@@ -1,0 +1,25 @@
+.placeholder {
+  background-color: #fff9e6;
+  border: 1px solid #ffd700;
+  border-radius: 8px;
+  padding: 20px;
+  text-align: center;
+}
+
+.title {
+  margin: 0 0 8px 0;
+  color: #666;
+}
+
+.description {
+  margin: 0;
+  color: #888;
+  font-size: 14px;
+}
+
+.note {
+  margin: 12px 0 0 0;
+  color: #888;
+  font-size: 13px;
+  font-style: italic;
+}

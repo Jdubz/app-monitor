@@ -1,0 +1,147 @@
+.quickActions {
+  background: white;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #212529;
+}
+
+.collapseButton {
+  background: none;
+  border: none;
+  color: #6c757d;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 12px;
+  transition: color 0.2s ease;
+}
+
+.collapseButton:hover {
+  color: #212529;
+}
+
+.actionsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.actionButton {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid #dee2e6;
+  border-radius: 6px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-height: 80px;
+  position: relative;
+}
+
+.actionButton:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+}
+
+.actionButton:active {
+  transform: translateY(0);
+}
+
+/* Variants */
+.actionButton.primary:hover {
+  border-color: #0d6efd;
+  background: #f8f9fa;
+}
+
+.actionButton.secondary:hover {
+  border-color: #6c757d;
+  background: #f8f9fa;
+}
+
+.actionButton.success:hover {
+  border-color: #198754;
+  background: #f8f9fa;
+}
+
+.actionButton.danger:hover {
+  border-color: #dc3545;
+  background: #fff5f5;
+}
+
+.actionButton.warning:hover {
+  border-color: #ffc107;
+  background: #fffbf0;
+}
+
+.icon {
+  font-size: 24px;
+  line-height: 1;
+}
+
+.label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #212529;
+  text-align: center;
+}
+
+.shortcut {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  font-size: 10px;
+  color: #6c757d;
+  background: #f8f9fa;
+  padding: 2px 6px;
+  border-radius: 3px;
+  font-family: monospace;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .actionsGrid {
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 8px;
+  }
+
+  .actionButton {
+    padding: 10px;
+    min-height: 70px;
+  }
+
+  .icon {
+    font-size: 20px;
+  }
+
+  .label {
+    font-size: 12px;
+  }
+
+  .shortcut {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .actionsGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
