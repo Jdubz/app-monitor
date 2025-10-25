@@ -133,6 +133,33 @@ See `docs/api/` for complete API documentation.
 
 ## Development
 
+### Git Hooks (Automated Quality Checks)
+
+This repository uses [Husky](https://typicode.github.io/husky/) for automated code quality checks:
+
+**Pre-commit Hook:** Runs linting on staged files
+- Automatically formats TypeScript files with ESLint
+- Catches style issues before commit
+- Can be bypassed with `git commit --no-verify` (not recommended)
+
+**Pre-push Hook:** Runs all unit tests
+- Ensures tests pass before pushing
+- Prevents broken code from reaching remote
+- Can be bypassed with `git push --no-verify` (not recommended)
+
+See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed development guidelines.
+
+### CI/CD Pipeline
+
+GitHub Actions automatically runs on pull requests and pushes to `main`/`develop`:
+- ✅ Linting (ESLint)
+- ✅ Unit tests (Vitest)
+- ✅ E2E tests (Playwright)
+- ✅ Build verification
+- ✅ Code coverage reports
+
+Matrix testing on Node.js 18.x and 20.x ensures compatibility.
+
 ### Running Tests
 ```bash
 # All tests

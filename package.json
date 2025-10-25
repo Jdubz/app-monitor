@@ -36,12 +36,10 @@
   },
   "lint-staged": {
     "backend/**/*.ts": [
-      "eslint --fix",
-      "git add"
+      "eslint --fix"
     ],
     "frontend/**/*.{ts,tsx}": [
-      "eslint --fix",
-      "git add"
+      "eslint --fix"
     ]
   }
 }
