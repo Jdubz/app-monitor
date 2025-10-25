@@ -5,17 +5,18 @@ import dotenv from 'dotenv';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Get the root directory of job-finder-app-manager (backend/src -> backend -> dev-monitor -> root)
+// Get the root directory of job-finder-app-manager (backend/src -> backend -> app-monitor -> root)
 const ROOT_DIR = path.resolve(__dirname, '../../..');
 
-// Load environment variables from .env file (use file-relative path)
-dotenv.config({ path: path.join(ROOT_DIR, 'dev-monitor/backend/.env') });
+// Load environment variables from .env file (backend directory)
+dotenv.config({ path: path.join(__dirname, '../.env') });
 
 export const config = {
   port: parseInt(process.env.PORT || '5000', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5174',
   gcpKeyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS || path.join(ROOT_DIR, '.firebase/serviceAccountKey.json'),
+  logSourcesConfig: path.join(__dirname, '../config/log-sources.json'),
 };
 
 export interface ServiceConfig {
@@ -26,47 +27,45 @@ export interface ServiceConfig {
   args: string[];
   cwd: string;
   ports?: number[];
+  requirePorts?: boolean;  // If true, fail if ports are busy
   env?: Record<string, string>;
 }
 
 export const services: Record<string, ServiceConfig> = {
-  'firebase-emulators': {
-    name: 'firebase-emulators',
-    displayName: 'Firebase Emulators',
-    description: 'Firebase Auth, Firestore, Functions, Storage emulators + UI (from BE)',
-    command: 'firebase',
-    args: [
-      'emulators:start',
-      '--only',
-      'auth,firestore,functions,storage,ui',
-      '--import=.firebase/emulator-data',
-      '--export-on-exit=.firebase/emulator-data'
-    ],
+  'job-finder-backend': {
+    name: 'job-finder-backend',
+    displayName: 'Job Finder Backend',
+    description: 'Node.js backend + Firebase emulators (Auth, Firestore, Functions, Storage + UI)',
+    command: 'npm',
+    args: ['run', 'dev'],
     cwd: path.join(ROOT_DIR, 'job-finder-BE'),
-    ports: [4000, 4400, 8080, 9099, 9199, 5001],
+    ports: [5001, 4000, 4400, 8080, 9099, 9199],
+    requirePorts: true,
     env: process.env as Record<string, string>,
   },
-  'frontend-dev': {
-    name: 'frontend-dev',
-    displayName: 'Frontend Dev Server',
-    description: 'React/Vite development server (job-finder-FE)',
+  'job-finder-frontend': {
+    name: 'job-finder-frontend',
+    displayName: 'Job Finder Frontend',
+    description: 'React/Vite development server',
     command: 'npm',
     args: ['run', 'dev'],
     cwd: path.join(ROOT_DIR, 'job-finder-FE'),
     ports: [5173],
+    requirePorts: true,
     env: process.env as Record<string, string>,
   },
-  'python-worker': {
-    name: 'python-worker',
-    displayName: 'Python Worker',
-    description: 'Job queue worker (Docker)',
-    command: 'docker',
-    args: ['compose', '-f', 'docker-compose.dev.yml', 'up'],
+  'job-finder-worker': {
+    name: 'job-finder-worker',
+    displayName: 'Job Finder Worker',
+    description: 'Python worker service',
+    command: 'python3',
+    args: ['-m', 'job_finder_worker'],
     cwd: path.join(ROOT_DIR, 'job-finder-worker'),
+    ports: [5555],
+    requirePorts: true,
     env: {
       ...(process.env as Record<string, string>),
-      // Write logs to dev-monitor/logs for centralized monitoring
-      LOG_FILE: path.join(ROOT_DIR, 'dev-monitor/logs/queue_worker.log'),
+      LOG_FILE: path.join(ROOT_DIR, 'job-finder-worker/logs/worker.log'),
     },
   },
 };
