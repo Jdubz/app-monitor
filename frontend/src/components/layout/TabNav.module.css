@@ -1,0 +1,59 @@
+.tabContainer {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid #e0e0e0;
+  background-color: #f5f5f5;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Hide scrollbar but keep functionality */
+.tabContainer::-webkit-scrollbar {
+  height: 4px;
+}
+
+.tabContainer::-webkit-scrollbar-thumb {
+  background: #d0d0d0;
+  border-radius: 2px;
+}
+
+.tab {
+  padding: 12px 24px;
+  background-color: #f5f5f5;
+  border: none;
+  border-bottom: 3px solid transparent;
+  cursor: pointer;
+  font-size: 15px;
+  font-weight: 400;
+  color: #666;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.tab:hover {
+  background-color: #ececec;
+}
+
+.tab.active {
+  background-color: #fff;
+  border-bottom-color: #4dabf7;
+  font-weight: 600;
+  color: #333;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .tab {
+    padding: 10px 16px;
+    font-size: 14px;
+  }
+}
+
+@media (max-width: 480px) {
+  .tab {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+}
