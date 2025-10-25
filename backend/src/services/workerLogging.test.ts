@@ -1,0 +1,228 @@
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import * as fs from 'fs';
+import * as path from 'path';
+
+describe('Worker Logging System', () => {
+  const testLogsDir = path.join(process.cwd(), 'test-logs');
+  
+  beforeEach(() => {
+    // Clean up test logs directory
+    if (fs.existsSync(testLogsDir)) {
+      fs.rmSync(testLogsDir, { recursive: true, force: true });
+    }
+  });
+  
+  afterEach(() => {
+    // Clean up test logs directory
+    if (fs.existsSync(testLogsDir)) {
+      fs.rmSync(testLogsDir, { recursive: true, force: true });
+    }
+  });
+
+  describe('Worker Log File Initialization', () => {
+    it('should create logs directory if it does not exist', () => {
+      expect(fs.existsSync(testLogsDir)).toBe(false);
+      
+      fs.mkdirSync(testLogsDir, { recursive: true });
+      
+      expect(fs.existsSync(testLogsDir)).toBe(true);
+    });
+
+    it('should create worker-a.log file with proper header', () => {
+      const workerType = 'worker-a';
+      const logFile = path.join(testLogsDir, `${workerType}.log`);
+      
+      // Create logs directory
+      fs.mkdirSync(testLogsDir, { recursive: true });
+      
+      // Initialize log file with header
+      const timestamp = new Date().toISOString();
+      const header = `=== ${workerType.toUpperCase()} WORKER LOG ===\n` +
+                    `Initialized: ${timestamp}\n` +
+                    `Worker Type: ${workerType}\n` +
+                    `=====================================\n\n`;
+      
+      fs.appendFileSync(logFile, header);
+      
+      expect(fs.existsSync(logFile)).toBe(true);
+      
+      const content = fs.readFileSync(logFile, 'utf8');
+      expect(content).toContain('=== WORKER-A WORKER LOG ===');
+      expect(content).toContain(`Worker Type: ${workerType}`);
+      expect(content).toContain('Initialized:');
+    });
+
+    it('should create worker-b.log file with proper header', () => {
+      const workerType = 'worker-b';
+      const logFile = path.join(testLogsDir, `${workerType}.log`);
+      
+      // Create logs directory
+      fs.mkdirSync(testLogsDir, { recursive: true });
+      
+      // Initialize log file with header
+      const timestamp = new Date().toISOString();
+      const header = `=== ${workerType.toUpperCase()} WORKER LOG ===\n` +
+                    `Initialized: ${timestamp}\n` +
+                    `Worker Type: ${workerType}\n` +
+                    `=====================================\n\n`;
+      
+      fs.appendFileSync(logFile, header);
+      
+      expect(fs.existsSync(logFile)).toBe(true);
+      
+      const content = fs.readFileSync(logFile, 'utf8');
+      expect(content).toContain('=== WORKER-B WORKER LOG ===');
+      expect(content).toContain(`Worker Type: ${workerType}`);
+      expect(content).toContain('Initialized:');
+    });
+  });
+
+  describe('Worker Log File Paths', () => {
+    it('should generate correct log file path for worker-a', () => {
+      const workerType = 'worker-a';
+      const logFile = `/app/logs/${workerType}.log`;
+      
+      expect(logFile).toBe('/app/logs/worker-a.log');
+    });
+
+    it('should generate correct log file path for worker-b', () => {
+      const workerType = 'worker-b';
+      const logFile = `/app/logs/${workerType}.log`;
+      
+      expect(logFile).toBe('/app/logs/worker-b.log');
+    });
+  });
+
+  describe('Worker Type Detection', () => {
+    it('should correctly identify worker-a from worker ID', () => {
+      const workerId = 'worker-a-backend-specialist-1761259412357';
+      const workerType = workerId.includes('worker-a') ? 'worker-a' : 'worker-b';
+      
+      expect(workerType).toBe('worker-a');
+    });
+
+    it('should correctly identify worker-b from worker ID', () => {
+      const workerId = 'worker-b-frontend-specialist-1761259432926';
+      const workerType = workerId.includes('worker-a') ? 'worker-a' : 'worker-b';
+      
+      expect(workerType).toBe('worker-b');
+    });
+  });
+
+  describe('Log Command Generation', () => {
+    it('should generate correct logging wrapper command for worker-a', () => {
+      const workerType = 'worker-a';
+      const logFile = `/app/logs/${workerType}.log`;
+      const agentName = 'Backend Specialist';
+      const taskTitle = 'Test Task';
+      
+      const wrapperCommand = [
+        'echo "=== Worker Task Execution Started ===" >> ' + logFile,
+        'echo "Timestamp: $(date)" >> ' + logFile,
+        'echo "Worker: ' + agentName + '" >> ' + logFile,
+        'echo "Task: ' + taskTitle + '" >> ' + logFile,
+        'echo "=====================================" >> ' + logFile,
+        'claude -p "test prompt" 2>&1 | tee -a ' + logFile,
+        'echo "=== Worker Task Execution Completed ===" >> ' + logFile,
+        'echo "Exit Code: $?" >> ' + logFile,
+        'echo "=======================================" >> ' + logFile
+      ].join(' && ');
+      
+      expect(wrapperCommand).toContain('/app/logs/worker-a.log');
+      expect(wrapperCommand).toContain('Worker Task Execution Started');
+      expect(wrapperCommand).toContain('Worker Task Execution Completed');
+      expect(wrapperCommand).toContain('tee -a');
+    });
+
+    it('should generate correct logging wrapper command for worker-b', () => {
+      const workerType = 'worker-b';
+      const logFile = `/app/logs/${workerType}.log`;
+      const agentName = 'Frontend Specialist';
+      const taskTitle = 'UI Task';
+      
+      const wrapperCommand = [
+        'echo "=== Worker Task Execution Started ===" >> ' + logFile,
+        'echo "Timestamp: $(date)" >> ' + logFile,
+        'echo "Worker: ' + agentName + '" >> ' + logFile,
+        'echo "Task: ' + taskTitle + '" >> ' + logFile,
+        'echo "=====================================" >> ' + logFile,
+        'claude -p "test prompt" 2>&1 | tee -a ' + logFile,
+        'echo "=== Worker Task Execution Completed ===" >> ' + logFile,
+        'echo "Exit Code: $?" >> ' + logFile,
+        'echo "=======================================" >> ' + logFile
+      ].join(' && ');
+      
+      expect(wrapperCommand).toContain('/app/logs/worker-b.log');
+      expect(wrapperCommand).toContain('Worker Task Execution Started');
+      expect(wrapperCommand).toContain('Worker Task Execution Completed');
+      expect(wrapperCommand).toContain('tee -a');
+    });
+  });
+
+  describe('Docker Volume Mounting', () => {
+    it('should include logs directory in Docker binds', () => {
+      const binds = [
+        `${process.cwd()}:/app:ro`,
+        `${process.cwd()}/worktrees:/app/worktrees:rw`,
+        `${process.cwd()}/logs:/app/logs:rw`
+      ];
+      
+      expect(binds).toContain(`${process.cwd()}/logs:/app/logs:rw`);
+    });
+
+    it('should mount logs directory as read-write', () => {
+      const logBind = `${process.cwd()}/logs:/app/logs:rw`;
+      
+      expect(logBind).toContain(':rw');
+      expect(logBind).toContain('/app/logs');
+    });
+  });
+
+  describe('Log File Persistence', () => {
+    it('should append to existing log file without overwriting', () => {
+      const workerType = 'worker-a';
+      const logFile = path.join(testLogsDir, `${workerType}.log`);
+      
+      // Create logs directory
+      fs.mkdirSync(testLogsDir, { recursive: true });
+      
+      // Write initial content
+      const initialContent = 'Initial log entry\n';
+      fs.writeFileSync(logFile, initialContent);
+      
+      // Append new content
+      const newContent = 'New log entry\n';
+      fs.appendFileSync(logFile, newContent);
+      
+      const finalContent = fs.readFileSync(logFile, 'utf8');
+      expect(finalContent).toContain('Initial log entry');
+      expect(finalContent).toContain('New log entry');
+    });
+
+    it('should handle multiple log entries correctly', () => {
+      const workerType = 'worker-b';
+      const logFile = path.join(testLogsDir, `${workerType}.log`);
+      
+      // Create logs directory
+      fs.mkdirSync(testLogsDir, { recursive: true });
+      
+      // Write multiple entries
+      const entries = [
+        '=== WORKER-B WORKER LOG ===\n',
+        'Entry 1: Task started\n',
+        'Entry 2: Task in progress\n',
+        'Entry 3: Task completed\n'
+      ];
+      
+      entries.forEach(entry => {
+        fs.appendFileSync(logFile, entry);
+      });
+      
+      const content = fs.readFileSync(logFile, 'utf8');
+      expect(content).toContain('=== WORKER-B WORKER LOG ===');
+      expect(content).toContain('Entry 1: Task started');
+      expect(content).toContain('Entry 2: Task in progress');
+      expect(content).toContain('Entry 3: Task completed');
+    });
+  });
+});

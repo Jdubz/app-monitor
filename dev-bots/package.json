@@ -1,0 +1,47 @@
+{
+  "name": "app-monitor-dev-bots",
+  "version": "1.0.0",
+  "description": "Development bots for app monitor with autonomous Docker orchestration",
+  "type": "module",
+  "scripts": {
+    "test": "bash scripts/run-tests-safely.sh all",
+    "test:e2e": "bash scripts/run-tests-safely.sh e2e",
+    "test:unsafe": "npx playwright test",
+    "test:watch": "NODE_OPTIONS='--max-old-space-size=2048' npx playwright test --headed",
+    "test:debug": "NODE_OPTIONS='--max-old-space-size=2048' npx playwright test --debug",
+    "test:ui": "NODE_OPTIONS='--max-old-space-size=2048' npx playwright test --ui",
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "build": "tsc",
+    "lint": "eslint src --ext .ts",
+    "lint:fix": "eslint src --ext .ts --fix"
+  },
+  "keywords": [
+    "claude",
+    "workers",
+    "docker",
+    "orchestration",
+    "autonomous"
+  ],
+  "author": "Job Finder App Manager",
+  "license": "MIT",
+  "dependencies": {
+    "dockerode": "^4.0.2",
+    "express": "^4.18.2",
+    "socket.io": "^4.6.1",
+    "ws": "^8.16.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.40.0",
+    "@types/node": "^20.10.0",
+    "@typescript-eslint/eslint-plugin": "^6.16.0",
+    "@typescript-eslint/parser": "^6.16.0",
+    "eslint": "^8.56.0",
+    "nodemon": "^3.0.2",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  }
+}
