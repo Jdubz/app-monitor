@@ -34,10 +34,13 @@ dev-frontend: ## Start frontend only
 
 stop: ## Stop all services
 	@echo "$(CYAN)Stopping services...$(RESET)"
-	@pkill -f "nodemon.*app-monitor" || true
-	@pkill -f "vite.*app-monitor" || true
-	@lsof -ti:5000 | xargs kill || true
-	@lsof -ti:5174 | xargs kill || true
+	@pkill -f "nodemon.*app-monitor" 2>/dev/null || true
+	@pkill -f "tsx.*app-monitor" 2>/dev/null || true
+	@pkill -f "vite.*app-monitor" 2>/dev/null || true
+	@pkill -f "node.*app-monitor.*backend" 2>/dev/null || true
+	@lsof -ti:5000 2>/dev/null | xargs kill -9 2>/dev/null || true
+	@lsof -ti:5174 2>/dev/null | xargs kill -9 2>/dev/null || true
+	@sleep 1
 	@echo "$(GREEN)✓ Services stopped$(RESET)"
 
 build: ## Build all workspaces
