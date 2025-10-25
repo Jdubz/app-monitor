@@ -12,6 +12,7 @@ import {
   stopDockerContainer,
   getDockerContainerInfo,
 } from '../utils/portManager.js';
+import { checkPortsAvailable, getPortInfo } from '../utils/portCheck.js';
 import {
   ProcessLifecycle,
   ProcessEventManager,
@@ -103,8 +104,44 @@ export class ProcessManager extends EventEmitter {
         existing.status = 'starting';
       }
 
-      // Check for port conflicts and clean them up before starting
-      if (config.ports && config.ports.length > 0) {
+      // STRICT PORT CHECK: If requirePorts is true, fail if ports are busy
+      if (config.requirePorts && config.ports && config.ports.length > 0) {
+        const { available, busyPorts } = await checkPortsAvailable(config.ports);
+        
+        if (!available) {
+          const portDetails = await Promise.all(
+            busyPorts.map(async (port) => {
+              const info = await getPortInfo(port);
+              return `Port ${port}:\n${info || 'Unknown process'}`;
+            })
+          );
+          
+          const errorMessage = 
+            `Cannot start ${config.displayName}. Required ports are in use:\n\n` +
+            portDetails.join('\n\n') +
+            `\n\nFix:\n` +
+            `  1. Stop conflicting services: make monitor-stop\n` +
+            `  2. Or kill processes manually: lsof -ti:${busyPorts.join(',')} | xargs kill`;
+          
+          logger.error({
+            category: 'process',
+            action: 'port_conflict',
+            message: errorMessage,
+            details: { service: serviceName, busyPorts },
+          });
+          
+          throw new Error(errorMessage);
+        }
+        
+        logger.info({
+          category: 'process',
+          action: 'ports_available',
+          message: `All required ports available for ${config.displayName}`,
+          details: { ports: config.ports },
+        });
+      }
+      // Legacy behavior: Try to free ports automatically
+      else if (config.ports && config.ports.length > 0) {
         await PortConflictResolver.checkAndFreePorts(serviceName, config.ports);
       }
 

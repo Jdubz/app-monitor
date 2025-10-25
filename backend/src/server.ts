@@ -14,6 +14,7 @@ import { ConnectionManager } from './services/connectionManager.js';
 import { TaskQueueManager } from './services/taskQueueManager.js';
 import { ScriptExecutionHistory } from './services/scriptExecutionHistory.js';
 import { TaskBridge } from './services/taskBridge.js';
+import { LogSourceManager } from './services/logSourceManager.js';
 import { logger } from './utils/logger.js';
 import type {
   ClientToServerEvents,
@@ -33,6 +34,7 @@ export let connectionManager: ConnectionManager;
 export let taskQueueManager: TaskQueueManager;
 export let scriptExecutionHistory: ScriptExecutionHistory;
 export let taskBridge: TaskBridge;
+export let logSourceManager: LogSourceManager;
 
 export function createApp() {
   const app = express();
@@ -43,6 +45,17 @@ export function createApp() {
   cloudLogging = new CloudLogging();
   scriptManager = new ScriptManager();
   claudeWorkersManager = new ClaudeWorkersManager(processManager);
+  
+  // Initialize LogSourceManager and load configuration
+  logSourceManager = new LogSourceManager();
+  logSourceManager.loadConfig().catch((error) => {
+    logger.error({
+      category: 'system',
+      action: 'log_source_manager_init_failed',
+      message: 'Failed to initialize LogSourceManager',
+      error,
+    });
+  });
 
   // Setup Socket.IO with type-safe events
   const io = new SocketIOServer<
