@@ -36,6 +36,7 @@ describe('ProcessManager Core Functionality', () => {
       stdout: { on: vi.fn() },
       stderr: { on: vi.fn() },
       on: vi.fn(),
+      once: vi.fn(),
       kill: vi.fn(),
       exitCode: null
     });
@@ -79,16 +80,14 @@ describe('ProcessManager Core Functionality', () => {
       const result = await processManager.startService(serviceName);
 
       // Then: Process is spawned with correct parameters
-      expect(mockSpawn).toHaveBeenCalledWith(
-        config.command,
-        config.args,
-        expect.objectContaining({
-          cwd: config.cwd,
-          env: expect.objectContaining({
-            NODE_ENV: 'development'
-          })
-        })
-      );
+      expect(mockSpawn).toHaveBeenCalled();
+      const spawnCall = mockSpawn.mock.calls[0];
+      expect(spawnCall[0]).toBe(config.command);
+      expect(spawnCall[1]).toEqual(config.args);
+      expect(spawnCall[2].cwd).toBe(config.cwd);
+      expect(spawnCall[2].env).toEqual(expect.objectContaining({
+        NODE_ENV: 'development'
+      }));
 
       // And: Status is returned
       expect(result).toBeDefined();
