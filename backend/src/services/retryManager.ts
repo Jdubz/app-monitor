@@ -6,7 +6,7 @@
 
 import { EventEmitter } from 'events';
 import { logger } from '../utils/logger.js';
-import { Task, RetryAttempt } from './claudeWorkersManager.js';
+import { Task, RetryAttempt } from './devBotsManager.js';
 
 export interface RetryConfig {
   maxRetries: number;

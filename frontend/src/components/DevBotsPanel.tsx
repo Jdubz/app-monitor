@@ -3,7 +3,7 @@ import { Socket } from 'socket.io-client';
 import { api } from '../services/api';
 import StatusBadge from './StatusBadge';
 // import ControlButtons from './ControlButtons';
-import styles from './ClaudeWorkersPanel.module.css';
+import styles from './DevBotsPanel.module.css';
 
 // interface RetryAttempt {
 //   attemptNumber: number;
@@ -72,7 +72,7 @@ interface WorkerStatus {
   lastOnboardingCheck?: number;
 }
 
-interface ClaudeWorkersStatus {
+interface DevBotsStatus {
   systemStatus: 'running' | 'stopped' | 'error';
   workers: Record<string, WorkerStatus>;
   queueSize: number;
@@ -130,18 +130,18 @@ interface TaskTemplate {
   validationRules: string[];
 }
 
-interface ClaudeWorkersPanelProps {
+interface DevBotsPanelProps {
   serviceName?: string;
   onStatusChange?: (status: any) => void;
   socket?: Socket | null;
 }
 
-export const ClaudeWorkersPanel: React.FC<ClaudeWorkersPanelProps> = ({
+export const DevBotsPanel: React.FC<DevBotsPanelProps> = ({
   serviceName: _serviceName,
   onStatusChange,
   socket
 }) => {
-  const [status, setStatus] = useState<ClaudeWorkersStatus | null>(null);
+  const [status, setStatus] = useState<DevBotsStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [newTask, setNewTask] = useState({
@@ -170,11 +170,11 @@ export const ClaudeWorkersPanel: React.FC<ClaudeWorkersPanelProps> = ({
     try {
       setLoading(true);
       const [statusResponse, violationsResponse, cleanupResponse, agentsResponse, templatesResponse] = await Promise.all([
-        api.get('/claude-workers/status'),
-        api.get('/claude-workers/scope-violations').catch(() => ({ data: { violations: [] } })),
-        api.get('/claude-workers/cleanup-status').catch(() => ({ data: { schedules: [], recentTasks: [], totalCleanupTasks: 0 } })),
-        api.get('/claude-workers/agents').catch(() => ({ data: { agents: [] } })),
-        api.get('/claude-workers/templates').catch(() => ({ data: { templates: [] } }))
+        api.get('/dev-bots/status'),
+        api.get('/dev-bots/scope-violations').catch(() => ({ data: { violations: [] } })),
+        api.get('/dev-bots/cleanup-status').catch(() => ({ data: { schedules: [], recentTasks: [], totalCleanupTasks: 0 } })),
+        api.get('/dev-bots/agents').catch(() => ({ data: { agents: [] } })),
+        api.get('/dev-bots/templates').catch(() => ({ data: { templates: [] } }))
       ]);
       
       setStatus(statusResponse.data);
@@ -199,7 +199,7 @@ export const ClaudeWorkersPanel: React.FC<ClaudeWorkersPanelProps> = ({
 
     try {
       setAddingTask(true);
-      await api.post('/claude-workers/tasks', newTask);
+      await api.post('/dev-bots/tasks', newTask);
       setNewTask({ 
         type: 'implementation',
         title: '',
@@ -221,7 +221,7 @@ export const ClaudeWorkersPanel: React.FC<ClaudeWorkersPanelProps> = ({
 
   const triggerEmergencyRecovery = async () => {
     try {
-      await api.post('/claude-workers/emergency-recovery');
+      await api.post('/dev-bots/emergency-recovery');
       await fetchStatus();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to trigger emergency recovery');
@@ -230,7 +230,7 @@ export const ClaudeWorkersPanel: React.FC<ClaudeWorkersPanelProps> = ({
 
   const triggerCleanup = async (type: string) => {
     try {
-      await api.post('/claude-workers/trigger-cleanup', { type });
+      await api.post('/dev-bots/trigger-cleanup', { type });
       await fetchStatus();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to trigger cleanup');
@@ -239,7 +239,7 @@ export const ClaudeWorkersPanel: React.FC<ClaudeWorkersPanelProps> = ({
 
   const startSystem = async () => {
     try {
-      await api.post('/claude-workers/start');
+      await api.post('/dev-bots/start');
       await fetchStatus();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to start system');
@@ -248,7 +248,7 @@ export const ClaudeWorkersPanel: React.FC<ClaudeWorkersPanelProps> = ({
 
   const stopSystem = async () => {
     try {
-      await api.post('/claude-workers/stop');
+      await api.post('/dev-bots/stop');
       await fetchStatus();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to stop system');
@@ -258,7 +258,7 @@ export const ClaudeWorkersPanel: React.FC<ClaudeWorkersPanelProps> = ({
   // Simple manual retry function
   const retryTask = async (taskId: string) => {
     try {
-      await api.post(`/claude-workers/tasks/${taskId}/retry`);
+      await api.post(`/dev-bots/tasks/${taskId}/retry`);
       await fetchStatus();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to retry task');
@@ -341,9 +341,9 @@ export const ClaudeWorkersPanel: React.FC<ClaudeWorkersPanelProps> = ({
 
   if (loading && !status) {
     return (
-      <div className={styles['claude-workers-panel']}>
+      <div className={styles['dev-bots-panel']}>
         <div className={styles['panel-header']}>
-          <h3>🤖 Claude Workers</h3>
+          <h3>🤖 Dev-Bots</h3>
         </div>
         <div className={styles['panel-content']}>
           <div className={styles.loading}>Loading...</div>
@@ -354,9 +354,9 @@ export const ClaudeWorkersPanel: React.FC<ClaudeWorkersPanelProps> = ({
 
   if (error && !status) {
     return (
-      <div className={styles['claude-workers-panel']}>
+      <div className={styles['dev-bots-panel']}>
         <div className={styles['panel-header']}>
-          <h3>🤖 Claude Workers</h3>
+          <h3>🤖 Dev-Bots</h3>
         </div>
         <div className={styles['panel-content']}>
           <div className={styles.error}>
@@ -412,15 +412,15 @@ export const ClaudeWorkersPanel: React.FC<ClaudeWorkersPanelProps> = ({
   };
 
   return (
-    <div className={styles["claude-workers-panel"]}>
+    <div className={styles["dev-bots-panel"]}>
       <div className={styles["panel-header"]}>
-        <h3>🤖 Claude Workers (Ephemeral)</h3>
+        <h3>🤖 Dev-Bots (Ephemeral)</h3>
         <div className={styles["header-actions"]}>
           {status?.systemStatus === 'stopped' ? (
             <button
               onClick={startSystem}
               className={styles["start-btn"]}
-              title="Start Claude Workers system"
+              title="Start Dev-Bots system"
             >
               ▶️ Start System
             </button>
@@ -428,7 +428,7 @@ export const ClaudeWorkersPanel: React.FC<ClaudeWorkersPanelProps> = ({
             <button
               onClick={stopSystem}
               className={styles["stop-btn"]}
-              title="Stop Claude Workers system"
+              title="Stop Dev-Bots system"
             >
               ⏹️ Stop System
             </button>
@@ -608,7 +608,7 @@ export const ClaudeWorkersPanel: React.FC<ClaudeWorkersPanelProps> = ({
                     title="Target project"
                   >
                     <option value="app-monitor">app-monitor</option>
-                    <option value="claude-workers">claude-workers</option>
+                    <option value="dev-bots">dev-bots</option>
                     <option value="job-finder-FE">job-finder-FE</option>
                     <option value="job-finder-BE">job-finder-BE</option>
                     <option value="job-finder-shared-types">job-finder-shared-types</option>

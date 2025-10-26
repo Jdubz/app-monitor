@@ -1,11 +1,11 @@
 /**
- * Tests for Retry functionality in ClaudeWorkersManager
+ * Tests for Retry functionality in DevBotsManager
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { ClaudeWorkersManager } from './claudeWorkersManager.js';
+import { DevBotsManager } from './devBotsManager.js';
 import { ProcessManager } from './processManager.js';
-import { Task } from './claudeWorkersManager.js';
+import { Task } from './devBotsManager.js';
 
 // Mock the ProcessManager
 vi.mock('./processManager.js', () => ({
@@ -50,14 +50,14 @@ vi.mock('./dockerManager.js', () => ({
   }))
 }));
 
-describe('ClaudeWorkersManager Retry Functionality', () => {
-  let manager: ClaudeWorkersManager;
+describe('DevBotsManager Retry Functionality', () => {
+  let manager: DevBotsManager;
   let mockProcessManager: ProcessManager;
   let mockTask: Task;
 
   beforeEach(() => {
     mockProcessManager = new ProcessManager() as any;
-    manager = new ClaudeWorkersManager(mockProcessManager);
+    manager = new DevBotsManager(mockProcessManager);
     
     mockTask = {
       id: 'test-task-1',

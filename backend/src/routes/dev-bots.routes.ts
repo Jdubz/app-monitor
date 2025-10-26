@@ -1,7 +1,7 @@
 /**
- * Claude Workers Management Routes
+ * Dev-Bots Management Routes
  * 
- * Comprehensive API for Claude Workers system:
+ * Comprehensive API for Dev-Bots system:
  * - System status and health
  * - Task management
  * - Agent management
@@ -14,16 +14,16 @@
  */
 
 import { Router, Request, Response } from 'express';
-import type { ClaudeWorkersManager } from '../services/claudeWorkersManager.js';
+import type { DevBotsManager } from '../services/devBotsManager.js';
 import { logger } from '../utils/logger.js';
 
 /**
- * Create Claude Workers router
+ * Create Dev-Bots router
  * 
- * @param claudeWorkersManager - ClaudeWorkersManager instance
- * @returns Express router with Claude Workers endpoints
+ * @param devBotsManager - DevBotsManager instance
+ * @returns Express router with Dev-Bots endpoints
  */
-export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersManager): Router {
+export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Router {
   const router = Router();
 
   // ============================================================================
@@ -31,84 +31,84 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   // ============================================================================
 
   /**
-   * GET /claude-workers/status
+   * GET /dev-bots/status
    * Get overall system status
    */
   router.get('/status', async (_req: Request, res: Response) => {
     try {
-      const status = await claudeWorkersManager.getSystemStatus();
+      const status = await devBotsManager.getSystemStatus();
       if (status) {
         res.json(status);
       } else {
         res.status(503).json({
-          error: 'Claude Workers coordinator is not available',
-          healthy: claudeWorkersManager.isHealthy()
+          error: 'Dev-Bots coordinator is not available',
+          healthy: devBotsManager.isHealthy()
         });
       }
     } catch (error) {
       logger.error({
         category: 'api',
         action: 'error_getting_claude_workers_status_error',
-        message: `Error getting Claude Workers status: ${error}`,
+        message: `Error getting Dev-Bots status: ${error}`,
         error
       });
       res.status(500).json({
-        error: 'Failed to get Claude Workers status',
+        error: 'Failed to get Dev-Bots status',
         message: error instanceof Error ? error.message : String(error),
       });
     }
   });
 
   /**
-   * GET /claude-workers/health
+   * GET /dev-bots/health
    * Get health check status
    */
   router.get('/health', (_req: Request, res: Response) => {
     res.json({
-      healthy: claudeWorkersManager.isHealthy(),
-      status: claudeWorkersManager.isHealthy() ? 'healthy' : 'unhealthy'
+      healthy: devBotsManager.isHealthy(),
+      status: devBotsManager.isHealthy() ? 'healthy' : 'unhealthy'
     });
   });
 
   /**
-   * POST /claude-workers/start
-   * Start Claude Workers system
+   * POST /dev-bots/start
+   * Start Dev-Bots system
    */
   router.post('/start', (_req: Request, res: Response) => {
     try {
-      claudeWorkersManager.start();
-      res.json({ success: true, message: 'Claude Workers started' });
+      devBotsManager.start();
+      res.json({ success: true, message: 'Dev-Bots started' });
     } catch (error) {
       logger.error({
         category: 'api',
         action: 'error_starting_claude_workers_error',
-        message: `Error starting Claude Workers: ${error}`,
+        message: `Error starting Dev-Bots: ${error}`,
         error
       });
       res.status(500).json({
-        error: 'Failed to start Claude Workers',
+        error: 'Failed to start Dev-Bots',
         message: error instanceof Error ? error.message : String(error),
       });
     }
   });
 
   /**
-   * POST /claude-workers/stop
-   * Stop Claude Workers system
+   * POST /dev-bots/stop
+   * Stop Dev-Bots system
    */
   router.post('/stop', (_req: Request, res: Response) => {
     try {
-      claudeWorkersManager.stop();
-      res.json({ success: true, message: 'Claude Workers stopped' });
+      devBotsManager.stop();
+      res.json({ success: true, message: 'Dev-Bots stopped' });
     } catch (error) {
       logger.error({
         category: 'api',
         action: 'error_stopping_claude_workers_error',
-        message: `Error stopping Claude Workers: ${error}`,
+        message: `Error stopping Dev-Bots: ${error}`,
         error
       });
       res.status(500).json({
-        error: 'Failed to stop Claude Workers',
+        error: 'Failed to stop Dev-Bots',
         message: error instanceof Error ? error.message : String(error),
       });
     }
@@ -119,36 +119,36 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   // ============================================================================
 
   /**
-   * GET /claude-workers/tasks
+   * GET /dev-bots/tasks
    * Get all tasks
    */
   router.get('/tasks', async (_req: Request, res: Response) => {
     try {
-      const tasks = await claudeWorkersManager.getTasks();
+      const tasks = await devBotsManager.getTasks();
       if (tasks) {
         res.json(tasks);
       } else {
         res.status(503).json({
-          error: 'Claude Workers coordinator is not available',
-          healthy: claudeWorkersManager.isHealthy()
+          error: 'Dev-Bots coordinator is not available',
+          healthy: devBotsManager.isHealthy()
         });
       }
     } catch (error) {
       logger.error({
         category: 'api',
         action: 'error_getting_claude_workers_tasks_error',
-        message: `Error getting Claude Workers tasks: ${error}`,
+        message: `Error getting Dev-Bots tasks: ${error}`,
         error
       });
       res.status(500).json({
-        error: 'Failed to get Claude Workers tasks',
+        error: 'Failed to get Dev-Bots tasks',
         message: error instanceof Error ? error.message : String(error),
       });
     }
   });
 
   /**
-   * POST /claude-workers/tasks
+   * POST /dev-bots/tasks
    * Create a new task
    */
   router.post('/tasks', async (req: Request, res: Response) => {
@@ -161,7 +161,7 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
         });
       }
 
-      const task = await claudeWorkersManager.addTask(type, title, documentation, acceptanceCriteria, {
+      const task = await devBotsManager.addTask(type, title, documentation, acceptanceCriteria, {
         files,
         dependencies,
         repository,
@@ -173,7 +173,7 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
       logger.error({
         category: 'api',
         action: 'error_adding_claude_workers_task_error',
-        message: `Error adding Claude Workers task: ${error}`,
+        message: `Error adding Dev-Bots task: ${error}`,
         error
       });
       res.status(500).json({
@@ -184,13 +184,13 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   });
 
   /**
-   * POST /claude-workers/tasks/enhanced
+   * POST /dev-bots/tasks/enhanced
    * Create enhanced task with additional metadata
    */
   router.post('/tasks/enhanced', async (req: Request, res: Response) => {
     try {
       const taskData = req.body;
-      const task = await claudeWorkersManager.addEnhancedTask(taskData);
+      const task = await devBotsManager.addEnhancedTask(taskData);
       res.json({ task, message: 'Enhanced task added successfully' });
     } catch (error) {
       logger.error({
@@ -207,12 +207,12 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   });
 
   /**
-   * GET /claude-workers/tasks/completed
+   * GET /dev-bots/tasks/completed
    * Get all completed tasks
    */
   router.get('/tasks/completed', (_req: Request, res: Response) => {
     try {
-      const tasks = claudeWorkersManager.getCompletedTasks();
+      const tasks = devBotsManager.getCompletedTasks();
       res.json({ tasks });
     } catch (error) {
       logger.error({
@@ -229,12 +229,12 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   });
 
   /**
-   * POST /claude-workers/validate
+   * POST /dev-bots/validate
    * Validate task data
    */
   router.post('/validate', async (req: Request, res: Response) => {
     try {
-      const result = await claudeWorkersManager.validateTask(req.body);
+      const result = await devBotsManager.validateTask(req.body);
       res.json(result);
     } catch (error) {
       logger.error({
@@ -255,12 +255,12 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   // ============================================================================
 
   /**
-   * GET /claude-workers/agents
+   * GET /dev-bots/agents
    * Get all agent personalities
    */
   router.get('/agents', (_req: Request, res: Response) => {
     try {
-      const agents = claudeWorkersManager.getAgentPersonalities();
+      const agents = devBotsManager.getAgentPersonalities();
       res.json({ agents });
     } catch (error) {
       logger.error({
@@ -277,12 +277,12 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   });
 
   /**
-   * GET /claude-workers/agents/valid
+   * GET /dev-bots/agents/valid
    * Get list of valid agent IDs
    */
   router.get('/agents/valid', (_req: Request, res: Response) => {
     try {
-      const validAgents = claudeWorkersManager.getValidAgents();
+      const validAgents = devBotsManager.getValidAgents();
       res.json({ validAgents });
     } catch (error) {
       logger.error({
@@ -303,12 +303,12 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   // ============================================================================
 
   /**
-   * GET /claude-workers/templates
+   * GET /dev-bots/templates
    * Get all task templates
    */
   router.get('/templates', (_req: Request, res: Response) => {
     try {
-      const templates = claudeWorkersManager.getTaskTemplates();
+      const templates = devBotsManager.getTaskTemplates();
       res.json({ templates });
     } catch (error) {
       logger.error({
@@ -325,12 +325,12 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   });
 
   /**
-   * GET /claude-workers/guidelines
+   * GET /dev-bots/guidelines
    * Get all task guidelines
    */
   router.get('/guidelines', (_req: Request, res: Response) => {
     try {
-      const guidelines = claudeWorkersManager.getGuidelines();
+      const guidelines = devBotsManager.getGuidelines();
       res.json({ guidelines });
     } catch (error) {
       logger.error({
@@ -347,13 +347,13 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   });
 
   /**
-   * GET /claude-workers/guidelines/:taskType
+   * GET /dev-bots/guidelines/:taskType
    * Get guidelines for specific task type
    */
   router.get('/guidelines/:taskType', (req: Request, res: Response) => {
     try {
       const { taskType } = req.params;
-      const guidelines = claudeWorkersManager.getGuidelinesForType(taskType);
+      const guidelines = devBotsManager.getGuidelinesForType(taskType);
       res.json({ guidelines });
     } catch (error) {
       logger.error({
@@ -370,13 +370,13 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   });
 
   /**
-   * GET /claude-workers/examples/:taskType
+   * GET /dev-bots/examples/:taskType
    * Get examples for specific task type
    */
   router.get('/examples/:taskType', (req: Request, res: Response) => {
     try {
       const { taskType } = req.params;
-      const examples = claudeWorkersManager.getExamplesForType(taskType);
+      const examples = devBotsManager.getExamplesForType(taskType);
       res.json({ examples });
     } catch (error) {
       logger.error({
@@ -393,13 +393,13 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   });
 
   /**
-   * GET /claude-workers/checklist/:taskType
+   * GET /dev-bots/checklist/:taskType
    * Get checklist for specific task type
    */
   router.get('/checklist/:taskType', (req: Request, res: Response) => {
     try {
       const { taskType } = req.params;
-      const checklist = claudeWorkersManager.getChecklistForType(taskType);
+      const checklist = devBotsManager.getChecklistForType(taskType);
       res.json({ checklist });
     } catch (error) {
       logger.error({
@@ -420,12 +420,12 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   // ============================================================================
 
   /**
-   * GET /claude-workers/projects
+   * GET /dev-bots/projects
    * Get all projects
    */
   router.get('/projects', (_req: Request, res: Response) => {
     try {
-      const projects = claudeWorkersManager.getProjects();
+      const projects = devBotsManager.getProjects();
       res.json({ projects });
     } catch (error) {
       logger.error({
@@ -446,13 +446,13 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   // ============================================================================
 
   /**
-   * POST /claude-workers/export
+   * POST /dev-bots/export
    * Export system data
    */
   router.post('/export', async (req: Request, res: Response) => {
     try {
       const { format } = req.body;
-      const data = await claudeWorkersManager.exportData(format);
+      const data = await devBotsManager.exportData(format);
       res.json({ success: true, data });
     } catch (error) {
       logger.error({
@@ -469,13 +469,13 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   });
 
   /**
-   * POST /claude-workers/import
+   * POST /dev-bots/import
    * Import system data
    */
   router.post('/import', async (req: Request, res: Response) => {
     try {
       const { data } = req.body;
-      const result = await claudeWorkersManager.importData(data);
+      const result = await devBotsManager.importData(data);
       res.json({ success: true, result });
     } catch (error) {
       logger.error({
@@ -496,12 +496,12 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   // ============================================================================
 
   /**
-   * POST /claude-workers/onboarding/complete
+   * POST /dev-bots/onboarding/complete
    * Mark onboarding as complete
    */
   router.post('/onboarding/complete', async (req: Request, res: Response) => {
     try {
-      await claudeWorkersManager.completeOnboarding();
+      await devBotsManager.completeOnboarding();
       res.json({ success: true, message: 'Onboarding completed' });
     } catch (error) {
       logger.error({
@@ -522,12 +522,12 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   // ============================================================================
 
   /**
-   * GET /claude-workers/workspace-sync/status
+   * GET /dev-bots/workspace-sync/status
    * Get workspace sync status
    */
   router.get('/workspace-sync/status', async (_req: Request, res: Response) => {
     try {
-      const status = await claudeWorkersManager.getWorkspaceSyncStatus();
+      const status = await devBotsManager.getWorkspaceSyncStatus();
       res.json(status);
     } catch (error) {
       logger.error({
@@ -544,13 +544,13 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   });
 
   /**
-   * POST /claude-workers/workspace-sync/trigger
+   * POST /dev-bots/workspace-sync/trigger
    * Trigger workspace synchronization
    */
   router.post('/workspace-sync/trigger', async (req: Request, res: Response) => {
     try {
       const { force } = req.body;
-      const result = await claudeWorkersManager.triggerWorkspaceSync(force);
+      const result = await devBotsManager.triggerWorkspaceSync(force);
       res.json(result);
     } catch (error) {
       logger.error({
@@ -571,12 +571,12 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   // ============================================================================
 
   /**
-   * GET /claude-workers/docker/status
+   * GET /dev-bots/docker/status
    * Get Docker integration status
    */
   router.get('/docker/status', async (_req: Request, res: Response) => {
     try {
-      const status = await claudeWorkersManager.getDockerStatus();
+      const status = await devBotsManager.getDockerStatus();
       res.json(status);
     } catch (error) {
       logger.error({
@@ -593,12 +593,12 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   });
 
   /**
-   * POST /claude-workers/docker/revalidate
+   * POST /dev-bots/docker/revalidate
    * Revalidate Docker containers
    */
   router.post('/docker/revalidate', async (_req: Request, res: Response) => {
     try {
-      const result = await claudeWorkersManager.revalidateDockerContainers();
+      const result = await devBotsManager.revalidateDockerContainers();
       res.json(result);
     } catch (error) {
       logger.error({
@@ -615,12 +615,12 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   });
 
   /**
-   * POST /claude-workers/docker/cleanup
+   * POST /dev-bots/docker/cleanup
    * Clean up Docker resources
    */
   router.post('/docker/cleanup', async (_req: Request, res: Response) => {
     try {
-      const result = await claudeWorkersManager.cleanupDockerResources();
+      const result = await devBotsManager.cleanupDockerResources();
       res.json(result);
     } catch (error) {
       logger.error({
@@ -637,13 +637,13 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   });
 
   /**
-   * GET /claude-workers/containers/:containerId/health
+   * GET /dev-bots/containers/:containerId/health
    * Get health status of specific container
    */
   router.get('/containers/:containerId/health', async (req: Request, res: Response) => {
     try {
       const { containerId } = req.params;
-      const health = await claudeWorkersManager.getContainerHealth(containerId);
+      const health = await devBotsManager.getContainerHealth(containerId);
       res.json(health);
     } catch (error) {
       logger.error({
@@ -664,12 +664,12 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   // ============================================================================
 
   /**
-   * GET /claude-workers/cleanup-status
+   * GET /dev-bots/cleanup-status
    * Get cleanup system status
    */
   router.get('/cleanup-status', async (_req: Request, res: Response) => {
     try {
-      const status = await claudeWorkersManager.getCleanupStatus();
+      const status = await devBotsManager.getCleanupStatus();
       res.json(status);
     } catch (error) {
       logger.error({
@@ -686,13 +686,13 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   });
 
   /**
-   * POST /claude-workers/trigger-cleanup
+   * POST /dev-bots/trigger-cleanup
    * Manually trigger cleanup
    */
   router.post('/trigger-cleanup', async (req: Request, res: Response) => {
     try {
       const { aggressive } = req.body;
-      const result = await claudeWorkersManager.triggerCleanup(aggressive);
+      const result = await devBotsManager.triggerCleanup(aggressive);
       res.json(result);
     } catch (error) {
       logger.error({
@@ -709,12 +709,12 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   });
 
   /**
-   * GET /claude-workers/scope-violations
+   * GET /dev-bots/scope-violations
    * Get scope violation reports
    */
   router.get('/scope-violations', async (_req: Request, res: Response) => {
     try {
-      const violations = await claudeWorkersManager.getScopeViolations();
+      const violations = await devBotsManager.getScopeViolations();
       res.json(violations);
     } catch (error) {
       logger.error({
@@ -731,12 +731,12 @@ export function createClaudeWorkersRouter(claudeWorkersManager: ClaudeWorkersMan
   });
 
   /**
-   * POST /claude-workers/emergency-recovery
+   * POST /dev-bots/emergency-recovery
    * Trigger emergency recovery procedures
    */
   router.post('/emergency-recovery', async (_req: Request, res: Response) => {
     try {
-      const result = await claudeWorkersManager.emergencyRecovery();
+      const result = await devBotsManager.emergencyRecovery();
       res.json(result);
     } catch (error) {
       logger.error({

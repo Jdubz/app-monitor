@@ -50,7 +50,7 @@ describe('DockerManager', () => {
         Architecture: 'x86_64'
       });
 
-      // Mock listImages to return claude-worker image
+      // Mock listImages to return dev-bot image
       mockDocker.listImages.mockResolvedValue([{
         Id: 'sha256:123456',
         Created: 1234567890,
@@ -87,7 +87,7 @@ describe('DockerManager', () => {
         Architecture: 'x86_64'
       });
 
-      // Mock listImages to return empty (no claude-worker image)
+      // Mock listImages to return empty (no dev-bot image)
       mockDocker.listImages.mockResolvedValue([]);
       mockDocker.listContainers.mockResolvedValue([]);
 
@@ -130,10 +130,10 @@ describe('DockerManager', () => {
         Size: 1000000000
       }]);
 
-      const result = await dockerManager.checkImage('claude-worker:latest');
+      const result = await dockerManager.checkImage('dev-bot:latest');
 
       expect(result.exists).toBe(true);
-      expect(result.name).toBe('claude-worker');
+      expect(result.name).toBe('dev-bot');
       expect(result.tag).toBe('latest');
       expect(result.id).toBe('sha256:123456');
     });
@@ -229,7 +229,7 @@ describe('DockerManager', () => {
       const result = await dockerManager.ensureRequiredImages();
 
       expect(result.success).toBe(false);
-      expect(result.errors[0]).toContain('build-claude-worker-image.sh');
+      expect(result.errors[0]).toContain('build-dev-bot-image.sh');
     });
   });
 
@@ -338,9 +338,9 @@ describe('DockerManager', () => {
   });
 
   describe('Static methods', () => {
-    it('should return Claude Worker image name', () => {
+    it('should return Dev-Bot image name', () => {
       const imageName = DockerManager.getClaudeWorkerImage();
-      expect(imageName).toBe('claude-worker:latest');
+      expect(imageName).toBe('dev-bot:latest');
     });
   });
 });

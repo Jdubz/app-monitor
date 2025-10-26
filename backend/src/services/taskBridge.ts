@@ -1,16 +1,16 @@
 /**
  * Task Bridge Service
  * 
- * Bridges the TaskQueueManager with ClaudeWorkersManager
+ * Bridges the TaskQueueManager with DevBotsManager
  * Provides bidirectional synchronization
  */
 
 import { EventEmitter } from 'events';
 import { logger } from '../utils/logger.js';
 import type { TaskQueueManager } from './taskQueueManager.js';
-import type { ClaudeWorkersManager } from './claudeWorkersManager.js';
+import type { DevBotsManager } from './devBotsManager.js';
 import type { Task as QueueTask } from '../types/taskSchema.js';
-import type { Task as ClaudeTask } from './claudeWorkersManager.js';
+import type { Task as ClaudeTask } from './devBotsManager.js';
 
 export interface TaskBridgeConfig {
   autoSync: boolean;
@@ -19,20 +19,20 @@ export interface TaskBridgeConfig {
 
 export class TaskBridge extends EventEmitter {
   private taskQueueManager: TaskQueueManager;
-  private claudeWorkersManager: ClaudeWorkersManager;
+  private devBotsManager: DevBotsManager;
   private config: TaskBridgeConfig;
   private syncInterval?: NodeJS.Timeout;
   private taskMapping: Map<string, string> = new Map(); // QueueTask.id -> ClaudeTask.id
 
   constructor(
     taskQueueManager: TaskQueueManager,
-    claudeWorkersManager: ClaudeWorkersManager,
+    devBotsManager: DevBotsManager,
     config: Partial<TaskBridgeConfig> = {}
   ) {
     super();
     
     this.taskQueueManager = taskQueueManager;
-    this.claudeWorkersManager = claudeWorkersManager;
+    this.devBotsManager = devBotsManager;
     
     this.config = {
       autoSync: config.autoSync ?? true,
@@ -66,20 +66,20 @@ export class TaskBridge extends EventEmitter {
       this.onQueueTaskUpdated(task);
     });
 
-    // Listen to ClaudeWorkersManager events
-    this.claudeWorkersManager.on('taskAdded', (task: ClaudeTask) => {
+    // Listen to DevBotsManager events
+    this.devBotsManager.on('taskAdded', (task: ClaudeTask) => {
       this.onClaudeTaskAdded(task);
     });
 
-    this.claudeWorkersManager.on('taskAssigned', (task: ClaudeTask) => {
+    this.devBotsManager.on('taskAssigned', (task: ClaudeTask) => {
       this.onClaudeTaskAssigned(task);
     });
 
-    this.claudeWorkersManager.on('taskCompleted', (task: ClaudeTask) => {
+    this.devBotsManager.on('taskCompleted', (task: ClaudeTask) => {
       this.onClaudeTaskCompleted(task);
     });
 
-    this.claudeWorkersManager.on('taskFailed', (task: ClaudeTask) => {
+    this.devBotsManager.on('taskFailed', (task: ClaudeTask) => {
       this.onClaudeTaskFailed(task);
     });
   }
@@ -89,8 +89,8 @@ export class TaskBridge extends EventEmitter {
    */
   private async onQueueTaskCreated(task: QueueTask): Promise<void> {
     try {
-      // Create task in ClaudeWorkersManager
-      const claudeTask = await this.claudeWorkersManager.addTask(
+      // Create task in DevBotsManager
+      const claudeTask = await this.devBotsManager.addTask(
         task.type,
         task.title,
         task.documentation || '',
@@ -139,7 +139,7 @@ export class TaskBridge extends EventEmitter {
       return;
     }
 
-    // Claude tasks are managed by ClaudeWorkersManager
+    // Claude tasks are managed by DevBotsManager
     // We mainly sync status changes
     logger.debug({
       category: 'process',
@@ -288,7 +288,7 @@ export class TaskBridge extends EventEmitter {
     try {
       // Get all tasks from both systems
       // const _queueTasks = this.taskQueueManager.getAllTasks();
-      const claudeTasksObj = await this.claudeWorkersManager.getTasks();
+      const claudeTasksObj = await this.devBotsManager.getTasks();
       
       // Flatten all claude tasks into a single array
       const claudeTasks = [
@@ -370,7 +370,7 @@ export class TaskBridge extends EventEmitter {
     return {
       mappedTasks: this.taskMapping.size,
       queueTasks: this.taskQueueManager.getAllTasks().length,
-      claudeTasks: this.claudeWorkersManager.getTasks().length,
+      claudeTasks: this.devBotsManager.getTasks().length,
       autoSync: this.config.autoSync && !!this.syncInterval,
     };
   }

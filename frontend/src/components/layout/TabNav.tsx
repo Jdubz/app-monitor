@@ -1,7 +1,6 @@
-import { ReactNode } from 'react';
 import styles from './TabNav.module.css';
 
-export type TabType = 'local' | 'scripts' | 'staging' | 'production' | 'health' | 'claude-workers';
+export type TabType = 'local' | 'scripts' | 'staging' | 'production' | 'health' | 'dev-bots';
 
 interface TabNavProps {
   activeTab: TabType;
@@ -19,7 +18,7 @@ const tabs: Tab[] = [
   { id: 'staging', label: 'Staging' },
   { id: 'production', label: 'Production' },
   { id: 'health', label: 'System Health' },
-  { id: 'claude-workers', label: 'Claude Workers' },
+  { id: 'dev-bots', label: 'Dev-Bots' },
 ];
 
 export function TabNav({ activeTab, onTabChange }: TabNavProps) {

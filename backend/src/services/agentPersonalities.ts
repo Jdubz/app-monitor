@@ -2,7 +2,7 @@
  * Agent Personalities Service for Dev-Monitor
  *
  * Defines different agent personalities and their specializations
- * Integrates with the existing ClaudeWorkersManager
+ * Integrates with the existing DevBotsManager
  */
 
 export interface AgentPersonality {

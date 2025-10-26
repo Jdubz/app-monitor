@@ -88,7 +88,7 @@ export class TaskCreationGuidelinesManager {
   private guidelines: Map<string, TaskCreationGuidelines> = new Map();
   private validationRules: ValidationRule[] = [];
   private validProjects: string[] = [
-    'claude-workers',
+    'dev-bots',
     'dev-monitor', 
     'job-finder-FE',
     'job-finder-BE',

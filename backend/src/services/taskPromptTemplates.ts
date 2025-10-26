@@ -6,7 +6,7 @@
  */
 
 import { logger } from '../utils/logger.js';
-import { Task } from './claudeWorkersManager.js';
+import { Task } from './devBotsManager.js';
 import { AgentPersonality } from './agentPersonalities.js';
 import { getGuidelinesForTaskType, formatGuidelinesAsMarkdown } from './taskTypeGuidelines.js';
 

@@ -126,7 +126,7 @@ export interface WorkerStatus {
   lastOnboardingCheck?: number; // New: last onboarding check timestamp
 }
 
-export interface ClaudeWorkersStatus {
+export interface DevBotsStatus {
   systemStatus: 'running' | 'stopped' | 'error';
   workers: Record<string, WorkerStatus>;
   queueSize: number;
@@ -319,7 +319,7 @@ class PeriodicCleanupScheduler {
   }
 }
 
-export class ClaudeWorkersManager extends EventEmitter {
+export class DevBotsManager extends EventEmitter {
   private processManager: ProcessManager;
   private docker: Docker;
   private dockerManager: DockerManager;
@@ -376,12 +376,14 @@ export class ClaudeWorkersManager extends EventEmitter {
     // Load persisted tasks
     this.loadPersistedTasks();
 
-    // Start cleanup scheduler (health checks not needed for ephemeral workers)
-    this.startCleanupScheduler();
+    // NOTE: Cleanup tasks should be created manually via the task API
+    // Linting, testing, documentation are part of the development process
+    // via git hooks, CI/CD, and manual code review
+    // this.startCleanupScheduler(); // REMOVED - cleanup is not automatic
 
     // Listen for process status changes
     this.processManager.on('statusChange', (serviceName: string, status: ProcessInfo) => {
-      if (serviceName === 'claude-workers') {
+      if (serviceName === 'dev-bots') {
         this.emit('systemStatusChange', status);
         this.updateWorkerHealth();
       }
@@ -410,7 +412,7 @@ export class ClaudeWorkersManager extends EventEmitter {
         this.emit('dockerError', {
           type: 'validation_failed',
           errors: this.dockerValidationResult.errors,
-          message: 'Docker environment validation failed. Claude Workers cannot start.'
+          message: 'Docker environment validation failed. Dev-Bots cannot start.'
         });
         return;
       }
@@ -628,7 +630,7 @@ export class ClaudeWorkersManager extends EventEmitter {
 
   private async updateWorkerHealth(): Promise<void> {
     try {
-      const processInfo = await this.processManager.getServiceStatus('claude-workers');
+      const processInfo = await this.processManager.getServiceStatus('dev-bots');
       if (processInfo?.status !== 'running') {
         this.isCoordinatorHealthy = false;
       }
@@ -1080,7 +1082,7 @@ export class ClaudeWorkersManager extends EventEmitter {
     }
     
     const workerId = `${workerType}-${agent.id}-${Date.now()}`;
-    const containerName = `claude-worker-${workerId}`;
+    const containerName = `dev-bot-${workerId}`;
     
     try {
       // Create Docker container with agent-specific configuration
@@ -1152,12 +1154,12 @@ export class ClaudeWorkersManager extends EventEmitter {
 
   /**
    * Get Docker image for agent personality
-   * All agents now use the same custom claude-worker image with Claude CLI pre-installed
+   * All agents now use the same custom dev-bot image with Claude CLI pre-installed
    */
   private getAgentDockerImage(_agent: AgentPersonality): string {
-    // Use the custom claude-worker image for all agents
+    // Use the custom dev-bot image for all agents
     // This image has Claude CLI and all required tools pre-installed
-    return DockerManager.getClaudeWorkerImage();
+    return DockerManager.getDevBotImage();
   }
 
   /**
@@ -1530,7 +1532,7 @@ export class ClaudeWorkersManager extends EventEmitter {
       logger.info({
       category: 'process',
       action: 'claude_workers_system_is_already_running',
-      message: 'Claude Workers system is already running'
+      message: 'Dev-Bots system is already running'
     });
       return;
     }
@@ -1544,7 +1546,7 @@ export class ClaudeWorkersManager extends EventEmitter {
     logger.info({
       category: 'process',
       action: 'claude_workers_system_started_ephemeral_workers_wi',
-      message: 'Claude Workers system started - ephemeral workers will be created for tasks'
+      message: 'Dev-Bots system started - ephemeral workers will be created for tasks'
     });
     
     // Try to assign pending tasks
@@ -1556,7 +1558,7 @@ export class ClaudeWorkersManager extends EventEmitter {
       logger.info({
       category: 'process',
       action: 'claude_workers_system_is_already_stopped',
-      message: 'Claude Workers system is already stopped'
+      message: 'Dev-Bots system is already stopped'
     });
       return;
     }
@@ -1587,7 +1589,7 @@ export class ClaudeWorkersManager extends EventEmitter {
     logger.info({
       category: 'process',
       action: 'claude_workers_system_stopped_all_ephemeral_worker',
-      message: 'Claude Workers system stopped - all ephemeral workers terminated'
+      message: 'Dev-Bots system stopped - all ephemeral workers terminated'
     });
   }
 
@@ -1772,7 +1774,7 @@ export class ClaudeWorkersManager extends EventEmitter {
     return prompt;
   }
 
-  async getSystemStatus(): Promise<ClaudeWorkersStatus> {
+  async getSystemStatus(): Promise<DevBotsStatus> {
     // Convert ephemeral workers to worker status format for compatibility
     const workersRecord: Record<string, WorkerStatus> = {};
     for (const [workerId, ephemeralWorker] of this.ephemeralWorkers.entries()) {

@@ -4,7 +4,7 @@ import { getEnvironments } from './services/api';
 import { Environment } from './types/log.types';
 import { LogProvider } from './contexts/LogContext';
 import { Header, MainLayout, TabNav, TabContent, TabType } from './components/layout';
-import { LocalTab, ScriptsTab, EnvironmentTab, SystemHealthTab, ClaudeWorkersTab } from './components/tabs';
+import { LocalTab, ScriptsTab, EnvironmentTab, SystemHealthTab, DevBotsTab } from './components/tabs';
 import { ErrorBoundary, LoadingSpinner, InlineError } from './components/common';
 import './App.css';
 
@@ -61,7 +61,7 @@ function App() {
                 {activeTab === 'staging' && <EnvironmentTab socket={socket} environment="staging" environments={environments} />}
                 {activeTab === 'production' && <EnvironmentTab socket={socket} environment="production" environments={environments} />}
                 {activeTab === 'health' && <SystemHealthTab />}
-                {activeTab === 'claude-workers' && <ClaudeWorkersTab socket={socket} />}
+                {activeTab === 'dev-bots' && <DevBotsTab socket={socket} />}
               </div>
             )}
           </TabContent>

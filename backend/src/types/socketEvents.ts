@@ -83,7 +83,7 @@ export interface ServerToClientEvents {
   'script:failed': (execution: any) => void;
   'script:killed': (execution: any) => void;
   
-  // Claude Workers events
+  // Dev-Bots events
   'claude:taskAdded': (task: any) => void;
   'claude:taskAssigned': (task: any) => void;
   'claude:taskStarted': (task: any) => void;

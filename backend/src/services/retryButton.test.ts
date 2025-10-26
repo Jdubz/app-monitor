@@ -3,9 +3,9 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { ClaudeWorkersManager } from './claudeWorkersManager.js';
+import { DevBotsManager } from './devBotsManager.js';
 import { ProcessManager } from './processManager.js';
-import { Task } from './claudeWorkersManager.js';
+import { Task } from './devBotsManager.js';
 
 // Mock dependencies
 vi.mock('./processManager.js');
@@ -43,12 +43,12 @@ vi.mock('../utils/logger.js', () => ({
 }));
 
 describe('Retry Button Functionality', () => {
-  let manager: ClaudeWorkersManager;
+  let manager: DevBotsManager;
   let mockProcessManager: ProcessManager;
 
   beforeEach(() => {
     mockProcessManager = new ProcessManager();
-    manager = new ClaudeWorkersManager(mockProcessManager);
+    manager = new DevBotsManager(mockProcessManager);
   });
 
   describe('Failed Task Retry', () => {

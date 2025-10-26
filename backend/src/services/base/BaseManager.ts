@@ -2,7 +2,7 @@
  * Base Manager Class
  * 
  * Provides common functionality for all service managers.
- * Eliminates duplication in ProcessManager, ScriptManager, ClaudeWorkersManager, etc.
+ * Eliminates duplication in ProcessManager, ScriptManager, DevBotsManager, etc.
  */
 
 import { EventEmitter } from 'events';

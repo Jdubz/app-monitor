@@ -29,7 +29,7 @@ export interface DockerImageInfo {
 
 export class DockerManager {
   private docker: Docker;
-  private static readonly CLAUDE_WORKER_IMAGE = 'claude-worker:latest';
+  private static readonly CLAUDE_WORKER_IMAGE = 'dev-bot:latest';
   private static readonly REQUIRED_IMAGES = [
     DockerManager.CLAUDE_WORKER_IMAGE
   ];
@@ -212,10 +212,10 @@ export class DockerManager {
     });
 
         // For custom images that need to be built, provide helpful error
-        if (imageName.startsWith('claude-worker')) {
+        if (imageName.startsWith('dev-bot')) {
           errors.push(
             `Custom image '${imageName}' not found. Please build it first:\n` +
-            `  cd dev-monitor/backend && ./build-claude-worker-image.sh`
+            `  cd dev-monitor/backend && ./build-dev-bot-image.sh`
           );
           continue;
         }
@@ -249,9 +249,9 @@ export class DockerManager {
   }
 
   /**
-   * Get the Claude Worker image name
+   * Get the Dev-Bot image name
    */
-  static getClaudeWorkerImage(): string {
+  static getDevBotImage(): string {
     return DockerManager.CLAUDE_WORKER_IMAGE;
   }
 

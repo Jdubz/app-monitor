@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplates.js';
 import { AgentPersonality } from './agentPersonalities.js';
-import { Task } from './claudeWorkersManager.js';
+import { Task } from './devBotsManager.js';
 
 describe('Template Integration Tests', () => {
   let templateManager: TaskPromptTemplateManager;

@@ -7,7 +7,7 @@ import { createApiRouter } from './routes/index.js';
 import { ProcessManager } from './services/processManager.js';
 import { CloudLogging } from './services/cloudLogging.js';
 import { ScriptManager } from './services/scriptManager.js';
-import { ClaudeWorkersManager } from './services/claudeWorkersManager.js';
+import { DevBotsManager } from './services/devBotsManager.js';
 import { LogStreamer } from './services/logStreamer.js';
 import { LogRotation } from './services/logRotation.js';
 import { ConnectionManager } from './services/connectionManager.js';
@@ -27,7 +27,7 @@ import type {
 export let processManager: ProcessManager;
 export let cloudLogging: CloudLogging;
 export let scriptManager: ScriptManager;
-export let claudeWorkersManager: ClaudeWorkersManager;
+export let devBotsManager: DevBotsManager;
 export let logRotation: LogRotation;
 export let logStreamer: LogStreamer;
 export let connectionManager: ConnectionManager;
@@ -44,7 +44,7 @@ export function createApp() {
   processManager = new ProcessManager();
   cloudLogging = new CloudLogging();
   scriptManager = new ScriptManager();
-  claudeWorkersManager = new ClaudeWorkersManager(processManager);
+  devBotsManager = new DevBotsManager(processManager);
   
   // Initialize LogSourceManager and load configuration
   logSourceManager = new LogSourceManager();
@@ -113,8 +113,8 @@ export function createApp() {
     scriptExecutionHistory.addExecution(execution);
   });
 
-  // Initialize TaskBridge to sync TaskQueueManager with ClaudeWorkersManager
-  taskBridge = new TaskBridge(taskQueueManager, claudeWorkersManager, {
+  // Initialize TaskBridge to sync TaskQueueManager with DevBotsManager
+  taskBridge = new TaskBridge(taskQueueManager, devBotsManager, {
     autoSync: true,
     syncInterval: 5000,
   });
@@ -153,37 +153,37 @@ export function createApp() {
     io.emit('script:killed', execution);
   });
 
-  // Setup Claude Workers Manager Socket.IO events
-  claudeWorkersManager.on('taskAdded', (task) => {
+  // Setup Dev-Bots Manager Socket.IO events
+  devBotsManager.on('taskAdded', (task) => {
     io.emit('claude:taskAdded', task);
   });
 
-  claudeWorkersManager.on('taskAssigned', (task) => {
+  devBotsManager.on('taskAssigned', (task) => {
     io.emit('claude:taskAssigned', task);
   });
 
-  claudeWorkersManager.on('taskStarted', (task) => {
+  devBotsManager.on('taskStarted', (task) => {
     io.emit('claude:taskStarted', task);
   });
 
-  claudeWorkersManager.on('taskCompleted', (task) => {
+  devBotsManager.on('taskCompleted', (task) => {
     io.emit('claude:taskCompleted', task);
   });
 
-  claudeWorkersManager.on('taskFailed', (task) => {
+  devBotsManager.on('taskFailed', (task) => {
     io.emit('claude:taskFailed', task);
   });
 
-  claudeWorkersManager.on('systemStatusChange', (status) => {
+  devBotsManager.on('systemStatusChange', (status) => {
     io.emit('claude:systemStatusChange', status);
   });
 
-  claudeWorkersManager.on('coordinatorHealthChange', (isHealthy) => {
+  devBotsManager.on('coordinatorHealthChange', (isHealthy) => {
     io.emit('claude:coordinatorHealthChange', isHealthy);
   });
 
   // Docker error and warning events
-  claudeWorkersManager.on('dockerError', (error) => {
+  devBotsManager.on('dockerError', (error) => {
     io.emit('claude:dockerError', error);
     logger.error({
       category: 'process',
@@ -193,7 +193,7 @@ export function createApp() {
     });
   });
 
-  claudeWorkersManager.on('dockerWarning', (warning) => {
+  devBotsManager.on('dockerWarning', (warning) => {
     io.emit('claude:dockerWarning', warning);
     logger.warn({
       category: 'process',
@@ -203,7 +203,7 @@ export function createApp() {
     });
   });
 
-  claudeWorkersManager.on('workerError', (error) => {
+  devBotsManager.on('workerError', (error) => {
     io.emit('claude:workerError', error);
     logger.error({
       category: 'process',
@@ -235,7 +235,7 @@ export function createApp() {
           details: { socketId: socket.id, containerId, options }
         });
 
-        const dockerManager = claudeWorkersManager.getDockerManager();
+        const dockerManager = devBotsManager.getDockerManager();
         
         // Track monitor in connection manager
         connectionManager.addMonitor(socket.id, containerId);
@@ -286,7 +286,7 @@ export function createApp() {
     // Container status monitoring
     socket.on('docker:monitorContainer', async ({ containerId }) => {
       try {
-        const dockerManager = claudeWorkersManager.getDockerManager();
+        const dockerManager = devBotsManager.getDockerManager();
         
         // Track monitor in connection manager
         connectionManager.addMonitor(socket.id, containerId);
@@ -383,7 +383,7 @@ export function createApp() {
     processManager,
     cloudLogging,
     scriptManager,
-    claudeWorkersManager,
+    devBotsManager,
     connectionManager,
     taskQueueManager,
     scriptExecutionHistory,
