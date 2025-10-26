@@ -1,4 +1,4 @@
-import { Logging, Log, Entry } from '@google-cloud/logging';
+import { Logging, Entry } from '@google-cloud/logging';
 import { logger } from '../utils/logger.js';
 import { config, environments, CloudServiceConfig } from '../config.js';
 import * as fs from 'fs';
@@ -43,6 +43,11 @@ export class CloudLogging {
 
   /**
    * Initialize Google Cloud Logging client
+   * 
+   * Required IAM permissions:
+   * - roles/logging.viewer: Read logs from Cloud Logging
+   * 
+   * See docs/GOOGLE_CLOUD_LOGGING_PERMISSIONS.md for setup instructions
    */
   private async initializeLogging(): Promise<void> {
     try {
@@ -134,7 +139,6 @@ export class CloudLogging {
       message: `Fetching logs for ${query.environment} with filter: ${filter}`
     });
 
-      const log = this.logging!.log('cloudfunction');
       const [entries] = await this.logging!.getEntries({
         filter,
         pageSize: limit,
@@ -212,7 +216,9 @@ export class CloudLogging {
    * Parse a Cloud Logging entry into our standardized format
    */
   private parseLogEntry(entry: Entry, serviceName: string, index: number): ParsedCloudLog {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const metadata = entry.metadata as any;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = entry.data as any;
 
     // Extract message from different payload types
@@ -273,7 +279,8 @@ export class CloudLogging {
   /**
    * Parse protobuf audit log payload into a readable message
    */
-  private parseProtoPayload(protoPayload: any, metadata: any): string {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
+  private parseProtoPayload(protoPayload: any, _metadata: any): string {
     try {
       // Extract key information from audit log
       const methodName = protoPayload.methodName || 'Unknown method';

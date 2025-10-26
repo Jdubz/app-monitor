@@ -218,6 +218,7 @@ make stop
 - [Architecture](./docs/ARCHITECTURE.md) - System design
 - [Development Guide](./docs/DEVELOPMENT.md) - Developer guide
 - [Migration Guide](./docs/MIGRATION_GUIDE.md) - Migration notes
+- [Google Cloud Logging Permissions](./docs/GOOGLE_CLOUD_LOGGING_PERMISSIONS.md) - GCP IAM setup
 - [API Documentation](./docs/api/) - API reference
 
 ## Features
