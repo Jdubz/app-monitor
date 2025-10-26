@@ -47,9 +47,11 @@ run_e2e_tests() {
   echo -e "${YELLOW}📦 Running E2E tests...${NC}"
   
   local failed_tests=0
+  local found_tests=0
   
   for test_file in "${E2E_TESTS[@]}"; do
     if [ -f "$test_file" ]; then
+      ((found_tests++))
       if ! run_test_batch "$test_file" "E2E"; then
         ((failed_tests++))
       fi
@@ -57,6 +59,11 @@ run_e2e_tests() {
       echo -e "${YELLOW}⚠️  Test file not found: $test_file${NC}"
     fi
   done
+  
+  if [ $found_tests -eq 0 ]; then
+    echo -e "${YELLOW}⚠️  No E2E test files found, skipping E2E tests${NC}"
+    return 0
+  fi
   
   if [ $failed_tests -eq 0 ]; then
     echo -e "${GREEN}✅ All E2E tests passed${NC}"

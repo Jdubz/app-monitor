@@ -240,11 +240,11 @@ class SnowballPrevention {
 
 class PeriodicCleanupScheduler {
   private schedules = {
-    linting: { interval: 6 * 60 * 60 * 1000, lastRun: 0 },
-    deduplication: { interval: 12 * 60 * 60 * 1000, lastRun: 0 },
-    documentation: { interval: 24 * 60 * 60 * 1000, lastRun: 0 },
-    testing: { interval: 48 * 60 * 60 * 1000, lastRun: 0 },
-    deepCleanup: { interval: 7 * 24 * 60 * 60 * 1000, lastRun: 0 }
+    linting: { interval: 6 * 60 * 60 * 1000, lastRun: Date.now() },
+    deduplication: { interval: 12 * 60 * 60 * 1000, lastRun: Date.now() },
+    documentation: { interval: 24 * 60 * 60 * 1000, lastRun: Date.now() },
+    testing: { interval: 48 * 60 * 60 * 1000, lastRun: Date.now() },
+    deepCleanup: { interval: 7 * 24 * 60 * 60 * 1000, lastRun: Date.now() }
   };
   
   checkSchedules(): string[] {
