@@ -39,7 +39,7 @@ describe('ProcessManager Core Functionality', () => {
       once: vi.fn(),
       kill: vi.fn(),
       exitCode: null
-    });
+    } as any);
 
     // Mock fs
     mockFs = vi.mocked(fs);
@@ -104,9 +104,10 @@ describe('ProcessManager Core Functionality', () => {
         stdout: { on: vi.fn() },
         stderr: { on: vi.fn() },
         on: vi.fn(),
+        once: vi.fn(),
         kill: vi.fn(),
         exitCode: null
-      };
+      } as any;
 
       mockSpawn.mockReturnValue(mockProcess);
       await processManager.startService(serviceName);
@@ -127,9 +128,10 @@ describe('ProcessManager Core Functionality', () => {
         stdout: { on: vi.fn() },
         stderr: { on: vi.fn() },
         on: vi.fn(),
+        once: vi.fn(),
         kill: vi.fn(),
         exitCode: null
-      };
+      } as any;
 
       mockSpawn.mockReturnValue(mockProcess);
       await processManager.startService(serviceName);
@@ -301,9 +303,10 @@ describe('ProcessManager Core Functionality', () => {
             setTimeout(() => callback(1), 100);
           }
         }),
+        once: vi.fn(),
         kill: vi.fn(),
         exitCode: null
-      };
+      } as any;
 
       mockSpawn.mockReturnValue(mockProcess);
       await processManager.startService(serviceName);
@@ -360,9 +363,10 @@ describe('ProcessManager Core Functionality', () => {
         stdout: { on: vi.fn() },
         stderr: { on: vi.fn() },
         on: vi.fn(),
+        once: vi.fn(),
         kill: vi.fn(),
         exitCode: null
-      };
+      } as any;
 
       mockSpawn.mockReturnValue(mockProcess);
       await processManager.startService(serviceName);
@@ -388,9 +392,10 @@ describe('ProcessManager Core Functionality', () => {
         stdout: { on: vi.fn() },
         stderr: { on: vi.fn() },
         on: vi.fn(),
+        once: vi.fn(),
         kill: vi.fn(),
         exitCode: null
-      };
+      } as any;
 
       mockSpawn.mockReturnValue(mockProcess);
       await processManager.startService(serviceName);
@@ -441,11 +446,12 @@ describe('ProcessManager Core Functionality', () => {
         stdout: { on: vi.fn() },
         stderr: { on: vi.fn() },
         on: vi.fn(),
+        once: vi.fn(),
         kill: vi.fn().mockImplementation(() => {
           throw new Error('Stop failed');
         }),
         exitCode: null
-      };
+      } as any;
 
       mockSpawn.mockReturnValue(mockProcess);
       await processManager.startService(serviceName);
@@ -479,18 +485,20 @@ describe('ProcessManager Core Functionality', () => {
         stdout: { on: vi.fn() },
         stderr: { on: vi.fn() },
         on: vi.fn(),
+        once: vi.fn(),
         kill: vi.fn(),
         exitCode: null
-      };
+      } as any;
 
       const mockProcess2 = {
         pid: 12346,
         stdout: { on: vi.fn() },
         stderr: { on: vi.fn() },
         on: vi.fn(),
+        once: vi.fn(),
         kill: vi.fn(),
         exitCode: null
-      };
+      } as any;
 
       mockSpawn
         .mockReturnValueOnce(mockProcess1)
@@ -515,11 +523,12 @@ describe('ProcessManager Core Functionality', () => {
         stdout: { on: vi.fn() },
         stderr: { on: vi.fn() },
         on: vi.fn(),
+        once: vi.fn(),
         kill: vi.fn().mockImplementation(() => {
           throw new Error('Kill failed');
         }),
         exitCode: null
-      };
+      } as any;
 
       mockSpawn.mockReturnValue(mockProcess);
       await processManager.startService(serviceName);
