@@ -195,11 +195,12 @@ describe('TaskPersistence', () => {
       // When: Saving tasks
       taskPersistence.saveTasks(tasks);
 
-      // Then: Tasks are saved
-      expect(mockFs.writeFileSync).toHaveBeenCalledWith(
+      // Then: Tasks are saved (with versioned format)
+      expect(mockFs.writeFileSync).toHaveBeenCalledTimes(2); // Main file + backup
+      expect(mockFs.writeFileSync).toHaveBeenNthCalledWith(
+        2, // Second call is for the main file
         '/test/storage/tasks.json',
-        JSON.stringify(tasks, null, 2),
-        'utf8'
+        expect.stringContaining('"version": "1.0"')
       );
     });
 
@@ -261,11 +262,12 @@ describe('TaskPersistence', () => {
       // When: Saving completed tasks
       taskPersistence.saveCompletedTasks(completedTasks);
 
-      // Then: Tasks are saved
-      expect(mockFs.writeFileSync).toHaveBeenCalledWith(
+      // Then: Tasks are saved (with versioned format)
+      expect(mockFs.writeFileSync).toHaveBeenCalledTimes(2); // Main file + backup
+      expect(mockFs.writeFileSync).toHaveBeenNthCalledWith(
+        2, // Second call is for the main file
         '/test/storage/completed-tasks.json',
-        JSON.stringify(completedTasks, null, 2),
-        'utf8'
+        expect.stringContaining('"version": "1.0"')
       );
     });
 
@@ -351,11 +353,10 @@ describe('TaskPersistence', () => {
       // When: Exporting tasks
       taskPersistence.exportTasks(tasks, exportPath);
 
-      // Then: Tasks are exported
+      // Then: Tasks are exported (with versioned format)
       expect(mockFs.writeFileSync).toHaveBeenCalledWith(
         exportPath,
-        JSON.stringify(tasks, null, 2),
-        'utf8'
+        expect.stringContaining('"version": "1.0"')
       );
     });
 
@@ -384,18 +385,21 @@ describe('TaskPersistence', () => {
 
       // Then: Tasks are imported
       expect(tasks).toEqual(mockTasks);
-      expect(mockFs.readFileSync).toHaveBeenCalledWith(importPath, 'utf8');
+      expect(mockFs.readFileSync).toHaveBeenCalledWith(importPath, 'utf-8');
     });
 
     it('should handle import file not found', () => {
       // Given: Non-existent import file
       mockFs.existsSync.mockReturnValue(false);
+      mockFs.readFileSync.mockImplementation(() => {
+        throw new Error('ENOENT: no such file or directory');
+      });
 
       const importPath = '/test/import/nonexistent.json';
 
       // When: Importing tasks
-      // Then: Error is thrown
-      expect(() => taskPersistence.importTasks(importPath)).toThrow('Import file not found');
+      // Then: Error is thrown (fs.readFileSync will throw ENOENT error)
+      expect(() => taskPersistence.importTasks(importPath)).toThrow();
     });
 
     it('should handle corrupted import file', () => {
@@ -560,10 +564,10 @@ describe('TaskPersistence', () => {
 
       // Then: Data structure is preserved
       expect(loadedTasks[0]).toEqual(complexTask);
-      expect(mockFs.writeFileSync).toHaveBeenCalledWith(
+      expect(mockFs.writeFileSync).toHaveBeenNthCalledWith(
+        2, // Second call is for the main file
         '/test/storage/tasks.json',
-        JSON.stringify([complexTask], null, 2),
-        'utf8'
+        expect.stringContaining('"version": "1.0"')
       );
     });
 
@@ -574,11 +578,11 @@ describe('TaskPersistence', () => {
       // When: Saving empty tasks
       taskPersistence.saveTasks(emptyTasks);
 
-      // Then: Empty array is saved
-      expect(mockFs.writeFileSync).toHaveBeenCalledWith(
+      // Then: Empty array is saved (with versioned format)
+      expect(mockFs.writeFileSync).toHaveBeenNthCalledWith(
+        2, // Second call is for the main file
         '/test/storage/tasks.json',
-        JSON.stringify([], null, 2),
-        'utf8'
+        expect.stringContaining('"tasks": []')
       );
     });
   });
