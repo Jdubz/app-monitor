@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
-import { Client as SocketIOClient } from 'socket.io-client';
+import { io as SocketIOClient } from 'socket.io-client';
 import { ProcessManager } from './processManager.js';
 import { LogStreamer } from './logStreamer.js';
 import { CloudLogging } from './cloudLogging.js';
