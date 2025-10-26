@@ -243,8 +243,11 @@ export class CloudLogging {
     const level = this.mapSeverityToLevel(severity);
 
     // Extract timestamp
-    const timestamp = metadata.timestamp
-      ? new Date(metadata.timestamp).getTime()
+    // entry.timestamp is an object with { seconds: number, nanos?: number }
+    const timestamp = entry.timestamp
+      ? (typeof entry.timestamp === 'object' && 'seconds' in entry.timestamp
+          ? entry.timestamp.seconds * 1000
+          : new Date(entry.timestamp as any).getTime())
       : Date.now();
 
     // Extract trace and span IDs
