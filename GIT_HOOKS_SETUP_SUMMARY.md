@@ -41,16 +41,13 @@ Added to `package.json`:
 - Auto-fixes issues where possible
 - Integrated with pre-commit hook
 
-### 4. CI/CD Pipeline (Already Existed)
-Verified existing GitHub Actions workflow:
+### 4. CI/CD Pipeline
+Simplified GitHub Actions workflow:
 - **Location**: `.github/workflows/ci.yml`
-- **Triggers**: Push/PR to main/develop branches
+- **Triggers**: Pull requests to `main` only
 - **Jobs**:
-  - Frontend Tests (Node 18.x, 20.x)
-  - Backend Tests (Node 18.x, 20.x)
-  - E2E Tests (Playwright)
-  - Code Quality & Coverage
-  - Build Summary
+  - Frontend Tests (Linting + Unit Tests on Node 18.x, 20.x)
+  - Backend Tests (Linting + Unit Tests on Node 18.x, 20.x)
 
 ### 5. Documentation
 - **CONTRIBUTING.md**: Complete development guide with git hooks info
@@ -67,11 +64,10 @@ Verified existing GitHub Actions workflow:
 - Backend: 0 errors, warnings only for `any` types
 - Frontend: Some errors for unused vars (pre-existing)
 
-✅ **CI/CD Workflow**: Already configured and comprehensive
+✅ **CI/CD Workflow**: Simplified for dev tool
+- Only runs on PRs to main (no deployment)
+- Linting and unit tests only
 - Matrix testing on multiple Node versions
-- Full test suite including E2E
-- Build verification
-- Coverage reports
 
 ## File Changes
 
@@ -133,6 +129,7 @@ Both added as dev dependencies to root package.json.
 ## Notes
 
 - This is a **dev-only tool** - no deployment needed
+- CI runs only on PRs to `main` (not on push to staging)
 - Hooks are local and don't affect CI/CD
 - CI/CD runs independently on GitHub
 - Matrix testing ensures Node 18.x and 20.x compatibility

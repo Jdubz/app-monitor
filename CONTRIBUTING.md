@@ -41,14 +41,11 @@ git push --no-verify
 ## CI/CD Pipeline
 
 GitHub Actions automatically runs on:
-- Push to `main` or `develop` branches
-- Pull requests to `main` or `develop` branches
+- Pull requests to `main` branch
 
 ### CI Jobs
-1. **Frontend Tests** - Linting, unit tests, build (Node 18.x, 20.x)
+1. **Frontend Tests** - Linting, unit tests (Node 18.x, 20.x)
 2. **Backend Tests** - Linting, unit tests (Node 18.x, 20.x)
-3. **E2E Tests** - Playwright end-to-end tests
-4. **Code Quality** - Coverage reports
 
 ## Scripts
 

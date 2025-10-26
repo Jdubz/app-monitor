@@ -151,12 +151,10 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed development guidelines.
 
 ### CI/CD Pipeline
 
-GitHub Actions automatically runs on pull requests and pushes to `main`/`develop`:
+GitHub Actions automatically runs on pull requests to `main`:
 - ✅ Linting (ESLint)
 - ✅ Unit tests (Vitest)
-- ✅ E2E tests (Playwright)
 - ✅ Build verification
-- ✅ Code coverage reports
 
 Matrix testing on Node.js 18.x and 20.x ensures compatibility.
 

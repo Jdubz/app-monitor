@@ -93,17 +93,18 @@ export const checkCloudLoggingStatus = async (): Promise<CloudLoggingStatus> => 
 
 // Log sources endpoint (dynamically discovered log files)
 export interface LogSource {
-  service: string;
-  filename: string;
-  filepath: string;
+  id: string;
+  name: string;
   format: string;
-  formatConfidence: string;
-  watching: boolean;
+  parser: string;
+  color: string;
+  displayOrder: number;
+  path: string;
 }
 
 export const getLogSources = async (): Promise<LogSource[]> => {
-  const response = await apiClient.get<{ count: number; sources: LogSource[] }>('/logs/sources');
-  return response.sources;
+  const response = await apiClient.get<{ success: boolean; data: LogSource[] }>('/logs/sources');
+  return response.data;
 };
 
 // Script management endpoints
