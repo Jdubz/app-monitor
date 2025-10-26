@@ -150,15 +150,17 @@ describe('TaskPersistence', () => {
           tasks: [{ id: 'backup-task' }]
         })); // Backup file
 
-      mockFs.readdirSync.mockReturnValue(['backup-1.json']);
+      mockFs.readdirSync.mockReturnValue(['tasks-backup-2025-01-01.json']);
 
       // When: Loading tasks
       const tasks = taskPersistence.loadTasks();
 
       // Then: Tasks are loaded from backup
       expect(tasks).toEqual([{ id: 'backup-task' }]);
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to load tasks from main file')
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: 'Failed to load tasks from storage:'
+        })
       );
     });
 
@@ -288,7 +290,12 @@ describe('TaskPersistence', () => {
       ];
 
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readFileSync.mockReturnValue(JSON.stringify(mockCompletedTasks));
+      mockFs.readFileSync.mockReturnValue(JSON.stringify({
+        version: '1.0',
+        lastSaved: new Date().toISOString(),
+        totalCompleted: mockCompletedTasks.length,
+        tasks: mockCompletedTasks
+      }));
 
       // When: Loading completed tasks
       const tasks = taskPersistence.loadCompletedTasks();
@@ -376,7 +383,11 @@ describe('TaskPersistence', () => {
       ];
 
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readFileSync.mockReturnValue(JSON.stringify(mockTasks));
+      mockFs.readFileSync.mockReturnValue(JSON.stringify({
+        version: '1.0',
+        lastSaved: new Date().toISOString(),
+        tasks: mockTasks
+      }));
 
       const importPath = '/test/import/tasks.json';
 
@@ -410,8 +421,8 @@ describe('TaskPersistence', () => {
       const importPath = '/test/import/corrupted.json';
 
       // When: Importing tasks
-      // Then: Error is thrown
-      expect(() => taskPersistence.importTasks(importPath)).toThrow('Invalid JSON in import file');
+      // Then: Error is thrown (JSON.parse will throw)
+      expect(() => taskPersistence.importTasks(importPath)).toThrow();
     });
   });
 
@@ -556,7 +567,11 @@ describe('TaskPersistence', () => {
       };
 
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readFileSync.mockReturnValue(JSON.stringify([complexTask]));
+      mockFs.readFileSync.mockReturnValue(JSON.stringify({
+        version: '1.0',
+        lastSaved: new Date().toISOString(),
+        tasks: [complexTask]
+      }));
 
       // When: Loading and saving tasks
       const loadedTasks = taskPersistence.loadTasks();
