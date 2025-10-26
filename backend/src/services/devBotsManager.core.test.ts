@@ -16,6 +16,21 @@ vi.mock('./agentPersonalities.js');
 vi.mock('./workspaceSyncManager.js');
 vi.mock('./dockerManager.js');
 vi.mock('./retryManager.js');
+vi.mock('./taskCreationGuidelines.js', async () => {
+  return {
+    TaskCreationGuidelinesManager: class MockTaskCreationGuidelinesManager {
+      validateTaskData = vi.fn().mockReturnValue({
+        isValid: true,
+        warnings: [],
+        suggestions: [],
+        errors: []
+      });
+      getGuidelinesForType = vi.fn().mockReturnValue({ type: 'feature', guidelines: [] });
+      constructor() {}
+    }
+  };
+});
+vi.mock('./promptTemplateService.js');
 vi.mock('../utils/logger.js');
 
 describe('DevBotsManager Core Functionality', () => {
