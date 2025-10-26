@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from 'vitest'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { logger } from './logger'
 import * as fs from 'fs'
 import * as path from 'path'
