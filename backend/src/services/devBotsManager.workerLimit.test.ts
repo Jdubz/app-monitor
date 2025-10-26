@@ -98,7 +98,7 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
       await devBotsManager.assignNextTask();
 
       expect(task.status).toBe('assigned');
-      expect(task.assignedWorker).toContain('worker-a');
+      expect(task.assignedWorker).toContain('bot-a');
       expect(logger.info).toHaveBeenCalledWith(expect.objectContaining({
         message: expect.stringContaining('Assigning task task-1 to available worker')
       }));
@@ -106,8 +106,8 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
 
     it.skip('should allow second task to be assigned to worker-b (integration test - fix in Phase 2)', async () => {
       // First, add a worker-a to simulate it being active
-      devBotsManager['ephemeralWorkers'].set('worker-a-test-123', {
-        id: 'worker-a-test-123',
+      devBotsManager['ephemeralWorkers'].set('bot-a-test-123', {
+        id: 'bot-a-test-123',
         containerId: 'container-1',
         agent: agentManager.getPersonality('backend-specialist')!,
         task: { id: 'task-0' } as any,
@@ -148,7 +148,7 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
       await devBotsManager.assignNextTask();
 
       expect(task.status).toBe('assigned');
-      expect(task.assignedWorker).toContain('worker-b');
+      expect(task.assignedWorker).toContain('bot-b');
       expect(logger.info).toHaveBeenCalledWith(expect.objectContaining({
         message: expect.stringContaining('Assigning task task-2 to available worker')
       }));
@@ -156,8 +156,8 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
 
     it('should prevent third task assignment when both worker-a and worker-b are active', async () => {
       // Add both worker-a and worker-b to simulate them being active
-      devBotsManager['ephemeralWorkers'].set('worker-a-test-123', {
-        id: 'worker-a-test-123',
+      devBotsManager['ephemeralWorkers'].set('bot-a-test-123', {
+        id: 'bot-a-test-123',
         containerId: 'container-1',
         agent: agentManager.getPersonality('backend-specialist')!,
         task: { id: 'task-0' } as any,
@@ -165,8 +165,8 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
         createdAt: new Date().toISOString()
       });
 
-      devBotsManager['ephemeralWorkers'].set('worker-b-test-456', {
-        id: 'worker-b-test-456',
+      devBotsManager['ephemeralWorkers'].set('bot-b-test-456', {
+        id: 'bot-b-test-456',
         containerId: 'container-2',
         agent: agentManager.getPersonality('frontend-specialist')!,
         task: { id: 'task-1' } as any,
@@ -229,13 +229,13 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
 
       await devBotsManager.assignNextTask();
 
-      expect(task.assignedWorker).toContain('worker-a');
+      expect(task.assignedWorker).toContain('bot-a');
     });
 
     it.skip('should assign to worker-b when only worker-a is active (integration test - fix in Phase 2)', async () => {
       // Add worker-a to simulate it being active
-      devBotsManager['ephemeralWorkers'].set('worker-a-test-123', {
-        id: 'worker-a-test-123',
+      devBotsManager['ephemeralWorkers'].set('bot-a-test-123', {
+        id: 'bot-a-test-123',
         containerId: 'container-1',
         agent: agentManager.getPersonality('backend-specialist')!,
         task: { id: 'task-0' } as any,
@@ -275,7 +275,7 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
 
       await devBotsManager.assignNextTask();
 
-      expect(task.assignedWorker).toContain('worker-b');
+      expect(task.assignedWorker).toContain('bot-b');
     });
 
     it.skip('should use correct worktree path for worker-a (integration test - fix in Phase 2)', async () => {
@@ -314,15 +314,15 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
       // Check that the container was created with correct working directory
       expect(vi.mocked(mockDocker.createContainer)).toHaveBeenCalledWith(
         expect.objectContaining({
-          WorkingDir: '/app/worktrees/worker-a'
+          WorkingDir: '/workspace'
         })
       );
     });
 
     it.skip('should use correct worktree path for worker-b (integration test - fix in Phase 2)', async () => {
       // Add worker-a to simulate it being active
-      devBotsManager['ephemeralWorkers'].set('worker-a-test-123', {
-        id: 'worker-a-test-123',
+      devBotsManager['ephemeralWorkers'].set('bot-a-test-123', {
+        id: 'bot-a-test-123',
         containerId: 'container-1',
         agent: agentManager.getPersonality('backend-specialist')!,
         task: { id: 'task-0' } as any,
@@ -365,7 +365,7 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
       // Check that the container was created with correct working directory
       expect(vi.mocked(mockDocker.createContainer)).toHaveBeenCalledWith(
         expect.objectContaining({
-          WorkingDir: '/app/worktrees/worker-b'
+          WorkingDir: '/workspace'
         })
       );
     });
@@ -404,7 +404,7 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
       await devBotsManager.assignNextTask();
 
       // Check that the task worktree was updated
-      expect(task.worktree).toBe('./worktrees/worker-a');
+      expect(task.worktree).toBe('./dev-bots/volumes/bot-a');
     });
 
     it('should respect MAX_CONCURRENT_WORKERS limit', () => {
@@ -413,8 +413,8 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
 
     it('should handle worker cleanup errors gracefully', async () => {
       // Add a worker to simulate cleanup failure
-      devBotsManager['ephemeralWorkers'].set('worker-a-test-123', {
-        id: 'worker-a-test-123',
+      devBotsManager['ephemeralWorkers'].set('bot-a-test-123', {
+        id: 'bot-a-test-123',
         containerId: 'container-1',
         agent: agentManager.getPersonality('backend-specialist')!,
         task: { id: 'task-0' } as any,
@@ -431,14 +431,14 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
       devBotsManager['docker'] = mockDocker as any;
 
       // This should not throw an error
-      await expect(devBotsManager['destroyEphemeralWorker']('worker-a-test-123')).resolves.not.toThrow();
+      await expect(devBotsManager['destroyEphemeralWorker']('bot-a-test-123')).resolves.not.toThrow();
     });
   });
 
   describe('Worker Type Assignment Logic', () => {
     it('should correctly identify active worker-a', () => {
-      devBotsManager['ephemeralWorkers'].set('worker-a-test-123', {
-        id: 'worker-a-test-123',
+      devBotsManager['ephemeralWorkers'].set('bot-a-test-123', {
+        id: 'bot-a-test-123',
         containerId: 'container-1',
         agent: agentManager.getPersonality('backend-specialist')!,
         task: { id: 'task-0' } as any,
@@ -450,13 +450,13 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
         worker => worker.status !== 'destroyed'
       );
       
-      const hasWorkerA = activeWorkers.some(worker => worker.id.includes('worker-a'));
-      expect(hasWorkerA).toBe(true);
+      const hasBotA = activeWorkers.some(worker => worker.id.includes('bot-a'));
+      expect(hasBotA).toBe(true);
     });
 
     it('should correctly identify active worker-b', () => {
-      devBotsManager['ephemeralWorkers'].set('worker-b-test-456', {
-        id: 'worker-b-test-456',
+      devBotsManager['ephemeralWorkers'].set('bot-b-test-456', {
+        id: 'bot-b-test-456',
         containerId: 'container-2',
         agent: agentManager.getPersonality('frontend-specialist')!,
         task: { id: 'task-1' } as any,
@@ -468,13 +468,13 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
         worker => worker.status !== 'destroyed'
       );
       
-      const hasWorkerB = activeWorkers.some(worker => worker.id.includes('worker-b'));
-      expect(hasWorkerB).toBe(true);
+      const hasBotB = activeWorkers.some(worker => worker.id.includes('bot-b'));
+      expect(hasBotB).toBe(true);
     });
 
     it('should correctly identify when both workers are active', () => {
-      devBotsManager['ephemeralWorkers'].set('worker-a-test-123', {
-        id: 'worker-a-test-123',
+      devBotsManager['ephemeralWorkers'].set('bot-a-test-123', {
+        id: 'bot-a-test-123',
         containerId: 'container-1',
         agent: agentManager.getPersonality('backend-specialist')!,
         task: { id: 'task-0' } as any,
@@ -482,8 +482,8 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
         createdAt: new Date().toISOString()
       });
 
-      devBotsManager['ephemeralWorkers'].set('worker-b-test-456', {
-        id: 'worker-b-test-456',
+      devBotsManager['ephemeralWorkers'].set('bot-b-test-456', {
+        id: 'bot-b-test-456',
         containerId: 'container-2',
         agent: agentManager.getPersonality('frontend-specialist')!,
         task: { id: 'task-1' } as any,
@@ -495,11 +495,11 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
         worker => worker.status !== 'destroyed'
       );
       
-      const hasWorkerA = activeWorkers.some(worker => worker.id.includes('worker-a'));
-      const hasWorkerB = activeWorkers.some(worker => worker.id.includes('worker-b'));
+      const hasBotA = activeWorkers.some(worker => worker.id.includes('bot-a'));
+      const hasBotB = activeWorkers.some(worker => worker.id.includes('bot-b'));
       
-      expect(hasWorkerA).toBe(true);
-      expect(hasWorkerB).toBe(true);
+      expect(hasBotA).toBe(true);
+      expect(hasBotB).toBe(true);
     });
   });
 });

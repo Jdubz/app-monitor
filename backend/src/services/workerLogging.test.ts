@@ -29,7 +29,7 @@ describe('Worker Logging System', () => {
     });
 
     it('should create worker-a.log file with proper header', () => {
-      const workerType = 'worker-a';
+      const workerType = 'bot-a';
       const logFile = path.join(testLogsDir, `${workerType}.log`);
       
       // Create logs directory
@@ -47,13 +47,13 @@ describe('Worker Logging System', () => {
       expect(fs.existsSync(logFile)).toBe(true);
       
       const content = fs.readFileSync(logFile, 'utf8');
-      expect(content).toContain('=== WORKER-A WORKER LOG ===');
+      expect(content).toContain('=== BOT-A WORKER LOG ===');
       expect(content).toContain(`Worker Type: ${workerType}`);
       expect(content).toContain('Initialized:');
     });
 
     it('should create worker-b.log file with proper header', () => {
-      const workerType = 'worker-b';
+      const workerType = 'bot-b';
       const logFile = path.join(testLogsDir, `${workerType}.log`);
       
       // Create logs directory
@@ -71,7 +71,7 @@ describe('Worker Logging System', () => {
       expect(fs.existsSync(logFile)).toBe(true);
       
       const content = fs.readFileSync(logFile, 'utf8');
-      expect(content).toContain('=== WORKER-B WORKER LOG ===');
+      expect(content).toContain('=== BOT-B WORKER LOG ===');
       expect(content).toContain(`Worker Type: ${workerType}`);
       expect(content).toContain('Initialized:');
     });
@@ -79,14 +79,14 @@ describe('Worker Logging System', () => {
 
   describe('Worker Log File Paths', () => {
     it('should generate correct log file path for worker-a', () => {
-      const workerType = 'worker-a';
+      const workerType = 'bot-a';
       const logFile = `/app/logs/${workerType}.log`;
       
       expect(logFile).toBe('/app/logs/worker-a.log');
     });
 
     it('should generate correct log file path for worker-b', () => {
-      const workerType = 'worker-b';
+      const workerType = 'bot-b';
       const logFile = `/app/logs/${workerType}.log`;
       
       expect(logFile).toBe('/app/logs/worker-b.log');
@@ -96,22 +96,22 @@ describe('Worker Logging System', () => {
   describe('Worker Type Detection', () => {
     it('should correctly identify worker-a from worker ID', () => {
       const workerId = 'worker-a-backend-specialist-1761259412357';
-      const workerType = workerId.includes('worker-a') ? 'worker-a' : 'worker-b';
+      const workerType = workerId.includes('bot-a') ? 'bot-a' : 'bot-b';
       
-      expect(workerType).toBe('worker-a');
+      expect(workerType).toBe('bot-a');
     });
 
     it('should correctly identify worker-b from worker ID', () => {
       const workerId = 'worker-b-frontend-specialist-1761259432926';
-      const workerType = workerId.includes('worker-a') ? 'worker-a' : 'worker-b';
+      const workerType = workerId.includes('bot-a') ? 'bot-a' : 'bot-b';
       
-      expect(workerType).toBe('worker-b');
+      expect(workerType).toBe('bot-b');
     });
   });
 
   describe('Log Command Generation', () => {
     it('should generate correct logging wrapper command for worker-a', () => {
-      const workerType = 'worker-a';
+      const workerType = 'bot-a';
       const logFile = `/app/logs/${workerType}.log`;
       const agentName = 'Backend Specialist';
       const taskTitle = 'Test Task';
@@ -135,7 +135,7 @@ describe('Worker Logging System', () => {
     });
 
     it('should generate correct logging wrapper command for worker-b', () => {
-      const workerType = 'worker-b';
+      const workerType = 'bot-b';
       const logFile = `/app/logs/${workerType}.log`;
       const agentName = 'Frontend Specialist';
       const taskTitle = 'UI Task';
@@ -163,7 +163,7 @@ describe('Worker Logging System', () => {
     it('should include logs directory in Docker binds', () => {
       const binds = [
         `${process.cwd()}:/app:ro`,
-        `${process.cwd()}/worktrees:/app/worktrees:rw`,
+        `${process.cwd()}/app-monitor/dev-bots/volumes/bot-a:/workspace:rw`,
         `${process.cwd()}/logs:/app/logs:rw`
       ];
       
@@ -180,7 +180,7 @@ describe('Worker Logging System', () => {
 
   describe('Log File Persistence', () => {
     it('should append to existing log file without overwriting', () => {
-      const workerType = 'worker-a';
+      const workerType = 'bot-a';
       const logFile = path.join(testLogsDir, `${workerType}.log`);
       
       // Create logs directory
@@ -200,7 +200,7 @@ describe('Worker Logging System', () => {
     });
 
     it('should handle multiple log entries correctly', () => {
-      const workerType = 'worker-b';
+      const workerType = 'bot-b';
       const logFile = path.join(testLogsDir, `${workerType}.log`);
       
       // Create logs directory
@@ -208,7 +208,7 @@ describe('Worker Logging System', () => {
       
       // Write multiple entries
       const entries = [
-        '=== WORKER-B WORKER LOG ===\n',
+        '=== BOT-B WORKER LOG ===\n',
         'Entry 1: Task started\n',
         'Entry 2: Task in progress\n',
         'Entry 3: Task completed\n'
@@ -219,7 +219,7 @@ describe('Worker Logging System', () => {
       });
       
       const content = fs.readFileSync(logFile, 'utf8');
-      expect(content).toContain('=== WORKER-B WORKER LOG ===');
+      expect(content).toContain('=== BOT-B WORKER LOG ===');
       expect(content).toContain('Entry 1: Task started');
       expect(content).toContain('Entry 2: Task in progress');
       expect(content).toContain('Entry 3: Task completed');

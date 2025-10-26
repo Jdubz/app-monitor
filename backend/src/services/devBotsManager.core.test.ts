@@ -55,8 +55,8 @@ describe('DevBotsManager Core Functionality', () => {
       }),
       getAllPersonalities: vi.fn().mockReturnValue([
         { id: 'test-agent', name: 'Test Agent' },
-        { id: 'worker-a', name: 'Worker A' },
-        { id: 'worker-b', name: 'Worker B' }
+        { id: 'bot-a', name: 'Bot A' },
+        { id: 'bot-b', name: 'Bot B' }
       ])
     };
 
@@ -145,7 +145,7 @@ describe('DevBotsManager Core Functionality', () => {
           id: 'worker-1',
           status: 'busy',
           lastSeen: Date.now(),
-          personality: { id: 'worker-a', name: 'Worker A' },
+          personality: { id: 'bot-a', name: 'Bot A' },
           onboardingComplete: true,
           lastOnboardingCheck: Date.now(),
           currentTask: 'task-1'
@@ -154,7 +154,7 @@ describe('DevBotsManager Core Functionality', () => {
           id: 'worker-2',
           status: 'busy',
           lastSeen: Date.now(),
-          personality: { id: 'worker-b', name: 'Worker B' },
+          personality: { id: 'bot-b', name: 'Bot B' },
           onboardingComplete: true,
           lastOnboardingCheck: Date.now(),
           currentTask: 'task-2'

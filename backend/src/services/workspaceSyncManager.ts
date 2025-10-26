@@ -74,7 +74,7 @@ export class WorkspaceSyncManager extends EventEmitter {
       'job-finder-shared-types',
       'job-finder-worker'
     ];
-    this.workers = options.workers || ['worker-a', 'worker-b'];
+    this.workers = options.workers || ['bot-a', 'bot-b'];
     this.conflictStrategy = options.conflictStrategy || 'auto-merge';
     
     logger.info({
@@ -254,7 +254,7 @@ export class WorkspaceSyncManager extends EventEmitter {
   }
 
   /**
-   * Sync all worktrees for a specific worker
+   * Sync all workspaces for a specific bot
    */
   private async syncWorkerWorkspaces(workerName: string, options: SyncOptions, result: SyncResult): Promise<void> {
     logger.info({
@@ -262,9 +262,9 @@ export class WorkspaceSyncManager extends EventEmitter {
       action: 'syncing_workername_workspaces',
       message: `Syncing ${workerName} workspaces...`
     });
-    
-    const workerDir = path.join(this.baseDir, 'worktrees', workerName);
-    
+
+    const workerDir = path.join(this.baseDir, 'app-monitor/dev-bots/volumes', workerName);
+
     if (!fs.existsSync(workerDir)) {
       logger.warn({
       category: 'process',
@@ -299,28 +299,28 @@ export class WorkspaceSyncManager extends EventEmitter {
     }
 
     for (const repo of this.repositories) {
-      const worktreePath = path.join(workerDir, repo);
-      
-      if (!fs.existsSync(worktreePath)) {
+      const repoPath = path.join(workerDir, repo);
+
+      if (!fs.existsSync(repoPath)) {
         logger.warn({
       category: 'process',
       action: 'worktree_repo_not_found_for_workername_skipping',
-      message: `Worktree ${repo} not found for ${workerName}, skipping...`
+      message: `Repository ${repo} not found for ${workerName}, skipping...`
     });
-        result.skipped.push({ 
-          worker: workerName, 
-          repo, 
-          reason: 'Worktree not found' 
+        result.skipped.push({
+          worker: workerName,
+          repo,
+          reason: 'Repository not found'
         });
         continue;
       }
 
       try {
-        await this.syncWorkerWorktree(workerName, repo, worktreePath, options);
-        result.successful.push({ 
-          worker: workerName, 
-          repo, 
-          action: 'synced' 
+        await this.syncWorkerWorktree(workerName, repo, repoPath, options);
+        result.successful.push({
+          worker: workerName,
+          repo,
+          action: 'synced'
         });
       } catch (error) {
         logger.error({
@@ -329,21 +329,21 @@ export class WorkspaceSyncManager extends EventEmitter {
       message: `Failed to sync ${workerName}/${repo}:`,
       error: error
     });
-        
+
         if (error instanceof Error && error.message.includes('merge conflict')) {
           result.conflicts.push({
             worker: workerName,
             repo,
-            path: worktreePath,
+            path: repoPath,
             timestamp: new Date().toISOString(),
             strategy: this.conflictStrategy,
             status: 'unresolved'
           });
         } else {
-          result.errors.push({ 
-            worker: workerName, 
-            repo, 
-            error: error instanceof Error ? error.message : String(error) 
+          result.errors.push({
+            worker: workerName,
+            repo,
+            error: error instanceof Error ? error.message : String(error)
           });
         }
       }
@@ -351,12 +351,12 @@ export class WorkspaceSyncManager extends EventEmitter {
   }
 
   /**
-   * Sync a single worker worktree with staging (Direct Staging Workflow)
+   * Sync a single bot repository with staging (Direct Staging Workflow)
    */
   private async syncWorkerWorktree(
-    workerName: string, 
-    repoName: string, 
-    worktreePath: string, 
+    workerName: string,
+    repoName: string,
+    repoPath: string,
     options: SyncOptions
   ): Promise<void> {
     logger.info({
@@ -367,26 +367,26 @@ export class WorkspaceSyncManager extends EventEmitter {
     
     try {
       // Check current status
-      const status = this.getGitStatus(worktreePath);
-      
+      const status = this.getGitStatus(repoPath);
+
       if (status.hasUncommittedChanges) {
         logger.warn({
       category: 'process',
       action: 'uncommitted_changes_detected_in_workername_reponam',
       message: `Uncommitted changes detected in ${workerName}/${repoName}`
     });
-        await this.handleUncommittedChanges(workerName, repoName, worktreePath, status, options);
+        await this.handleUncommittedChanges(workerName, repoName, repoPath, status, options);
       }
 
       // Fetch latest changes
-      this.executeGitCommand(worktreePath, 'git fetch origin', options);
-      
+      this.executeGitCommand(repoPath, 'git fetch origin', options);
+
       // Ensure we're on staging branch (Direct Staging Workflow)
-      this.executeGitCommand(worktreePath, 'git checkout staging', options);
-      
+      this.executeGitCommand(repoPath, 'git checkout staging', options);
+
       // Pull latest staging changes
-      this.executeGitCommand(worktreePath, 'git pull origin staging', options);
-      
+      this.executeGitCommand(repoPath, 'git pull origin staging', options);
+
       logger.info({
       category: 'process',
       action: 'workername_reponame_synced_successfully',
@@ -434,9 +434,9 @@ export class WorkspaceSyncManager extends EventEmitter {
    * Handle uncommitted changes before sync
    */
   private async handleUncommittedChanges(
-    workerName: string, 
-    repoName: string, 
-    worktreePath: string, 
+    workerName: string,
+    repoName: string,
+    repoPath: string,
     status: { hasUncommittedChanges: boolean; changes: Array<{ status: string; file: string }> },
     options: SyncOptions
   ): Promise<void> {
@@ -445,10 +445,10 @@ export class WorkspaceSyncManager extends EventEmitter {
       action: 'found_status_changes_length_uncommitted_changes_in',
       message: `Found ${status.changes.length} uncommitted changes in ${workerName}/${repoName}`
     });
-    
+
     if (this.conflictStrategy === 'stash') {
       // Stash changes
-      this.executeGitCommand(worktreePath, 'git stash push -m "Auto-stash before sync"', options);
+      this.executeGitCommand(repoPath, 'git stash push -m "Auto-stash before sync"', options);
       logger.info({
       category: 'process',
       action: 'stashed_changes_in_workername_reponame',
@@ -458,8 +458,8 @@ export class WorkspaceSyncManager extends EventEmitter {
       throw new Error('Uncommitted changes found and abort strategy is set');
     } else {
       // Auto-merge strategy: commit changes first
-      this.executeGitCommand(worktreePath, 'git add .', options);
-      this.executeGitCommand(worktreePath, `git commit -m "Auto-commit before sync: ${new Date().toISOString()}"`, options);
+      this.executeGitCommand(repoPath, 'git add .', options);
+      this.executeGitCommand(repoPath, `git commit -m "Auto-commit before sync: ${new Date().toISOString()}"`, options);
       logger.info({
       category: 'process',
       action: 'committed_changes_in_workername_reponame',
@@ -473,9 +473,9 @@ export class WorkspaceSyncManager extends EventEmitter {
    * Handle merge conflicts
    */
   private async handleMergeConflict(
-    workerName: string, 
-    repoName: string, 
-    worktreePath: string, 
+    workerName: string,
+    repoName: string,
+    repoPath: string,
     error: Error,
     options: SyncOptions
   ): Promise<void> {
@@ -484,13 +484,13 @@ export class WorkspaceSyncManager extends EventEmitter {
       action: 'handling_merge_conflict_in_workername_reponame',
       message: `Handling merge conflict in ${workerName}/${repoName}...`
     });
-    
+
     if (this.conflictStrategy === 'auto-merge') {
       // Try to auto-resolve conflicts
-      const resolved = await this.autoResolveConflicts(worktreePath);
+      const resolved = await this.autoResolveConflicts(repoPath);
       if (resolved) {
-        this.executeGitCommand(worktreePath, 'git add .', options);
-        this.executeGitCommand(worktreePath, 'git commit -m "Auto-resolved merge conflicts"', options);
+        this.executeGitCommand(repoPath, 'git add .', options);
+        this.executeGitCommand(repoPath, 'git commit -m "Auto-resolved merge conflicts"', options);
         logger.info({
       category: 'process',
       action: 'auto_resolved_conflicts_in_workername_reponame',
@@ -505,11 +505,11 @@ export class WorkspaceSyncManager extends EventEmitter {
         throw new Error('merge conflict');
       }
     } else if (this.conflictStrategy === 'stash') {
-      // Abort merge and stash worker changes
-      this.executeGitCommand(worktreePath, 'git merge --abort', options);
-      this.executeGitCommand(worktreePath, 'git stash push -m "Stashed due to merge conflict"', options);
+      // Abort merge and stash bot changes
+      this.executeGitCommand(repoPath, 'git merge --abort', options);
+      this.executeGitCommand(repoPath, 'git stash push -m "Stashed due to merge conflict"', options);
       // Then try to merge staging
-      this.executeGitCommand(worktreePath, 'git merge origin/staging --no-ff -m "Sync with staging (after stash)"', options);
+      this.executeGitCommand(repoPath, 'git merge origin/staging --no-ff -m "Sync with staging (after stash)"', options);
       logger.info({
       category: 'process',
       action: 'stashed_conflicting_changes_in_workername_reponame',
@@ -517,7 +517,7 @@ export class WorkspaceSyncManager extends EventEmitter {
     });
     } else {
       // Abort merge
-      this.executeGitCommand(worktreePath, 'git merge --abort', options);
+      this.executeGitCommand(repoPath, 'git merge --abort', options);
       logger.warn({
       category: 'process',
       action: 'aborted_merge_in_workername_reponame',
@@ -530,12 +530,12 @@ export class WorkspaceSyncManager extends EventEmitter {
   /**
    * Attempt to auto-resolve merge conflicts
    */
-  private async autoResolveConflicts(worktreePath: string): Promise<boolean> {
+  private async autoResolveConflicts(repoPath: string): Promise<boolean> {
     try {
       // Get list of conflicted files
-      const conflictFiles = execSync('git diff --name-only --diff-filter=U', { 
-        cwd: worktreePath, 
-        encoding: 'utf8' 
+      const conflictFiles = execSync('git diff --name-only --diff-filter=U', {
+        cwd: repoPath,
+        encoding: 'utf8'
       }).trim().split('\n').filter(line => line.length > 0);
 
       if (conflictFiles.length === 0) {
@@ -547,11 +547,11 @@ export class WorkspaceSyncManager extends EventEmitter {
       action: 'found_conflictfiles_length_conflicted_files',
       message: `Found ${conflictFiles.length} conflicted files`
     });
-      
+
       let allResolved = true;
-      
+
       for (const file of conflictFiles) {
-        const resolved = await this.resolveFileConflict(worktreePath, file);
+        const resolved = await this.resolveFileConflict(repoPath, file);
         if (!resolved) {
           allResolved = false;
           logger.error({
@@ -583,25 +583,25 @@ export class WorkspaceSyncManager extends EventEmitter {
   /**
    * Resolve conflict in a specific file
    */
-  private async resolveFileConflict(worktreePath: string, filePath: string): Promise<boolean> {
+  private async resolveFileConflict(repoPath: string, filePath: string): Promise<boolean> {
     try {
-      const fullPath = path.join(worktreePath, filePath);
+      const fullPath = path.join(repoPath, filePath);
       const content = fs.readFileSync(fullPath, 'utf8');
-      
+
       // Simple conflict resolution strategies
       if (this.isSimpleConflict(content)) {
         const resolvedContent = this.resolveSimpleConflict(content);
         fs.writeFileSync(fullPath, resolvedContent);
         return true;
       }
-      
+
       // For complex conflicts, try to prefer staging changes
       if (this.canPreferStaging(content)) {
         const resolvedContent = this.preferStagingChanges(content);
         fs.writeFileSync(fullPath, resolvedContent);
         return true;
       }
-      
+
       return false;
     } catch (error) {
       return false;
@@ -680,7 +680,7 @@ export class WorkspaceSyncManager extends EventEmitter {
   /**
    * Execute a git command
    */
-  private executeGitCommand(worktreePath: string, command: string, options: SyncOptions): void {
+  private executeGitCommand(repoPath: string, command: string, options: SyncOptions): void {
     if (options.dryRun) {
       logger.info({
       category: 'process',
@@ -691,9 +691,9 @@ export class WorkspaceSyncManager extends EventEmitter {
     }
 
     try {
-      execSync(command, { 
-        cwd: worktreePath, 
-        stdio: options.verbose ? 'inherit' : 'pipe' 
+      execSync(command, {
+        cwd: repoPath,
+        stdio: options.verbose ? 'inherit' : 'pipe'
       });
     } catch (error) {
       throw new Error(`Git command failed: ${command} - ${error instanceof Error ? error.message : String(error)}`);

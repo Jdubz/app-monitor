@@ -169,25 +169,35 @@ export const DevBotsPanel: React.FC<DevBotsPanelProps> = ({
   const fetchStatus = async () => {
     try {
       setLoading(true);
+      console.log('[DevBotsPanel] Fetching status from /dev-bots/status');
       const [statusResponse, violationsResponse, cleanupResponse, agentsResponse, templatesResponse] = await Promise.all([
         api.get('/dev-bots/status'),
-        api.get('/dev-bots/scope-violations').catch(() => ({ data: { violations: [] } })),
-        api.get('/dev-bots/cleanup-status').catch(() => ({ data: { schedules: [], recentTasks: [], totalCleanupTasks: 0 } })),
-        api.get('/dev-bots/agents').catch(() => ({ data: { agents: [] } })),
-        api.get('/dev-bots/templates').catch(() => ({ data: { templates: [] } }))
+        api.get('/dev-bots/scope-violations').catch(() => ({ violations: [] })),
+        api.get('/dev-bots/cleanup-status').catch(() => ({ schedules: [], recentTasks: [], totalCleanupTasks: 0 })),
+        api.get('/dev-bots/agents').catch(() => ({ agents: [] })),
+        api.get('/dev-bots/templates').catch(() => ({ templates: [] }))
       ]);
-      
-      setStatus(statusResponse.data);
-      setScopeViolations(violationsResponse.data.violations || []);
-      setCleanupStatus(cleanupResponse.data);
-      setAgents(agentsResponse.data.agents || []);
-      setTemplates(templatesResponse.data.templates || []);
+
+      console.log('[DevBotsPanel] Status response:', statusResponse);
+      setStatus(statusResponse);
+      setScopeViolations(violationsResponse.violations || []);
+      setCleanupStatus(cleanupResponse);
+      setAgents(agentsResponse.agents || []);
+      setTemplates(templatesResponse.templates || []);
       setError(null);
       if (onStatusChange) {
-        onStatusChange(statusResponse.data);
+        onStatusChange(statusResponse);
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to fetch status');
+      console.error('[DevBotsPanel] Error fetching status:', err);
+      console.error('[DevBotsPanel] Error details:', {
+        message: err.message,
+        response: err.response,
+        error: err.error,
+        code: err.code
+      });
+      const errorMessage = err.error || err.response?.data?.error || err.message || 'Failed to fetch status';
+      setError(errorMessage);
       setStatus(null);
     } finally {
       setLoading(false);

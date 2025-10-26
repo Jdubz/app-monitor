@@ -338,7 +338,7 @@ export class DevBotsManager extends EventEmitter {
   private workers = new Map<string, WorkerInfo>();
   private ephemeralWorkers = new Map<string, EphemeralWorker>();
   private readonly MAX_CONCURRENT_WORKERS = 2; // Maximum 2 workers as per architecture
-  private readonly WORKER_TYPES = ['worker-a', 'worker-b']; // Specific worker types
+  private readonly WORKER_TYPES = ['bot-a', 'bot-b']; // Specific bot types
 
   // Enhanced services
   private taskPersistence!: TaskPersistence;
@@ -498,7 +498,7 @@ export class DevBotsManager extends EventEmitter {
     this.workspaceSyncManager = new WorkspaceSyncManager({
       baseDir: path.resolve(path.join(process.cwd(), '../../')),
       repositories: ['job-finder-BE', 'job-finder-FE', 'job-finder-shared-types', 'job-finder-worker'],
-      workers: ['worker-a', 'worker-b'],
+      workers: ['bot-a', 'bot-b'],
       conflictStrategy: 'auto-merge'
     });
 
@@ -807,25 +807,25 @@ export class DevBotsManager extends EventEmitter {
       return;
     }
     
-    // Check if we already have both worker-a and worker-b active
+    // Check if we already have both bot-a and bot-b active
     const activeWorkers = Array.from(this.ephemeralWorkers.values()).filter(
       worker => worker.status !== 'destroyed'
     );
-    
-    const hasWorkerA = activeWorkers.some(worker => worker.id.includes('worker-a'));
-    const hasWorkerB = activeWorkers.some(worker => worker.id.includes('worker-b'));
-    
+
+    const hasBotA = activeWorkers.some(worker => worker.id.includes('bot-a'));
+    const hasBotB = activeWorkers.some(worker => worker.id.includes('bot-b'));
+
     logger.info({
       category: 'process',
       action: 'task_assignment_check_this_taskqueue_length_pendin',
-      message: `Task assignment check: ${this.taskQueue.length} pending tasks, ${activeWorkers.length} active workers (A: ${hasWorkerA}, B: ${hasWorkerB})`
+      message: `Task assignment check: ${this.taskQueue.length} pending tasks, ${activeWorkers.length} active workers (A: ${hasBotA}, B: ${hasBotB})`
     });
-    
-    if (hasWorkerA && hasWorkerB) {
+
+    if (hasBotA && hasBotB) {
       logger.info({
       category: 'process',
-      action: 'both_worker_a_and_worker_b_are_active_skipping_tas',
-      message: 'Both worker-a and worker-b are active, skipping task assignment'
+      action: 'both_bot_a_and_bot_b_are_active_skipping_tas',
+      message: 'Both bot-a and bot-b are active, skipping task assignment'
     });
       return;
     }
@@ -926,7 +926,7 @@ export class DevBotsManager extends EventEmitter {
       task: nextTask,
       agent: agent,
       project: nextTask.project || 'dev-monitor',
-      worktree: `./worktrees/worker-${agent.id}-${Date.now()}`, // Temporary worktree path
+      worktree: `./dev-bots/volumes/bot-${agent.id}-${Date.now()}`, // Temporary bot volume path
       environment: 'development'
     };
     
@@ -1064,21 +1064,21 @@ export class DevBotsManager extends EventEmitter {
    * Create a new ephemeral Docker container for a task
    */
   private async createEphemeralWorker(task: Task, agent: AgentPersonality): Promise<EphemeralWorker> {
-    // Determine which worker type to use (worker-a or worker-b)
+    // Determine which bot type to use (bot-a or bot-b)
     const activeWorkers = Array.from(this.ephemeralWorkers.values()).filter(
       worker => worker.status !== 'destroyed'
     );
-    
-    const hasWorkerA = activeWorkers.some(worker => worker.id.includes('worker-a'));
-    const hasWorkerB = activeWorkers.some(worker => worker.id.includes('worker-b'));
-    
+
+    const hasBotA = activeWorkers.some(worker => worker.id.includes('bot-a'));
+    const hasBotB = activeWorkers.some(worker => worker.id.includes('bot-b'));
+
     let workerType: string;
-    if (!hasWorkerA) {
-      workerType = 'worker-a';
-    } else if (!hasWorkerB) {
-      workerType = 'worker-b';
+    if (!hasBotA) {
+      workerType = 'bot-a';
+    } else if (!hasBotB) {
+      workerType = 'bot-b';
     } else {
-      throw new Error('Both worker-a and worker-b are already active');
+      throw new Error('Both bot-a and bot-b are already active');
     }
     
     const workerId = `${workerType}-${agent.id}-${Date.now()}`;
@@ -1096,15 +1096,15 @@ export class DevBotsManager extends EventEmitter {
           `TASK_ID=${task.id}`,
           `WORKER_ID=${workerId}`
         ],
-        WorkingDir: `/app/worktrees/${workerType}`, // Use specific worktree for worker type
+        WorkingDir: `/workspace`, // Use workspace directory in bot volume
         HostConfig: {
           Memory: 512 * 1024 * 1024, // 512MB memory limit
           CpuQuota: 50000, // 50% CPU limit
           AutoRemove: true, // Auto-remove when stopped
           Binds: [
             `${process.cwd()}:/app:ro`, // Mount current directory as read-only
-            `${process.cwd()}/worktrees:/app/worktrees:rw`, // Mount worktrees as read-write
-            `${process.cwd()}/logs:/app/logs:rw` // Mount logs directory for worker-specific logging
+            `${path.resolve(process.cwd(), '../../dev-bots/volumes', workerType)}:/workspace:rw`, // Mount bot volume as read-write
+            `${process.cwd()}/logs:/app/logs:rw` // Mount logs directory for bot-specific logging
           ]
         },
         Labels: {
@@ -1172,7 +1172,7 @@ export class DevBotsManager extends EventEmitter {
       const container = this.docker.getContainer(worker.containerId);
       
       // Determine worker type for log file
-      const workerType = worker.id.includes('worker-a') ? 'worker-a' : 'worker-b';
+      const workerType = worker.id.includes('bot-a') ? 'bot-a' : 'bot-b';
       const logFile = `/app/logs/${workerType}.log`;
       
       // Generate task execution command with logging
@@ -1243,7 +1243,7 @@ export class DevBotsManager extends EventEmitter {
       'claude',
       '-p', `"${escapedPrompt}"`,
       '--allowedTools', 'Bash,Read,Write,Edit,Grep,Glob,WebSearch,WebFetch',
-      '--workingDirectory', '/app/worktrees',
+      '--workingDirectory', '/workspace',
       '--print'
     ];
 
@@ -1284,7 +1284,7 @@ export class DevBotsManager extends EventEmitter {
       'claude',
       '-p', `"${escapedPrompt}"`,
       '--allowedTools', 'Bash,Read,Write,Edit,Grep,Glob,WebSearch,WebFetch',
-      '--workingDirectory', '/app/worktrees',
+      '--workingDirectory', '/workspace',
       '--print'
     ];
 
