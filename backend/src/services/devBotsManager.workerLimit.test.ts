@@ -192,7 +192,7 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
       // Task should remain pending
       expect(task.status).toBe('pending');
       expect(logger.info).toHaveBeenCalledWith(expect.objectContaining({
-        message: 'Both worker-a and worker-b are active, skipping task assignment'
+        message: 'Both bot-a and bot-b are active, skipping task assignment'
       }));
     });
 

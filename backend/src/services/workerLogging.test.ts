@@ -78,44 +78,44 @@ describe('Worker Logging System', () => {
   });
 
   describe('Worker Log File Paths', () => {
-    it('should generate correct log file path for worker-a', () => {
+    it('should generate correct log file path for bot-a', () => {
       const workerType = 'bot-a';
       const logFile = `/app/logs/${workerType}.log`;
-      
-      expect(logFile).toBe('/app/logs/worker-a.log');
+
+      expect(logFile).toBe('/app/logs/bot-a.log');
     });
 
-    it('should generate correct log file path for worker-b', () => {
+    it('should generate correct log file path for bot-b', () => {
       const workerType = 'bot-b';
       const logFile = `/app/logs/${workerType}.log`;
-      
-      expect(logFile).toBe('/app/logs/worker-b.log');
+
+      expect(logFile).toBe('/app/logs/bot-b.log');
     });
   });
 
   describe('Worker Type Detection', () => {
-    it('should correctly identify worker-a from worker ID', () => {
-      const workerId = 'worker-a-backend-specialist-1761259412357';
+    it('should correctly identify bot-a from worker ID', () => {
+      const workerId = 'bot-a-backend-specialist-1761259412357';
       const workerType = workerId.includes('bot-a') ? 'bot-a' : 'bot-b';
-      
+
       expect(workerType).toBe('bot-a');
     });
 
-    it('should correctly identify worker-b from worker ID', () => {
-      const workerId = 'worker-b-frontend-specialist-1761259432926';
+    it('should correctly identify bot-b from worker ID', () => {
+      const workerId = 'bot-b-frontend-specialist-1761259432926';
       const workerType = workerId.includes('bot-a') ? 'bot-a' : 'bot-b';
-      
+
       expect(workerType).toBe('bot-b');
     });
   });
 
   describe('Log Command Generation', () => {
-    it('should generate correct logging wrapper command for worker-a', () => {
+    it('should generate correct logging wrapper command for bot-a', () => {
       const workerType = 'bot-a';
       const logFile = `/app/logs/${workerType}.log`;
       const agentName = 'Backend Specialist';
       const taskTitle = 'Test Task';
-      
+
       const wrapperCommand = [
         'echo "=== Worker Task Execution Started ===" >> ' + logFile,
         'echo "Timestamp: $(date)" >> ' + logFile,
@@ -127,19 +127,19 @@ describe('Worker Logging System', () => {
         'echo "Exit Code: $?" >> ' + logFile,
         'echo "=======================================" >> ' + logFile
       ].join(' && ');
-      
-      expect(wrapperCommand).toContain('/app/logs/worker-a.log');
+
+      expect(wrapperCommand).toContain('/app/logs/bot-a.log');
       expect(wrapperCommand).toContain('Worker Task Execution Started');
       expect(wrapperCommand).toContain('Worker Task Execution Completed');
       expect(wrapperCommand).toContain('tee -a');
     });
 
-    it('should generate correct logging wrapper command for worker-b', () => {
+    it('should generate correct logging wrapper command for bot-b', () => {
       const workerType = 'bot-b';
       const logFile = `/app/logs/${workerType}.log`;
       const agentName = 'Frontend Specialist';
       const taskTitle = 'UI Task';
-      
+
       const wrapperCommand = [
         'echo "=== Worker Task Execution Started ===" >> ' + logFile,
         'echo "Timestamp: $(date)" >> ' + logFile,
@@ -151,8 +151,8 @@ describe('Worker Logging System', () => {
         'echo "Exit Code: $?" >> ' + logFile,
         'echo "=======================================" >> ' + logFile
       ].join(' && ');
-      
-      expect(wrapperCommand).toContain('/app/logs/worker-b.log');
+
+      expect(wrapperCommand).toContain('/app/logs/bot-b.log');
       expect(wrapperCommand).toContain('Worker Task Execution Started');
       expect(wrapperCommand).toContain('Worker Task Execution Completed');
       expect(wrapperCommand).toContain('tee -a');

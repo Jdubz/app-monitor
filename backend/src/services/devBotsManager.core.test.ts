@@ -46,20 +46,6 @@ describe('DevBotsManager Core Functionality', () => {
       loadTask: vi.fn().mockReturnValue(null)
     };
 
-    // Setup mock AgentPersonalityManager
-    mockAgentPersonalityManager = {
-      getPersonality: vi.fn().mockReturnValue({
-        id: 'test-agent',
-        name: 'Test Agent',
-        description: 'A test agent for development'
-      }),
-      getAllPersonalities: vi.fn().mockReturnValue([
-        { id: 'test-agent', name: 'Test Agent' },
-        { id: 'bot-a', name: 'Bot A' },
-        { id: 'bot-b', name: 'Bot B' }
-      ])
-    };
-
     // Setup mock WorkspaceSyncManager
     mockWorkspaceSyncManager = {
       syncWorkspace: vi.fn().mockResolvedValue({ success: true }),
@@ -73,13 +59,6 @@ describe('DevBotsManager Core Functionality', () => {
       startContainer: vi.fn().mockResolvedValue({ success: true }),
       stopContainer: vi.fn().mockResolvedValue({ success: true }),
       removeContainer: vi.fn().mockResolvedValue({ success: true })
-    };
-
-    // Setup mock RetryManager
-    mockRetryManager = {
-      shouldRetry: vi.fn().mockReturnValue(true),
-      getRetryDelay: vi.fn().mockReturnValue(1000),
-      canRetry: vi.fn().mockReturnValue(true)
     };
 
     // Mock logger methods
@@ -402,7 +381,7 @@ describe('DevBotsManager Core Functionality', () => {
   });
 
   describe('Status and Monitoring', () => {
-    it('should return comprehensive system status', () => {
+    it('should return comprehensive system status', async () => {
       // Given: System with workers and tasks
       devBotsManager['workers'] = {
         'worker-1': {
@@ -445,7 +424,7 @@ describe('DevBotsManager Core Functionality', () => {
       expect(status.tasks.active).toHaveLength(1);
     });
 
-    it('should track worker uptime and health', () => {
+    it('should track worker uptime and health', async () => {
       // Given: Worker with known creation time
       const workerId = 'worker-1';
       const startTime = Date.now() - 60000; // 1 minute ago

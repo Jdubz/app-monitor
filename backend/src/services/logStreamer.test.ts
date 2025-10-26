@@ -13,14 +13,17 @@ import { logger } from '../utils/logger.js';
 vi.mock('../utils/logger.js');
 vi.mock('./processManager.js');
 vi.mock('./cloudLogging.js');
-vi.mock('./logWatcher.js');
+vi.mock('./logWatcher.js', () => ({
+  LogWatcher: vi.fn().mockImplementation(() => ({
+    getRecentLogs: vi.fn().mockReturnValue([])
+  }))
+}));
 
 describe('LogStreamer', () => {
   let logStreamer: LogStreamer;
   let mockIO: any;
   let mockProcessManager: any;
   let mockCloudLogging: any;
-  let mockLogWatcher: any;
   let mockSocket: any;
 
   beforeEach(() => {
@@ -51,9 +54,6 @@ describe('LogStreamer', () => {
     mockLogWatcher = {
       getRecentLogs: vi.fn().mockReturnValue([])
     };
-
-    // Mock LogWatcher constructor
-    vi.mocked(LogWatcher).mockImplementation(() => mockLogWatcher);
 
     // Mock Socket
     mockSocket = {
