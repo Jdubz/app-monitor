@@ -2,19 +2,19 @@ import React, { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 import { api } from '../services/api';
 import StatusBadge from './StatusBadge';
-import ControlButtons from './ControlButtons';
+// import ControlButtons from './ControlButtons';
 import styles from './ClaudeWorkersPanel.module.css';
 
-interface RetryAttempt {
-  attemptNumber: number;
-  timestamp: string;
-  reason: string;
-  error?: string;
-  exitCode?: number;
-  duration?: number;
-  workerId?: string;
-  agentId?: string;
-}
+// interface RetryAttempt {
+//   attemptNumber: number;
+//   timestamp: string;
+//   reason: string;
+//   error?: string;
+//   exitCode?: number;
+//   duration?: number;
+//   workerId?: string;
+//   agentId?: string;
+// }
 
 interface Task {
   id: string;
@@ -137,7 +137,7 @@ interface ClaudeWorkersPanelProps {
 }
 
 export const ClaudeWorkersPanel: React.FC<ClaudeWorkersPanelProps> = ({
-  serviceName,
+  serviceName: _serviceName,
   onStatusChange,
   socket
 }) => {
@@ -164,7 +164,7 @@ export const ClaudeWorkersPanel: React.FC<ClaudeWorkersPanelProps> = ({
   // Enhanced features state
   const [agents, setAgents] = useState<AgentPersonality[]>([]);
   const [templates, setTemplates] = useState<TaskTemplate[]>([]);
-  const [showTaskPrompt, setShowTaskPrompt] = useState<string | null>(null);
+  // const [showTaskPrompt, setShowTaskPrompt] = useState<string | null>(null);
 
   const fetchStatus = async () => {
     try {

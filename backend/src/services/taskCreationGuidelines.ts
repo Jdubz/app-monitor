@@ -5,7 +5,7 @@
  * guidelines for high-quality task creation
  */
 
-import { logger } from '../utils/logger.js';
+// import { logger } from '../utils/logger.js';
 
 export interface TaskCreationGuidelines {
   id: string;

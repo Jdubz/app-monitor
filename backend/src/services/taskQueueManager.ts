@@ -7,7 +7,7 @@
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../utils/logger.js';
-import { TaskSchema, TaskCreateSchema, TaskQuery, TaskStats, TaskStatusType } from '../types/taskSchema.js';
+import { TaskSchema, TaskCreateSchema, TaskQuery, TaskStats } from '../types/taskSchema.js';
 import type { Task, TaskCreate } from '../types/taskSchema.js';
 
 export interface TaskQueueConfig {

@@ -133,7 +133,7 @@ function stripAnsiCodes(text: string): string {
 /**
  * Clean message text by removing timestamp and log level prefixes
  */
-function cleanMessage(line: string, severity: LogSeverity): string {
+function cleanMessage(line: string, _severity: LogSeverity): string {
   let message = stripAnsiCodes(line);
 
   // Remove timestamp brackets if present

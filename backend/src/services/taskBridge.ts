@@ -287,7 +287,7 @@ export class TaskBridge extends EventEmitter {
   public async syncTasks(): Promise<void> {
     try {
       // Get all tasks from both systems
-      const queueTasks = this.taskQueueManager.getAllTasks();
+      // const _queueTasks = this.taskQueueManager.getAllTasks();
       const claudeTasksObj = await this.claudeWorkersManager.getTasks();
       
       // Flatten all claude tasks into a single array

@@ -159,7 +159,7 @@ export class DockerManager {
       return new Promise((resolve, reject) => {
         this.docker.modem.followProgress(
           stream,
-          (err, output) => {
+          (err, _output) => {
             if (err) {
               logger.error({
       category: 'process',

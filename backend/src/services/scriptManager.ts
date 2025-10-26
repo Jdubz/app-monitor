@@ -86,7 +86,7 @@ export class ScriptManager extends EventEmitter {
     this.executions.set(executionId, execution);
 
     // Run script asynchronously (don't await - fire and forget)
-    this._runScript(executionId, execution).catch((error) => {
+    this._runScript(executionId, execution).catch((_error) => {
       // Error already handled in _runScript via events
       // This catch prevents unhandled promise rejection
     });
@@ -144,7 +144,7 @@ export class ScriptManager extends EventEmitter {
       });
 
       // Handle process exit
-      child.on('exit', (code, signal) => {
+      child.on('exit', (code, _signal) => {
         execution.exitCode = code ?? undefined;
         execution.endTime = new Date();
         execution.status = code === 0 ? 'completed' : 'failed';

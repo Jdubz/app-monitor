@@ -641,7 +641,7 @@ export class LogWatcher {
    * Clean up watchers
    */
   public destroy(): void {
-    for (const [filepath, watched] of this.watchedFiles.entries()) {
+    for (const [, watched] of this.watchedFiles.entries()) {
       if (watched.watcher) {
         watched.watcher.close();
       }

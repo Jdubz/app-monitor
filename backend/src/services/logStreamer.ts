@@ -250,7 +250,7 @@ export class LogStreamer {
   /**
    * Convert structured log entry to DevMonitorLogLine format
    */
-  private convertStructuredLogToDevMonitorLog(entry: any, index: number): DevMonitorLogLine {
+  private convertStructuredLogToDevMonitorLog(entry: any, _index: number): DevMonitorLogLine {
     return {
       id: `${entry.service}-${this.logIdCounter++}`,
       service: entry.service as LocalService,
@@ -284,7 +284,7 @@ export class LogStreamer {
   /**
    * Create a structured log line object
    */
-  private createLogLine(serviceName: LocalService, message: string, index?: number): DevMonitorLogLine {
+  private createLogLine(serviceName: LocalService, message: string, _index?: number): DevMonitorLogLine {
     // Try to detect log level from message
     const level = this.detectLogLevel(message);
 
