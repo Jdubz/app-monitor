@@ -57,15 +57,17 @@ export const services: Record<string, ServiceConfig> = {
   'job-finder-worker': {
     name: 'job-finder-worker',
     displayName: 'Job Finder Worker',
-    description: 'Python worker service',
+    description: 'Flask-based worker with health monitoring (port 5555)',
     command: 'python3',
-    args: ['-m', 'job_finder_worker'],
+    args: ['src/job_finder/simple_flask_worker.py'],
     cwd: path.join(ROOT_DIR, 'job-finder-worker'),
     ports: [5555],
     requirePorts: true,
     env: {
       ...(process.env as Record<string, string>),
       LOG_FILE: path.join(ROOT_DIR, 'job-finder-worker/logs/worker.log'),
+      WORKER_PORT: '5555',
+      WORKER_HOST: '0.0.0.0',
     },
   },
 };

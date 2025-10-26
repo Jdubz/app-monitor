@@ -22,7 +22,7 @@
     "job-finder-backend": {
       "name": "Job Finder Backend",
       "enabled": true,
-      "path": "../../job-finder-BE/logs/backend-dev.log",
+      "path": "../../../job-finder-BE/logs/backend.log",
       "format": "structured",
       "color": "#F97316",
       "parser": "winston",
@@ -31,7 +31,7 @@
     "job-finder-frontend": {
       "name": "Job Finder Frontend",
       "enabled": true,
-      "path": "../../job-finder-FE/logs/frontend-dev.log",
+      "path": "../../../job-finder-FE/logs/frontend.log",
       "format": "vite",
       "color": "#61DAFB",
       "parser": "vite",
@@ -40,7 +40,7 @@
     "job-finder-worker": {
       "name": "Job Finder Worker",
       "enabled": true,
-      "path": "../../job-finder-worker/logs/worker.log",
+      "path": "../../../job-finder-worker/logs/worker.log",
       "format": "python",
       "color": "#3776AB",
       "parser": "python-logging",

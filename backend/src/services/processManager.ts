@@ -7,8 +7,6 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import {
   isPortInUse,
-  killPortProcess,
-  killMultiplePorts,
   stopDockerContainer,
   getDockerContainerInfo,
 } from '../utils/portManager.js';
@@ -401,8 +399,8 @@ export class ProcessManager extends EventEmitter {
     };
 
     if (!managed) {
-      // Check for docker container even if not managed
-      if (serviceName === 'python-worker') {
+      // Check for docker container even if not managed (legacy Docker mode)
+      if (serviceName === 'python-worker' && services[serviceName]?.command === 'docker') {
         const containerNames = ['job-finder-local-dev', 'job-finder-dev'];
         for (const name of containerNames) {
           const containerInfo = await getDockerContainerInfo(name);
@@ -467,8 +465,8 @@ export class ProcessManager extends EventEmitter {
       startedAt: managed.startedAt,
     };
 
-    // Add docker container info for python-worker
-    if (serviceName === 'python-worker') {
+    // Add docker container info for python-worker (legacy Docker mode)
+    if (serviceName === 'python-worker' && services[serviceName]?.command === 'docker') {
       const containerNames = ['job-finder-local-dev', 'job-finder-dev'];
       for (const name of containerNames) {
         const containerInfo = await getDockerContainerInfo(name);
@@ -757,36 +755,41 @@ export class ProcessManager extends EventEmitter {
     // Cleanup all event handlers
     this.eventManager.cleanupAll();
 
-    // Ensure Docker containers are stopped
-    logger.info({
-      category: 'process',
-      action: 'docker_cleanup',
-      message: 'Stopping any remaining Docker containers...',
-    });
-    const containerNames = ['job-finder-local-dev', 'job-finder-dev', 'job-finder-staging-local'];
-    for (const name of containerNames) {
-      try {
-        await stopDockerContainer(name);
-        logger.info({
-          category: 'process',
-          action: 'docker_stopped',
-          message: `Docker container ${name} stopped`,
-        });
-      } catch (error) {
-        // Container might not exist or already be stopped, log but continue
-        logger.warn({
-          category: 'process',
-          action: 'docker_stop_failed',
-          message: `Could not stop container ${name}: ${error instanceof Error ? error.message : String(error)}`,
-        });
+    // Only cleanup Docker containers if we're actually using Docker
+    // Check if any service is configured to use Docker
+    const usingDocker = Object.values(services).some(service => service.command === 'docker');
+    
+    if (usingDocker) {
+      logger.info({
+        category: 'process',
+        action: 'docker_cleanup',
+        message: 'Stopping any remaining Docker containers...',
+      });
+      const containerNames = ['job-finder-local-dev', 'job-finder-dev', 'job-finder-staging-local'];
+      for (const name of containerNames) {
+        try {
+          await stopDockerContainer(name);
+          logger.info({
+            category: 'process',
+            action: 'docker_stopped',
+            message: `Docker container ${name} stopped`,
+          });
+        } catch (error) {
+          // Container might not exist or already be stopped, log but continue
+          logger.warn({
+            category: 'process',
+            action: 'docker_stop_failed',
+            message: `Could not stop container ${name}: ${error instanceof Error ? error.message : String(error)}`,
+          });
+        }
       }
+    } else {
+      logger.info({
+        category: 'process',
+        action: 'cleanup_complete',
+        message: 'All processes cleaned up (no Docker containers to stop)',
+      });
     }
-
-    logger.info({
-      category: 'process',
-      action: 'cleanup_complete',
-      message: 'All processes cleaned up',
-    });
     process.exit(0);
   }
 }
