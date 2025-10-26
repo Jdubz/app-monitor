@@ -3,7 +3,7 @@
 **Version:** 2.0.0  
 **Last Updated:** October 26, 2025  
 **Status:** Evolution In Progress  
-**Based On:** `docs/plans/EVOLUTION_PLAN.md`, `docs/plans/app-monitor-updated-plan-summary.md`
+**Based On:** `docs/plans/EVOLUTION_PLAN.md`, `docs/plans/DEV_BOTS_AGENTS_PLAN.md`, `docs/plans/CLAUDE_AGENT_EXPERIMENTS.md`, `docs/plans/COPILOT_INTEGRATION_DESIGN.md`
 
 ---
 
@@ -149,9 +149,11 @@ job-finder-app-manager/
 │   └── logs/                               ← Worker service logs
 └── docs/
     └── plans/
-        ├── EVOLUTION_PLAN.md               ← Master plan
-        ├── app-monitor-updated-plan-summary.md
-        └── APP-MONITOR-QUICKSTART.md
+        ├── README.md                       ← Plans overview
+        ├── EVOLUTION_PLAN.md               ← Master evolution plan
+        ├── DEV_BOTS_AGENTS_PLAN.md         ← Agent strategy
+        ├── CLAUDE_AGENT_EXPERIMENTS.md     ← Experimentation framework
+        └── COPILOT_INTEGRATION_DESIGN.md   ← Copilot integration
 ```
 
 ---
@@ -405,8 +407,10 @@ interface TaskQualityScore {
 
 ### Planning Documents
 - `/docs/plans/EVOLUTION_PLAN.md` - **Master evolution plan**
-- `/docs/plans/app-monitor-updated-plan-summary.md` - Recovery/setup plan
-- `/docs/plans/APP-MONITOR-QUICKSTART.md` - Quick start guide
+- `/docs/plans/DEV_BOTS_AGENTS_PLAN.md` - Agent strategy and Claude focus
+- `/docs/plans/CLAUDE_AGENT_EXPERIMENTS.md` - Experimentation framework
+- `/docs/plans/COPILOT_INTEGRATION_DESIGN.md` - Copilot integration strategy
+- `/docs/plans/README.md` - Plans overview and roadmap
 
 ### Implementation Details
 - `/app-monitor/CLEANUP_SCHEDULER_REMOVAL.md` - Why no automatic cleanup

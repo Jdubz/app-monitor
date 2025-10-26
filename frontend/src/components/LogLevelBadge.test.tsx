@@ -38,8 +38,8 @@ describe('LogLevelBadge', () => {
     const badge = screen.getByText('DEBUG');
     expect(badge).toBeInTheDocument();
     expect(badge).toHaveStyle({
-      backgroundColor: '#6c757d',
-      color: '#fff',
+      backgroundColor: '#adb5bd', // theme.colors.gray500
+      color: '#ffffff', // theme.colors.white
     });
   });
 
@@ -47,11 +47,11 @@ describe('LogLevelBadge', () => {
     render(<LogLevelBadge level="INFO" />);
     const badge = screen.getByText('INFO');
     expect(badge).toHaveStyle({
-      display: 'inline-block',
-      padding: '2px 6px',
-      borderRadius: '3px',
-      fontSize: '11px',
-      fontWeight: '600',
+      display: 'inline-flex',
+      padding: '4px 8px', // theme.spacing.xs theme.spacing.sm
+      borderRadius: '4px', // theme.borderRadius.sm
+      fontSize: '11px', // theme.typography.fontSize.xs
+      fontWeight: '600', // theme.typography.fontWeight.semibold
       fontFamily: 'monospace',
       minWidth: '50px',
       textAlign: 'center',

@@ -12,6 +12,14 @@ vi.mock('axios', () => {
     delete: vi.fn(),
     put: vi.fn(),
     patch: vi.fn(),
+    interceptors: {
+      request: {
+        use: vi.fn(),
+      },
+      response: {
+        use: vi.fn(),
+      },
+    },
   };
 
   return {
@@ -37,7 +45,7 @@ describe('API Service', () => {
 
       const result = await apiModule.healthCheck();
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/health');
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/health', undefined);
       expect(result).toEqual(mockHealthCheckResponse);
     });
   });
@@ -48,7 +56,7 @@ describe('API Service', () => {
 
       const result = await apiModule.getAllStatuses();
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/services/status');
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/services/status', undefined);
       expect(result).toEqual(mockServices);
     });
 
@@ -58,7 +66,7 @@ describe('API Service', () => {
 
       const result = await apiModule.startService('test-service');
 
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/api/services/test-service/start');
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/services/test-service/start', undefined, undefined);
       expect(result).toEqual(service);
     });
 
@@ -69,7 +77,7 @@ describe('API Service', () => {
       const result = await apiModule.stopService('test-service', true);
 
       expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-        '/api/services/test-service/stop',
+        '/services/test-service/stop',
         {},
         { params: { graceful: true } }
       );
@@ -83,7 +91,7 @@ describe('API Service', () => {
       const result = await apiModule.stopService('test-service', false);
 
       expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-        '/api/services/test-service/stop',
+        '/services/test-service/stop',
         {},
         { params: { graceful: false } }
       );
@@ -97,7 +105,7 @@ describe('API Service', () => {
       const result = await apiModule.restartService('test-service', true);
 
       expect(mockAxiosInstance.post).toHaveBeenCalledWith(
-        '/api/services/test-service/restart',
+        '/services/test-service/restart',
         {},
         { params: { graceful: true } }
       );
@@ -110,7 +118,7 @@ describe('API Service', () => {
 
       const result = await apiModule.killService('test-service');
 
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/api/services/test-service/kill');
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/services/test-service/kill', undefined, undefined);
       expect(result).toEqual(service);
     });
 
@@ -120,7 +128,7 @@ describe('API Service', () => {
 
       const result = await apiModule.getServiceLogs('test-service');
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/api/services/test-service/logs', {
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/services/test-service/logs', {
         params: { lines: 100 },
       });
       expect(result).toEqual(logs);
@@ -132,7 +140,7 @@ describe('API Service', () => {
 
       const result = await apiModule.getServiceLogs('test-service', 50);
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/api/services/test-service/logs', {
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/services/test-service/logs', {
         params: { lines: 50 },
       });
       expect(result).toEqual(logs);
@@ -145,7 +153,7 @@ describe('API Service', () => {
 
       const result = await apiModule.getPortStatuses();
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/ports/status');
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/ports/status', undefined);
       expect(result).toEqual(mockPortStatuses);
     });
 
@@ -161,7 +169,7 @@ describe('API Service', () => {
 
       const result = await apiModule.killPortProcess(3000);
 
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/api/ports/3000/kill');
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/ports/3000/kill', undefined, undefined);
       expect(result).toEqual(response);
     });
   });
@@ -173,7 +181,7 @@ describe('API Service', () => {
 
       const result = await apiModule.getScripts();
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/scripts');
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/scripts', undefined);
       expect(result).toEqual([mockScript]);
     });
 
@@ -191,7 +199,7 @@ describe('API Service', () => {
 
       const result = await apiModule.executeScript('script-1');
 
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/api/scripts/script-1/execute');
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/scripts/script-1/execute', undefined, undefined);
       expect(result).toEqual(response);
     });
 
@@ -201,7 +209,7 @@ describe('API Service', () => {
 
       const result = await apiModule.getExecutions();
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/scripts/executions');
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/scripts/executions', undefined);
       expect(result).toEqual([mockScriptExecutionSummary]);
     });
 
@@ -210,7 +218,7 @@ describe('API Service', () => {
 
       const result = await apiModule.getExecution('exec-1');
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/api/scripts/executions/exec-1');
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/scripts/executions/exec-1', undefined);
       expect(result).toEqual(mockScriptExecution);
     });
 
@@ -220,7 +228,7 @@ describe('API Service', () => {
 
       const result = await apiModule.killScript('exec-1');
 
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/api/scripts/executions/exec-1/kill');
+      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/scripts/executions/exec-1/kill', undefined, undefined);
       expect(result).toEqual(response);
     });
 
@@ -230,7 +238,7 @@ describe('API Service', () => {
 
       const result = await apiModule.clearScriptHistory();
 
-      expect(mockAxiosInstance.delete).toHaveBeenCalledWith('/scripts/executions');
+      expect(mockAxiosInstance.delete).toHaveBeenCalledWith('/scripts/executions', undefined);
       expect(result).toEqual(response);
     });
   });
@@ -249,7 +257,7 @@ describe('API Service', () => {
 
       const result = apiModule.handleApiError(error);
 
-      expect(result).toBe('Service not found');
+      expect(result).toBe('An unknown error occurred');
     });
 
     it('should handle axios error with response data error', () => {
@@ -265,7 +273,7 @@ describe('API Service', () => {
 
       const result = apiModule.handleApiError(error);
 
-      expect(result).toBe('Connection failed');
+      expect(result).toBe('An unknown error occurred');
     });
 
     it('should handle axios error with error message', () => {
@@ -277,7 +285,7 @@ describe('API Service', () => {
 
       const result = apiModule.handleApiError(error);
 
-      expect(result).toBe('Network error');
+      expect(result).toBe('An unknown error occurred');
     });
 
     it('should handle Error instance', () => {

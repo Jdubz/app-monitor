@@ -19,14 +19,14 @@ export default defineConfig({
     // Test file patterns - UNIT TESTS ONLY (exclude problematic ones)
     include: [
       'src/utils/**/*.{test,spec}.{js,ts,tsx}',
+      'src/components/**/*.test.{js,ts,tsx}',
+      'src/services/**/*.test.{js,ts,tsx}',
     ],
     exclude: [
       'node_modules',
       'dist',
       '**/node_modules/**',
       '**/dist/**',
-      'src/components/**/*.test.{js,ts,tsx}',  // EXCLUDE component tests (they have setup issues)
-      'src/services/**/*.test.{js,ts,tsx}',   // EXCLUDE service tests (missing fixtures)
     ],
   },
 });

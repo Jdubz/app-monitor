@@ -6,7 +6,8 @@ Comprehensive documentation for the App Monitor developer tool.
 
 - [Getting Started](./getting-started.md)
 - [Development Guide](./DEVELOPMENT.md)
-- [Architecture Overview](./ARCHITECTURE.md)
+- [Architecture Overview](./ARCHITECTURE_V2.md)
+- [Evolution Plan](./plans/EVOLUTION_PLAN.md)
 - [Migration Guide](./MIGRATION_GUIDE.md)
 - [API Reference](./api/README.md)
 
@@ -38,6 +39,19 @@ Dev-bots (formerly claude-workers) documentation:
 - [HEALING_SYSTEM_DESIGN.md](./dev-bots/HEALING_SYSTEM_DESIGN.md)
 - [LEARNING_SYSTEM_ANALYSIS.md](./dev-bots/LEARNING_SYSTEM_ANALYSIS.md)
 - [WORKER_ONBOARDING.md](./dev-bots/WORKER_ONBOARDING.md)
+
+### `/plans/`
+Evolution and strategic planning documents:
+- Master evolution plan for autonomous development
+- Dev-bots agents strategy and Claude focus
+- Claude agent experimentation framework
+- GitHub Copilot integration design
+
+**Key Files:**
+- [EVOLUTION_PLAN.md](./plans/EVOLUTION_PLAN.md) - Master evolution strategy
+- [DEV_BOTS_AGENTS_PLAN.md](./plans/DEV_BOTS_AGENTS_PLAN.md) - Agent strategy and Claude focus
+- [CLAUDE_AGENT_EXPERIMENTS.md](./plans/CLAUDE_AGENT_EXPERIMENTS.md) - Experimentation framework
+- [COPILOT_INTEGRATION_DESIGN.md](./plans/COPILOT_INTEGRATION_DESIGN.md) - Copilot integration strategy
 
 ### `/architecture/`
 System architecture and design documents (to be created)
