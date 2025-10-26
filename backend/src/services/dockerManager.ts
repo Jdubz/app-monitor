@@ -631,4 +631,11 @@ export class DockerManager {
       return null;
     }
   }
+
+  /**
+   * Get the Claude worker image name
+   */
+  static getClaudeWorkerImage(): string {
+    return 'dev-bot:latest';
+  }
 }
