@@ -5,7 +5,7 @@
  * Note: These tests require Docker to be running and accessible.
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { DockerManager } from '../../src/services/dockerManager.js';
 
 describe('Docker Operations Integration', () => {
@@ -18,7 +18,7 @@ describe('Docker Operations Integration', () => {
     
     // Check if Docker is available
     try {
-      await dockerManager.ping();
+      await dockerManager.validateDockerEnvironment();
     } catch (error) {
       console.warn('Docker not available, skipping Docker integration tests');
     }
@@ -399,18 +399,18 @@ describe('Docker Operations Integration', () => {
 
   describe('Error Handling', () => {
     it('should handle non-existent container operations', async () => {
-      await expect(async () => {
-        await dockerManager.inspectContainer('nonexistent-container-xyz');
-      }).rejects.toThrow();
+      await expect(
+        dockerManager.inspectContainer('nonexistent-container-xyz')
+      ).rejects.toThrow();
     });
 
     it('should handle invalid container creation parameters', async () => {
-      await expect(async () => {
-        await dockerManager.createContainer({
+      await expect(
+        dockerManager.createContainer({
           Image: 'nonexistent-image-xyz:latest',
           name: 'test-invalid-image',
-        });
-      }).rejects.toThrow();
+        })
+      ).rejects.toThrow();
     });
 
     it('should handle stopping an already stopped container', async () => {
@@ -431,9 +431,9 @@ describe('Docker Operations Integration', () => {
         await new Promise(resolve => setTimeout(resolve, 2000));
         
         // Try to stop an already stopped container
-        await expect(async () => {
-          await dockerManager.stopContainer(container.id, 1);
-        }).rejects.toThrow();
+        await expect(
+          dockerManager.stopContainer(container.id, 1)
+        ).rejects.toThrow();
       } catch (error) {
         console.warn('Double stop test skipped');
       }
