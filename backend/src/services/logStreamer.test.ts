@@ -13,11 +13,18 @@ import { logger } from '../utils/logger.js';
 vi.mock('../utils/logger.js');
 vi.mock('./processManager.js');
 vi.mock('./cloudLogging.js');
-vi.mock('./logWatcher.js', () => ({
-  LogWatcher: vi.fn().mockImplementation(() => ({
-    getRecentLogs: vi.fn().mockReturnValue([])
-  }))
-}));
+vi.mock('./logWatcher.js', async () => {
+  const actual = await vi.importActual<typeof import('./logWatcher.js')>('./logWatcher.js');
+  return {
+    ...actual,
+    LogWatcher: class MockLogWatcher {
+      getRecentLogs = vi.fn(() => []);
+      getAvailableSources = vi.fn(() => []);
+      destroy = vi.fn();
+      constructor() {}
+    }
+  };
+});
 
 describe('LogStreamer', () => {
   let logStreamer: LogStreamer;
@@ -48,11 +55,6 @@ describe('LogStreamer', () => {
       getLogs: vi.fn().mockResolvedValue([]),
       getEnvironments: vi.fn().mockReturnValue({}),
       isAvailable: vi.fn().mockReturnValue(true)
-    };
-
-    // Mock LogWatcher
-    mockLogWatcher = {
-      getRecentLogs: vi.fn().mockReturnValue([])
     };
 
     // Mock Socket

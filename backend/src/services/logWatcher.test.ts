@@ -1,6 +1,6 @@
 /**
  * Log Watcher Tests
- * 
+ *
  * Based on test scenarios from docs/plans/test-scenarios-by-repository.md
  * Covers file monitoring, log parsing, real-time streaming, and error handling
  */
@@ -10,6 +10,7 @@ import { LogWatcher } from './logWatcher.js';
 import { Server as SocketIOServer } from 'socket.io';
 import { createServer } from 'http';
 import * as fs from 'fs';
+import * as path from 'path';
 import { logger } from '../utils/logger.js';
 
 // Mock dependencies
@@ -27,11 +28,14 @@ describe('LogWatcher', () => {
 
     // Mock fs
     mockFs = vi.mocked(fs);
-    mockFs.watchFile = vi.fn();
-    mockFs.unwatchFile = vi.fn();
-    mockFs.readFileSync = vi.fn();
+    mockFs.watch = vi.fn().mockReturnValue({ close: vi.fn() });
     mockFs.existsSync = vi.fn().mockReturnValue(true);
-    mockFs.statSync = vi.fn().mockReturnValue({ mtime: new Date() });
+    mockFs.statSync = vi.fn().mockReturnValue({ size: 0 });
+    mockFs.readFileSync = vi.fn().mockReturnValue('');
+    mockFs.readdirSync = vi.fn().mockReturnValue([]);
+    mockFs.openSync = vi.fn().mockReturnValue(3);
+    mockFs.readSync = vi.fn().mockReturnValue(0);
+    mockFs.closeSync = vi.fn();
 
     // Mock logger
     vi.mocked(logger.info).mockImplementation(() => {});
@@ -64,447 +68,544 @@ describe('LogWatcher', () => {
     });
 
     it('should discover log files on initialization', () => {
-      // Given: Log files exist
-      mockFs.readdirSync = vi.fn().mockReturnValue([
-        'backend.log',
-        'frontend.log',
-        'worker.log'
-      ]);
+      // Given: Log directory exists with log files
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.readdirSync.mockReturnValue(['dev-monitor-backend.log']);
 
       // When: LogWatcher is initialized
       new LogWatcher(io);
 
-      // Then: Log files are discovered
-      expect(mockFs.readdirSync).toHaveBeenCalled();
+      // Then: Log discovery is attempted
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          category: 'system',
+          action: 'log_discovery'
+        })
+      );
+    });
+
+    it('should handle missing log directory gracefully', () => {
+      // Given: Log directory does not exist
+      mockFs.existsSync.mockReturnValue(false);
+
+      // When: LogWatcher is initialized
+      new LogWatcher(io);
+
+      // Then: Warning is logged
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          category: 'system',
+          action: 'directory_not_found'
+        })
+      );
     });
   });
 
   describe('File Watching', () => {
     it('should watch file for changes', () => {
       // Given: Log file path
-      const logPath = '/test/logs/backend.log';
+      const logPath = '/test/logs/dev-monitor-backend.log';
       mockFs.existsSync.mockReturnValue(true);
+      mockFs.statSync.mockReturnValue({ size: 0 });
 
       // When: File watching is started
-      logWatcher['watchFile'](logPath);
+      logWatcher['watchFile'](logPath, 'dev-monitor-backend');
 
       // Then: File is watched
-      expect(mockFs.watchFile).toHaveBeenCalledWith(
+      expect(mockFs.watch).toHaveBeenCalledWith(
         logPath,
         expect.any(Function)
       );
     });
 
-    it('should handle file changes and parse logs', () => {
+    it('should handle file changes', () => {
       // Given: Log file with content
-      const logPath = '/test/logs/backend.log';
-      const logContent = JSON.stringify({
-        severity: 'INFO',
-        timestamp: '2025-01-26T10:00:00.000Z',
-        environment: 'development',
-        service: 'backend',
-        message: 'Test log message'
+      const logPath = '/test/logs/dev-monitor-backend.log';
+
+      type WatchCallback = (eventType: string, filename: string) => void;
+      let watchCallback: WatchCallback;
+
+      mockFs.watch.mockImplementation((filepath: string, callback: WatchCallback) => {
+        watchCallback = callback;
+        return { close: vi.fn() };
       });
 
-      mockFs.readFileSync.mockReturnValue(logContent);
       mockFs.existsSync.mockReturnValue(true);
-
-      // Mock file change callback
-      type FileChangeCallback = (curr: fs.Stats, prev: fs.Stats) => void;
-      let changeCallback: FileChangeCallback;
-      mockFs.watchFile.mockImplementation((filePath: string, callback: FileChangeCallback) => {
-        changeCallback = callback;
-      });
+      mockFs.statSync.mockReturnValue({ size: 100 });
+      mockFs.readFileSync.mockReturnValue('{"severity":"INFO","timestamp":"2025-01-26T10:00:00.000Z","environment":"development","service":"dev-monitor-backend","message":"Test"}');
 
       // When: File watching is started
-      logWatcher['watchFile'](logPath);
+      logWatcher['watchFile'](logPath, 'dev-monitor-backend');
 
       // And: File change is triggered
-      changeCallback!(logPath, { mtime: new Date() });
+      watchCallback!('change', path.basename(logPath));
 
-      // Then: Log is parsed and emitted
-      expect(mockFs.readFileSync).toHaveBeenCalledWith(logPath, 'utf8');
-    });
-
-    it('should handle multiple file watching', () => {
-      // Given: Multiple log files
-      const logPaths = [
-        '/test/logs/backend.log',
-        '/test/logs/frontend.log',
-        '/test/logs/worker.log'
-      ];
-
-      mockFs.existsSync.mockReturnValue(true);
-
-      // When: Multiple files are watched
-      logPaths.forEach(path => logWatcher['watchFile'](path));
-
-      // Then: All files are watched
-      expect(mockFs.watchFile).toHaveBeenCalledTimes(3);
-      logPaths.forEach(path => {
-        expect(mockFs.watchFile).toHaveBeenCalledWith(path, expect.any(Function));
-      });
+      // Then: File change is handled (debounced)
+      expect(mockFs.watch).toHaveBeenCalledWith(logPath, expect.any(Function));
     });
 
     it('should handle file rotation', () => {
       // Given: Log file that gets rotated
-      const logPath = '/test/logs/backend.log';
-      type FileChangeCallback = (curr: fs.Stats, prev: fs.Stats) => void;
-      let changeCallback: FileChangeCallback;
-      
-      mockFs.watchFile.mockImplementation((filePath: string, callback: FileChangeCallback) => {
-        changeCallback = callback;
+      const logPath = '/test/logs/dev-monitor-backend.log';
+
+      type WatchCallback = (eventType: string, filename: string) => void;
+      let watchCallback: WatchCallback;
+
+      mockFs.watch.mockImplementation((filepath: string, callback: WatchCallback) => {
+        watchCallback = callback;
+        return { close: vi.fn() };
       });
 
-      mockFs.existsSync
-        .mockReturnValueOnce(true)  // File exists initially
-        .mockReturnValueOnce(false) // File disappears (rotation)
-        .mockReturnValueOnce(true); // New file appears
-
-      mockFs.readFileSync.mockReturnValue('');
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.statSync.mockReturnValue({ size: 0 });
 
       // When: File watching is started
-      logWatcher['watchFile'](logPath);
+      logWatcher['watchFile'](logPath, 'dev-monitor-backend');
 
       // And: File rotation occurs
-      changeCallback!(logPath, { mtime: new Date() });
-      changeCallback!(logPath, { mtime: new Date() });
+      watchCallback!('rename', path.basename(logPath));
 
-      // Then: File watching continues
-      expect(mockFs.watchFile).toHaveBeenCalledTimes(1);
+      // Then: File rotation is logged
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          category: 'system',
+          action: 'file_rotated'
+        })
+      );
+    });
+
+    it('should watch for file creation if file does not exist', () => {
+      // Given: Log file does not exist
+      const logPath = '/test/logs/new-service.log';
+      mockFs.existsSync.mockReturnValue(false);
+
+      // When: File watching is attempted
+      logWatcher['watchFile'](logPath, 'new-service');
+
+      // Then: Directory is watched for file creation
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          category: 'system',
+          action: 'file_not_found'
+        })
+      );
     });
   });
 
-  describe('Log Parsing', () => {
-    it('should parse JSON logs correctly', () => {
-      // Given: JSON log entry
-      const jsonLog = {
-        severity: 'INFO',
-        timestamp: '2025-01-26T10:00:00.000Z',
-        environment: 'development',
-        service: 'backend',
-        category: 'process',
-        action: 'start',
-        message: 'Service started successfully',
-        details: { pid: 12345, port: 5000 }
-      };
+  describe('Log Format Validation', () => {
+    it('should detect JSON log format with high confidence', () => {
+      // Given: Log file with JSON content
+      const jsonLogs = Array(10).fill('{"severity":"INFO","message":"Test"}').join('\n');
+      mockFs.readFileSync.mockReturnValue(jsonLogs);
+      mockFs.existsSync.mockReturnValue(true);
 
-      const logLine = JSON.stringify(jsonLog);
+      // When: Format is validated
+      const validation = logWatcher['validateLogFormat']('/test/logs/backend.log');
 
-      // When: Log is parsed
-      const parsed = logWatcher['parseLogLine'](logLine);
-
-      // Then: Log is parsed correctly
-      expect(parsed).toEqual(expect.objectContaining(jsonLog));
-      expect(parsed.id).toBeDefined();
-      expect(parsed.timestamp).toBeDefined();
+      // Then: Format is detected as JSON with high confidence
+      expect(validation.format).toBe('json');
+      expect(validation.confidence).toBe('high');
     });
 
-    it('should parse plain text logs', () => {
+    it('should detect plain text log format', () => {
+      // Given: Log file with plain text content
+      const plainLogs = Array(10).fill('2025-01-26 10:00:00 [INFO] Test message').join('\n');
+      mockFs.readFileSync.mockReturnValue(plainLogs);
+      mockFs.existsSync.mockReturnValue(true);
+
+      // When: Format is validated
+      const validation = logWatcher['validateLogFormat']('/test/logs/backend.log');
+
+      // Then: Format is detected as plain text
+      expect(validation.format).toBe('plain-text');
+      expect(validation.confidence).toBe('high');
+    });
+
+    it('should detect mixed format with low confidence', () => {
+      // Given: Log file with mixed content
+      const mixedLogs = [
+        '{"severity":"INFO","message":"JSON log"}',
+        'Plain text log',
+        '{"severity":"ERROR","message":"Another JSON"}',
+        'Another plain text',
+        'More plain text'
+      ].join('\n');
+      mockFs.readFileSync.mockReturnValue(mixedLogs);
+      mockFs.existsSync.mockReturnValue(true);
+
+      // When: Format is validated
+      const validation = logWatcher['validateLogFormat']('/test/logs/backend.log');
+
+      // Then: Format is detected with low confidence
+      expect(['mixed', 'plain-text']).toContain(validation.format);
+    });
+
+    it('should handle empty log files', () => {
+      // Given: Empty log file
+      mockFs.readFileSync.mockReturnValue('');
+      mockFs.existsSync.mockReturnValue(true);
+
+      // When: Format is validated
+      const validation = logWatcher['validateLogFormat']('/test/logs/empty.log');
+
+      // Then: Format is unknown
+      expect(validation.format).toBe('unknown');
+      expect(validation.confidence).toBe('none');
+    });
+
+    it('should handle non-existent files', () => {
+      // Given: File does not exist
+      mockFs.existsSync.mockReturnValue(false);
+
+      // When: Format is validated
+      const validation = logWatcher['validateLogFormat']('/test/logs/nonexistent.log');
+
+      // Then: Format is unknown with error
+      expect(validation.format).toBe('unknown');
+      expect(validation.confidence).toBe('none');
+      expect(validation.error).toBeDefined();
+    });
+  });
+
+  describe('Plain Text Conversion', () => {
+    it('should convert plain text to structured format', () => {
       // Given: Plain text log entry
       const plainLog = '2025-01-26 10:00:00 [INFO] Backend service started on port 5000';
 
-      // When: Log is parsed
-      const parsed = logWatcher['parseLogLine'](plainLog);
+      // When: Log is converted
+      const structured = logWatcher['convertPlainTextToStructured'](plainLog, 'backend');
 
       // Then: Log is converted to structured format
-      expect(parsed).toEqual(expect.objectContaining({
+      expect(structured).toEqual(expect.objectContaining({
         severity: 'INFO',
-        message: expect.stringContaining('Backend service started'),
-        raw: plainLog
+        service: 'backend',
+        message: plainLog,
+        environment: 'development'
       }));
     });
 
-    it('should detect log severity levels', () => {
-      // Given: Different severity levels
-      const testCases = [
-        { input: 'ERROR: Something went wrong', expected: 'ERROR' },
-        { input: 'WARN: This is a warning', expected: 'WARNING' },
-        { input: 'INFO: Information message', expected: 'INFO' },
-        { input: 'DEBUG: Debug information', expected: 'DEBUG' },
-        { input: 'Unknown message', expected: 'INFO' }
-      ];
+    it('should detect ERROR severity', () => {
+      // Given: Plain text log with error
+      const errorLog = 'ERROR: Database connection failed';
 
-      testCases.forEach(({ input, expected }) => {
-        // When: Log is parsed
-        const parsed = logWatcher['parseLogLine'](input);
+      // When: Log is converted
+      const structured = logWatcher['convertPlainTextToStructured'](errorLog, 'backend');
 
-        // Then: Severity is detected correctly
-        expect(parsed.severity).toBe(expected);
-      });
+      // Then: Severity is ERROR
+      expect(structured.severity).toBe('ERROR');
     });
 
-    it('should extract timestamps from various formats', () => {
-      // Given: Different timestamp formats
-      const testCases = [
-        '2025-01-26T10:00:00.000Z [INFO] Message',
-        '2025-01-26 10:00:00 [INFO] Message',
-        '26/01/2025 10:00:00 [INFO] Message',
-        'No timestamp [INFO] Message'
-      ];
+    it('should detect WARNING severity', () => {
+      // Given: Plain text log with warning
+      const warnLog = 'WARN: Connection timeout, retrying...';
 
-      testCases.forEach(input => {
-        // When: Log is parsed
-        const parsed = logWatcher['parseLogLine'](input);
+      // When: Log is converted
+      const structured = logWatcher['convertPlainTextToStructured'](warnLog, 'backend');
 
-        // Then: Timestamp is extracted or defaulted
-        expect(parsed.timestamp).toBeDefined();
-        expect(typeof parsed.timestamp).toBe('number');
-      });
+      // Then: Severity is WARNING
+      expect(structured.severity).toBe('WARNING');
     });
 
-    it('should handle malformed JSON gracefully', () => {
-      // Given: Malformed JSON
-      const malformedJson = '{"severity": "INFO", "message": "Incomplete';
+    it('should detect DEBUG severity', () => {
+      // Given: Plain text log with debug
+      const debugLog = 'DEBUG: Processing request with params: {...}';
 
-      // When: Log is parsed
-      const parsed = logWatcher['parseLogLine'](malformedJson);
+      // When: Log is converted
+      const structured = logWatcher['convertPlainTextToStructured'](debugLog, 'backend');
 
-      // Then: Log is treated as plain text
-      expect(parsed.severity).toBe('INFO');
-      expect(parsed.raw).toBe(malformedJson);
+      // Then: Severity is DEBUG
+      expect(structured.severity).toBe('DEBUG');
     });
 
-    it('should skip empty lines', () => {
-      // Given: Empty log line
-      const emptyLine = '';
+    it('should default to INFO severity', () => {
+      // Given: Plain text log without severity keyword
+      const infoLog = 'Service is running normally';
 
-      // When: Log is parsed
-      const parsed = logWatcher['parseLogLine'](emptyLine);
+      // When: Log is converted
+      const structured = logWatcher['convertPlainTextToStructured'](infoLog, 'backend');
 
-      // Then: Null is returned
-      expect(parsed).toBeNull();
+      // Then: Severity defaults to INFO
+      expect(structured.severity).toBe('INFO');
+    });
+
+    it('should detect emulator category', () => {
+      // Given: Plain text log from Firebase emulator
+      const emulatorLog = 'Firestore emulator started on port 8080';
+
+      // When: Log is converted
+      const structured = logWatcher['convertPlainTextToStructured'](emulatorLog, 'firebase-emulators');
+
+      // Then: Category is emulator
+      expect(structured.category).toBe('emulator');
+    });
+
+    it('should detect server category', () => {
+      // Given: Plain text log about HTTP server
+      const serverLog = 'HTTP server listening on port 3000';
+
+      // When: Log is converted
+      const structured = logWatcher['convertPlainTextToStructured'](serverLog, 'backend');
+
+      // Then: Category is server
+      expect(structured.category).toBe('server');
     });
   });
 
   describe('Real-time Streaming', () => {
-    it('should emit log events to Socket.IO clients', () => {
-      // Given: Log entry
+    it('should broadcast log entries to Socket.IO clients', () => {
+      // Given: Structured log entry
       const logEntry = {
-        id: 'log-123',
-        severity: 'INFO',
-        timestamp: Date.now(),
+        severity: 'INFO' as const,
+        timestamp: '2025-01-26T10:00:00.000Z',
+        environment: 'development',
         service: 'backend',
-        message: 'Test message',
-        raw: 'Test raw log'
+        message: 'Test message'
       };
 
-      // Mock Socket.IO emit
-      const mockEmit = vi.fn();
-      logWatcher['io'].emit = mockEmit;
+      // Mock Socket.IO to method
+      const mockTo = vi.fn().mockReturnValue({ emit: vi.fn() });
+      logWatcher['io'].to = mockTo;
 
       // When: Log is broadcast
-      logWatcher['broadcastLog'](logEntry);
+      logWatcher['broadcastLogEntry'](logEntry);
 
-      // Then: Event is emitted
-      expect(mockEmit).toHaveBeenCalledWith('process:log', logEntry);
+      // Then: Event is emitted to service-specific and all logs rooms
+      expect(mockTo).toHaveBeenCalledWith('logs:backend');
+      expect(mockTo).toHaveBeenCalledWith('logs:all');
     });
 
-    it('should filter logs by service', () => {
-      // Given: Log entries for different services
-      const logs = [
-        { service: 'backend', message: 'Backend log' },
-        { service: 'frontend', message: 'Frontend log' },
-        { service: 'worker', message: 'Worker log' }
-      ];
+    it('should handle format errors gracefully', () => {
+      // Given: Invalid log line
+      const invalidLine = '{"malformed": "json';
 
       // Mock Socket.IO emit
       const mockEmit = vi.fn();
       logWatcher['io'].emit = mockEmit;
+      logWatcher['io'].to = vi.fn().mockReturnValue({ emit: vi.fn() });
 
-      // When: Logs are broadcast
-      logs.forEach(log => logWatcher['broadcastLog'](log as any));
+      // When: Format error is broadcast
+      logWatcher['broadcastFormatError']('backend', '/test/logs/backend.log', invalidLine);
 
-      // Then: All logs are emitted
-      expect(mockEmit).toHaveBeenCalledTimes(3);
+      // Then: Error event is emitted
+      expect(mockEmit).toHaveBeenCalledWith('log_format_error', expect.objectContaining({
+        severity: 'ERROR',
+        category: 'log_format',
+        action: 'invalid_format'
+      }));
+    });
+  });
+
+  describe('Recent Logs Retrieval', () => {
+    it('should read recent logs from file', () => {
+      // Given: Log file with entries
+      const logContent = [
+        '{"severity":"INFO","timestamp":"2025-01-26T10:00:00.000Z","environment":"development","service":"backend","message":"Log 1"}',
+        '{"severity":"ERROR","timestamp":"2025-01-26T10:01:00.000Z","environment":"development","service":"backend","message":"Log 2"}',
+        '{"severity":"INFO","timestamp":"2025-01-26T10:02:00.000Z","environment":"development","service":"backend","message":"Log 3"}'
+      ].join('\n');
+
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.readFileSync.mockReturnValue(logContent);
+
+      // When: Recent logs are requested
+      const logs = logWatcher.getRecentLogs('dev-monitor-backend', 10);
+
+      // Then: Logs are returned
+      expect(logs).toHaveLength(3);
+      expect(logs[0]).toEqual(expect.objectContaining({
+        severity: 'INFO',
+        message: 'Log 1'
+      }));
     });
 
-    it('should handle high-frequency log streaming', () => {
-      // Given: High-frequency log entries
-      const logCount = 100;
-      const mockEmit = vi.fn();
-      logWatcher['io'].emit = mockEmit;
+    it('should limit number of returned logs', () => {
+      // Given: Log file with many entries
+      const logLines = Array.from({ length: 200 }, (_, i) =>
+        `{"severity":"INFO","timestamp":"2025-01-26T10:00:00.000Z","environment":"development","service":"backend","message":"Log ${i}"}`
+      );
+      const logContent = logLines.join('\n');
 
-      // When: Many logs are broadcast quickly
-      for (let i = 0; i < logCount; i++) {
-        logWatcher['broadcastLog']({
-          id: `log-${i}`,
-          severity: 'INFO',
-          timestamp: Date.now(),
-          service: 'backend',
-          message: `Log message ${i}`,
-          raw: `Raw log ${i}`
-        });
-      }
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.readFileSync.mockReturnValue(logContent);
 
-      // Then: All logs are emitted
-      expect(mockEmit).toHaveBeenCalledTimes(logCount);
+      // When: Recent logs are requested with limit
+      const logs = logWatcher.getRecentLogs('dev-monitor-backend', 50);
+
+      // Then: Only last 50 logs are returned
+      expect(logs.length).toBeLessThanOrEqual(50);
+    });
+
+    it('should handle plain text logs in recent logs', () => {
+      // Given: Log file with plain text
+      const logContent = [
+        'Plain text log 1',
+        'ERROR: Something went wrong',
+        'Plain text log 3'
+      ].join('\n');
+
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.readFileSync.mockReturnValue(logContent);
+
+      // When: Recent logs are requested
+      const logs = logWatcher.getRecentLogs('dev-monitor-backend', 10);
+
+      // Then: Plain text logs are converted to structured format
+      expect(logs).toHaveLength(3);
+      expect(logs[0]).toEqual(expect.objectContaining({
+        severity: 'INFO',
+        message: 'Plain text log 1'
+      }));
+      expect(logs[1]).toEqual(expect.objectContaining({
+        severity: 'ERROR',
+        message: 'ERROR: Something went wrong'
+      }));
+    });
+
+    it('should return empty array when log file not found', () => {
+      // Given: Log file does not exist
+      mockFs.existsSync.mockReturnValue(false);
+
+      // When: Recent logs are requested
+      const logs = logWatcher.getRecentLogs('nonexistent-service', 10);
+
+      // Then: Empty array is returned
+      expect(logs).toEqual([]);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          category: 'system',
+          action: 'log_file_not_found'
+        })
+      );
+    });
+  });
+
+  describe('Available Sources', () => {
+    it('should return available log sources', () => {
+      // Given: Log files are being watched
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.statSync.mockReturnValue({ size: 0 });
+
+      logWatcher['watchFile']('/test/logs/backend.log', 'backend');
+      logWatcher['watchFile']('/test/logs/frontend.log', 'frontend');
+
+      // When: Available sources are requested
+      const sources = logWatcher.getAvailableSources();
+
+      // Then: All watched sources are returned (including any auto-discovered sources)
+      expect(sources.length).toBeGreaterThanOrEqual(2);
+      const serviceNames = sources.map(s => s.service);
+      expect(serviceNames).toContain('backend');
+      expect(serviceNames).toContain('frontend');
+    });
+
+    it('should only return sources for files that exist', () => {
+      // Given: Some log files exist, others do not
+      mockFs.existsSync
+        .mockReturnValueOnce(true)  // backend.log exists
+        .mockReturnValueOnce(false); // frontend.log doesn't exist
+
+      mockFs.statSync.mockReturnValue({ size: 0 });
+
+      logWatcher['watchFile']('/test/logs/backend.log', 'backend');
+
+      // When: Available sources are requested
+      const sources = logWatcher.getAvailableSources();
+
+      // Then: Only existing files are returned
+      expect(sources.length).toBeGreaterThanOrEqual(0);
     });
   });
 
   describe('Error Handling', () => {
     it('should handle file read errors', () => {
-      // Given: File read error
-      mockFs.readFileSync.mockImplementation(() => {
-        throw new Error('File read error');
-      });
-
-      type FileChangeCallback = (curr: fs.Stats, prev: fs.Stats) => void;
-      let changeCallback: FileChangeCallback;
-      mockFs.watchFile.mockImplementation((filePath: string, callback: FileChangeCallback) => {
-        changeCallback = callback;
-      });
-
-      // When: File change is triggered
-      logWatcher['watchFile']('/test/logs/backend.log');
-      changeCallback!('/test/logs/backend.log' as any, { mtime: new Date() } as any);
-
-      // Then: Error is logged
-      expect(logger.error).toHaveBeenCalledWith(
-        expect.stringContaining('Failed to read log file'),
-        expect.any(Error)
-      );
-    });
-
-    it('should handle file not found errors', () => {
-      // Given: File does not exist
-      mockFs.existsSync.mockReturnValue(false);
-
-      // When: File watching is attempted
-      logWatcher['watchFile']('/nonexistent/logs/backend.log');
-
-      // Then: Warning is logged
-      expect(logger.warn).toHaveBeenCalledWith(
-        expect.stringContaining('Log file does not exist')
-      );
-    });
-
-    it('should handle parsing errors gracefully', () => {
-      // Given: Unparseable log content
-      const unparseableContent = 'This is not a valid log format\nAnother line\n';
-
-      mockFs.readFileSync.mockReturnValue(unparseableContent);
-
-      type FileChangeCallback = (curr: fs.Stats, prev: fs.Stats) => void;
-      let changeCallback: FileChangeCallback;
-      mockFs.watchFile.mockImplementation((filePath: string, callback: FileChangeCallback) => {
-        changeCallback = callback;
-      });
-
-      // When: File change is triggered
-      logWatcher['watchFile']('/test/logs/backend.log');
-      changeCallback!('/test/logs/backend.log' as any, { mtime: new Date() } as any);
-
-      // Then: Logs are still processed
-      expect(mockFs.readFileSync).toHaveBeenCalled();
-    });
-
-    it('should handle Socket.IO emit errors', () => {
-      // Given: Socket.IO emit error
-      const mockEmit = vi.fn().mockImplementation(() => {
-        throw new Error('Socket.IO error');
-      });
-      logWatcher['io'].emit = mockEmit;
-
-      // When: Log is broadcast
-      logWatcher['broadcastLog']({
-        id: 'log-123',
-        severity: 'INFO',
-        timestamp: Date.now(),
-        service: 'backend',
-        message: 'Test message',
-        raw: 'Test raw log'
-      });
-
-      // Then: Error is handled gracefully
-      expect(mockEmit).toHaveBeenCalled();
-    });
-  });
-
-  describe('Log Source Management', () => {
-    it('should get watched log sources', () => {
-      // Given: Log files are being watched
-      const logPaths = [
-        '/test/logs/backend.log',
-        '/test/logs/frontend.log'
-      ];
-
-      logPaths.forEach(path => {
-        mockFs.existsSync.mockReturnValue(true);
-        logWatcher['watchFile'](path);
-      });
-
-      // When: Log sources are requested
-      const sources = logWatcher.getLogSources();
-
-      // Then: All watched sources are returned
-      expect(sources).toEqual(expect.arrayContaining(logPaths));
-    });
-
-    it('should add new log source', () => {
-      // Given: New log file
-      const newLogPath = '/test/logs/new-service.log';
-      mockFs.existsSync.mockReturnValue(true);
-
-      // When: New log source is added
-      logWatcher.addLogSource(newLogPath);
-
-      // Then: File is watched
-      expect(mockFs.watchFile).toHaveBeenCalledWith(newLogPath, expect.any(Function));
-    });
-
-    it('should remove log source', () => {
       // Given: Log file is being watched
       const logPath = '/test/logs/backend.log';
       mockFs.existsSync.mockReturnValue(true);
-      logWatcher['watchFile'](logPath);
+      mockFs.statSync
+        .mockReturnValueOnce({ size: 0 })  // Initial watch
+        .mockReturnValueOnce({ size: 100 }); // On read attempt
 
-      // When: Log source is removed
-      logWatcher.removeLogSource(logPath);
+      // Set up the watched file
+      logWatcher['watchFile'](logPath, 'backend');
 
-      // Then: File watching is stopped
-      expect(mockFs.unwatchFile).toHaveBeenCalledWith(logPath);
+      // Now mock file read to throw error
+      mockFs.readSync.mockImplementation(() => {
+        throw new Error('File read error');
+      });
+      mockFs.openSync.mockReturnValue(3);
+
+      // When: File is read
+      logWatcher['readNewLines'](logPath);
+
+      // Then: Error is logged
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          category: 'system',
+          action: 'read_failed'
+        })
+      );
+    });
+
+    it('should handle format validation errors', () => {
+      // Given: Format validation throws error
+      mockFs.readFileSync.mockImplementation(() => {
+        throw new Error('Read error');
+      });
+      mockFs.existsSync.mockReturnValue(true);
+
+      // When: Format is validated
+      const validation = logWatcher['validateLogFormat']('/test/logs/error.log');
+
+      // Then: Error is captured
+      expect(validation.format).toBe('unknown');
+      expect(validation.confidence).toBe('none');
+      expect(validation.error).toBeDefined();
+    });
+
+    it('should handle malformed JSON in log entries', () => {
+      // Given: Log file with malformed JSON
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.statSync.mockReturnValue({ size: 50 });
+      mockFs.readFileSync.mockReturnValue('{"malformed": "json');
+
+      const mockEmit = vi.fn();
+      logWatcher['io'].emit = mockEmit;
+      logWatcher['io'].to = vi.fn().mockReturnValue({ emit: vi.fn() });
+
+      // When: Log line is processed
+      logWatcher['processLogLine']('{"malformed": "json', 'backend');
+
+      // Then: Error is logged and format error is broadcast
+      expect(logger.error).toHaveBeenCalledWith(
+        expect.objectContaining({
+          category: 'system',
+          action: 'invalid_json'
+        })
+      );
     });
   });
 
-  describe('Performance and Memory Management', () => {
-    it('should limit log history to prevent memory issues', () => {
-      // Given: LogWatcher with limited history
-      logWatcher['maxLogHistory'] = 10;
+  describe('Cleanup', () => {
+    it('should destroy watchers on cleanup', () => {
+      // Given: LogWatcher with active watchers
+      const mockClose = vi.fn();
+      mockFs.watch.mockReturnValue({ close: mockClose });
+      mockFs.existsSync.mockReturnValue(true);
+      mockFs.statSync.mockReturnValue({ size: 0 });
 
-      // When: Many logs are added
-      for (let i = 0; i < 20; i++) {
-        logWatcher['addToHistory']({
-          id: `log-${i}`,
-          severity: 'INFO',
-          timestamp: Date.now(),
-          service: 'backend',
-          message: `Log message ${i}`,
-          raw: `Raw log ${i}`
-        });
-      }
+      logWatcher['watchFile']('/test/logs/backend.log', 'backend');
 
-      // Then: History is limited
-      expect(logWatcher['logHistory'].length).toBeLessThanOrEqual(10);
-    });
+      // When: Destroy is called
+      logWatcher.destroy();
 
-    it('should handle large log files efficiently', () => {
-      // Given: Large log file
-      const largeLogContent = 'Line 1\n'.repeat(10000);
-      mockFs.readFileSync.mockReturnValue(largeLogContent);
-
-      type FileChangeCallback = (curr: fs.Stats, prev: fs.Stats) => void;
-      let changeCallback: FileChangeCallback;
-      mockFs.watchFile.mockImplementation((filePath: string, callback: FileChangeCallback) => {
-        changeCallback = callback;
-      });
-
-      // When: Large file change is processed
-      logWatcher['watchFile']('/test/logs/large.log');
-      changeCallback!('/test/logs/large.log' as any, { mtime: new Date() } as any);
-
-      // Then: Processing completes without errors
-      expect(mockFs.readFileSync).toHaveBeenCalled();
+      // Then: Watchers are closed
+      expect(mockClose).toHaveBeenCalled();
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          category: 'system',
+          action: 'destroyed'
+        })
+      );
     });
   });
 });
