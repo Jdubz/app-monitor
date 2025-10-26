@@ -30,7 +30,11 @@ describe('TaskPersistence', () => {
     mockFs = vi.mocked(fs);
     mockFs.existsSync.mockReturnValue(false);
     mockFs.mkdirSync.mockImplementation(() => {});
-    mockFs.readFileSync.mockReturnValue('[]');
+    mockFs.readFileSync.mockReturnValue(JSON.stringify({
+      version: '1.0',
+      lastSaved: new Date().toISOString(),
+      tasks: []
+    }));
     mockFs.writeFileSync.mockImplementation(() => {});
     mockFs.readdirSync.mockReturnValue([]);
     mockFs.statSync.mockReturnValue({ mtime: new Date() });
@@ -110,14 +114,18 @@ describe('TaskPersistence', () => {
       ];
 
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readFileSync.mockReturnValue(JSON.stringify(mockTasks));
+      mockFs.readFileSync.mockReturnValue(JSON.stringify({
+        version: '1.0',
+        lastSaved: new Date().toISOString(),
+        tasks: mockTasks
+      }));
 
       // When: Loading tasks
       const tasks = taskPersistence.loadTasks();
 
       // Then: Tasks are loaded
       expect(tasks).toEqual(mockTasks);
-      expect(mockFs.readFileSync).toHaveBeenCalledWith('/test/storage/tasks.json', 'utf8');
+      expect(mockFs.readFileSync).toHaveBeenCalledWith('/test/storage/tasks.json', 'utf-8');
     });
 
     it('should return empty array when no storage file exists', () => {
@@ -136,7 +144,11 @@ describe('TaskPersistence', () => {
       mockFs.existsSync.mockReturnValue(true);
       mockFs.readFileSync
         .mockReturnValueOnce('invalid json') // Main file corrupted
-        .mockReturnValueOnce(JSON.stringify([{ id: 'backup-task' }])); // Backup file
+        .mockReturnValueOnce(JSON.stringify({
+          version: '1.0',
+          backupCreated: new Date().toISOString(),
+          tasks: [{ id: 'backup-task' }]
+        })); // Backup file
 
       mockFs.readdirSync.mockReturnValue(['backup-1.json']);
 
