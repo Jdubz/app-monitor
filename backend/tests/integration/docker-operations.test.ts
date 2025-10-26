@@ -38,8 +38,8 @@ describe('Docker Operations Integration', () => {
 
   describe('Docker Connectivity', () => {
     it('should connect to Docker daemon', async () => {
-      const isAvailable = await dockerManager.ping();
-      expect(typeof isAvailable).toBe('boolean');
+      const validation = await dockerManager.validateDockerEnvironment();
+      expect(validation.isValid).toBe(true);
     });
 
     it('should get Docker version info', async () => {
