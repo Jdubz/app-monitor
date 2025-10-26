@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '../test/test-utils';
 import StatusBadge from './StatusBadge';
-import { ProcessInfo } from '../types/service.types';
 
 describe('StatusBadge', () => {
   it('renders running status correctly', () => {

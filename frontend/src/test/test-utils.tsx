@@ -1,19 +1,19 @@
-import React, { ReactElement } from 'react';
+import { ReactElement } from 'react';
 import { render, RenderOptions } from '@testing-library/react';
 import { vi } from 'vitest';
 
 // Mock Socket.IO
 export const createMockSocket = () => {
-  const listeners = new Map<string, Function[]>();
+  const listeners = new Map<string, ((...args: any[]) => void)[]>();
 
   return {
-    on: vi.fn((event: string, handler: Function) => {
+    on: vi.fn((event: string, handler: (...args: any[]) => void) => {
       if (!listeners.has(event)) {
         listeners.set(event, []);
       }
       listeners.get(event)?.push(handler);
     }),
-    off: vi.fn((event: string, handler?: Function) => {
+    off: vi.fn((event: string, handler?: (...args: any[]) => void) => {
       if (handler) {
         const handlers = listeners.get(event) || [];
         listeners.set(event, handlers.filter(h => h !== handler));

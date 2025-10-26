@@ -37,7 +37,7 @@ export const services: Record<string, ServiceConfig> = {
     displayName: 'Job Finder Backend',
     description: 'Node.js backend + Firebase emulators (Auth, Firestore, Functions, Storage + UI)',
     command: 'npm',
-    args: ['run', 'dev'],
+    args: ['run', 'start'],
     cwd: path.join(ROOT_DIR, 'job-finder-BE'),
     ports: [5001, 4000, 4400, 8080, 9099, 9199],
     requirePorts: true,

@@ -70,21 +70,21 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
     }
   };
 
-  const formatUptime = (startedAt: number | null) => {
-    if (!startedAt) return 'Unknown';
-    const uptime = Date.now() - startedAt;
-    const seconds = Math.floor(uptime / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
+  // const _formatUptime = (startedAt: number | null) => {
+  //   if (!startedAt) return 'Unknown';
+  //   const uptime = Date.now() - startedAt;
+  //   const seconds = Math.floor(uptime / 1000);
+  //   const minutes = Math.floor(seconds / 60);
+  //   const hours = Math.floor(minutes / 60);
 
-    if (hours > 0) {
-      return `${hours}h ${minutes % 60}m`;
-    } else if (minutes > 0) {
-      return `${minutes}m ${seconds % 60}s`;
-    } else {
-      return `${seconds}s`;
-    }
-  };
+  //   if (hours > 0) {
+  //     return `${hours}h ${minutes % 60}m`;
+  //   } else if (minutes > 0) {
+  //     return `${minutes}m ${seconds % 60}s`;
+  //   } else {
+  //     return `${seconds}s`;
+  //   }
+  // };
 
   const getStatusBadgeStyle = (status: string): React.CSSProperties => {
     const baseStyle: React.CSSProperties = {

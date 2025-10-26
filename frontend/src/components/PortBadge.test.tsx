@@ -158,7 +158,7 @@ describe('PortBadge', () => {
       vi.mocked(window.confirm).mockReturnValue(true);
       mockOnKillPort.mockResolvedValue(undefined);
 
-      const { container } = render(
+      render(
         <div onClick={parentClickHandler}>
           <PortBadge portInfo={portInfoInUse} onKillPort={mockOnKillPort} />
         </div>

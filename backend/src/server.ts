@@ -67,7 +67,11 @@ export function createApp() {
     cors: {
       origin: config.corsOrigin,
       credentials: true,
+      methods: ["GET", "POST"],
     },
+    path: '/socket.io',
+    transports: ['websocket', 'polling'],
+    allowEIO3: true,
   });
 
   // Initialize LogStreamer with processManager and cloudLogging from routes

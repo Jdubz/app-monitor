@@ -32,8 +32,8 @@ const CloudLogsViewer: React.FC<CloudLogsViewerProps> = ({
   onSelectAllLevels,
   onClearAllLevels,
   onClearSearch,
-  onRefresh,
-  onClear,
+  onRefresh: _onRefresh,
+  onClear: _onClear,
 }) => {
   const logsEndRef = useRef<HTMLDivElement>(null);
 

@@ -1,5 +1,5 @@
 # App Monitor Makefile
-.PHONY: help install setup dev dev-backend dev-frontend stop test lint build clean
+.PHONY: help install setup dev dev-backend dev-frontend stop start status restart test lint build clean
 
 CYAN := \033[0;36m
 GREEN := \033[0;32m
@@ -33,11 +33,16 @@ dev-frontend: ## Start frontend only
 	@npm run dev:frontend
 
 stop: ## Stop all services
-	@echo "$(CYAN)Stopping services...$(RESET)"
-	@-lsof -ti:5000 2>/dev/null | xargs -r kill -9 2>/dev/null
-	@-lsof -ti:5174 2>/dev/null | xargs -r kill -9 2>/dev/null
-	@sleep 1
-	@echo "$(GREEN)✓ Services stopped$(RESET)"
+	@./scripts/process-manager.sh stop
+
+status: ## Show process status
+	@./scripts/process-manager.sh status
+
+start: ## Start all services
+	@./scripts/process-manager.sh start
+
+restart: ## Restart all services
+	@./scripts/process-manager.sh restart
 
 build: ## Build all workspaces
 	@echo "$(CYAN)Building...$(RESET)"
