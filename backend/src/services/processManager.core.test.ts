@@ -37,6 +37,7 @@ describe('ProcessManager Core Functionality', () => {
       stderr: { on: vi.fn() },
       on: vi.fn(),
       once: vi.fn(),
+      removeListener: vi.fn(),
       kill: vi.fn(),
       exitCode: null
     } as any);
@@ -105,6 +106,7 @@ describe('ProcessManager Core Functionality', () => {
         stderr: { on: vi.fn() },
         on: vi.fn(),
         once: vi.fn(),
+        removeListener: vi.fn(),
         kill: vi.fn(),
         exitCode: null
       } as any;
@@ -129,6 +131,7 @@ describe('ProcessManager Core Functionality', () => {
         stderr: { on: vi.fn() },
         on: vi.fn(),
         once: vi.fn(),
+        removeListener: vi.fn(),
         kill: vi.fn(),
         exitCode: null
       } as any;
@@ -281,7 +284,7 @@ describe('ProcessManager Core Functionality', () => {
       await processManager.startService(serviceName);
 
       // When: Status is checked
-      const status = processManager.getServiceStatus(serviceName);
+      const status = await processManager.getServiceStatus(serviceName);
 
       // Then: Status is tracked correctly
       expect(status).toBeDefined();
@@ -304,6 +307,7 @@ describe('ProcessManager Core Functionality', () => {
           }
         }),
         once: vi.fn(),
+        removeListener: vi.fn(),
         kill: vi.fn(),
         exitCode: null
       } as any;
@@ -315,7 +319,7 @@ describe('ProcessManager Core Functionality', () => {
       await new Promise(resolve => setTimeout(resolve, 150));
 
       // Then: Status is updated
-      const status = processManager.getServiceStatus(serviceName);
+      const status = await processManager.getServiceStatus(serviceName);
       expect(status.status).toBe('error');
       expect(status.error).toBeDefined();
     });
@@ -329,7 +333,7 @@ describe('ProcessManager Core Functionality', () => {
 
       // When: Status is checked after delay
       await new Promise(resolve => setTimeout(resolve, 100));
-      const status = processManager.getServiceStatus(serviceName);
+      const status = await processManager.getServiceStatus(serviceName);
 
       // Then: Uptime is calculated
       expect(status.uptime).toBeGreaterThan(0);
@@ -364,6 +368,7 @@ describe('ProcessManager Core Functionality', () => {
         stderr: { on: vi.fn() },
         on: vi.fn(),
         once: vi.fn(),
+        removeListener: vi.fn(),
         kill: vi.fn(),
         exitCode: null
       } as any;
@@ -393,6 +398,7 @@ describe('ProcessManager Core Functionality', () => {
         stderr: { on: vi.fn() },
         on: vi.fn(),
         once: vi.fn(),
+        removeListener: vi.fn(),
         kill: vi.fn(),
         exitCode: null
       } as any;
@@ -413,7 +419,7 @@ describe('ProcessManager Core Functionality', () => {
       }
 
       // Then: Log lines are limited
-      const status = processManager.getServiceStatus(serviceName);
+      const status = await processManager.getServiceStatus(serviceName);
       expect(status.logs?.length).toBeLessThanOrEqual(1000);
     });
   });
@@ -447,6 +453,7 @@ describe('ProcessManager Core Functionality', () => {
         stderr: { on: vi.fn() },
         on: vi.fn(),
         once: vi.fn(),
+        removeListener: vi.fn(),
         kill: vi.fn().mockImplementation(() => {
           throw new Error('Stop failed');
         }),
@@ -486,6 +493,7 @@ describe('ProcessManager Core Functionality', () => {
         stderr: { on: vi.fn() },
         on: vi.fn(),
         once: vi.fn(),
+        removeListener: vi.fn(),
         kill: vi.fn(),
         exitCode: null
       } as any;
@@ -496,6 +504,7 @@ describe('ProcessManager Core Functionality', () => {
         stderr: { on: vi.fn() },
         on: vi.fn(),
         once: vi.fn(),
+        removeListener: vi.fn(),
         kill: vi.fn(),
         exitCode: null
       } as any;
@@ -524,6 +533,7 @@ describe('ProcessManager Core Functionality', () => {
         stderr: { on: vi.fn() },
         on: vi.fn(),
         once: vi.fn(),
+        removeListener: vi.fn(),
         kill: vi.fn().mockImplementation(() => {
           throw new Error('Kill failed');
         }),
@@ -555,12 +565,12 @@ describe('ProcessManager Core Functionality', () => {
       await processManager.startService(serviceName2);
 
       // When: All statuses are requested
-      const statuses = processManager.getAllStatuses();
+      const statuses = await processManager.getAllStatuses();
 
       // Then: All service statuses are returned
-      expect(Object.keys(statuses)).toHaveLength(2);
-      expect(statuses[serviceName1]).toBeDefined();
-      expect(statuses[serviceName2]).toBeDefined();
+      expect(statuses).toHaveLength(2);
+      expect(statuses.find(s => s.name === serviceName1)).toBeDefined();
+      expect(statuses.find(s => s.name === serviceName2)).toBeDefined();
     });
 
     it('should include Docker container status', async () => {
@@ -575,7 +585,7 @@ describe('ProcessManager Core Functionality', () => {
       await processManager.startService(serviceName);
 
       // When: Status is checked
-      const status = processManager.getServiceStatus(serviceName);
+      const status = await processManager.getServiceStatus(serviceName);
 
       // Then: Docker container info is included
       expect(status.dockerContainer).toBeDefined();
