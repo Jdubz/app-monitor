@@ -10,6 +10,8 @@ import { TaskCreationGuidelinesManager, EnhancedTaskData } from './taskCreationG
 import { WorkspaceSyncManager, SyncOptions, SyncResult } from './workspaceSyncManager.js';
 import { DockerManager, DockerValidationResult } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
+import { getTokenTrackingService } from './tokenTracking.js';
+import { getQualityGateValidator, QualityValidationResult } from './qualityGates.js';
 
 export interface RetryAttempt {
   attemptNumber: number;
@@ -52,6 +54,7 @@ export interface Task {
   files?: string[]; // Files to be modified
   dependencies?: string[]; // Task dependencies
   project?: string; // Target project
+  qualityValidation?: QualityValidationResult; // Quality gate validation results
 
   // Retry system fields
   retryCount?: number; // Number of retry attempts made
@@ -1395,28 +1398,157 @@ export class DevBotsManager extends EventEmitter {
   }
 
   /**
+   * Extract and record token usage from task output
+   */
+  private extractAndRecordTokenUsage(task: Task, output: string): void {
+    try {
+      const tokenTracking = getTokenTrackingService();
+
+      // Try to extract token usage from output
+      // Format: "Input tokens: 1234, Output tokens: 567"
+      const inputMatch = output.match(/Input tokens?:\s*(\d+)/i);
+      const outputMatch = output.match(/Output tokens?:\s*(\d+)/i);
+
+      if (inputMatch && outputMatch) {
+        const inputTokens = parseInt(inputMatch[1], 10);
+        const outputTokens = parseInt(outputMatch[1], 10);
+
+        // Determine provider from task or default to 'claude'
+        const provider = task.assignedAgent?.includes('codex') ? 'codex' : 'claude';
+
+        tokenTracking.recordUsage({
+          provider,
+          model: task.assignedAgent || 'unknown',
+          taskId: task.id,
+          inputTokens,
+          outputTokens
+        });
+
+        logger.info({
+          category: 'token-tracking',
+          action: 'recorded_token_usage',
+          message: `Recorded token usage for task ${task.id}`,
+          details: { provider, inputTokens, outputTokens }
+        });
+      }
+    } catch (error) {
+      logger.error({
+        category: 'token-tracking',
+        action: 'failed_to_extract_tokens',
+        message: 'Failed to extract and record token usage',
+        error
+      });
+    }
+  }
+
+  /**
+   * Run quality gate validation on a completed task
+   * This is async and runs in the background - it doesn't block task completion
+   */
+  private async runQualityGateValidation(task: Task, workspacePath: string): Promise<void> {
+    try {
+      const qualityGates = getQualityGateValidator();
+
+      // Determine project name from task
+      const project = task.project || 'unknown';
+
+      logger.info({
+        category: 'quality-gates',
+        action: 'validation_started',
+        message: `Starting quality gate validation for task ${task.id}`,
+        details: { project, workspacePath }
+      });
+
+      // Run validation (this is async and takes time)
+      const validationResult: QualityValidationResult = await qualityGates.validateTask(
+        task.id,
+        workspacePath,
+        project
+      );
+
+      // Store validation results in task
+      task.qualityValidation = validationResult;
+
+      logger.info({
+        category: 'quality-gates',
+        action: 'validation_completed',
+        message: `Quality gate validation completed for task ${task.id}`,
+        details: {
+          passed: validationResult.passed,
+          overallScore: validationResult.overallScore,
+          gatesPassed: validationResult.gates.filter(g => g.passed).length,
+          gatesTotal: validationResult.gates.length
+        }
+      });
+
+      // Emit event for UI updates
+      this.emit('quality_validation_completed', {
+        taskId: task.id,
+        result: validationResult
+      });
+
+      // If quality gates failed, optionally create a healing task
+      if (!validationResult.passed) {
+        logger.warn({
+          category: 'quality-gates',
+          action: 'validation_failed',
+          message: `Quality gates failed for task ${task.id}`,
+          details: {
+            failedGates: validationResult.gates.filter(g => !g.passed).map(g => g.gate)
+          }
+        });
+
+        // TODO: Create auto-healing task
+        // this.createHealingTask(task, validationResult);
+      }
+    } catch (error) {
+      logger.error({
+        category: 'quality-gates',
+        action: 'validation_error',
+        message: `Error running quality gate validation for task ${task.id}`,
+        error
+      });
+    }
+  }
+
+  /**
    * Complete task in ephemeral worker
    */
   private async completeEphemeralTask(worker: EphemeralWorker, output: string, errorOutput: string, exitCode: number): Promise<void> {
     worker.status = 'completing';
-    
+
     // Update task
     worker.task.status = 'completed';
     worker.task.completedAt = new Date().toISOString();
     worker.task.output = output;
     worker.task.error = errorOutput;
     worker.task.exitCode = exitCode;
-    
+
+    // Extract and record token usage
+    this.extractAndRecordTokenUsage(worker.task, output);
+
+    // Run quality gate validation (async, doesn't block)
+    // Determine workspace path from worker
+    const workspacePath = path.join(process.cwd(), '../../dev-bots/volumes', worker.type);
+    this.runQualityGateValidation(worker.task, workspacePath).catch(error => {
+      logger.error({
+        category: 'quality-gates',
+        action: 'validation_async_error',
+        message: 'Error in async quality gate validation',
+        error
+      });
+    });
+
     // Move to completed tasks
     this.activeTasks.delete(worker.task.id);
     this.completedTasks.push(worker.task);
-    
+
     // Save to persistence
     this.taskPersistence.saveCompletedTasks([worker.task]);
-    
+
     // Destroy container
     await this.destroyEphemeralWorker(worker.id);
-    
+
     logger.info({
       category: 'process',
       action: 'task_completed_worker_task_id',
@@ -1727,10 +1859,13 @@ export class DevBotsManager extends EventEmitter {
       task.completedAt = new Date().toISOString();
       task.output = output;
       task.exitCode = 0;
-      
+
+      // Extract and record token usage
+      this.extractAndRecordTokenUsage(task, output);
+
       this.activeTasks.delete(task.id);
       this.completedTasks.push(task);
-      
+
       // Save completed task to persistence
       this.taskPersistence.saveCompletedTasks([task]);
       

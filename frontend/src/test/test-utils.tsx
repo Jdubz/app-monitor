@@ -39,13 +39,20 @@ export const createMockSocket = () => {
 };
 
 // Mock API Client
-export const createMockApiClient = () => ({
-  get: vi.fn(),
-  post: vi.fn(),
-  put: vi.fn(),
-  delete: vi.fn(),
-  patch: vi.fn(),
-});
+const API_CLIENT_SYMBOL = '__APP_MONITOR_API_CLIENT__';
+
+export const createMockApiClient = () => {
+  const mockApi = {
+    get: vi.fn(),
+    post: vi.fn(),
+    put: vi.fn(),
+    delete: vi.fn(),
+    patch: vi.fn(),
+  };
+
+  (globalThis as Record<string, unknown>)[API_CLIENT_SYMBOL] = mockApi;
+  return mockApi;
+};
 
 // Mock WebSocket
 export const createMockWebSocket = () => ({
