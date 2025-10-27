@@ -1,7 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { QualityGateValidator, getQualityGateValidator, resetQualityGateValidator, QualityGateConfig } from './qualityGates.js';
-import * as fs from 'fs';
-import * as path from 'path';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { QualityGateValidator, getQualityGateValidator, resetQualityGateValidator } from './qualityGates.js';
 
 // Mock child_process
 vi.mock('child_process', () => ({
@@ -108,12 +106,6 @@ describe('QualityGateValidator', () => {
       validator.setGateConfig('testing', { weight: 10, enabled: true });
       // Linting gate (weight 5, score 50)
       validator.setGateConfig('linting', { weight: 5, enabled: true });
-
-      // Mock results
-      const results = [
-        { gate: 'Testing', passed: true, score: 100, duration: 1000 },
-        { gate: 'Linting', passed: true, score: 50, duration: 500 }
-      ];
 
       // Calculate: (100*10 + 50*5) / (10+5) = 1250/15 = 83.33
       // This is done internally by validateTask, but we can test the logic

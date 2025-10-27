@@ -1,5 +1,5 @@
 import express, { Request, Response } from 'express';
-import { getQualityGateValidator, QualityGateConfig } from '../services/qualityGates.js';
+import { getQualityGateValidator, resetQualityGateValidator, QualityGateConfig } from '../services/qualityGates.js';
 import { logger } from '../utils/logger.js';
 
 const router = express.Router();
@@ -124,7 +124,6 @@ router.post('/validate', async (req: Request, res: Response) => {
 router.post('/config/reset', (req: Request, res: Response) => {
   try {
     // Create a new validator instance to get defaults
-    const { resetQualityGateValidator, getQualityGateValidator } = require('../services/qualityGates.js');
     resetQualityGateValidator();
     const newValidator = getQualityGateValidator();
 

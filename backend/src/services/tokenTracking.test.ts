@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TokenTrackingService, getTokenTrackingService, resetTokenTrackingService, TokenBudget } from './tokenTracking.js';
-import { DevBotsDatabase, getDatabase, TokenUsage } from './database.js';
+import { DevBotsDatabase, TokenUsage } from './database.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';

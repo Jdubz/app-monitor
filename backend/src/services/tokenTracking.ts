@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { logger } from '../utils/logger.js';
-import { DevBotsDatabase, getDatabase, TokenUsage, TokenUsageStats } from './database.js';
+import { DevBotsDatabase, getDatabase, TokenUsage } from './database.js';
 
 /**
  * Token budget configuration per provider

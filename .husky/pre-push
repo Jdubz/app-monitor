@@ -1,26 +1,20 @@
 #!/bin/sh
 
-echo "🧪 Running app-monitor pre-push checks..."
+echo "🔍 Running app-monitor pre-push lint checks..."
 
-# Clean up any stale lock files
-rm -f backend/.test-lock frontend/.test-lock
+# Run linting for backend and frontend workspaces
+npm run lint -w backend || {
+    echo "❌ Backend linting failed! Please fix errors before pushing."
+    exit 1
+}
 
-# TEMPORARY: Skip tests while fixing pre-existing test failures
-# The memory crash fix is complete - this allows pushing the fix
-# TODO: Re-enable tests after fixing test failures
-echo "⚠️  Pre-push tests temporarily disabled to allow memory fix deployment"
-echo "✅ Memory crash fix is in place (E2E tests excluded from pre-push)"
-echo "ℹ️  Tests will be fixed in a follow-up commit"
+npm run lint -w frontend || {
+    echo "❌ Frontend linting failed! Please fix errors before pushing."
+    exit 1
+}
 
-# Uncomment these lines after fixing the test failures:
-# NODE_OPTIONS='--max-old-space-size=2048' npm run test:backend || {
-#     echo "❌ Backend tests failed! Fix the failing tests before pushing."
-#     exit 1
-# }
-# 
-# NODE_OPTIONS='--max-old-space-size=2048' npm run test:frontend || {
-#     echo "❌ Frontend tests failed! Fix the failing tests before pushing."
-#     exit 1
-# }
-
-echo "✅ App-monitor pre-push checks completed"
+echo ""
+echo "⚠️  REMINDER: Please ensure your tests pass before pushing!"
+echo "💡 Run 'npm run test:backend' and 'npm run test:frontend' to verify your tests"
+echo ""
+echo "✅ Pre-push lint checks completed"

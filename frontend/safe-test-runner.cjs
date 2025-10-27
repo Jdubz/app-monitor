@@ -108,7 +108,7 @@ class SafeTestRunner {
     return new Promise((resolve) => {
       console.log('\n🧪 Running tests...')
       
-      const testProcess = spawn('npx', ['vitest', 'run', '--no-coverage', '--reporter=verbose', '--no-isolate'], {
+      const testProcess = spawn('npx', ['vitest', 'run', '--no-coverage', '--reporter=verbose'], {
         stdio: 'inherit',
         shell: process.platform === 'win32',
         env: { 
