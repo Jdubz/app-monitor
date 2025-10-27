@@ -199,96 +199,18 @@ describe('ProcessManager Core Functionality', () => {
       expect(mockSpawn).not.toHaveBeenCalled();
     });
 
-    // TODO: This test expects port clearing behavior that doesn't exist
-    // Services with requirePorts: true throw an error when ports are busy
-    // They don't try to clear ports automatically
-    // To test port clearing, use a service with requirePorts: false
-    it.skip('should clear conflicting ports when required', async () => {
-      // Given: Ports are busy but service requires them
-      vi.mocked(checkPortsAvailable).mockResolvedValue({
-        available: false,
-        busyPorts: [5001]
-      });
+    // Test removed: Port clearing functionality doesn't exist
+    // All services have requirePorts: true and throw errors when ports are busy
+    // This is the correct behavior - services should fail fast if ports aren't available
 
-      vi.mocked(isPortInUse).mockResolvedValue(true);
-      vi.mocked(stopDockerContainer).mockResolvedValue({ success: true });
-
-      const serviceName = 'job-finder-backend';
-
-      // When: Service start is attempted
-      await processManager.startService(serviceName);
-
-      // Then: Conflicting processes are stopped
-      expect(stopDockerContainer).toHaveBeenCalled();
-    });
-
-    // TODO: This test expects alternative port behavior that doesn't exist
-    // Services with requirePorts: true throw an error when ports are busy
-    // There's no alternative port fallback logic in the current implementation
-    it.skip('should find alternative port when possible', async () => {
-      // Given: Primary port is busy but alternative is available
-      vi.mocked(checkPortsAvailable)
-        .mockResolvedValueOnce({ available: false, busyPorts: [5001] })
-        .mockResolvedValueOnce({ available: true, busyPorts: [] });
-
-      const serviceName = 'job-finder-frontend';
-
-      // When: Service start is attempted
-      const result = await processManager.startService(serviceName);
-
-      // Then: Service starts with alternative port
-      expect(result.status).toBe('running');
-    });
+    // Test removed: Alternative port fallback doesn't exist
+    // All services have requirePorts: true and throw errors when ports are busy
+    // There's no alternative port logic - this is intentional for predictable deployments
   });
 
-  describe('Docker Container Management', () => {
-    // TODO: This test expects dockerContainer info for 'job-finder-worker'
-    // But dockerContainer is only populated for 'python-worker' service
-    // See processManager.ts:468-493 - Docker info only set for 'python-worker'
-    it.skip('should start Docker containers', async () => {
-      // Given: Docker service configuration
-      const serviceName = 'job-finder-worker';
-
-      // When: Docker service is started
-      const result = await processManager.startService(serviceName);
-
-      // Then: Container is created and started
-      expect(result.status).toBe('running');
-      expect(result.dockerContainer).toBeDefined();
-    });
-
-    it('should stop Docker containers gracefully', async () => {
-      // Given: Docker container is running
-      const serviceName = 'job-finder-worker';
-
-      await processManager.startService(serviceName);
-
-      // When: Container is stopped
-      const result = await processManager.stopService(serviceName);
-
-      // Then: Container is stopped gracefully
-      expect(result.status).toBe('stopped');
-    });
-
-    it('should handle Docker container failures', async () => {
-      // Given: Docker operation fails
-      const serviceName = 'job-finder-worker';
-      mockSpawn.mockImplementation(() => {
-        throw new Error('Docker error');
-      });
-
-      // When: Docker service start is attempted
-      await expect(processManager.startService(serviceName))
-        .rejects.toThrow('Docker error');
-
-      // Then: Error is logged
-      expect(logger.error).toHaveBeenCalledWith(
-        expect.objectContaining({
-          message: expect.stringContaining('Failed to start service')
-        })
-      );
-    });
-  });
+  // Docker Container Management tests removed
+  // job-finder-worker is now Flask-based and runs as a regular Python process
+  // Docker-specific logic has been removed from ProcessManager after Flask migration
 
   describe('Process Monitoring', () => {
     it('should track process status', async () => {
@@ -402,43 +324,10 @@ describe('ProcessManager Core Functionality', () => {
       expect(mockProcess.stdout.on).toHaveBeenCalledWith('data', expect.any(Function));
     });
 
-    // TODO: This test expects logs to be exposed in ProcessInfo status
-    // But ProcessInfo doesn't have a logs field
-    // Logs are stored internally in managed.logs but not exposed via getServiceStatus
-    // See processManager.ts:386-510 - ProcessInfo interface doesn't include logs
-    it.skip('should limit log lines to prevent memory issues', async () => {
-      // Given: Service with many log lines
-      const serviceName = 'job-finder-backend';
-      const mockProcess = {
-        pid: 12345,
-        stdout: { on: vi.fn() },
-        stderr: { on: vi.fn() },
-        on: vi.fn(),
-        once: vi.fn(),
-        removeListener: vi.fn(),
-        kill: vi.fn(),
-        exitCode: null
-      } as any;
-
-      mockSpawn.mockReturnValue(mockProcess);
-      await processManager.startService(serviceName);
-
-      // When: Many log lines are emitted
-      const stdoutCallback = mockProcess.stdout.on.mock.calls.find(
-        call => call[0] === 'data'
-      )?.[1];
-
-      if (stdoutCallback) {
-        // Emit more than maxLogLines
-        for (let i = 0; i < 1500; i++) {
-          stdoutCallback(Buffer.from(`Log line ${i}\n`));
-        }
-      }
-
-      // Then: Log lines are limited
-      const status = await processManager.getServiceStatus(serviceName);
-      expect(status.logs?.length).toBeLessThanOrEqual(1000);
-    });
+    // Test removed: Log limiting test no longer applicable
+    // Logs are now written to files and read via LogWatcher, not exposed via ProcessInfo
+    // Internal log limiting still happens (maxLogLines = 1000) but isn't publicly testable
+    // See processManager.ts:446 - getServiceLogs removed, logs read from files via LogWatcher
   });
 
   describe('Error Handling', () => {
@@ -591,27 +480,8 @@ describe('ProcessManager Core Functionality', () => {
       expect(statuses.find(s => s.name === serviceName2)).toBeDefined();
     });
 
-    // TODO: This test expects dockerContainer info for 'job-finder-worker'
-    // But dockerContainer is only populated for 'python-worker' service
-    // See processManager.ts:468-493 - Docker info only set for 'python-worker'
-    it.skip('should include Docker container status', async () => {
-      // Given: Docker service
-      const serviceName = 'job-finder-worker';
-      vi.mocked(getDockerContainerInfo).mockResolvedValue({
-        name: 'test-container',
-        status: 'running',
-        containerId: 'abc123'
-      });
-
-      await processManager.startService(serviceName);
-
-      // When: Status is checked
-      const status = await processManager.getServiceStatus(serviceName);
-
-      // Then: Docker container info is included
-      expect(status.dockerContainer).toBeDefined();
-      expect(status.dockerContainer?.name).toBe('test-container');
-      expect(status.dockerContainer?.status).toBe('running');
-    });
+    // Test removed: Docker container status test no longer relevant
+    // job-finder-worker is now Flask-based and runs as a regular Python process
+    // Docker-specific logic has been removed from ProcessManager
   });
 });
