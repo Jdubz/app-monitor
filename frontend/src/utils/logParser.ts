@@ -123,7 +123,7 @@ export function getLogLevelStats(entries: ParsedLogEntry[]): Record<LogLevel, nu
 
   entries.forEach(entry => {
     const level = entry.level as LogLevel;
-    if (Object.prototype.hasOwnProperty.call(stats, level)) {
+    if (Object.hasOwn(stats, level)) {
       stats[level]++;
     }
   });

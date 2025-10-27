@@ -104,7 +104,7 @@ export const createMockSessionStorage = () => {
 export const createMockFetch = (responses: Record<string, any> = {}) => {
   const mockFetch = vi.fn();
   
-  Object.entries(responses).forEach(([_url, response]) => {
+  Object.entries(responses).forEach(([, response]) => {
     mockFetch.mockImplementationOnce(() => 
       Promise.resolve({
         ok: true,

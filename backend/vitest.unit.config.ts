@@ -54,6 +54,8 @@ export default defineConfig({
       '**/node_modules/**',
       '**/dist/**',
       'tests/integration/**',  // EXCLUDE integration tests
+      '**/*.integration.test.ts', // EXCLUDE integration tests in src
+      '**/*.integration.spec.ts', // EXCLUDE integration specs in src
     ],
   },
 });
