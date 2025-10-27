@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getPortInfo, killPortProcess } from '../utils/portManager.js';
+import { getPortInfo, killPortProcess, PortInfo } from '../utils/portManager.js';
 import { ServiceConfig } from '../config.js';
 import { logger } from '../utils/logger.js';
 
@@ -14,7 +14,7 @@ export function createPortsRoutes(deps: PortsRoutesDependencies): Router {
   // Get port status for all configured services
   router.get('/status', async (_req: Request, res: Response) => {
     try {
-      const portStatuses: Record<string, any> = {};
+      const portStatuses: Record<string, PortInfo[]> = {};
 
       for (const [serviceName, serviceConfig] of Object.entries(services)) {
         if (serviceConfig.ports && serviceConfig.ports.length > 0) {

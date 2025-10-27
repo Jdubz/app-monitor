@@ -15,7 +15,7 @@ interface MinimalLogsPanelProps {
 }
 
 const MinimalLogsPanel: React.FC<MinimalLogsPanelProps> = ({
-  panelId,
+  panelId: _panelId,
   selectedSource,
   availableSources,
   logs,

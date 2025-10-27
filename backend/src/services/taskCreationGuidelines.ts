@@ -5,7 +5,7 @@
  * guidelines for high-quality task creation
  */
 
-import { logger } from '../utils/logger.js';
+// import { logger } from '../utils/logger.js';
 
 export interface TaskCreationGuidelines {
   id: string;
@@ -30,7 +30,7 @@ export interface TaskExample {
   type: string;
   title: string;
   description: string;
-  example: any;
+  example: Record<string, unknown>;
 }
 
 export interface EnhancedTaskData {
@@ -88,7 +88,7 @@ export class TaskCreationGuidelinesManager {
   private guidelines: Map<string, TaskCreationGuidelines> = new Map();
   private validationRules: ValidationRule[] = [];
   private validProjects: string[] = [
-    'claude-workers',
+    'dev-bots',
     'dev-monitor', 
     'job-finder-FE',
     'job-finder-BE',
@@ -639,11 +639,11 @@ export class TaskCreationGuidelinesManager {
     return checklist;
   }
 
-  private getNestedValue(obj: any, path: string): any {
-    return path.split('.').reduce((current, key) => current?.[key], obj);
+  private getNestedValue(obj: Record<string, unknown>, path: string): unknown {
+    return path.split('.').reduce((current: unknown, key) => (current as Record<string, unknown>)?.[key], obj as unknown);
   }
 
-  private applyValidationRule(rule: ValidationRule, value: any): 'error' | 'warning' | 'info' | null {
+  private applyValidationRule(rule: ValidationRule, value: unknown): 'error' | 'warning' | 'info' | null {
     switch (rule.rule) {
       case 'required':
         return value === undefined || value === null || value === '' ? rule.severity : null;

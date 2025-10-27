@@ -3,7 +3,7 @@ import { ProcessInfo } from '../types/service.types';
 import { getAllStatuses, startService, stopService, restartService, killService, handleApiError } from '../services/api';
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const SOCKET_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5174';
 
 export const useServices = () => {
   const [services, setServices] = useState<ProcessInfo[]>([]);

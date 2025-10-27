@@ -45,7 +45,7 @@ export class SocketService {
   private connectionState: ConnectionState;
   private healthMetrics: HealthMetrics;
   private pingInterval?: NodeJS.Timeout;
-  private eventListeners: Map<string, Set<Function>> = new Map();
+  private eventListeners: Map<string, Set<(...args: any[]) => void>> = new Map();
 
   constructor(config: SocketConfig) {
     this.config = {
@@ -270,7 +270,7 @@ export class SocketService {
   /**
    * Register event listener
    */
-  public on(event: string, callback: Function): void {
+  public on(event: string, callback: (...args: any[]) => void): void {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, new Set());
     }
@@ -285,7 +285,7 @@ export class SocketService {
   /**
    * Unregister event listener
    */
-  public off(event: string, callback: Function): void {
+  public off(event: string, callback: (...args: any[]) => void): void {
     const listeners = this.eventListeners.get(event);
     if (listeners) {
       listeners.delete(callback);

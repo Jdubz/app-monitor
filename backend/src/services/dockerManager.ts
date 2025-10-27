@@ -3,7 +3,7 @@
  * Handles Docker connectivity, image management, and validation
  */
 
-import Docker from 'dockerode';
+import Docker, { ContainerCreateOptions, ContainerRemoveOptions } from 'dockerode';
 import { logger } from '../utils/logger.js';
 
 export interface DockerValidationResult {
@@ -29,7 +29,7 @@ export interface DockerImageInfo {
 
 export class DockerManager {
   private docker: Docker;
-  private static readonly CLAUDE_WORKER_IMAGE = 'claude-worker:latest';
+  private static readonly CLAUDE_WORKER_IMAGE = 'dev-bot:latest';
   private static readonly REQUIRED_IMAGES = [
     DockerManager.CLAUDE_WORKER_IMAGE
   ];
@@ -159,7 +159,7 @@ export class DockerManager {
       return new Promise((resolve, reject) => {
         this.docker.modem.followProgress(
           stream,
-          (err, output) => {
+          (err, _output) => {
             if (err) {
               logger.error({
       category: 'process',
@@ -212,10 +212,10 @@ export class DockerManager {
     });
 
         // For custom images that need to be built, provide helpful error
-        if (imageName.startsWith('claude-worker')) {
+        if (imageName.startsWith('dev-bot')) {
           errors.push(
             `Custom image '${imageName}' not found. Please build it first:\n` +
-            `  cd dev-monitor/backend && ./build-claude-worker-image.sh`
+            `  cd dev-monitor/backend && ./build-dev-bot-image.sh`
           );
           continue;
         }
@@ -242,6 +242,66 @@ export class DockerManager {
   }
 
   /**
+   * Create a new container
+   */
+  async createContainer(
+    options: ContainerCreateOptions,
+    { pullImageIfMissing = true }: { pullImageIfMissing?: boolean } = {}
+  ): Promise<Docker.Container> {
+    const imageName = options.Image;
+
+    if (pullImageIfMissing && imageName) {
+      const imageInfo = await this.checkImage(imageName);
+      if (!imageInfo.exists) {
+        logger.warn({
+          category: 'docker',
+          action: 'create_container_pull_missing_image',
+          message: `Image ${imageName} not present locally. Attempting to pull before container creation.`
+        });
+
+        const pulled = await this.pullImage(imageName);
+        if (!pulled) {
+          throw new Error(`Failed to pull image ${imageName} required for container creation.`);
+        }
+      }
+    }
+
+    try {
+      const container = await this.docker.createContainer(options);
+      const containerId = container.id ?? (await container.inspect()).Id;
+
+      if (!containerId) {
+        throw new Error('Container ID not available after creation');
+      }
+
+      if (!container.id) {
+        // Align dockerode instance with inspected ID so downstream consumers can rely on it.
+        (container as { id: string }).id = containerId;
+      }
+
+      logger.info({
+        category: 'docker',
+        action: 'create_container',
+        message: `Created container ${containerId ?? 'unknown'}`,
+        details: {
+          image: options.Image,
+          name: (options as { name?: string }).name
+        }
+      });
+
+      return container;
+    } catch (error) {
+      logger.error({
+        category: 'docker',
+        action: 'create_container_error',
+        message: `Failed to create container from image ${imageName ?? 'unknown'}`,
+        error
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Get Docker client instance
    */
   getDocker(): Docker {
@@ -249,9 +309,9 @@ export class DockerManager {
   }
 
   /**
-   * Get the Claude Worker image name
+   * Get the Dev-Bot image name
    */
-  static getClaudeWorkerImage(): string {
+  static getDevBotImage(): string {
     return DockerManager.CLAUDE_WORKER_IMAGE;
   }
 
@@ -500,16 +560,23 @@ export class DockerManager {
   /**
    * Remove a container
    */
-  async removeContainer(containerId: string, force: boolean = false): Promise<boolean> {
+  async removeContainer(
+    containerId: string,
+    options: boolean | (ContainerRemoveOptions & { force?: boolean }) = false
+  ): Promise<boolean> {
     try {
       const container = this.docker.getContainer(containerId);
-      await container.remove({ force });
+      const removeOptions: ContainerRemoveOptions =
+        typeof options === 'boolean'
+          ? { force: options }
+          : { force: options.force, v: options.v, link: options.link };
+      await container.remove(removeOptions);
 
       logger.info({
         category: 'docker',
         action: 'remove_container',
         message: `Removed container ${containerId}`,
-        details: { containerId, force }
+        details: { containerId, options: removeOptions }
       });
 
       return true;
@@ -630,5 +697,12 @@ export class DockerManager {
       });
       return null;
     }
+  }
+
+  /**
+   * Get the Claude worker image name
+   */
+  static getClaudeWorkerImage(): string {
+    return 'dev-bot:latest';
   }
 }

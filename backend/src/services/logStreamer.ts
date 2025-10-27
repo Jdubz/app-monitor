@@ -1,7 +1,7 @@
 import { Server as SocketIOServer, Socket } from 'socket.io';
 import { ProcessManager } from './processManager.js';
 import { CloudLogging, CloudLogsQuery } from './cloudLogging.js';
-import { LogWatcher } from './logWatcher.js';
+import { LogWatcher, StructuredLogEntry } from './logWatcher.js';
 import { logger } from '../utils/logger.js';
 
 // Local types for dev-monitor
@@ -34,9 +34,10 @@ export class LogStreamer {
     this.processManager = processManager;
     this.cloudLogging = cloudLogging;
     this.logWatcher = new LogWatcher(io);
-    
+
     // Inject LogWatcher into ProcessManager for API access
-    (processManager as any).logWatcher = this.logWatcher;
+    // Using type assertion as ProcessManager doesn't formally declare this property
+    (processManager as ProcessManager & { logWatcher: LogWatcher }).logWatcher = this.logWatcher;
 
     // ONLY listen to status changes from process manager (not log events)
     this.processManager.on('status_change', (data: { serviceName: string; status: string; error?: string }) => {
@@ -250,13 +251,13 @@ export class LogStreamer {
   /**
    * Convert structured log entry to DevMonitorLogLine format
    */
-  private convertStructuredLogToDevMonitorLog(entry: any, index: number): DevMonitorLogLine {
+  private convertStructuredLogToDevMonitorLog(entry: StructuredLogEntry, _index: number): DevMonitorLogLine {
     return {
       id: `${entry.service}-${this.logIdCounter++}`,
       service: entry.service as LocalService,
       timestamp: new Date(entry.timestamp).getTime(),
       level: this.mapSeverityToLevel(entry.severity),
-      message: entry.message || entry.details?.message || 'No message',
+      message: entry.message || (entry.details?.message as string | undefined) || 'No message',
       raw: JSON.stringify(entry),
     };
   }
@@ -284,7 +285,7 @@ export class LogStreamer {
   /**
    * Create a structured log line object
    */
-  private createLogLine(serviceName: LocalService, message: string, index?: number): DevMonitorLogLine {
+  private createLogLine(serviceName: LocalService, message: string, _index?: number): DevMonitorLogLine {
     // Try to detect log level from message
     const level = this.detectLogLevel(message);
 

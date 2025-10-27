@@ -1,13 +1,12 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
 import { useCloudLogs } from '../hooks/useCloudLogs';
 import { useLogFilter } from '../hooks/useLogFilter';
 import { getEnvironmentServices } from '../services/api';
-import { CloudService, ParsedCloudLog } from '../types/log.types';
+import { CloudService } from '../types/log.types';
 import { Panel, LayoutType, LogSource } from '../types/panel.types';
 import { PanelStorage } from '../services/panelStorage';
 import PanelToolbar from './panels/PanelToolbar';
-import PanelWrapper from './panels/PanelWrapper';
 import CloudLogsViewer from './CloudLogsViewer';
 import '../styles/panel-layouts.css';
 
@@ -26,7 +25,7 @@ interface CloudPanel extends Panel {
 const CloudPanelContainer: React.FC<CloudPanelContainerProps> = ({ 
   socket, 
   environment, 
-  projectId 
+  projectId: _projectId 
 }) => {
   const [panels, setPanels] = useState<CloudPanel[]>([
     {
@@ -66,7 +65,7 @@ const CloudPanelContainer: React.FC<CloudPanelContainerProps> = ({
   useEffect(() => {
     if (panels.length > 0) {
       // Convert cloud panels back to regular panels for storage
-      const regularPanels = panels.map(({ environment, service, ...panel }) => panel);
+      const regularPanels = panels.map(({ environment: _environment, service: _service, ...panel }) => panel);
       PanelStorage.saveCurrentLayout(regularPanels, layoutType);
     }
   }, [panels, layoutType]);
@@ -212,7 +211,7 @@ const CloudPanelWrapper: React.FC<CloudPanelWrapperProps> = ({
     selectAllLevels,
     clearAllLevels,
     clearSearch,
-  } = useLogFilter(logs as any);
+  } = useLogFilter(logs);
 
   const wrapperStyle: React.CSSProperties = {
     display: 'flex',

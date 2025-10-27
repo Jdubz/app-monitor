@@ -59,7 +59,7 @@ export const WorkspaceSyncPanel: React.FC<WorkspaceSyncPanelProps> = ({
   const fetchStatus = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/claude-workers/workspace-sync/status');
+      const response = await api.get('/dev-bots/workspace-sync/status');
       setStatus(response.data);
       setError(null);
       if (onStatusChange) {
@@ -78,7 +78,7 @@ export const WorkspaceSyncPanel: React.FC<WorkspaceSyncPanelProps> = ({
       setSyncInProgress(true);
       setError(null);
       
-      const response = await api.post('/claude-workers/workspace-sync/trigger', syncOptions);
+      const response = await api.post('/dev-bots/workspace-sync/trigger', syncOptions);
       setLastSyncResult(response.data.result);
       
       // Refresh status after sync
@@ -93,7 +93,7 @@ export const WorkspaceSyncPanel: React.FC<WorkspaceSyncPanelProps> = ({
 
   const updateConfig = async () => {
     try {
-      await api.put('/claude-workers/workspace-sync/config', {
+      await api.put('/dev-bots/workspace-sync/config', {
         conflictStrategy: syncOptions.conflictStrategy
       });
       await fetchStatus();

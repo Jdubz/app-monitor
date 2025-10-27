@@ -30,6 +30,8 @@
   transition: all 0.2s ease;
   white-space: nowrap;
   flex-shrink: 0;
+  text-decoration: none;
+  display: inline-block;
 }
 
 .tab:hover {

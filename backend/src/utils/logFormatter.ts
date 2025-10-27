@@ -8,7 +8,7 @@
  * ```bash
  * firebase emulators:start 2>&1 | node logFormatter.js firebase-emulators
  * npm run dev 2>&1 | node logFormatter.js frontend-dev
- * docker compose up 2>&1 | node logFormatter.js python-worker
+ * python3 src/job_finder/simple_flask_worker.py 2>&1 | node logFormatter.js job-finder-worker
  * ```
  *
  * Each service's output is converted to the standardized JSON log format:
@@ -55,7 +55,7 @@ interface StructuredLogEntry {
 const LOG_FILE_MAP: Record<string, string> = {
   'firebase-emulators': 'backend.log',
   'frontend-dev': 'frontend.log',
-  'python-worker': 'worker.log',
+  'job-finder-worker': 'worker.log',
 };
 
 /**
@@ -133,7 +133,7 @@ function stripAnsiCodes(text: string): string {
 /**
  * Clean message text by removing timestamp and log level prefixes
  */
-function cleanMessage(line: string, severity: LogSeverity): string {
+function cleanMessage(line: string, _severity: LogSeverity): string {
   let message = stripAnsiCodes(line);
 
   // Remove timestamp brackets if present
@@ -171,8 +171,8 @@ function detectCategory(line: string, service: string): string {
     if (lowerLine.includes('server')) return 'server';
   }
 
-  if (service === 'python-worker') {
-    if (lowerLine.includes('docker')) return 'container';
+  if (service === 'job-finder-worker') {
+    if (lowerLine.includes('flask')) return 'server';
     if (lowerLine.includes('worker')) return 'worker';
     if (lowerLine.includes('queue')) return 'queue';
     if (lowerLine.includes('pipeline')) return 'pipeline';
@@ -327,7 +327,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 
   if (!serviceName) {
     console.error('Usage: node logFormatter.js <service-name>');
-    console.error('Available services: firebase-emulators, frontend-dev, python-worker');
+    console.error('Available services: firebase-emulators, frontend-dev, job-finder-worker');
     process.exit(1);
   }
 

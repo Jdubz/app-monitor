@@ -5,6 +5,7 @@ import { LogRotation } from '../services/logRotation.js';
 import { CloudLogging } from '../services/cloudLogging.js';
 import { LogStreamer } from '../services/logStreamer.js';
 import { ProcessManager } from '../services/processManager.js';
+import { logSourceManager } from '../server.js';
 import { logger } from '../utils/logger.js';
 
 const LOGS_DIR = path.join(process.cwd(), 'logs');
@@ -20,12 +21,101 @@ export function createLogsRoutes(deps: LogsRoutesDependencies): Router {
   const router = Router();
   const { logRotation, cloudLogging, logStreamer, processManager } = deps;
 
+  /**
+   * GET /api/logs/sources
+   * Get all configured log sources
+   */
+  router.get('/sources', async (req: Request, res: Response) => {
+    try {
+      const sources = logSourceManager.getEnabledSources();
+      
+      res.json({
+        success: true,
+        data: sources.map(source => ({
+          id: source.id,
+          name: source.name,
+          format: source.format,
+          parser: source.parser,
+          color: source.color,
+          displayOrder: source.displayOrder,
+          path: logSourceManager.resolveLogPath(source),
+        })),
+      });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'get_log_sources_error',
+        message: 'Failed to get log sources',
+        error,
+      });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
+
+  /**
+   * GET /api/logs/config
+   * Get log sources configuration including global settings
+   */
+  router.get('/config', async (req: Request, res: Response) => {
+    try {
+      const configJSON = logSourceManager.getConfigJSON();
+      
+      res.json({
+        success: true,
+        data: configJSON,
+      });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'get_log_config_error',
+        message: 'Failed to get log configuration',
+        error,
+      });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
+
+  /**
+   * POST /api/logs/reload
+   * Reload log sources configuration from disk
+   */
+  router.post('/reload', async (req: Request, res: Response) => {
+    try {
+      await logSourceManager.reloadConfig();
+      
+      res.json({
+        success: true,
+        message: 'Log sources configuration reloaded',
+      });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'reload_log_config_error',
+        message: 'Failed to reload log configuration',
+        error,
+      });
+      res.status(500).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  });
+
   // Get logs for a specific service
   router.get('/services/:serviceName/logs', (req: Request, res: Response) => {
     try {
       const { serviceName } = req.params;
       const lines = parseInt(req.query.lines as string) || 100;
       const logWatcher = processManager.getLogWatcher();
+      if (!logWatcher) {
+        return res.status(503).json({ error: 'Log watcher not available' });
+      }
       const logs = logWatcher.getRecentLogs(serviceName, lines);
       res.json({ serviceName, logs });
     } catch (error) {
@@ -91,8 +181,8 @@ export function createLogsRoutes(deps: LogsRoutesDependencies): Router {
     });
   });
 
-  // Get available log sources
-  router.get('/sources', (_req: Request, res: Response) => {
+  // Get available log sources (legacy - kept for backwards compatibility)
+  router.get('/sources/legacy', (_req: Request, res: Response) => {
     try {
       const logWatcher = logStreamer.getLogWatcher();
       const sources = logWatcher.getAvailableSources();

@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplates.js';
 import { AgentPersonality } from './agentPersonalities.js';
-import { Task } from './claudeWorkersManager.js';
+import { Task } from './devBotsManager.js';
 
 describe('TaskPromptTemplateManager', () => {
   let templateManager: TaskPromptTemplateManager;
@@ -66,7 +66,7 @@ describe('TaskPromptTemplateManager', () => {
         task: mockTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -88,7 +88,7 @@ describe('TaskPromptTemplateManager', () => {
         task: mockTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -105,7 +105,7 @@ describe('TaskPromptTemplateManager', () => {
         task: mockTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -124,7 +124,7 @@ describe('TaskPromptTemplateManager', () => {
         task: { ...mockTask, project: 'job-finder-BE' },
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -141,7 +141,7 @@ describe('TaskPromptTemplateManager', () => {
         task: { ...mockTask, project: 'job-finder-FE' },
         agent: mockAgent,
         project: 'job-finder-FE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -157,7 +157,7 @@ describe('TaskPromptTemplateManager', () => {
         task: { ...mockTask, project: 'job-finder-worker' },
         agent: mockAgent,
         project: 'job-finder-worker',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -173,7 +173,7 @@ describe('TaskPromptTemplateManager', () => {
         task: { ...mockTask, project: 'dev-monitor' },
         agent: mockAgent,
         project: 'dev-monitor',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -190,7 +190,7 @@ describe('TaskPromptTemplateManager', () => {
         task: { ...mockTask, project: 'job-finder-shared-types' },
         agent: mockAgent,
         project: 'job-finder-shared-types',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -205,7 +205,7 @@ describe('TaskPromptTemplateManager', () => {
         task: { ...mockTask, project: 'unknown-project' },
         agent: mockAgent,
         project: 'unknown-project',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -220,7 +220,7 @@ describe('TaskPromptTemplateManager', () => {
         task: mockTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -247,7 +247,7 @@ describe('TaskPromptTemplateManager', () => {
           task: { ...mockTask, project },
           agent: mockAgent,
           project,
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -263,7 +263,7 @@ describe('TaskPromptTemplateManager', () => {
         task: mockTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -297,7 +297,7 @@ describe('TaskPromptTemplateManager', () => {
         task: mockTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -318,7 +318,7 @@ describe('TaskPromptTemplateManager', () => {
         task: mockTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -337,7 +337,7 @@ describe('TaskPromptTemplateManager', () => {
         task: mockTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -369,7 +369,7 @@ describe('TaskPromptTemplateManager', () => {
         task: mockTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -398,7 +398,7 @@ describe('TaskPromptTemplateManager', () => {
         task: minimalTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -422,7 +422,7 @@ describe('TaskPromptTemplateManager', () => {
         task: taskWithArrays,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -442,7 +442,7 @@ describe('TaskPromptTemplateManager', () => {
         task: mockTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -461,7 +461,7 @@ describe('TaskPromptTemplateManager', () => {
         task: mockTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -479,7 +479,7 @@ describe('TaskPromptTemplateManager', () => {
         task: mockTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -508,7 +508,7 @@ describe('TaskPromptTemplateManager', () => {
         task: taskWithEmptyArrays,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -531,7 +531,7 @@ describe('TaskPromptTemplateManager', () => {
         task: taskWithSpecialChars,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -553,7 +553,7 @@ describe('TaskPromptTemplateManager', () => {
         task: taskWithLongDescription,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -576,7 +576,7 @@ describe('TaskPromptTemplateManager', () => {
           task: taskWithParent,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -590,7 +590,7 @@ describe('TaskPromptTemplateManager', () => {
           task: mockTask,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -616,7 +616,7 @@ describe('TaskPromptTemplateManager', () => {
           task: taskWithRelated,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -633,7 +633,7 @@ describe('TaskPromptTemplateManager', () => {
           task: mockTask,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -652,7 +652,7 @@ describe('TaskPromptTemplateManager', () => {
           task: taskWithEmptyRelated,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -677,7 +677,7 @@ describe('TaskPromptTemplateManager', () => {
           task: taskWithEffort,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -710,7 +710,7 @@ describe('TaskPromptTemplateManager', () => {
             task: taskWithEffort,
             agent: mockAgent,
             project: 'job-finder-BE',
-            worktree: './worktrees/worker-a',
+            worktree: './dev-bots/volumes/bot-a',
             environment: 'development'
           };
 
@@ -725,7 +725,7 @@ describe('TaskPromptTemplateManager', () => {
           task: mockTask,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -752,7 +752,7 @@ describe('TaskPromptTemplateManager', () => {
           task: taskWithMetrics,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -768,7 +768,7 @@ describe('TaskPromptTemplateManager', () => {
           task: mockTask,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -789,7 +789,7 @@ describe('TaskPromptTemplateManager', () => {
           task: taskWithEmptyMetrics,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -812,7 +812,7 @@ describe('TaskPromptTemplateManager', () => {
           task: taskWithSkills,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -829,7 +829,7 @@ describe('TaskPromptTemplateManager', () => {
           task: mockTask,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -850,7 +850,7 @@ describe('TaskPromptTemplateManager', () => {
           task: taskWithEmptySkills,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -877,7 +877,7 @@ describe('TaskPromptTemplateManager', () => {
           task: taskWithAssumptions,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -893,7 +893,7 @@ describe('TaskPromptTemplateManager', () => {
           task: mockTask,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -912,7 +912,7 @@ describe('TaskPromptTemplateManager', () => {
           task: taskWithEmptyAssumptions,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -937,7 +937,7 @@ describe('TaskPromptTemplateManager', () => {
           task: taskWithAlternatives,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -953,7 +953,7 @@ describe('TaskPromptTemplateManager', () => {
           task: mockTask,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -973,7 +973,7 @@ describe('TaskPromptTemplateManager', () => {
           task: taskWithEmptyAlternatives,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -999,7 +999,7 @@ describe('TaskPromptTemplateManager', () => {
           task: taskWithBoundaries,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -1030,7 +1030,7 @@ describe('TaskPromptTemplateManager', () => {
           task: taskWithPartialBoundaries,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -1045,7 +1045,7 @@ describe('TaskPromptTemplateManager', () => {
           task: mockTask,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -1071,7 +1071,7 @@ describe('TaskPromptTemplateManager', () => {
           task: taskWithValidation,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -1088,7 +1088,7 @@ describe('TaskPromptTemplateManager', () => {
           task: mockTask,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -1109,7 +1109,7 @@ describe('TaskPromptTemplateManager', () => {
           task: taskWithEmptyValidation,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -1128,7 +1128,7 @@ describe('TaskPromptTemplateManager', () => {
         task: mockTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -1145,7 +1145,7 @@ describe('TaskPromptTemplateManager', () => {
         task: mockTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -1161,7 +1161,7 @@ describe('TaskPromptTemplateManager', () => {
         task: mockTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -1177,7 +1177,7 @@ describe('TaskPromptTemplateManager', () => {
         task: mockTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -1192,7 +1192,7 @@ describe('TaskPromptTemplateManager', () => {
         task: mockTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -1207,7 +1207,7 @@ describe('TaskPromptTemplateManager', () => {
         task: mockTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -1248,7 +1248,7 @@ describe('TaskPromptTemplateManager', () => {
           task: taskWithComplexity,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -1286,7 +1286,7 @@ describe('TaskPromptTemplateManager', () => {
           task: taskWithConfidence,
           agent: mockAgent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -1351,7 +1351,7 @@ describe('TaskPromptTemplateManager', () => {
         task: fullyEnhancedTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -1424,7 +1424,7 @@ describe('TaskPromptTemplateManager', () => {
         task: allFieldsTask,
         agent: mockAgent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 

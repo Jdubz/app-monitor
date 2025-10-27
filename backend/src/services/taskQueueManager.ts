@@ -7,7 +7,7 @@
 import { EventEmitter } from 'events';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../utils/logger.js';
-import { TaskSchema, TaskCreateSchema, TaskQuery, TaskStats, TaskStatusType } from '../types/taskSchema.js';
+import { TaskSchema, TaskCreateSchema, TaskQuery, TaskStats } from '../types/taskSchema.js';
 import type { Task, TaskCreate } from '../types/taskSchema.js';
 
 export interface TaskQueueConfig {
@@ -189,10 +189,10 @@ export class TaskQueueManager extends EventEmitter {
     // Sort
     const sortBy = query.sortBy || 'createdAt';
     const sortOrder = query.sortOrder || 'desc';
-    
+
     tasks.sort((a, b) => {
-      let aVal: any = a[sortBy as keyof Task];
-      let bVal: any = b[sortBy as keyof Task];
+      let aVal: string | number = a[sortBy as keyof Task] as string | number;
+      let bVal: string | number = b[sortBy as keyof Task] as string | number;
 
       if (sortBy === 'createdAt') {
         aVal = new Date(aVal).getTime();

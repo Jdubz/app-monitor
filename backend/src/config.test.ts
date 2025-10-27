@@ -38,25 +38,25 @@ describe('Config', () => {
       expect(Object.keys(services).length).toBeGreaterThan(0)
     })
 
-    it('should have firebase-emulators service', () => {
-      expect(services['firebase-emulators']).toBeDefined()
-      expect(services['firebase-emulators'].name).toBe('firebase-emulators')
-      expect(services['firebase-emulators'].displayName).toBeTruthy()
-      expect(services['firebase-emulators'].command).toBe('firebase')
-      expect(services['firebase-emulators'].ports).toBeDefined()
-      expect(Array.isArray(services['firebase-emulators'].ports)).toBe(true)
+    it('should have job-finder-backend service', () => {
+      expect(services['job-finder-backend']).toBeDefined()
+      expect(services['job-finder-backend'].name).toBe('job-finder-backend')
+      expect(services['job-finder-backend'].displayName).toBeTruthy()
+      expect(services['job-finder-backend'].command).toBe('npm')
+      expect(services['job-finder-backend'].ports).toBeDefined()
+      expect(Array.isArray(services['job-finder-backend'].ports)).toBe(true)
     })
 
-    it('should have frontend-dev service', () => {
-      expect(services['frontend-dev']).toBeDefined()
-      expect(services['frontend-dev'].name).toBe('frontend-dev')
-      expect(services['frontend-dev'].command).toBe('npm')
+    it('should have job-finder-frontend service', () => {
+      expect(services['job-finder-frontend']).toBeDefined()
+      expect(services['job-finder-frontend'].name).toBe('job-finder-frontend')
+      expect(services['job-finder-frontend'].command).toBe('npm')
     })
 
-    it('should have python-worker service', () => {
-      expect(services['python-worker']).toBeDefined()
-      expect(services['python-worker'].name).toBe('python-worker')
-      expect(services['python-worker'].command).toBe('docker')
+    it('should have job-finder-worker service', () => {
+      expect(services['job-finder-worker']).toBeDefined()
+      expect(services['job-finder-worker'].name).toBe('job-finder-worker')
+      expect(services['job-finder-worker'].command).toBe('python3')
     })
 
     it('should have valid service structure for all services', () => {

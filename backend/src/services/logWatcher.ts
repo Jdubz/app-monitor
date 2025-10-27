@@ -25,7 +25,9 @@ const DEFAULT_LOG_DIR = path.resolve(__dirname, '../../../../logs');
 
 
 type LogSeverity = 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR';
-interface StructuredLogEntry {
+
+// Export for use in other services
+export interface StructuredLogEntry {
   severity: LogSeverity;
   timestamp: string;
   environment: string;
@@ -33,7 +35,7 @@ interface StructuredLogEntry {
   category?: string;
   action?: string;
   message?: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   error?: {
     type: string;
     message: string;
@@ -164,7 +166,7 @@ export class LogWatcher {
     // Map known filenames to service names
     const serviceMap: Record<string, string> = {
       'frontend': 'frontend-dev',
-      'worker': 'python-worker',
+      'worker': 'job-finder-worker',
       'dev-monitor-backend': 'dev-monitor-backend',
       'firebase-emulators': 'firebase-emulators',
     };
@@ -568,7 +570,7 @@ export class LogWatcher {
   public getRecentLogs(service: string, lines: number = 100): StructuredLogEntry[] {
     // Map service names to log file names
     const serviceNameMap: Record<string, string> = {
-      'python-worker': 'worker',
+      'job-finder-worker': 'worker',
       'frontend-dev': 'frontend',
       'firebase-emulators': 'firebase-emulators',
       'dev-monitor-backend': 'dev-monitor-backend',
@@ -641,7 +643,7 @@ export class LogWatcher {
    * Clean up watchers
    */
   public destroy(): void {
-    for (const [filepath, watched] of this.watchedFiles.entries()) {
+    for (const [, watched] of this.watchedFiles.entries()) {
       if (watched.watcher) {
         watched.watcher.close();
       }

@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Socket } from 'socket.io-client';
-import { Script, ScriptExecution, ScriptExecutionSummary } from '../types/script.types';
+import { Script, ScriptExecution } from '../types/script.types';
 import * as api from '../services/api';
 
 export function useScripts(socket: Socket | null) {

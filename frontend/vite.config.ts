@@ -8,6 +8,7 @@ export default defineConfig({
     react(),
     jsonLogger({
       serviceName: 'app-monitor-frontend',
+      logFile: './logs/frontend.log',
     }),
   ],
   server: {
@@ -21,7 +22,9 @@ export default defineConfig({
       },
       '/socket.io': {
         target: 'http://localhost:5000',
+        changeOrigin: true,
         ws: true,
+        rewriteWsOrigin: true,
       },
     },
   },

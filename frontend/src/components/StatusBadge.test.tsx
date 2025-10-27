@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { render, screen } from '../test/test-utils';
 import StatusBadge from './StatusBadge';
-import { ProcessInfo } from '../types/service.types';
 
 describe('StatusBadge', () => {
   it('renders running status correctly', () => {
@@ -33,8 +32,8 @@ describe('StatusBadge', () => {
     render(<StatusBadge status="running" />);
     const badge = screen.getByText('● Running');
     expect(badge).toHaveStyle({
-      backgroundColor: '#d4edda',
-      color: '#155724',
+      backgroundColor: '#28a745', // theme.colors.success
+      color: '#ffffff', // theme.colors.white
     });
   });
 
@@ -42,8 +41,8 @@ describe('StatusBadge', () => {
     render(<StatusBadge status="stopped" />);
     const badge = screen.getByText('○ Stopped');
     expect(badge).toHaveStyle({
-      backgroundColor: '#f8d7da',
-      color: '#721c24',
+      backgroundColor: '#dc3545', // theme.colors.error
+      color: '#ffffff', // theme.colors.white
     });
   });
 
@@ -51,8 +50,8 @@ describe('StatusBadge', () => {
     render(<StatusBadge status="starting" />);
     const badge = screen.getByText('◐ Starting...');
     expect(badge).toHaveStyle({
-      backgroundColor: '#fff3cd',
-      color: '#856404',
+      backgroundColor: '#ffc107', // theme.colors.warning
+      color: '#000000', // theme.colors.black
     });
   });
 
@@ -60,8 +59,8 @@ describe('StatusBadge', () => {
     render(<StatusBadge status="stopping" />);
     const badge = screen.getByText('◑ Stopping...');
     expect(badge).toHaveStyle({
-      backgroundColor: '#fff3cd',
-      color: '#856404',
+      backgroundColor: '#ffc107', // theme.colors.warning
+      color: '#000000', // theme.colors.black
     });
   });
 
@@ -69,8 +68,8 @@ describe('StatusBadge', () => {
     render(<StatusBadge status="error" />);
     const badge = screen.getByText('✕ Error');
     expect(badge).toHaveStyle({
-      backgroundColor: '#f8d7da',
-      color: '#721c24',
+      backgroundColor: '#dc3545', // theme.colors.error
+      color: '#ffffff', // theme.colors.white
     });
   });
 
@@ -99,11 +98,11 @@ describe('StatusBadge', () => {
     render(<StatusBadge status="running" />);
     const badge = screen.getByText('● Running');
     expect(badge).toHaveStyle({
-      display: 'inline-block',
-      padding: '4px 12px',
-      borderRadius: '12px',
-      fontSize: '13px',
-      fontWeight: '600',
+      display: 'inline-flex',
+      padding: '8px 12px', // theme.spacing.sm theme.spacing.md
+      borderRadius: '4px', // theme.borderRadius.sm
+      fontSize: '12px', // theme.typography.fontSize.sm
+      fontWeight: '600', // theme.typography.fontWeight.semibold
     });
   });
 });

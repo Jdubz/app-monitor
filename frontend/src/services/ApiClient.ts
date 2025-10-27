@@ -5,7 +5,7 @@
  * Provides error handling, request/response interceptors, and type safety.
  */
 
-import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 
 export interface ApiResponse<T = any> {
   data: T;
@@ -22,9 +22,13 @@ export interface ApiError {
 export class ApiClient {
   private client: AxiosInstance;
 
-  constructor(baseURL: string = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000') {
+  constructor(baseURL: string = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5174') {
+    const fullBaseURL = `${baseURL}/api`;
+    console.log('[ApiClient] Initializing with base URL:', fullBaseURL);
+    console.log('[ApiClient] VITE_API_BASE_URL env var:', import.meta.env.VITE_API_BASE_URL);
+
     this.client = axios.create({
-      baseURL: `${baseURL}/api`,
+      baseURL: fullBaseURL,
       timeout: 30000,
       headers: {
         'Content-Type': 'application/json',

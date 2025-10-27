@@ -30,19 +30,19 @@ docker run --rm claude-worker:latest /home/worker/verify-install.sh
 # With project mounted (development mode)
 docker run --rm -it \
   -v $(pwd):/app:ro \
-  -v $(pwd)/worktrees:/app/worktrees:rw \
+  -v $(pwd)/app-monitor/dev-bots/volumes/bot-a:/workspace:rw \
   -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY \
   claude-worker:latest
 
 # Execute a Claude task
 docker run --rm \
   -v $(pwd):/app:ro \
-  -v $(pwd)/worktrees:/app/worktrees:rw \
+  -v $(pwd)/app-monitor/dev-bots/volumes/bot-a:/workspace:rw \
   -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY \
   claude-worker:latest \
   claude -p "Fix the bug in server.ts" \
     --allowedTools Bash,Read,Write,Edit \
-    --workingDirectory /app/worktrees/worker-a
+    --workingDirectory /workspace
 ```
 
 ## Performance Metrics
@@ -192,7 +192,7 @@ docker run --rm claude-worker:latest which claude
 
 1. **Use BuildKit for faster builds** - `DOCKER_BUILDKIT=1`
 2. **Mount project read-only** - Prevents accidental modifications
-3. **Mount worktrees read-write** - Workers need to write output
+3. **Mount bot volumes read-write** - Workers need to write output to their isolated volumes
 4. **Set API keys via environment** - Don't bake into image
 5. **Clean up regularly** - `docker system prune -af`
 

@@ -9,11 +9,11 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     // CRITICAL: Single process execution - NO parallelism
-    pool: 'forks',
+    pool: 'threads',
     poolOptions: {
-      forks: {
-        maxForks: 1,  // ONLY 1 process at a time
-        minForks: 1,
+      threads: {
+        maxThreads: 1,  // ONLY 1 worker at a time
+        minThreads: 1,
       },
     },
     
@@ -54,6 +54,7 @@ export default defineConfig({
       'dist',
       '**/node_modules/**',
       '**/dist/**',
+      '**/app-monitor/**',
     ],
   },
 });

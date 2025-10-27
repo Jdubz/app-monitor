@@ -68,6 +68,6 @@ export default defineConfig({
     },
     
     // Global setup
-    setupFiles: [],
+    setupFiles: ['./src/test/setup.ts'],
   },
 });

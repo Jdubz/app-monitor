@@ -12,7 +12,7 @@ import { Router } from 'express';
 import { ProcessManager } from '../services/processManager.js';
 import { CloudLogging } from '../services/cloudLogging.js';
 import { ScriptManager } from '../services/scriptManager.js';
-import { ClaudeWorkersManager } from '../services/claudeWorkersManager.js';
+import { DevBotsManager } from '../services/devBotsManager.js';
 import type { ConnectionManager } from '../services/connectionManager.js';
 import type { TaskQueueManager } from '../services/taskQueueManager.js';
 import type { ScriptExecutionHistory } from '../services/scriptExecutionHistory.js';
@@ -26,10 +26,12 @@ import { createSocketRoutes, createTaskRoutes } from './socket-task.routes.js';
 import { createDockerRouter } from './docker.routes.js';
 import { createScriptsRouter } from './scripts.routes.js';
 import { createScriptHistoryRouter } from './script-history.routes.js';
-import { createClaudeWorkersRouter } from './claude-workers.routes.js';
+import { createClaudeWorkersRouter } from './dev-bots.routes.js';
 import { createLogsRoutes } from './logs.routes.js';
 import { createPortsRoutes } from './ports.routes.js';
 import { createEnvironmentsRoutes } from './environments.routes.js';
+import tokenTrackingRoutes from './token-tracking.routes.js';
+import qualityGatesRoutes from './quality-gates.routes.js';
 
 /**
  * Create the main API router with all sub-routes
@@ -45,7 +47,7 @@ export function createApiRouter(deps: {
   processManager: ProcessManager;
   cloudLogging: CloudLogging;
   scriptManager: ScriptManager;
-  claudeWorkersManager: ClaudeWorkersManager;
+  devBotsManager: DevBotsManager;
   connectionManager?: ConnectionManager;
   taskQueueManager?: TaskQueueManager;
   scriptExecutionHistory?: ScriptExecutionHistory;
@@ -91,8 +93,8 @@ export function createApiRouter(deps: {
     router.use('/scripts', historyRouter);
   }
 
-  // Mount Claude Workers routes
-  router.use('/claude-workers', createClaudeWorkersRouter(deps.claudeWorkersManager));
+  // Mount Dev-Bots routes
+  router.use('/dev-bots', createClaudeWorkersRouter(deps.devBotsManager));
 
   // Mount Logs routes (if available)
   if (deps.logRotation && deps.logStreamer) {
@@ -112,6 +114,12 @@ export function createApiRouter(deps: {
   // Mount Environments routes
   router.use('/environments', createEnvironmentsRoutes({ cloudLogging: deps.cloudLogging }));
 
+  // Mount Token Tracking routes
+  router.use('/token-tracking', tokenTrackingRoutes);
+
+  // Mount Quality Gates routes
+  router.use('/quality-gates', qualityGatesRoutes);
+
   return router;
 }
 
@@ -122,7 +130,7 @@ export function createApiRouter(deps: {
 export const processManager = new ProcessManager();
 export const cloudLogging = new CloudLogging();
 export const scriptManager = new ScriptManager();
-export const claudeWorkersManager = new ClaudeWorkersManager(processManager);
+export const devBotsManager = new DevBotsManager(processManager);
 
 /**
  * Default export for backward compatibility

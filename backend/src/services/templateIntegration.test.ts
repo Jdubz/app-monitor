@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplates.js';
 import { AgentPersonality } from './agentPersonalities.js';
-import { Task } from './claudeWorkersManager.js';
+import { Task } from './devBotsManager.js';
 
 describe('Template Integration Tests', () => {
   let templateManager: TaskPromptTemplateManager;
@@ -96,7 +96,7 @@ describe('Template Integration Tests', () => {
         task: backendTask,
         agent: backendAgent as unknown as AgentPersonality,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -216,7 +216,7 @@ describe('Template Integration Tests', () => {
         task: frontendTask,
         agent: frontendAgent as unknown as AgentPersonality,
         project: 'job-finder-FE',
-        worktree: './worktrees/worker-b',
+        worktree: './dev-bots/volumes/bot-b',
         environment: 'development'
       };
 
@@ -319,7 +319,7 @@ describe('Template Integration Tests', () => {
         task: workerTask,
         agent: workerAgent as unknown as AgentPersonality,
         project: 'job-finder-worker',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -375,7 +375,7 @@ describe('Template Integration Tests', () => {
         task: minimalTask,
         agent: minimalAgent as unknown as AgentPersonality,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -431,7 +431,7 @@ describe('Template Integration Tests', () => {
           task,
           agent,
           project: 'job-finder-BE',
-          worktree: './worktrees/worker-a',
+          worktree: './dev-bots/volumes/bot-a',
           environment: 'development'
         };
 
@@ -478,7 +478,7 @@ describe('Template Integration Tests', () => {
         task: incompleteTask,
         agent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 
@@ -527,7 +527,7 @@ describe('Template Integration Tests', () => {
         task: taskWithEmptyArrays,
         agent,
         project: 'job-finder-BE',
-        worktree: './worktrees/worker-a',
+        worktree: './dev-bots/volumes/bot-a',
         environment: 'development'
       };
 

@@ -143,9 +143,9 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
   const loadGuidelinesAndExample = async () => {
     try {
       const [guidelinesRes, exampleRes, checklistRes] = await Promise.all([
-        api.get(`/claude-workers/guidelines/${taskData.type}`),
-        api.get(`/claude-workers/examples/${taskData.type}`),
-        api.get(`/claude-workers/checklist/${taskData.type}`)
+        api.get(`/dev-bots/guidelines/${taskData.type}`),
+        api.get(`/dev-bots/examples/${taskData.type}`),
+        api.get(`/dev-bots/checklist/${taskData.type}`)
       ]);
 
       setGuidelines(guidelinesRes.data.guidelines);
@@ -158,7 +158,7 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
 
   const validateTaskData = async () => {
     try {
-      const response = await api.post('/claude-workers/validate', {
+      const response = await api.post('/dev-bots/validate', {
         taskData,
         taskType: taskData.type
       });
@@ -247,7 +247,7 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
         }
       };
 
-      const response = await api.post('/claude-workers/tasks/enhanced', cleanedTaskData);
+      const response = await api.post('/dev-bots/tasks/enhanced', cleanedTaskData);
       
       if (onTaskCreated) {
         onTaskCreated(response.data.task);
@@ -454,7 +454,7 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
                       required
                     >
                       <option value="app-monitor">app-monitor</option>
-                      <option value="claude-workers">claude-workers</option>
+                      <option value="dev-bots">dev-bots</option>
                       <option value="job-finder-FE">job-finder-FE</option>
                       <option value="job-finder-BE">job-finder-BE</option>
                       <option value="job-finder-shared-types">job-finder-shared-types</option>

@@ -2,13 +2,13 @@
  * Task Persistence Service for Dev-Monitor
  * 
  * Provides file-based storage for tasks to persist between restarts
- * Integrates with the existing ClaudeWorkersManager
+ * Integrates with the existing DevBotsManager
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger.js';
-import { Task } from './claudeWorkersManager.js';
+import { Task } from './devBotsManager.js';
 
 export interface TaskStorageConfig {
   storagePath: string;

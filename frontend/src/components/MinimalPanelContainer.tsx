@@ -55,7 +55,7 @@ const MinimalPanelContainer: React.FC = () => {
       try {
         const logSources = await getLogSources();
         // Extract service names and deduplicate (multiple files may map to same service)
-        const serviceNames = logSources.map(source => source.service as LocalService);
+        const serviceNames = logSources.map(source => source.id as LocalService);
         const uniqueServiceNames = Array.from(new Set(serviceNames));
         setAvailableSources(uniqueServiceNames);
       } catch (error) {

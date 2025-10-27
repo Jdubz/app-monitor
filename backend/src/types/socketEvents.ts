@@ -77,32 +77,32 @@ export interface ServerToClientEvents {
   }) => void;
   
   // Script events
-  'script:started': (execution: any) => void;
-  'script:output': (data: any) => void;
-  'script:completed': (execution: any) => void;
-  'script:failed': (execution: any) => void;
-  'script:killed': (execution: any) => void;
-  
-  // Claude Workers events
-  'claude:taskAdded': (task: any) => void;
-  'claude:taskAssigned': (task: any) => void;
-  'claude:taskStarted': (task: any) => void;
-  'claude:taskCompleted': (task: any) => void;
-  'claude:taskFailed': (task: any) => void;
-  'claude:systemStatusChange': (status: any) => void;
+  'script:started': (execution: Record<string, unknown>) => void;
+  'script:output': (data: Record<string, unknown>) => void;
+  'script:completed': (execution: Record<string, unknown>) => void;
+  'script:failed': (execution: Record<string, unknown>) => void;
+  'script:killed': (execution: Record<string, unknown>) => void;
+
+  // Dev-Bots events
+  'claude:taskAdded': (task: Record<string, unknown>) => void;
+  'claude:taskAssigned': (task: Record<string, unknown>) => void;
+  'claude:taskStarted': (task: Record<string, unknown>) => void;
+  'claude:taskCompleted': (task: Record<string, unknown>) => void;
+  'claude:taskFailed': (task: Record<string, unknown>) => void;
+  'claude:systemStatusChange': (status: Record<string, unknown>) => void;
   'claude:coordinatorHealthChange': (isHealthy: boolean) => void;
-  'claude:dockerError': (error: any) => void;
-  'claude:dockerWarning': (warning: any) => void;
-  'claude:workerError': (error: any) => void;
-  
+  'claude:dockerError': (error: Error | { message: string; code?: string }) => void;
+  'claude:dockerWarning': (warning: { message: string; details?: unknown }) => void;
+  'claude:workerError': (error: Error | { message: string; code?: string }) => void;
+
   // Task events
-  'task:created': (task: any) => void;
-  'task:updated': (task: any) => void;
+  'task:created': (task: Record<string, unknown>) => void;
+  'task:updated': (task: Record<string, unknown>) => void;
   'task:deleted': (data: { taskId: string }) => void;
-  'task:assigned': (task: any) => void;
-  'task:started': (task: any) => void;
-  'task:completed': (task: any) => void;
-  'task:failed': (task: any) => void;
+  'task:assigned': (task: Record<string, unknown>) => void;
+  'task:started': (task: Record<string, unknown>) => void;
+  'task:completed': (task: Record<string, unknown>) => void;
+  'task:failed': (task: Record<string, unknown>) => void;
 }
 
 // ============================================================================

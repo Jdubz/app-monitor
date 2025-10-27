@@ -14,6 +14,11 @@ dev-bots/logs/
 frontend/logs/
 logs/
 
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
 # Environment
 .env
 .env.local
@@ -41,3 +46,5 @@ temp/
 
 # Docker
 .dockerignore
+
+dev-bots/volumes/

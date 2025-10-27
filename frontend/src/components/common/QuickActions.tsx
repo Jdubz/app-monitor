@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import styles from './QuickActions.module.css';
-import commonStyles from '../../styles/common.module.css';
 
 export interface QuickAction {
   id: string;

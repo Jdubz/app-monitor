@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '../test/test-utils';
+import { render, screen, waitFor, act } from '../test/test-utils';
 import userEvent from '@testing-library/user-event';
 import PortBadge from './PortBadge';
 
@@ -53,7 +53,10 @@ describe('PortBadge', () => {
       render(<PortBadge portInfo={portInfoInUse} onKillPort={mockOnKillPort} />);
 
       const killButton = screen.getByText('✕');
-      await user.click(killButton);
+      
+      await act(async () => {
+        await user.click(killButton);
+      });
 
       expect(window.confirm).toHaveBeenCalledWith(
         expect.stringContaining('Stop process on port 3000')
@@ -70,7 +73,10 @@ describe('PortBadge', () => {
       render(<PortBadge portInfo={portInfoInUse} onKillPort={mockOnKillPort} />);
 
       const killButton = screen.getByText('✕');
-      await user.click(killButton);
+      
+      await act(async () => {
+        await user.click(killButton);
+      });
 
       expect(window.confirm).toHaveBeenCalled();
       expect(mockOnKillPort).not.toHaveBeenCalled();
@@ -90,7 +96,10 @@ describe('PortBadge', () => {
       render(<PortBadge portInfo={portInfoInUse} onKillPort={mockOnKillPort} />);
 
       const killButton = screen.getByText('✕');
-      await user.click(killButton);
+      
+      await act(async () => {
+        await user.click(killButton);
+      });
 
       // Should show loading state
       await waitFor(() => {
@@ -98,7 +107,11 @@ describe('PortBadge', () => {
       });
 
       // Resolve the promise
-      resolveKill!();
+      await act(async () => {
+        resolveKill!();
+        await killPromise;
+      });
+      
       await waitFor(() => {
         expect(screen.getByText('✕')).toBeInTheDocument();
       });
@@ -117,14 +130,20 @@ describe('PortBadge', () => {
       render(<PortBadge portInfo={portInfoInUse} onKillPort={mockOnKillPort} />);
 
       const killButton = screen.getByText('✕');
-      await user.click(killButton);
+      
+      await act(async () => {
+        await user.click(killButton);
+      });
 
       await waitFor(() => {
         const loadingButton = screen.getByText('...');
         expect(loadingButton).toBeDisabled();
       });
 
-      resolveKill!();
+      await act(async () => {
+        resolveKill!();
+        await killPromise;
+      });
     });
 
     it('handles kill errors gracefully', async () => {
@@ -137,7 +156,10 @@ describe('PortBadge', () => {
       render(<PortBadge portInfo={portInfoInUse} onKillPort={mockOnKillPort} />);
 
       const killButton = screen.getByText('✕');
-      await user.click(killButton);
+      
+      await act(async () => {
+        await user.click(killButton);
+      });
 
       await waitFor(() => {
         expect(consoleErrorSpy).toHaveBeenCalledWith(
@@ -158,14 +180,17 @@ describe('PortBadge', () => {
       vi.mocked(window.confirm).mockReturnValue(true);
       mockOnKillPort.mockResolvedValue(undefined);
 
-      const { container } = render(
+      render(
         <div onClick={parentClickHandler}>
           <PortBadge portInfo={portInfoInUse} onKillPort={mockOnKillPort} />
         </div>
       );
 
       const killButton = screen.getByText('✕');
-      await user.click(killButton);
+      
+      await act(async () => {
+        await user.click(killButton);
+      });
 
       // Parent click handler should not be called due to stopPropagation
       expect(parentClickHandler).not.toHaveBeenCalled();

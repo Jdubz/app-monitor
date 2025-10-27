@@ -16,7 +16,7 @@ export class DockerContainerHelper {
    * Check if Docker container is already running
    * @returns Container info if running, null otherwise
    */
-  static async checkExistingContainer(serviceName: string): Promise<{
+  static async checkExistingContainer(_serviceName: string): Promise<{
     running: boolean;
     pid: number | null;
     startedAt: number | null;

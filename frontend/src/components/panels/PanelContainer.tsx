@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Panel, LayoutType, LogSource, LocalService, DevMonitorLogLevel } from '../../types/panel.types';
+import React, { useState, useEffect } from 'react';
+import { Panel, LayoutType, LogSource, LocalService } from '../../types/panel.types';
 import { PanelStorage } from '../../services/panelStorage';
 import { useLogContext } from '../../contexts/LogContext';
 import { filterLogs, sourceToServices, getUniqueServices } from '../../utils/panelFilters';

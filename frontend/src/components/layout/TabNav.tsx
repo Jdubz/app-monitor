@@ -1,39 +1,40 @@
-import { ReactNode } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import styles from './TabNav.module.css';
 
-export type TabType = 'local' | 'scripts' | 'staging' | 'production' | 'health' | 'claude-workers';
-
-interface TabNavProps {
-  activeTab: TabType;
-  onTabChange: (tab: TabType) => void;
-}
+export type TabType = 'local' | 'scripts' | 'staging' | 'production' | 'health' | 'dev-bots';
 
 interface Tab {
   id: TabType;
   label: string;
+  path: string;
 }
 
 const tabs: Tab[] = [
-  { id: 'local', label: 'Local Development' },
-  { id: 'scripts', label: 'Scripts' },
-  { id: 'staging', label: 'Staging' },
-  { id: 'production', label: 'Production' },
-  { id: 'health', label: 'System Health' },
-  { id: 'claude-workers', label: 'Claude Workers' },
+  { id: 'local', label: 'Local Development', path: '/local' },
+  { id: 'scripts', label: 'Scripts', path: '/scripts' },
+  { id: 'staging', label: 'Staging', path: '/staging' },
+  { id: 'production', label: 'Production', path: '/production' },
+  { id: 'health', label: 'System Health', path: '/health' },
+  { id: 'dev-bots', label: 'Dev-Bots', path: '/dev-bots' },
 ];
 
-export function TabNav({ activeTab, onTabChange }: TabNavProps) {
+export function TabNav() {
+  const location = useLocation();
+
   return (
     <div className={styles.tabContainer}>
-      {tabs.map((tab) => (
-        <button
-          key={tab.id}
-          onClick={() => onTabChange(tab.id)}
-          className={`${styles.tab} ${activeTab === tab.id ? styles.active : ''}`}
-        >
-          {tab.label}
-        </button>
-      ))}
+      {tabs.map((tab) => {
+        const isActive = location.pathname === tab.path;
+        return (
+          <Link
+            key={tab.id}
+            to={tab.path}
+            className={`${styles.tab} ${isActive ? styles.active : ''}`}
+          >
+            {tab.label}
+          </Link>
+        );
+      })}
     </div>
   );
 }

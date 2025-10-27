@@ -58,7 +58,7 @@ export const TaskSchema = z.object({
   retryCount: z.number().min(0).default(0),
   maxRetries: z.number().min(0).default(3),
   timeout: z.number().positive().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type Task = z.infer<typeof TaskSchema>;
@@ -83,7 +83,7 @@ export const TaskCreateSchema = z.object({
   retryCount: z.number().min(0).optional(),
   maxRetries: z.number().min(0).optional(),
   timeout: z.number().positive().optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export type TaskCreate = z.infer<typeof TaskCreateSchema>;
