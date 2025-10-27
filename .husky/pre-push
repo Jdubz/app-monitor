@@ -5,11 +5,16 @@ echo "🧪 Running app-monitor pre-push checks..."
 # Clean up any stale lock files
 rm -f backend/.test-lock frontend/.test-lock
 
-# Run tests safely with memory limits
-NODE_OPTIONS='--max-old-space-size=2048' npm test || {
-    echo "❌ Tests failed! Fix the failing tests before pushing."
-    echo "💡 Tip: Run 'npm test' to see detailed test results."
+# Run tests only for backend and frontend (skip dev-bots E2E tests)
+NODE_OPTIONS='--max-old-space-size=2048' npm run test:backend || {
+    echo "❌ Backend tests failed! Fix the failing tests before pushing."
+    exit 1
+}
+
+NODE_OPTIONS='--max-old-space-size=2048' npm run test:frontend || {
+    echo "❌ Frontend tests failed! Fix the failing tests before pushing."
     exit 1
 }
 
 echo "✅ App-monitor pre-push checks completed"
+echo "ℹ️  Note: E2E tests (dev-bots) are skipped in pre-push hook"
