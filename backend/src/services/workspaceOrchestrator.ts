@@ -267,11 +267,33 @@ export class WorkspaceOrchestrator extends EventEmitter {
   private ensureMirror(): void {
     if (!fs.existsSync(this.mirrorPath)) {
       this.ensureDirectory(path.dirname(this.mirrorPath));
-      execFileSync(
-        'git',
-        ['clone', '--quiet', '--local', '--branch', this.branch, this.repoRoot, this.mirrorPath],
-        { stdio: 'inherit' }
-      );
+      const cloneArgs = ['clone', '--quiet', '--branch', this.branch, this.repoRoot, this.mirrorPath];
+
+      try {
+        execFileSync('git', cloneArgs, { stdio: 'inherit' });
+      } catch (error) {
+        if (fs.existsSync(this.mirrorPath)) {
+          logger.warn({
+            category: 'workspace',
+            action: 'mirror_clone_race',
+            message: 'Mirror clone race detected; using existing mirror',
+            error
+          });
+        } else {
+          logger.warn({
+            category: 'workspace',
+            action: 'mirror_clone_retry_remote',
+            message: 'Local mirror clone failed; falling back to remote clone',
+            error
+          });
+          execFileSync(
+            'git',
+            ['clone', '--quiet', '--branch', this.branch, this.getRemoteUrl(), this.mirrorPath],
+            { stdio: 'inherit' }
+          );
+        }
+      }
+
       this.configureRepository(this.mirrorPath);
       logger.info({
         category: 'workspace',
