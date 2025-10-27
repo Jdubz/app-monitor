@@ -30,6 +30,8 @@ import { createClaudeWorkersRouter } from './dev-bots.routes.js';
 import { createLogsRoutes } from './logs.routes.js';
 import { createPortsRoutes } from './ports.routes.js';
 import { createEnvironmentsRoutes } from './environments.routes.js';
+import tokenTrackingRoutes from './token-tracking.routes.js';
+import qualityGatesRoutes from './quality-gates.routes.js';
 
 /**
  * Create the main API router with all sub-routes
@@ -111,6 +113,12 @@ export function createApiRouter(deps: {
 
   // Mount Environments routes
   router.use('/environments', createEnvironmentsRoutes({ cloudLogging: deps.cloudLogging }));
+
+  // Mount Token Tracking routes
+  router.use('/token-tracking', tokenTrackingRoutes);
+
+  // Mount Quality Gates routes
+  router.use('/quality-gates', qualityGatesRoutes);
 
   return router;
 }
