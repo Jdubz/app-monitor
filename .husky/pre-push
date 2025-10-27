@@ -1,1 +1,15 @@
-npm test
+#!/bin/sh
+
+echo "🧪 Running app-monitor pre-push checks..."
+
+# Clean up any stale lock files
+rm -f backend/.test-lock frontend/.test-lock
+
+# Run tests safely with memory limits
+NODE_OPTIONS='--max-old-space-size=2048' npm test || {
+    echo "❌ Tests failed! Fix the failing tests before pushing."
+    echo "💡 Tip: Run 'npm test' to see detailed test results."
+    exit 1
+}
+
+echo "✅ App-monitor pre-push checks completed"

@@ -11,9 +11,9 @@
 
 Transform App-Monitor from a **development monitoring tool** into a **self-building, self-improving autonomous development platform** that:
 
-- **Leverages Claude AI exclusively** for autonomous operations (Cursor/Copilot lack autonomous modes)
+- **Leverages Claude AI alongside Codex dev-bots** for autonomous operations (Codex yolo mode adds a high-velocity option while Cursor/Copilot still lack full autonomy)
 - **Integrates GitHub Copilot** for code quality improvements and regression prevention
-- **Experiments with multiple Claude agent configurations** to optimize performance
+- **Experiments with multiple Claude and Codex agent configurations** to optimize performance
 - **Self-tunes and evolves** based on task execution patterns
 - **Maintains quality gates** while operating within token budget constraints
 
@@ -23,7 +23,7 @@ Transform App-Monitor from a **development monitoring tool** into a **self-build
 
 ### ✅ Existing Infrastructure (85% Production Ready)
 - **Task Management**: FIFO queue with persistence, 9 task types
-- **Agent Personalities**: 6 specialized Claude agents (Backend, Frontend, Review, Testing, DevOps, Documentation)
+- **Agent Personalities**: 6 specialized Claude agents (Backend, Frontend, Review, Testing, DevOps, Documentation) with a Codex yolo-mode candidate now in evaluation
 - **Docker Integration**: Ephemeral containers with workspace sync
 - **API Layer**: 30+ endpoints with real-time WebSocket updates
 - **Log Management**: Config-driven log streaming from multiple services
@@ -36,6 +36,7 @@ Transform App-Monitor from a **development monitoring tool** into a **self-build
 4. **Testing Specialist** - Test automation, QA methodologies
 5. **DevOps Specialist** - Docker, Kubernetes, CI/CD, infrastructure
 6. **Documentation Specialist** - Technical writing, API documentation
+7. **Codex Specialist (Candidate)** - Codex yolo-mode executor with switchable Codex models for rapid prototyping, exploratory spikes, and aggressive refactors
 
 ---
 

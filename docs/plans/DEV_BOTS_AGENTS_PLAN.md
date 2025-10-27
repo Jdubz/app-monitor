@@ -1,4 +1,4 @@
-# Dev-Bots Agents Plan - Claude-Focused Autonomous Development
+# Dev-Bots Agents Plan - Claude & Codex Autonomous Development
 
 **Version:** 2.0.0  
 **Last Updated:** January 27, 2025  
@@ -9,11 +9,12 @@
 
 ## 🎯 Agent Strategy Overview
 
-### Primary Focus: Claude AI Agents
-- **Exclusive Claude usage** for autonomous operations (Cursor/Copilot lack autonomous modes)
-- **Multiple Claude models** for different task complexities and cost optimization
+### Primary Focus: Claude & Codex AI Agents
+- **Claude-first autonomous ops** with Codex dev-bot expansion (Cursor/Copilot still lack true autonomy)
+- **Multiple Claude and Codex models** for different task complexities and cost optimization
 - **Specialized agent personalities** optimized for specific development phases
 - **Experimental framework** for continuous agent improvement
+- **Codex yolo-mode candidate** for aggressive autonomy with optional balanced/safe Codex models
 
 ### Secondary Focus: GitHub Copilot Integration
 - **Code quality enhancement** through Copilot suggestions
@@ -128,6 +129,23 @@
 - Documentation consistency checking
 - API documentation synchronization
 - Content optimization suggestions
+
+#### 7. Codex Specialist (Riley)
+**Enhanced Focus**: High-velocity experiments, spike solutions, and YOLO-mode autonomous execution
+
+**Codex Modes**: Codex-YOLO (primary), Codex-Balanced, Codex-Safety
+**Specializations**:
+- Rapid prototyping with minimal guardrails
+- Exploratory refactors and greenfield scaffolding
+- Cross-stack experiments that need fast iteration
+- Aggressive prompt chaining to unblock stalled tasks
+- Model selection across Codex modes based on risk tolerance
+
+**Copilot Integration**:
+- Safety net suggestions for YOLO outputs
+- Regression detection when Codex bypasses quality gates
+- Documentation breadcrumbs for fast-follow cleanups
+- Testing prompts to backfill coverage post-YOLO
 
 ---
 
