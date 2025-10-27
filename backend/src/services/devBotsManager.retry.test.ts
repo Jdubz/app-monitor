@@ -42,6 +42,38 @@ vi.mock('./taskCreationGuidelines.js', () => ({
 vi.mock('./workspaceSyncManager.js', () => ({
   WorkspaceSyncManager: vi.fn().mockImplementation(() => ({}))
 }));
+vi.mock('./workspaceOrchestrator.js', () => {
+  const mockInitialize = vi.fn();
+  const mockCreateWorkspace = vi.fn(() => ({
+    id: 'workspace-test',
+    hostPath: '/tmp/workspace',
+    branchName: 'bots/test-task-1',
+    mirrorPath: '/tmp/mirror',
+    createdAt: new Date().toISOString()
+  }));
+  const mockSealWorkspace = vi.fn(async () => ({
+    status: 'success',
+    branchName: 'bots/test-task-1',
+    commitSha: 'abc123'
+  }));
+  const mockCleanupWorkspace = vi.fn();
+  const mockCreatePatchArtifact = vi.fn(() => '/tmp/workspace.patch');
+
+  return {
+    WorkspaceOrchestrator: vi.fn().mockImplementation(() => ({
+      initialize: mockInitialize,
+      createWorkspace: mockCreateWorkspace,
+      sealWorkspace: mockSealWorkspace,
+      cleanupWorkspace: mockCleanupWorkspace,
+      createPatchArtifact: mockCreatePatchArtifact
+    })),
+    PushCoordinator: class {
+      enqueue(handler: () => Promise<unknown> | unknown) {
+        return Promise.resolve(handler());
+      }
+    }
+  };
+});
 
 vi.mock('./dockerManager.js', () => ({
   DockerManager: vi.fn().mockImplementation(() => ({
@@ -58,7 +90,28 @@ describe('DevBotsManager Retry Functionality', () => {
   beforeEach(() => {
     mockProcessManager = new ProcessManager() as any;
     manager = new DevBotsManager(mockProcessManager);
-    
+
+    manager['workspaceOrchestrator'] = {
+      initialize: vi.fn(),
+      createWorkspace: vi.fn(() => ({
+        id: 'workspace-test',
+        hostPath: '/tmp/workspace',
+        branchName: 'bots/task-1',
+        mirrorPath: '/tmp/mirror',
+        createdAt: new Date().toISOString()
+      })),
+      sealWorkspace: vi.fn(async () => ({
+        status: 'success',
+        branchName: 'bots/task-1',
+        commitSha: 'abc123'
+      })),
+      cleanupWorkspace: vi.fn(),
+      createPatchArtifact: vi.fn(() => '/tmp/workspace.patch')
+    } as any;
+    manager['pushCoordinator'] = {
+      enqueue: (handler: () => unknown) => Promise.resolve(handler())
+    } as any;
+
     mockTask = {
       id: 'test-task-1',
       type: 'test',

@@ -16,6 +16,38 @@ vi.mock('./agentPersonalities.js');
 vi.mock('./workspaceSyncManager.js');
 vi.mock('./dockerManager.js');
 vi.mock('./retryManager.js');
+vi.mock('./workspaceOrchestrator.js', () => {
+  const mockInitialize = vi.fn();
+  const mockCreateWorkspace = vi.fn(() => ({
+    id: 'workspace-test',
+    hostPath: '/tmp/workspace',
+    branchName: 'bots/task-core',
+    mirrorPath: '/tmp/mirror',
+    createdAt: new Date().toISOString()
+  }));
+  const mockSealWorkspace = vi.fn(async () => ({
+    status: 'success',
+    branchName: 'bots/task-core',
+    commitSha: 'abc123'
+  }));
+  const mockCleanupWorkspace = vi.fn();
+  const mockCreatePatchArtifact = vi.fn(() => '/tmp/workspace.patch');
+
+  return {
+    WorkspaceOrchestrator: vi.fn().mockImplementation(() => ({
+      initialize: mockInitialize,
+      createWorkspace: mockCreateWorkspace,
+      sealWorkspace: mockSealWorkspace,
+      cleanupWorkspace: mockCleanupWorkspace,
+      createPatchArtifact: mockCreatePatchArtifact
+    })),
+    PushCoordinator: class {
+      enqueue(handler: () => Promise<unknown> | unknown) {
+        return Promise.resolve(handler());
+      }
+    }
+  };
+});
 vi.mock('./taskCreationGuidelines.js', async () => {
   return {
     TaskCreationGuidelinesManager: class MockTaskCreationGuidelinesManager {
