@@ -244,60 +244,61 @@ export class DockerManager {
   /**
    * Create a new container
    */
-  async createContainer(options: ContainerCreateOptions, retryOnMissingImage: boolean = true): Promise<{ id: string; container: Docker.Container }> {
+  async createContainer(
+    options: ContainerCreateOptions,
+    { pullImageIfMissing = true }: { pullImageIfMissing?: boolean } = {}
+  ): Promise<Docker.Container> {
+    const imageName = options.Image;
+
+    if (pullImageIfMissing && imageName) {
+      const imageInfo = await this.checkImage(imageName);
+      if (!imageInfo.exists) {
+        logger.warn({
+          category: 'docker',
+          action: 'create_container_pull_missing_image',
+          message: `Image ${imageName} not present locally. Attempting to pull before container creation.`
+        });
+
+        const pulled = await this.pullImage(imageName);
+        if (!pulled) {
+          throw new Error(`Failed to pull image ${imageName} required for container creation.`);
+        }
+      }
+    }
+
     try {
       const container = await this.docker.createContainer(options);
-      const containerId = container.id ?? (await container.inspect()).Id ?? '';
+      const containerId = container.id ?? (await container.inspect()).Id;
 
       if (!containerId) {
         throw new Error('Container ID not available after creation');
       }
 
+      if (!container.id) {
+        // Align dockerode instance with inspected ID so downstream consumers can rely on it.
+        (container as { id: string }).id = containerId;
+      }
+
       logger.info({
         category: 'docker',
         action: 'create_container',
-        message: `Created container ${containerId}`,
+        message: `Created container ${containerId ?? 'unknown'}`,
         details: {
           image: options.Image,
-          name: (options as { name?: string }).name,
+          name: (options as { name?: string }).name
         }
       });
 
-      return { id: containerId, container };
+      return container;
     } catch (error) {
-      if (retryOnMissingImage && this.isMissingImageError(error) && options.Image) {
-        const pulled = await this.pullImage(options.Image);
-        if (!pulled) {
-          logger.error({
-            category: 'docker',
-            action: 'create_container_pull_image_failed',
-            message: `Failed to pull image ${options.Image} when creating container`,
-            error
-          });
-          throw error;
-        }
-
-        return this.createContainer(options, false);
-      }
-
       logger.error({
         category: 'docker',
         action: 'create_container_error',
-        message: 'Failed to create container',
-        error,
-        details: {
-          image: options.Image,
-          name: (options as { name?: string }).name,
-        }
+        message: `Failed to create container from image ${imageName ?? 'unknown'}`,
+        error
       });
       throw error;
     }
-  }
-
-  private isMissingImageError(error: unknown): boolean {
-    if (!error) return false;
-    const message = error instanceof Error ? error.message : String(error);
-    return message.includes('No such image');
   }
 
   /**

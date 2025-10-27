@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { DevBotsDatabase, TaskExecution, TokenUsage, FailurePattern } from '../database';
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import type { TaskExecution, TokenUsage, FailurePattern } from '../database';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -10,35 +10,45 @@ const __dirname = dirname(__filename);
 
 const TEST_DB_PATH = path.join(__dirname, 'test.db');
 
-describe('DevBotsDatabase', () => {
-  let db: DevBotsDatabase;
+// Skip the native better-sqlite3 backed suite in CI where the addon is unavailable.
+const shouldSkipNativeDbSuite =
+  process.env.CI === 'true' && process.env.FORCE_NATIVE_DB_TESTS !== '1';
+
+const describeNativeDb = shouldSkipNativeDbSuite ? describe.skip : describe;
+
+type DatabaseModule = typeof import('../database');
+type DevBotsDatabaseClass = DatabaseModule['DevBotsDatabase'];
+type DevBotsDatabaseInstance = InstanceType<DevBotsDatabaseClass>;
+
+function cleanupTestDatabaseFiles(): void {
+  if (fs.existsSync(TEST_DB_PATH)) {
+    fs.unlinkSync(TEST_DB_PATH);
+  }
+  if (fs.existsSync(TEST_DB_PATH + '-shm')) {
+    fs.unlinkSync(TEST_DB_PATH + '-shm');
+  }
+  if (fs.existsSync(TEST_DB_PATH + '-wal')) {
+    fs.unlinkSync(TEST_DB_PATH + '-wal');
+  }
+}
+
+describeNativeDb('DevBotsDatabase', () => {
+  let DevBotsDatabaseCtor: DevBotsDatabaseClass;
+  let db: DevBotsDatabaseInstance;
+
+  beforeAll(async () => {
+    const module: DatabaseModule = await import('../database.js');
+    DevBotsDatabaseCtor = module.DevBotsDatabase;
+  });
 
   beforeEach(() => {
-    // Clean up any existing test db
-    if (fs.existsSync(TEST_DB_PATH)) {
-      fs.unlinkSync(TEST_DB_PATH);
-    }
-    // Also clean up WAL files
-    if (fs.existsSync(TEST_DB_PATH + '-shm')) {
-      fs.unlinkSync(TEST_DB_PATH + '-shm');
-    }
-    if (fs.existsSync(TEST_DB_PATH + '-wal')) {
-      fs.unlinkSync(TEST_DB_PATH + '-wal');
-    }
-    db = new DevBotsDatabase(TEST_DB_PATH);
+    cleanupTestDatabaseFiles();
+    db = new DevBotsDatabaseCtor(TEST_DB_PATH);
   });
 
   afterEach(() => {
     db.close();
-    if (fs.existsSync(TEST_DB_PATH)) {
-      fs.unlinkSync(TEST_DB_PATH);
-    }
-    if (fs.existsSync(TEST_DB_PATH + '-shm')) {
-      fs.unlinkSync(TEST_DB_PATH + '-shm');
-    }
-    if (fs.existsSync(TEST_DB_PATH + '-wal')) {
-      fs.unlinkSync(TEST_DB_PATH + '-wal');
-    }
+    cleanupTestDatabaseFiles();
   });
 
   describe('Database Initialization', () => {
@@ -76,7 +86,7 @@ describe('DevBotsDatabase', () => {
       db.close();
 
       // Create new database instance with same file
-      const db2 = new DevBotsDatabase(TEST_DB_PATH);
+      const db2 = new DevBotsDatabaseCtor(TEST_DB_PATH);
 
       // Check migrations table has only one entry
       const migrations = (db2 as any).db.prepare('SELECT * FROM migrations').all();

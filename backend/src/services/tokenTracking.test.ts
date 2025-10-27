@@ -1,6 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TokenTrackingService, getTokenTrackingService, resetTokenTrackingService, TokenBudget } from './tokenTracking.js';
-import { DevBotsDatabase, TokenUsage } from './database.js';
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import type { TokenUsage } from './database.js';
+import type { TokenBudget } from './tokenTracking.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -11,30 +11,63 @@ const __dirname = dirname(__filename);
 
 const TEST_DB_PATH = path.join(__dirname, 'token-tracking-test.db');
 
-describe('TokenTrackingService', () => {
-  let service: TokenTrackingService;
-  let db: DevBotsDatabase;
+// Skip the native better-sqlite3 backed suite in CI where the addon is unavailable.
+const shouldSkipNativeDbSuite =
+  process.env.CI === 'true' && process.env.FORCE_NATIVE_DB_TESTS !== '1';
+
+const describeNativeDb = shouldSkipNativeDbSuite ? describe.skip : describe;
+
+type DatabaseModule = typeof import('./database.js');
+type DevBotsDatabaseClass = DatabaseModule['DevBotsDatabase'];
+type DevBotsDatabaseInstance = InstanceType<DevBotsDatabaseClass>;
+type TokenTrackingModule = typeof import('./tokenTracking.js');
+type TokenTrackingServiceClass = TokenTrackingModule['TokenTrackingService'];
+type TokenTrackingServiceInstance = InstanceType<TokenTrackingServiceClass>;
+
+function cleanupTestDatabase(): void {
+  if (fs.existsSync(TEST_DB_PATH)) {
+    fs.unlinkSync(TEST_DB_PATH);
+  }
+  if (fs.existsSync(TEST_DB_PATH + '-shm')) {
+    fs.unlinkSync(TEST_DB_PATH + '-shm');
+  }
+  if (fs.existsSync(TEST_DB_PATH + '-wal')) {
+    fs.unlinkSync(TEST_DB_PATH + '-wal');
+  }
+}
+
+describeNativeDb('TokenTrackingService', () => {
+  let DevBotsDatabaseCtor: DevBotsDatabaseClass;
+  let TokenTrackingServiceCtor: TokenTrackingServiceClass;
+  let getTokenTrackingServiceFn: TokenTrackingModule['getTokenTrackingService'];
+  let resetTokenTrackingServiceFn: TokenTrackingModule['resetTokenTrackingService'];
+  let service: TokenTrackingServiceInstance;
+  let db: DevBotsDatabaseInstance;
+
+  beforeAll(async () => {
+    const [databaseModule, tokenTrackingModule] = await Promise.all([
+      import('./database.js'),
+      import('./tokenTracking.js'),
+    ]);
+
+    DevBotsDatabaseCtor = databaseModule.DevBotsDatabase;
+    TokenTrackingServiceCtor = tokenTrackingModule.TokenTrackingService;
+    getTokenTrackingServiceFn = tokenTrackingModule.getTokenTrackingService;
+    resetTokenTrackingServiceFn = tokenTrackingModule.resetTokenTrackingService;
+  });
 
   beforeEach(() => {
-    // Clean up any existing test db
-    if (fs.existsSync(TEST_DB_PATH)) {
-      fs.unlinkSync(TEST_DB_PATH);
-    }
+    cleanupTestDatabase();
 
-    // Create test database
-    db = new DevBotsDatabase(TEST_DB_PATH);
-
-    // Reset singleton and create new service
-    resetTokenTrackingService();
-    service = new TokenTrackingService({ database: db });
+    db = new DevBotsDatabaseCtor(TEST_DB_PATH);
+    resetTokenTrackingServiceFn();
+    service = new TokenTrackingServiceCtor({ database: db });
   });
 
   afterEach(() => {
-    resetTokenTrackingService();
+    resetTokenTrackingServiceFn();
     db.close();
-    if (fs.existsSync(TEST_DB_PATH)) {
-      fs.unlinkSync(TEST_DB_PATH);
-    }
+    cleanupTestDatabase();
   });
 
   describe('Budget Management', () => {
@@ -320,16 +353,16 @@ describe('TokenTrackingService', () => {
 
   describe('Singleton Pattern', () => {
     it('should return same instance', () => {
-      const instance1 = getTokenTrackingService({ database: db });
-      const instance2 = getTokenTrackingService();
+      const instance1 = getTokenTrackingServiceFn({ database: db });
+      const instance2 = getTokenTrackingServiceFn();
 
       expect(instance1).toBe(instance2);
     });
 
     it('should reset singleton', () => {
-      const instance1 = getTokenTrackingService({ database: db });
-      resetTokenTrackingService();
-      const instance2 = getTokenTrackingService({ database: db });
+      const instance1 = getTokenTrackingServiceFn({ database: db });
+      resetTokenTrackingServiceFn();
+      const instance2 = getTokenTrackingServiceFn({ database: db });
 
       expect(instance1).not.toBe(instance2);
     });
