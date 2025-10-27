@@ -275,7 +275,21 @@ class PeriodicCleanupScheduler {
   }
   
   createCleanupTask(type: string, taskIdCounter: number): Task {
-    const cleanupTasks: Record<string, { description: string; scope: Record<string, unknown> }> = {
+    const cleanupTasks: Record<string, {
+      description: string;
+      scope: {
+        type: string;
+        boundaries: {
+          maxChanges: number;
+          forbiddenActions: string[];
+          maxNewLines: number;
+        };
+        validation: {
+          forbiddenPatterns: string[];
+          allowedPatterns: string[];
+        };
+      };
+    }> = {
       linting: {
         description: 'PERIODIC CLEANUP: Run linting and fix code style issues. Focus on existing files only.',
         scope: {
@@ -327,7 +341,7 @@ class PeriodicCleanupScheduler {
       status: 'pending',
       createdAt: new Date().toISOString(),
       assignedAgent: 'backend-specialist',
-      scope: task.scope as unknown as { type: string; boundaries: Record<string, unknown>; validation: Record<string, unknown> }
+      scope: task.scope
     };
   }
 }

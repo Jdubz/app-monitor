@@ -361,16 +361,17 @@ export class TaskBridge extends EventEmitter {
   /**
    * Get sync statistics
    */
-  public getStats(): {
+  public async getStats(): Promise<{
     mappedTasks: number;
     queueTasks: number;
     claudeTasks: number;
     autoSync: boolean;
-  } {
+  }> {
+    const claudeTasks = await this.devBotsManager.getTasks();
     return {
       mappedTasks: this.taskMapping.size,
       queueTasks: this.taskQueueManager.getAllTasks().length,
-      claudeTasks: this.devBotsManager.getTasks().length,
+      claudeTasks: claudeTasks.pending.length + claudeTasks.active.length + claudeTasks.completed.length,
       autoSync: this.config.autoSync && !!this.syncInterval,
     };
   }

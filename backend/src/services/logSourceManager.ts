@@ -51,13 +51,13 @@ export class LogSourceManager {
         action: 'log_sources_loaded',
         message: 'Log sources configuration loaded',
         details: {
-          version: this.config.version,
-          totalSources: Object.keys(this.config.logSources).length,
+          version: loadedConfig.version,
+          totalSources: Object.keys(loadedConfig.logSources).length,
           enabledSources: this.getEnabledSources().length,
         },
       });
 
-      return this.config;
+      return loadedConfig;
     } catch (error) {
       logger.error({
         category: 'system',

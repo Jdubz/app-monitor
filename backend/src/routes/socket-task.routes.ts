@@ -71,7 +71,7 @@ export function createSocketRoutes(connectionManager: ConnectionManager) {
   router.get('/connections/:socketId', (req: Request, res: Response) => {
     try {
       const { socketId } = req.params;
-      const connection = connectionManager.getConnection(socketId);
+      const connection = connectionManager.getConnectionInfo(socketId);
       
       if (!connection) {
         res.status(404).json({
@@ -144,7 +144,7 @@ export function createTaskRoutes(taskQueueManager: TaskQueueManager) {
   router.get('/', (req: Request, res: Response) => {
     try {
       const query = {
-        status: req.query.status as string | undefined,
+        status: req.query.status as 'pending' | 'assigned' | 'active' | 'completed' | 'failed' | 'retrying' | undefined,
         type: req.query.type as string | undefined,
         assignedAgent: req.query.assignedAgent as string | undefined,
         assignedWorker: req.query.assignedWorker as string | undefined,
@@ -382,15 +382,15 @@ export function createTaskRoutes(taskQueueManager: TaskQueueManager) {
    */
   router.get('/queue', (_req: Request, res: Response) => {
     try {
-      const queue = taskQueueManager.getQueue();
-      
+      const stats = taskQueueManager.getStats();
+
       res.json({
         success: true,
         queue: {
-          pending: queue.pending,
-          active: queue.active,
-          completed: queue.completed,
-          failed: queue.failed,
+          pending: stats.pending,
+          active: stats.active,
+          completed: stats.completed,
+          failed: stats.failed,
         }
       });
     } catch (error) {
@@ -413,7 +413,7 @@ export function createTaskRoutes(taskQueueManager: TaskQueueManager) {
   router.post('/queue/clear', (req: Request, res: Response) => {
     try {
       const { status } = req.body;
-      
+
       if (status && !['completed', 'failed', 'all'].includes(status)) {
         res.status(400).json({
           error: 'Invalid status',
@@ -421,9 +421,23 @@ export function createTaskRoutes(taskQueueManager: TaskQueueManager) {
         });
         return;
       }
-      
-      const cleared = taskQueueManager.clearTasks(status || 'completed');
-      
+
+      let cleared = 0;
+      if (status === 'all' || !status) {
+        taskQueueManager.clearAll();
+        cleared = 0; // clearAll doesn't return count
+      } else {
+        // Clear specific status tasks
+        const tasksToDelete = taskQueueManager.queryTasks({
+          status: status as 'completed' | 'failed'
+        });
+        tasksToDelete.forEach(task => {
+          if (taskQueueManager.deleteTask(task.id)) {
+            cleared++;
+          }
+        });
+      }
+
       res.json({
         success: true,
         cleared,

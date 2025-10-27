@@ -113,6 +113,9 @@ export function createLogsRoutes(deps: LogsRoutesDependencies): Router {
       const { serviceName } = req.params;
       const lines = parseInt(req.query.lines as string) || 100;
       const logWatcher = processManager.getLogWatcher();
+      if (!logWatcher) {
+        return res.status(503).json({ error: 'Log watcher not available' });
+      }
       const logs = logWatcher.getRecentLogs(serviceName, lines);
       res.json({ serviceName, logs });
     } catch (error) {
