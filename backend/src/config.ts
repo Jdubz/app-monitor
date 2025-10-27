@@ -105,9 +105,9 @@ export const environments: Record<string, EnvironmentConfig> = {
         description: 'Vite dev server (port 5173)',
       },
       {
-        name: 'python-worker',
-        displayName: 'Python Worker',
-        description: 'Docker worker for job queue',
+        name: 'job-finder-worker',
+        displayName: 'Job Finder Worker',
+        description: 'Flask-based worker with health monitoring (port 5555)',
       },
     ],
     readOnly: false,

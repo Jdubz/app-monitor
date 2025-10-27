@@ -8,14 +8,12 @@ import { fileURLToPath } from 'url';
 import {
   isPortInUse,
   stopDockerContainer,
-  getDockerContainerInfo,
 } from '../utils/portManager.js';
 import { checkPortsAvailable, getPortInfo } from '../utils/portCheck.js';
 import {
   ProcessLifecycle,
   ProcessEventManager,
   PortConflictResolver,
-  DockerContainerHelper,
 } from './processManager/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -141,37 +139,6 @@ export class ProcessManager extends EventEmitter {
       // Legacy behavior: Try to free ports automatically
       else if (config.ports && config.ports.length > 0) {
         await PortConflictResolver.checkAndFreePorts(serviceName, config.ports);
-      }
-
-      // For Docker services, check for running containers
-      if (config.command === 'docker' && serviceName === 'python-worker') {
-        const containerInfo = await DockerContainerHelper.checkExistingContainer(serviceName);
-
-        if (containerInfo && containerInfo.running) {
-          logger.info({
-            category: 'process',
-            action: 'docker_running',
-            message: `Docker container already running (PID: ${containerInfo.pid})`,
-          });
-          logger.info({
-            category: 'process',
-            action: 'docker_monitoring',
-            message: 'Container running - logs monitored via LogWatcher from worker.log',
-          });
-
-          return DockerContainerHelper.createDockerProcessInfo(
-            config.name,
-            config.displayName,
-            config.ports,
-            containerInfo
-          );
-        } else {
-          logger.info({
-            category: 'process',
-            action: 'docker_start_new',
-            message: 'No running container found, starting new container',
-          });
-        }
       }
 
       // Spawn the process
@@ -399,40 +366,6 @@ export class ProcessManager extends EventEmitter {
     };
 
     if (!managed) {
-      // Check for docker container even if not managed (legacy Docker mode)
-      if (serviceName === 'python-worker' && services[serviceName]?.command === 'docker') {
-        const containerNames = ['job-finder-local-dev', 'job-finder-dev'];
-        for (const name of containerNames) {
-          const containerInfo = await getDockerContainerInfo(name);
-          if (containerInfo.running || containerInfo.pid) {
-            const workerStatus = await this.getDockerWorkerStatus(name);
-            baseInfo.dockerContainer = {
-              name,
-              status: containerInfo.running ? 'running' : 'stopped',
-              workerStatus,
-              containerId: containerInfo.containerId || undefined,
-            };
-            // Update service status to running if container is running
-            if (containerInfo.running) {
-              baseInfo.status = 'running';
-              baseInfo.pid = containerInfo.pid || undefined;
-              baseInfo.startedAt = containerInfo.startedAt || undefined;
-              baseInfo.uptime = containerInfo.startedAt ? Date.now() - containerInfo.startedAt : undefined;
-            }
-            break;
-          }
-        }
-
-        // If no container found
-        if (!baseInfo.dockerContainer) {
-          baseInfo.dockerContainer = {
-            name: 'job-finder-local-dev',
-            status: 'stopped',
-            workerStatus: 'stopped',
-          };
-        }
-      }
-
       // Check for Firebase emulators by port usage even if not managed
       if (serviceName === 'firebase-emulators' && config.ports && config.ports.length > 0) {
         // Check if any of the Firebase ports are in use
@@ -464,33 +397,6 @@ export class ProcessManager extends EventEmitter {
       error: managed.error,
       startedAt: managed.startedAt,
     };
-
-    // Add docker container info for python-worker (legacy Docker mode)
-    if (serviceName === 'python-worker' && services[serviceName]?.command === 'docker') {
-      const containerNames = ['job-finder-local-dev', 'job-finder-dev'];
-      for (const name of containerNames) {
-        const containerInfo = await getDockerContainerInfo(name);
-        if (containerInfo.running || containerInfo.pid) {
-          const workerStatus = await this.getDockerWorkerStatus(name);
-          status.dockerContainer = {
-            name,
-            status: containerInfo.running ? 'running' : 'stopped',
-            workerStatus,
-            containerId: containerInfo.containerId || undefined,
-          };
-          break;
-        }
-      }
-
-      // If no container found
-      if (!status.dockerContainer) {
-        status.dockerContainer = {
-          name: 'job-finder-local-dev',
-          status: 'stopped',
-          workerStatus: 'stopped',
-        };
-      }
-    }
 
     // Verify Firebase emulators status by checking ports
     if (serviceName === 'firebase-emulators' && config.ports && config.ports.length > 0) {

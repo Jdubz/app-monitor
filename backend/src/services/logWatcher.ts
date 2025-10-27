@@ -164,7 +164,7 @@ export class LogWatcher {
     // Map known filenames to service names
     const serviceMap: Record<string, string> = {
       'frontend': 'frontend-dev',
-      'worker': 'python-worker',
+      'worker': 'job-finder-worker',
       'dev-monitor-backend': 'dev-monitor-backend',
       'firebase-emulators': 'firebase-emulators',
     };
@@ -568,7 +568,7 @@ export class LogWatcher {
   public getRecentLogs(service: string, lines: number = 100): StructuredLogEntry[] {
     // Map service names to log file names
     const serviceNameMap: Record<string, string> = {
-      'python-worker': 'worker',
+      'job-finder-worker': 'worker',
       'frontend-dev': 'frontend',
       'firebase-emulators': 'firebase-emulators',
       'dev-monitor-backend': 'dev-monitor-backend',
