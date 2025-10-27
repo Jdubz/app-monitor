@@ -23,7 +23,7 @@ jobs:
 
       - name: Install frontend dependencies
         working-directory: ./frontend
-        run: npm install
+        run: npm install --ignore-scripts
       
       - name: Run linter
         working-directory: ./frontend
@@ -51,7 +51,7 @@ jobs:
 
       - name: Install backend dependencies
         working-directory: ./backend
-        run: npm install
+        run: npm install --ignore-scripts
       
       - name: Run linter
         working-directory: ./backend
