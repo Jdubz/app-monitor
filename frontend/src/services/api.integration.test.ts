@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { createMockApiClient, createMockFetch } from '../test/test-utils';
+import { createMockApiClient } from '../test/test-utils';
 import * as apiModule from './api';
 
 // Mock the ApiClient

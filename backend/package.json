@@ -47,6 +47,7 @@
     "@vitest/coverage-v8": "^1.6.1",
     "eslint": "^8.56.0",
     "nodemon": "^3.0.2",
+    "socket.io-client": "^4.6.1",
     "supertest": "^7.1.4",
     "tsx": "^4.20.6",
     "typescript": "^5.3.3",

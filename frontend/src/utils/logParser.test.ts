@@ -11,9 +11,7 @@ import {
   getServiceStats,
   extractErrorDetails,
   containsSensitiveInfo,
-  sanitizeLogEntry,
-  type ParsedLogEntry,
-  type LogLevel
+  sanitizeLogEntry
 } from './logParser';
 
 describe('Log Parser Utilities', () => {

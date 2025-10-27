@@ -23,7 +23,7 @@
     "lint": "npm run lint --workspaces",
     "lint:fix": "npm run lint:fix --workspaces",
     "clean": "npm run clean --workspaces",
-    "prepare": "husky"
+    "prepare": "husky || true"
   },
   "devDependencies": {
     "concurrently": "^9.2.1",
