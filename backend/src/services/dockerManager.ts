@@ -3,7 +3,7 @@
  * Handles Docker connectivity, image management, and validation
  */
 
-import Docker from 'dockerode';
+import Docker, { ContainerCreateOptions, ContainerRemoveOptions } from 'dockerode';
 import { logger } from '../utils/logger.js';
 
 export interface DockerValidationResult {
@@ -239,6 +239,65 @@ export class DockerManager {
       success: errors.length === 0,
       errors
     };
+  }
+
+  /**
+   * Create a new container
+   */
+  async createContainer(options: ContainerCreateOptions, retryOnMissingImage: boolean = true): Promise<{ id: string; container: Docker.Container }> {
+    try {
+      const container = await this.docker.createContainer(options);
+      const containerId = container.id ?? (await container.inspect()).Id ?? '';
+
+      if (!containerId) {
+        throw new Error('Container ID not available after creation');
+      }
+
+      logger.info({
+        category: 'docker',
+        action: 'create_container',
+        message: `Created container ${containerId}`,
+        details: {
+          image: options.Image,
+          name: (options as { name?: string }).name,
+        }
+      });
+
+      return { id: containerId, container };
+    } catch (error) {
+      if (retryOnMissingImage && this.isMissingImageError(error) && options.Image) {
+        const pulled = await this.pullImage(options.Image);
+        if (!pulled) {
+          logger.error({
+            category: 'docker',
+            action: 'create_container_pull_image_failed',
+            message: `Failed to pull image ${options.Image} when creating container`,
+            error
+          });
+          throw error;
+        }
+
+        return this.createContainer(options, false);
+      }
+
+      logger.error({
+        category: 'docker',
+        action: 'create_container_error',
+        message: 'Failed to create container',
+        error,
+        details: {
+          image: options.Image,
+          name: (options as { name?: string }).name,
+        }
+      });
+      throw error;
+    }
+  }
+
+  private isMissingImageError(error: unknown): boolean {
+    if (!error) return false;
+    const message = error instanceof Error ? error.message : String(error);
+    return message.includes('No such image');
   }
 
   /**
@@ -500,16 +559,23 @@ export class DockerManager {
   /**
    * Remove a container
    */
-  async removeContainer(containerId: string, force: boolean = false): Promise<boolean> {
+  async removeContainer(
+    containerId: string,
+    options: boolean | (ContainerRemoveOptions & { force?: boolean }) = false
+  ): Promise<boolean> {
     try {
       const container = this.docker.getContainer(containerId);
-      await container.remove({ force });
+      const removeOptions: ContainerRemoveOptions =
+        typeof options === 'boolean'
+          ? { force: options }
+          : { force: options.force, v: options.v, link: options.link };
+      await container.remove(removeOptions);
 
       logger.info({
         category: 'docker',
         action: 'remove_container',
         message: `Removed container ${containerId}`,
-        details: { containerId, force }
+        details: { containerId, options: removeOptions }
       });
 
       return true;

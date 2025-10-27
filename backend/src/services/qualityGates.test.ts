@@ -21,9 +21,9 @@ describe('QualityGateValidator', () => {
       expect(configs.size).toBeGreaterThan(0);
       expect(configs.has('linting')).toBe(true);
       expect(configs.has('testing')).toBe(true);
-      expect(configs.has('typecheck')).toBe(true);
+      expect(configs.has('typechecking')).toBe(true);
       expect(configs.has('documentation')).toBe(true);
-      expect(configs.has('git')).toBe(true);
+      expect(configs.has('gitcommit')).toBe(true);
       expect(configs.has('build')).toBe(true);
     });
 
@@ -128,7 +128,7 @@ describe('QualityGateValidator', () => {
     it('should have required gates marked correctly', () => {
       const lintingConfig = validator.getGateConfig('linting');
       const testingConfig = validator.getGateConfig('testing');
-      const typecheckConfig = validator.getGateConfig('typecheck');
+      const typecheckConfig = validator.getGateConfig('typechecking');
       const buildConfig = validator.getGateConfig('build');
 
       // These should be required
@@ -140,7 +140,7 @@ describe('QualityGateValidator', () => {
 
     it('should have optional gates marked correctly', () => {
       const docConfig = validator.getGateConfig('documentation');
-      const gitConfig = validator.getGateConfig('git');
+      const gitConfig = validator.getGateConfig('gitcommit');
 
       // These should be optional
       expect(docConfig?.required).toBe(false);
@@ -174,29 +174,47 @@ describe('QualityGateValidator', () => {
       expect(validator).toHaveProperty('removeListener');
     });
 
-    it('should emit events when gates complete', (done) => {
-      validator.on('gate_completed', (event) => {
-        expect(event).toHaveProperty('taskId');
-        expect(event).toHaveProperty('gate');
-        expect(event).toHaveProperty('result');
-        done();
+    it('should emit events when gates complete', async () => {
+      const eventReceived = new Promise<void>((resolve, reject) => {
+        const handler = (event: unknown) => {
+          try {
+            expect(event).toHaveProperty('taskId');
+            expect(event).toHaveProperty('gate');
+            expect(event).toHaveProperty('result');
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        };
+
+        validator.once('gate_completed', handler);
       });
 
       // This would normally be triggered during validateTask
       validator.emit('gate_completed', {
         taskId: 'test-1',
         gate: 'linting',
-        result: { gate: 'Linting', passed: true, score: 100, duration: 100 }
+        result: { gate: 'linting', passed: true, score: 100, duration: 100 }
       });
+
+      await eventReceived;
     });
 
-    it('should emit events when validation completes', (done) => {
-      validator.on('validation_completed', (result) => {
-        expect(result).toHaveProperty('taskId');
-        expect(result).toHaveProperty('passed');
-        expect(result).toHaveProperty('overallScore');
-        expect(result).toHaveProperty('gates');
-        done();
+    it('should emit events when validation completes', async () => {
+      const validationReceived = new Promise<void>((resolve, reject) => {
+        const handler = (result: unknown) => {
+          try {
+            expect(result).toHaveProperty('taskId');
+            expect(result).toHaveProperty('passed');
+            expect(result).toHaveProperty('overallScore');
+            expect(result).toHaveProperty('gates');
+            resolve();
+          } catch (error) {
+            reject(error);
+          }
+        };
+
+        validator.once('validation_completed', handler);
       });
 
       // This would normally be triggered at the end of validateTask
@@ -208,12 +226,14 @@ describe('QualityGateValidator', () => {
         duration: 1000,
         timestamp: new Date().toISOString()
       });
+
+      await validationReceived;
     });
   });
 
   describe('Gate Types', () => {
     it('should have all expected gate types', () => {
-      const expectedGates = ['linting', 'testing', 'typecheck', 'documentation', 'git', 'build'];
+      const expectedGates = ['linting', 'testing', 'typechecking', 'documentation', 'gitcommit', 'build'];
 
       for (const gate of expectedGates) {
         const config = validator.getGateConfig(gate);
@@ -277,7 +297,7 @@ describe('QualityGateValidator', () => {
 
     it('should have build gate with high weight', () => {
       const buildConfig = validator.getGateConfig('build');
-      const gitConfig = validator.getGateConfig('git');
+      const gitConfig = validator.getGateConfig('gitcommit');
 
       // Build should have higher weight than git
       expect(buildConfig?.weight).toBeGreaterThan(gitConfig?.weight || 0);
@@ -293,10 +313,10 @@ describe('QualityGateValidator', () => {
     });
 
     it('should allow enabling gates', () => {
-      validator.setGateConfig('git', { enabled: false });
-      validator.setGateConfig('git', { enabled: true });
+      validator.setGateConfig('gitcommit', { enabled: false });
+      validator.setGateConfig('gitcommit', { enabled: true });
 
-      const config = validator.getGateConfig('git');
+      const config = validator.getGateConfig('gitcommit');
       expect(config?.enabled).toBe(true);
     });
 

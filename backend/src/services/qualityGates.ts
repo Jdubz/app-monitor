@@ -64,7 +64,7 @@ export class QualityGateValidator extends EventEmitter {
    */
   private initializeDefaultConfig(): void {
     this.defaultConfig.set('linting', {
-      name: 'Linting',
+      name: 'linting',
       enabled: true,
       required: true,
       weight: 8,
@@ -72,15 +72,15 @@ export class QualityGateValidator extends EventEmitter {
     });
 
     this.defaultConfig.set('testing', {
-      name: 'Testing',
+      name: 'testing',
       enabled: true,
       required: true,
       weight: 10,
       timeout: 300000 // 5 minutes
     });
 
-    this.defaultConfig.set('typecheck', {
-      name: 'Type Checking',
+    this.defaultConfig.set('typechecking', {
+      name: 'typechecking',
       enabled: true,
       required: true,
       weight: 7,
@@ -88,15 +88,15 @@ export class QualityGateValidator extends EventEmitter {
     });
 
     this.defaultConfig.set('documentation', {
-      name: 'Documentation',
+      name: 'documentation',
       enabled: true,
       required: false,
       weight: 5,
       timeout: 10000 // 10 seconds
     });
 
-    this.defaultConfig.set('git', {
-      name: 'Git Commit',
+    this.defaultConfig.set('gitcommit', {
+      name: 'gitcommit',
       enabled: true,
       required: false,
       weight: 3,
@@ -104,7 +104,7 @@ export class QualityGateValidator extends EventEmitter {
     });
 
     this.defaultConfig.set('build', {
-      name: 'Build',
+      name: 'build',
       enabled: true,
       required: true,
       weight: 9,
@@ -145,13 +145,13 @@ export class QualityGateValidator extends EventEmitter {
           case 'testing':
             result = await this.runTestingGate(workspacePath, project, config);
             break;
-          case 'typecheck':
+          case 'typechecking':
             result = await this.runTypeCheckGate(workspacePath, project, config);
             break;
           case 'documentation':
             result = await this.runDocumentationGate(workspacePath, project, config);
             break;
-          case 'git':
+          case 'gitcommit':
             result = await this.runGitGate(workspacePath, project, config);
             break;
           case 'build':

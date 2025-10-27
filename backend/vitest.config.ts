@@ -54,6 +54,7 @@ export default defineConfig({
       'dist',
       '**/node_modules/**',
       '**/dist/**',
+      '**/app-monitor/**',
     ],
   },
 });
