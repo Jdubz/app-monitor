@@ -1,8 +1,22 @@
 import { EventEmitter } from 'events';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from '../utils/logger.js';
+
+function findNearestGitRoot(startDir: string): string {
+  let current = path.resolve(startDir);
+
+  while (!fs.existsSync(path.join(current, '.git'))) {
+    const parent = path.dirname(current);
+    if (parent === current) {
+      throw new Error(`Unable to locate git repository root from ${startDir}`);
+    }
+    current = parent;
+  }
+
+  return current;
+}
 
 export interface WorkspaceOrchestratorConfig {
   repoRoot?: string;
@@ -60,7 +74,9 @@ export class WorkspaceOrchestrator extends EventEmitter {
   constructor(config: WorkspaceOrchestratorConfig = {}) {
     super();
 
-    this.repoRoot = config.repoRoot || path.resolve(process.cwd(), '../../');
+    this.repoRoot = config.repoRoot
+      ? path.resolve(config.repoRoot)
+      : findNearestGitRoot(process.cwd());
     this.branch = config.branch || 'staging';
     const devBotsRoot = config.devBotsRoot || path.resolve(process.cwd(), '../dev-bots');
     this.mirrorPath = config.mirrorPath || path.join(devBotsRoot, 'mirror');
@@ -87,13 +103,14 @@ export class WorkspaceOrchestrator extends EventEmitter {
     const cloneSource = this.mirrorPath;
     const branchName = `bots/${taskId}-${Date.now()}`;
 
-    execSync(
-      `git clone --quiet --local --branch ${this.branch} ${cloneSource} ${hostPath}`,
+    execFileSync(
+      'git',
+      ['clone', '--quiet', '--local', '--branch', this.branch, cloneSource, hostPath],
       { stdio: 'inherit' }
     );
 
     this.configureRepository(hostPath);
-    execSync(`git checkout -B ${branchName}`, { cwd: hostPath, stdio: 'inherit' });
+    execFileSync('git', ['checkout', '-B', branchName], { cwd: hostPath, stdio: 'inherit' });
 
     const context: WorkspaceContext = {
       id: workspaceId,
@@ -119,7 +136,7 @@ export class WorkspaceOrchestrator extends EventEmitter {
     context: WorkspaceContext,
     options: WorkspaceSealOptions
   ): Promise<WorkspaceSealResult> {
-    const gitStatus = execSync('git status --porcelain', { cwd: context.hostPath })
+    const gitStatus = execFileSync('git', ['status', '--porcelain'], { cwd: context.hostPath })
       .toString()
       .trim();
 
@@ -133,29 +150,32 @@ export class WorkspaceOrchestrator extends EventEmitter {
     }
 
     this.ensureGitIdentity(context.hostPath);
-    execSync('git add -A', { cwd: context.hostPath, stdio: 'inherit' });
+    execFileSync('git', ['add', '-A'], { cwd: context.hostPath, stdio: 'inherit' });
 
     const sanitizedTitle = options.taskTitle.replace(/[\r\n]+/g, ' ').slice(0, 120);
     const commitMessage = `bot: ${sanitizedTitle} (${options.taskId})`;
 
-    execSync(`git commit -m "${commitMessage}"`, {
+    execFileSync('git', ['commit', '-m', commitMessage], {
       cwd: context.hostPath,
       stdio: 'inherit'
     });
 
     return options.pushCoordinator.enqueue(async () => {
       try {
-        execSync(`git fetch origin ${this.branch}`, {
+        execFileSync('git', ['fetch', 'origin', this.branch], {
           cwd: context.hostPath,
           stdio: 'inherit'
         });
-        execSync(`git rebase origin/${this.branch}`, {
+        execFileSync('git', ['rebase', `origin/${this.branch}`], {
           cwd: context.hostPath,
           stdio: 'inherit'
         });
       } catch (error) {
         try {
-          execSync('git rebase --abort', { cwd: context.hostPath, stdio: 'ignore' });
+          execFileSync('git', ['rebase', '--abort'], {
+            cwd: context.hostPath,
+            stdio: 'ignore'
+          });
         } catch (abortError) {
           logger.warn({
             category: 'workspace',
@@ -183,12 +203,12 @@ export class WorkspaceOrchestrator extends EventEmitter {
       }
 
       try {
-        execSync(`git push origin HEAD:${this.branch}`, {
+        execFileSync('git', ['push', 'origin', `HEAD:${this.branch}`], {
           cwd: context.hostPath,
           stdio: 'inherit'
         });
 
-        const commitSha = execSync('git rev-parse HEAD', {
+        const commitSha = execFileSync('git', ['rev-parse', 'HEAD'], {
           cwd: context.hostPath
         })
           .toString()
@@ -247,8 +267,9 @@ export class WorkspaceOrchestrator extends EventEmitter {
   private ensureMirror(): void {
     if (!fs.existsSync(this.mirrorPath)) {
       this.ensureDirectory(path.dirname(this.mirrorPath));
-      execSync(
-        `git clone --quiet --local --branch ${this.branch} ${this.repoRoot} ${this.mirrorPath}`,
+      execFileSync(
+        'git',
+        ['clone', '--quiet', '--local', '--branch', this.branch, this.repoRoot, this.mirrorPath],
         { stdio: 'inherit' }
       );
       this.configureRepository(this.mirrorPath);
@@ -260,9 +281,9 @@ export class WorkspaceOrchestrator extends EventEmitter {
       return;
     }
 
-    execSync('git fetch origin', { cwd: this.mirrorPath, stdio: 'inherit' });
-    execSync(`git checkout ${this.branch}`, { cwd: this.mirrorPath, stdio: 'inherit' });
-    execSync(`git reset --hard origin/${this.branch}`, {
+    execFileSync('git', ['fetch', 'origin'], { cwd: this.mirrorPath, stdio: 'inherit' });
+    execFileSync('git', ['checkout', this.branch], { cwd: this.mirrorPath, stdio: 'inherit' });
+    execFileSync('git', ['reset', '--hard', `origin/${this.branch}`], {
       cwd: this.mirrorPath,
       stdio: 'inherit'
     });
@@ -271,15 +292,15 @@ export class WorkspaceOrchestrator extends EventEmitter {
   private configureRepository(repoPath: string): void {
     const remoteUrl = this.getRemoteUrl();
 
-    execSync(`git remote set-url origin "${remoteUrl}"`, {
+    execFileSync('git', ['remote', 'set-url', 'origin', remoteUrl], {
       cwd: repoPath,
       stdio: 'inherit'
     });
-    execSync(`git config user.name "${this.gitUserName}"`, {
+    execFileSync('git', ['config', 'user.name', this.gitUserName], {
       cwd: repoPath,
       stdio: 'inherit'
     });
-    execSync(`git config user.email "${this.gitUserEmail}"`, {
+    execFileSync('git', ['config', 'user.email', this.gitUserEmail], {
       cwd: repoPath,
       stdio: 'inherit'
     });
@@ -292,11 +313,11 @@ export class WorkspaceOrchestrator extends EventEmitter {
   }
 
   private ensureGitIdentity(repoPath: string): void {
-    execSync(`git config user.name "${this.gitUserName}"`, {
+    execFileSync('git', ['config', 'user.name', this.gitUserName], {
       cwd: repoPath,
       stdio: 'inherit'
     });
-    execSync(`git config user.email "${this.gitUserEmail}"`, {
+    execFileSync('git', ['config', 'user.email', this.gitUserEmail], {
       cwd: repoPath,
       stdio: 'inherit'
     });
@@ -304,7 +325,7 @@ export class WorkspaceOrchestrator extends EventEmitter {
 
   private getRemoteUrl(): string {
     if (!this.remoteUrl) {
-      this.remoteUrl = execSync('git remote get-url origin', { cwd: this.repoRoot })
+      this.remoteUrl = execFileSync('git', ['remote', 'get-url', 'origin'], { cwd: this.repoRoot })
         .toString()
         .trim();
     }
@@ -318,7 +339,7 @@ export class WorkspaceOrchestrator extends EventEmitter {
     let patchCreated = false;
 
     try {
-      const patch = execSync(`git format-patch origin/${this.branch} --stdout`, {
+      const patch = execFileSync('git', ['format-patch', `origin/${this.branch}`, '--stdout'], {
         cwd: context.hostPath
       });
       fs.writeFileSync(patchPath, patch);
@@ -332,7 +353,7 @@ export class WorkspaceOrchestrator extends EventEmitter {
       });
 
       try {
-        const diff = execSync('git diff', { cwd: context.hostPath });
+        const diff = execFileSync('git', ['diff'], { cwd: context.hostPath });
         fs.writeFileSync(patchPath, diff);
         patchCreated = true;
       } catch (diffError) {
