@@ -12,6 +12,7 @@ import { DockerManager, DockerValidationResult } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
 import { getTokenTrackingService } from './tokenTracking.js';
 import { getQualityGateValidator, QualityValidationResult } from './qualityGates.js';
+import { WorkspaceOrchestrator, WorkspaceContext, PushCoordinator } from './workspaceOrchestrator.js';
 
 export interface RetryAttempt {
   attemptNumber: number;
@@ -116,6 +117,7 @@ export interface EphemeralWorker {
   task: Task;
   status: 'starting' | 'running' | 'completing' | 'destroyed';
   createdAt: string;
+  workspace: WorkspaceContext;
   destroyedAt?: string;
 }
 
@@ -368,7 +370,6 @@ export class DevBotsManager extends EventEmitter {
   private workers = new Map<string, WorkerInfo>();
   private ephemeralWorkers = new Map<string, EphemeralWorker>();
   private readonly MAX_CONCURRENT_WORKERS = 2; // Maximum 2 workers as per architecture
-  private readonly WORKER_TYPES = ['bot-a', 'bot-b']; // Specific bot types
 
   // Enhanced services
   private taskPersistence!: TaskPersistence;
@@ -377,6 +378,8 @@ export class DevBotsManager extends EventEmitter {
   private guidelinesManager!: TaskCreationGuidelinesManager;
   private workspaceSyncManager!: WorkspaceSyncManager;
   private retryManager!: RetryManager;
+  private workspaceOrchestrator!: WorkspaceOrchestrator;
+  private pushCoordinator: PushCoordinator = new PushCoordinator();
 
   // Scope control systems
   private scopeCreepDetector = new ScopeCreepDetector();
@@ -524,11 +527,17 @@ export class DevBotsManager extends EventEmitter {
     // Initialize guidelines manager
     this.guidelinesManager = new TaskCreationGuidelinesManager();
 
+    // Initialize workspace orchestrator for dynamic workspaces
+    this.workspaceOrchestrator = new WorkspaceOrchestrator();
+    if (typeof this.workspaceOrchestrator.initialize === 'function') {
+      this.workspaceOrchestrator.initialize();
+    }
+
     // Initialize workspace sync manager
     this.workspaceSyncManager = new WorkspaceSyncManager({
       baseDir: path.resolve(path.join(process.cwd(), '../../')),
       repositories: ['job-finder-BE', 'job-finder-FE', 'job-finder-shared-types', 'job-finder-worker'],
-      workers: ['bot-a', 'bot-b'],
+      workers: [],
       conflictStrategy: 'auto-merge'
     });
 
@@ -837,25 +846,22 @@ export class DevBotsManager extends EventEmitter {
       return;
     }
     
-    // Check if we already have both bot-a and bot-b active
+    // Check active worker count against concurrency limit
     const activeWorkers = Array.from(this.ephemeralWorkers.values()).filter(
       worker => worker.status !== 'destroyed'
     );
 
-    const hasBotA = activeWorkers.some(worker => worker.id.includes('bot-a'));
-    const hasBotB = activeWorkers.some(worker => worker.id.includes('bot-b'));
-
     logger.info({
       category: 'process',
       action: 'task_assignment_check_this_taskqueue_length_pendin',
-      message: `Task assignment check: ${this.taskQueue.length} pending tasks, ${activeWorkers.length} active workers (A: ${hasBotA}, B: ${hasBotB})`
+      message: `Task assignment check: ${this.taskQueue.length} pending tasks, ${activeWorkers.length}/${this.MAX_CONCURRENT_WORKERS} active workers`
     });
 
-    if (hasBotA && hasBotB) {
+    if (activeWorkers.length >= this.MAX_CONCURRENT_WORKERS) {
       logger.info({
       category: 'process',
-      action: 'both_bot_a_and_bot_b_are_active_skipping_tas',
-      message: 'Both bot-a and bot-b are active, skipping task assignment'
+      action: 'max_workers_active_skipping_assignment',
+      message: 'Maximum concurrent workers are active, skipping task assignment'
     });
       return;
     }
@@ -863,61 +869,18 @@ export class DevBotsManager extends EventEmitter {
     // Get next task (FIFO queue)
     const nextTask = this.taskQueue[0];
 
-    // Sync workspaces before task assignment
+    // Ensure mirror is up to date before provisioning workspace
     try {
-      logger.info({
-      category: 'process',
-      action: 'syncing_workspaces_before_assigning_task_nexttask_',
-      message: `Syncing workspaces before assigning task ${nextTask.id}...`
-    });
-      const syncResult = await this.workspaceSyncManager.syncAllWorkspaces({
-        dryRun: false,
-        verbose: false,
-        conflictStrategy: 'auto-merge'
-      });
-      
-      if (syncResult.errors.length > 0) {
-        logger.error({
-          category: 'process',
-          action: 'workspace_sync_failed_skipping_task',
-          message: 'Workspace sync failed, skipping task assignment',
-          details: { errors: syncResult.errors }
-        });
-        // Move task to failed state
-        nextTask.status = 'failed';
-        nextTask.error = 'Workspace sync failed';
-        nextTask.completedAt = new Date().toISOString();
-        nextTask.canRetry = true;
-        this.taskQueue.splice(0, 1);
-        this.completedTasks.push(nextTask);
-        this.taskPersistence.saveCompletedTasks([nextTask]);
-        return;
-      }
-
-      if (syncResult.conflicts.length > 0) {
-        logger.warn({
-          category: 'process',
-          action: 'workspace_sync_conflicts_continuing',
-          message: 'Workspace sync had conflicts, but continuing with task assignment',
-          details: { conflicts: syncResult.conflicts }
-        });
-      }
-      
-      logger.info({
-      category: 'process',
-      action: 'workspace_sync_completed_syncresult_successful_len',
-      message: `Workspace sync completed: ${syncResult.successful.length} successful, ${syncResult.conflicts.length} conflicts`
-    });
+      this.workspaceOrchestrator.initialize();
     } catch (error) {
       logger.error({
       category: 'process',
-      action: 'workspace_sync_failed',
-      message: 'Workspace sync failed:',
-      error: error
+      action: 'workspace_orchestrator_init_failed',
+      message: `Workspace orchestrator failed before assigning task ${nextTask.id}`,
+      error
     });
-      // Move task to failed state
       nextTask.status = 'failed';
-      nextTask.error = `Workspace sync failed: ${error instanceof Error ? error.message : String(error)}`;
+      nextTask.error = `Workspace initialization failed: ${error instanceof Error ? error.message : String(error)}`;
       nextTask.completedAt = new Date().toISOString();
       nextTask.canRetry = true;
       this.taskQueue.splice(0, 1);
@@ -925,7 +888,7 @@ export class DevBotsManager extends EventEmitter {
       this.taskPersistence.saveCompletedTasks([nextTask]);
       return;
     }
-    
+ 
     // Get agent personality, but check if it's compatible with available worker type
     const requestedAgent = this.agentManager.getPersonality(nextTask.assignedAgent);
     if (!requestedAgent) {
@@ -956,7 +919,7 @@ export class DevBotsManager extends EventEmitter {
       task: nextTask,
       agent: agent,
       project: nextTask.project || 'dev-monitor',
-      worktree: `./dev-bots/volumes/bot-${agent.id}-${Date.now()}`, // Temporary bot volume path
+      worktree: '[dynamic workspace provisioned per task]',
       environment: 'development'
     };
     
@@ -1094,72 +1057,61 @@ export class DevBotsManager extends EventEmitter {
    * Create a new ephemeral Docker container for a task
    */
   private async createEphemeralWorker(task: Task, agent: AgentPersonality): Promise<EphemeralWorker> {
-    // Determine which bot type to use (bot-a or bot-b)
     const activeWorkers = Array.from(this.ephemeralWorkers.values()).filter(
       worker => worker.status !== 'destroyed'
     );
 
-    const hasBotA = activeWorkers.some(worker => worker.id.includes('bot-a'));
-    const hasBotB = activeWorkers.some(worker => worker.id.includes('bot-b'));
-
-    let workerType: string;
-    if (!hasBotA) {
-      workerType = 'bot-a';
-    } else if (!hasBotB) {
-      workerType = 'bot-b';
-    } else {
-      throw new Error('Both bot-a and bot-b are already active');
+    if (activeWorkers.length >= this.MAX_CONCURRENT_WORKERS) {
+      throw new Error('Maximum concurrent dev-bots are already active');
     }
-    
-    const workerId = `${workerType}-${agent.id}-${Date.now()}`;
+
+    const workspace = this.workspaceOrchestrator.createWorkspace(task.id, agent.id);
+    const workerId = `bot-${agent.id}-${Date.now()}`;
     const containerName = `dev-bot-${workerId}`;
     
     try {
-      // Create Docker container with agent-specific configuration
       const container = await this.docker.createContainer({
         Image: this.getAgentDockerImage(agent),
         name: containerName,
-        Cmd: ['/bin/bash', '-c', 'tail -f /dev/null'], // Keep container running
+        Cmd: ['/bin/bash', '-c', 'tail -f /dev/null'],
         Env: [
           `AGENT_ID=${agent.id}`,
           `AGENT_NAME=${agent.name}`,
           `TASK_ID=${task.id}`,
-          `WORKER_ID=${workerId}`
+          `WORKER_ID=${workerId}`,
+          `WORKSPACE_BRANCH=${workspace.branchName}`,
+          `WORKSPACE_ID=${workspace.id}`
         ],
-        WorkingDir: `/workspace`, // Use workspace directory in bot volume
+        WorkingDir: `/workspace`,
         HostConfig: {
-          Memory: 512 * 1024 * 1024, // 512MB memory limit
-          CpuQuota: 50000, // 50% CPU limit
-          AutoRemove: true, // Auto-remove when stopped
+          Memory: 512 * 1024 * 1024,
+          CpuQuota: 50000,
+          AutoRemove: true,
           Binds: [
-            `${process.cwd()}:/app:ro`, // Mount current directory as read-only
-            `${path.resolve(process.cwd(), '../../dev-bots/volumes', workerType)}:/workspace:rw`, // Mount bot volume as read-write
-            `${process.cwd()}/logs:/app/logs:rw` // Mount logs directory for bot-specific logging
+            `${process.cwd()}:/app:ro`,
+            `${workspace.hostPath}:/workspace:rw`,
+            `${process.cwd()}/logs:/app/logs:rw`
           ]
         },
         Labels: {
           'claude.worker.id': workerId,
           'claude.agent.id': agent.id,
-          'claude.task.id': task.id
+          'claude.task.id': task.id,
+          'claude.workspace.id': workspace.id
         }
       });
 
-      // Start the container
       await container.start();
-
-      // Ensure logs directory exists and initialize worker log file
-      await this.initializeWorkerLogFile(workerType);
-
-      // Note: worktree path is managed by the worker container
-      // task.worktree = `./worktrees/${workerType}`;
+      await this.initializeWorkerLogFile(workerId);
 
       const ephemeralWorker: EphemeralWorker = {
         id: workerId,
         containerId: container.id,
-        agent: agent,
-        task: task,
+        agent,
+        task,
         status: 'starting',
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        workspace
       };
 
       this.ephemeralWorkers.set(workerId, ephemeralWorker);
@@ -1178,6 +1130,7 @@ export class DevBotsManager extends EventEmitter {
       message: `Failed to create ephemeral worker ${workerId}:`,
       error: error
     });
+      this.workspaceOrchestrator.cleanupWorkspace(workspace);
       throw error;
     }
   }
@@ -1201,9 +1154,9 @@ export class DevBotsManager extends EventEmitter {
       
       const container = this.docker.getContainer(worker.containerId);
       
-      // Determine worker type for log file
-      const workerType = worker.id.includes('bot-a') ? 'bot-a' : 'bot-b';
-      const logFile = `/app/logs/${workerType}.log`;
+      // Determine log file path per worker
+      const sanitizedId = worker.id.replace(/[^a-zA-Z0-9-_]/g, '_');
+      const logFile = `/app/logs/${sanitizedId}.log`;
       
       // Generate task execution command with logging
       const executionCommand = this.generateTaskExecutionCommandWithLogging(worker.task, worker.agent, logFile);
@@ -1355,7 +1308,7 @@ export class DevBotsManager extends EventEmitter {
   /**
    * Initialize worker-specific log file
    */
-  private async initializeWorkerLogFile(workerType: string): Promise<void> {
+  private async initializeWorkerLogFile(workerId: string): Promise<void> {
     try {
       const fs = await import('fs');
       const path = await import('path');
@@ -1372,11 +1325,12 @@ export class DevBotsManager extends EventEmitter {
       }
       
       // Initialize worker log file with header
-      const logFile = path.join(logsDir, `${workerType}.log`);
+      const sanitizedId = workerId.replace(/[^a-zA-Z0-9-_]/g, '_');
+      const logFile = path.join(logsDir, `${sanitizedId}.log`);
       const timestamp = new Date().toISOString();
-      const header = `=== ${workerType.toUpperCase()} WORKER LOG ===\n` +
+      const header = `=== ${workerId.toUpperCase()} WORKER LOG ===\n` +
                     `Initialized: ${timestamp}\n` +
-                    `Worker Type: ${workerType}\n` +
+                    `Worker ID: ${workerId}\n` +
                     `=====================================\n\n`;
       
       // Append header to log file (don't overwrite existing content)
@@ -1391,7 +1345,7 @@ export class DevBotsManager extends EventEmitter {
       logger.error({
       category: 'process',
       action: 'failed_to_initialize_worker_log_file_for_workertyp',
-      message: `Failed to initialize worker log file for ${workerType}:`,
+      message: `Failed to initialize worker log file for ${workerId}:`,
       error: error
     });
     }
@@ -1514,58 +1468,122 @@ export class DevBotsManager extends EventEmitter {
   /**
    * Complete task in ephemeral worker
    */
-  private async completeEphemeralTask(worker: EphemeralWorker, output: string, errorOutput: string, exitCode: number): Promise<void> {
+  private async completeEphemeralTask(
+    worker: EphemeralWorker,
+    output: string,
+    errorOutput: string,
+    exitCode: number
+  ): Promise<void> {
     worker.status = 'completing';
 
-    // Update task
-    worker.task.status = 'completed';
-    worker.task.completedAt = new Date().toISOString();
-    worker.task.output = output;
-    worker.task.error = errorOutput;
-    worker.task.exitCode = exitCode;
+    const task = worker.task;
+    task.output = output;
+    task.error = errorOutput;
+    task.exitCode = exitCode;
 
-    // Extract and record token usage
-    this.extractAndRecordTokenUsage(worker.task, output);
+    this.extractAndRecordTokenUsage(task, output);
 
-    // Run quality gate validation (async, doesn't block)
-    // Determine workspace path from worker
-    const workspacePath = path.join(process.cwd(), '../../dev-bots/volumes', worker.type);
-    this.runQualityGateValidation(worker.task, workspacePath).catch(error => {
-      logger.error({
-        category: 'quality-gates',
-        action: 'validation_async_error',
-        message: 'Error in async quality gate validation',
-        error
+    const workspacePath = worker.workspace.hostPath;
+    let qualityValidation: QualityValidationResult | undefined;
+    let shouldPush = exitCode === 0;
+
+    if (shouldPush) {
+      try {
+        qualityValidation = await this.runQualityGateValidation(task, workspacePath);
+        task.qualityValidation = qualityValidation;
+        shouldPush = qualityValidation.passed;
+      } catch (error) {
+        shouldPush = false;
+        logger.error({
+          category: 'quality-gates',
+          action: 'validation_error',
+          message: `Error running quality gate validation for task ${task.id}`,
+          error
+        });
+        task.error = `${task.error || ''}\nQuality gate validation failed to execute: ${
+          error instanceof Error ? error.message : String(error)
+        }`;
+      }
+    }
+
+    let finalStatus: 'completed' | 'failed' = exitCode === 0 ? 'completed' : 'failed';
+    let failureReason: string | undefined;
+
+    if (shouldPush) {
+      const sealResult = await this.workspaceOrchestrator.sealWorkspace(worker.workspace, {
+        taskId: task.id,
+        taskTitle: task.title,
+        pushCoordinator: this.pushCoordinator
       });
-    });
 
-    // Move to completed tasks
-    this.activeTasks.delete(worker.task.id);
-    this.completedTasks.push(worker.task);
+      if (sealResult.status === 'success' || sealResult.status === 'noop') {
+        finalStatus = 'completed';
+        if (sealResult.commitSha) {
+          const commitNote = `Pushed commit ${sealResult.commitSha} to staging from workspace ${worker.workspace.id}`;
+          task.notes = task.notes ? `${task.notes}\n${commitNote}` : commitNote;
+        }
+      } else {
+        finalStatus = 'failed';
+        failureReason = sealResult.message || `Failed to push changes (${sealResult.status})`;
+        if (sealResult.patchPath) {
+          failureReason = `${failureReason}. Patch saved at ${sealResult.patchPath}`;
+        }
+      }
+    } else {
+      finalStatus = 'failed';
+      failureReason =
+        exitCode !== 0
+          ? `Task exited with code ${exitCode}`
+          : qualityValidation && !qualityValidation.passed
+          ? 'Quality gates failed'
+          : 'Task did not meet push requirements';
 
-    // Save to persistence
-    this.taskPersistence.saveCompletedTasks([worker.task]);
+      const patchPath = this.workspaceOrchestrator.createPatchArtifact(worker.workspace);
+      if (patchPath) {
+        failureReason = `${failureReason}. Workspace patch saved at ${patchPath}`;
+      }
+    }
 
-    // Destroy container
+    task.status = finalStatus;
+    task.completedAt = new Date().toISOString();
+
+    if (failureReason) {
+      task.error = [task.error, failureReason].filter(Boolean).join('\n');
+      task.canRetry = true;
+    }
+
+    this.activeTasks.delete(task.id);
+    this.completedTasks.push(task);
+    this.taskPersistence.saveCompletedTasks([task]);
+
     await this.destroyEphemeralWorker(worker.id);
 
-    logger.info({
-      category: 'process',
-      action: 'task_completed_worker_task_id',
-      message: `Task completed: ${worker.task.id}`
-    });
-    
-    // Log current worker status for debugging
+    if (finalStatus === 'completed') {
+      logger.info({
+        category: 'process',
+        action: 'task_completed_worker_task_id',
+        message: `Task completed: ${task.id}`
+      });
+    } else {
+      logger.warn({
+        category: 'process',
+        action: 'task_failed_to_push',
+        message: `Task ${task.id} finished with status ${finalStatus}`,
+        details: { failureReason }
+      });
+    }
+
     const activeWorkers = Array.from(this.ephemeralWorkers.values()).filter(
-      worker => worker.status !== 'destroyed'
+      workerInfo => workerInfo.status !== 'destroyed'
     );
     logger.info({
       category: 'process',
       action: 'active_workers_after_completion',
-      message: `Active workers after completion: ${activeWorkers.length} (${activeWorkers.map(w => w.id).join(', ')})`
+      message: `Active workers after completion: ${activeWorkers.length} (${activeWorkers
+        .map(w => w.id)
+        .join(', ')})`
     });
-    
-    // Try to assign next task (now that we have a free worker slot)
+
     await this.assignNextTask();
   }
 
@@ -1578,7 +1596,13 @@ export class DevBotsManager extends EventEmitter {
     // Update task
     worker.task.status = 'failed';
     worker.task.completedAt = new Date().toISOString();
-    worker.task.error = error instanceof Error ? error.message : String(error);
+    const baseError = error instanceof Error ? error.message : String(error);
+    let failureMessage = baseError;
+    const patchPath = this.workspaceOrchestrator.createPatchArtifact(worker.workspace);
+    if (patchPath) {
+      failureMessage = `${baseError}\nWorkspace patch saved at ${patchPath}`;
+    }
+    worker.task.error = failureMessage;
     worker.task.exitCode = 1;
     worker.task.canRetry = true;
     
@@ -1682,6 +1706,17 @@ export class DevBotsManager extends EventEmitter {
         workerId,
         type: 'cleanup_failed',
         error: error instanceof Error ? error.message : String(error)
+      });
+    }
+
+    try {
+      this.workspaceOrchestrator.cleanupWorkspace(worker.workspace);
+    } catch (cleanupError) {
+      logger.warn({
+        category: 'process',
+        action: 'workspace_cleanup_after_destroy_failed',
+        message: `Workspace cleanup failed for worker ${workerId}`,
+        error: cleanupError
       });
     }
   }
@@ -1939,6 +1974,9 @@ export class DevBotsManager extends EventEmitter {
   async getSystemStatus(): Promise<DevBotsStatus> {
     // Convert ephemeral workers to worker status format for compatibility
     const workersRecord: Record<string, WorkerStatus> = {};
+    const activeEphemeralWorkers = Array.from(this.ephemeralWorkers.values()).filter(
+      worker => worker.status !== 'destroyed'
+    );
     for (const [workerId, ephemeralWorker] of this.ephemeralWorkers.entries()) {
       workersRecord[workerId] = {
         id: workerId,
@@ -1960,8 +1998,11 @@ export class DevBotsManager extends EventEmitter {
       uptime: Date.now() - this.startTime,
       workerCount: this.ephemeralWorkers.size,
       maxWorkers: this.MAX_CONCURRENT_WORKERS,
-      activeWorkerTypes: Array.from(this.ephemeralWorkers.values()).filter(w => w.status !== 'destroyed').map(w => w.id),
-      availableWorkerTypes: this.WORKER_TYPES,
+      activeWorkerTypes: activeEphemeralWorkers.map(w => w.id),
+      availableWorkerTypes: Array.from(
+        { length: Math.max(this.MAX_CONCURRENT_WORKERS - activeEphemeralWorkers.length, 0) },
+        (_value, index) => `slot-${index + 1}`
+      ),
       tasks: {
         pending: this.taskQueue,
         active: Array.from(this.activeTasks.values()),
@@ -2308,4 +2349,3 @@ export class DevBotsManager extends EventEmitter {
     this.retryManager.clearAllRetries();
   }
 }
-

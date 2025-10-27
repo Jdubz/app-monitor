@@ -12,6 +12,38 @@ vi.mock('./taskPersistence.js');
 vi.mock('./taskPromptTemplates.js');
 vi.mock('./retryManager.js');
 vi.mock('./workspaceSyncManager.js');
+vi.mock('./workspaceOrchestrator.js', () => {
+  const mockInitialize = vi.fn();
+  const mockCreateWorkspace = vi.fn(() => ({
+    id: 'workspace-test',
+    hostPath: '/tmp/workspace',
+    branchName: 'bots/task-123',
+    mirrorPath: '/tmp/mirror',
+    createdAt: new Date().toISOString()
+  }));
+  const mockSealWorkspace = vi.fn(async () => ({
+    status: 'success',
+    branchName: 'bots/task-123',
+    commitSha: 'abc123'
+  }));
+  const mockCleanupWorkspace = vi.fn();
+  const mockCreatePatchArtifact = vi.fn(() => '/tmp/workspace.patch');
+
+  return {
+    WorkspaceOrchestrator: vi.fn().mockImplementation(() => ({
+      initialize: mockInitialize,
+      createWorkspace: mockCreateWorkspace,
+      sealWorkspace: mockSealWorkspace,
+      cleanupWorkspace: mockCleanupWorkspace,
+      createPatchArtifact: mockCreatePatchArtifact
+    })),
+    PushCoordinator: class {
+      enqueue(handler: () => Promise<unknown> | unknown) {
+        return Promise.resolve(handler());
+      }
+    }
+  };
+});
 vi.mock('../utils/logger.js');
 
 describe('DevBotsManager Worker Limit Enforcement', () => {
@@ -43,6 +75,27 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
 
     devBotsManager = new DevBotsManager(mockProcessManager);
 
+    devBotsManager['workspaceOrchestrator'] = {
+      initialize: vi.fn(),
+      createWorkspace: vi.fn(() => ({
+        id: 'workspace-test',
+        hostPath: '/tmp/workspace',
+        branchName: 'bots/task-123',
+        mirrorPath: '/tmp/mirror',
+        createdAt: new Date().toISOString()
+      })),
+      sealWorkspace: vi.fn(async () => ({
+        status: 'success',
+        branchName: 'bots/task-123',
+        commitSha: 'abc123'
+      })),
+      cleanupWorkspace: vi.fn(),
+      createPatchArtifact: vi.fn(() => '/tmp/workspace.patch')
+    } as any;
+    devBotsManager['pushCoordinator'] = {
+      enqueue: (handler: () => unknown) => Promise.resolve(handler())
+    } as any;
+
     // Mock initializeWorkerLogFile to avoid filesystem operations
     devBotsManager['initializeWorkerLogFile'] = vi.fn().mockResolvedValue(undefined);
 
@@ -50,7 +103,7 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
     devBotsManager['taskQueue'] = [];
     devBotsManager['activeTasks'] = new Map();
     devBotsManager['completedTasks'] = [];
-    devBotsManager['ephemeralWorkers'] = new Map();
+    devBotsManager['ephemeralWorkers'] = new Map() as any;
     // MAX_CONCURRENT_WORKERS is a readonly constant
 
     // Mock task persistence methods
@@ -192,7 +245,7 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
       // Task should remain pending
       expect(task.status).toBe('pending');
       expect(logger.info).toHaveBeenCalledWith(expect.objectContaining({
-        message: 'Both bot-a and bot-b are active, skipping task assignment'
+        message: 'Maximum concurrent workers are active, skipping task assignment'
       }));
     });
 
@@ -404,7 +457,7 @@ describe('DevBotsManager Worker Limit Enforcement', () => {
       await devBotsManager.assignNextTask();
 
       // Check that the task worktree was updated
-      expect(task.worktree).toBe('./dev-bots/volumes/bot-a');
+      expect(task.worktree).toBe('[dynamic workspace provisioned per task]');
     });
 
     it('should respect MAX_CONCURRENT_WORKERS limit', () => {
