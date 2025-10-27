@@ -457,9 +457,17 @@ describe('CloudLogging', () => {
         service: 'test-function'
       };
 
-      // When: Getting logs
-      // Then: Error is thrown (null data causes issues in parseLogEntry)
-      await expect(cloudLogging.getLogs(query)).rejects.toThrow('Failed to fetch cloud logs');
+      // When: Getting logs with malformed entry
+      const result = await cloudLogging.getLogs(query);
+
+      // Then: Malformed entry is parsed gracefully with default values
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        service: 'test-function',
+        message: 'null', // JSON.stringify(null) returns "null"
+        level: 'INFO', // Default level
+      });
+      expect(result[0].timestamp).toBeDefined();
     });
 
     it('should handle network timeouts', async () => {
