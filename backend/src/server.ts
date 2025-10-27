@@ -368,7 +368,7 @@ export function createApp() {
 
       // Clear all monitor intervals
       if (socket.data.monitorIntervals) {
-        Object.values(socket.data.monitorIntervals).forEach((intervalId: any) => {
+        Object.values(socket.data.monitorIntervals).forEach((intervalId: NodeJS.Timeout) => {
           clearInterval(intervalId);
         });
       }

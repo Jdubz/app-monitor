@@ -25,7 +25,9 @@ const DEFAULT_LOG_DIR = path.resolve(__dirname, '../../../../logs');
 
 
 type LogSeverity = 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR';
-interface StructuredLogEntry {
+
+// Export for use in other services
+export interface StructuredLogEntry {
   severity: LogSeverity;
   timestamp: string;
   environment: string;
@@ -33,7 +35,7 @@ interface StructuredLogEntry {
   category?: string;
   action?: string;
   message?: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
   error?: {
     type: string;
     message: string;

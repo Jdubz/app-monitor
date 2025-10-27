@@ -1,11 +1,11 @@
 /**
  * Centralized Error Handling
- * 
+ *
  * Provides consistent error handling across the application.
  * Replaces scattered try-catch blocks with standardized patterns.
  */
 
-import { Request, Response } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { logger } from './logger.js';
 
 export interface ApiError {
@@ -107,8 +107,8 @@ export const handleApiError = (error: unknown, req: Request, res: Response): voi
 /**
  * Wrapper for async route handlers with automatic error handling
  */
-export const asyncHandler = (fn: (req: Request, res: Response, next?: any) => Promise<any>) => {
-  return (req: Request, res: Response, next: any) => {
+export const asyncHandler = (fn: (req: Request, res: Response, next?: NextFunction) => Promise<unknown>) => {
+  return (req: Request, res: Response, next: NextFunction) => {
     Promise.resolve(fn(req, res, next)).catch((error) => {
       handleApiError(error, req, res);
     });
@@ -145,7 +145,7 @@ export const withErrorHandling = async <T>(
 /**
  * Validate required fields in request body
  */
-export const validateRequired = (body: any, fields: string[]): void => {
+export const validateRequired = (body: Record<string, unknown>, fields: string[]): void => {
   const missing = fields.filter(field => !body[field]);
   if (missing.length > 0) {
     throw new ValidationError(`Missing required fields: ${missing.join(', ')}`, {
@@ -158,7 +158,7 @@ export const validateRequired = (body: any, fields: string[]): void => {
 /**
  * Validate field types
  */
-export const validateTypes = (body: any, schema: Record<string, string>): void => {
+export const validateTypes = (body: Record<string, unknown>, schema: Record<string, string>): void => {
   const errors: string[] = [];
   
   for (const [field, expectedType] of Object.entries(schema)) {

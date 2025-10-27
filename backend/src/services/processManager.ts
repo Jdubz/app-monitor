@@ -446,9 +446,9 @@ export class ProcessManager extends EventEmitter {
   /**
    * Get the LogWatcher instance for file-based log reading
    */
-  public getLogWatcher(): any {
+  public getLogWatcher(): import('./logWatcher.js').LogWatcher | undefined {
     // This will be injected by the LogStreamer
-    return (this as any).logWatcher;
+    return (this as ProcessManager & { logWatcher?: import('./logWatcher.js').LogWatcher }).logWatcher;
   }
 
   /**

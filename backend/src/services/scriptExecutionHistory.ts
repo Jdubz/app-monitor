@@ -58,13 +58,13 @@ export class ScriptExecutionHistory {
   private loadHistory(): void {
     try {
       const historyFile = path.join(this.historyDir, 'executions.json');
-      
+
       if (fs.existsSync(historyFile)) {
         const data = fs.readFileSync(historyFile, 'utf-8');
-        const parsed = JSON.parse(data);
-        
+        const parsed = JSON.parse(data) as Array<Omit<ScriptExecution, 'startTime' | 'endTime'> & { startTime: string; endTime?: string }>;
+
         // Convert date strings back to Date objects
-        this.executions = parsed.map((exec: any) => ({
+        this.executions = parsed.map((exec) => ({
           ...exec,
           startTime: new Date(exec.startTime),
           endTime: exec.endTime ? new Date(exec.endTime) : undefined,

@@ -216,49 +216,58 @@ export class CloudLogging {
    * Parse a Cloud Logging entry into our standardized format
    */
   private parseLogEntry(entry: Entry, serviceName: string, index: number): ParsedCloudLog {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const metadata = entry.metadata as any;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const data = entry.data as any;
+    // Google Cloud Logging Entry types are complex and vary by log type
+    // Using Record<string, unknown> for safe access to dynamic properties
+    const metadata = entry.metadata as Record<string, unknown>;
+    const data = entry.data as Record<string, unknown> | string;
 
     // Extract message from different payload types
     let message = '';
     if (typeof data === 'string') {
       message = data;
-    } else if (data.message) {
-      message = data.message;
-    } else if (data.textPayload) {
-      message = data.textPayload;
-    } else if (data.jsonPayload) {
-      message = JSON.stringify(data.jsonPayload);
-    } else if (data.protoPayload) {
-      // Handle protobuf audit logs - extract meaningful information
-      message = this.parseProtoPayload(data.protoPayload, metadata);
+    } else if (typeof data === 'object' && data !== null) {
+      if ('message' in data && typeof data.message === 'string') {
+        message = data.message;
+      } else if ('textPayload' in data && typeof data.textPayload === 'string') {
+        message = data.textPayload;
+      } else if ('jsonPayload' in data) {
+        message = JSON.stringify(data.jsonPayload);
+      } else if ('protoPayload' in data && typeof data.protoPayload === 'object' && data.protoPayload !== null) {
+        // Handle protobuf audit logs - extract meaningful information
+        message = this.parseProtoPayload(data.protoPayload as Record<string, unknown>, metadata);
+      } else {
+        message = JSON.stringify(data);
+      }
     } else {
       message = JSON.stringify(data);
     }
 
     // Map Cloud Logging severity to our log levels
-    const severity = metadata.severity || 'INFO';
+    const severity = typeof metadata.severity === 'string' ? metadata.severity : 'INFO';
     const level = this.mapSeverityToLevel(severity);
 
     // Extract timestamp
     // entry.timestamp is an object with { seconds: number, nanos?: number }
-    const timestamp = entry.timestamp
-      ? (typeof entry.timestamp === 'object' && 'seconds' in entry.timestamp
-          ? entry.timestamp.seconds * 1000
-          : new Date(entry.timestamp as any).getTime())
+    const entryTimestamp = (entry as unknown as { timestamp?: unknown }).timestamp;
+    const timestamp = entryTimestamp
+      ? (typeof entryTimestamp === 'object' && entryTimestamp !== null && 'seconds' in entryTimestamp
+          ? (entryTimestamp as { seconds: number }).seconds * 1000
+          : new Date(entryTimestamp as string | number | Date).getTime())
       : Date.now();
 
     // Extract trace and span IDs
-    const trace = metadata.trace;
-    const spanId = metadata.spanId;
+    const trace = typeof metadata.trace === 'string' ? metadata.trace : undefined;
+    const spanId = typeof metadata.spanId === 'string' ? metadata.spanId : undefined;
 
     // Extract resource info
-    const resource = metadata.resource;
+    const resource = typeof metadata.resource === 'object' && metadata.resource !== null
+      ? metadata.resource as Record<string, unknown>
+      : undefined;
 
     // Extract labels
-    const labels = metadata.labels || {};
+    const labels = typeof metadata.labels === 'object' && metadata.labels !== null
+      ? metadata.labels as Record<string, string>
+      : {} as Record<string, string>;
 
     return {
       id: `cloud-${serviceName}-${index}-${timestamp}`,
@@ -272,8 +281,8 @@ export class CloudLogging {
         resource,
         labels,
         severity,
-        insertId: metadata.insertId,
-        logName: metadata.logName,
+        insertId: typeof metadata.insertId === 'string' ? metadata.insertId : undefined,
+        logName: typeof metadata.logName === 'string' ? metadata.logName : undefined,
       },
       raw: entry,
     };
@@ -282,20 +291,24 @@ export class CloudLogging {
   /**
    * Parse protobuf audit log payload into a readable message
    */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars
-  private parseProtoPayload(protoPayload: any, _metadata: any): string {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  private parseProtoPayload(protoPayload: Record<string, unknown>, _metadata: Record<string, unknown>): string {
     try {
       // Extract key information from audit log
-      const methodName = protoPayload.methodName || 'Unknown method';
-      const serviceName = protoPayload.serviceName || 'Unknown service';
-      const resourceName = protoPayload.resourceName || '';
-      const requestMetadata = protoPayload.requestMetadata || {};
-      const callerIp = requestMetadata.callerIp || 'Unknown IP';
+      const methodName = typeof protoPayload.methodName === 'string' ? protoPayload.methodName : 'Unknown method';
+      const serviceName = typeof protoPayload.serviceName === 'string' ? protoPayload.serviceName : 'Unknown service';
+      const resourceName = typeof protoPayload.resourceName === 'string' ? protoPayload.resourceName : '';
+      const requestMetadata = typeof protoPayload.requestMetadata === 'object' && protoPayload.requestMetadata !== null
+        ? protoPayload.requestMetadata as Record<string, unknown>
+        : {} as Record<string, unknown>;
+      const callerIp = typeof requestMetadata.callerIp === 'string' ? requestMetadata.callerIp : 'Unknown IP';
 
       // For Cloud Build/Functions deployment audit logs
       if (serviceName.includes('cloudfunctions') || serviceName.includes('cloudbuild')) {
-        const status = protoPayload.status || {};
-        if (status.message) {
+        const status = typeof protoPayload.status === 'object' && protoPayload.status !== null
+          ? protoPayload.status as Record<string, unknown>
+          : {} as Record<string, unknown>;
+        if (typeof status.message === 'string') {
           // Extract the actual error message from the status
           return `[Audit Log] ${serviceName}: ${status.message}`;
         }

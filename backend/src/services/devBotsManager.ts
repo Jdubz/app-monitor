@@ -176,10 +176,17 @@ class ScopeCreepDetector {
   }
 }
 
+interface CleanContext {
+  allowedFiles: string[];
+  maxComplexity: string;
+  forbiddenPatterns: string[];
+  scope: string;
+}
+
 class ContextIsolation {
-  private cleanContexts = new Map<string, any>();
+  private cleanContexts = new Map<string, CleanContext>();
   private contaminatedContexts = new Set<string>();
-  
+
   isolateContaminatedContext(taskId: string, _violations: Array<{ type: string; severity: string }>): void {
     this.contaminatedContexts.add(taskId);
     const cleanContext = this.createCleanContext(taskId);
@@ -190,8 +197,8 @@ class ContextIsolation {
       message: `[CONTEXT_ISOLATION] Isolated contaminated context for task ${taskId}`
     });
   }
-  
-  private createCleanContext(_taskId: string): any {
+
+  private createCleanContext(_taskId: string): CleanContext {
     return {
       allowedFiles: ['existing-files-only'],
       maxComplexity: 'simple',
@@ -199,8 +206,8 @@ class ContextIsolation {
       scope: 'minimal'
     };
   }
-  
-  getBaselineContext(): any {
+
+  getBaselineContext(): CleanContext {
     return {
       allowedFiles: ['existing-files-only'],
       maxComplexity: 'simple',
@@ -210,9 +217,15 @@ class ContextIsolation {
   }
 }
 
+interface ViolationChainEntry {
+  taskId: string;
+  violations: Array<{ type: string; severity: string }>;
+  timestamp: number;
+}
+
 class SnowballPrevention {
-  private violationChain = new Map<string, Array<any>>();
-  
+  private violationChain = new Map<string, ViolationChainEntry[]>();
+
   detectViolationChain(taskId: string, violations: Array<{ type: string; severity: string }>): void {
     const chain = this.violationChain.get(taskId) || [];
     chain.push({
@@ -220,15 +233,15 @@ class SnowballPrevention {
       violations,
       timestamp: Date.now()
     });
-    
+
     this.violationChain.set(taskId, chain);
-    
+
     if (chain.length >= 3) {
       this.triggerChainBreaker(taskId, chain);
     }
   }
-  
-  private triggerChainBreaker(taskId: string, chain: Array<any>): void {
+
+  private triggerChainBreaker(taskId: string, chain: ViolationChainEntry[]): void {
     logger.warn({
       category: 'process',
       action: 'chain_breaker_detected_violation_chain_of_chain_le',
@@ -262,7 +275,7 @@ class PeriodicCleanupScheduler {
   }
   
   createCleanupTask(type: string, taskIdCounter: number): Task {
-    const cleanupTasks: Record<string, { description: string; scope: any }> = {
+    const cleanupTasks: Record<string, { description: string; scope: Record<string, unknown> }> = {
       linting: {
         description: 'PERIODIC CLEANUP: Run linting and fix code style issues. Focus on existing files only.',
         scope: {
@@ -314,7 +327,7 @@ class PeriodicCleanupScheduler {
       status: 'pending',
       createdAt: new Date().toISOString(),
       assignedAgent: 'backend-specialist',
-      scope: task.scope
+      scope: task.scope as unknown as { type: string; boundaries: Record<string, unknown>; validation: Record<string, unknown> }
     };
   }
 }
@@ -1013,19 +1026,19 @@ export class DevBotsManager extends EventEmitter {
     return this.agentManager.getAllPersonalities();
   }
 
-  public getTaskTemplates(): any[] {
+  public getTaskTemplates(): Record<string, unknown>[] {
     // Return the single universal template as an array for API compatibility
-    return [this.templateManager.getTemplate()];
+    return [this.templateManager.getTemplate() as unknown as Record<string, unknown>];
   }
 
-  public getTaskGuidelines(taskType?: string): any {
+  public getTaskGuidelines(taskType?: string): unknown {
     if (taskType) {
       return this.guidelinesManager.getGuidelines(taskType);
     }
     return this.guidelinesManager.getAllGuidelines();
   }
 
-  public getTaskExample(taskType: string): any {
+  public getTaskExample(taskType: string): unknown {
     return this.guidelinesManager.getExampleTask(taskType);
   }
 
@@ -1033,7 +1046,7 @@ export class DevBotsManager extends EventEmitter {
     return this.guidelinesManager.generateTaskChecklist(taskType);
   }
 
-  public validateTaskData(taskData: any, taskType: string): any {
+  public validateTaskData(taskData: Record<string, unknown>, taskType: string): unknown {
     return this.guidelinesManager.validateTaskData(taskData, taskType);
   }
 
@@ -1222,7 +1235,7 @@ export class DevBotsManager extends EventEmitter {
       message: `Task execution failed for worker ${worker.id}:`,
       error: error
     });
-      await this.failEphemeralTask(worker, error);
+      await this.failEphemeralTask(worker, error instanceof Error ? error : { message: String(error) });
     }
   }
 
@@ -1413,7 +1426,7 @@ export class DevBotsManager extends EventEmitter {
   /**
    * Fail task in ephemeral worker
    */
-  private async failEphemeralTask(worker: EphemeralWorker, error: any): Promise<void> {
+  private async failEphemeralTask(worker: EphemeralWorker, error: Error | { message: string }): Promise<void> {
     worker.status = 'completing';
     
     // Update task
@@ -1855,11 +1868,11 @@ export class DevBotsManager extends EventEmitter {
     return recoveryTask;
   }
 
-  async getCleanupStatus(): Promise<{ schedules: any; recentTasks: Task[] }> {
+  async getCleanupStatus(): Promise<{ schedules: string[]; recentTasks: Task[] }> {
     const recentCleanupTasks = this.completedTasks
       .filter(t => t.type === 'cleanup')
       .slice(-10);
-    
+
     return {
       schedules: this.cleanupScheduler.checkSchedules(),
       recentTasks: recentCleanupTasks
@@ -1876,7 +1889,7 @@ export class DevBotsManager extends EventEmitter {
   /**
    * Get workspace sync status
    */
-  async getWorkspaceSyncStatus(): Promise<any> {
+  async getWorkspaceSyncStatus(): Promise<unknown> {
     return this.workspaceSyncManager.getSyncStatus();
   }
 

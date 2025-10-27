@@ -189,10 +189,10 @@ export class TaskQueueManager extends EventEmitter {
     // Sort
     const sortBy = query.sortBy || 'createdAt';
     const sortOrder = query.sortOrder || 'desc';
-    
+
     tasks.sort((a, b) => {
-      let aVal: any = a[sortBy as keyof Task];
-      let bVal: any = b[sortBy as keyof Task];
+      let aVal: string | number = a[sortBy as keyof Task] as string | number;
+      let bVal: string | number = b[sortBy as keyof Task] as string | number;
 
       if (sortBy === 'createdAt') {
         aVal = new Date(aVal).getTime();

@@ -76,7 +76,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
    */
   router.post('/start', (_req: Request, res: Response) => {
     try {
-      devBotsManager.start();
+      devBotsManager.startSystem();
       res.json({ success: true, message: 'Dev-Bots started' });
     } catch (error) {
       logger.error({
@@ -98,7 +98,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
    */
   router.post('/stop', (_req: Request, res: Response) => {
     try {
-      devBotsManager.stop();
+      devBotsManager.stopSystem();
       res.json({ success: true, message: 'Dev-Bots stopped' });
     } catch (error) {
       logger.error({
@@ -234,7 +234,8 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
    */
   router.post('/validate', async (req: Request, res: Response) => {
     try {
-      const result = await devBotsManager.validateTask(req.body);
+      const { type, ...taskData } = req.body;
+      const result = devBotsManager.validateTaskData(taskData, type || 'general');
       res.json(result);
     } catch (error) {
       logger.error({
@@ -330,7 +331,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
    */
   router.get('/guidelines', (_req: Request, res: Response) => {
     try {
-      const guidelines = devBotsManager.getGuidelines();
+      const guidelines = devBotsManager.getTaskGuidelines();
       res.json({ guidelines });
     } catch (error) {
       logger.error({
@@ -353,7 +354,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
   router.get('/guidelines/:taskType', (req: Request, res: Response) => {
     try {
       const { taskType } = req.params;
-      const guidelines = devBotsManager.getGuidelinesForType(taskType);
+      const guidelines = devBotsManager.getTaskGuidelines(taskType);
       res.json({ guidelines });
     } catch (error) {
       logger.error({
@@ -376,8 +377,8 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
   router.get('/examples/:taskType', (req: Request, res: Response) => {
     try {
       const { taskType } = req.params;
-      const examples = devBotsManager.getExamplesForType(taskType);
-      res.json({ examples });
+      const example = devBotsManager.getTaskExample(taskType);
+      res.json({ examples: [example] });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -399,7 +400,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
   router.get('/checklist/:taskType', (req: Request, res: Response) => {
     try {
       const { taskType } = req.params;
-      const checklist = devBotsManager.getChecklistForType(taskType);
+      const checklist = devBotsManager.getTaskChecklist(taskType);
       res.json({ checklist });
     } catch (error) {
       logger.error({
@@ -425,7 +426,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
    */
   router.get('/projects', (_req: Request, res: Response) => {
     try {
-      const projects = devBotsManager.getProjects();
+      const projects = devBotsManager.getValidProjects();
       res.json({ projects });
     } catch (error) {
       logger.error({
@@ -451,9 +452,9 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
    */
   router.post('/export', async (req: Request, res: Response) => {
     try {
-      const { format } = req.body;
-      const data = await devBotsManager.exportData(format);
-      res.json({ success: true, data });
+      const { path = './task-export.json' } = req.body;
+      devBotsManager.exportTasks(path);
+      res.json({ success: true, message: `Tasks exported to ${path}` });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -474,9 +475,9 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
    */
   router.post('/import', async (req: Request, res: Response) => {
     try {
-      const { data } = req.body;
-      const result = await devBotsManager.importData(data);
-      res.json({ success: true, result });
+      const { path = './task-export.json' } = req.body;
+      devBotsManager.importTasks(path);
+      res.json({ success: true, message: `Tasks imported from ${path}` });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -501,7 +502,11 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
    */
   router.post('/onboarding/complete', async (req: Request, res: Response) => {
     try {
-      await devBotsManager.completeOnboarding();
+      const { workerId } = req.body;
+      if (!workerId) {
+        return res.status(400).json({ error: 'Worker ID is required' });
+      }
+      devBotsManager.completeWorkerOnboarding(workerId);
       res.json({ success: true, message: 'Onboarding completed' });
     } catch (error) {
       logger.error({
@@ -598,7 +603,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
    */
   router.post('/docker/revalidate', async (_req: Request, res: Response) => {
     try {
-      const result = await devBotsManager.revalidateDockerContainers();
+      const result = await devBotsManager.revalidateDockerEnvironment();
       res.json(result);
     } catch (error) {
       logger.error({
@@ -620,7 +625,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
    */
   router.post('/docker/cleanup', async (_req: Request, res: Response) => {
     try {
-      const result = await devBotsManager.cleanupDockerResources();
+      const result = await devBotsManager.cleanupOrphanedResources();
       res.json(result);
     } catch (error) {
       logger.error({
@@ -736,7 +741,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
    */
   router.post('/emergency-recovery', async (_req: Request, res: Response) => {
     try {
-      const result = await devBotsManager.emergencyRecovery();
+      const result = await devBotsManager.triggerEmergencyRecovery();
       res.json(result);
     } catch (error) {
       logger.error({

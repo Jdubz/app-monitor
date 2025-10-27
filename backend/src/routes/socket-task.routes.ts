@@ -151,8 +151,8 @@ export function createTaskRoutes(taskQueueManager: TaskQueueManager) {
         project: req.query.project as string | undefined,
         limit: req.query.limit ? parseInt(req.query.limit as string) : undefined,
         offset: req.query.offset ? parseInt(req.query.offset as string) : undefined,
-        sortBy: req.query.sortBy as any,
-        sortOrder: req.query.sortOrder as any,
+        sortBy: req.query.sortBy as 'createdAt' | 'priority' | 'status' | undefined,
+        sortOrder: req.query.sortOrder as 'asc' | 'desc' | undefined,
       };
       
       const tasks = taskQueueManager.queryTasks(query);
