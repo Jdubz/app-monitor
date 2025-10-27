@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom'
-import { vi } from 'vitest'
+import { vi, beforeEach, afterEach } from 'vitest'
+import { cleanup } from '@testing-library/react'
 
 // Mock Socket.IO
 vi.mock('socket.io-client', () => ({
@@ -168,6 +169,7 @@ beforeEach(() => {
 
 afterEach(() => {
   // Clean up after each test
+  cleanup();
   vi.clearAllTimers();
   vi.useRealTimers();
 });

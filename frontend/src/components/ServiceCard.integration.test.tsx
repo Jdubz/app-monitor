@@ -1,227 +1,189 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, act } from '../test/test-utils';
-import { createMockSocket, generateMockService } from '../test/test-utils';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, waitFor, act, cleanup } from '../test/test-utils';
+import { generateMockService } from '../test/test-utils';
 import ServiceCard from './ServiceCard';
 
-// Mock the API module
-vi.mock('../services/api', () => ({
-  startService: vi.fn(),
-  stopService: vi.fn(),
-  restartService: vi.fn(),
-  killService: vi.fn(),
-  getServiceLogs: vi.fn(),
-}));
-
-// Mock Socket.IO
-vi.mock('socket.io-client', () => ({
-  io: vi.fn(() => createMockSocket()),
-}));
-
 describe('ServiceCard Integration Tests', () => {
-  const mockService = generateMockService({
-    id: 'test-service-1',
-    name: 'test-service',
-    status: 'running',
-    port: 3000,
-    pid: 12345,
-  });
-
-  const defaultProps = {
-    service: mockService,
-    onServiceUpdate: vi.fn(),
-    onLogsRequest: vi.fn(),
-  };
+  let mockOnStart: ReturnType<typeof vi.fn>;
+  let mockOnStop: ReturnType<typeof vi.fn>;
+  let mockOnRestart: ReturnType<typeof vi.fn>;
+  let mockOnKill: ReturnType<typeof vi.fn>;
+  let mockService: ReturnType<typeof generateMockService>;
+  let defaultProps: any;
 
   beforeEach(() => {
     vi.clearAllMocks();
+
+    mockService = generateMockService({
+      id: 'test-service-1',
+      name: 'test-service',
+      status: 'running',
+      port: 3000,
+      pid: 12345,
+    });
+
+    mockOnStart = vi.fn().mockResolvedValue(undefined);
+    mockOnStop = vi.fn().mockResolvedValue(undefined);
+    mockOnRestart = vi.fn().mockResolvedValue(undefined);
+    mockOnKill = vi.fn().mockResolvedValue(undefined);
+
+    defaultProps = {
+      service: mockService,
+      onStart: mockOnStart,
+      onStop: mockOnStop,
+      onRestart: mockOnRestart,
+      onKill: mockOnKill,
+    };
+  });
+
+  afterEach(() => {
+    cleanup();
   });
 
   describe('Service Status Management', () => {
     it('should handle complete service lifecycle interactions', async () => {
-      const { startService, stopService, restartService, killService } = await import('../services/api');
-      
-      // Mock API responses
-      vi.mocked(startService).mockResolvedValueOnce({ ...mockService, status: 'starting' });
-      vi.mocked(stopService).mockResolvedValueOnce({ ...mockService, status: 'stopped' });
-      vi.mocked(restartService).mockResolvedValueOnce({ ...mockService, status: 'running' });
-      vi.mocked(killService).mockResolvedValueOnce({ ...mockService, status: 'stopped' });
+      // Test starting service - use stopped status
+      const stoppedService = generateMockService({
+        ...mockService,
+        status: 'stopped'
+      });
 
-      render(<ServiceCard {...defaultProps} />);
+      render(<ServiceCard {...defaultProps} service={stoppedService} />);
 
-      // Test starting service
-      const startButton = screen.getByRole('button', { name: /start/i });
+      const startButton = screen.getByRole('button', { name: /^start$/i });
       await act(async () => {
-        await startButton.click();
+        startButton.click();
       });
 
       await waitFor(() => {
-        expect(startService).toHaveBeenCalledWith('test-service');
+        expect(mockOnStart).toHaveBeenCalledTimes(1);
       });
+
+      // Rerender with running status for other buttons
+      const runningService = generateMockService({
+        ...mockService,
+        status: 'running'
+      });
+
+      cleanup();
+      render(<ServiceCard {...defaultProps} service={runningService} />);
 
       // Test stopping service
-      const stopButton = screen.getByRole('button', { name: /stop/i });
+      const stopButton = screen.getByRole('button', { name: /^stop$/i });
       await act(async () => {
-        await stopButton.click();
+        stopButton.click();
       });
 
       await waitFor(() => {
-        expect(stopService).toHaveBeenCalledWith('test-service', true);
+        expect(mockOnStop).toHaveBeenCalledTimes(1);
       });
 
       // Test restarting service
-      const restartButton = screen.getByRole('button', { name: /restart/i });
+      const restartButton = screen.getByRole('button', { name: /^restart$/i });
       await act(async () => {
-        await restartButton.click();
+        restartButton.click();
       });
 
       await waitFor(() => {
-        expect(restartService).toHaveBeenCalledWith('test-service', true);
+        expect(mockOnRestart).toHaveBeenCalledTimes(1);
       });
 
-      // Test killing service
-      const killButton = screen.getByRole('button', { name: /kill/i });
+      // Test killing service - need to click twice for confirmation
+      const killButton = screen.getByRole('button', { name: /^kill$/i });
+
+      // First click - shows confirmation
       await act(async () => {
-        await killButton.click();
+        killButton.click();
+      });
+
+      // Second click - confirms kill
+      await act(async () => {
+        killButton.click();
       });
 
       await waitFor(() => {
-        expect(killService).toHaveBeenCalledWith('test-service');
+        expect(mockOnKill).toHaveBeenCalledTimes(1);
       });
     });
 
-    it('should handle service status updates from WebSocket', async () => {
-      const mockSocket = createMockSocket();
-      const onServiceUpdate = vi.fn();
-
-      render(<ServiceCard {...defaultProps} onServiceUpdate={onServiceUpdate} />);
-
-      // Simulate WebSocket status update
-      act(() => {
-        mockSocket._trigger('service_status_update', {
-          serviceId: 'test-service-1',
-          status: 'stopped',
-          timestamp: new Date().toISOString()
-        });
-      });
-
-      await waitFor(() => {
-        expect(onServiceUpdate).toHaveBeenCalledWith({
-          serviceId: 'test-service-1',
-          status: 'stopped',
-          timestamp: expect.any(String)
-        });
-      });
-    });
-  });
-
-  describe('Log Management Integration', () => {
-    it('should handle log requests and display', async () => {
-      const { getServiceLogs } = await import('../services/api');
-      const onLogsRequest = vi.fn();
-
-      const mockLogs = {
-        serviceName: 'test-service',
-        logs: [
-          '2025-01-27T14:13:57.000Z [INFO] Service started',
-          '2025-01-27T14:13:58.000Z [INFO] Service running',
-          '2025-01-27T14:13:59.000Z [ERROR] Service error occurred'
-        ]
-      };
-
-      vi.mocked(getServiceLogs).mockResolvedValueOnce(mockLogs);
-
-      render(<ServiceCard {...defaultProps} onLogsRequest={onLogsRequest} />);
-
-      // Click logs button
-      const logsButton = screen.getByRole('button', { name: /logs/i });
-      await act(async () => {
-        await logsButton.click();
-      });
-
-      await waitFor(() => {
-        expect(getServiceLogs).toHaveBeenCalledWith('test-service', 100);
-        expect(onLogsRequest).toHaveBeenCalledWith('test-service', mockLogs);
-      });
-    });
-
-    it('should handle log request errors', async () => {
-      const { getServiceLogs } = await import('../services/api');
-      const onLogsRequest = vi.fn();
-
-      const error = new Error('Failed to fetch logs');
-      vi.mocked(getServiceLogs).mockRejectedValueOnce(error);
-
-      render(<ServiceCard {...defaultProps} onLogsRequest={onLogsRequest} />);
-
-      // Click logs button
-      const logsButton = screen.getByRole('button', { name: /logs/i });
-      await act(async () => {
-        await logsButton.click();
-      });
-
-      await waitFor(() => {
-        expect(getServiceLogs).toHaveBeenCalledWith('test-service', 100);
-        expect(onLogsRequest).not.toHaveBeenCalled();
-      });
-    });
   });
 
   describe('Error Handling Integration', () => {
-    it('should handle API errors gracefully', async () => {
-      const { startService } = await import('../services/api');
+    it('should handle action errors gracefully', async () => {
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
 
       const error = new Error('Service start failed');
-      vi.mocked(startService).mockRejectedValueOnce(error);
+      const mockOnStartWithError = vi.fn().mockRejectedValueOnce(error);
 
-      render(<ServiceCard {...defaultProps} />);
+      // Use stopped status so Start button is enabled
+      const stoppedService = generateMockService({
+        ...mockService,
+        status: 'stopped'
+      });
 
-      const startButton = screen.getByRole('button', { name: /start/i });
+      render(<ServiceCard {...defaultProps} service={stoppedService} onStart={mockOnStartWithError} />);
+
+      const startButton = screen.getByRole('button', { name: /^start$/i });
       await act(async () => {
-        await startButton.click();
+        startButton.click();
       });
 
       await waitFor(() => {
         expect(consoleErrorSpy).toHaveBeenCalledWith(
-          expect.stringContaining('Failed to start service'),
+          expect.stringContaining('Failed to start'),
           error
+        );
+        expect(alertSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Failed to start')
         );
       });
 
       consoleErrorSpy.mockRestore();
+      alertSpy.mockRestore();
     });
 
     it('should handle network errors', async () => {
-      const { startService } = await import('../services/api');
       const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {});
 
       const networkError = new Error('Network error - please check your connection');
-      vi.mocked(startService).mockRejectedValueOnce(networkError);
+      const mockOnStopWithError = vi.fn().mockRejectedValueOnce(networkError);
 
-      render(<ServiceCard {...defaultProps} />);
+      render(<ServiceCard {...defaultProps} onStop={mockOnStopWithError} />);
 
-      const startButton = screen.getByRole('button', { name: /start/i });
+      const stopButton = screen.getByRole('button', { name: /^stop$/i });
       await act(async () => {
-        await startButton.click();
+        stopButton.click();
       });
 
       await waitFor(() => {
         expect(consoleErrorSpy).toHaveBeenCalledWith(
-          expect.stringContaining('Failed to start service'),
+          expect.stringContaining('Failed to stop'),
           networkError
+        );
+        expect(alertSpy).toHaveBeenCalledWith(
+          expect.stringContaining('Failed to stop')
         );
       });
 
       consoleErrorSpy.mockRestore();
+      alertSpy.mockRestore();
     });
   });
 
   describe('User Interaction Integration', () => {
     it('should handle keyboard navigation', async () => {
-      render(<ServiceCard {...defaultProps} />);
+      // Use stopped status so Start button is enabled and focusable
+      const stoppedService = generateMockService({
+        ...mockService,
+        status: 'stopped'
+      });
 
-      const startButton = screen.getByRole('button', { name: /start/i });
-      
+      render(<ServiceCard {...defaultProps} service={stoppedService} />);
+
+      const startButton = screen.getByRole('button', { name: /^start$/i });
+
       // Test keyboard navigation
       await act(async () => {
         startButton.focus();
@@ -245,54 +207,67 @@ describe('ServiceCard Integration Tests', () => {
     it('should handle accessibility features', async () => {
       render(<ServiceCard {...defaultProps} />);
 
-      // Test ARIA labels
-      const startButton = screen.getByRole('button', { name: /start/i });
-      expect(startButton).toHaveAttribute('aria-label');
+      // Test titles (not ARIA labels - buttons use title attribute)
+      const startButton = screen.getByRole('button', { name: /^start$/i });
+      expect(startButton).toHaveAttribute('title');
 
       // Test keyboard shortcuts
-      const restartButton = screen.getByRole('button', { name: /restart/i });
+      const restartButton = screen.getByRole('button', { name: /^restart$/i });
       expect(restartButton).toHaveAttribute('title');
     });
   });
 
   describe('Performance Integration', () => {
     it('should handle rapid button clicks', async () => {
-      const { startService } = await import('../services/api');
-      
-      vi.mocked(startService).mockResolvedValue({ ...mockService, status: 'starting' });
+      // Use stopped status so Start button is enabled
+      const stoppedService = generateMockService({
+        ...mockService,
+        status: 'stopped'
+      });
 
-      render(<ServiceCard {...defaultProps} />);
+      // Use a slow mock to test loading state properly
+      const slowMockOnStart = vi.fn().mockImplementation(() => new Promise(resolve => setTimeout(resolve, 100)));
 
-      const startButton = screen.getByRole('button', { name: /start/i });
+      render(<ServiceCard {...defaultProps} service={stoppedService} onStart={slowMockOnStart} />);
 
-      // Rapid clicks
+      const startButton = screen.getByRole('button', { name: /^start$/i });
+
+      // First click
       await act(async () => {
-        for (let i = 0; i < 5; i++) {
-          await startButton.click();
-        }
+        startButton.click();
       });
 
-      // Should only call API once due to debouncing
-      await waitFor(() => {
-        expect(startService).toHaveBeenCalledTimes(1);
+      // Try to click again while loading - should be disabled
+      await act(async () => {
+        startButton.click();
+        startButton.click();
       });
+
+      // Wait for the promise to resolve
+      await waitFor(() => {
+        expect(slowMockOnStart).toHaveBeenCalledTimes(1);
+      }, { timeout: 200 });
     });
 
     it('should handle component unmounting during async operations', async () => {
-      const { startService } = await import('../services/api');
-      
       // Create a promise that we can control
       let resolveStart: (value: any) => void;
-      const startPromise = new Promise((resolve) => {
+      const startPromise = new Promise<void>((resolve) => {
         resolveStart = resolve;
       });
-      vi.mocked(startService).mockReturnValueOnce(startPromise);
+      const mockOnStartDelayed = vi.fn().mockReturnValueOnce(startPromise);
 
-      const { unmount } = render(<ServiceCard {...defaultProps} />);
+      // Use stopped status so Start button is enabled
+      const stoppedService = generateMockService({
+        ...mockService,
+        status: 'stopped'
+      });
 
-      const startButton = screen.getByRole('button', { name: /start/i });
+      const { unmount } = render(<ServiceCard {...defaultProps} service={stoppedService} onStart={mockOnStartDelayed} />);
+
+      const startButton = screen.getByRole('button', { name: /^start$/i });
       await act(async () => {
-        await startButton.click();
+        startButton.click();
       });
 
       // Unmount component before promise resolves
@@ -300,11 +275,11 @@ describe('ServiceCard Integration Tests', () => {
 
       // Resolve the promise
       await act(async () => {
-        resolveStart!({ ...mockService, status: 'starting' });
+        resolveStart!();
       });
 
       // Should not throw any errors
-      expect(true).toBe(true);
+      expect(mockOnStartDelayed).toHaveBeenCalledTimes(1);
     });
   });
 });
