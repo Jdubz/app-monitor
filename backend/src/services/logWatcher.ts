@@ -16,15 +16,61 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { Server as SocketIOServer } from 'socket.io';
 import { logger } from '../utils/logger.js';
+import type { LogSourceManager } from './logSourceManager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Resolve logs directory relative to this file (services -> src -> backend -> dev-monitor -> root -> logs)
 const DEFAULT_LOG_DIR = path.resolve(__dirname, '../../../../logs');
-
+const DEFAULT_MAX_RECENT_ENTRIES = 500;
 
 type LogSeverity = 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR';
+type DevMonitorLogLevel = 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+
+interface DevMonitorLogLine {
+  id: string;
+  service: string;
+  timestamp: number;
+  level: DevMonitorLogLevel;
+  message: string;
+  raw: string;
+}
+
+interface LogWatcherOptions {
+  logDir?: string;
+  logSourceManager?: LogSourceManager;
+  maxRecentEntries?: number;
+}
+
+const SERVICE_ALIAS_MAP: Record<string, string> = {
+  'backend': 'firebase-emulators',
+  'firebase': 'firebase-emulators',
+  'firebase-emulators': 'firebase-emulators',
+  'job-finder-backend': 'firebase-emulators',
+  'frontend': 'frontend-dev',
+  'frontend-dev': 'frontend-dev',
+  'frontend_dev': 'frontend-dev',
+  'job-finder-frontend': 'frontend-dev',
+  'app-monitor-frontend': 'frontend-dev',
+  'worker': 'job-finder-worker',
+  'queue_worker': 'job-finder-worker',
+  'job-finder-worker': 'job-finder-worker',
+  'python-worker': 'job-finder-worker',
+  'dev-monitor': 'dev-monitor-backend',
+  'dev-monitor-backend': 'dev-monitor-backend',
+  'dev': 'dev-monitor-backend',
+  'app-monitor-backend': 'dev-monitor-backend',
+};
+
+const SERVICE_FILE_CANDIDATES: Record<string, string[]> = {
+  'firebase-emulators': ['backend', 'firebase-emulators'],
+  'frontend-dev': ['frontend', 'job-finder-frontend'],
+  'job-finder-worker': ['worker', 'queue_worker', 'job-finder-worker'],
+  'dev-monitor-backend': ['dev-monitor-backend', 'dev'],
+};
+
+const PLAIN_LOG_DIR_NAME = 'plain';
 
 // Export for use in other services
 export interface StructuredLogEntry {
@@ -66,7 +112,7 @@ interface LogFormatValidation {
   error?: string;
 }
 
-interface LogSource {
+interface WatchedLogSource {
   service: string;
   filename: string;
   filepath: string;
@@ -80,14 +126,30 @@ export class LogWatcher {
   private watchedFiles: Map<string, WatchedFile> = new Map();
   private logDir: string;
   private readDebounceTimers: Map<string, NodeJS.Timeout> = new Map();
+  private logSourceManager?: LogSourceManager;
+  private recentEntries: Map<string, StructuredLogEntry[]> = new Map();
+  private maxRecentEntries: number;
+  private logIdCounter = 0;
 
-  constructor(io: SocketIOServer, logDir?: string) {
+  constructor(io: SocketIOServer, options: LogWatcherOptions = {}) {
     this.io = io;
+    const { logDir, logSourceManager, maxRecentEntries } = options;
     // Default to /logs directory in repository root
     this.logDir = logDir || DEFAULT_LOG_DIR;
+    this.logSourceManager = logSourceManager;
+    this.maxRecentEntries = maxRecentEntries ?? DEFAULT_MAX_RECENT_ENTRIES;
 
     this.initializeWatchers();
-    logger.info({ category: 'system', action: 'initialized', message: 'LogWatcher initialized', details: { logDir: this.logDir } });
+    logger.info({
+      category: 'system',
+      action: 'initialized',
+      message: 'LogWatcher initialized',
+      details: {
+        logDir: this.logDir,
+        hasLogSourceManager: Boolean(this.logSourceManager),
+        maxRecentEntries: this.maxRecentEntries,
+      },
+    });
   }
 
   /**
@@ -111,45 +173,87 @@ export class LogWatcher {
 
   /**
    * Dynamically discover log files in the logs directory
-   * ONLY streams dev-monitor backend logs, uses file reads for external services
+   * Streams all discovered logs including configured sources and plain-text mirrors
    */
   private discoverLogFiles(): Array<{ filepath: string; service: string }> {
     const logFiles: Array<{ filepath: string; service: string }> = [];
+    const seenPaths = new Set<string>();
 
-    try {
-      // Ensure log directory exists
-      if (!fs.existsSync(this.logDir)) {
+    const addLogFile = (filepath: string, serviceCandidate: string) => {
+      const resolvedPath = path.resolve(filepath);
+      const parentDir = path.dirname(resolvedPath);
+
+      if (!fs.existsSync(parentDir)) {
         logger.warn({
           category: 'system',
-          action: 'directory_not_found',
-          message: `Log directory not found: ${this.logDir}`,
+          action: 'log_directory_missing',
+          message: `Skipping log file because parent directory is missing`,
+          details: { filepath: resolvedPath },
         });
-        return logFiles;
+        return;
       }
 
-      // ONLY watch dev-monitor backend logs for streaming
-      // External service logs are read-only (no streaming)
-      const devMonitorLogFile = path.join(this.logDir, 'dev-monitor-backend.log');
-      if (fs.existsSync(devMonitorLogFile)) {
-        logFiles.push({ filepath: devMonitorLogFile, service: 'dev-monitor-backend' });
+      if (seenPaths.has(resolvedPath)) {
+        return;
       }
 
-      // Note: External service logs (frontend, worker, firebase-emulators) are available
-      // via getRecentLogs() for file-based reading, but not streamed in real-time
-      logger.info({
-        category: 'system',
-        action: 'log_discovery',
-        message: 'Only dev-monitor-backend logs will be streamed. External service logs use file reads only.',
-        details: { streamingService: 'dev-monitor-backend', fileBasedServices: ['frontend', 'worker', 'firebase-emulators'] }
-      });
+      const normalizedService = this.normalizeServiceName(serviceCandidate);
+      seenPaths.add(resolvedPath);
+      logFiles.push({ filepath: resolvedPath, service: normalizedService });
+    };
 
-    } catch (error) {
-      logger.error({
+    const scanDirectory = (dir: string) => {
+      try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (entry.isFile() && entry.name.endsWith('.log')) {
+            const baseName = entry.name.replace(/\.log$/i, '');
+            const service = this.inferServiceFromFilename(baseName);
+            addLogFile(path.join(dir, entry.name), service);
+          } else if (entry.isDirectory()) {
+            const childDir = path.join(dir, entry.name);
+            if (entry.name === PLAIN_LOG_DIR_NAME) {
+              scanDirectory(childDir);
+            }
+          }
+        }
+      } catch (error) {
+        logger.warn({
+          category: 'system',
+          action: 'directory_scan_failed',
+          message: `Failed to scan logs directory: ${dir}`,
+          error: error instanceof Error ? error : new Error(String(error)),
+        });
+      }
+    };
+
+    if (!fs.existsSync(this.logDir)) {
+      logger.warn({
         category: 'system',
-        action: 'discovery_failed',
-        message: `Failed to discover log files in: ${this.logDir}`,
-        error: error instanceof Error ? error : new Error(String(error)),
+        action: 'directory_not_found',
+        message: `Log directory not found: ${this.logDir}`,
       });
+      return logFiles;
+    }
+
+    scanDirectory(this.logDir);
+
+    if (this.logSourceManager) {
+      try {
+        const sources = this.logSourceManager.getEnabledSources();
+        for (const source of sources) {
+          const resolvedPath = this.logSourceManager.resolveLogPath(source);
+          const serviceId = source.id || source.name || source.path;
+          addLogFile(resolvedPath, serviceId);
+        }
+      } catch (error) {
+        logger.warn({
+          category: 'system',
+          action: 'log_source_manager_unavailable',
+          message: 'Failed to load configured log sources',
+          error: error instanceof Error ? error : new Error(String(error)),
+        });
+      }
     }
 
     return logFiles;
@@ -165,13 +269,32 @@ export class LogWatcher {
 
     // Map known filenames to service names
     const serviceMap: Record<string, string> = {
+      'backend': 'firebase-emulators',
       'frontend': 'frontend-dev',
+      'frontend-dev': 'frontend-dev',
       'worker': 'job-finder-worker',
+      'queue_worker': 'job-finder-worker',
+      'job-finder-worker': 'job-finder-worker',
       'dev-monitor-backend': 'dev-monitor-backend',
+      'dev-monitor': 'dev-monitor-backend',
+      'dev': 'dev-monitor-backend',
       'firebase-emulators': 'firebase-emulators',
     };
 
-    return serviceMap[baseName] || baseName;
+    const mapped = serviceMap[baseName] || baseName;
+    return this.normalizeServiceName(mapped);
+  }
+
+  /**
+   * Normalize service names to the identifiers used by the UI
+   */
+  private normalizeServiceName(service: string): string {
+    if (!service) {
+      return 'unknown';
+    }
+
+    const aliasKey = service.toLowerCase();
+    return SERVICE_ALIAS_MAP[aliasKey] || service;
   }
 
   /**
@@ -225,8 +348,8 @@ export class LogWatcher {
    * Public method for API endpoint
    * Only returns sources for files that actually exist
    */
-  public getAvailableSources(): LogSource[] {
-    const sources: LogSource[] = [];
+  public getAvailableSources(): WatchedLogSource[] {
+    const sources: WatchedLogSource[] = [];
 
     for (const [filepath, watched] of this.watchedFiles.entries()) {
       // Only include sources for files that actually exist
@@ -397,6 +520,7 @@ export class LogWatcher {
           message: `Log file truncated: ${filepath}`,
         });
         watched.position = 0;
+        this.recentEntries.delete(watched.service);
       }
 
       // No new data
@@ -437,10 +561,11 @@ export class LogWatcher {
   private processLogLine(line: string, service: string, filepath?: string): void {
     // Check if this is from the plain text logs directory
     const isPlainTextLog = filepath?.includes('/plain/') ?? false;
+    const normalizedService = this.normalizeServiceName(service);
 
     if (isPlainTextLog) {
       // Convert plain text to structured format
-      const entry: StructuredLogEntry = this.convertPlainTextToStructured(line, service);
+      const entry: StructuredLogEntry = this.convertPlainTextToStructured(line, normalizedService);
       this.broadcastLogEntry(entry);
     } else {
       try {
@@ -457,6 +582,9 @@ export class LogWatcher {
           });
           return;
         }
+
+        entry.service = this.normalizeServiceName(entry.service || normalizedService);
+        entry.severity = entry.severity.toUpperCase() as LogSeverity;
 
         // Broadcast to Socket.IO clients
         this.broadcastLogEntry(entry);
@@ -480,6 +608,8 @@ export class LogWatcher {
    * Convert plain text log line to structured format
    */
   private convertPlainTextToStructured(line: string, service: string): StructuredLogEntry {
+    const normalizedService = this.normalizeServiceName(service);
+
     // Detect severity from line content
     let severity: LogSeverity = 'INFO';
     const lowerLine = line.toLowerCase();
@@ -516,7 +646,7 @@ export class LogWatcher {
       severity,
       timestamp: new Date().toISOString(),
       environment: 'development',
-      service,
+      service: normalizedService,
       category,
       action,
       message: line,
@@ -527,24 +657,98 @@ export class LogWatcher {
    * Broadcast structured log entry to all subscribed clients
    */
   private broadcastLogEntry(entry: StructuredLogEntry): void {
-    const service = entry.service;
+    const normalizedService = this.normalizeServiceName(entry.service);
+    const normalizedSeverity = (entry.severity || 'INFO').toUpperCase() as LogSeverity;
+    const timestamp = entry.timestamp || new Date().toISOString();
+
+    const normalizedEntry: StructuredLogEntry = {
+      ...entry,
+      service: normalizedService,
+      severity: normalizedSeverity,
+      timestamp,
+    };
+
+    this.cacheLogEntry(normalizedEntry);
+    const logLine = this.convertStructuredToLogLine(normalizedEntry);
 
     // Broadcast to service-specific room
-    this.io.to(`logs:${service}`).emit('structured_log', entry);
+    this.io.to(`logs:${normalizedService}`).emit('structured_log', normalizedEntry);
+    this.io.to(`logs:${normalizedService}`).emit('log_line', logLine);
 
     // Broadcast to "all logs" room
-    this.io.to('logs:all').emit('structured_log', entry);
+    this.io.to('logs:all').emit('structured_log', normalizedEntry);
+    this.io.to('logs:all').emit('log_line', logLine);
+  }
+
+  /**
+   * Cache recent log entries for quick history retrieval
+   */
+  private cacheLogEntry(entry: StructuredLogEntry): void {
+    const service = entry.service;
+    const existing = this.recentEntries.get(service) ?? [];
+    existing.push(entry);
+
+    if (existing.length > this.maxRecentEntries) {
+      existing.splice(0, existing.length - this.maxRecentEntries);
+    }
+
+    this.recentEntries.set(service, existing);
+  }
+
+  /**
+   * Convert a structured log entry to the Dev Monitor line format
+   */
+  private convertStructuredToLogLine(entry: StructuredLogEntry): DevMonitorLogLine {
+    const timestampMs = Number.isNaN(new Date(entry.timestamp).getTime())
+      ? Date.now()
+      : new Date(entry.timestamp).getTime();
+
+    let message = entry.message;
+    if (!message && entry.details) {
+      if (typeof entry.details.message === 'string') {
+        message = entry.details.message;
+      } else {
+        message = JSON.stringify(entry.details);
+      }
+    }
+
+    return {
+      id: `${entry.service}-${this.logIdCounter++}`,
+      service: entry.service,
+      timestamp: timestampMs,
+      level: this.mapSeverityToLevel(entry.severity),
+      message: message || 'Log entry',
+      raw: JSON.stringify(entry),
+    };
+  }
+
+  /**
+   * Map structured log severity to Dev Monitor log level
+   */
+  private mapSeverityToLevel(severity: string): DevMonitorLogLevel {
+    switch ((severity || '').toUpperCase()) {
+      case 'ERROR':
+        return 'ERROR';
+      case 'WARNING':
+      case 'WARN':
+        return 'WARN';
+      case 'DEBUG':
+        return 'DEBUG';
+      default:
+        return 'INFO';
+    }
   }
 
   /**
    * Broadcast log format error to UI
    */
   private broadcastFormatError(service: string, filepath: string, invalidLine: string): void {
+    const normalizedService = this.normalizeServiceName(service);
     const errorEntry: StructuredLogEntry = {
       severity: 'ERROR',
       timestamp: new Date().toISOString(),
       environment: 'development',
-      service: 'dev-monitor-backend',
+      service: normalizedService,
       category: 'log_format',
       action: 'invalid_format',
       message: `Invalid JSON in log file for service "${service}"`,
@@ -556,10 +760,15 @@ export class LogWatcher {
       },
     };
 
+    this.cacheLogEntry(errorEntry);
+    const logLine = this.convertStructuredToLogLine(errorEntry);
+
     // Broadcast to service-specific room
-    this.io.to(`logs:${service}`).emit('structured_log', errorEntry);
+    this.io.to(`logs:${normalizedService}`).emit('structured_log', errorEntry);
+    this.io.to(`logs:${normalizedService}`).emit('log_line', logLine);
     // Broadcast to "all logs" room
     this.io.to('logs:all').emit('structured_log', errorEntry);
+    this.io.to('logs:all').emit('log_line', logLine);
     // Also broadcast as format error event
     this.io.emit('log_format_error', errorEntry);
   }
@@ -568,72 +777,86 @@ export class LogWatcher {
    * Get recent log entries from a file (file-based reading for external services)
    */
   public getRecentLogs(service: string, lines: number = 100): StructuredLogEntry[] {
-    // Map service names to log file names
-    const serviceNameMap: Record<string, string> = {
-      'job-finder-worker': 'worker',
-      'frontend-dev': 'frontend',
-      'firebase-emulators': 'firebase-emulators',
-      'dev-monitor-backend': 'dev-monitor-backend',
-    };
-    
-    const logFileName = serviceNameMap[service] || service;
-    
-    // Try multiple possible log file locations
-    const possiblePaths = [
-      path.join(this.logDir, `${logFileName}.log`),
-      path.join(this.logDir, 'plain', `${logFileName}.log`),
-      path.join(this.logDir, `${logFileName}-dev.log`),
-    ];
+    const normalizedService = this.normalizeServiceName(service);
+
+    const cached = this.recentEntries.get(normalizedService);
+    if (cached && cached.length > 0) {
+      return cached.slice(-lines);
+    }
+
+    const candidateBases = SERVICE_FILE_CANDIDATES[normalizedService] ?? [normalizedService];
+    const possiblePaths: string[] = [];
+
+    for (const base of candidateBases) {
+      possiblePaths.push(path.join(this.logDir, `${base}.log`));
+      possiblePaths.push(path.join(this.logDir, PLAIN_LOG_DIR_NAME, `${base}.log`));
+      possiblePaths.push(path.join(this.logDir, `${base}-dev.log`));
+    }
 
     for (const filepath of possiblePaths) {
-      if (fs.existsSync(filepath)) {
-        try {
-          // Read entire file
-          const content = fs.readFileSync(filepath, 'utf-8');
-          const allLines = content.split('\n').filter((line) => line.trim().length > 0);
+      if (!fs.existsSync(filepath)) {
+        continue;
+      }
 
-          // Get last N lines
-          const recentLines = allLines.slice(-lines);
+      try {
+        const content = fs.readFileSync(filepath, 'utf-8');
+        const allLines = content.split('\n').filter((line) => line.trim().length > 0);
+        const recentLines = allLines.slice(-lines);
+        const entries: StructuredLogEntry[] = [];
+        const isPlainLog = filepath.includes(`${path.sep}${PLAIN_LOG_DIR_NAME}${path.sep}`);
 
-          // Parse entries (JSON or convert plain text)
-          const entries: StructuredLogEntry[] = [];
-          for (const line of recentLines) {
-            try {
-              // Try to parse as JSON first
-              const entry = JSON.parse(line);
-              entries.push(entry);
-            } catch {
-              // Convert plain text to structured format
-              const structuredEntry = this.convertPlainTextToStructured(line, service);
-              entries.push(structuredEntry);
-            }
+        for (const line of recentLines) {
+          if (!line) continue;
+
+          if (isPlainLog) {
+            const structuredEntry = this.convertPlainTextToStructured(line, normalizedService);
+            entries.push(structuredEntry);
+            continue;
           }
 
-          logger.info({
-            category: 'system',
-            action: 'file_read_success',
-            message: `Successfully read ${entries.length} log entries from file`,
-            details: { service, filepath, entryCount: entries.length }
-          });
-
-          return entries;
-        } catch (error) {
-          logger.error({
-            category: 'system',
-            action: 'read_history_failed',
-            message: `Failed to read log history: ${filepath}`,
-            error: error instanceof Error ? error : new Error(String(error)),
-          });
+          try {
+            const parsed: StructuredLogEntry = JSON.parse(line);
+            const normalizedEntry: StructuredLogEntry = {
+              ...parsed,
+              service: this.normalizeServiceName(parsed.service || normalizedService),
+              severity: (parsed.severity || 'INFO').toUpperCase() as LogSeverity,
+              timestamp: parsed.timestamp || new Date().toISOString(),
+            };
+            entries.push(normalizedEntry);
+          } catch {
+            const structuredEntry = this.convertPlainTextToStructured(line, normalizedService);
+            entries.push(structuredEntry);
+          }
         }
+
+        logger.info({
+          category: 'system',
+          action: 'file_read_success',
+          message: `Read ${entries.length} log entries from file`,
+          details: { service: normalizedService, filepath, entryCount: entries.length },
+        });
+
+        if (entries.length > 0) {
+          const trimmed = entries.slice(-this.maxRecentEntries);
+          this.recentEntries.set(normalizedService, trimmed);
+        }
+
+        return entries;
+      } catch (error) {
+        logger.error({
+          category: 'system',
+          action: 'read_history_failed',
+          message: `Failed to read log history: ${filepath}`,
+          error: error instanceof Error ? error : new Error(String(error)),
+        });
       }
     }
 
-    // No log file found for this service
     logger.warn({
       category: 'system',
       action: 'log_file_not_found',
-      message: `No log file found for service: ${service}`,
-      details: { service, searchedPaths: possiblePaths }
+      message: `No log file found for service: ${normalizedService}`,
+      details: { service: normalizedService, searchedPaths: possiblePaths },
     });
 
     return [];
@@ -654,6 +877,8 @@ export class LogWatcher {
       clearTimeout(timer);
     }
     this.readDebounceTimers.clear();
+    this.recentEntries.clear();
+    this.logIdCounter = 0;
 
     logger.info({ category: 'system', action: 'destroyed', message: 'LogWatcher destroyed' });
   }

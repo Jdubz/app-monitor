@@ -15,7 +15,12 @@ router.get('/config', (req: Request, res: Response) => {
     const configObject = Object.fromEntries(configs);
     res.json({ configs: configObject });
   } catch (error) {
-    logger.error('Error getting quality gate configs:', error);
+    logger.error({
+      category: 'api',
+      action: 'quality_gates_config_list_failed',
+      message: 'Failed to load quality gate configurations',
+      error,
+    });
     res.status(500).json({ error: 'Failed to get quality gate configurations' });
   }
 });
@@ -35,7 +40,12 @@ router.get('/config/:gate', (req: Request, res: Response) => {
 
     res.json(config);
   } catch (error) {
-    logger.error(`Error getting config for gate ${req.params.gate}:`, error);
+    logger.error({
+      category: 'api',
+      action: 'quality_gates_config_fetch_failed',
+      message: `Failed to load config for gate ${req.params.gate}`,
+      error,
+    });
     res.status(500).json({ error: 'Failed to get gate configuration' });
   }
 });
@@ -77,7 +87,13 @@ router.put('/config/:gate', (req: Request, res: Response) => {
       config: updatedConfig
     });
   } catch (error) {
-    logger.error(`Error updating config for gate ${req.params.gate}:`, error);
+    logger.error({
+      category: 'api',
+      action: 'quality_gates_config_update_failed',
+      message: `Failed to update config for gate ${req.params.gate}`,
+      error,
+      details: { gate: req.params.gate },
+    });
     res.status(500).json({ error: 'Failed to update gate configuration' });
   }
 });
@@ -102,7 +118,7 @@ router.post('/validate', async (req: Request, res: Response) => {
     }
 
     logger.info({
-      category: 'quality-gates-api',
+      category: 'api',
       action: 'validation_requested',
       message: `Quality validation requested for task ${taskId}`,
       details: { workspacePath, project }
@@ -112,7 +128,16 @@ router.post('/validate', async (req: Request, res: Response) => {
 
     res.json(result);
   } catch (error) {
-    logger.error('Error validating task:', error);
+    logger.error({
+      category: 'api',
+      action: 'quality_gates_validation_failed',
+      message: `Quality validation failed for task ${req.body?.taskId ?? 'unknown'}`,
+      error,
+      details: {
+        workspacePath: req.body?.workspacePath,
+        project: req.body?.project,
+      },
+    });
     res.status(500).json({ error: 'Failed to validate task' });
   }
 });
@@ -132,7 +157,12 @@ router.post('/config/reset', (req: Request, res: Response) => {
       configs: Object.fromEntries(newValidator.getAllGateConfigs())
     });
   } catch (error) {
-    logger.error('Error resetting quality gate configs:', error);
+    logger.error({
+      category: 'api',
+      action: 'quality_gates_reset_failed',
+      message: 'Failed to reset quality gate configurations',
+      error,
+    });
     res.status(500).json({ error: 'Failed to reset configurations' });
   }
 });
@@ -161,7 +191,12 @@ router.get('/status', (req: Request, res: Response) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    logger.error('Error getting quality gates status:', error);
+    logger.error({
+      category: 'api',
+      action: 'quality_gates_status_failed',
+      message: 'Failed to get quality gate status',
+      error,
+    });
     res.status(500).json({ error: 'Failed to get status' });
   }
 });

@@ -27,10 +27,12 @@ vi.mock('./logWatcher.js', async () => {
 });
 
 describe('LogStreamer', () => {
+  const LOCAL_SERVICE = 'firebase-emulators';
   let logStreamer: LogStreamer;
   let mockIO: any;
   let mockProcessManager: any;
   let mockCloudLogging: any;
+  let mockLogSourceManager: any;
   let mockSocket: any;
 
   beforeEach(() => {
@@ -57,6 +59,11 @@ describe('LogStreamer', () => {
       isAvailable: vi.fn().mockReturnValue(true)
     };
 
+    mockLogSourceManager = {
+      getEnabledSources: vi.fn(() => []),
+      resolveLogPath: vi.fn((source: any) => source.path ?? '')
+    };
+
     // Mock Socket
     mockSocket = {
       id: 'test-socket-123',
@@ -73,7 +80,7 @@ describe('LogStreamer', () => {
     vi.mocked(logger.error).mockImplementation(() => {});
 
     // Create LogStreamer instance
-    logStreamer = new LogStreamer(mockIO, mockProcessManager, mockCloudLogging);
+    logStreamer = new LogStreamer(mockIO, mockProcessManager, mockCloudLogging, mockLogSourceManager);
   });
 
   afterEach(() => {
@@ -160,15 +167,15 @@ describe('LogStreamer', () => {
       const subscribeHandler = mockSocket.on.mock.calls.find(call => call[0] === 'subscribe_logs')[1];
       
       // When: Subscribing to logs
-      subscribeHandler('backend');
+      subscribeHandler(LOCAL_SERVICE);
 
       // Then: Socket joins log room and receives history
-      expect(mockSocket.join).toHaveBeenCalledWith('logs:backend');
+      expect(mockSocket.join).toHaveBeenCalledWith(`logs:${LOCAL_SERVICE}`);
       expect(mockSocket.emit).toHaveBeenCalledWith('log_history', expect.any(Object));
       expect(logger.info).toHaveBeenCalledWith({
         category: 'process',
         action: 'client_socket_id_subscribed_to_logs_for_servicenam',
-        message: 'Client test-socket-123 subscribed to logs for backend'
+        message: `Client test-socket-123 subscribed to logs for ${LOCAL_SERVICE}`
       });
     });
 
@@ -177,14 +184,14 @@ describe('LogStreamer', () => {
       const unsubscribeHandler = mockSocket.on.mock.calls.find(call => call[0] === 'unsubscribe_logs')[1];
       
       // When: Unsubscribing from logs
-      unsubscribeHandler('backend');
+      unsubscribeHandler(LOCAL_SERVICE);
 
       // Then: Socket leaves log room
-      expect(mockSocket.leave).toHaveBeenCalledWith('logs:backend');
+      expect(mockSocket.leave).toHaveBeenCalledWith(`logs:${LOCAL_SERVICE}`);
       expect(logger.info).toHaveBeenCalledWith({
         category: 'process',
         action: 'client_socket_id_unsubscribed_from_logs_for_servic',
-        message: 'Client test-socket-123 unsubscribed from logs for backend'
+        message: `Client test-socket-123 unsubscribed from logs for ${LOCAL_SERVICE}`
       });
     });
 
@@ -193,7 +200,7 @@ describe('LogStreamer', () => {
       const historyHandler = mockSocket.on.mock.calls.find(call => call[0] === 'get_history')[1];
       
       // When: Requesting history
-      historyHandler({ serviceName: 'backend', lines: 50 });
+      historyHandler({ serviceName: LOCAL_SERVICE, lines: 50 });
 
       // Then: History is sent
       expect(mockSocket.emit).toHaveBeenCalledWith('log_history', expect.any(Object));
@@ -223,10 +230,10 @@ describe('LogStreamer', () => {
       const statusHandler = mockSocket.on.mock.calls.find(call => call[0] === 'get_service_status')[1];
       
       // When: Requesting service status
-      statusHandler('backend');
+      statusHandler(LOCAL_SERVICE);
 
       // Then: Status is sent
-      expect(mockProcessManager.getServiceStatus).toHaveBeenCalledWith('backend');
+      expect(mockProcessManager.getServiceStatus).toHaveBeenCalledWith(LOCAL_SERVICE);
       expect(mockSocket.emit).toHaveBeenCalledWith('service_status', { status: 'running' });
     });
 
@@ -365,10 +372,10 @@ describe('LogStreamer', () => {
       const fileSubscribeHandler = mockSocket.on.mock.calls.find(call => call[0] === 'subscribe_file_logs')[1];
       
       // When: Subscribing to file logs
-      fileSubscribeHandler({ service: 'backend' });
+      fileSubscribeHandler({ service: LOCAL_SERVICE });
 
       // Then: Socket joins room and receives history
-      expect(mockSocket.join).toHaveBeenCalledWith('logs:backend');
+      expect(mockSocket.join).toHaveBeenCalledWith(`logs:${LOCAL_SERVICE}`);
       expect(mockSocket.emit).toHaveBeenCalledWith('file_log_history', expect.any(Object));
     });
 
@@ -377,10 +384,10 @@ describe('LogStreamer', () => {
       const fileUnsubscribeHandler = mockSocket.on.mock.calls.find(call => call[0] === 'unsubscribe_file_logs')[1];
       
       // When: Unsubscribing from file logs
-      fileUnsubscribeHandler({ service: 'backend' });
+      fileUnsubscribeHandler({ service: LOCAL_SERVICE });
 
       // Then: Socket leaves room
-      expect(mockSocket.leave).toHaveBeenCalledWith('logs:backend');
+      expect(mockSocket.leave).toHaveBeenCalledWith(`logs:${LOCAL_SERVICE}`);
     });
 
     it('should handle file log history request', () => {
@@ -388,7 +395,7 @@ describe('LogStreamer', () => {
       const historyHandler = mockSocket.on.mock.calls.find(call => call[0] === 'get_file_log_history')[1];
       
       // When: Requesting file log history
-      historyHandler({ service: 'backend', lines: 50 });
+      historyHandler({ service: LOCAL_SERVICE, lines: 50 });
 
       // Then: History is sent
       expect(mockSocket.emit).toHaveBeenCalledWith('file_log_history', expect.any(Object));
@@ -424,7 +431,7 @@ describe('LogStreamer', () => {
       const subscribeHandler = mockSocket.on.mock.calls.find(call => call[0] === 'subscribe_logs')[1];
       
       // When: Subscribing to logs (which triggers conversion)
-      subscribeHandler('backend');
+      subscribeHandler(LOCAL_SERVICE);
 
       // Then: Conversion happens through the flow
       expect(mockSocket.emit).toHaveBeenCalledWith('log_history', expect.any(Object));
@@ -494,12 +501,12 @@ describe('LogStreamer', () => {
       const fileSubscribeHandler = mockSocket.on.mock.calls.find(call => call[0] === 'subscribe_file_logs')[1];
       
       // When: Subscribing to both log types
-      subscribeHandler('backend');
-      fileSubscribeHandler({ service: 'frontend' });
+      subscribeHandler(LOCAL_SERVICE);
+      fileSubscribeHandler({ service: 'frontend-dev' });
 
       // Then: Both subscriptions are handled
-      expect(mockSocket.join).toHaveBeenCalledWith('logs:backend');
-      expect(mockSocket.join).toHaveBeenCalledWith('logs:frontend');
+      expect(mockSocket.join).toHaveBeenCalledWith(`logs:${LOCAL_SERVICE}`);
+      expect(mockSocket.join).toHaveBeenCalledWith('logs:frontend-dev');
     });
   });
 });

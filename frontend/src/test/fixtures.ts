@@ -4,13 +4,7 @@ import type { Service, PortStatus, Script, ScriptExecution, ScriptExecutionSumma
 export const mockHealthCheckResponse: HealthCheckResponse = {
   status: 'healthy',
   timestamp: '2025-01-27T14:13:57.000Z',
-  services: {
-    backend: 'running',
-    frontend: 'running',
-    database: 'running'
-  },
-  uptime: 3600,
-  version: '1.0.0'
+  uptime: 3600
 };
 
 export const mockServices: Service[] = [

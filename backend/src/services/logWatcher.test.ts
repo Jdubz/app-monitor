@@ -79,7 +79,14 @@ describe('LogWatcher', () => {
       expect(logger.info).toHaveBeenCalledWith(
         expect.objectContaining({
           category: 'system',
-          action: 'log_discovery'
+          action: 'discovered_logs'
+        })
+      );
+      expect(logger.info).toHaveBeenCalledWith(
+        expect.objectContaining({
+          category: 'system',
+          action: 'initialized',
+          message: 'LogWatcher initialized'
         })
       );
     });
@@ -278,10 +285,12 @@ describe('LogWatcher', () => {
       // Then: Log is converted to structured format
       expect(structured).toEqual(expect.objectContaining({
         severity: 'INFO',
-        service: 'backend',
+        service: 'firebase-emulators',
         message: plainLog,
         environment: 'development'
       }));
+      const parsedTimestamp = new Date(structured.timestamp);
+      expect(Number.isNaN(parsedTimestamp.getTime())).toBe(false);
     });
 
     it('should detect ERROR severity', () => {
@@ -370,7 +379,7 @@ describe('LogWatcher', () => {
       logWatcher['broadcastLogEntry'](logEntry);
 
       // Then: Event is emitted to service-specific and all logs rooms
-      expect(mockTo).toHaveBeenCalledWith('logs:backend');
+      expect(mockTo).toHaveBeenCalledWith('logs:firebase-emulators');
       expect(mockTo).toHaveBeenCalledWith('logs:all');
     });
 
@@ -392,6 +401,48 @@ describe('LogWatcher', () => {
         category: 'log_format',
         action: 'invalid_format'
       }));
+    });
+
+    it('should normalize plain text logs, emit log_line events, and cache entries', () => {
+      const emitted: Record<string, Array<{ event: string; payload: any }>> = {};
+
+      const emitSpy = vi.spyOn(logWatcher['io'], 'emit').mockImplementation(() => logWatcher['io'] as unknown as any);
+      const toSpy = vi.spyOn(logWatcher['io'], 'to').mockImplementation((room: string) => ({
+        emit: (event: string, payload: unknown) => {
+          if (!emitted[room]) {
+            emitted[room] = [];
+          }
+          emitted[room].push({ event, payload });
+          return logWatcher['io'];
+        },
+      }) as unknown as any);
+
+      const plainLogLine = 'Worker container booted';
+      logWatcher['processLogLine'](plainLogLine, 'worker', '/logs/plain/worker.log');
+
+      toSpy.mockRestore();
+      emitSpy.mockRestore();
+
+      const serviceRoom = emitted['logs:job-finder-worker'];
+      expect(serviceRoom).toBeDefined();
+
+      const logLineEvent = serviceRoom?.find(entry => entry.event === 'log_line');
+      expect(logLineEvent).toBeDefined();
+      expect(logLineEvent?.payload).toEqual(expect.objectContaining({
+        service: 'job-finder-worker',
+        message: plainLogLine,
+      }));
+
+      mockFs.existsSync.mockReturnValue(false);
+      mockFs.readFileSync.mockClear();
+
+      const recentLogs = logWatcher.getRecentLogs('job-finder-worker', 5);
+      expect(recentLogs).toHaveLength(1);
+      expect(recentLogs[0]).toEqual(expect.objectContaining({
+        service: 'job-finder-worker',
+        message: plainLogLine,
+      }));
+      expect(mockFs.readFileSync).not.toHaveBeenCalled();
     });
   });
 

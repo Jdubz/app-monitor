@@ -1,7 +1,13 @@
 import { useMemo, useState, useCallback } from 'react';
-import { LogLine, LogLevel } from '../types/log.types';
+import { LogLevel } from '../types/log.types';
 
-export const useLogFilter = (logs: LogLine[]) => {
+interface FilterableLog {
+  service: string;
+  level: LogLevel;
+  message: string;
+}
+
+export const useLogFilter = <T extends FilterableLog>(logs: T[]) => {
   const [selectedServices, setSelectedServices] = useState<string[]>([]);
   const [selectedLevels, setSelectedLevels] = useState<LogLevel[]>(['INFO', 'WARN', 'ERROR', 'DEBUG']);
   const [searchText, setSearchText] = useState('');

@@ -2,6 +2,7 @@ import { Server as SocketIOServer, Socket } from 'socket.io';
 import { ProcessManager } from './processManager.js';
 import { CloudLogging, CloudLogsQuery } from './cloudLogging.js';
 import { LogWatcher, StructuredLogEntry } from './logWatcher.js';
+import { LogSourceManager } from './logSourceManager.js';
 import { logger } from '../utils/logger.js';
 
 // Local types for dev-monitor
@@ -29,11 +30,16 @@ export class LogStreamer {
   private logWatcher: LogWatcher;
   private logIdCounter = 0;
 
-  constructor(io: SocketIOServer, processManager: ProcessManager, cloudLogging: CloudLogging) {
+  constructor(
+    io: SocketIOServer,
+    processManager: ProcessManager,
+    cloudLogging: CloudLogging,
+    logSourceManager: LogSourceManager
+  ) {
     this.io = io;
     this.processManager = processManager;
     this.cloudLogging = cloudLogging;
-    this.logWatcher = new LogWatcher(io);
+    this.logWatcher = new LogWatcher(io, { logSourceManager });
 
     // Inject LogWatcher into ProcessManager for API access
     // Using type assertion as ProcessManager doesn't formally declare this property

@@ -78,6 +78,10 @@ interface DevBotsStatus {
   queueSize: number;
   activeTasks: number;
   uptime: number;
+  workerCount: number;
+  maxWorkers: number;
+  activeWorkerTypes: string[];
+  availableWorkerTypes: string[];
   tasks: {
     pending: Task[];
     active: Task[];
@@ -171,19 +175,23 @@ export const DevBotsPanel: React.FC<DevBotsPanelProps> = ({
       setLoading(true);
       console.log('[DevBotsPanel] Fetching status from /dev-bots/status');
       const [statusResponse, violationsResponse, cleanupResponse, agentsResponse, templatesResponse] = await Promise.all([
-        api.get('/dev-bots/status'),
-        api.get('/dev-bots/scope-violations').catch(() => ({ violations: [] })),
-        api.get('/dev-bots/cleanup-status').catch(() => ({ schedules: [], recentTasks: [], totalCleanupTasks: 0 })),
-        api.get('/dev-bots/agents').catch(() => ({ agents: [] })),
-        api.get('/dev-bots/templates').catch(() => ({ templates: [] }))
+        api.get<DevBotsStatus>('/dev-bots/status'),
+        api.get<{ violations: ScopeViolation[] }>('/dev-bots/scope-violations').catch(() => ({ violations: [] as ScopeViolation[] })),
+        api.get<CleanupStatus>('/dev-bots/cleanup-status').catch(() => ({
+          schedules: [],
+          recentTasks: [],
+          totalCleanupTasks: 0,
+        })),
+        api.get<{ agents: AgentPersonality[] }>('/dev-bots/agents').catch(() => ({ agents: [] as AgentPersonality[] })),
+        api.get<{ templates: TaskTemplate[] }>('/dev-bots/templates').catch(() => ({ templates: [] as TaskTemplate[] })),
       ]);
 
       console.log('[DevBotsPanel] Status response:', statusResponse);
       setStatus(statusResponse);
-      setScopeViolations(violationsResponse.violations || []);
+      setScopeViolations(violationsResponse.violations ?? []);
       setCleanupStatus(cleanupResponse);
-      setAgents(agentsResponse.agents || []);
-      setTemplates(templatesResponse.templates || []);
+      setAgents(agentsResponse.agents ?? []);
+      setTemplates(templatesResponse.templates ?? []);
       setError(null);
       if (onStatusChange) {
         onStatusChange(statusResponse);

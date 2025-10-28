@@ -36,7 +36,7 @@ export let scriptExecutionHistory: ScriptExecutionHistory;
 export let taskBridge: TaskBridge;
 export let logSourceManager: LogSourceManager;
 
-export function createApp() {
+export async function createApp() {
   const app = express();
   const httpServer = createServer(app);
 
@@ -48,14 +48,16 @@ export function createApp() {
   
   // Initialize LogSourceManager and load configuration
   logSourceManager = new LogSourceManager();
-  logSourceManager.loadConfig().catch((error) => {
+  try {
+    await logSourceManager.loadConfig();
+  } catch (error) {
     logger.error({
       category: 'system',
       action: 'log_source_manager_init_failed',
       message: 'Failed to initialize LogSourceManager',
       error,
     });
-  });
+  }
 
   // Setup Socket.IO with type-safe events
   const io = new SocketIOServer<
@@ -75,7 +77,7 @@ export function createApp() {
   });
 
   // Initialize LogStreamer with processManager and cloudLogging from routes
-  logStreamer = new LogStreamer(io, processManager, cloudLogging);
+  logStreamer = new LogStreamer(io, processManager, cloudLogging, logSourceManager);
 
   // Initialize ConnectionManager
   connectionManager = new ConnectionManager();

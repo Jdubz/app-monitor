@@ -12,6 +12,14 @@ interface PanelState {
 const STORAGE_KEY = 'app-monitor-panels';
 const MAX_PANELS = 6;
 
+const LOG_SOURCE_TO_SERVICE: Record<string, LocalService> = {
+  'app-monitor-backend': 'dev-monitor-backend',
+  'app-monitor-frontend': 'frontend-dev',
+  'job-finder-backend': 'firebase-emulators',
+  'job-finder-frontend': 'frontend-dev',
+  'job-finder-worker': 'job-finder-worker',
+};
+
 const MinimalPanelContainer: React.FC = () => {
   const { getLogsForService, isConnected, subscribeToService } = useLogContext();
   const [panels, setPanels] = useState<PanelState[]>([{ id: '1', source: null }]);
@@ -55,7 +63,9 @@ const MinimalPanelContainer: React.FC = () => {
       try {
         const logSources = await getLogSources();
         // Extract service names and deduplicate (multiple files may map to same service)
-        const serviceNames = logSources.map(source => source.id as LocalService);
+        const serviceNames = logSources
+          .map(source => LOG_SOURCE_TO_SERVICE[source.id])
+          .filter((service): service is LocalService => Boolean(service));
         const uniqueServiceNames = Array.from(new Set(serviceNames));
         setAvailableSources(uniqueServiceNames);
       } catch (error) {

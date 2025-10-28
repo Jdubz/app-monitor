@@ -83,8 +83,8 @@ const ServiceGrid: React.FC = () => {
     padding: '20px',
   };
 
-  // Service order: firebase-emulators, backend-functions, frontend-dev, python-worker
-  const serviceOrder = ['firebase-emulators', 'backend-functions', 'frontend-dev', 'python-worker'];
+  // Service order: firebase-emulators, job-finder-backend, frontend-dev, job-finder-worker
+  const serviceOrder = ['firebase-emulators', 'job-finder-backend', 'frontend-dev', 'job-finder-worker'];
   const sortedServices = [...serviceArray].sort((a, b) => {
     const aIndex = serviceOrder.indexOf(a.name);
     const bIndex = serviceOrder.indexOf(b.name);

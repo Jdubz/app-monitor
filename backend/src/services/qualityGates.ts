@@ -111,7 +111,11 @@ export class QualityGateValidator extends EventEmitter {
       timeout: 180000 // 3 minutes
     });
 
-    logger.info('QualityGateValidator: Default configuration initialized');
+    logger.info({
+      category: 'quality-gates',
+      action: 'default_config_initialized',
+      message: 'Quality gate default configuration initialized'
+    });
   }
 
   /**
@@ -158,7 +162,11 @@ export class QualityGateValidator extends EventEmitter {
             result = await this.runBuildGate(workspacePath, project, config);
             break;
           default:
-            logger.warn(`Unknown gate: ${gateKey}`);
+            logger.warn({
+              category: 'quality-gates',
+              action: 'unknown_gate_encountered',
+              message: `Unknown quality gate configured: ${gateKey}`
+            });
             continue;
         }
 
@@ -587,9 +595,17 @@ export class QualityGateValidator extends EventEmitter {
     const existing = this.defaultConfig.get(gate.toLowerCase());
     if (existing) {
       this.defaultConfig.set(gate.toLowerCase(), { ...existing, ...config });
-      logger.info(`QualityGateValidator: Updated config for gate ${gate}`);
+      logger.info({
+        category: 'quality-gates',
+        action: 'gate_configuration_updated',
+        message: `Updated configuration for gate ${gate}`
+      });
     } else {
-      logger.warn(`QualityGateValidator: Gate ${gate} not found`);
+      logger.warn({
+        category: 'quality-gates',
+        action: 'gate_not_found',
+        message: `Attempted to update missing gate ${gate}`
+      });
     }
   }
 

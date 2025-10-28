@@ -1,12 +1,12 @@
 import React from 'react';
-import { LogLevel } from '../types/log.types';
+import { LogLevel, LocalService } from '../types/log.types';
 
 interface LogFiltersProps {
-  availableServices: string[];
-  selectedServices: string[];
+  availableServices: LocalService[];
+  selectedServices: LocalService[];
   selectedLevels: LogLevel[];
   searchText: string;
-  onToggleService: (service: string) => void;
+  onToggleService: (service: LocalService) => void;
   onToggleLevel: (level: LogLevel) => void;
   onSearchChange: (text: string) => void;
   onSelectAllServices: () => void;

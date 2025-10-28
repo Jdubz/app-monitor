@@ -58,12 +58,22 @@ export interface ClaudeUsageSummary {
 }
 
 // Claude pricing per 1M tokens (as of Oct 2025)
-const CLAUDE_PRICING = {
-  'claude-sonnet-4-5-20250929': { input: 3.00, output: 15.00 },
-  'claude-3-5-sonnet-20241022': { input: 3.00, output: 15.00 },
-  'claude-3-5-haiku-20241022': { input: 0.80, output: 4.00 },
-  'claude-3-opus-20240229': { input: 15.00, output: 75.00 },
-  default: { input: 3.00, output: 15.00 } // Default to Sonnet pricing
+interface ClaudePricingTier {
+  input: number;
+  output: number;
+}
+
+const DEFAULT_PRICING: ClaudePricingTier = { input: 3.0, output: 15.0 };
+
+const CLAUDE_PRICING = new Map<string, ClaudePricingTier>([
+  ['claude-sonnet-4-5-20250929', { input: 3.0, output: 15.0 }],
+  ['claude-3-5-sonnet-20241022', { input: 3.0, output: 15.0 }],
+  ['claude-3-5-haiku-20241022', { input: 0.8, output: 4.0 }],
+  ['claude-3-opus-20240229', { input: 15.0, output: 75.0 }],
+]);
+
+const getPricingForModel = (model: string): ClaudePricingTier => {
+  return CLAUDE_PRICING.get(model) ?? DEFAULT_PRICING;
 };
 
 export class ClaudeLogParser {
@@ -211,7 +221,7 @@ export class ClaudeLogParser {
       summary.modelBreakdown[entry.model].requestCount += 1;
 
       // Calculate cost
-      const pricing = CLAUDE_PRICING[entry.model] || CLAUDE_PRICING.default;
+      const pricing = getPricingForModel(entry.model);
       const inputCost = (entry.usage.totalInputTokens / 1_000_000) * pricing.input;
       const outputCost = (entry.usage.totalOutputTokens / 1_000_000) * pricing.output;
       summary.estimatedCost += inputCost + outputCost;
@@ -284,7 +294,7 @@ export class ClaudeLogParser {
     ];
 
     for (const [model, stats] of Object.entries(summary.modelBreakdown)) {
-      const pricing = CLAUDE_PRICING[model] || CLAUDE_PRICING.default;
+      const pricing = getPricingForModel(model);
       const cost = (stats.inputTokens / 1_000_000) * pricing.input +
                    (stats.outputTokens / 1_000_000) * pricing.output;
 

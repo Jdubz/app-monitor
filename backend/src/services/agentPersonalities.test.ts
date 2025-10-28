@@ -249,7 +249,11 @@ describe('AgentPersonalityManager', () => {
       const instructions = manager.getOnboardingInstructions(agentId);
 
       // Then: Instructions are returned
-      expect(instructions).toBeDefined();
+      expect(instructions).not.toBeNull();
+      if (!instructions) {
+        throw new Error('Expected onboarding instructions for backend-specialist');
+      }
+
       expect(instructions.requiredReading).toBeDefined();
       expect(instructions.setupSteps).toBeDefined();
       expect(instructions.validationChecks).toBeDefined();
@@ -279,7 +283,11 @@ describe('AgentPersonalityManager', () => {
       const preferences = manager.getAgentPreferences(agentId);
 
       // Then: Preferences are returned
-      expect(preferences).toBeDefined();
+      expect(preferences).not.toBeNull();
+      if (!preferences) {
+        throw new Error('Expected preferences for backend-specialist');
+      }
+
       expect(preferences.preferredTypes).toBeDefined();
       expect(preferences.avoidedTypes).toBeDefined();
       expect(preferences.complexityRange).toBeDefined();

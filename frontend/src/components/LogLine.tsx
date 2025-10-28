@@ -41,8 +41,9 @@ const LogLine: React.FC<LogLineProps> = memo(({ log, searchText, showMetadata = 
     const colors: Record<string, string> = {
       'firebase-emulators': '#FFA500',
       'frontend-dev': '#61DAFB',
-      'backend-functions': '#68A063',
-      'python-worker': '#3776AB',
+      'job-finder-worker': '#3776AB',
+      'dev-monitor-backend': '#00D9FF',
+      'all': '#6c757d',
     };
     return colors[service] || '#6c757d';
   };
