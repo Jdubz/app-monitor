@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import styles from './TabNav.module.css';
 
-export type TabType = 'local' | 'scripts' | 'staging' | 'production' | 'dev-bots';
+export type TabType = 'local' | 'scripts' | 'deployed' | 'dev-bots';
 
 interface Tab {
   id: TabType;
@@ -12,8 +12,7 @@ interface Tab {
 const tabs: Tab[] = [
   { id: 'local', label: 'Local Development', path: '/local' },
   { id: 'scripts', label: 'Scripts', path: '/scripts' },
-  { id: 'staging', label: 'Staging', path: '/staging' },
-  { id: 'production', label: 'Production', path: '/production' },
+  { id: 'deployed', label: 'Deployed Services', path: '/deployed' },
   { id: 'dev-bots', label: 'Dev-Bots', path: '/dev-bots' },
 ];
 
