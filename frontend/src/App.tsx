@@ -5,7 +5,7 @@ import { getEnvironments } from './services/api';
 import { Environment } from './types/log.types';
 import { LogProvider } from './contexts/LogContext';
 import { Header, MainLayout, TabNav, TabContent } from './components/layout';
-import { LocalTab, ScriptsTab, EnvironmentTab, SystemHealthTab, DevBotsTab } from './components/tabs';
+import { LocalTab, ScriptsTab, EnvironmentTab, DevBotsTab } from './components/tabs';
 import { ErrorBoundary, LoadingSpinner, InlineError } from './components/common';
 import './App.css';
 
@@ -61,7 +61,6 @@ function AppContent() {
               <Route path="/scripts" element={<ScriptsTab socket={socket} />} />
               <Route path="/staging" element={<EnvironmentTab socket={socket} environment="staging" environments={environments} />} />
               <Route path="/production" element={<EnvironmentTab socket={socket} environment="production" environments={environments} />} />
-              <Route path="/health" element={<SystemHealthTab />} />
               <Route path="/dev-bots" element={<DevBotsTab socket={socket} />} />
               <Route path="*" element={<Navigate to="/local" replace />} />
             </Routes>
