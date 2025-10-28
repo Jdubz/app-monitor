@@ -118,12 +118,6 @@ export const environments: Record<string, EnvironmentConfig> = {
     projectId: 'static-sites-257923',
     services: [
       {
-        name: 'manageJobQueue-staging',
-        displayName: 'Job Queue (Staging)',
-        description: 'Queue processing functions',
-        logFilter: 'resource.type="cloud_function" resource.labels.function_name="manageJobQueue-staging"',
-      },
-      {
         name: 'manageGenerator-staging',
         displayName: 'Generator (Staging)',
         description: 'Content generator functions',
@@ -149,12 +143,6 @@ export const environments: Record<string, EnvironmentConfig> = {
     displayName: 'Production',
     projectId: process.env.PROD_PROJECT_ID || 'static-sites-257923',
     services: [
-      {
-        name: 'manageJobQueue',
-        displayName: 'Job Queue (Production)',
-        description: 'Queue processing functions',
-        logFilter: 'resource.type="cloud_function" resource.labels.function_name="manageJobQueue"',
-      },
       {
         name: 'manageGenerator',
         displayName: 'Generator (Production)',
