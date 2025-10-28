@@ -30,8 +30,12 @@ describe('CloudPanelContainer', () => {
       off: vi.fn(),
     };
 
-    // Mock environments
+    // Mock environments (including local which should be filtered out)
     mockEnvironments = {
+      local: {
+        projectId: 'local',
+        name: 'Local',
+      },
       staging: {
         projectId: 'test-staging',
         name: 'Staging',
@@ -71,7 +75,7 @@ describe('CloudPanelContainer', () => {
   });
 
   describe('Environment Selector', () => {
-    it('should render environment selector with all environments', async () => {
+    it('should render environment selector with only deployed environments (excluding local)', async () => {
       render(
         <CloudPanelContainer
           socket={mockSocket as Socket}
@@ -88,9 +92,11 @@ describe('CloudPanelContainer', () => {
 
         if (envSelect) {
           const options = Array.from(envSelect.querySelectorAll('option'));
-          expect(options).toHaveLength(2);
+          expect(options).toHaveLength(2); // Only staging and production, not local
           expect(options[0].textContent).toBe('Staging - All');
           expect(options[1].textContent).toBe('Production - All');
+          // Verify local is NOT in the list
+          expect(options.find(opt => opt.textContent?.includes('Local'))).toBeUndefined();
         }
       });
     });
@@ -176,7 +182,7 @@ describe('CloudPanelContainer', () => {
   });
 
   describe('Service Selector', () => {
-    it('should fetch services for all environments on mount', async () => {
+    it('should fetch services for only deployed environments on mount (excluding local)', async () => {
       render(
         <CloudPanelContainer
           socket={mockSocket as Socket}
@@ -187,6 +193,8 @@ describe('CloudPanelContainer', () => {
       await waitFor(() => {
         expect(getEnvironmentServices).toHaveBeenCalledWith('staging');
         expect(getEnvironmentServices).toHaveBeenCalledWith('production');
+        // Verify local is NOT fetched
+        expect(getEnvironmentServices).not.toHaveBeenCalledWith('local');
       });
     });
 

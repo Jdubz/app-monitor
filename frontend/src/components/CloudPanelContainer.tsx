@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Socket } from 'socket.io-client';
 import { useCloudLogs } from '../hooks/useCloudLogs';
 import { useLogFilter } from '../hooks/useLogFilter';
@@ -25,8 +25,20 @@ const CloudPanelContainer: React.FC<CloudPanelContainerProps> = ({
   socket,
   environments
 }) => {
-  // Default to staging or first available environment
-  const defaultEnvironment = environments.staging ? 'staging' : Object.keys(environments)[0] || 'staging';
+  // Filter out local environment - only show deployed environments
+  const deployedEnvironments = useMemo(() => {
+    return Object.keys(environments)
+      .filter(key => key !== 'local')
+      .reduce((acc, key) => {
+        acc[key] = environments[key];
+        return acc;
+      }, {} as Record<string, import('../types/log.types').Environment>);
+  }, [environments]);
+
+  // Default to staging or first available deployed environment
+  const defaultEnvironment = useMemo(() => {
+    return deployedEnvironments.staging ? 'staging' : Object.keys(deployedEnvironments)[0] || 'staging';
+  }, [deployedEnvironments]);
 
   const [panels, setPanels] = useState<CloudPanel[]>([
     {
@@ -75,12 +87,12 @@ const CloudPanelContainer: React.FC<CloudPanelContainerProps> = ({
     }
   }, [panels, layoutType]);
 
-  // Fetch services for all environments
+  // Fetch services for all deployed environments
   useEffect(() => {
     const fetchAllServices = async () => {
       try {
-        // Fetch services from all available environments
-        const allServicesPromises = Object.keys(environments).map(async (env) => {
+        // Fetch services from all deployed environments (excluding local)
+        const allServicesPromises = Object.keys(deployedEnvironments).map(async (env) => {
           const envServices = await getEnvironmentServices(env);
           return envServices.map(svc => ({ ...svc, environment: env }));
         });
@@ -94,10 +106,10 @@ const CloudPanelContainer: React.FC<CloudPanelContainerProps> = ({
       }
     };
 
-    if (Object.keys(environments).length > 0) {
+    if (Object.keys(deployedEnvironments).length > 0) {
       fetchAllServices();
     }
-  }, [environments]);
+  }, [deployedEnvironments]);
 
   // Auto-adjust layout when adding panels
   useEffect(() => {
@@ -174,7 +186,7 @@ const CloudPanelContainer: React.FC<CloudPanelContainerProps> = ({
               key={panel.id}
               panel={panel}
               socket={socket}
-              environments={environments}
+              environments={deployedEnvironments}
               services={services}
               isLoadingServices={isLoadingServices}
               onRemove={() => removePanel(panel.id)}
