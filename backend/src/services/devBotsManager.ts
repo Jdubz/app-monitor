@@ -1489,6 +1489,9 @@ export class DevBotsManager extends EventEmitter {
         timestamp: new Date().toISOString()
       };
       
+      // Store the failed result in the task
+      task.qualityValidation = failedResult;
+      
       return failedResult;
     }
   }
@@ -1517,7 +1520,6 @@ export class DevBotsManager extends EventEmitter {
 
     if (shouldPush) {
       qualityValidation = await this.runQualityGateValidation(task, workspacePath);
-      task.qualityValidation = qualityValidation;
       shouldPush = qualityValidation.passed;
     }
 
