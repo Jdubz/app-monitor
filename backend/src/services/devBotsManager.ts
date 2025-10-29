@@ -1477,7 +1477,22 @@ export class DevBotsManager extends EventEmitter {
         message: `Error running quality gate validation for task ${task.id}`,
         error
       });
-      throw error;
+      
+      // Return a failed validation result instead of throwing
+      // to maintain consistent return type behavior
+      const failedResult: QualityValidationResult = {
+        taskId: task.id,
+        passed: false,
+        overallScore: 0,
+        gates: [],
+        duration: 0,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Store the failed result in the task
+      task.qualityValidation = failedResult;
+      
+      return failedResult;
     }
   }
 
@@ -1504,22 +1519,8 @@ export class DevBotsManager extends EventEmitter {
     let shouldPush = exitCode === 0;
 
     if (shouldPush) {
-      try {
-        qualityValidation = await this.runQualityGateValidation(task, workspacePath);
-        task.qualityValidation = qualityValidation;
-        shouldPush = qualityValidation.passed;
-      } catch (error) {
-        shouldPush = false;
-        logger.error({
-          category: 'quality-gates',
-          action: 'validation_error',
-          message: `Error running quality gate validation for task ${task.id}`,
-          error
-        });
-        task.error = `${task.error || ''}\nQuality gate validation failed to execute: ${
-          error instanceof Error ? error.message : String(error)
-        }`;
-      }
+      qualityValidation = await this.runQualityGateValidation(task, workspacePath);
+      shouldPush = qualityValidation.passed;
     }
 
     let finalStatus: 'completed' | 'failed' = exitCode === 0 ? 'completed' : 'failed';
