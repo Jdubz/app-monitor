@@ -1477,7 +1477,19 @@ export class DevBotsManager extends EventEmitter {
         message: `Error running quality gate validation for task ${task.id}`,
         error
       });
-      throw error;
+      
+      // Return a failed validation result instead of throwing
+      // to maintain consistent return type behavior
+      const failedResult: QualityValidationResult = {
+        taskId: task.id,
+        passed: false,
+        overallScore: 0,
+        gates: [],
+        duration: 0,
+        timestamp: new Date().toISOString()
+      };
+      
+      return failedResult;
     }
   }
 
