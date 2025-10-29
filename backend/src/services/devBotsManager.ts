@@ -1516,22 +1516,9 @@ export class DevBotsManager extends EventEmitter {
     let shouldPush = exitCode === 0;
 
     if (shouldPush) {
-      try {
-        qualityValidation = await this.runQualityGateValidation(task, workspacePath);
-        task.qualityValidation = qualityValidation;
-        shouldPush = qualityValidation.passed;
-      } catch (error) {
-        shouldPush = false;
-        logger.error({
-          category: 'quality-gates',
-          action: 'validation_error',
-          message: `Error running quality gate validation for task ${task.id}`,
-          error
-        });
-        task.error = `${task.error || ''}\nQuality gate validation failed to execute: ${
-          error instanceof Error ? error.message : String(error)
-        }`;
-      }
+      qualityValidation = await this.runQualityGateValidation(task, workspacePath);
+      task.qualityValidation = qualityValidation;
+      shouldPush = qualityValidation.passed;
     }
 
     let finalStatus: 'completed' | 'failed' = exitCode === 0 ? 'completed' : 'failed';
