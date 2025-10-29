@@ -1,7 +1,8 @@
 import { EventEmitter } from 'events';
+import * as fs from 'fs';
+import * as path from 'path';
 import { logger } from '../utils/logger.js';
 import { ProcessManager, ProcessInfo } from './processManager.js';
-import * as path from 'path';
 import Docker from 'dockerode';
 import { TaskPersistence, TaskStorageConfig } from './taskPersistence.js';
 import { AgentPersonalityManager, AgentPersonality } from './agentPersonalities.js';
@@ -1070,6 +1071,11 @@ export class DevBotsManager extends EventEmitter {
     const containerName = `dev-bot-${workerId}`;
     
     try {
+      const hostLogsDir = this.getHostLogsDir();
+      if (!fs.existsSync(hostLogsDir)) {
+        fs.mkdirSync(hostLogsDir, { recursive: true });
+      }
+
       const container = await this.docker.createContainer({
         Image: this.getAgentDockerImage(agent),
         name: containerName,
@@ -1090,7 +1096,7 @@ export class DevBotsManager extends EventEmitter {
           Binds: [
             `${process.cwd()}:/app:ro`,
             `${workspace.hostPath}:/workspace:rw`,
-            `${process.cwd()}/logs:/app/logs:rw`
+            `${hostLogsDir}:/app/logs:rw`
           ]
         },
         Labels: {
@@ -1143,6 +1149,13 @@ export class DevBotsManager extends EventEmitter {
     // Use the custom dev-bot image for all agents
     // This image has Claude CLI and all required tools pre-installed
     return DockerManager.getDevBotImage();
+  }
+
+  /**
+   * Resolve the host directory used for worker log files
+   */
+  private getHostLogsDir(): string {
+    return path.resolve(process.cwd(), '../../logs');
   }
 
   /**
@@ -1314,7 +1327,7 @@ export class DevBotsManager extends EventEmitter {
       const path = await import('path');
       
       // Ensure logs directory exists (use root logs directory)
-      const logsDir = path.join(process.cwd(), '../../logs');
+      const logsDir = this.getHostLogsDir();
       if (!fs.existsSync(logsDir)) {
         fs.mkdirSync(logsDir, { recursive: true });
         logger.info({
@@ -1399,7 +1412,7 @@ export class DevBotsManager extends EventEmitter {
    * Run quality gate validation on a completed task
    * This is async and runs in the background - it doesn't block task completion
    */
-  private async runQualityGateValidation(task: Task, workspacePath: string): Promise<void> {
+  private async runQualityGateValidation(task: Task, workspacePath: string): Promise<QualityValidationResult> {
     try {
       const qualityGates = getQualityGateValidator();
 
@@ -1455,6 +1468,8 @@ export class DevBotsManager extends EventEmitter {
         // TODO: Create auto-healing task
         // this.createHealingTask(task, validationResult);
       }
+
+      return validationResult;
     } catch (error) {
       logger.error({
         category: 'quality-gates',
@@ -1462,6 +1477,22 @@ export class DevBotsManager extends EventEmitter {
         message: `Error running quality gate validation for task ${task.id}`,
         error
       });
+      
+      // Return a failed validation result instead of throwing
+      // to maintain consistent return type behavior
+      const failedResult: QualityValidationResult = {
+        taskId: task.id,
+        passed: false,
+        overallScore: 0,
+        gates: [],
+        duration: 0,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Store the failed result in the task
+      task.qualityValidation = failedResult;
+      
+      return failedResult;
     }
   }
 
@@ -1488,22 +1519,8 @@ export class DevBotsManager extends EventEmitter {
     let shouldPush = exitCode === 0;
 
     if (shouldPush) {
-      try {
-        qualityValidation = await this.runQualityGateValidation(task, workspacePath);
-        task.qualityValidation = qualityValidation;
-        shouldPush = qualityValidation.passed;
-      } catch (error) {
-        shouldPush = false;
-        logger.error({
-          category: 'quality-gates',
-          action: 'validation_error',
-          message: `Error running quality gate validation for task ${task.id}`,
-          error
-        });
-        task.error = `${task.error || ''}\nQuality gate validation failed to execute: ${
-          error instanceof Error ? error.message : String(error)
-        }`;
-      }
+      qualityValidation = await this.runQualityGateValidation(task, workspacePath);
+      shouldPush = qualityValidation.passed;
     }
 
     let finalStatus: 'completed' | 'failed' = exitCode === 0 ? 'completed' : 'failed';

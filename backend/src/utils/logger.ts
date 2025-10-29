@@ -32,20 +32,39 @@ if (!fs.existsSync(LOGS_DIR)) {
 
 type LogLevel = 'debug' | 'info' | 'warning' | 'error';
 type LogSeverity = 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR';
-type LogCategory = 'system' | 'api' | 'process' | 'logs' | 'scripts' | 'cloud' | 'socket' | 'docker';
+type LogCategory =
+  | 'api'
+  | 'build'
+  | 'cloud'
+  | 'database'
+  | 'docker'
+  | 'lint_error'
+  | 'log_format'
+  | 'logs'
+  | 'merge_conflict'
+  | 'process'
+  | 'quality'
+  | 'quality-gates'
+  | 'scripts'
+  | 'socket'
+  | 'system'
+  | 'test'
+  | 'test_failure'
+  | 'token-tracking'
+  | 'utility'
+  | 'workspace';
 
 interface LogEntry {
   category: LogCategory;
   action: string;
   message: string;
   details?: Record<string, unknown>;
-}
-
-interface LogEntryWithError extends LogEntry {
   error?: Error | unknown;
 }
 
-interface FormattedLogEntry extends LogEntry {
+type LogEntryOverrides = Partial<Omit<LogEntry, 'message'>>;
+
+interface FormattedLogEntry extends Omit<LogEntry, 'error'> {
   error?: {
     type: string;
     message: string;
@@ -103,13 +122,18 @@ class Logger {
     };
   }
 
-  private writeLog(level: LogLevel, entry: FormattedLogEntry): void {
+  private writeLog(level: LogLevel, entry: LogEntry): void {
+    const formattedEntry: FormattedLogEntry = {
+      ...entry,
+      error: entry.error ? this.formatError(entry.error) : undefined,
+    };
+
     const logOutput: LogOutput = {
       severity: this.getSeverity(level),
       timestamp: new Date().toISOString(),
       environment: process.env.NODE_ENV || 'development',
       service: 'dev-monitor-backend',
-      ...entry,
+      ...formattedEntry,
     };
 
     const consoleMethod = this.getConsoleMethod(level);
@@ -160,12 +184,30 @@ class Logger {
     this.writeLog('warning', entry);
   }
 
-  error(entry: LogEntryWithError): void {
-    const errorEntry: FormattedLogEntry = {
-      ...entry,
-      error: entry.error ? this.formatError(entry.error) : undefined,
-    };
-    this.writeLog('error', errorEntry);
+  error(entry: LogEntry): void;
+  error(message: string, error?: unknown, overrides?: LogEntryOverrides): void;
+  error(arg1: LogEntry | string, error?: unknown, overrides?: LogEntryOverrides): void {
+    let entry: LogEntry;
+
+    if (typeof arg1 === 'string') {
+      const {
+        category = 'system',
+        action = 'unstructured_error',
+        details,
+      } = overrides ?? {};
+
+      entry = {
+        category,
+        action,
+        message: arg1,
+        details,
+        error,
+      };
+    } else {
+      entry = arg1;
+    }
+
+    this.writeLog('error', entry);
   }
 }
 

@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "bash scripts/safe-dev.sh",
-    "build": "tsc",
+    "build": "tsc --project tsconfig.build.json",
     "start": "node dist/index.js",
     "test": "node safe-test-runner.cjs",
     "test:unit": "node safe-test-runner.cjs",
@@ -18,7 +18,8 @@
     "lint:fix": "eslint src --ext .ts --fix",
     "check": "node scripts/check-process.js && node scripts/check-port.js",
     "clean": "pkill -f 'nodemon.*app-monitor' 2>/dev/null || true",
-    "stop": "pkill -f 'nodemon.*app-monitor' 2>/dev/null || true"
+    "stop": "pkill -f 'nodemon.*app-monitor' 2>/dev/null || true",
+    "type-check": "tsc --project tsconfig.typecheck.json"
   },
   "keywords": [
     "express",

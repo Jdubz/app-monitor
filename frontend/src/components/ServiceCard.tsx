@@ -136,8 +136,8 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
         <StatusBadge status={service.status} />
       </div>
 
-      {/* Docker Container Status for python-worker */}
-      {service.name === 'python-worker' && service.dockerContainer && (
+      {/* Docker Container Status for job-finder-worker */}
+      {service.name === 'job-finder-worker' && service.dockerContainer && (
         <div style={{
           marginTop: theme.spacing.md,
           marginBottom: theme.spacing.md,
@@ -223,8 +223,8 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
         </div>
       )}
 
-      {/* Only show regular service controls for non-python-worker services */}
-      {service.name !== 'python-worker' && (
+      {/* Only show regular service controls for non job-finder-worker services */}
+      {service.name !== 'job-finder-worker' && (
         <ControlButtons
           service={service}
           onStart={onStart}

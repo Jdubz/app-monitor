@@ -73,6 +73,7 @@ vi.mock('../utils/logger.js');
 // 2. Refactor DevBotsManager to accept dependencies through constructor
 describe.skip('DevBotsManager Core Functionality', () => {
   let devBotsManager: DevBotsManager;
+  let managerInternals: any;
   let mockProcessManager: any;
   let mockTaskPersistence: any;
   let mockWorkspaceSyncManager: any;
@@ -122,10 +123,11 @@ describe.skip('DevBotsManager Core Functionality', () => {
 
     // Create DevBotsManager instance
     devBotsManager = new DevBotsManager(mockProcessManager);
+    managerInternals = devBotsManager as any;
 
     // Mock private methods to avoid filesystem operations
-    devBotsManager['initializeWorkerLogFile'] = vi.fn().mockResolvedValue(undefined);
-    devBotsManager['cleanupWorker'] = vi.fn().mockResolvedValue(undefined);
+    managerInternals.initializeWorkerLogFile = vi.fn().mockResolvedValue(undefined);
+    managerInternals.cleanupWorker = vi.fn().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -136,7 +138,7 @@ describe.skip('DevBotsManager Core Functionality', () => {
     it('should create task and assign to worker', async () => {
       // Given: Task is submitted
       // Mock worker availability
-      devBotsManager['workers'] = {
+      managerInternals.workers = {
         'worker-1': {
           id: 'worker-1',
           status: 'idle',

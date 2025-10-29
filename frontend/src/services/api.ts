@@ -228,8 +228,12 @@ export const api = {
   killPortProcess,
   handleApiError,
   // Add HTTP methods for components that need them
-  get: async (...args: Parameters<ApiClient['get']>) => (await getApiClient()).get(...args),
-  post: async (...args: Parameters<ApiClient['post']>) => (await getApiClient()).post(...args),
-  put: async (...args: Parameters<ApiClient['put']>) => (await getApiClient()).put(...args),
-  delete: async (...args: Parameters<ApiClient['delete']>) => (await getApiClient()).delete(...args),
+  get: async <T>(url: string, config?: Parameters<ApiClient['get']>[1]) =>
+    (await getApiClient()).get<T>(url, config),
+  post: async <T>(url: string, data?: Parameters<ApiClient['post']>[1], config?: Parameters<ApiClient['post']>[2]) =>
+    (await getApiClient()).post<T>(url, data, config),
+  put: async <T>(url: string, data?: Parameters<ApiClient['put']>[1], config?: Parameters<ApiClient['put']>[2]) =>
+    (await getApiClient()).put<T>(url, data, config),
+  delete: async <T>(url: string, config?: Parameters<ApiClient['delete']>[1]) =>
+    (await getApiClient()).delete<T>(url, config),
 };

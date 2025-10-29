@@ -33,16 +33,26 @@ describe('CloudPanelContainer', () => {
     // Mock environments (including local which should be filtered out)
     mockEnvironments = {
       local: {
+        name: 'local',
+        displayName: 'Local Development',
         projectId: 'local',
-        name: 'Local',
+        services: [],
       },
       staging: {
+        name: 'staging',
+        displayName: 'Staging',
         projectId: 'test-staging',
-        name: 'Staging',
+        services: [
+          { name: 'job-queue', displayName: 'Job Queue' },
+        ],
       },
       production: {
+        name: 'production',
+        displayName: 'Production',
         projectId: 'test-production',
-        name: 'Production',
+        services: [
+          { name: 'generator', displayName: 'Generator' },
+        ],
       },
     };
 

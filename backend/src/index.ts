@@ -14,7 +14,7 @@ process.on('unhandledRejection', (reason, promise) => {
   process.exit(1);
 });
 
-const server = createApp();
+const server = await createApp();
 
 server.listen(config.port, '0.0.0.0', () => {
   console.log(`🚀 Dev Monitor Backend running on http://0.0.0.0:${config.port}`);

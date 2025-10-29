@@ -11,6 +11,7 @@ describe('LogStreamer socket integration (in-process)', () => {
   let io: TestSocketIOServer;
   let processManager: ProcessManager;
   let cloudLogging: CloudLogging;
+  let logSourceManager: any;
   let logStreamer: LogStreamer;
 
   beforeEach(() => {
@@ -32,12 +33,17 @@ describe('LogStreamer socket integration (in-process)', () => {
       isAvailable: vi.fn().mockReturnValue(true),
     } as unknown as CloudLogging;
 
+    logSourceManager = {
+      getEnabledSources: vi.fn(() => []),
+      resolveLogPath: vi.fn((source: any) => source.path ?? '')
+    };
+
     vi.mocked(logger.info).mockImplementation(() => {});
     vi.mocked(logger.warn).mockImplementation(() => {});
     vi.mocked(logger.error).mockImplementation(() => {});
     vi.mocked(logger.debug).mockImplementation(() => {});
 
-    logStreamer = new LogStreamer(io as unknown as any, processManager, cloudLogging);
+    logStreamer = new LogStreamer(io as unknown as any, processManager, cloudLogging, logSourceManager);
   });
 
   it('sends initial status payloads when a client connects', () => {
@@ -74,11 +80,11 @@ describe('LogStreamer socket integration (in-process)', () => {
     const client = new TestClientSocket();
     io.connect(client);
 
-    await client.clientEmit('subscribe_logs', 'backend');
-    expect(client.rooms.has('logs:backend')).toBe(true);
+    await client.clientEmit('subscribe_logs', 'firebase-emulators');
+    expect(client.rooms.has('logs:firebase-emulators')).toBe(true);
 
-    await client.clientEmit('unsubscribe_logs', 'backend');
-    expect(client.rooms.has('logs:backend')).toBe(false);
+    await client.clientEmit('unsubscribe_logs', 'firebase-emulators');
+    expect(client.rooms.has('logs:firebase-emulators')).toBe(false);
   });
 
   it('returns log history when requested by the client', async () => {
@@ -87,15 +93,15 @@ describe('LogStreamer socket integration (in-process)', () => {
     client.clientOn('log_history', (payload) => histories.push(payload));
 
     const mockLogs = [
-      { service: 'backend', timestamp: Date.now(), level: 'INFO', message: 'Hello', raw: 'Hello' },
+      { service: 'firebase-emulators', timestamp: Date.now(), level: 'INFO', message: 'Hello', raw: 'Hello' },
     ];
     (logStreamer as any).logWatcher.getRecentLogs = vi.fn().mockReturnValue(mockLogs);
 
     io.connect(client);
-    await client.clientEmit('get_history', { serviceName: 'backend', lines: 5 });
+    await client.clientEmit('get_history', { serviceName: 'firebase-emulators', lines: 5 });
 
     expect(histories).toHaveLength(1);
-    expect(histories[0].serviceName).toBe('backend');
+    expect(histories[0].serviceName).toBe('firebase-emulators');
     expect(histories[0].logs).toHaveLength(1);
   });
 

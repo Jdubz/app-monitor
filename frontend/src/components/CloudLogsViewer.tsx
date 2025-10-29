@@ -1,5 +1,5 @@
 import React, { useRef, useEffect } from 'react';
-import { ParsedCloudLog, CloudLoggingStatus } from '../types/log.types';
+import { ParsedCloudLog, CloudLoggingStatus, LogLevel } from '../types/log.types';
 import LogLevelBadge from './LogLevelBadge';
 
 interface CloudLogsViewerProps {
@@ -8,10 +8,10 @@ interface CloudLogsViewerProps {
   error: string | null;
   cloudLoggingStatus: CloudLoggingStatus | null;
   searchText: string;
-  selectedLevels: string[];
+  selectedLevels: LogLevel[];
   showMetadata: boolean;
   onSearchChange: (text: string) => void;
-  onToggleLevel: (level: string) => void;
+  onToggleLevel: (level: LogLevel) => void;
   onSelectAllLevels: () => void;
   onClearAllLevels: () => void;
   onClearSearch: () => void;

@@ -17,13 +17,18 @@ import {
 export function sourceToServices(source: LogSource): LocalService[] {
   switch (source) {
     case 'local-all':
-      return ['firebase-emulators', 'frontend-dev', 'python-worker', 'dev-monitor-backend'];
+      return [
+        'firebase-emulators',
+        'frontend-dev',
+        'job-finder-worker' as LocalService,
+        'dev-monitor-backend',
+      ];
     case 'local-frontend':
       return ['frontend-dev'];
     case 'local-backend':
       return ['firebase-emulators'];
     case 'local-worker':
-      return ['python-worker'];
+      return ['job-finder-worker' as LocalService];
     case 'local-dev-monitor':
       return ['dev-monitor-backend'];
     // Cloud sources - not applicable for local filtering
@@ -104,10 +109,12 @@ export function getServiceDisplayName(service: LocalService): string {
   const displayNames: Record<LocalService, string> = {
     'firebase-emulators': 'Firebase Emulators',
     'frontend-dev': 'Frontend Dev',
-    'python-worker': 'Python Worker',
     'dev-monitor-backend': 'Dev Monitor Backend',
     'all': 'All Services',
   };
+  if (service === 'job-finder-worker') {
+    return 'Job Finder Worker';
+  }
   return displayNames[service] || service;
 }
 

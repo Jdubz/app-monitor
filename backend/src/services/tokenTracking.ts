@@ -91,7 +91,11 @@ export class TokenTrackingService extends EventEmitter {
       warningThreshold: 80
     });
 
-    logger.info('TokenTrackingService: Default budgets initialized');
+    logger.info({
+      category: 'token-tracking',
+      action: 'default_budgets_initialized',
+      message: 'Default token budgets initialized',
+    });
   }
 
   /**
@@ -99,9 +103,15 @@ export class TokenTrackingService extends EventEmitter {
    */
   setBudget(budget: TokenBudget): void {
     this.budgets.set(budget.provider, budget);
-    logger.info(`TokenTrackingService: Budget set for ${budget.provider}`, {
-      dailyLimit: budget.dailyLimit,
-      warningThreshold: budget.warningThreshold
+    logger.info({
+      category: 'token-tracking',
+      action: 'budget_updated',
+      message: `Budget set for provider ${budget.provider}`,
+      details: {
+        provider: budget.provider,
+        dailyLimit: budget.dailyLimit,
+        warningThreshold: budget.warningThreshold
+      }
     });
   }
 
@@ -128,13 +138,18 @@ export class TokenTrackingService extends EventEmitter {
     // Record in database
     this.db.recordTokenUsage(usage);
 
-    logger.debug('TokenTrackingService: Usage recorded', {
-      provider: usage.provider,
-      model: usage.model,
-      taskId: usage.taskId,
-      inputTokens: usage.inputTokens,
-      outputTokens: usage.outputTokens,
-      cost: usage.costEstimate
+    logger.debug({
+      category: 'token-tracking',
+      action: 'usage_recorded',
+      message: `Token usage recorded for task ${usage.taskId}`,
+      details: {
+        provider: usage.provider,
+        model: usage.model,
+        taskId: usage.taskId,
+        inputTokens: usage.inputTokens,
+        outputTokens: usage.outputTokens,
+        cost: usage.costEstimate
+      }
     });
 
     // Check if budget exceeded or warning threshold reached
@@ -147,7 +162,11 @@ export class TokenTrackingService extends EventEmitter {
   private calculateCost(provider: string, inputTokens: number, outputTokens: number): number {
     const budget = this.budgets.get(provider);
     if (!budget) {
-      logger.warn(`TokenTrackingService: No budget configured for ${provider}, cannot calculate cost`);
+      logger.warn({
+        category: 'token-tracking',
+        action: 'budget_missing',
+        message: `No budget configured for provider ${provider}; cost estimation unavailable`
+      });
       return 0;
     }
 
@@ -166,18 +185,28 @@ export class TokenTrackingService extends EventEmitter {
     // Emit warning if threshold reached
     if (summary.warningTriggered && !summary.limitExceeded) {
       this.emit('budget_warning', summary);
-      logger.warn(`TokenTrackingService: Budget warning for ${provider}`, {
-        percentUsed: summary.percentUsed,
-        threshold: this.budgets.get(provider)?.warningThreshold
+      logger.warn({
+        category: 'token-tracking',
+        action: 'budget_threshold_warning',
+        message: `Budget warning triggered for provider ${provider}`,
+        details: {
+          percentUsed: summary.percentUsed,
+          threshold: this.budgets.get(provider)?.warningThreshold
+        }
       });
     }
 
     // Emit stop signal if limit exceeded
     if (summary.limitExceeded) {
       this.emit('budget_exceeded', summary);
-      logger.error(`TokenTrackingService: Budget EXCEEDED for ${provider}`, {
-        totalTokens: summary.totalTokens,
-        limit: summary.budgetLimit
+      logger.error({
+        category: 'token-tracking',
+        action: 'budget_exceeded',
+        message: `Budget exceeded for provider ${provider}`,
+        details: {
+          totalTokens: summary.totalTokens,
+          limit: summary.budgetLimit
+        }
       });
     }
   }
@@ -251,7 +280,11 @@ export class TokenTrackingService extends EventEmitter {
   resetDailyTracking(): void {
     // Daily tracking is handled by database queries filtering by date
     // This method is for any in-memory resets if needed
-    logger.info('TokenTrackingService: Daily tracking reset (database queries by date)');
+    logger.info({
+      category: 'token-tracking',
+      action: 'daily_tracking_reset',
+      message: 'Daily token tracking statistics reset'
+    });
     this.emit('daily_reset');
   }
 }

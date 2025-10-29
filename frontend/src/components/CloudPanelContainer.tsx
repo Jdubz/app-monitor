@@ -352,7 +352,7 @@ const CloudPanelWrapper: React.FC<CloudPanelWrapperProps> = ({
 
         <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
           <button
-            onClick={refreshLogs}
+            onClick={() => refreshLogs()}
             disabled={isLoading}
             style={buttonStyle}
             title="Refresh logs"
@@ -361,7 +361,7 @@ const CloudPanelWrapper: React.FC<CloudPanelWrapperProps> = ({
           </button>
 
           <button
-            onClick={clearLogs}
+            onClick={() => clearLogs()}
             style={{ ...buttonStyle, backgroundColor: '#868e96' }}
             title="Clear logs"
           >

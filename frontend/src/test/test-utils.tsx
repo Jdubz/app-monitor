@@ -1,6 +1,6 @@
 import { ReactElement } from 'react';
 import { render, RenderOptions, waitFor } from '@testing-library/react';
-import { vi } from 'vitest';
+import { expect, vi } from 'vitest';
 import userEvent from '@testing-library/user-event';
 
 // Mock Socket.IO

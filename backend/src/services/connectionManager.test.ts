@@ -6,26 +6,29 @@
  */
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
+import type { Socket } from 'socket.io';
 import { ConnectionManager } from './connectionManager.js';
 import { logger } from '../utils/logger.js';
 
 // Mock dependencies
 vi.mock('../utils/logger.js');
 
+const createMockSocket = (id: string): Socket => ({
+  id,
+  on: vi.fn(),
+  emit: vi.fn(),
+  disconnect: vi.fn(),
+} as unknown as Socket);
+
 describe('ConnectionManager', () => {
   let connectionManager: ConnectionManager;
-  let mockSocket: any;
+  let mockSocket: Socket;
 
   beforeEach(() => {
     vi.clearAllMocks();
 
     // Mock Socket
-    mockSocket = {
-      id: 'test-socket-123',
-      on: vi.fn(),
-      emit: vi.fn(),
-      disconnect: vi.fn()
-    };
+    mockSocket = createMockSocket('test-socket-123');
 
     // Mock logger
     vi.mocked(logger.info).mockImplementation(() => {});
@@ -189,9 +192,8 @@ describe('ConnectionManager', () => {
 
     it('should get all connections', () => {
       // Given: Multiple registered connections
-      const socket1 = { id: 'socket-1', on: vi.fn(), emit: vi.fn(), disconnect: vi.fn() };
-      const socket2 = { id: 'socket-2', on: vi.fn(), emit: vi.fn(), disconnect: vi.fn() };
-
+      const socket1 = createMockSocket('socket-1');
+      const socket2 = createMockSocket('socket-2');
       connectionManager.register(socket1);
       connectionManager.register(socket2);
 
@@ -206,8 +208,8 @@ describe('ConnectionManager', () => {
 
     it('should get connection count', () => {
       // Given: Multiple registered connections
-      const socket1 = { id: 'socket-1', on: vi.fn(), emit: vi.fn(), disconnect: vi.fn() };
-      const socket2 = { id: 'socket-2', on: vi.fn(), emit: vi.fn(), disconnect: vi.fn() };
+      const socket1 = createMockSocket('socket-1');
+      const socket2 = createMockSocket('socket-2');
 
       connectionManager.register(socket1);
       connectionManager.register(socket2);
@@ -329,8 +331,8 @@ describe('ConnectionManager', () => {
   describe('Statistics', () => {
     it('should get connection statistics', () => {
       // Given: Multiple connections with different states
-      const socket1 = { id: 'socket-1', on: vi.fn(), emit: vi.fn(), disconnect: vi.fn() };
-      const socket2 = { id: 'socket-2', on: vi.fn(), emit: vi.fn(), disconnect: vi.fn() };
+      const socket1 = createMockSocket('socket-1');
+      const socket2 = createMockSocket('socket-2');
 
       connectionManager.register(socket1);
       connectionManager.register(socket2);
@@ -375,7 +377,7 @@ describe('ConnectionManager', () => {
       // When: Reconnecting (simulating disconnect and reconnect)
       connectionManager.unregister('test-socket-123', 'client_disconnect');
       
-      const newSocket = { id: 'test-socket-123', on: vi.fn(), emit: vi.fn(), disconnect: vi.fn() };
+      const newSocket = createMockSocket('test-socket-123');
       connectionManager.register(newSocket);
 
       // Then: New connection is registered
@@ -404,7 +406,7 @@ describe('ConnectionManager', () => {
   describe('Error Handling', () => {
     it('should handle invalid socket operations gracefully', () => {
       // Given: Invalid socket data
-      const invalidSocket = { id: '', on: vi.fn(), emit: vi.fn(), disconnect: vi.fn() };
+      const invalidSocket = createMockSocket('');
 
       // When: Registering invalid socket
       // Then: No error is thrown
@@ -433,12 +435,7 @@ describe('ConnectionManager', () => {
   describe('Performance', () => {
     it('should handle large number of connections', () => {
       // Given: Large number of connections
-      const connections = Array.from({ length: 100 }, (_, i) => ({
-        id: `socket-${i}`,
-        on: vi.fn(),
-        emit: vi.fn(),
-        disconnect: vi.fn()
-      }));
+      const connections = Array.from({ length: 100 }, (_, i) => createMockSocket(`socket-${i}`));
 
       // When: Registering all connections
       connections.forEach(socket => connectionManager.register(socket));

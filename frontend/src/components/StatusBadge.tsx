@@ -3,8 +3,10 @@ import { ProcessInfo } from '../types/service.types';
 import { StyledBadge, BadgeVariant } from './common/StyledBadge';
 import { theme } from '../styles/theme';
 
+type StatusBadgeStatus = ProcessInfo['status'] | 'busy';
+
 interface StatusBadgeProps {
-  status: ProcessInfo['status'];
+  status: StatusBadgeStatus;
 }
 
 const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
@@ -14,6 +16,8 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
         return { variant: 'success', text: '● Running', isTransitional: false };
       case 'stopped':
         return { variant: 'error', text: '○ Stopped', isTransitional: false };
+      case 'busy':
+        return { variant: 'warning', text: '● Busy', isTransitional: false };
       case 'starting':
         return { variant: 'warning', text: '◐ Starting...', isTransitional: true };
       case 'stopping':
