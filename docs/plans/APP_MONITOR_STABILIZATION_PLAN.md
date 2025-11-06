@@ -1,17 +1,19 @@
 # App Monitor Stabilization Plan
 
-**Version:** 0.1.0  
-**Last Updated:** November 6, 2025  
-**Scope:** Pre-POC stabilization (prerequisite for autonomous continuous queue)  
+**Version:** 0.2.0
+**Last Updated:** November 6, 2025
+**Scope:** Pre-POC stabilization (prerequisite for autonomous continuous queue)
 **Owner:** Platform Tooling (personal experiment)
 
 ---
 
 ## Objectives
-1. Restore green builds/tests so feature work can land safely.  
-2. Establish SQLite as the authoritative work-target registry.  
-3. Ensure developer workflows (hooks, scripts, docs) reflect the current tooling.  
+1. Restore green builds/tests so feature work can land safely.
+2. Establish SQLite as the authoritative work-target registry.
+3. Ensure developer workflows (hooks, scripts, docs) reflect the current tooling.
 4. Capture the baseline metrics needed for the upcoming continuous task queue.
+5. **NEW:** Implement v3 prompt engineering to prevent scope creep and duplication.
+6. **NEW:** Establish quality metrics and monitoring baselines.
 
 ---
 
@@ -63,15 +65,49 @@
 - **TC-4**: ✅ **COMPLETE** - Scope remediation container requirements (image, bootstrap script path, read-only credential mounts) per work-target.
   - *Deliverable*: Container credentials mounting, workspace permissions, and command flags documented and working. ✅ **VERIFIED 2025-11-06**
   - *Notes*: See `docs/sessions/DEV_BOT_CREDENTIALS_FIX_2025-11-06.md` for implementation details.
+- **TC-5**: ✅ **COMPLETE** - Ephemeral container implementation with tar | docker cp pattern.
+  - *Deliverable*: Zero filesystem artifacts, automatic container cleanup, workspace copying working. ✅ **VERIFIED 2025-11-06**
+  - *Notes*: See `DEV_BOT_EPHEMERAL_CONTAINER_MIGRATION.md` for implementation details.
+- **TC-6**: ✅ **COMPLETE** - Safety mechanisms for uncommitted changes.
+  - *Deliverable*: Patch file creation, git status capture, prevents losing bot work on failures. ✅ **VERIFIED 2025-11-06**
+
+### 8. Prompt Engineering v3 (NEW)
+- **PE-1**: Implement task template validation system (`validateTaskTemplate()` function).
+  - *Deliverable*: TypeScript validator that enforces v3 compliance with clear error messages.
+- **PE-2**: Create task template library for common patterns.
+  - *Deliverable*: Pre-built templates for migrations, extensions, bugfixes, refactors with mandatory fields.
+  - *Templates*: `createMigrationTaskTemplate()`, `createExtensionTaskTemplate()`, `createBugfixTaskTemplate()`, `createRefactorTaskTemplate()`.
+- **PE-3**: Add scope validation rules to task creation API.
+  - *Deliverable*: API endpoint rejects tasks without required v3 fields (investigation, doNotCreate, constraints).
+- **PE-4**: Enforce mandatory investigation phase in all task workflows.
+  - *Deliverable*: Tasks must include investigation steps, mustFind, mustNotDuplicate fields.
+- **PE-5**: Add pre-implementation checklist validation.
+  - *Deliverable*: All tasks include verification checklist before execution begins.
+- **PE-6**: Update specification documents to use "EXACTLY N items" format.
+  - *Deliverable*: All planning docs explicitly list features to prevent scope creep.
+
+### 9. Quality Metrics Baseline (NEW)
+- **QM-1**: Define success metrics for bot execution.
+  - *Deliverable*: Document target metrics: scope compliance (100%), duplication rate (0%), git workflow success (100%), feature creep (0%).
+- **QM-2**: Implement metrics collection in task execution.
+  - *Deliverable*: Track and log: scope violations, code duplication, git commit success, investigation completion.
+- **QM-3**: Create quality metrics dashboard.
+  - *Deliverable*: UI showing real-time: scope compliance, duplication detection, workflow success rates.
+- **QM-4**: Set up alert thresholds for quality degradation.
+  - *Deliverable*: Alerts at: 10% scope violations (yellow), 20% scope violations (red), 30% scope violations (emergency).
 
 ---
 
 ## Acceptance Criteria
-- `npm run build -w frontend`, `npm run test:backend`, and `npm run test:frontend` pass locally and via CI.  
-- Pre-push hook enforces lint + test suites without false positives.  
-- Work-target metadata resolvable from SQLite; JSON configs retained only as backups.  
-- Updated documentation instructs contributors on stabilized workflows.  
+- `npm run build -w frontend`, `npm run test:backend`, and `npm run test:frontend` pass locally and via CI.
+- Pre-push hook enforces lint + test suites without false positives.
+- Work-target metadata resolvable from SQLite; JSON configs retained only as backups.
+- Updated documentation instructs contributors on stabilized workflows.
 - Baseline metrics captured and logged for future comparison.
+- **NEW:** V3 task template validation enforced in task creation API.
+- **NEW:** Task template library available with at least 4 common patterns.
+- **NEW:** Quality metrics dashboard operational with real-time tracking.
+- **NEW:** All new tasks created must use v3 template format with mandatory investigation phase.
 
 ---
 
