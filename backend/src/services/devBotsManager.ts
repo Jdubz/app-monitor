@@ -7,6 +7,8 @@ import { logger } from '../utils/logger.js';
 import { ProcessManager, ProcessInfo } from './processManager.js';
 import Docker from 'dockerode';
 import { TaskPersistence, TaskStorageConfig } from './taskPersistence.js';
+import { TaskQueueService } from './taskQueue.sqlite.js';
+import { TaskQueueMigration } from './taskQueue.migration.js';
 import { AgentPersonalityManager, AgentPersonality } from './agentPersonalities.js';
 import { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplates.js';
 import { TaskCreationGuidelinesManager, EnhancedTaskData } from './taskCreationGuidelines.js';
@@ -574,7 +576,8 @@ export class DevBotsManager extends EventEmitter {
   private readonly MAX_CONCURRENT_WORKERS = 2; // Maximum 2 workers as per architecture
 
   // Enhanced services
-  private taskPersistence!: TaskPersistence;
+  private taskPersistence!: TaskPersistence; // Deprecated - keeping for migration only
+  private taskQueue!: TaskQueueService; // New SQLite-based queue
   private agentManager!: AgentPersonalityManager;
   private templateManager!: TaskPromptTemplateManager;
   private guidelinesManager!: TaskCreationGuidelinesManager;
@@ -623,6 +626,60 @@ export class DevBotsManager extends EventEmitter {
         this.updateWorkerHealth();
       }
     });
+  }
+
+  /**
+   * Migrate existing JSON tasks to SQLite
+   */
+  private migrateToSQLite(): void {
+    try {
+      // Check if migration marker exists
+      const migrationMarker = './data/tasks/.migrated-to-sqlite';
+      if (fs.existsSync(migrationMarker)) {
+        logger.info({
+          category: 'process',
+          action: 'migration_already_completed',
+          message: 'SQLite migration already completed, skipping'
+        });
+        return;
+      }
+
+      // Backup legacy files
+      TaskQueueMigration.backupLegacyFiles('./data/tasks', './data/backups');
+
+      // Run migration
+      const migration = new TaskQueueMigration(this.taskQueue, './data/tasks');
+      const result = migration.migrate();
+
+      if (result.success) {
+        logger.info({
+          category: 'process',
+          action: 'migration_successful',
+          message: `Successfully migrated ${result.tasksImported} tasks and ${result.executionsCreated} executions to SQLite`
+        });
+
+        // Create migration marker to prevent re-running
+        fs.writeFileSync(migrationMarker, JSON.stringify({
+          migratedAt: new Date().toISOString(),
+          tasksImported: result.tasksImported,
+          executionsCreated: result.executionsCreated
+        }));
+      } else {
+        logger.error({
+          category: 'process',
+          action: 'migration_failed',
+          message: `Migration completed with ${result.errors.length} errors`,
+          details: result.errors
+        });
+      }
+    } catch (error) {
+      logger.error({
+        category: 'process',
+        action: 'migration_exception',
+        message: 'Migration failed with exception',
+        error
+      });
+    }
   }
 
   /**
@@ -710,7 +767,11 @@ export class DevBotsManager extends EventEmitter {
   }
 
   private initializeEnhancedServices(): void {
-    // Initialize task persistence
+    // Initialize SQLite task queue
+    const dbPath = './data/tasks/queue.db';
+    this.taskQueue = new TaskQueueService(dbPath);
+
+    // Initialize legacy task persistence (for migration only)
     const storageConfig: TaskStorageConfig = {
       storagePath: './data/tasks',
       backupPath: './data/backups',
@@ -719,6 +780,9 @@ export class DevBotsManager extends EventEmitter {
       saveInterval: 30000 // 30 seconds
     };
     this.taskPersistence = new TaskPersistence(storageConfig);
+
+    // Run migration from JSON to SQLite
+    this.migrateToSQLite();
 
     // Initialize agent personality manager
     this.agentManager = new AgentPersonalityManager();
