@@ -1617,6 +1617,27 @@ export class DevBotsManager extends EventEmitter {
       });
     });
 
+    // Save dev-bot execution logs to artifacts directory
+    const artifactsDir = path.join(process.cwd(), 'dev-bots', 'artifacts');
+    const timestamp = Date.now();
+    const stdoutLogPath = path.join(artifactsDir, `${task.id}-stdout-${timestamp}.log`);
+    const stderrLogPath = path.join(artifactsDir, `${task.id}-stderr-${timestamp}.log`);
+
+    try {
+      if (stdout.length > 0) {
+        fs.writeFileSync(stdoutLogPath, stdout, 'utf-8');
+      }
+      if (stderr.length > 0) {
+        fs.writeFileSync(stderrLogPath, stderr, 'utf-8');
+      }
+    } catch (logError) {
+      logger.warn({
+        category: 'process',
+        action: 'failed_to_save_logs',
+        message: `Failed to save dev-bot logs to disk: ${logError instanceof Error ? logError.message : String(logError)}`
+      });
+    }
+
     // Calculate task execution metrics
     const executionDuration = Date.now() - Date.parse(task.assignedAt || task.createdAt);
     const metrics = this.getQueueMetrics();
@@ -1635,7 +1656,9 @@ export class DevBotsManager extends EventEmitter {
         executionDuration_ms: executionDuration,
         executionDuration_human: `${Math.floor(executionDuration / 60000)}m ${Math.floor((executionDuration % 60000) / 1000)}s`,
         stdoutLength: stdout.length,
-        stderrLength: stderr.length
+        stderrLength: stderr.length,
+        stdoutLog: stdout.length > 0 ? stdoutLogPath : null,
+        stderrLog: stderr.length > 0 ? stderrLogPath : null
       },
       workflow_insights: {
         queue_depth: metrics.pending,
