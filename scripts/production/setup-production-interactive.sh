@@ -41,7 +41,12 @@ sudo -v
 while true; do sudo -n true; sleep 60; kill -0 "$$" || exit; done 2>/dev/null &
 
 # Configuration
-PRODUCTION_USER="$USER"
+# Get the actual user (not root when using sudo)
+if [ -n "$SUDO_USER" ]; then
+    PRODUCTION_USER="$SUDO_USER"
+else
+    PRODUCTION_USER="$USER"
+fi
 PRODUCTION_DIR="/opt/app-monitor"
 SOURCE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 REPO_URL="https://github.com/Jdubz/app-monitor.git"
@@ -118,7 +123,13 @@ echo "   ⚠️  IMPORTANT: Edit /opt/app-monitor/.env to add your API keys"
 # Step 5: Install dependencies
 echo ""
 echo "📦 Step 5/7: Installing dependencies..."
-npm ci --production
+# Use npm install if package-lock.json doesn't exist, otherwise use npm ci
+if [ -f "package-lock.json" ]; then
+    npm ci --omit=dev
+else
+    echo "   ⚠️  No package-lock.json found, using npm install..."
+    npm install --omit=dev
+fi
 echo "   ✅ Dependencies installed"
 
 # Step 6: Build application

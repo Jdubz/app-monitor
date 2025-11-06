@@ -46,7 +46,13 @@ fi
 
 echo ""
 echo "📦 Installing dependencies..."
-npm ci --production
+# Use npm install if package-lock.json doesn't exist, otherwise use npm ci
+if [ -f "package-lock.json" ]; then
+    npm ci --omit=dev
+else
+    echo "   ⚠️  No package-lock.json found, using npm install..."
+    npm install --omit=dev
+fi
 
 echo ""
 echo "🏗️  Building backend..."
