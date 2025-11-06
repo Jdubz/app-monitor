@@ -1,5 +1,7 @@
-import React, { ReactNode } from 'react';
-import styles from './ErrorDisplay.module.css';
+import React, { ReactNode } from "react";
+import { AlertTriangle, X } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 
 interface ErrorDisplayProps {
   error: Error | string;
@@ -9,50 +11,50 @@ interface ErrorDisplayProps {
   fullScreen?: boolean;
 }
 
-export function ErrorDisplay({ 
-  error, 
-  title = 'Error',
+export function ErrorDisplay({
+  error,
+  title = "Error",
   onRetry,
   showDetails = false,
-  fullScreen = false
+  fullScreen = false,
 }: ErrorDisplayProps) {
-  const errorMessage = typeof error === 'string' ? error : error.message;
-  const errorStack = typeof error === 'string' ? undefined : error.stack;
+  const errorMessage = typeof error === "string" ? error : error.message;
+  const errorStack = typeof error === "string" ? undefined : error.stack;
 
   const content = (
-    <div className={styles.error}>
-      <div className={styles.iconContainer}>
-        <svg className={styles.errorIcon} viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <circle cx="12" cy="12" r="10" strokeWidth="2"/>
-          <line x1="12" y1="8" x2="12" y2="12" strokeWidth="2" strokeLinecap="round"/>
-          <line x1="12" y1="16" x2="12.01" y2="16" strokeWidth="2" strokeLinecap="round"/>
-        </svg>
+    <div className="flex w-full max-w-xl flex-col gap-4 rounded-xl border border-destructive/40 bg-destructive/10 p-6 text-sm shadow-sm backdrop-blur">
+      <div className="flex items-start gap-3">
+        <span className="mt-0.5 rounded-full bg-destructive/20 p-2 text-destructive">
+          <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+        </span>
+        <div className="flex-1 space-y-2">
+          <h3 className="text-base font-semibold text-destructive-foreground">{title}</h3>
+          <p className="text-sm text-destructive-foreground/90">{errorMessage}</p>
+        </div>
       </div>
-      
-      <h3 className={styles.title}>{title}</h3>
-      <p className={styles.message}>{errorMessage}</p>
-      
-      {showDetails && errorStack && (
-        <details className={styles.details}>
-          <summary>Technical Details</summary>
-          <pre className={styles.stack}>{errorStack}</pre>
+
+      {showDetails && errorStack ? (
+        <details className="rounded-lg border border-destructive/20 bg-background/40 p-3 text-xs">
+          <summary className="cursor-pointer font-medium text-destructive-foreground">Technical details</summary>
+          <pre className="mt-2 max-h-64 overflow-auto rounded bg-background/60 p-3 text-[11px] leading-relaxed text-muted-foreground">
+            {errorStack}
+          </pre>
         </details>
-      )}
-      
-      {onRetry && (
-        <button 
-          className={styles.retryButton}
-          onClick={onRetry}
-        >
-          Try Again
-        </button>
-      )}
+      ) : null}
+
+      {onRetry ? (
+        <div className="flex justify-end">
+          <Button variant="destructive" onClick={onRetry} size="sm">
+            Try again
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 
   if (fullScreen) {
     return (
-      <div className={styles.fullScreen}>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-6">
         {content}
       </div>
     );
@@ -82,7 +84,7 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('ErrorBoundary caught:', error, errorInfo);
+    console.error("ErrorBoundary caught:", error, errorInfo);
   }
 
   reset = () => {
@@ -100,8 +102,8 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
           error={this.state.error}
           title="Something went wrong"
           onRetry={this.reset}
-          showDetails={true}
-          fullScreen={true}
+          showDetails
+          fullScreen
         />
       );
     }
@@ -117,20 +119,19 @@ interface InlineErrorProps {
 
 export function InlineError({ message, onDismiss }: InlineErrorProps) {
   return (
-    <div className={styles.inlineError}>
-      <svg className={styles.inlineIcon} viewBox="0 0 20 20" fill="currentColor">
-        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
-      </svg>
-      <span className={styles.inlineMessage}>{message}</span>
-      {onDismiss && (
-        <button 
-          className={styles.dismissButton}
+    <div className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive-foreground">
+      <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+      <span className="flex-1 text-sm">{message}</span>
+      {onDismiss ? (
+        <button
+          type="button"
           onClick={onDismiss}
           aria-label="Dismiss error"
+          className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-destructive/40 bg-destructive/20 text-destructive transition hover:bg-destructive/30"
         >
-          ×
+          <X className="h-3.5 w-3.5" />
         </button>
-      )}
+      ) : null}
     </div>
   );
 }

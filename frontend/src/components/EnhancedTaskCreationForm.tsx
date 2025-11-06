@@ -1,13 +1,15 @@
 /**
  * Enhanced Task Creation Form Component
- * 
+ *
  * Provides a comprehensive form for creating tasks with detailed guidelines,
  * validation, and examples
  */
 
-import React, { useState, useEffect } from 'react';
-import { api } from '../services/api';
-import styles from './EnhancedTaskCreationForm.module.css';
+import React, { useEffect, useState } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
+import { api } from "../services/api";
 
 interface EnhancedTaskData {
   // Core fields (required)
@@ -15,17 +17,17 @@ interface EnhancedTaskData {
   title: string;
   description: string;
   project: string;
-  
+
   // Detailed specification (required)
   acceptanceCriteria: string[];
   architectureReferences: string[];
   longTermGoals: string[];
   estimatedEffort: {
     hours: number;
-    complexity: 'simple' | 'medium' | 'complex' | 'expert';
-    confidence: 'low' | 'medium' | 'high';
+    complexity: "simple" | "medium" | "complex" | "expert";
+    confidence: "low" | "medium" | "high";
   };
-  
+
   // Context and boundaries (required)
   prerequisites: string[];
   contextBoundaries: {
@@ -33,27 +35,27 @@ interface EnhancedTaskData {
     mustNotAffect: string[];
     integrationPoints: string[];
   };
-  
+
   // Implementation details (required)
   files: string[];
   dependencies: string[];
   validationSteps: string[];
   rollbackPlan: string[];
-  
+
   // Quality assurance (required)
   successMetrics: string[];
   testingRequirements: string[];
   documentationRequirements: string[];
-  
+
   // Agent assignment (required)
   assignedAgent: string;
   requiredSkills: string[];
-  
+
   // Workflow context (optional)
   parentInitiative?: string;
   relatedTasks: string[];
   blockers: string[];
-  
+
   // Additional context (optional)
   assumptions: string[];
   risks: string[];
@@ -83,43 +85,97 @@ interface EnhancedTaskCreationFormProps {
   onCancel?: () => void;
 }
 
+const classes = {
+  container: "mx-auto mb-12 max-w-6xl space-y-6 px-4 sm:px-6 lg:px-8",
+  header:
+    "flex flex-col gap-4 rounded-2xl border border-border/60 bg-card/80 px-6 py-5 shadow-sm md:flex-row md:items-center md:justify-between",
+  headerTitle: "text-2xl font-semibold tracking-tight",
+  headerActions: "flex flex-wrap gap-3",
+  content: "grid items-start gap-6 lg:grid-cols-[320px_1fr]",
+  sidebar:
+    "sticky top-6 space-y-6 rounded-2xl border border-border/60 bg-card/80 p-6 shadow-sm",
+  sidebarHeading:
+    "text-xs font-semibold uppercase tracking-[0.35em] text-muted-foreground",
+  sidebarList: "list-disc space-y-1 pl-4 text-sm text-muted-foreground",
+  mainForm: "space-y-6 rounded-2xl border border-border/60 bg-card/90 p-6 shadow-sm",
+  navigation: "flex flex-wrap gap-2 overflow-x-auto border-b border-border/60 pb-4",
+  validation: "space-y-4 rounded-xl border border-border/60 bg-background/80 p-4",
+  validationList: "list-disc space-y-1 pl-4 text-sm text-muted-foreground",
+  form: "space-y-10",
+  section: "space-y-6",
+  sectionTitle: "text-lg font-semibold tracking-tight border-b border-border/60 pb-3",
+  formRow: "grid gap-4 md:grid-cols-2",
+  formGroup: "flex flex-col gap-2",
+  label: "text-sm font-medium text-foreground",
+  select:
+    "h-10 w-full rounded-md border border-border bg-background px-3 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+  textarea:
+    "min-h-[140px] w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+  arrayField:
+    "flex flex-col gap-2 rounded-lg border border-border/60 bg-background/70 p-3 sm:flex-row sm:items-center sm:gap-3",
+  arrayInput: "flex-1",
+  formActions: "flex flex-wrap items-center justify-end gap-3 border-t border-border/60 pt-4",
+  error:
+    "rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive-foreground",
+};
+
+const navButtonClass = (active: boolean) =>
+  cn(
+    "inline-flex items-center gap-2 rounded-lg border border-border/60 bg-background px-4 py-2 text-sm font-medium text-muted-foreground transition hover:bg-muted/70",
+    active &&
+      "border-primary bg-primary text-primary-foreground shadow-sm hover:bg-primary/90",
+  );
+
+const validationBlockClass = {
+  error: "space-y-2 rounded-lg border border-destructive/40 bg-destructive/10 p-4",
+  warning: "space-y-2 rounded-lg border border-amber-400/40 bg-amber-100/10 p-4",
+  suggestion: "space-y-2 rounded-lg border border-sky-400/40 bg-sky-100/10 p-4",
+  title: "text-sm font-semibold",
+};
+
+type StringArrayKey = {
+  [K in keyof EnhancedTaskData]: EnhancedTaskData[K] extends string[] ? K : never;
+}[keyof EnhancedTaskData];
+
+type ContextBoundaryKey = keyof EnhancedTaskData["contextBoundaries"];
+
 export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> = ({
   onTaskCreated,
-  onCancel
+  onCancel,
 }) => {
   const [taskData, setTaskData] = useState<EnhancedTaskData>({
-    type: 'implementation',
-    title: '',
-    description: '',
-    project: 'app-monitor',
-    acceptanceCriteria: [''],
-    architectureReferences: [''],
-    longTermGoals: [''],
+    type: "implementation",
+    title: "",
+    description: "",
+    project: "app-monitor",
+    acceptanceCriteria: [""],
+    architectureReferences: [""],
+    longTermGoals: [""],
     estimatedEffort: {
       hours: 4,
-      complexity: 'medium',
-      confidence: 'medium'
+      complexity: "medium",
+      confidence: "medium",
     },
-    prerequisites: [''],
+    prerequisites: [""],
     contextBoundaries: {
-      mustNotChange: [''],
-      mustNotAffect: [''],
-      integrationPoints: ['']
+      mustNotChange: [""],
+      mustNotAffect: [""],
+      integrationPoints: [""],
     },
-    files: [''],
-    dependencies: [''],
-    validationSteps: [''],
-    rollbackPlan: [''],
-    successMetrics: [''],
-    testingRequirements: [''],
-    documentationRequirements: [''],
-    assignedAgent: 'backend-specialist',
-    requiredSkills: [''],
-    relatedTasks: [''],
-    blockers: [''],
-    assumptions: [''],
-    risks: [''],
-    alternatives: ['']
+    files: [""],
+    dependencies: [""],
+    validationSteps: [""],
+    rollbackPlan: [""],
+    successMetrics: [""],
+    testingRequirements: [""],
+    documentationRequirements: [""],
+    assignedAgent: "backend-specialist",
+    requiredSkills: [""],
+    relatedTasks: [""],
+    blockers: [""],
+    assumptions: [""],
+    risks: [""],
+    alternatives: [""],
   });
 
   const [guidelines, setGuidelines] = useState<TaskGuidelines | null>(null);
@@ -128,14 +184,12 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
   const [validation, setValidation] = useState<ValidationResult | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeSection, setActiveSection] = useState<string>('basic');
+  const [activeSection, setActiveSection] = useState<string>("basic");
 
-  // Load guidelines and example when task type changes
   useEffect(() => {
     loadGuidelinesAndExample();
   }, [taskData.type]);
 
-  // Validate task data when it changes
   useEffect(() => {
     validateTaskData();
   }, [taskData]);
@@ -145,74 +199,85 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
       const [guidelinesRes, exampleRes, checklistRes] = await Promise.all([
         api.get(`/dev-bots/guidelines/${taskData.type}`),
         api.get(`/dev-bots/examples/${taskData.type}`),
-        api.get(`/dev-bots/checklist/${taskData.type}`)
+        api.get(`/dev-bots/checklist/${taskData.type}`),
       ]);
 
       setGuidelines((guidelinesRes as any).data.guidelines);
       setExample((exampleRes as any).data.example);
       setChecklist((checklistRes as any).data.checklist);
     } catch (err: any) {
-      console.error('Failed to load guidelines:', err);
+      console.error("Failed to load guidelines:", err);
     }
   };
 
   const validateTaskData = async () => {
     try {
-      const response = await api.post('/dev-bots/validate', {
+      const response = await api.post("/dev-bots/validate", {
         taskData,
-        taskType: taskData.type
+        taskType: taskData.type,
       });
       setValidation((response as any).data.validation);
     } catch (err: any) {
-      console.error('Failed to validate task data:', err);
+      console.error("Failed to validate task data:", err);
     }
   };
 
-  const handleArrayFieldChange = (field: string, index: number, value: string) => {
-    const newArray = [...(taskData[field as keyof EnhancedTaskData] as string[])];
-    newArray[index] = value;
-    setTaskData({ ...taskData, [field]: newArray });
+  const handleArrayFieldChange = (
+    field: StringArrayKey,
+    index: number,
+    value: string,
+  ) => {
+    const updated = [...(taskData[field] as string[])];
+    updated[index] = value;
+    setTaskData({ ...taskData, [field]: updated });
   };
 
-  const addArrayField = (field: string) => {
-    const newArray = [...(taskData[field as keyof EnhancedTaskData] as string[]), ''];
-    setTaskData({ ...taskData, [field]: newArray });
+  const addArrayField = (field: StringArrayKey) => {
+    const updated = [...(taskData[field] as string[]), ""];
+    setTaskData({ ...taskData, [field]: updated });
   };
 
-  const removeArrayField = (field: string, index: number) => {
-    const newArray = (taskData[field as keyof EnhancedTaskData] as string[]).filter((_, i) => i !== index);
-    setTaskData({ ...taskData, [field]: newArray });
+  const removeArrayField = (field: StringArrayKey, index: number) => {
+    const updated = (taskData[field] as string[]).filter((_, i) => i !== index);
+    setTaskData({ ...taskData, [field]: updated.length ? updated : [""] });
   };
 
-  const handleContextBoundaryChange = (boundary: string, index: number, value: string) => {
-    const newBoundaries = { ...taskData.contextBoundaries };
-    newBoundaries[boundary as keyof typeof newBoundaries] = [
-      ...newBoundaries[boundary as keyof typeof newBoundaries]
-    ];
-    newBoundaries[boundary as keyof typeof newBoundaries][index] = value;
-    setTaskData({ ...taskData, contextBoundaries: newBoundaries });
+  const handleContextBoundaryChange = (
+    field: ContextBoundaryKey,
+    index: number,
+    value: string,
+  ) => {
+    const updated = {
+      ...taskData.contextBoundaries,
+      [field]: taskData.contextBoundaries[field].map((existing, i) =>
+        i === index ? value : existing,
+      ),
+    };
+    setTaskData({ ...taskData, contextBoundaries: updated });
   };
 
-  const addContextBoundary = (boundary: string) => {
-    const newBoundaries = { ...taskData.contextBoundaries };
-    newBoundaries[boundary as keyof typeof newBoundaries] = [
-      ...newBoundaries[boundary as keyof typeof newBoundaries],
-      ''
-    ];
-    setTaskData({ ...taskData, contextBoundaries: newBoundaries });
+  const addContextBoundary = (field: ContextBoundaryKey) => {
+    const updated = {
+      ...taskData.contextBoundaries,
+      [field]: [...taskData.contextBoundaries[field], ""],
+    };
+    setTaskData({ ...taskData, contextBoundaries: updated });
   };
 
-  const removeContextBoundary = (boundary: string, index: number) => {
-    const newBoundaries = { ...taskData.contextBoundaries };
-    newBoundaries[boundary as keyof typeof newBoundaries] = newBoundaries[boundary as keyof typeof newBoundaries].filter((_, i) => i !== index);
-    setTaskData({ ...taskData, contextBoundaries: newBoundaries });
+  const removeContextBoundary = (field: ContextBoundaryKey, index: number) => {
+    const filtered = taskData.contextBoundaries[field].filter((_, i) => i !== index);
+    const updated = {
+      ...taskData.contextBoundaries,
+      [field]: filtered.length ? filtered : [""],
+    };
+    setTaskData({ ...taskData, contextBoundaries: updated });
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+
     if (!validation?.isValid) {
-      setError('Please fix validation errors before submitting');
+      setError("Please fix validation errors before submitting");
       return;
     }
 
@@ -220,40 +285,39 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
     setError(null);
 
     try {
-      // Clean up empty strings from arrays
       const cleanedTaskData = {
         ...taskData,
-        acceptanceCriteria: taskData.acceptanceCriteria.filter(c => c.trim()),
-        architectureReferences: taskData.architectureReferences.filter(r => r.trim()),
-        longTermGoals: taskData.longTermGoals.filter(g => g.trim()),
-        prerequisites: taskData.prerequisites.filter(p => p.trim()),
-        files: taskData.files.filter(f => f.trim()),
-        dependencies: taskData.dependencies.filter(d => d.trim()),
-        validationSteps: taskData.validationSteps.filter(v => v.trim()),
-        rollbackPlan: taskData.rollbackPlan.filter(r => r.trim()),
-        successMetrics: taskData.successMetrics.filter(m => m.trim()),
-        testingRequirements: taskData.testingRequirements.filter(t => t.trim()),
-        documentationRequirements: taskData.documentationRequirements.filter(d => d.trim()),
-        requiredSkills: taskData.requiredSkills.filter(s => s.trim()),
-        relatedTasks: taskData.relatedTasks.filter(t => t.trim()),
-        blockers: taskData.blockers.filter(b => b.trim()),
-        assumptions: taskData.assumptions.filter(a => a.trim()),
-        risks: taskData.risks.filter(r => r.trim()),
-        alternatives: taskData.alternatives.filter(a => a.trim()),
+        acceptanceCriteria: taskData.acceptanceCriteria.filter((item) => item.trim()),
+        architectureReferences: taskData.architectureReferences.filter((item) => item.trim()),
+        longTermGoals: taskData.longTermGoals.filter((item) => item.trim()),
+        prerequisites: taskData.prerequisites.filter((item) => item.trim()),
+        files: taskData.files.filter((item) => item.trim()),
+        dependencies: taskData.dependencies.filter((item) => item.trim()),
+        validationSteps: taskData.validationSteps.filter((item) => item.trim()),
+        rollbackPlan: taskData.rollbackPlan.filter((item) => item.trim()),
+        successMetrics: taskData.successMetrics.filter((item) => item.trim()),
+        testingRequirements: taskData.testingRequirements.filter((item) => item.trim()),
+        documentationRequirements: taskData.documentationRequirements.filter((item) => item.trim()),
+        requiredSkills: taskData.requiredSkills.filter((item) => item.trim()),
+        relatedTasks: taskData.relatedTasks.filter((item) => item.trim()),
+        blockers: taskData.blockers.filter((item) => item.trim()),
+        assumptions: taskData.assumptions.filter((item) => item.trim()),
+        risks: taskData.risks.filter((item) => item.trim()),
+        alternatives: taskData.alternatives.filter((item) => item.trim()),
         contextBoundaries: {
-          mustNotChange: taskData.contextBoundaries.mustNotChange.filter(c => c.trim()),
-          mustNotAffect: taskData.contextBoundaries.mustNotAffect.filter(a => a.trim()),
-          integrationPoints: taskData.contextBoundaries.integrationPoints.filter(i => i.trim())
-        }
+          mustNotChange: taskData.contextBoundaries.mustNotChange.filter((item) => item.trim()),
+          mustNotAffect: taskData.contextBoundaries.mustNotAffect.filter((item) => item.trim()),
+          integrationPoints: taskData.contextBoundaries.integrationPoints.filter((item) => item.trim()),
+        },
       };
 
-      const response = await api.post('/dev-bots/tasks/enhanced', cleanedTaskData);
+      const response = await api.post("/dev-bots/tasks/enhanced", cleanedTaskData);
 
       if (onTaskCreated) {
         onTaskCreated((response as any).data.task);
       }
     } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to create task');
+      setError(err.response?.data?.error || "Failed to create task");
     } finally {
       setLoading(false);
     }
@@ -261,134 +325,225 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
 
   const loadExample = () => {
     if (example?.example) {
-      setTaskData(prev => ({
+      setTaskData((prev) => ({
         ...prev,
-        ...example.example
+        ...example.example,
       }));
     }
   };
 
   const sections = [
-    { id: 'basic', label: 'Basic Info', icon: '📝' },
-    { id: 'specification', label: 'Specification', icon: '🎯' },
-    { id: 'context', label: 'Context', icon: '🌐' },
-    { id: 'implementation', label: 'Implementation', icon: '⚙️' },
-    { id: 'quality', label: 'Quality', icon: '✅' },
-    { id: 'workflow', label: 'Workflow', icon: '🔄' },
-    { id: 'additional', label: 'Additional', icon: '📋' }
+    { id: "basic", label: "Basic Info", icon: "📝" },
+    { id: "specification", label: "Specification", icon: "🎯" },
+    { id: "context", label: "Context", icon: "🌐" },
+    { id: "implementation", label: "Implementation", icon: "⚙️" },
+    { id: "quality", label: "Quality", icon: "✅" },
+    { id: "workflow", label: "Workflow", icon: "🔄" },
+    { id: "additional", label: "Additional", icon: "📋" },
   ];
 
-  return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <h2>Create Enhanced Task</h2>
-        <div className={styles.headerActions}>
-          {example && (
-            <button
+  const renderArrayField = (
+    field: StringArrayKey,
+    {
+      label,
+      placeholder,
+      addLabel,
+      required = false,
+    }: { label: string; placeholder: string; addLabel: string; required?: boolean },
+  ) => (
+    <div className={classes.formGroup}>
+      <label className={classes.label}>
+        {label}
+        {required && <span className="ml-1 text-destructive">*</span>}
+      </label>
+      <div className="space-y-2">
+        {(taskData[field] as string[]).map((value, index) => (
+          <div key={`${field}-${index}`} className={classes.arrayField}>
+            <Input
+              value={value}
+              onChange={(event) => handleArrayFieldChange(field, index, event.target.value)}
+              placeholder={placeholder}
+              className={classes.arrayInput}
+            />
+            <Button
               type="button"
-              onClick={loadExample}
-              className={styles.exampleBtn}
+              variant="ghost"
+              size="sm"
+              onClick={() => removeArrayField(field, index)}
+              className="text-destructive hover:text-destructive"
             >
-              📋 Load Example
-            </button>
+              Remove
+            </Button>
+          </div>
+        ))}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => addArrayField(field)}
+          className="gap-1"
+        >
+          + {addLabel}
+        </Button>
+      </div>
+    </div>
+  );
+
+  const renderContextBoundaryField = (
+    field: ContextBoundaryKey,
+    {
+      label,
+      placeholder,
+      addLabel,
+    }: { label: string; placeholder: string; addLabel: string },
+  ) => (
+    <div className={classes.formGroup}>
+      <label className={classes.label}>{label}</label>
+      <div className="space-y-2">
+        {taskData.contextBoundaries[field].map((value, index) => (
+          <div key={`${field}-${index}`} className={classes.arrayField}>
+            <Input
+              value={value}
+              onChange={(event) => handleContextBoundaryChange(field, index, event.target.value)}
+              placeholder={placeholder}
+              className={classes.arrayInput}
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              onClick={() => removeContextBoundary(field, index)}
+              className="text-destructive hover:text-destructive"
+            >
+              Remove
+            </Button>
+          </div>
+        ))}
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => addContextBoundary(field)}
+          className="gap-1"
+        >
+          + {addLabel}
+        </Button>
+      </div>
+    </div>
+  );
+
+  return (
+    <div className={classes.container}>
+      <div className={classes.header}>
+        <div>
+          <h2 className={classes.headerTitle}>Create Enhanced Task</h2>
+          <p className="text-sm text-muted-foreground">
+            Provide the full specification so dev-bots can execute with confidence.
+          </p>
+        </div>
+        <div className={classes.headerActions}>
+          {example && (
+            <Button type="button" variant="outline" onClick={loadExample} className="gap-2">
+              <span aria-hidden="true">📋</span>
+              Load Example
+            </Button>
           )}
           {onCancel && (
-            <button
-              type="button"
-              onClick={onCancel}
-              className={styles.cancelBtn}
-            >
+            <Button type="button" variant="ghost" onClick={onCancel}>
               Cancel
-            </button>
+            </Button>
           )}
         </div>
       </div>
 
-      <div className={styles.content}>
-        {/* Guidelines and Checklist */}
-        <div className={styles.sidebar}>
+      <div className={classes.content}>
+        <aside className={classes.sidebar}>
           {guidelines && (
-            <div className={styles.guidelines}>
-              <h3>Guidelines</h3>
-              <p>{guidelines.description}</p>
-              
-              <h4>Required Fields</h4>
-              <ul>
-                {guidelines.requiredFields.map((field, index) => (
-                  <li key={index}>{field}</li>
-                ))}
-              </ul>
-              
-              <h4>Best Practices</h4>
-              <ul>
-                {guidelines.bestPractices.map((practice, index) => (
-                  <li key={index}>{practice}</li>
-                ))}
-              </ul>
-            </div>
+            <section className="space-y-4">
+              <div className="space-y-2">
+                <h3 className={classes.sidebarHeading}>Guidelines</h3>
+                <p className="text-sm leading-6 text-muted-foreground">{guidelines.description}</p>
+              </div>
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold uppercase tracking-[0.35em] text-muted-foreground">
+                  Required Fields
+                </h4>
+                <ul className={classes.sidebarList}>
+                  {guidelines.requiredFields.map((field, index) => (
+                    <li key={`required-${index}`}>{field}</li>
+                  ))}
+                </ul>
+              </div>
+              <div className="space-y-2">
+                <h4 className="text-xs font-semibold uppercase tracking-[0.35em] text-muted-foreground">
+                  Best Practices
+                </h4>
+                <ul className={classes.sidebarList}>
+                  {guidelines.bestPractices.map((practice, index) => (
+                    <li key={`practice-${index}`}>{practice}</li>
+                  ))}
+                </ul>
+              </div>
+            </section>
           )}
 
           {checklist.length > 0 && (
-            <div className={styles.checklist}>
-              <h3>Task Checklist</h3>
-              <ul>
+            <section className="space-y-3">
+              <h3 className={classes.sidebarHeading}>Task Checklist</h3>
+              <ul className={classes.sidebarList}>
                 {checklist.map((item, index) => (
-                  <li key={index} className={styles.checklistItem}>
-                    {item}
-                  </li>
+                  <li key={`checklist-${index}`}>{item}</li>
                 ))}
               </ul>
-            </div>
+            </section>
           )}
-        </div>
+        </aside>
 
-        {/* Main Form */}
-        <div className={styles.mainForm}>
-          {/* Navigation */}
-          <div className={styles.navigation}>
-            {sections.map(section => (
+        <div className={classes.mainForm}>
+          <nav className={classes.navigation}>
+            {sections.map((section) => (
               <button
                 key={section.id}
                 type="button"
-                className={`${styles.navBtn} ${activeSection === section.id ? styles.active : ''}`}
+                className={navButtonClass(activeSection === section.id)}
                 onClick={() => setActiveSection(section.id)}
               >
-                {section.icon} {section.label}
+                <span aria-hidden="true">{section.icon}</span>
+                {section.label}
               </button>
             ))}
-          </div>
+          </nav>
 
-          {/* Validation Results */}
           {validation && (
-            <div className={styles.validation}>
+            <div className={classes.validation}>
               {validation.errors.length > 0 && (
-                <div className={styles.errors}>
-                  <h4>❌ Errors</h4>
-                  <ul>
-                    {validation.errors.map((error, index) => (
-                      <li key={index}>{error}</li>
+                <div className={validationBlockClass.error}>
+                  <h4 className={validationBlockClass.title}>❌ Errors</h4>
+                  <ul className={classes.validationList}>
+                    {validation.errors.map((item, index) => (
+                      <li key={`error-${index}`}>{item}</li>
                     ))}
                   </ul>
                 </div>
               )}
-              
+
               {validation.warnings.length > 0 && (
-                <div className={styles.warnings}>
-                  <h4>⚠️ Warnings</h4>
-                  <ul>
-                    {validation.warnings.map((warning, index) => (
-                      <li key={index}>{warning}</li>
+                <div className={validationBlockClass.warning}>
+                  <h4 className={validationBlockClass.title}>⚠️ Warnings</h4>
+                  <ul className={classes.validationList}>
+                    {validation.warnings.map((item, index) => (
+                      <li key={`warning-${index}`}>{item}</li>
                     ))}
                   </ul>
                 </div>
               )}
-              
+
               {validation.suggestions.length > 0 && (
-                <div className={styles.suggestions}>
-                  <h4>💡 Suggestions</h4>
-                  <ul>
-                    {validation.suggestions.map((suggestion, index) => (
-                      <li key={index}>{suggestion}</li>
+                <div className={validationBlockClass.suggestion}>
+                  <h4 className={validationBlockClass.title}>💡 Suggestions</h4>
+                  <ul className={classes.validationList}>
+                    {validation.suggestions.map((item, index) => (
+                      <li key={`suggestion-${index}`}>{item}</li>
                     ))}
                   </ul>
                 </div>
@@ -396,19 +551,18 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className={styles.form}>
-            {/* Basic Info Section */}
-            {activeSection === 'basic' && (
-              <div className={styles.section}>
-                <h3>Basic Information</h3>
-                
-                <div className={styles.formRow}>
-                  <div className={styles.formGroup}>
-                    <label>Task Type *</label>
+          <form onSubmit={handleSubmit} className={classes.form}>
+            {activeSection === "basic" && (
+              <section className={classes.section}>
+                <h3 className={classes.sectionTitle}>Basic Information</h3>
+
+                <div className={classes.formRow}>
+                  <div className={classes.formGroup}>
+                    <label className={classes.label}>Task Type *</label>
                     <select
                       value={taskData.type}
-                      onChange={(e) => setTaskData({ ...taskData, type: e.target.value })}
-                      className={styles.formInput}
+                      onChange={(event) => setTaskData({ ...taskData, type: event.target.value })}
+                      className={classes.select}
                       title="Select task type"
                     >
                       <option value="implementation">Implementation</option>
@@ -422,16 +576,13 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
                       <option value="cleanup">Cleanup</option>
                     </select>
                   </div>
-                  
-                </div>
 
-                <div className={styles.formRow}>
-                  <div className={styles.formGroup}>
-                    <label>Assigned Agent *</label>
+                  <div className={classes.formGroup}>
+                    <label className={classes.label}>Assigned Agent *</label>
                     <select
                       value={taskData.assignedAgent}
-                      onChange={(e) => setTaskData({ ...taskData, assignedAgent: e.target.value })}
-                      className={styles.formInput}
+                      onChange={(event) => setTaskData({ ...taskData, assignedAgent: event.target.value })}
+                      className={classes.select}
                       title="Select assigned agent"
                       required
                     >
@@ -443,13 +594,13 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
                       <option value="documentation-specialist">Documentation Specialist (Morgan)</option>
                     </select>
                   </div>
-                  
-                  <div className={styles.formGroup}>
-                    <label>Project *</label>
+
+                  <div className={classes.formGroup}>
+                    <label className={classes.label}>Project *</label>
                     <select
                       value={taskData.project}
-                      onChange={(e) => setTaskData({ ...taskData, project: e.target.value })}
-                      className={styles.formInput}
+                      onChange={(event) => setTaskData({ ...taskData, project: event.target.value })}
+                      className={classes.select}
                       title="Select target project"
                       required
                     >
@@ -466,158 +617,92 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
                   </div>
                 </div>
 
-                <div className={styles.formGroup}>
-                  <label>Title *</label>
-                  <input
-                    type="text"
+                <div className={classes.formGroup}>
+                  <label className={classes.label}>Title *</label>
+                  <Input
                     value={taskData.title}
-                    onChange={(e) => setTaskData({ ...taskData, title: e.target.value })}
+                    onChange={(event) => setTaskData({ ...taskData, title: event.target.value })}
                     placeholder="Specific, descriptive task title"
-                    className={styles.formInput}
                     required
                   />
                 </div>
 
-                <div className={styles.formGroup}>
-                  <label>Description *</label>
+                <div className={classes.formGroup}>
+                  <label className={classes.label}>Description *</label>
                   <textarea
                     value={taskData.description}
-                    onChange={(e) => setTaskData({ ...taskData, description: e.target.value })}
-                    placeholder="Describe the task in detail. Include:
-- What needs to be implemented/changed
-- Why this change is needed  
-- Expected behavior and outcomes
-- Any specific requirements or constraints
-- Context and background information"
-                    className={styles.formTextarea}
+                    onChange={(event) => setTaskData({ ...taskData, description: event.target.value })}
+                    placeholder={
+                      "Describe the task in detail. Include:\n- What needs to be implemented/changed\n- Why this change is needed\n- Expected behavior and outcomes\n- Any specific requirements or constraints\n- Context and background information"
+                    }
+                    className={classes.textarea}
                     rows={6}
                     required
                   />
                 </div>
-
-              </div>
+              </section>
             )}
 
-            {/* Specification Section */}
-            {activeSection === 'specification' && (
-              <div className={styles.section}>
-                <h3>Detailed Specification</h3>
-                
-                <div className={styles.formGroup}>
-                  <label>Acceptance Criteria *</label>
-                  {taskData.acceptanceCriteria.map((criteria, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={criteria}
-                        onChange={(e) => handleArrayFieldChange('acceptanceCriteria', index, e.target.value)}
-                        placeholder="Specific, testable acceptance criteria"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeArrayField('acceptanceCriteria', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addArrayField('acceptanceCriteria')}
-                    className={styles.addBtn}
-                  >
-                    + Add Criteria
-                  </button>
-                </div>
+            {activeSection === "specification" && (
+              <section className={classes.section}>
+                <h3 className={classes.sectionTitle}>Detailed Specification</h3>
 
-                <div className={styles.formGroup}>
-                  <label>Architecture References *</label>
-                  {taskData.architectureReferences.map((ref, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={ref}
-                        onChange={(e) => handleArrayFieldChange('architectureReferences', index, e.target.value)}
-                        placeholder="Path to architecture documentation"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeArrayField('architectureReferences', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addArrayField('architectureReferences')}
-                    className={styles.addBtn}
-                  >
-                    + Add Reference
-                  </button>
-                </div>
+                {renderArrayField("acceptanceCriteria", {
+                  label: "Acceptance Criteria *",
+                  placeholder: "Specific, testable acceptance criteria",
+                  addLabel: "Add Criteria",
+                  required: true,
+                })}
 
-                <div className={styles.formGroup}>
-                  <label>Long-term Goals</label>
-                  {taskData.longTermGoals.map((goal, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={goal}
-                        onChange={(e) => handleArrayFieldChange('longTermGoals', index, e.target.value)}
-                        placeholder="How this task contributes to larger initiatives"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeArrayField('longTermGoals', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addArrayField('longTermGoals')}
-                    className={styles.addBtn}
-                  >
-                    + Add Goal
-                  </button>
-                </div>
+                {renderArrayField("architectureReferences", {
+                  label: "Architecture References *",
+                  placeholder: "Path to architecture documentation",
+                  addLabel: "Add Reference",
+                  required: true,
+                })}
 
-                <div className={styles.formRow}>
-                  <div className={styles.formGroup}>
-                    <label>Estimated Hours *</label>
-                    <input
+                {renderArrayField("longTermGoals", {
+                  label: "Long-term Goals",
+                  placeholder: "How this task contributes to larger initiatives",
+                  addLabel: "Add Goal",
+                })}
+
+                <div className={classes.formRow}>
+                  <div className={classes.formGroup}>
+                    <label className={classes.label}>Estimated Hours *</label>
+                    <Input
                       type="number"
+                      min={1}
+                      max={40}
                       value={taskData.estimatedEffort.hours}
-                      onChange={(e) => setTaskData({
-                        ...taskData,
-                        estimatedEffort: { ...taskData.estimatedEffort, hours: parseInt(e.target.value) || 0 }
-                      })}
-                      min="1"
-                      max="40"
-                      className={styles.formInput}
-                      title="Enter estimated hours"
-                      placeholder="Enter hours"
+                      onChange={(event) =>
+                        setTaskData({
+                          ...taskData,
+                          estimatedEffort: {
+                            ...taskData.estimatedEffort,
+                            hours: Number(event.target.value) || 0,
+                          },
+                        })
+                      }
+                      placeholder="Enter estimated hours"
                       required
                     />
                   </div>
-                  
-                  <div className={styles.formGroup}>
-                    <label>Complexity *</label>
+
+                  <div className={classes.formGroup}>
+                    <label className={classes.label}>Complexity *</label>
                     <select
                       value={taskData.estimatedEffort.complexity}
-                      onChange={(e) => setTaskData({
-                        ...taskData,
-                        estimatedEffort: { ...taskData.estimatedEffort, complexity: e.target.value as any }
-                      })}
-                      className={styles.formInput}
+                      onChange={(event) =>
+                        setTaskData({
+                          ...taskData,
+                          estimatedEffort: {
+                            ...taskData.estimatedEffort,
+                            complexity: event.target.value as EnhancedTaskData["estimatedEffort"]["complexity"],
+                          },
+                        })
+                      }
+                      className={classes.select}
                       title="Select complexity level"
                     >
                       <option value="simple">Simple</option>
@@ -626,16 +711,21 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
                       <option value="expert">Expert</option>
                     </select>
                   </div>
-                  
-                  <div className={styles.formGroup}>
-                    <label>Confidence *</label>
+
+                  <div className={classes.formGroup}>
+                    <label className={classes.label}>Confidence *</label>
                     <select
                       value={taskData.estimatedEffort.confidence}
-                      onChange={(e) => setTaskData({
-                        ...taskData,
-                        estimatedEffort: { ...taskData.estimatedEffort, confidence: e.target.value as any }
-                      })}
-                      className={styles.formInput}
+                      onChange={(event) =>
+                        setTaskData({
+                          ...taskData,
+                          estimatedEffort: {
+                            ...taskData.estimatedEffort,
+                            confidence: event.target.value as EnhancedTaskData["estimatedEffort"]["confidence"],
+                          },
+                        })
+                      }
+                      className={classes.select}
                       title="Select confidence level"
                     >
                       <option value="low">Low</option>
@@ -644,564 +734,160 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
                     </select>
                   </div>
                 </div>
-              </div>
+              </section>
             )}
 
-            {/* Implementation Section */}
-            {activeSection === 'implementation' && (
-              <div className={styles.section}>
-                <h3>Implementation Details</h3>
-                
-                <div className={styles.formGroup}>
-                  <label>Files to Modify (Optional)</label>
-                  {taskData.files.map((file, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={file}
-                        onChange={(e) => handleArrayFieldChange('files', index, e.target.value)}
-                        placeholder="Path to file to be modified"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeArrayField('files', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addArrayField('files')}
-                    className={styles.addBtn}
-                  >
-                    + Add File
-                  </button>
-                </div>
+            {activeSection === "implementation" && (
+              <section className={classes.section}>
+                <h3 className={classes.sectionTitle}>Implementation Details</h3>
 
-                <div className={styles.formGroup}>
-                  <label>Dependencies (Optional)</label>
-                  {taskData.dependencies.map((dep, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={dep}
-                        onChange={(e) => handleArrayFieldChange('dependencies', index, e.target.value)}
-                        placeholder="Task or system dependencies"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeArrayField('dependencies', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addArrayField('dependencies')}
-                    className={styles.addBtn}
-                  >
-                    + Add Dependency
-                  </button>
-                </div>
+                {renderArrayField("files", {
+                  label: "Files to Modify (Optional)",
+                  placeholder: "Path to file to be modified",
+                  addLabel: "Add File",
+                })}
 
-                <div className={styles.formGroup}>
-                  <label>Validation Steps *</label>
-                  {taskData.validationSteps.map((step, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={step}
-                        onChange={(e) => handleArrayFieldChange('validationSteps', index, e.target.value)}
-                        placeholder="How to verify the task is completed correctly"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeArrayField('validationSteps', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addArrayField('validationSteps')}
-                    className={styles.addBtn}
-                  >
-                    + Add Step
-                  </button>
-                </div>
+                {renderArrayField("dependencies", {
+                  label: "Dependencies (Optional)",
+                  placeholder: "Task or system dependencies",
+                  addLabel: "Add Dependency",
+                })}
 
-                <div className={styles.formGroup}>
-                  <label>Rollback Plan</label>
-                  {taskData.rollbackPlan.map((plan, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={plan}
-                        onChange={(e) => handleArrayFieldChange('rollbackPlan', index, e.target.value)}
-                        placeholder="Steps to undo changes if something goes wrong"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeArrayField('rollbackPlan', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addArrayField('rollbackPlan')}
-                    className={styles.addBtn}
-                  >
-                    + Add Plan
-                  </button>
-                </div>
-              </div>
+                {renderArrayField("validationSteps", {
+                  label: "Validation Steps *",
+                  placeholder: "How to verify the task is completed correctly",
+                  addLabel: "Add Step",
+                  required: true,
+                })}
+
+                {renderArrayField("rollbackPlan", {
+                  label: "Rollback Plan",
+                  placeholder: "Steps to undo changes if something goes wrong",
+                  addLabel: "Add Plan",
+                })}
+              </section>
             )}
 
-            {/* Quality Section */}
-            {activeSection === 'quality' && (
-              <div className={styles.section}>
-                <h3>Quality Assurance</h3>
-                
-                <div className={styles.formGroup}>
-                  <label>Success Metrics *</label>
-                  {taskData.successMetrics.map((metric, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={metric}
-                        onChange={(e) => handleArrayFieldChange('successMetrics', index, e.target.value)}
-                        placeholder="Measurable success criteria"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeArrayField('successMetrics', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addArrayField('successMetrics')}
-                    className={styles.addBtn}
-                  >
-                    + Add Metric
-                  </button>
-                </div>
+            {activeSection === "quality" && (
+              <section className={classes.section}>
+                <h3 className={classes.sectionTitle}>Quality Assurance</h3>
 
-                <div className={styles.formGroup}>
-                  <label>Testing Requirements *</label>
-                  {taskData.testingRequirements.map((req, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={req}
-                        onChange={(e) => handleArrayFieldChange('testingRequirements', index, e.target.value)}
-                        placeholder="Testing requirements and expectations"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeArrayField('testingRequirements', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addArrayField('testingRequirements')}
-                    className={styles.addBtn}
-                  >
-                    + Add Requirement
-                  </button>
-                </div>
+                {renderArrayField("successMetrics", {
+                  label: "Success Metrics *",
+                  placeholder: "Measurable success criteria",
+                  addLabel: "Add Metric",
+                  required: true,
+                })}
 
-                <div className={styles.formGroup}>
-                  <label>Documentation Requirements *</label>
-                  {taskData.documentationRequirements.map((req, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={req}
-                        onChange={(e) => handleArrayFieldChange('documentationRequirements', index, e.target.value)}
-                        placeholder="Documentation that needs to be updated"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeArrayField('documentationRequirements', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addArrayField('documentationRequirements')}
-                    className={styles.addBtn}
-                  >
-                    + Add Requirement
-                  </button>
-                </div>
-              </div>
+                {renderArrayField("testingRequirements", {
+                  label: "Testing Requirements *",
+                  placeholder: "Testing requirements and expectations",
+                  addLabel: "Add Requirement",
+                  required: true,
+                })}
+
+                {renderArrayField("documentationRequirements", {
+                  label: "Documentation Requirements *",
+                  placeholder: "Documentation that needs to be updated",
+                  addLabel: "Add Requirement",
+                  required: true,
+                })}
+              </section>
             )}
 
-            {/* Context Section */}
-            {activeSection === 'context' && (
-              <div className={styles.section}>
-                <h3>Context and Boundaries</h3>
-                
-                <div className={styles.formGroup}>
-                  <label>Prerequisites</label>
-                  {taskData.prerequisites.map((prereq, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={prereq}
-                        onChange={(e) => handleArrayFieldChange('prerequisites', index, e.target.value)}
-                        placeholder="Required knowledge, setup, or dependencies"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeArrayField('prerequisites', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addArrayField('prerequisites')}
-                    className={styles.addBtn}
-                  >
-                    + Add Prerequisite
-                  </button>
-                </div>
+            {activeSection === "context" && (
+              <section className={classes.section}>
+                <h3 className={classes.sectionTitle}>Context and Boundaries</h3>
 
-                <div className={styles.formGroup}>
-                  <label>Must Not Change</label>
-                  {taskData.contextBoundaries.mustNotChange.map((boundary, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={boundary}
-                        onChange={(e) => handleContextBoundaryChange('mustNotChange', index, e.target.value)}
-                        placeholder="What must not be changed"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeContextBoundary('mustNotChange', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addContextBoundary('mustNotChange')}
-                    className={styles.addBtn}
-                  >
-                    + Add Boundary
-                  </button>
-                </div>
+                {renderArrayField("prerequisites", {
+                  label: "Prerequisites",
+                  placeholder: "Required knowledge, setup, or dependencies",
+                  addLabel: "Add Prerequisite",
+                })}
 
-                <div className={styles.formGroup}>
-                  <label>Must Not Affect</label>
-                  {taskData.contextBoundaries.mustNotAffect.map((boundary, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={boundary}
-                        onChange={(e) => handleContextBoundaryChange('mustNotAffect', index, e.target.value)}
-                        placeholder="What must not be affected"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeContextBoundary('mustNotAffect', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addContextBoundary('mustNotAffect')}
-                    className={styles.addBtn}
-                  >
-                    + Add Boundary
-                  </button>
-                </div>
+                {renderContextBoundaryField("mustNotChange", {
+                  label: "Must Not Change",
+                  placeholder: "What must not be changed",
+                  addLabel: "Add Boundary",
+                })}
 
-                <div className={styles.formGroup}>
-                  <label>Integration Points</label>
-                  {taskData.contextBoundaries.integrationPoints.map((point, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={point}
-                        onChange={(e) => handleContextBoundaryChange('integrationPoints', index, e.target.value)}
-                        placeholder="How this connects to other systems"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeContextBoundary('integrationPoints', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addContextBoundary('integrationPoints')}
-                    className={styles.addBtn}
-                  >
-                    + Add Point
-                  </button>
-                </div>
-              </div>
+                {renderContextBoundaryField("mustNotAffect", {
+                  label: "Must Not Affect",
+                  placeholder: "What must not be affected",
+                  addLabel: "Add Boundary",
+                })}
+
+                {renderContextBoundaryField("integrationPoints", {
+                  label: "Integration Points",
+                  placeholder: "How this connects to other systems",
+                  addLabel: "Add Point",
+                })}
+              </section>
             )}
 
-            {/* Workflow Section */}
-            {activeSection === 'workflow' && (
-              <div className={styles.section}>
-                <h3>Workflow Context</h3>
-                
-                <div className={styles.formGroup}>
-                  <label>Parent Initiative</label>
-                  <input
-                    type="text"
-                    value={taskData.parentInitiative || ''}
-                    onChange={(e) => setTaskData({ ...taskData, parentInitiative: e.target.value })}
+            {activeSection === "workflow" && (
+              <section className={classes.section}>
+                <h3 className={classes.sectionTitle}>Workflow Context</h3>
+
+                <div className={classes.formGroup}>
+                  <label className={classes.label}>Parent Initiative</label>
+                  <Input
+                    value={taskData.parentInitiative ?? ""}
+                    onChange={(event) => setTaskData({ ...taskData, parentInitiative: event.target.value })}
                     placeholder="Larger project or initiative this task belongs to"
-                    className={styles.formInput}
                   />
                 </div>
 
-                <div className={styles.formGroup}>
-                  <label>Related Tasks</label>
-                  {taskData.relatedTasks.map((task, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={task}
-                        onChange={(e) => handleArrayFieldChange('relatedTasks', index, e.target.value)}
-                        placeholder="Related task IDs or descriptions"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeArrayField('relatedTasks', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addArrayField('relatedTasks')}
-                    className={styles.addBtn}
-                  >
-                    + Add Task
-                  </button>
-                </div>
+                {renderArrayField("relatedTasks", {
+                  label: "Related Tasks",
+                  placeholder: "Related task IDs or descriptions",
+                  addLabel: "Add Task",
+                })}
 
-                <div className={styles.formGroup}>
-                  <label>Blockers</label>
-                  {taskData.blockers.map((blocker, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={blocker}
-                        onChange={(e) => handleArrayFieldChange('blockers', index, e.target.value)}
-                        placeholder="Issues that might block this task"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeArrayField('blockers', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addArrayField('blockers')}
-                    className={styles.addBtn}
-                  >
-                    + Add Blocker
-                  </button>
-                </div>
+                {renderArrayField("blockers", {
+                  label: "Blockers",
+                  placeholder: "Issues that might block this task",
+                  addLabel: "Add Blocker",
+                })}
 
-                <div className={styles.formGroup}>
-                  <label>Required Skills</label>
-                  {taskData.requiredSkills.map((skill, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={skill}
-                        onChange={(e) => handleArrayFieldChange('requiredSkills', index, e.target.value)}
-                        placeholder="Skills required to complete this task"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeArrayField('requiredSkills', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addArrayField('requiredSkills')}
-                    className={styles.addBtn}
-                  >
-                    + Add Skill
-                  </button>
-                </div>
-              </div>
+                {renderArrayField("requiredSkills", {
+                  label: "Required Skills",
+                  placeholder: "Skills required to complete this task",
+                  addLabel: "Add Skill",
+                })}
+              </section>
             )}
 
-            {/* Additional Section */}
-            {activeSection === 'additional' && (
-              <div className={styles.section}>
-                <h3>Additional Context</h3>
-                
-                <div className={styles.formGroup}>
-                  <label>Assumptions</label>
-                  {taskData.assumptions.map((assumption, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={assumption}
-                        onChange={(e) => handleArrayFieldChange('assumptions', index, e.target.value)}
-                        placeholder="Assumptions made about the task"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeArrayField('assumptions', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addArrayField('assumptions')}
-                    className={styles.addBtn}
-                  >
-                    + Add Assumption
-                  </button>
-                </div>
+            {activeSection === "additional" && (
+              <section className={classes.section}>
+                <h3 className={classes.sectionTitle}>Additional Context</h3>
 
-                <div className={styles.formGroup}>
-                  <label>Risks</label>
-                  {taskData.risks.map((risk, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={risk}
-                        onChange={(e) => handleArrayFieldChange('risks', index, e.target.value)}
-                        placeholder="Potential risks and mitigation strategies"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeArrayField('risks', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addArrayField('risks')}
-                    className={styles.addBtn}
-                  >
-                    + Add Risk
-                  </button>
-                </div>
+                {renderArrayField("assumptions", {
+                  label: "Assumptions",
+                  placeholder: "Assumptions made about the task",
+                  addLabel: "Add Assumption",
+                })}
 
-                <div className={styles.formGroup}>
-                  <label>Alternatives</label>
-                  {taskData.alternatives.map((alternative, index) => (
-                    <div key={index} className={styles.arrayField}>
-                      <input
-                        type="text"
-                        value={alternative}
-                        onChange={(e) => handleArrayFieldChange('alternatives', index, e.target.value)}
-                        placeholder="Alternative approaches considered"
-                        className={styles.formInput}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => removeArrayField('alternatives', index)}
-                        className={styles.removeBtn}
-                      >
-                        Remove
-                      </button>
-                    </div>
-                  ))}
-                  <button
-                    type="button"
-                    onClick={() => addArrayField('alternatives')}
-                    className={styles.addBtn}
-                  >
-                    + Add Alternative
-                  </button>
-                </div>
-              </div>
+                {renderArrayField("risks", {
+                  label: "Risks",
+                  placeholder: "Potential risks and mitigation strategies",
+                  addLabel: "Add Risk",
+                })}
+
+                {renderArrayField("alternatives", {
+                  label: "Alternatives",
+                  placeholder: "Alternative approaches considered",
+                  addLabel: "Add Alternative",
+                })}
+              </section>
             )}
 
-            {/* Error Display */}
-            {error && (
-              <div className={styles.error}>
-                {error}
-              </div>
-            )}
+            {error && <div className={classes.error}>{error}</div>}
 
-            {/* Submit Button */}
-            <div className={styles.formActions}>
-              <button
-                type="submit"
-                disabled={loading || !validation?.isValid}
-                className={styles.submitBtn}
-              >
-                {loading ? 'Creating...' : 'Create Enhanced Task'}
-              </button>
+            <div className={classes.formActions}>
+              <Button type="submit" disabled={loading || !validation?.isValid}>
+                {loading ? "Creating..." : "Create Enhanced Task"}
+              </Button>
             </div>
           </form>
         </div>
