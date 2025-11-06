@@ -1123,7 +1123,12 @@ export class DevBotsManager extends EventEmitter {
       category: 'process',
       action: 'executing_task_with_docker_run',
       message: `Executing task ${task.id} with docker run (ephemeral container)`,
-      details: { workerId, agent: agent.id }
+      details: {
+        workerId,
+        agent: agent.id,
+        taskTitle: task.title,
+        dockerCommand: dockerArgs.join(' ')
+      }
     });
 
     // Execute with spawn
@@ -1157,7 +1162,15 @@ export class DevBotsManager extends EventEmitter {
       category: 'process',
       action: 'docker_run_completed',
       message: `Docker run completed with exit code ${exitCode}`,
-      details: { taskId: task.id, exitCode }
+      details: {
+        taskId: task.id,
+        taskTitle: task.title,
+        exitCode,
+        stdoutLength: stdout.length,
+        stderrLength: stderr.length,
+        stdoutPreview: stdout.substring(0, 200),
+        stderrPreview: stderr.substring(0, 200)
+      }
     });
 
     // Handle task completion
@@ -1206,6 +1219,19 @@ export class DevBotsManager extends EventEmitter {
       }
     } else {
       // Non-zero exit code
+      logger.error({
+        category: 'process',
+        action: 'docker_run_failed',
+        message: `Docker run failed for task ${task.id} with exit code ${exitCode}`,
+        details: {
+          taskId: task.id,
+          taskTitle: task.title,
+          exitCode,
+          stdout,
+          stderr
+        }
+      });
+
       task.status = 'failed';
       task.error = `Docker run failed with exit code ${exitCode}. stderr: ${stderr}`;
       task.completedAt = new Date().toISOString();
