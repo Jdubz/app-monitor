@@ -32,11 +32,12 @@ describe('PortBadge', () => {
     it('applies correct styling for port in use', () => {
       const { container } = render(<PortBadge portInfo={portInfoInUse} onKillPort={mockOnKillPort} />);
       const badge = container.querySelector('span[title*="Port 3000"]');
-      expect(badge).toHaveStyle({
-        backgroundColor: '#ffe0e0',
-        color: '#c62828',
-        cursor: 'pointer',
-      });
+      expect(badge).toHaveClass(
+        'border-rose-500/40',
+        'bg-rose-500/15',
+        'text-rose-100',
+      );
+      expect(badge).toHaveClass('hover:-translate-y-0.5');
     });
 
     it('has correct title/tooltip for port in use', () => {
@@ -217,11 +218,12 @@ describe('PortBadge', () => {
     it('applies correct styling for available port', () => {
       const { container } = render(<PortBadge portInfo={portInfoAvailable} onKillPort={mockOnKillPort} />);
       const badge = container.querySelector('span[title*="Port 4000"]');
-      expect(badge).toHaveStyle({
-        backgroundColor: '#e8f5e9',
-        color: '#2e7d32',
-        cursor: 'default',
-      });
+      expect(badge).toHaveClass(
+        'border-emerald-500/40',
+        'bg-emerald-500/15',
+        'text-emerald-100',
+      );
+      expect(badge?.className).not.toContain('hover:-translate-y-0.5');
     });
 
     it('has correct title/tooltip for available port', () => {
@@ -238,8 +240,7 @@ describe('PortBadge', () => {
       const mouseEnterEvent = new MouseEvent('mouseenter', { bubbles: true });
       badge.dispatchEvent(mouseEnterEvent);
 
-      // Background should remain the same (no hover effect since onMouseEnter only modifies if inUse)
-      expect(badge).toHaveStyle({ backgroundColor: '#e8f5e9' });
+      expect(badge.className).not.toContain('hover:-translate-y-0.5');
     });
   });
 
@@ -250,10 +251,8 @@ describe('PortBadge', () => {
 
       const badge = container.querySelector('span[title*="Port 3000"]');
       const dot = badge?.querySelector('span');
-      expect(dot).toHaveStyle({
-        backgroundColor: '#d32f2f',
-        borderRadius: '50%',
-      });
+      expect(dot).toHaveClass('bg-rose-400');
+      expect(dot).toHaveClass('rounded-full');
     });
 
     it('shows green dot for available port', () => {
@@ -262,10 +261,8 @@ describe('PortBadge', () => {
 
       const badge = container.querySelector('span[title*="Port 4000"]');
       const dot = badge?.querySelector('span');
-      expect(dot).toHaveStyle({
-        backgroundColor: '#4caf50',
-        borderRadius: '50%',
-      });
+      expect(dot).toHaveClass('bg-emerald-400');
+      expect(dot).toHaveClass('rounded-full');
     });
   });
 });

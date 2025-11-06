@@ -380,6 +380,7 @@ const CloudPanelCard: React.FC<CloudPanelCardProps> = ({
             size="sm"
             onClick={onRemove}
             className="gap-2"
+            title="Remove panel"
           >
             <Trash2 className="h-4 w-4" />
             Remove

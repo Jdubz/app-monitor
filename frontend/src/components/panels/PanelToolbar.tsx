@@ -46,6 +46,7 @@ const PanelToolbar: React.FC<PanelToolbarProps> = ({
         onClick={onAddPanel}
         disabled={panelCount >= maxPanels}
         className="gap-2"
+        title="Add new panel"
       >
         <Plus className="h-4 w-4" />
         Add Panel

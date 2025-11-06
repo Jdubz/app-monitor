@@ -103,8 +103,8 @@ describe('CloudPanelContainer', () => {
         if (envSelect) {
           const options = Array.from(envSelect.querySelectorAll('option'));
           expect(options).toHaveLength(2); // Only staging and production, not local
-          expect(options[0].textContent).toBe('Staging - All');
-          expect(options[1].textContent).toBe('Production - All');
+          expect(options[0].textContent).toBe('Staging');
+          expect(options[1].textContent).toBe('Production');
           // Verify local is NOT in the list
           expect(options.find(opt => opt.textContent?.includes('Local'))).toBeUndefined();
         }
@@ -284,6 +284,8 @@ describe('CloudPanelContainer', () => {
     });
 
     it('should not remove the last panel', async () => {
+      const user = userEvent.setup();
+
       render(
         <CloudPanelContainer
           socket={mockSocket as Socket}
@@ -291,9 +293,15 @@ describe('CloudPanelContainer', () => {
         />
       );
 
-      // Find remove button - should be disabled when only 1 panel
       const removeButtons = screen.getAllByTitle(/remove panel|cannot remove last panel/i);
-      expect(removeButtons[0]).toBeDisabled();
+      expect(removeButtons).toHaveLength(1);
+
+      await user.click(removeButtons[0]);
+
+      await waitFor(() => {
+        const envSelectors = screen.getAllByTitle('Select environment');
+        expect(envSelectors).toHaveLength(1);
+      });
     });
   });
 
