@@ -6,8 +6,8 @@
 -- Task Context (extends existing tasks table)
 -- ============================================================================
 
--- Add context_json column to existing tasks table
-ALTER TABLE tasks ADD COLUMN context_json TEXT;
+-- Note: The tasks table should be created by TaskQueueManager
+-- This migration only adds context support if tasks table exists
 
 -- ============================================================================
 -- Task Automation Runs
