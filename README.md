@@ -2,6 +2,40 @@
 
 Developer monitoring and automation tool for the job-finder-app-manager ecosystem.
 
+## 📊 Project Status: Pre-POC Stabilization
+
+**Current Phase:** Stabilization (v0.2.0)
+**Status:** Active Development
+**Last Updated:** November 6, 2025
+
+This project is currently in **pre-POC stabilization** phase, preparing the foundation for an autonomous continuous task queue. Key accomplishments and ongoing work:
+
+### ✅ Completed Stabilization Tasks
+- **Frontend Build Health** (FE-1, FE-2): TypeScript compilation and ESLint warnings resolved
+- **Ephemeral Container Architecture** (TC-4, TC-5): Zero filesystem artifacts, automatic cleanup, tar|docker cp pattern
+- **Safety Mechanisms** (TC-6): Uncommitted changes detection, patch files, git status capture
+- **Dev-Bot Credentials** (TC-4): Fixed credentials mounting, workspace permissions
+
+### 🚧 In Progress
+- **Backend Test Suite** (BE-1): Resolving hanging ProcessManager integration tests
+- **Work-Target Registry** (WT-1-4): SQLite schema migration for work-target metadata
+- **Prompt Engineering v3** (PE-1-6): Task template validation system to prevent scope creep
+- **Quality Metrics** (QM-1-4): Establishing baseline metrics for bot execution
+
+### 📋 Stabilization Goals
+1. Restore green builds/tests so feature work can land safely
+2. Establish SQLite as authoritative work-target registry
+3. Align developer workflows (hooks, scripts, docs) with current tooling
+4. Capture baseline metrics for continuous task queue
+5. Implement v3 prompt engineering to prevent scope creep
+6. Establish quality metrics and monitoring baselines
+
+**Note:** Some TypeScript build errors remain in backend. These are being addressed as part of ongoing stabilization work.
+
+📖 For complete stabilization details, see [Stabilization Plan](./docs/plans/APP_MONITOR_STABILIZATION_PLAN.md) and [Capability Roadmap](./docs/plans/APP_MONITOR_CAPABILITY_ROADMAP.md).
+
+---
+
 ## ⚠️ CRITICAL: Development vs Production
 
 ### Development Environment (THIS ONE)
