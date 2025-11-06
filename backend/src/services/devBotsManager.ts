@@ -37,116 +37,252 @@ export interface WorkerInfo {
   currentTask?: string;
 }
 
-export type TaskStatus = 'pending' | 'assigned' | 'active' | 'completed' | 'failed' | 'retrying';
-
 /**
- * Task interface representing a unit of work for dev-bots agents
+ * Represents a task to be executed by a development bot worker
  */
 export interface Task {
-  /** @type {string} Unique identifier for the task */
+  /**
+   * Unique identifier for the task
+   * @type {string}
+   */
   id: string;
-  /** @type {string} Type of task (e.g., implementation, bug fix, refactoring) */
+  /**
+   * Type of task (e.g., implementation, bug fix, refactoring)
+   * @type {string}
+   */
   type: string;
-  /** @type {string} Specific title describing the task */
+  /**
+   * Specific title describing the task
+   * @type {string}
+   */
   title: string;
-  /** @type {string} Detailed description of what needs to be done */
+  /**
+   * Detailed description of what needs to be done
+   * @type {string}
+   */
   description?: string;
-  /** @type {string} Documentation the worker should read before starting */
+  /**
+   * Documentation the worker should read before starting
+   * @type {string}
+   */
   documentation?: string;
-  /** @type {string} Additional context or notes for task execution */
+  /**
+   * Additional context or notes for task execution
+   * @type {string}
+   */
   notes?: string;
-  /** @type {TaskStatus} Current status of the task */
-  status: TaskStatus;
-  /** @type {string} ISO timestamp when task was created */
+  /**
+   * Current status of the task
+   * @type {'pending' | 'assigned' | 'active' | 'completed' | 'failed' | 'retrying'}
+   */
+  status: 'pending' | 'assigned' | 'active' | 'completed' | 'failed' | 'retrying';
+  /**
+   * ISO timestamp when task was created
+   * @type {string}
+   */
   createdAt: string;
-  /** @type {string} ID of the worker assigned to this task */
+  /**
+   * ID of the worker assigned to this task
+   * @type {string}
+   */
   assignedWorker?: string;
-  /** @type {string} Agent personality assigned to execute this task */
+  /**
+   * Agent personality assigned to execute this task
+   * @type {string}
+   */
   assignedAgent: string;
-  /** @type {string} ISO timestamp when task was assigned */
+  /**
+   * ISO timestamp when task was assigned
+   * @type {string}
+   */
   assignedAt?: string;
-  /** @type {string} ISO timestamp when task was completed */
+  /**
+   * ISO timestamp when task was completed
+   * @type {string}
+   */
   completedAt?: string;
-  /** @type {string} Output produced by task execution */
+  /**
+   * Output produced by task execution
+   * @type {string}
+   */
   output?: string;
-  /** @type {string} Error message if task failed */
+  /**
+   * Error message if task failed
+   * @type {string}
+   */
   error?: string;
-  /** @type {number} Exit code from task execution */
+  /**
+   * Exit code from task execution
+   * @type {number}
+   */
   exitCode?: number;
-  /** @type {string} Generated prompt used for task execution */
+  /**
+   * Generated prompt used for task execution
+   * @type {string}
+   */
   prompt?: string;
-  /** @type {string[]} List of files to be modified by this task */
+  /**
+   * List of files to be modified by this task
+   * @type {string[]}
+   */
   files?: string[];
-  /** @type {string[]} Task IDs that must complete before this task */
+  /**
+   * Task IDs that must complete before this task
+   * @type {string[]}
+   */
   dependencies?: string[];
-  /** @type {string} Target project for this task */
+  /**
+   * Target project for this task
+   * @type {string}
+   */
   project?: string;
-  /** @type {QualityValidationResult} Quality gate validation results */
+  /**
+   * Quality gate validation results
+   * @type {QualityValidationResult}
+   */
   qualityValidation?: QualityValidationResult;
 
   // Retry system fields
-  /** @type {number} Number of retry attempts made so far */
+  /**
+   * Number of retry attempts made so far
+   * @type {number}
+   */
   retryCount?: number;
-  /** @type {number} Maximum number of retries allowed for this task */
+  /**
+   * Maximum number of retries allowed for this task
+   * @type {number}
+   */
   maxRetries?: number;
-  /** @type {number} Delay in milliseconds before next retry */
+  /**
+   * Delay in milliseconds before next retry
+   * @type {number}
+   */
   retryDelay?: number;
-  /** @type {string} Explanation of why retry was triggered */
+  /**
+   * Explanation of why retry was triggered
+   * @type {string}
+   */
   retryReason?: string;
-  /** @type {RetryAttempt[]} History of all retry attempts */
+  /**
+   * History of all retry attempts
+   * @type {RetryAttempt[]}
+   */
   retryHistory?: RetryAttempt[];
-  /** @type {boolean} Whether this task is eligible for retry */
+  /**
+   * Whether this task is eligible for retry
+   * @type {boolean}
+   */
   canRetry?: boolean;
-  /** @type {'immediate' | 'exponential' | 'linear' | 'manual'} Strategy for retry timing */
+  /**
+   * Strategy for retry timing
+   * @type {'immediate' | 'exponential' | 'linear' | 'manual'}
+   */
   retryStrategy?: 'immediate' | 'exponential' | 'linear' | 'manual';
 
   // Enhanced task specification
-  /** @type {string[]} Explicit acceptance criteria that define task completion */
+  /**
+   * Explicit acceptance criteria that define task completion
+   * @type {string[]}
+   */
   acceptanceCriteria?: string[];
-  /** @type {string[]} References to relevant architecture documentation */
+  /**
+   * References to relevant architecture documentation
+   * @type {string[]}
+   */
   architectureReferences?: string[];
-  /** @type {string[]} Connection to larger initiatives or strategic goals */
+  /**
+   * Connection to larger initiatives or strategic goals
+   * @type {string[]}
+   */
   longTermGoals?: string[];
-  /** @type {object} Effort estimation for task completion */
+  /**
+   * Effort estimation for task completion
+   * @type {object}
+   */
   estimatedEffort?: {
     hours: number;
     complexity: 'simple' | 'medium' | 'complex' | 'expert';
     confidence: 'low' | 'medium' | 'high';
   };
-  /** @type {string[]} Required knowledge or setup before starting */
+  /**
+   * Required knowledge or setup before starting
+   * @type {string[]}
+   */
   prerequisites?: string[];
-  /** @type {object} Boundaries defining what should not be changed */
+  /**
+   * Boundaries defining what should not be changed
+   * @type {object}
+   */
   contextBoundaries?: {
     mustNotChange: string[];
     mustNotAffect: string[];
     integrationPoints: string[];
   };
-  /** @type {string[]} Steps to verify task completion */
+  /**
+   * Steps to verify task completion
+   * @type {string[]}
+   */
   validationSteps?: string[];
-  /** @type {string[]} Actions to take if implementation causes issues */
+  /**
+   * Actions to take if implementation causes issues
+   * @type {string[]}
+   */
   rollbackPlan?: string[];
-  /** @type {string[]} Measurable outcomes that define success */
+  /**
+   * Measurable outcomes that define success
+   * @type {string[]}
+   */
   successMetrics?: string[];
-  /** @type {string[]} Testing requirements for this task */
+  /**
+   * Testing requirements for this task
+   * @type {string[]}
+   */
   testingRequirements?: string[];
-  /** @type {string[]} Documentation requirements for this task */
+  /**
+   * Documentation requirements for this task
+   * @type {string[]}
+   */
   documentationRequirements?: string[];
-  /** @type {string[]} Required agent skills or expertise areas */
+  /**
+   * Required agent skills or expertise areas
+   * @type {string[]}
+   */
   requiredSkills?: string[];
-  /** @type {string} Parent initiative or project this task belongs to */
+  /**
+   * Parent initiative or project this task belongs to
+   * @type {string}
+   */
   parentInitiative?: string;
-  /** @type {string[]} IDs of related tasks */
+  /**
+   * IDs of related tasks
+   * @type {string[]}
+   */
   relatedTasks?: string[];
-  /** @type {string[]} Blocking issues preventing task completion */
+  /**
+   * Blocking issues preventing task completion
+   * @type {string[]}
+   */
   blockers?: string[];
-  /** @type {string[]} Documented assumptions made during planning */
+  /**
+   * Documented assumptions made during planning
+   * @type {string[]}
+   */
   assumptions?: string[];
-  /** @type {string[]} Identified risks for this task */
+  /**
+   * Identified risks for this task
+   * @type {string[]}
+   */
   risks?: string[];
-  /** @type {string[]} Alternative approaches considered but not chosen */
+  /**
+   * Alternative approaches considered but not chosen
+   * @type {string[]}
+   */
   alternatives?: string[];
   
-  /** @type {object} Scope constraints for task execution */
+  /**
+   * Scope constraints for task execution
+   * @type {object}
+   */
   scope?: {
     type: string;
     boundaries: {
@@ -159,9 +295,15 @@ export interface Task {
       allowedPatterns: string[];
     };
   };
-  /** @type {boolean} Whether this task requires urgent attention */
+  /**
+   * Whether this task requires urgent attention
+   * @type {boolean}
+   */
   isEmergency?: boolean;
-  /** @type {string} Chain ID for task dependencies or sequencing */
+  /**
+   * Chain ID for task dependencies or sequencing
+   * @type {string}
+   */
   chainId?: string;
 }
 
