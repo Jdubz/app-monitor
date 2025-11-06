@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import { execFileSync } from 'child_process';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import { logger } from '../utils/logger.js';
 
@@ -62,6 +63,7 @@ export class PushCoordinator {
 }
 
 export class WorkspaceOrchestrator extends EventEmitter {
+  private readonly devBotsRoot: string;
   private readonly repoRoot: string;
   private readonly branch: string;
   private readonly mirrorPath: string;
@@ -78,10 +80,11 @@ export class WorkspaceOrchestrator extends EventEmitter {
       ? path.resolve(config.repoRoot)
       : findNearestGitRoot(process.cwd());
     this.branch = config.branch || 'staging';
-    const devBotsRoot = config.devBotsRoot || path.resolve(process.cwd(), '../dev-bots');
-    this.mirrorPath = config.mirrorPath || path.join(devBotsRoot, 'mirror');
-    this.workspaceRoot = config.workspaceRoot || path.join(devBotsRoot, 'workspaces');
-    this.artifactsRoot = config.artifactsRoot || path.join(devBotsRoot, 'artifacts');
+    this.devBotsRoot = config.devBotsRoot || path.resolve(process.cwd(), '../dev-bots');
+    const tempMirrorRoot = path.join(os.tmpdir(), 'app-monitor-dev-bots', 'mirror');
+    this.mirrorPath = config.mirrorPath || path.join(tempMirrorRoot, this.branch);
+    this.workspaceRoot = config.workspaceRoot || path.join(this.devBotsRoot, 'workspaces');
+    this.artifactsRoot = config.artifactsRoot || path.join(this.devBotsRoot, 'artifacts');
     this.gitUserName = config.gitUserName || 'DevBot';
     this.gitUserEmail = config.gitUserEmail || 'devbot@local';
   }
@@ -89,6 +92,7 @@ export class WorkspaceOrchestrator extends EventEmitter {
   initialize(): void {
     this.ensureDirectory(this.workspaceRoot);
     this.ensureDirectory(this.artifactsRoot);
+    this.cleanupLegacyMirror();
     this.ensureMirror();
   }
 
@@ -331,6 +335,29 @@ export class WorkspaceOrchestrator extends EventEmitter {
   private ensureDirectory(dirPath: string): void {
     if (!fs.existsSync(dirPath)) {
       fs.mkdirSync(dirPath, { recursive: true });
+    }
+  }
+
+  private cleanupLegacyMirror(): void {
+    const legacyMirror = path.join(this.devBotsRoot, 'mirror');
+    if (legacyMirror === this.mirrorPath || !fs.existsSync(legacyMirror)) {
+      return;
+    }
+
+    try {
+      fs.rmSync(legacyMirror, { recursive: true, force: true });
+      logger.info({
+        category: 'workspace',
+        action: 'legacy_mirror_removed',
+        message: `Removed legacy mirror at ${legacyMirror}`
+      });
+    } catch (error) {
+      logger.warn({
+        category: 'workspace',
+        action: 'legacy_mirror_cleanup_failed',
+        message: `Failed to remove legacy mirror at ${legacyMirror}`,
+        error
+      });
     }
   }
 

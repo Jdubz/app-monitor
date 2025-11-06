@@ -7,7 +7,7 @@ import { logger } from '../utils/logger.js';
 import { ProcessManager, ProcessInfo } from './processManager.js';
 import Docker from 'dockerode';
 import { TaskPersistence, TaskStorageConfig } from './taskPersistence.js';
-import { TaskQueueService } from './taskQueue.sqlite.js';
+import { TaskQueueService, Task as SQLiteTask } from './taskQueue.sqlite.js';
 import { TaskQueueMigration } from './taskQueue.migration.js';
 import { AgentPersonalityManager, AgentPersonality } from './agentPersonalities.js';
 import { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplates.js';
@@ -562,13 +562,13 @@ export class DevBotsManager extends EventEmitter {
   private healthCheckInterval?: NodeJS.Timeout;
   private cleanupInterval?: NodeJS.Timeout;
 
-  // Task management
-  private taskQueue: Task[] = [];
-  private activeTasks = new Map<string, Task>();
-  private completedTasks: Task[] = [];
-  private taskIdCounter = 1;
-  private taskFingerprints = new Map<string, string>(); // fingerprint -> taskId
-  private fileModificationLocks = new Map<string, string>(); // file -> taskId
+  // Task management - DEPRECATED (now using SQLite)
+  // private taskQueue: Task[] = [];
+  // private activeTasks = new Map<string, Task>();
+  // private completedTasks: Task[] = [];
+  // private taskIdCounter = 1;
+  // private taskFingerprints = new Map<string, string>();
+  // private fileModificationLocks = new Map<string, string>();
 
   // Worker management
   private workers = new Map<string, WorkerInfo>();
@@ -577,7 +577,7 @@ export class DevBotsManager extends EventEmitter {
 
   // Enhanced services
   private taskPersistence!: TaskPersistence; // Deprecated - keeping for migration only
-  private taskQueue!: TaskQueueService; // New SQLite-based queue
+  private taskQueue!: TaskQueueService; // SQLite-based queue (replaces in-memory arrays)
   private agentManager!: AgentPersonalityManager;
   private templateManager!: TaskPromptTemplateManager;
   private guidelinesManager!: TaskCreationGuidelinesManager;
@@ -611,8 +611,8 @@ export class DevBotsManager extends EventEmitter {
 
     // Ephemeral workers are created on-demand, no initialization needed
 
-    // Load persisted tasks
-    this.loadPersistedTasks();
+    // Load persisted tasks - DEPRECATED (now using SQLite migration)
+    // this.loadPersistedTasks();
 
     // NOTE: Cleanup tasks should be created manually via the task API
     // Linting, testing, documentation are part of the development process
@@ -818,10 +818,99 @@ export class DevBotsManager extends EventEmitter {
       this.handleTaskRetry(task);
     });
 
+    // Start monitoring loops
+    this.startHeartbeatMonitor();
+    this.startLongRunningTaskMonitor();
+
     logger.info({
       category: 'process',
-      action: 'enhanced_services_initialized_task_persistence_age',
-      message: 'Enhanced services initialized: task persistence, agent personalities, prompt templates, creation guidelines, workspace sync, and retry management'
+      action: 'enhanced_services_initialized',
+      message: 'Enhanced services initialized: task persistence, agent personalities, prompt templates, creation guidelines, workspace sync, retry management, and monitoring loops'
+    });
+  }
+
+  /**
+   * Start heartbeat monitoring to detect stalled workers
+   */
+  private startHeartbeatMonitor(): void {
+    setInterval(() => {
+      // Detect stalled workers
+      const stalledWorkers = this.taskQueue.detectStalledWorkers();
+      if (stalledWorkers.length > 0) {
+        logger.warn({
+          category: 'process',
+          action: 'stalled_workers_detected',
+          message: `Detected ${stalledWorkers.length} stalled workers (heartbeat timeout)`,
+          details: stalledWorkers
+        });
+
+        // Tasks from stalled workers are automatically failed by detectStalledWorkers()
+        // Try to assign next tasks to replace them
+        for (let i = 0; i < stalledWorkers.length; i++) {
+          this.assignNextTask();
+        }
+      }
+    }, 60000); // Check every minute
+
+    logger.info({
+      category: 'process',
+      action: 'heartbeat_monitor_started',
+      message: 'Worker heartbeat monitor started (check interval: 60s, timeout: 30s)'
+    });
+  }
+
+  /**
+   * Start long-running task monitoring (warning only, no auto-fail)
+   */
+  private startLongRunningTaskMonitor(): void {
+    setInterval(() => {
+      const longRunning = this.taskQueue.detectLongRunningTasks(1800000); // 30 minutes
+      if (longRunning.length > 0) {
+        logger.warn({
+          category: 'process',
+          action: 'long_running_tasks_detected',
+          message: `${longRunning.length} tasks running longer than 30 minutes (WARNING ONLY - manual investigation recommended)`,
+          details: longRunning.map(task => ({
+            id: task.id,
+            title: task.title,
+            duration: task.duration_ms,
+            durationMinutes: Math.round(task.duration_ms / 60000)
+          }))
+        });
+      }
+    }, 300000); // Check every 5 minutes
+
+    logger.info({
+      category: 'process',
+      action: 'long_running_task_monitor_started',
+      message: 'Long-running task monitor started (check interval: 5min, warning threshold: 30min)'
+    });
+  }
+
+  /**
+   * Get queue metrics for monitoring
+   */
+  public getQueueMetrics() {
+    return this.taskQueue.getQueueMetrics();
+  }
+
+  /**
+   * Get task duration statistics
+   */
+  public getTaskDurationStats(daysBack: number = 30) {
+    return this.taskQueue.getTaskDurationStats(daysBack);
+  }
+
+  /**
+   * Manually timeout a task after verification
+   */
+  public manuallyTimeoutTask(taskId: string, reason: string) {
+    this.taskQueue.manuallyTimeoutTask(taskId, reason);
+    logger.info({
+      category: 'process',
+      action: 'task_manually_timed_out',
+      message: `Task ${taskId} manually timed out`,
+      details: { reason }
     });
   }
 
@@ -850,10 +939,10 @@ export class DevBotsManager extends EventEmitter {
         }
       }
       
-      // Save updated tasks back to persistence if any were reset
-      if (this.taskQueue.length > 0 || this.completedTasks.length > 0) {
-        this.saveTasksToPersistence();
-      }
+      // Save updated tasks back to persistence if any were reset - DEPRECATED
+      // if (this.taskQueue.length > 0 || this.completedTasks.length > 0) {
+      //   this.saveTasksToPersistence();
+      // }
       
       logger.info({
       category: 'process',
@@ -980,50 +1069,169 @@ export class DevBotsManager extends EventEmitter {
   }
 
   // Task Management Methods
-  async addTask(
-    type: string, 
-    title: string,
-    documentation: string,
-    acceptanceCriteria: string,
-    options?: {
-      files?: string[];
-      dependencies?: string[];
-      repository?: string;
-      assignedAgent?: string;
-      notes?: string;
-    }
-  ): Promise<Task> {
-    const task: Task = {
-      id: `task-${this.taskIdCounter++}-${Date.now()}`,
-      type,
-      title,
-      documentation,
-      acceptanceCriteria: [acceptanceCriteria],
-      notes: options?.notes,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      files: options?.files || [],
-      dependencies: options?.dependencies || [],
-      project: options?.repository || 'dev-monitor',
-      assignedAgent: options?.assignedAgent || 'backend-specialist'
+  /**
+   * Add a new task to the queue (unified method with SQLite)
+   * Supports both simple and comprehensive task data
+   */
+  async addTask(taskData: EnhancedTaskData | {
+    type: string;
+    title: string;
+    description?: string;
+    documentation?: string;
+    acceptanceCriteria?: string | string[];
+    files?: string[];
+    dependencies?: string[];
+    project?: string;
+    assignedAgent?: string;
+    notes?: string;
+  }): Promise<{
+    task: Task;
+    validation: {
+      isValid: boolean;
+      errors: string[];
+      warnings: string[];
+      suggestions: string[];
     };
-    
-    this.taskQueue.push(task);
-    
-    // Save to persistence
-    this.saveTasksToPersistence();
-    
+  }> {
+    // Normalize task data to EnhancedTaskData format
+    const normalizedData: EnhancedTaskData = {
+      type: taskData.type,
+      title: taskData.title,
+      description: ('description' in taskData && taskData.description) || '',
+      project: ('project' in taskData && taskData.project) || 'dev-monitor',
+      assignedAgent: ('assignedAgent' in taskData && taskData.assignedAgent) || 'backend-specialist',
+      files: ('files' in taskData && taskData.files) || [],
+      dependencies: ('dependencies' in taskData && taskData.dependencies) || [],
+      acceptanceCriteria: (() => {
+        if ('acceptanceCriteria' in taskData) {
+          if (Array.isArray(taskData.acceptanceCriteria)) {
+            return taskData.acceptanceCriteria;
+          }
+          if (typeof taskData.acceptanceCriteria === 'string') {
+            return [taskData.acceptanceCriteria];
+          }
+        }
+        return [];
+      })(),
+      ...(('architectureReferences' in taskData && taskData.architectureReferences) && { architectureReferences: taskData.architectureReferences }),
+      ...(('longTermGoals' in taskData && taskData.longTermGoals) && { longTermGoals: taskData.longTermGoals }),
+      ...(('estimatedEffort' in taskData && taskData.estimatedEffort) && { estimatedEffort: taskData.estimatedEffort }),
+      ...(('prerequisites' in taskData && taskData.prerequisites) && { prerequisites: taskData.prerequisites }),
+      ...(('contextBoundaries' in taskData && taskData.contextBoundaries) && { contextBoundaries: taskData.contextBoundaries }),
+      ...(('validationSteps' in taskData && taskData.validationSteps) && { validationSteps: taskData.validationSteps }),
+      ...(('rollbackPlan' in taskData && taskData.rollbackPlan) && { rollbackPlan: taskData.rollbackPlan }),
+      ...(('successMetrics' in taskData && taskData.successMetrics) && { successMetrics: taskData.successMetrics }),
+      ...(('testingRequirements' in taskData && taskData.testingRequirements) && { testingRequirements: taskData.testingRequirements }),
+      ...(('documentationRequirements' in taskData && taskData.documentationRequirements) && { documentationRequirements: taskData.documentationRequirements }),
+      ...(('requiredSkills' in taskData && taskData.requiredSkills) && { requiredSkills: taskData.requiredSkills }),
+      ...(('parentInitiative' in taskData && taskData.parentInitiative) && { parentInitiative: taskData.parentInitiative }),
+      ...(('relatedTasks' in taskData && taskData.relatedTasks) && { relatedTasks: taskData.relatedTasks }),
+      ...(('blockers' in taskData && taskData.blockers) && { blockers: taskData.blockers }),
+      ...(('assumptions' in taskData && taskData.assumptions) && { assumptions: taskData.assumptions }),
+      ...(('risks' in taskData && taskData.risks) && { risks: taskData.risks }),
+      ...(('alternatives' in taskData && taskData.alternatives) && { alternatives: taskData.alternatives })
+    };
+
+    // Check for duplicate task submission
+    const fingerprint = this.calculateTaskFingerprint(normalizedData);
+    const duplicateTask = await this.taskQueue.checkDuplicateTask(fingerprint);
+    if (duplicateTask) {
+      logger.warn({
+        category: 'process',
+        action: 'duplicate_task_detected',
+        message: `Duplicate task detected: "${normalizedData.title}" matches existing task ${duplicateTask.id} (${duplicateTask.status})`
+      });
+      throw new Error(`Duplicate task detected. Task "${duplicateTask.title}" (${duplicateTask.id}) is already ${duplicateTask.status}. Wait for it to complete or modify your task to be unique.`);
+    }
+
+    // Validate task data against guidelines
+    const validation = this.guidelinesManager.validateTaskData(normalizedData, normalizedData.type);
+
+    if (!validation.isValid) {
+      logger.warn({
+        category: 'process',
+        action: 'task_validation_failed',
+        message: `Task validation failed: ${validation.errors.join(', ')}`
+      });
+      throw new Error(`Task validation failed: ${validation.errors.join(', ')}`);
+    }
+
+    // Log warnings and suggestions
+    if (validation.warnings.length > 0) {
+      logger.warn({
+        category: 'process',
+        action: 'task_validation_warnings',
+        message: `Task validation warnings: ${validation.warnings.join(', ')}`
+      });
+    }
+    if (validation.suggestions.length > 0) {
+      logger.info({
+        category: 'process',
+        action: 'task_validation_suggestions',
+        message: `Task validation suggestions: ${validation.suggestions.join(', ')}`
+      });
+    }
+
+    // Create task in SQLite queue
+    const sqliteTask = this.taskQueue.createTask({
+      type: normalizedData.type,
+      title: normalizedData.title,
+      description: normalizedData.description,
+      assigned_agent: normalizedData.assignedAgent,
+      priority: normalizedData.estimatedEffort?.priority || 5,
+      estimated_hours: normalizedData.estimatedEffort?.hours,
+      complexity: normalizedData.estimatedEffort?.complexity,
+      files: normalizedData.files,
+      acceptance_criteria: normalizedData.acceptanceCriteria,
+      architecture_references: normalizedData.architectureReferences,
+      validation_steps: normalizedData.validationSteps,
+      success_metrics: normalizedData.successMetrics,
+      fingerprint
+    });
+
+    // Convert SQLite task to legacy Task format for return value
+    const task: Task = {
+      id: sqliteTask.id,
+      type: sqliteTask.type,
+      title: sqliteTask.title,
+      description: sqliteTask.description || '',
+      status: sqliteTask.status as 'pending' | 'assigned' | 'active' | 'completed' | 'failed',
+      createdAt: new Date(sqliteTask.created_at).toISOString(),
+      project: normalizedData.project,
+      assignedAgent: sqliteTask.assigned_agent || undefined,
+      files: sqliteTask.files || [],
+      dependencies: normalizedData.dependencies || [],
+      acceptanceCriteria: sqliteTask.acceptance_criteria || [],
+      architectureReferences: sqliteTask.architecture_references,
+      longTermGoals: normalizedData.longTermGoals,
+      estimatedEffort: normalizedData.estimatedEffort,
+      prerequisites: normalizedData.prerequisites,
+      contextBoundaries: normalizedData.contextBoundaries,
+      validationSteps: sqliteTask.validation_steps,
+      rollbackPlan: normalizedData.rollbackPlan,
+      successMetrics: sqliteTask.success_metrics,
+      testingRequirements: normalizedData.testingRequirements,
+      documentationRequirements: normalizedData.documentationRequirements,
+      requiredSkills: normalizedData.requiredSkills,
+      parentInitiative: normalizedData.parentInitiative,
+      relatedTasks: normalizedData.relatedTasks,
+      blockers: normalizedData.blockers,
+      assumptions: normalizedData.assumptions,
+      risks: normalizedData.risks,
+      alternatives: normalizedData.alternatives
+    };
+
     this.emit('taskAdded', task);
     logger.info({
       category: 'process',
-      action: 'enhanced_task_added_agent',
-      message: `Enhanced task added: ${task.id} - ${type} (Agent: ${task.assignedAgent || 'auto-assign'})`
+      action: 'task_added',
+      message: `Task added: ${task.id} - ${normalizedData.title} (Agent: ${normalizedData.assignedAgent || 'auto-assign'}, fingerprint: ${fingerprint.substring(0, 8)}...)`
     });
-    
+
     // Try to assign immediately
     await this.assignNextTask();
-    
-    return task;
+
+    return { task, validation };
   }
 
   /**
@@ -1040,190 +1248,87 @@ export class DevBotsManager extends EventEmitter {
     return crypto.createHash('md5').update(fingerprintString).digest('hex');
   }
 
-  /**
-   * Check for duplicate task based on fingerprint
-   * Returns the existing task if found and still active
-   */
-  private checkDuplicateTask(fingerprint: string): Task | null {
-    const existingTaskId = this.taskFingerprints.get(fingerprint);
-    if (!existingTaskId) {
-      return null;
-    }
-
-    // Check in queue
-    const queuedTask = this.taskQueue.find(t => t.id === existingTaskId);
-    if (queuedTask) {
-      return queuedTask;
-    }
-
-    // Check in active tasks
-    const activeTask = this.activeTasks.get(existingTaskId);
-    if (activeTask) {
-      return activeTask;
-    }
-
-    // Task completed or failed, fingerprint slot is available
-    return null;
-  }
-
-  // Enhanced task creation with comprehensive guidelines
-  async addEnhancedTask(taskData: EnhancedTaskData): Promise<{
-    task: Task;
-    validation: {
-      isValid: boolean;
-      errors: string[];
-      warnings: string[];
-      suggestions: string[];
-    };
-  }> {
-    // Check for duplicate task submission
-    const fingerprint = this.calculateTaskFingerprint(taskData);
-    const duplicateTask = this.checkDuplicateTask(fingerprint);
-    if (duplicateTask) {
-      logger.warn({
-        category: 'process',
-        action: 'duplicate_task_detected',
-        message: `Duplicate task detected: "${taskData.title}" matches existing task ${duplicateTask.id} (${duplicateTask.status})`
-      });
-      throw new Error(`Duplicate task detected. Task "${duplicateTask.title}" (${duplicateTask.id}) is already ${duplicateTask.status}. Wait for it to complete or modify your task to be unique.`);
-    }
-
-    // Validate task data against guidelines
-    const validation = this.guidelinesManager.validateTaskData(taskData, taskData.type);
-    
-    if (!validation.isValid) {
-      logger.warn({
-      category: 'process',
-      action: 'task_validation_failed',
-      message: `Task validation failed: ${validation.errors.join(', ')}`
-    });
-      throw new Error(`Task validation failed: ${validation.errors.join(', ')}`);
-    }
-
-    // Log warnings and suggestions
-    if (validation.warnings.length > 0) {
-      logger.warn({
-      category: 'process',
-      action: 'task_validation_warnings',
-      message: `Task validation warnings: ${validation.warnings.join(', ')}`
-    });
-    }
-    if (validation.suggestions.length > 0) {
-      logger.info({
-      category: 'process',
-      action: 'task_validation_suggestions',
-      message: `Task validation suggestions: ${validation.suggestions.join(', ')}`
-    });
-    }
-
-    const task: Task = {
-      id: `task-${this.taskIdCounter++}-${Date.now()}`,
-      type: taskData.type,
-      title: taskData.title,
-      description: taskData.description,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      project: taskData.project,
-      assignedAgent: taskData.assignedAgent,
-      
-      // Enhanced fields
-      files: taskData.files,
-      dependencies: taskData.dependencies,
-      acceptanceCriteria: taskData.acceptanceCriteria,
-      architectureReferences: taskData.architectureReferences,
-      longTermGoals: taskData.longTermGoals,
-      estimatedEffort: taskData.estimatedEffort,
-      prerequisites: taskData.prerequisites,
-      contextBoundaries: taskData.contextBoundaries,
-      validationSteps: taskData.validationSteps,
-      rollbackPlan: taskData.rollbackPlan,
-      successMetrics: taskData.successMetrics,
-      testingRequirements: taskData.testingRequirements,
-      documentationRequirements: taskData.documentationRequirements,
-      requiredSkills: taskData.requiredSkills,
-      parentInitiative: taskData.parentInitiative,
-      relatedTasks: taskData.relatedTasks,
-      blockers: taskData.blockers,
-      assumptions: taskData.assumptions,
-      risks: taskData.risks,
-      alternatives: taskData.alternatives
-    };
-    
-    this.taskQueue.push(task);
-
-    // Store fingerprint to prevent duplicates
-    this.taskFingerprints.set(fingerprint, task.id);
-
-    // Save to persistence
-    this.saveTasksToPersistence();
-
-    this.emit('taskAdded', task);
-    logger.info({
-      category: 'process',
-      action: 'enhanced_task_added_with_guidelines_agent',
-      message: `Enhanced task added with guidelines: ${task.id} - ${taskData.title} (Agent: ${taskData.assignedAgent || 'auto-assign'}, fingerprint: ${fingerprint.substring(0, 8)}...)`
-    });
-    
-    // Try to assign immediately
-    await this.assignNextTask();
-    
-    return { task, validation };
-  }
   
   async assignNextTask(): Promise<void> {
-    if (this.taskQueue.length === 0) {
-      logger.info({
-      category: 'process',
-      action: 'no_pending_tasks_in_queue',
-      message: 'No pending tasks in queue'
-    });
-      return;
-    }
-    
     // Check active worker count against concurrency limit
     const activeWorkers = Array.from(this.ephemeralWorkers.values()).filter(
       worker => worker.status !== 'destroyed'
     );
 
+    const queueMetrics = this.taskQueue.getQueueMetrics();
     logger.info({
       category: 'process',
-      action: 'task_assignment_check_this_taskqueue_length_pendin',
-      message: `Task assignment check: ${this.taskQueue.length} pending tasks, ${activeWorkers.length}/${this.MAX_CONCURRENT_WORKERS} active workers`
+      action: 'task_assignment_check',
+      message: `Task assignment check: ${queueMetrics.pending} pending tasks, ${activeWorkers.length}/${this.MAX_CONCURRENT_WORKERS} active workers`
     });
 
     if (activeWorkers.length >= this.MAX_CONCURRENT_WORKERS) {
       logger.info({
-      category: 'process',
-      action: 'max_workers_active_skipping_assignment',
-      message: 'Maximum concurrent workers are active, skipping task assignment'
-    });
+        category: 'process',
+        action: 'max_workers_active_skipping_assignment',
+        message: 'Maximum concurrent workers are active, skipping task assignment'
+      });
       return;
     }
-    
-    // Get next task (FIFO queue)
-    const nextTask = this.taskQueue[0];
+
+    // Atomically assign next task from SQLite queue
+    const workerId = `worker-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    const sqliteTask = this.taskQueue.assignNextTask(workerId);
+
+    if (!sqliteTask) {
+      logger.info({
+        category: 'process',
+        action: 'no_pending_tasks_in_queue',
+        message: 'No pending tasks in queue'
+      });
+      return;
+    }
+
+    // Convert SQLite task to legacy Task format
+    const nextTask: Task = {
+      id: sqliteTask.id,
+      type: sqliteTask.type,
+      title: sqliteTask.title,
+      description: sqliteTask.description || '',
+      status: 'assigned',
+      createdAt: new Date(sqliteTask.created_at).toISOString(),
+      assignedAt: new Date(sqliteTask.assigned_at!).toISOString(),
+      project: 'dev-monitor',
+      assignedAgent: sqliteTask.assigned_agent,
+      assignedWorker: workerId,
+      files: sqliteTask.files || [],
+      dependencies: [],
+      acceptanceCriteria: sqliteTask.acceptance_criteria || [],
+      architectureReferences: sqliteTask.architecture_references,
+      validationSteps: sqliteTask.validation_steps,
+      successMetrics: sqliteTask.success_metrics,
+      estimatedEffort: sqliteTask.estimated_hours ? {
+        hours: sqliteTask.estimated_hours,
+        complexity: sqliteTask.complexity
+      } : undefined
+    };
 
     // Ensure mirror is up to date before provisioning workspace
     try {
       this.workspaceOrchestrator.initialize();
     } catch (error) {
       logger.error({
-      category: 'process',
-      action: 'workspace_orchestrator_init_failed',
-      message: `Workspace orchestrator failed before assigning task ${nextTask.id}`,
-      error
-    });
-      nextTask.status = 'failed';
-      nextTask.error = `Workspace initialization failed: ${error instanceof Error ? error.message : String(error)}`;
-      nextTask.completedAt = new Date().toISOString();
-      nextTask.canRetry = true;
-      this.taskQueue.splice(0, 1);
-      this.completedTasks.push(nextTask);
-      this.taskPersistence.saveCompletedTasks([nextTask]);
+        category: 'process',
+        action: 'workspace_orchestrator_init_failed',
+        message: `Workspace orchestrator failed before assigning task ${nextTask.id}`,
+        error
+      });
+
+      // Fail task in SQLite
+      this.taskQueue.failTask(
+        nextTask.id,
+        `Workspace initialization failed: ${error instanceof Error ? error.message : String(error)}`
+      );
+
       return;
     }
- 
-    // Get agent personality, but check if it's compatible with available worker type
+
+    // Get agent personality
     const requestedAgent = this.agentManager.getPersonality(nextTask.assignedAgent);
     if (!requestedAgent) {
       logger.error({
@@ -1232,36 +1337,26 @@ export class DevBotsManager extends EventEmitter {
         message: `No agent found for ${nextTask.assignedAgent}`
       });
 
-      // Mark task as failed and remove from queue to unblock processing
-      nextTask.status = 'failed';
-      nextTask.error = `Agent not found: ${nextTask.assignedAgent}. Please check agent name is correct.`;
-      nextTask.completedAt = new Date().toISOString();
-      nextTask.canRetry = true;
-      this.taskQueue.splice(0, 1);
-      this.completedTasks.push(nextTask);
-      this.taskPersistence.saveCompletedTasks([nextTask]);
-      this.saveTasksToPersistence();
+      // Fail task in SQLite
+      this.taskQueue.failTask(
+        nextTask.id,
+        `Agent not found: ${nextTask.assignedAgent}. Please check agent name is correct.`
+      );
 
       // Try next task
       this.assignNextTask();
       return;
     }
 
-    // Workers are generic instances - assign any available worker to any task
-    // The worker will get the personality based on the task's assigned agent
     logger.info({
       category: 'process',
-      action: 'assigning_task_nexttask_id_to_available_worker_wit',
-      message: `Assigning task ${nextTask.id} to available worker with agent ${requestedAgent.id}`
+      action: 'assigning_task_to_worker',
+      message: `Assigning task ${nextTask.id} to worker ${workerId} with agent ${requestedAgent.id}`
     });
-    
+
     const agent = requestedAgent;
-    
-    // Remove from queue
-    const taskIndex = this.taskQueue.indexOf(nextTask);
-    this.taskQueue.splice(taskIndex, 1);
-    
-    // Generate task prompt (worktree will be determined in createEphemeralWorker)
+
+    // Generate task prompt
     const taskContext: TaskContext = {
       task: nextTask,
       agent: agent,
@@ -1269,48 +1364,37 @@ export class DevBotsManager extends EventEmitter {
       worktree: '[dynamic workspace provisioned per task]',
       environment: 'development'
     };
-    
+
     nextTask.prompt = this.templateManager.generatePrompt(taskContext);
-    nextTask.assignedAgent = agent.id;
-    nextTask.status = 'assigned';
-    nextTask.assignedAt = new Date().toISOString();
-    
-    this.activeTasks.set(nextTask.id, nextTask);
-    
+
     try {
       // Execute task using imagineer-style ephemeral container
       await this.executeTaskWithDockerRun(nextTask, agent);
 
       logger.info({
-      category: 'process',
-      action: 'task_execution_completed_nexttask_id',
-      message: `Task execution completed: ${nextTask.id}`
-    });
+        category: 'process',
+        action: 'task_execution_completed',
+        message: `Task execution completed: ${nextTask.id}`
+      });
 
     } catch (error) {
       logger.error({
-      category: 'process',
-      action: 'failed_to_create_ephemeral_worker_for_task_nexttas',
-      message: `Failed to create ephemeral worker for task ${nextTask.id}:`,
-      error: error
-    });
-      
-      // Mark task as failed
-      nextTask.status = 'failed';
-      nextTask.error = error instanceof Error ? error.message : String(error);
-      nextTask.completedAt = new Date().toISOString();
-      nextTask.canRetry = true;
-      this.activeTasks.delete(nextTask.id);
-      this.completedTasks.push(nextTask);
-      this.taskPersistence.saveCompletedTasks([nextTask]);
-      
+        category: 'process',
+        action: 'failed_to_create_ephemeral_worker',
+        message: `Failed to create ephemeral worker for task ${nextTask.id}:`,
+        error: error
+      });
+
+      // Fail task in SQLite
+      this.taskQueue.failTask(
+        nextTask.id,
+        error instanceof Error ? error.message : String(error)
+      );
+
       // Try next task
       this.assignNextTask();
     }
-    
-    // Save to persistence
-    this.saveTasksToPersistence();
-    
+
     this.emit('taskAssigned', nextTask);
   }
 
@@ -1522,14 +1606,8 @@ export class DevBotsManager extends EventEmitter {
         // Parse JSON output from Claude
         const claudeOutput = JSON.parse(stdout);
 
-        task.status = 'completed';
-        task.output = JSON.stringify(claudeOutput);
-        task.completedAt = new Date().toISOString();
-        task.canRetry = false;
-
-        this.activeTasks.delete(task.id);
-        this.completedTasks.push(task);
-        this.taskPersistence.saveCompletedTasks([task]);
+        // Complete task in SQLite
+        this.taskQueue.completeTask(task.id, JSON.stringify(claudeOutput));
 
         logger.info({
           category: 'process',
@@ -1538,8 +1616,10 @@ export class DevBotsManager extends EventEmitter {
           details: { claudeOutput }
         });
 
-        // Save task status to persistence immediately
-        this.saveTasksToPersistence();
+        // Update local task object for event emission
+        task.status = 'completed';
+        task.output = JSON.stringify(claudeOutput);
+        task.completedAt = new Date().toISOString();
 
         this.emit('taskCompleted', task);
 
@@ -1552,17 +1632,16 @@ export class DevBotsManager extends EventEmitter {
           details: { stdout, stderr, parseError }
         });
 
+        // Fail task in SQLite
+        this.taskQueue.failTask(
+          task.id,
+          `Failed to parse Claude output: ${parseError instanceof Error ? parseError.message : String(parseError)}`
+        );
+
+        // Update local task object for event emission
         task.status = 'failed';
         task.error = `Failed to parse Claude output: ${parseError instanceof Error ? parseError.message : String(parseError)}`;
         task.completedAt = new Date().toISOString();
-        task.canRetry = true;
-
-        this.activeTasks.delete(task.id);
-        this.completedTasks.push(task);
-        this.taskPersistence.saveCompletedTasks([task]);
-
-        // Save task status to persistence immediately
-        this.saveTasksToPersistence();
 
         this.emit('taskFailed', task);
       }
@@ -1581,14 +1660,11 @@ export class DevBotsManager extends EventEmitter {
         }
       });
 
-      task.status = 'failed';
-      task.error = `Docker run failed with exit code ${exitCode}. stderr: ${stderr}`;
-      task.completedAt = new Date().toISOString();
-      task.canRetry = true;
-
-      this.activeTasks.delete(task.id);
-      this.completedTasks.push(task);
-      this.taskPersistence.saveCompletedTasks([task]);
+      // Fail task in SQLite
+      this.taskQueue.failTask(
+        task.id,
+        `Docker run failed with exit code ${exitCode}. stderr: ${stderr}`
+      );
 
       logger.error({
         category: 'process',
@@ -1597,8 +1673,10 @@ export class DevBotsManager extends EventEmitter {
         details: { exitCode, stderr, stdout }
       });
 
-      // Save task status to persistence immediately
-      this.saveTasksToPersistence();
+      // Update local task object for event emission
+      task.status = 'failed';
+      task.error = `Docker run failed with exit code ${exitCode}. stderr: ${stderr}`;
+      task.completedAt = new Date().toISOString();
 
       this.emit('taskFailed', task);
     }
@@ -2755,8 +2833,8 @@ export class DevBotsManager extends EventEmitter {
           this.completedTasks.push(task);
         }
       }
-      
-      this.saveTasksToPersistence();
+
+      // this.saveTasksToPersistence(); // DEPRECATED
       logger.info({
       category: 'process',
       action: 'imported_importedtasks_length_tasks_from_importpat',
@@ -2937,10 +3015,37 @@ export class DevBotsManager extends EventEmitter {
   }
 
   async getTasks(): Promise<{ pending: Task[]; active: Task[]; completed: Task[] }> {
+    const pendingSQLite = this.taskQueue.getTasksByStatus('pending');
+    const runningSQLite = this.taskQueue.getTasksByStatus('running');
+    const completedSQLite = this.taskQueue.getTasksByStatus('completed').slice(-50);
+
+    // Convert SQLite tasks to legacy Task format
+    const convertTask = (sqliteTask: SQLiteTask): Task => ({
+      id: sqliteTask.id,
+      type: sqliteTask.type,
+      title: sqliteTask.title,
+      description: sqliteTask.description || '',
+      status: sqliteTask.status as 'pending' | 'assigned' | 'active' | 'completed' | 'failed',
+      createdAt: new Date(sqliteTask.created_at).toISOString(),
+      assignedAt: sqliteTask.assigned_at ? new Date(sqliteTask.assigned_at).toISOString() : undefined,
+      completedAt: sqliteTask.completed_at ? new Date(sqliteTask.completed_at).toISOString() : undefined,
+      project: 'dev-monitor',
+      assignedAgent: sqliteTask.assigned_agent,
+      assignedWorker: sqliteTask.assigned_worker,
+      files: sqliteTask.files || [],
+      dependencies: [],
+      acceptanceCriteria: sqliteTask.acceptance_criteria || [],
+      architectureReferences: sqliteTask.architecture_references,
+      validationSteps: sqliteTask.validation_steps,
+      successMetrics: sqliteTask.success_metrics,
+      output: sqliteTask.output,
+      error: sqliteTask.error
+    });
+
     return {
-      pending: this.taskQueue,
-      active: Array.from(this.activeTasks.values()),
-      completed: this.completedTasks.slice(-50)
+      pending: pendingSQLite.map(convertTask),
+      active: runningSQLite.map(convertTask),
+      completed: completedSQLite.map(convertTask)
     };
   }
 
