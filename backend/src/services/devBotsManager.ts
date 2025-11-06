@@ -1224,10 +1224,126 @@ export class DevBotsManager extends EventEmitter {
       this.emit('taskFailed', task);
     }
 
+    // Safety mechanism: Check for uncommitted changes and capture them
+    await this.captureUncommittedChanges(task);
+
     // Try to assign next task
     this.assignNextTask();
   }
 
+  /**
+   * Safety Mechanism: Capture uncommitted changes after task completion
+   * This prevents data loss when bots complete tasks but fail to commit
+   */
+  private async captureUncommittedChanges(task: Task): Promise<void> {
+    try {
+      const repoRoot = process.cwd();
+
+      // Check if there are uncommitted changes
+      const statusOutput = await this.execGitCommand(['status', '--porcelain'], repoRoot);
+
+      if (statusOutput.trim()) {
+        // Uncommitted changes detected
+        const timestamp = Date.now();
+        const artifactsDir = path.join(repoRoot, 'dev-bots', 'artifacts');
+
+        // Ensure artifacts directory exists
+        if (!fs.existsSync(artifactsDir)) {
+          fs.mkdirSync(artifactsDir, { recursive: true });
+        }
+
+        // Create patch file with uncommitted changes
+        const patchFile = path.join(artifactsDir, `${task.id}-uncommitted-${timestamp}.patch`);
+        const diffOutput = await this.execGitCommand(['diff', 'HEAD'], repoRoot);
+        fs.writeFileSync(patchFile, diffOutput);
+
+        // Create status file listing modified files
+        const statusFile = path.join(artifactsDir, `${task.id}-status-${timestamp}.txt`);
+        fs.writeFileSync(statusFile, statusOutput);
+
+        // Check if bot made new commits
+        const botCommitted = await this.verifyBotCommitted(task, repoRoot);
+
+        if (!botCommitted) {
+          logger.warn({
+            category: 'process',
+            action: 'uncommitted_changes_captured',
+            message: `Task ${task.id} completed but did NOT commit. Changes saved to patch file.`,
+            details: {
+              taskId: task.id,
+              patchFile,
+              statusFile,
+              linesChanged: diffOutput.split('\n').length
+            }
+          });
+
+          // Update task metadata with warning
+          task.metadata = {
+            ...task.metadata,
+            uncommittedChangesWarning: true,
+            patchFile,
+            statusFile
+          };
+        } else {
+          logger.info({
+            category: 'process',
+            action: 'uncommitted_changes_post_commit',
+            message: `Task ${task.id} has uncommitted changes AFTER committing. May be unrelated changes.`,
+            details: {
+              taskId: task.id,
+              patchFile,
+              statusFile
+            }
+          });
+        }
+      }
+    } catch (error) {
+      logger.error({
+        category: 'process',
+        action: 'capture_uncommitted_changes_failed',
+        message: 'Failed to capture uncommitted changes',
+        error,
+        details: { taskId: task.id }
+      });
+    }
+  }
+
+  /**
+   * Safety Mechanism: Verify if bot created new commits
+   * Checks git log to see if commits were made during task execution
+   */
+  private async verifyBotCommitted(task: Task, repoRoot: string): Promise<boolean> {
+    try {
+      // Get commits since task started (using task startedAt timestamp)
+      if (!task.startedAt) {
+        return false;
+      }
+
+      const taskStartDate = new Date(task.startedAt);
+      const gitLogSince = taskStartDate.toISOString();
+
+      // Check for commits made after task started
+      const logOutput = await this.execGitCommand([
+        'log',
+        '--oneline',
+        '--since',
+        gitLogSince,
+        '--author',
+        'Claude',  // Assuming bot commits with "Claude" as author
+        'staging'
+      ], repoRoot);
+
+      return logOutput.trim().length > 0;
+    } catch (error) {
+      logger.error({
+        category: 'process',
+        action: 'verify_bot_committed_failed',
+        message: 'Failed to verify if bot committed',
+        error
+      });
+      return false;
+    }
+  }
 
   /**
    * Create a new ephemeral Docker container for a task
