@@ -4,7 +4,7 @@ import {
   DevMonitorLogLine,
   LocalService,
   LogHistory,
-} from '@jsdubzw/job-finder-shared-types';
+} from '../types/shared.types';
 
 const MAX_LOG_LINES = 10000; // Keep more logs globally
 

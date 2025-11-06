@@ -1,5 +1,8 @@
 import { useState } from 'react';
 import { Script } from '../types/script.types';
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface ScriptCardProps {
   script: Script;
@@ -7,8 +10,16 @@ interface ScriptCardProps {
   onExecute: (scriptId: string) => void;
 }
 
+const dangerPalette: Record<NonNullable<Script['dangerLevel']>, string> = {
+  safe: 'border-sky-500/40 bg-sky-500/10 text-sky-100',
+  warning: 'border-amber-500/40 bg-amber-500/15 text-amber-100',
+  danger: 'border-rose-500/40 bg-rose-500/15 text-rose-100',
+};
+
 export default function ScriptCard({ script, isRunning, onExecute }: ScriptCardProps) {
   const [showConfirm, setShowConfirm] = useState(false);
+
+  const paletteClass = dangerPalette[script.dangerLevel ?? 'safe'];
 
   const handleClick = () => {
     if (script.requiresConfirmation && !showConfirm) {
@@ -20,118 +31,78 @@ export default function ScriptCard({ script, isRunning, onExecute }: ScriptCardP
     setShowConfirm(false);
   };
 
-  const dangerColors = {
-    safe: { bg: '#e7f5ff', border: '#339af0', text: '#1971c2' },
-    warning: { bg: '#fff3cd', border: '#ffc107', text: '#856404' },
-    danger: { bg: '#ffe5e5', border: '#ff6b6b', text: '#c92a2a' },
-  };
-
-  const colors = dangerColors[script.dangerLevel || 'safe'];
-
   return (
-    <div style={{
-      backgroundColor: '#fff',
-      border: `2px solid ${colors.border}`,
-      borderRadius: '8px',
-      padding: '16px',
-      cursor: isRunning ? 'not-allowed' : 'pointer',
-      opacity: isRunning ? 0.6 : 1,
-      transition: 'all 0.2s',
-    }}>
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        marginBottom: '8px',
-      }}>
-        <span style={{ fontSize: '24px' }}>{script.icon}</span>
-        <div style={{ flex: 1 }}>
-          <h3 style={{
-            margin: 0,
-            fontSize: '16px',
-            fontWeight: 600,
-            color: '#333',
-          }}>
-            {script.displayName}
-          </h3>
-          <p style={{
-            margin: '4px 0 0 0',
-            fontSize: '13px',
-            color: '#666',
-          }}>
-            {script.description}
-          </p>
-        </div>
-      </div>
-
-      {showConfirm ? (
-        <div style={{
-          marginTop: '12px',
-          padding: '12px',
-          backgroundColor: colors.bg,
-          borderRadius: '4px',
-          border: `1px solid ${colors.border}`,
-        }}>
-          <p style={{
-            margin: '0 0 8px 0',
-            fontSize: '13px',
-            color: colors.text,
-            fontWeight: 500,
-          }}>
-            Are you sure? This action cannot be undone.
-          </p>
-          <div style={{ display: 'flex', gap: '8px' }}>
-            <button
-              onClick={handleClick}
-              style={{
-                padding: '6px 12px',
-                backgroundColor: colors.border,
-                color: '#fff',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '13px',
-                fontWeight: 500,
-              }}
-            >
-              Confirm
-            </button>
-            <button
-              onClick={() => setShowConfirm(false)}
-              style={{
-                padding: '6px 12px',
-                backgroundColor: '#fff',
-                color: '#666',
-                border: '1px solid #ddd',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '13px',
-              }}
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      ) : (
-        <button
-          onClick={handleClick}
-          disabled={isRunning}
-          style={{
-            width: '100%',
-            padding: '10px',
-            backgroundColor: isRunning ? '#ccc' : colors.border,
-            color: '#fff',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: isRunning ? 'not-allowed' : 'pointer',
-            fontSize: '14px',
-            fontWeight: 500,
-            marginTop: '8px',
-          }}
-        >
-          {isRunning ? '⏳ Running...' : '▶ Run Script'}
-        </button>
+    <Card
+      className={cn(
+        'flex h-full flex-col border border-border/60 bg-card/70 text-foreground shadow-lg transition hover:-translate-y-1 hover:shadow-xl',
+        showConfirm && paletteClass,
+        isRunning && 'opacity-60',
       )}
-    </div>
+    >
+      <CardHeader className="flex flex-row items-start gap-3 space-y-0">
+        <span className="text-2xl">{script.icon}</span>
+        <div className="space-y-1">
+          <CardTitle className="text-base font-semibold tracking-tight">
+            {script.displayName}
+          </CardTitle>
+          <p className="text-xs text-muted-foreground">{script.description}</p>
+        </div>
+      </CardHeader>
+
+      <CardContent className="flex-1">
+        <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.35em] text-muted-foreground">
+          <span>{script.category}</span>
+          {script.requiresConfirmation && (
+            <span className="rounded-full border border-amber-500/40 bg-amber-500/15 px-2 py-1 text-amber-100">
+              Confirmation
+            </span>
+          )}
+          {isRunning && (
+            <span className="rounded-full border border-sky-500/40 bg-sky-500/15 px-2 py-1 text-sky-100">
+              In Progress
+            </span>
+          )}
+        </div>
+      </CardContent>
+
+      <CardFooter className="flex flex-col gap-3">
+        {showConfirm ? (
+          <div className="w-full rounded-lg border border-border/60 bg-background/60 p-3 text-xs text-muted-foreground">
+            <p className="mb-3 font-semibold text-foreground">
+              Are you sure? This action cannot be undone.
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="destructive"
+                className="flex-1"
+                onClick={handleClick}
+              >
+                Confirm
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="flex-1"
+                onClick={() => setShowConfirm(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <Button
+            onClick={handleClick}
+            disabled={isRunning}
+            className={cn(
+              'w-full justify-center gap-2',
+              isRunning && 'cursor-not-allowed',
+            )}
+          >
+            {isRunning ? '⏳ Running…' : '▶ Run Script'}
+          </Button>
+        )}
+      </CardFooter>
+    </Card>
   );
 }

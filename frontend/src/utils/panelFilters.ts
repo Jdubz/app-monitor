@@ -9,7 +9,7 @@ import {
   LocalService,
   DevMonitorLogLine,
   DevMonitorLogLevel,
-} from '@jsdubzw/job-finder-shared-types';
+} from '../types/shared.types';
 
 /**
  * Map a LogSource to the services it includes
@@ -109,12 +109,10 @@ export function getServiceDisplayName(service: LocalService): string {
   const displayNames: Record<LocalService, string> = {
     'firebase-emulators': 'Firebase Emulators',
     'frontend-dev': 'Frontend Dev',
+    'python-worker': 'Python Worker',
     'dev-monitor-backend': 'Dev Monitor Backend',
     'all': 'All Services',
   };
-  if (service === 'job-finder-worker') {
-    return 'Job Finder Worker';
-  }
   return displayNames[service] || service;
 }
 

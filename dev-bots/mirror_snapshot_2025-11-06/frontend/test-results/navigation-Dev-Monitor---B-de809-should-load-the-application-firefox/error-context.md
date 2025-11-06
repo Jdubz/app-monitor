@@ -1,0 +1,62 @@
+# Page snapshot
+
+```yaml
+- main [ref=e4]:
+    - generic [ref=e5]:
+        - heading "Dev Console Monitor" [level=1] [ref=e6]
+        - paragraph [ref=e7]: Manage and monitor all job-finder development processes
+    - generic [ref=e9]:
+        - generic [ref=e10]:
+            - link "Local Development" [ref=e11] [cursor=pointer]:
+                - /url: /local
+            - link "Scripts" [ref=e12] [cursor=pointer]:
+                - /url: /scripts
+            - link "Staging" [ref=e13] [cursor=pointer]:
+                - /url: /staging
+            - link "Production" [ref=e14] [cursor=pointer]:
+                - /url: /production
+            - link "System Health" [ref=e15] [cursor=pointer]:
+                - /url: /health
+            - link "Dev-Bots" [ref=e16] [cursor=pointer]:
+                - /url: /dev-bots
+        - generic [ref=e17]:
+            - generic [ref=e18]:
+                - generic [ref=e19]:
+                    - heading "Service Actions" [level=3] [ref=e20]
+                    - button "Collapse" [ref=e21] [cursor=pointer]: ▲
+                - generic [ref=e22]:
+                    - button "▶️ Start All" [ref=e23] [cursor=pointer]:
+                        - generic [ref=e24]: ▶️
+                        - generic [ref=e25]: Start All
+                    - button "⏹️ Stop All" [ref=e26] [cursor=pointer]:
+                        - generic [ref=e27]: ⏹️
+                        - generic [ref=e28]: Stop All
+                    - button "🔄 Restart All" [ref=e29] [cursor=pointer]:
+                        - generic [ref=e30]: 🔄
+                        - generic [ref=e31]: Restart All
+                    - button "📋 View All Logs" [ref=e32] [cursor=pointer]:
+                        - generic [ref=e33]: 📋
+                        - generic [ref=e34]: View All Logs
+            - generic [ref=e35]:
+                - heading "Services" [level=2] [ref=e37]
+                - paragraph [ref=e39]: No services configured
+            - generic [ref=e41]:
+                - generic [ref=e42]:
+                    - generic [ref=e43]:
+                        - text: Dev Monitor Logs
+                        - generic [ref=e44]: ● Connected
+                    - button "+ Add Panel (1/6)" [ref=e45] [cursor=pointer]
+                - generic [ref=e47]:
+                    - generic [ref=e48]:
+                        - combobox [ref=e49] [cursor=pointer]:
+                            - option "Select source..." [disabled] [selected]
+                            - option "app-monitor-backend"
+                            - option "app-monitor-frontend"
+                            - option "job-finder-backend"
+                            - option "job-finder-frontend"
+                            - option "job-finder-worker"
+                        - generic [ref=e50] [cursor=pointer]:
+                            - checkbox "Errors Only" [ref=e51]
+                            - text: Errors Only
+                    - generic [ref=e53]: Select a source to view logs
+```

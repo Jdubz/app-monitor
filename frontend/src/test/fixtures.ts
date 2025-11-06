@@ -1,5 +1,5 @@
 // Test fixtures for frontend tests
-import type { Service, PortStatus, Script, ScriptExecution, ScriptExecutionSummary, HealthCheckResponse } from '@jsdubzw/job-finder-shared-types';
+import type { Service, PortStatus, Script, ScriptExecution, ScriptExecutionSummary, HealthCheckResponse } from '../types/shared.types';
 
 export const mockHealthCheckResponse: HealthCheckResponse = {
   status: 'healthy',

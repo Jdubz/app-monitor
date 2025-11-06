@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface PortInfo {
   port: number;
@@ -22,7 +24,7 @@ const PortBadge: React.FC<PortBadgeProps> = ({ portInfo, onKillPort }) => {
     const confirmed = window.confirm(
       `Stop process on port ${portInfo.port}?\n\n` +
         `This will kill PID ${portInfo.pid}.\n` +
-        `The service will attempt graceful shutdown first.`
+        `The service will attempt graceful shutdown first.`,
     );
 
     if (!confirmed) return;
@@ -37,75 +39,42 @@ const PortBadge: React.FC<PortBadgeProps> = ({ portInfo, onKillPort }) => {
     }
   };
 
-  const badgeStyle: React.CSSProperties = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '6px',
-    padding: '3px 8px',
-    borderRadius: '12px',
-    fontSize: '12px',
-    fontFamily: 'monospace',
-    fontWeight: 600,
-    backgroundColor: portInfo.inUse ? '#ffe0e0' : '#e8f5e9',
-    color: portInfo.inUse ? '#c62828' : '#2e7d32',
-    border: portInfo.inUse ? '1px solid #ef9a9a' : '1px solid #a5d6a7',
-    cursor: portInfo.inUse ? 'pointer' : 'default',
-    transition: 'all 0.2s',
-  };
-
-  const dotStyle: React.CSSProperties = {
-    width: '6px',
-    height: '6px',
-    borderRadius: '50%',
-    backgroundColor: portInfo.inUse ? '#d32f2f' : '#4caf50',
-  };
-
-  const buttonStyle: React.CSSProperties = {
-    padding: '0 4px',
-    fontSize: '11px',
-    border: 'none',
-    background: 'none',
-    color: portInfo.inUse ? '#b71c1c' : '#1b5e20',
-    cursor: killing ? 'wait' : 'pointer',
-    fontWeight: 700,
-    opacity: killing ? 0.5 : 1,
-  };
+  const containerClass = portInfo.inUse
+    ? 'border-rose-500/40 bg-rose-500/15 text-rose-100 hover:bg-rose-500/25 cursor-pointer'
+    : 'border-emerald-500/40 bg-emerald-500/15 text-emerald-100';
 
   return (
     <span
-      style={badgeStyle}
+      className={cn(
+        'group inline-flex items-center gap-2 rounded-full border px-3 py-1 font-mono text-xs font-semibold transition-transform duration-150',
+        containerClass,
+        portInfo.inUse && 'hover:-translate-y-0.5',
+      )}
       title={
         portInfo.inUse
           ? `Port ${portInfo.port} IN USE (PID: ${portInfo.pid}) - Click to stop`
           : `Port ${portInfo.port} available`
       }
-      onMouseEnter={(e) => {
-        if (portInfo.inUse) {
-          e.currentTarget.style.backgroundColor = '#ffcdd2';
-          e.currentTarget.style.transform = 'scale(1.05)';
-        }
-      }}
-      onMouseLeave={(e) => {
-        if (portInfo.inUse) {
-          e.currentTarget.style.backgroundColor = '#ffe0e0';
-          e.currentTarget.style.transform = 'scale(1)';
-        }
-      }}
+      onClick={portInfo.inUse ? handleKillPort : undefined}
     >
-      <span style={dotStyle} />
+      <span
+        className={cn(
+          'h-2 w-2 rounded-full',
+          portInfo.inUse ? 'bg-rose-400' : 'bg-emerald-400',
+        )}
+      />
       {portInfo.port}
       {portInfo.inUse && (
-        <>
-          {' '}
-          <button
-            onClick={handleKillPort}
-            style={buttonStyle}
-            disabled={killing}
-            title={killing ? 'Stopping...' : 'Stop process on this port'}
-          >
-            {killing ? '...' : '✕'}
-          </button>
-        </>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="ml-2 h-6 w-6 rounded-full border border-rose-500/40 bg-rose-500/20 p-0 text-[11px] font-bold text-rose-100 hover:bg-rose-500/30"
+          onClick={handleKillPort}
+          disabled={killing}
+          title={killing ? 'Stopping...' : 'Stop process on this port'}
+        >
+          {killing ? '...' : '✕'}
+        </Button>
       )}
     </span>
   );

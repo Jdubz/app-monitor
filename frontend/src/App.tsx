@@ -7,7 +7,7 @@ import { LogProvider } from './contexts/LogContext';
 import { Header, MainLayout, TabNav, TabContent } from './components/layout';
 import { LocalTab, ScriptsTab, DeployedServicesTab, DevBotsTab } from './components/tabs';
 import { ErrorBoundary, LoadingSpinner, InlineError } from './components/common';
-import './App.css';
+import { ThemeProvider } from './components/theme/ThemeProvider';
 
 // Component that handles routing and tab state
 function AppContent() {
@@ -37,35 +37,39 @@ function AppContent() {
   return (
     <MainLayout>
       <Header />
-      <TabContent>
+      <div className="flex flex-col gap-6">
         <TabNav />
-        
-        {error && (
-          <div style={{ padding: 'var(--spacing-md)' }}>
-            <InlineError 
-              message={error}
-              onDismiss={() => setError(null)}
-            />
-          </div>
-        )}
-        
-        {isLoading ? (
-          <div style={{ padding: 'var(--spacing-2xl)', textAlign: 'center' }}>
-            <LoadingSpinner message="Loading environments..." />
-          </div>
-        ) : (
-          <div className="tab-panel">
-            <Routes>
-              <Route path="/" element={<Navigate to="/local" replace />} />
-              <Route path="/local" element={<LocalTab />} />
-              <Route path="/scripts" element={<ScriptsTab socket={socket} />} />
-              <Route path="/deployed" element={<DeployedServicesTab socket={socket} environments={environments} />} />
-              <Route path="/dev-bots" element={<DevBotsTab socket={socket} />} />
-              <Route path="*" element={<Navigate to="/local" replace />} />
-            </Routes>
-          </div>
-        )}
-      </TabContent>
+        <TabContent>
+          {error && (
+            <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-4">
+              <InlineError
+                message={error}
+                onDismiss={() => setError(null)}
+              />
+            </div>
+          )}
+
+          {isLoading ? (
+            <div className="flex h-[360px] flex-col items-center justify-center gap-4">
+              <LoadingSpinner message="Loading environments..." />
+            </div>
+          ) : (
+            <div className="h-full">
+              <Routes>
+                <Route path="/" element={<Navigate to="/local" replace />} />
+                <Route path="/local" element={<LocalTab />} />
+                <Route path="/scripts" element={<ScriptsTab socket={socket} />} />
+                <Route
+                  path="/deployed"
+                  element={<DeployedServicesTab socket={socket} environments={environments} />}
+                />
+                <Route path="/dev-bots" element={<DevBotsTab socket={socket} />} />
+                <Route path="*" element={<Navigate to="/local" replace />} />
+              </Routes>
+            </div>
+          )}
+        </TabContent>
+      </div>
     </MainLayout>
   );
 }
@@ -75,11 +79,13 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <LogProvider socket={socket}>
-        <Router>
-          <AppContent />
-        </Router>
-      </LogProvider>
+      <ThemeProvider>
+        <LogProvider socket={socket}>
+          <Router>
+            <AppContent />
+          </Router>
+        </LogProvider>
+      </ThemeProvider>
     </ErrorBoundary>
   );
 }

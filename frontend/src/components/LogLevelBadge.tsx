@@ -1,42 +1,37 @@
-import React from 'react';
 import { LogLevel } from '../types/log.types';
-import { StyledBadge, BadgeVariant } from './common/StyledBadge';
-import { theme } from '../styles/theme';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface LogLevelBadgeProps {
   level: LogLevel;
 }
 
 const LogLevelBadge: React.FC<LogLevelBadgeProps> = ({ level }) => {
-  const getVariant = (): BadgeVariant => {
+  const getVariant = (): 'destructive' | 'warning' | 'info' | 'outline' => {
     switch (level) {
       case 'ERROR':
-        return 'error';
+        return 'destructive';
       case 'WARN':
         return 'warning';
       case 'INFO':
         return 'info';
       case 'DEBUG':
-        return 'neutral';
+        return 'outline';
       default:
-        return 'neutral';
+        return 'outline';
     }
   };
 
   return (
-    <StyledBadge
+    <Badge
       variant={getVariant()}
-      size="sm"
-      style={{
-        fontFamily: 'monospace',
-        minWidth: '50px',
-        textAlign: 'center',
-        fontSize: theme.typography.fontSize.xs,
-        fontWeight: theme.typography.fontWeight.semibold,
-      }}
+      className={cn(
+        'min-w-[48px] justify-center font-mono text-[10px] uppercase tracking-[0.3em]',
+        level === 'DEBUG' && 'text-muted-foreground',
+      )}
     >
       {level}
-    </StyledBadge>
+    </Badge>
   );
 };
 

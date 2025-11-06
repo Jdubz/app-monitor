@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { ProcessInfo } from '../types/service.types';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
 
 interface ControlButtonsProps {
   service: ProcessInfo;
@@ -45,60 +47,67 @@ const ControlButtons: React.FC<ControlButtonsProps> = ({
     }
   };
 
-  const buttonStyle = (disabled: boolean, color: string) => ({
-    padding: '6px 12px',
-    fontSize: '13px',
-    fontWeight: 500,
-    border: 'none',
-    borderRadius: '4px',
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    opacity: disabled ? 0.5 : 1,
-    backgroundColor: disabled ? '#e9ecef' : color,
-    color: disabled ? '#6c757d' : '#fff',
-    transition: 'all 0.2s',
-    minWidth: '70px',
-  });
+  const buildClass = (
+    disabled: boolean,
+    baseClass: string,
+  ) =>
+    cn(
+      'h-9 min-w-[72px] justify-center rounded-md text-xs font-semibold uppercase tracking-[0.3em]',
+      baseClass,
+      disabled && 'opacity-50 pointer-events-none',
+    );
 
   return (
-    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-      <button
+    <div className="flex flex-wrap gap-2">
+      <Button
         onClick={() => handleAction(onStart, 'start')}
         disabled={isRunning || isTransitional || loading !== null}
-        style={buttonStyle(isRunning || isTransitional || loading !== null, '#28a745')}
+        className={buildClass(
+          isRunning || isTransitional || loading !== null,
+          'bg-emerald-500/80 text-emerald-950 hover:bg-emerald-500',
+        )}
         title="Start the service"
       >
         {loading === 'start' ? '...' : 'Start'}
-      </button>
+      </Button>
 
-      <button
+      <Button
         onClick={() => handleAction(onStop, 'stop')}
         disabled={isStopped || isTransitional || loading !== null}
-        style={buttonStyle(isStopped || isTransitional || loading !== null, '#dc3545')}
+        className={buildClass(
+          isStopped || isTransitional || loading !== null,
+          'bg-rose-500/80 text-rose-50 hover:bg-rose-500',
+        )}
         title="Gracefully stop the service (SIGTERM)"
       >
         {loading === 'stop' ? '...' : 'Stop'}
-      </button>
+      </Button>
 
-      <button
+      <Button
         onClick={() => handleAction(onRestart, 'restart')}
         disabled={isStopped || isTransitional || loading !== null}
-        style={buttonStyle(isStopped || isTransitional || loading !== null, '#007bff')}
+        className={buildClass(
+          isStopped || isTransitional || loading !== null,
+          'bg-primary text-primary-foreground hover:bg-primary/90',
+        )}
         title="Restart the service"
       >
         {loading === 'restart' ? '...' : 'Restart'}
-      </button>
+      </Button>
 
-      <button
+      <Button
         onClick={handleKillClick}
         disabled={isStopped || isTransitional || loading !== null}
-        style={{
-          ...buttonStyle(isStopped || isTransitional || loading !== null, '#6c757d'),
-          backgroundColor: showKillConfirm ? '#dc3545' : (isStopped || isTransitional || loading !== null ? '#e9ecef' : '#6c757d'),
-        }}
+        className={buildClass(
+          isStopped || isTransitional || loading !== null,
+          showKillConfirm
+            ? 'bg-rose-500/80 text-rose-50 hover:bg-rose-500'
+            : 'bg-slate-600 text-slate-50 hover:bg-slate-500',
+        )}
         title={showKillConfirm ? 'Click again to confirm force kill (SIGKILL)' : 'Force kill the service (SIGKILL)'}
       >
         {loading === 'kill' ? '...' : showKillConfirm ? 'Confirm?' : 'Kill'}
-      </button>
+      </Button>
     </div>
   );
 };

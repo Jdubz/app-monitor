@@ -1,6 +1,6 @@
-import React from 'react';
 import { ProcessInfo } from '../types/service.types';
 import PortBadge from './PortBadge';
+import { cn } from '@/lib/utils';
 
 interface PortInfo {
   port: number;
@@ -31,12 +31,13 @@ const ServiceInfo: React.FC<ServiceInfoProps> = ({ service, portStatuses, onKill
   };
 
   const renderPorts = () => {
-    if (!service.ports || service.ports.length === 0) return <span style={valueStyle}>N/A</span>;
+    if (!service.ports || service.ports.length === 0) {
+      return <span className="font-mono text-xs text-muted-foreground">N/A</span>;
+    }
 
-    // If we have port status information, render PortBadge components
     if (portStatuses && portStatuses.length > 0 && onKillPort) {
       return (
-        <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+        <div className="flex flex-wrap gap-2">
           {portStatuses.map((portInfo) => (
             <PortBadge
               key={portInfo.port}
@@ -48,65 +49,56 @@ const ServiceInfo: React.FC<ServiceInfoProps> = ({ service, portStatuses, onKill
       );
     }
 
-    // Fallback to plain text if no port status information available
-    return <span style={valueStyle}>{service.ports.join(', ')}</span>;
+    return (
+      <span className="font-mono text-xs text-muted-foreground">
+        {service.ports.join(', ')}
+      </span>
+    );
   };
 
-  const infoItemStyle = {
-    display: 'flex',
-    justifyContent: 'space-between',
-    padding: '4px 0',
-    fontSize: '13px',
-    borderBottom: '1px solid #f0f0f0',
-  };
-
-  const labelStyle = {
-    fontWeight: 500,
-    color: '#666',
-  };
-
-  const valueStyle = {
-    color: '#333',
-    fontFamily: 'monospace',
-  };
+  const InfoRow = ({
+    label,
+    value,
+  }: {
+    label: string;
+    value: React.ReactNode;
+  }) => (
+    <div className="flex items-center justify-between gap-4 border-b border-white/5 py-2 text-xs">
+      <span className="font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+        {label}
+      </span>
+      <div className="text-right text-sm text-foreground">{value}</div>
+    </div>
+  );
 
   return (
-    <div style={{ marginTop: '12px' }}>
-      <div style={infoItemStyle}>
-        <span style={labelStyle}>Status:</span>
-        <span style={valueStyle}>{service.status}</span>
-      </div>
+    <div className="rounded-xl border border-border/60 bg-background/50 p-4 text-foreground">
+      <InfoRow label="Status" value={<span className="font-mono text-xs text-muted-foreground">{service.status}</span>} />
 
       {service.status === 'running' && (
         <>
-          <div style={infoItemStyle}>
-            <span style={labelStyle}>PID:</span>
-            <span style={valueStyle}>{service.pid || 'N/A'}</span>
-          </div>
-
-          <div style={infoItemStyle}>
-            <span style={labelStyle}>Uptime:</span>
-            <span style={valueStyle}>{formatUptime(service.uptime)}</span>
-          </div>
+          <InfoRow
+            label="PID"
+            value={<span className="font-mono text-xs text-muted-foreground">{service.pid || 'N/A'}</span>}
+          />
+          <InfoRow
+            label="Uptime"
+            value={<span className="font-mono text-xs text-muted-foreground">{formatUptime(service.uptime)}</span>}
+          />
         </>
       )}
 
-      <div style={infoItemStyle}>
-        <span style={labelStyle}>Port(s):</span>
+      <div className={cn('flex flex-col gap-2 py-2')}>
+        <span className="font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          Ports
+        </span>
         {renderPorts()}
       </div>
 
       {service.error && (
-        <div style={{
-          marginTop: '8px',
-          padding: '8px',
-          backgroundColor: '#fee',
-          border: '1px solid #fcc',
-          borderRadius: '4px',
-          fontSize: '12px',
-          color: '#c00',
-        }}>
-          <strong>Error:</strong> {service.error}
+        <div className="mt-3 rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive-foreground">
+          <strong className="font-semibold uppercase tracking-[0.3em]">Error:</strong>{' '}
+          <span className="font-mono">{service.error}</span>
         </div>
       )}
     </div>

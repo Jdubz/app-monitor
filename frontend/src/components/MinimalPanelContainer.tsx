@@ -1,8 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { LocalService } from '@jsdubzw/job-finder-shared-types';
+import { useState, useEffect, useRef } from 'react';
+import { LocalService } from '../types/shared.types';
 import { useLogContext } from '../contexts/LogContext';
 import { getLogSources } from '../services/api';
 import MinimalLogsPanel from './MinimalLogsPanel';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface PanelState {
   id: string;
@@ -17,10 +20,10 @@ const LOG_SOURCE_TO_SERVICE: Record<string, LocalService> = {
   'app-monitor-frontend': 'frontend-dev',
   'job-finder-backend': 'firebase-emulators',
   'job-finder-frontend': 'frontend-dev',
-  'job-finder-worker': 'job-finder-worker',
+  'job-finder-worker': 'python-worker',
 };
 
-const MinimalPanelContainer: React.FC = () => {
+const MinimalPanelContainer = () => {
   const { getLogsForService, isConnected, subscribeToService } = useLogContext();
   const [panels, setPanels] = useState<PanelState[]>([{ id: '1', source: null }]);
   const [availableSources, setAvailableSources] = useState<LocalService[]>([]);
@@ -104,80 +107,37 @@ const MinimalPanelContainer: React.FC = () => {
     setPanels(panels.map(p => p.id === id ? { ...p, source } : p));
   };
 
-  const containerStyle: React.CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100%',
-    backgroundColor: '#0d0d0d',
-    position: 'relative',
-  };
-
-  const headerStyle: React.CSSProperties = {
-    padding: '12px 16px',
-    borderBottom: '1px solid #333',
-    backgroundColor: '#1a1a1a',
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  };
-
-  const panelGridStyle: React.CSSProperties = {
-    flex: 1,
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '12px',
-    padding: '12px',
-    overflowY: 'auto',
-    alignItems: 'stretch',
-    alignContent: 'stretch',
-  };
-
   return (
-    <div style={containerStyle}>
-      {/* Header */}
-      <div style={headerStyle}>
-        <div style={{
-          fontSize: '16px',
-          fontWeight: 600,
-          color: '#fff',
-          display: 'flex',
-          alignItems: 'center',
-          gap: '12px',
-        }}>
-          Dev Monitor Logs
-          <div style={{
-            fontSize: '11px',
-            fontWeight: 600,
-            padding: '3px 8px',
-            borderRadius: '10px',
-            backgroundColor: isConnected ? '#28a745' : '#dc3545',
-            color: '#fff',
-          }}>
+    <div className="flex min-h-[380px] flex-col overflow-hidden rounded-2xl border border-border/60 bg-black/80 text-foreground shadow-xl">
+      <div className="flex items-center justify-between border-b border-border/60 bg-black/70 px-5 py-4">
+        <div className="flex items-center gap-4 text-sm font-semibold tracking-tight">
+          <span className="text-base uppercase tracking-[0.4em] text-muted-foreground">
+            Dev Monitor Logs
+          </span>
+          <Badge
+            variant={isConnected ? 'success' : 'destructive'}
+            className={cn(
+              'font-mono text-[10px] uppercase tracking-[0.3em]',
+              !isConnected && 'animate-pulse',
+            )}
+          >
             {isConnected ? '● Connected' : '● Disconnected'}
-          </div>
+          </Badge>
         </div>
 
-        <button
+        <Button
+          variant="outline"
+          size="sm"
+          className="rounded-full border-primary/40 bg-primary/10 text-primary-foreground hover:bg-primary/20"
           onClick={addPanel}
           disabled={panels.length >= MAX_PANELS}
-          style={{
-            padding: '6px 12px',
-            backgroundColor: panels.length >= MAX_PANELS ? '#555' : '#007bff',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '4px',
-            fontSize: '12px',
-            cursor: panels.length >= MAX_PANELS ? 'not-allowed' : 'pointer',
-            fontWeight: 600,
-          }}
           title={panels.length >= MAX_PANELS ? `Maximum ${MAX_PANELS} panels` : 'Add panel'}
         >
           + Add Panel ({panels.length}/{MAX_PANELS})
-        </button>
+        </Button>
       </div>
 
-      {/* Panels Grid */}
-      <div style={panelGridStyle}>
+      <div className="flex flex-1 flex-wrap gap-3 overflow-y-auto p-4">
         {panels.map(panel => {
           const logs = panel.source ? getLogsForService(panel.source) : [];
           const hasError = panel.source !== null && !availableSources.includes(panel.source);

@@ -4,19 +4,14 @@ import { Environment } from '../../types/log.types';
 
 interface EnvironmentTabProps {
   socket: Socket | null;
-  environment: string;
   environments: Record<string, Environment>;
 }
 
-export function EnvironmentTab({ socket, environment, environments }: EnvironmentTabProps) {
-  const env = environments[environment];
-  if (!env) return null;
-  
+export function EnvironmentTab({ socket, environments }: EnvironmentTabProps) {
   return (
-    <CloudPanelContainer 
+    <CloudPanelContainer
       socket={socket}
-      environment={environment}
-      projectId={env.projectId}
+      environments={environments}
     />
   );
 }

@@ -2,6 +2,28 @@
 
 Developer monitoring and automation tool for the job-finder-app-manager ecosystem.
 
+## ⚠️ CRITICAL: Development vs Production
+
+### Development Environment (THIS ONE)
+**Use this for all development work:**
+- **Location**: This directory (`/home/jdubz/Development/app-monitor`)
+- **Branch**: `staging` or feature branches
+- **Ports**: Backend 5000, Frontend 5174
+- **Start**: `npm run dev -w backend` and `npm run dev -w frontend`
+- **Never commit directly to `main`**
+
+### Production Environment (HANDS OFF)
+**NEVER manually modify - CI/CD only:**
+- **Location**: `/opt/app-monitor` (system service)
+- **Branch**: `main` only
+- **Ports**: Backend 5050, Frontend 5173
+- **Services**: `app-monitor-backend-prod.service`, `app-monitor-frontend-prod.service`
+- **Deployment**: Automatic via GitHub Actions on push to `main`
+
+📖 See [Production Setup Guide](./docs/production/PRODUCTION_SETUP.md) for production details.
+
+---
+
 ## What It Does
 
 App Monitor is a **development-only** web dashboard that provides:

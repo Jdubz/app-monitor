@@ -1,0 +1,23 @@
+config:
+  target: "http://localhost:5000"
+  phases:
+    - duration: 60
+      arrivalRate: 5
+    - duration: 120
+      arrivalRate: 10
+    - duration: 60
+      arrivalRate: 5
+scenarios:
+  - name: "API Load Test"
+    weight: 100
+    flow:
+      - get:
+          url: "/api/health"
+      - get:
+          url: "/api/workers/status"
+      - post:
+          url: "/api/tasks"
+          json:
+            type: "implementation"
+            description: "Load test task"
+            priority: "medium"

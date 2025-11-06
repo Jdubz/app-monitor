@@ -5,104 +5,62 @@ import StatusBadge from './StatusBadge';
 describe('StatusBadge', () => {
   it('renders running status correctly', () => {
     render(<StatusBadge status="running" />);
-    expect(screen.getByText('● Running')).toBeInTheDocument();
+    const badge = screen.getByText('● Running');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveClass('bg-emerald-500/20', 'text-emerald-200');
+    expect(badge).not.toHaveClass('animate-pulse');
   });
 
   it('renders stopped status correctly', () => {
     render(<StatusBadge status="stopped" />);
-    expect(screen.getByText('○ Stopped')).toBeInTheDocument();
+    const badge = screen.getByText('○ Stopped');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveClass('bg-destructive/20');
+    expect(badge).not.toHaveClass('animate-pulse');
   });
 
   it('renders starting status correctly', () => {
     render(<StatusBadge status="starting" />);
-    expect(screen.getByText('◐ Starting...')).toBeInTheDocument();
+    const badge = screen.getByText('◐ Starting...');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveClass('bg-amber-400/20', 'animate-pulse');
   });
 
   it('renders stopping status correctly', () => {
     render(<StatusBadge status="stopping" />);
-    expect(screen.getByText('◑ Stopping...')).toBeInTheDocument();
+    const badge = screen.getByText('◑ Stopping...');
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveClass('bg-amber-400/20', 'animate-pulse');
   });
 
   it('renders error status correctly', () => {
     render(<StatusBadge status="error" />);
-    expect(screen.getByText('✕ Error')).toBeInTheDocument();
-  });
-
-  it('applies correct colors for running status', () => {
-    render(<StatusBadge status="running" />);
-    const badge = screen.getByText('● Running');
-    expect(badge).toHaveStyle({
-      backgroundColor: '#28a745', // theme.colors.success
-      color: '#ffffff', // theme.colors.white
-    });
-  });
-
-  it('applies correct colors for stopped status', () => {
-    render(<StatusBadge status="stopped" />);
-    const badge = screen.getByText('○ Stopped');
-    expect(badge).toHaveStyle({
-      backgroundColor: '#dc3545', // theme.colors.error
-      color: '#ffffff', // theme.colors.white
-    });
-  });
-
-  it('applies correct colors for starting status', () => {
-    render(<StatusBadge status="starting" />);
-    const badge = screen.getByText('◐ Starting...');
-    expect(badge).toHaveStyle({
-      backgroundColor: '#ffc107', // theme.colors.warning
-      color: '#000000', // theme.colors.black
-    });
-  });
-
-  it('applies correct colors for stopping status', () => {
-    render(<StatusBadge status="stopping" />);
-    const badge = screen.getByText('◑ Stopping...');
-    expect(badge).toHaveStyle({
-      backgroundColor: '#ffc107', // theme.colors.warning
-      color: '#000000', // theme.colors.black
-    });
-  });
-
-  it('applies correct colors for error status', () => {
-    render(<StatusBadge status="error" />);
     const badge = screen.getByText('✕ Error');
-    expect(badge).toHaveStyle({
-      backgroundColor: '#dc3545', // theme.colors.error
-      color: '#ffffff', // theme.colors.white
-    });
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveClass('bg-destructive/20');
   });
 
   it('has animation for transitional states (starting)', () => {
     render(<StatusBadge status="starting" />);
     const badge = screen.getByText('◐ Starting...');
-    // Check that animation is applied
-    const computedStyle = window.getComputedStyle(badge);
-    expect(computedStyle.animation).not.toBe('none');
+    expect(badge).toHaveClass('animate-pulse');
   });
 
   it('has animation for transitional states (stopping)', () => {
     render(<StatusBadge status="stopping" />);
     const badge = screen.getByText('◑ Stopping...');
-    const computedStyle = window.getComputedStyle(badge);
-    expect(computedStyle.animation).not.toBe('none');
+    expect(badge).toHaveClass('animate-pulse');
   });
 
   it('does not have animation for stable states', () => {
     render(<StatusBadge status="running" />);
     const badge = screen.getByText('● Running');
-    expect(badge).toHaveStyle({ animation: 'none' });
+    expect(badge).not.toHaveClass('animate-pulse');
   });
 
   it('renders with proper styling structure', () => {
     render(<StatusBadge status="running" />);
     const badge = screen.getByText('● Running');
-    expect(badge).toHaveStyle({
-      display: 'inline-flex',
-      padding: '8px 12px', // theme.spacing.sm theme.spacing.md
-      borderRadius: '4px', // theme.borderRadius.sm
-      fontSize: '12px', // theme.typography.fontSize.sm
-      fontWeight: '600', // theme.typography.fontWeight.semibold
-    });
+    expect(badge).toHaveClass('inline-flex', 'font-mono', 'tracking-[0.3em]');
   });
 });
