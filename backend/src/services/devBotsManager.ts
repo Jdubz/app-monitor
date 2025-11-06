@@ -1104,7 +1104,9 @@ export class DevBotsManager extends EventEmitter {
       '-v', `${repoRoot}:/workspace:rw`,  // Mount workspace directly
       '-v', `${hostLogsDir}:/logs:rw`,  // Mount logs
       '--tmpfs', '/home/node/.claude:uid=1000,gid=1000',  // Writable temp for Claude CLI
-      '-v', `${claudeCredentials}:/tmp/host-creds.json:ro`,  // Mount credentials
+      '-v', `${claudeCredentials}:/tmp/host-creds.json:ro`,  // Mount Claude credentials
+      // Mount Codex credentials for agent comparison
+      '-v', `${homeDir}/.codex:/home/node/.codex:ro`,  // Codex config and credentials
       // Mount git credentials for committing and pushing
       '-v', `${homeDir}/.gitconfig:/home/node/.gitconfig:ro`,  // Git config
       '-v', `${homeDir}/.ssh:/home/node/.ssh:ro`,  // SSH keys for git push

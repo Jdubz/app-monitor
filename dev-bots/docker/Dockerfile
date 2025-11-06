@@ -50,9 +50,10 @@ COPY package*.json ./
 COPY dev-monitor/backend/package*.json ./dev-monitor/backend/
 COPY dev-monitor/frontend/package*.json ./dev-monitor/frontend/
 
-# Install global npm packages
+# Install global npm packages (both Claude and Codex CLIs for agent comparison)
 RUN npm install -g \
     @anthropic-ai/claude-code \
+    @openai/codex \
     firebase-tools \
     typescript \
     ts-node \
@@ -171,7 +172,7 @@ RUN echo '' >> /home/worker/.bashrc && \
 # VERIFICATION & HEALTH CHECK
 # ==============================================================================
 
-# Create verification script
+# Create verification script (verify both Claude and Codex CLIs)
 RUN cat > /home/worker/verify-install.sh << 'EOF'
 #!/bin/bash
 echo "🔍 Verifying installations..."
@@ -179,16 +180,17 @@ echo "Node: $(node --version)"
 echo "npm: $(npm --version)"
 echo "Python: $(python3 --version)"
 echo "Claude CLI: $(which claude)"
+echo "Codex CLI: $(which codex)"
 echo "Firebase CLI: $(which firebase)"
 echo "TypeScript: $(which tsc)"
-echo "✅ All tools verified!"
+echo "✅ All tools verified! Both Claude and Codex agents available."
 EOF
 
 RUN chmod +x /home/worker/verify-install.sh
 
-# Healthcheck
+# Healthcheck (verify both Claude and Codex CLIs are available)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD which claude && which node && which python3 || exit 1
+  CMD which claude && which codex && which node && which python3 || exit 1
 
 # Default command
 CMD ["/bin/bash", "-c", "/home/worker/verify-install.sh && bash"]
