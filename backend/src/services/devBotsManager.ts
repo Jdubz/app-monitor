@@ -1208,6 +1208,9 @@ export class DevBotsManager extends EventEmitter {
           details: { claudeOutput }
         });
 
+        // Save task status to persistence immediately
+        this.saveTasksToPersistence();
+
         this.emit('taskCompleted', task);
 
       } catch (parseError) {
@@ -1227,6 +1230,9 @@ export class DevBotsManager extends EventEmitter {
         this.activeTasks.delete(task.id);
         this.completedTasks.push(task);
         this.taskPersistence.saveCompletedTasks([task]);
+
+        // Save task status to persistence immediately
+        this.saveTasksToPersistence();
 
         this.emit('taskFailed', task);
       }
@@ -1260,6 +1266,9 @@ export class DevBotsManager extends EventEmitter {
         message: `Task ${task.id} failed`,
         details: { exitCode, stderr, stdout }
       });
+
+      // Save task status to persistence immediately
+      this.saveTasksToPersistence();
 
       this.emit('taskFailed', task);
     }
