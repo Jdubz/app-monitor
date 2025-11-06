@@ -37,6 +37,8 @@ export interface WorkerInfo {
   currentTask?: string;
 }
 
+export type TaskStatus = 'pending' | 'assigned' | 'active' | 'completed' | 'failed' | 'retrying';
+
 /**
  * Task interface representing a unit of work for dev-bots agents
  */
@@ -53,8 +55,8 @@ export interface Task {
   documentation?: string;
   /** @type {string} Additional context or notes for task execution */
   notes?: string;
-  /** @type {'pending' | 'assigned' | 'active' | 'completed' | 'failed' | 'retrying'} Current status of the task */
-  status: 'pending' | 'assigned' | 'active' | 'completed' | 'failed' | 'retrying';
+  /** @type {TaskStatus} Current status of the task */
+  status: TaskStatus;
   /** @type {string} ISO timestamp when task was created */
   createdAt: string;
   /** @type {string} ID of the worker assigned to this task */
