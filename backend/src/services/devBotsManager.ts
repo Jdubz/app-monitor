@@ -899,6 +899,19 @@ export class DevBotsManager extends EventEmitter {
         action: 'agent_not_found',
         message: `No agent found for ${nextTask.assignedAgent}`
       });
+
+      // Mark task as failed and remove from queue to unblock processing
+      nextTask.status = 'failed';
+      nextTask.error = `Agent not found: ${nextTask.assignedAgent}. Please check agent name is correct.`;
+      nextTask.completedAt = new Date().toISOString();
+      nextTask.canRetry = true;
+      this.taskQueue.splice(0, 1);
+      this.completedTasks.push(nextTask);
+      this.taskPersistence.saveCompletedTasks([nextTask]);
+      this.saveTasksToPersistence();
+
+      // Try next task
+      this.assignNextTask();
       return;
     }
 
@@ -933,19 +946,15 @@ export class DevBotsManager extends EventEmitter {
     this.activeTasks.set(nextTask.id, nextTask);
     
     try {
-      // Create ephemeral worker and execute task
-      const ephemeralWorker = await this.createEphemeralWorker(nextTask, agent);
-      nextTask.assignedWorker = ephemeralWorker.id;
-      
-      // Execute task in container
-      this.executeTaskInEphemeralWorker(ephemeralWorker);
-      
+      // Execute task using imagineer-style ephemeral container
+      await this.executeTaskWithDockerRun(nextTask, agent);
+
       logger.info({
       category: 'process',
-      action: 'task_assigned_to_ephemeral_worker_nexttask_id_ephe',
-      message: `Task assigned to ephemeral worker: ${nextTask.id} -> ${ephemeralWorker.id}`
+      action: 'task_execution_completed_nexttask_id',
+      message: `Task execution completed: ${nextTask.id}`
     });
-      
+
     } catch (error) {
       logger.error({
       category: 'process',
@@ -1054,6 +1063,169 @@ export class DevBotsManager extends EventEmitter {
 
 
 
+  /**
+   * Execute task using docker run with ephemeral container (imagineer pattern)
+   * This replaces the old createEphemeralWorker + executeTaskInEphemeralWorker approach
+   */
+  private async executeTaskWithDockerRun(task: Task, agent: AgentPersonality): Promise<void> {
+    const { spawn } = await import('child_process');
+    const workerId = `bot-${agent.id}-${Date.now()}`;
+
+    // Ensure we're on staging branch
+    const repoRoot = process.cwd();
+    const baseBranch = 'staging';
+    await this.execGitCommand(['checkout', baseBranch], repoRoot);
+    await this.execGitCommand(['pull', 'origin', baseBranch], repoRoot);
+
+    // Prepare host-side resources
+    const hostLogsDir = this.getHostLogsDir();
+    if (!fs.existsSync(hostLogsDir)) {
+      fs.mkdirSync(hostLogsDir, { recursive: true });
+    }
+
+    const homeDir = os.homedir();
+
+    // Find Claude credentials file
+    const claudeCredentialsNew = path.join(homeDir, '.claude', '.credentials.json');
+    const claudeCredentialsOld = path.join(homeDir, '.claude', 'credentials.json');
+    const claudeCredentials = fs.existsSync(claudeCredentialsNew) ? claudeCredentialsNew : claudeCredentialsOld;
+
+    if (!fs.existsSync(claudeCredentials)) {
+      throw new Error('Claude credentials file not found. Please run "claude login" first.');
+    }
+
+    // Escape prompt for shell (use single quotes and escape any single quotes in content)
+    const promptText = (task.prompt || task.description || task.title).replace(/'/g, "'\\''");
+
+    // Build docker run command (imagineer pattern)
+    const dockerArgs = [
+      'run',
+      '--rm',  // Auto-remove container after exit
+      '-v', `${repoRoot}:/workspace:rw`,  // Mount workspace directly
+      '-v', `${hostLogsDir}:/logs:rw`,  // Mount logs
+      '--tmpfs', '/home/node/.claude:uid=1000,gid=1000',  // Writable temp for Claude CLI
+      '-v', `${claudeCredentials}:/tmp/host-creds.json:ro`,  // Mount credentials
+      // Mount git credentials for committing and pushing
+      '-v', `${homeDir}/.gitconfig:/home/node/.gitconfig:ro`,  // Git config
+      '-v', `${homeDir}/.ssh:/home/node/.ssh:ro`,  // SSH keys for git push
+      '-v', `${homeDir}/.config/gh:/home/node/.config/gh:ro`,  // GitHub CLI auth
+      this.getAgentDockerImage(agent),
+      'sh', '-c',
+      // Copy credentials and run Claude with JSON output
+      `cp /tmp/host-creds.json /home/node/.claude/.credentials.json && ` +
+      `claude --print --dangerously-skip-permissions --output-format json '${promptText}'`
+    ];
+
+    logger.info({
+      category: 'process',
+      action: 'executing_task_with_docker_run',
+      message: `Executing task ${task.id} with docker run (ephemeral container)`,
+      details: { workerId, agent: agent.id }
+    });
+
+    // Execute with spawn
+    const dockerProcess = spawn('docker', dockerArgs, {
+      cwd: repoRoot,
+      stdio: ['ignore', 'pipe', 'pipe']
+    });
+
+    let stdout = '';
+    let stderr = '';
+
+    dockerProcess.stdout.on('data', (data) => {
+      stdout += data.toString();
+    });
+
+    dockerProcess.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    // Wait for completion
+    const exitCode = await new Promise<number>((resolve, reject) => {
+      dockerProcess.on('close', (code) => {
+        resolve(code || 0);
+      });
+      dockerProcess.on('error', (error) => {
+        reject(error);
+      });
+    });
+
+    logger.info({
+      category: 'process',
+      action: 'docker_run_completed',
+      message: `Docker run completed with exit code ${exitCode}`,
+      details: { taskId: task.id, exitCode }
+    });
+
+    // Handle task completion
+    if (exitCode === 0) {
+      try {
+        // Parse JSON output from Claude
+        const claudeOutput = JSON.parse(stdout);
+
+        task.status = 'completed';
+        task.output = JSON.stringify(claudeOutput);
+        task.completedAt = new Date().toISOString();
+        task.canRetry = false;
+
+        this.activeTasks.delete(task.id);
+        this.completedTasks.push(task);
+        this.taskPersistence.saveCompletedTasks([task]);
+
+        logger.info({
+          category: 'process',
+          action: 'task_completed_successfully',
+          message: `Task ${task.id} completed successfully`,
+          details: { claudeOutput }
+        });
+
+        this.emit('taskCompleted', task);
+
+      } catch (parseError) {
+        // JSON parse failed - treat as error
+        logger.error({
+          category: 'process',
+          action: 'failed_to_parse_claude_output',
+          message: `Failed to parse Claude output for task ${task.id}`,
+          details: { stdout, stderr, parseError }
+        });
+
+        task.status = 'failed';
+        task.error = `Failed to parse Claude output: ${parseError instanceof Error ? parseError.message : String(parseError)}`;
+        task.completedAt = new Date().toISOString();
+        task.canRetry = true;
+
+        this.activeTasks.delete(task.id);
+        this.completedTasks.push(task);
+        this.taskPersistence.saveCompletedTasks([task]);
+
+        this.emit('taskFailed', task);
+      }
+    } else {
+      // Non-zero exit code
+      task.status = 'failed';
+      task.error = `Docker run failed with exit code ${exitCode}. stderr: ${stderr}`;
+      task.completedAt = new Date().toISOString();
+      task.canRetry = true;
+
+      this.activeTasks.delete(task.id);
+      this.completedTasks.push(task);
+      this.taskPersistence.saveCompletedTasks([task]);
+
+      logger.error({
+        category: 'process',
+        action: 'task_failed',
+        message: `Task ${task.id} failed`,
+        details: { exitCode, stderr, stdout }
+      });
+
+      this.emit('taskFailed', task);
+    }
+
+    // Try to assign next task
+    this.assignNextTask();
+  }
+
 
   /**
    * Create a new ephemeral Docker container for a task
@@ -1093,15 +1265,15 @@ export class DevBotsManager extends EventEmitter {
 
       const homeDir = os.homedir();
 
-      // Mount Claude credentials file directly to worker's .claude directory
+      // Mount Claude credentials file to temp location (will be copied inside container)
       // Try both .credentials.json (newer) and credentials.json (older)
       const claudeCredentialsNew = path.join(homeDir, '.claude', '.credentials.json');
       const claudeCredentialsOld = path.join(homeDir, '.claude', 'credentials.json');
       const claudeCredentials = fs.existsSync(claudeCredentialsNew) ? claudeCredentialsNew : claudeCredentialsOld;
 
       if (fs.existsSync(claudeCredentials)) {
-        // Mount directly to /home/worker/.claude/.credentials.json so Claude CLI can find it
-        binds.push(`${claudeCredentials}:/home/worker/.claude/.credentials.json:ro`);
+        // Mount to temp location - will be copied to .claude directory by shell command
+        binds.push(`${claudeCredentials}:/tmp/host-creds.json:ro`);
         logger.info({
           category: 'process',
           action: 'claude_credentials_mounted',
@@ -1152,7 +1324,10 @@ export class DevBotsManager extends EventEmitter {
           Memory: 512 * 1024 * 1024,
           CpuQuota: 50000,
           AutoRemove: true,
-          Binds: binds
+          Binds: binds,
+          Tmpfs: {
+            '/home/worker/.claude': 'uid=1001,gid=1001'  // Writable temp for Claude CLI
+          }
         },
         Labels: {
           'claude.worker.id': workerId,
@@ -1162,11 +1337,15 @@ export class DevBotsManager extends EventEmitter {
         }
       });
 
-      // Copy workspace INTO container using tar
+      // Start the container FIRST so we can exec commands
+      await container.start();
+
+      // Wait for container to be fully running before exec commands
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      // Copy workspace INTO container using tar (container must be running for chown)
       await this.copyWorkspaceToContainer(container.id, repoRoot);
 
-      // Now start the container with workspace already inside
-      await container.start();
       await this.initializeWorkerLogFile(workerId);
 
       const workspace = {
@@ -1219,6 +1398,56 @@ export class DevBotsManager extends EventEmitter {
       action: 'copying_workspace_to_container',
       message: `Copying workspace from ${repoRoot} into container ${containerId}`
     });
+
+    // Create /workspace directory in container first
+    try {
+      logger.info({
+        category: 'process',
+        action: 'creating_workspace_directory',
+        message: `About to create /workspace directory in container ${containerId}`
+      });
+
+      const container = this.docker.getContainer(containerId);
+      const mkdirExec = await container.exec({
+        Cmd: ['/bin/sh', '-c', 'mkdir -p /workspace && chown worker:worker /workspace'],
+        User: 'root',
+        AttachStdout: true,
+        AttachStderr: true
+      });
+
+      logger.info({
+        category: 'process',
+        action: 'exec_created_starting',
+        message: `Exec created, now starting mkdir in container ${containerId}`
+      });
+
+      await mkdirExec.start({ Detach: false, Tty: false });
+
+      // Wait for exec to complete by polling inspect
+      for (let i = 0; i < 10; i++) {
+        const inspect = await mkdirExec.inspect();
+        if (!inspect.Running) {
+          if (inspect.ExitCode !== 0) {
+            throw new Error(`mkdir command failed with exit code ${inspect.ExitCode}`);
+          }
+          break;
+        }
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+
+      logger.info({
+        category: 'process',
+        action: 'workspace_directory_created',
+        message: `Created /workspace directory in container ${containerId}`
+      });
+    } catch (error) {
+      logger.error({
+        category: 'process',
+        action: 'failed_to_create_workspace_directory',
+        message: `Failed to create /workspace directory: ${error instanceof Error ? error.message : String(error)}`
+      });
+      throw error;
+    }
 
     // Exclusions for tar (don't copy these into container)
     const exclusions = [
@@ -1455,47 +1684,26 @@ export class DevBotsManager extends EventEmitter {
 
   /**
    * Generate task execution command with worker-specific logging
-   * Generates a proper Claude CLI command with the task prompt and logs to worker-specific file
+   * Uses imagineer's pattern: copy credentials from temp mount, then run Claude
    */
   private generateTaskExecutionCommandWithLogging(task: Task, agent: AgentPersonality, logFile: string): string {
-    // Escape the prompt for shell execution
+    // Escape the prompt for shell execution (single quotes to preserve special chars)
     const escapedPrompt = (task.prompt || task.description || task.title)
-      .replace(/\\/g, '\\\\')
-      .replace(/"/g, '\\"')
-      .replace(/\$/g, '\\$')
-      .replace(/`/g, '\\`');
-
-    // Build Claude CLI command with logging
-    const command = [
-      'claude',
-      '-p', `"${escapedPrompt}"`,
-      '--allowedTools', 'Bash,Read,Write,Edit,Grep,Glob,WebSearch,WebFetch',
-      '--workingDirectory', '/workspace',
-      '--print'
-    ];
-
-    // Add any task-specific files
-    if (task.files && task.files.length > 0) {
-      command.push('--files', task.files.join(','));
-    }
-
-    // Add project context
-    if (task.project) {
-      command.push('--context', `project:${task.project}`);
-    }
-
-    const claudeCommand = command.join(' ');
+      .replace(/'/g, "'\\''");  // Escape single quotes for shell
 
     // Create a wrapper command that logs to the worker-specific file
-    // Note: Credentials are mounted directly to /home/worker/.claude/.credentials.json
+    // Following imagineer's pattern: copy credentials then run Claude
     const wrapperCommand = [
       'echo "=== Worker Task Execution Started ===" >> ' + logFile,
       'echo "Timestamp: $(date)" >> ' + logFile,
       'echo "Worker: ' + agent.name + '" >> ' + logFile,
       'echo "Task: ' + task.title + '" >> ' + logFile,
       'echo "=====================================" >> ' + logFile,
+      // Copy credentials from temp mount to .claude directory (imagineer pattern)
+      'cp /tmp/host-creds.json /home/worker/.claude/.credentials.json',
       'echo "Claude credentials: $(test -f ~/.claude/.credentials.json && echo found || echo missing)" >> ' + logFile,
-      claudeCommand + ' 2>&1 | tee -a ' + logFile,
+      // Run Claude with JSON output (imagineer pattern)
+      `claude --print --dangerously-skip-permissions --output-format json --workingDirectory /workspace '${escapedPrompt}' 2>&1 | tee -a ` + logFile,
       'CLAUDE_EXIT=$?',
       'echo "=== Worker Task Execution Completed ===" >> ' + logFile,
       'echo "Exit Code: $CLAUDE_EXIT" >> ' + logFile,
