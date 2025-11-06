@@ -1127,9 +1127,9 @@ export class DevBotsManager extends EventEmitter {
       '-v', `${homeDir}/.config/gh:/home/node/.config/gh:ro`,  // GitHub CLI auth
       this.getAgentDockerImage(agent),
       'sh', '-c',
-      // Copy credentials and run Claude with JSON output
+      // Copy credentials and run Claude with JSON output (bypass permissions for git access)
       `cp /tmp/host-creds.json /home/node/.claude/.credentials.json && ` +
-      `claude --print --dangerously-skip-permissions --output-format json '${promptText}'`
+      `claude --print --dangerously-skip-permissions --permission-mode bypassPermissions --allowedTools 'Bash(git:*)' --output-format json '${promptText}'`
     ];
 
     logger.info({
