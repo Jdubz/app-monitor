@@ -1093,10 +1093,26 @@ export class DevBotsManager extends EventEmitter {
 
       const homeDir = os.homedir();
 
-      // Mount Claude credentials file (not directory) to /tmp
-      const claudeCredentials = path.join(homeDir, '.claude', 'credentials.json');
+      // Mount Claude credentials file directly to worker's .claude directory
+      // Try both .credentials.json (newer) and credentials.json (older)
+      const claudeCredentialsNew = path.join(homeDir, '.claude', '.credentials.json');
+      const claudeCredentialsOld = path.join(homeDir, '.claude', 'credentials.json');
+      const claudeCredentials = fs.existsSync(claudeCredentialsNew) ? claudeCredentialsNew : claudeCredentialsOld;
+
       if (fs.existsSync(claudeCredentials)) {
-        binds.push(`${claudeCredentials}:/tmp/host-claude-credentials.json:ro`);
+        // Mount directly to /home/worker/.claude/.credentials.json so Claude CLI can find it
+        binds.push(`${claudeCredentials}:/home/worker/.claude/.credentials.json:ro`);
+        logger.info({
+          category: 'process',
+          action: 'claude_credentials_mounted',
+          message: `Mounting Claude credentials from: ${claudeCredentials}`
+        });
+      } else {
+        logger.warn({
+          category: 'process',
+          action: 'claude_credentials_not_found',
+          message: 'Claude credentials file not found, container may not authenticate'
+        });
       }
 
       const gitCredentials = path.join(homeDir, '.git-credentials');
@@ -1240,16 +1256,36 @@ export class DevBotsManager extends EventEmitter {
         stderr += data.toString();
       });
 
-      dockerCpProc.on('close', (code) => {
+      dockerCpProc.on('close', async (code) => {
         if (code !== 0) {
           reject(new Error(`docker cp failed with code ${code}: ${stderr}`));
         } else {
-          logger.info({
-            category: 'process',
-            action: 'workspace_copied_successfully',
-            message: `Workspace copied successfully to container ${containerId}`
-          });
-          resolve();
+          // Fix ownership of workspace for worker user (must run as root)
+          try {
+            const container = this.docker.getContainer(containerId);
+            const chownExec = await container.exec({
+              Cmd: ['/bin/sh', '-c', 'chown -R worker:worker /workspace'],
+              User: 'root',  // Run as root to be able to chown
+              AttachStdout: true,
+              AttachStderr: true
+            });
+            await chownExec.start({ Detach: false });
+
+            logger.info({
+              category: 'process',
+              action: 'workspace_copied_successfully',
+              message: `Workspace copied and ownership fixed for container ${containerId}`
+            });
+            resolve();
+          } catch (chownError) {
+            logger.warn({
+              category: 'process',
+              action: 'workspace_chown_failed',
+              message: `Failed to fix workspace ownership: ${chownError instanceof Error ? chownError.message : String(chownError)}`
+            });
+            // Don't fail - the copy succeeded, ownership might not be critical
+            resolve();
+          }
         }
       });
 
@@ -1393,6 +1429,7 @@ export class DevBotsManager extends EventEmitter {
       '-p', `"${escapedPrompt}"`,
       '--allowedTools', 'Bash,Read,Write,Edit,Grep,Glob,WebSearch,WebFetch',
       '--workingDirectory', '/workspace',
+      '--dangerously-skip-permissions',  // Skip permission prompts in container
       '--print'
     ];
 
@@ -1449,24 +1486,21 @@ export class DevBotsManager extends EventEmitter {
 
     const claudeCommand = command.join(' ');
 
-    const prepClaudeContext = [
-      'rm -rf ~/.claude',
-      'mkdir -p ~/.claude',
-      'if [ -f /tmp/host-claude-credentials.json ]; then cp /tmp/host-claude-credentials.json ~/.claude/credentials.json; fi'
-    ];
-
     // Create a wrapper command that logs to the worker-specific file
+    // Note: Credentials are mounted directly to /home/worker/.claude/.credentials.json
     const wrapperCommand = [
       'echo "=== Worker Task Execution Started ===" >> ' + logFile,
       'echo "Timestamp: $(date)" >> ' + logFile,
       'echo "Worker: ' + agent.name + '" >> ' + logFile,
       'echo "Task: ' + task.title + '" >> ' + logFile,
       'echo "=====================================" >> ' + logFile,
-      ...prepClaudeContext,
+      'echo "Claude credentials: $(test -f ~/.claude/.credentials.json && echo found || echo missing)" >> ' + logFile,
       claudeCommand + ' 2>&1 | tee -a ' + logFile,
+      'CLAUDE_EXIT=$?',
       'echo "=== Worker Task Execution Completed ===" >> ' + logFile,
-      'echo "Exit Code: $?" >> ' + logFile,
-      'echo "=======================================" >> ' + logFile
+      'echo "Exit Code: $CLAUDE_EXIT" >> ' + logFile,
+      'echo "=======================================" >> ' + logFile,
+      'exit $CLAUDE_EXIT'
     ].join(' && ');
 
     logger.info({

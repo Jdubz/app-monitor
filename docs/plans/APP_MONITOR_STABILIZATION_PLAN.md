@@ -18,11 +18,11 @@
 ## Workstreams & Tasks
 
 ### 1. Frontend Health
-- **FE-1**: Fix TypeScript compilation errors (`DevBotsPanel.tsx`, `EnhancedLogsViewer.tsx`, `EnhancedTaskCreationForm.tsx`, `ErrorDisplay.tsx`, `EnvironmentTab.tsx`, `panelFilters.ts`).  
-  - *Deliverable*: `npm run build -w frontend` succeeds.  
-  - *Notes*: Address discriminated unions, missing props, invalid enum comparisons.
-- **FE-2**: Resolve ESLint warnings that block pre-push hooks (primarily `@typescript-eslint/no-explicit-any`).  
-  - *Deliverable*: `npm run lint -w frontend` exits cleanly or warnings explicitly suppressed with justification.
+- **FE-1**: ✅ **COMPLETE** - Fix TypeScript compilation errors (`DevBotsPanel.tsx`, `EnhancedLogsViewer.tsx`, `EnhancedTaskCreationForm.tsx`, `ErrorDisplay.tsx`, `EnvironmentTab.tsx`, `panelFilters.ts`).
+  - *Deliverable*: `npm run build` succeeds. ✅ **VERIFIED 2025-11-06**
+  - *Notes*: All discriminated unions, missing props, and invalid enum comparisons resolved.
+- **FE-2**: ✅ **COMPLETE** - Resolve ESLint warnings that block pre-push hooks (primarily `@typescript-eslint/no-explicit-any`).
+  - *Deliverable*: `npm run lint` exits cleanly. ✅ **VERIFIED 2025-11-06**
 - **FE-3**: Audit dev-bot UI layouts post-fix to ensure components render without runtime errors.
 
 ### 2. Backend Health
@@ -60,7 +60,9 @@
 - **TC-1**: Author task context submission schemas/validators (description, env snapshot, logs, network events, artifact references).
 - **TC-2**: Design SQLite migrations for `task_context`, `task_artifacts`, and `task_automation_runs` tables (see `docs/dev-monitor/DEV_BOT_PIPELINE_ENHANCEMENT_PLAN.md`).
 - **TC-3**: Extend task API/CLI scaffolding to accept optional context payloads without enabling automation yet.
-- **TC-4**: Scope remediation container requirements (image, bootstrap script path, read-only credential mounts) per work-target and record them in the registry once migrated.
+- **TC-4**: ✅ **COMPLETE** - Scope remediation container requirements (image, bootstrap script path, read-only credential mounts) per work-target.
+  - *Deliverable*: Container credentials mounting, workspace permissions, and command flags documented and working. ✅ **VERIFIED 2025-11-06**
+  - *Notes*: See `docs/sessions/DEV_BOT_CREDENTIALS_FIX_2025-11-06.md` for implementation details.
 
 ---
 
