@@ -192,7 +192,7 @@ export const EnhancedLogsViewer: React.FC<EnhancedLogsViewerProps> = ({
         <div className={styles.buttonGroup}>
           <StyledButton
             variant={isPaused ? 'primary' : 'secondary'}
-            size="small"
+            size="sm"
             onClick={onTogglePause}
             title={`${isPaused ? 'Resume' : 'Pause'} (Ctrl+Space)`}
           >
@@ -201,7 +201,7 @@ export const EnhancedLogsViewer: React.FC<EnhancedLogsViewerProps> = ({
 
           <StyledButton
             variant={internalAutoScroll ? 'primary' : 'secondary'}
-            size="small"
+            size="sm"
             onClick={handleToggleAutoScroll}
             title="Toggle auto-scroll to bottom"
           >
@@ -210,7 +210,7 @@ export const EnhancedLogsViewer: React.FC<EnhancedLogsViewerProps> = ({
 
           <StyledButton
             variant="secondary"
-            size="small"
+            size="sm"
             onClick={() => setShowLineNumbers(!showLineNumbers)}
             title="Toggle line numbers (N)"
           >
@@ -219,7 +219,7 @@ export const EnhancedLogsViewer: React.FC<EnhancedLogsViewerProps> = ({
 
           <StyledButton
             variant="secondary"
-            size="small"
+            size="sm"
             onClick={onClear}
             title="Clear all logs (Ctrl+L)"
           >
@@ -228,7 +228,7 @@ export const EnhancedLogsViewer: React.FC<EnhancedLogsViewerProps> = ({
 
           <StyledButton
             variant="secondary"
-            size="small"
+            size="sm"
             onClick={copyAllLogs}
             title="Copy all logs to clipboard"
           >
@@ -237,7 +237,7 @@ export const EnhancedLogsViewer: React.FC<EnhancedLogsViewerProps> = ({
 
           <StyledButton
             variant="secondary"
-            size="small"
+            size="sm"
             onClick={downloadLogs}
             title="Download logs (Ctrl+S)"
           >

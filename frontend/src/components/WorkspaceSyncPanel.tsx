@@ -60,10 +60,10 @@ export const WorkspaceSyncPanel: React.FC<WorkspaceSyncPanelProps> = ({
     try {
       setLoading(true);
       const response = await api.get('/dev-bots/workspace-sync/status');
-      setStatus(response.data);
+      setStatus((response as any).data);
       setError(null);
       if (onStatusChange) {
-        onStatusChange(response.data);
+        onStatusChange((response as any).data);
       }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to fetch sync status');
@@ -77,13 +77,13 @@ export const WorkspaceSyncPanel: React.FC<WorkspaceSyncPanelProps> = ({
     try {
       setSyncInProgress(true);
       setError(null);
-      
+
       const response = await api.post('/dev-bots/workspace-sync/trigger', syncOptions);
-      setLastSyncResult(response.data.result);
-      
+      setLastSyncResult((response as any).data.result);
+
       // Refresh status after sync
       await fetchStatus();
-      
+
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to trigger sync');
     } finally {

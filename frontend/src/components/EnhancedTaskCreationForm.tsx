@@ -14,7 +14,7 @@ interface EnhancedTaskData {
   type: string;
   title: string;
   description: string;
-  repository: string;
+  project: string;
   
   // Detailed specification (required)
   acceptanceCriteria: string[];
@@ -148,9 +148,9 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
         api.get(`/dev-bots/checklist/${taskData.type}`)
       ]);
 
-      setGuidelines(guidelinesRes.data.guidelines);
-      setExample(exampleRes.data.example);
-      setChecklist(checklistRes.data.checklist);
+      setGuidelines((guidelinesRes as any).data.guidelines);
+      setExample((exampleRes as any).data.example);
+      setChecklist((checklistRes as any).data.checklist);
     } catch (err: any) {
       console.error('Failed to load guidelines:', err);
     }
@@ -162,7 +162,7 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
         taskData,
         taskType: taskData.type
       });
-      setValidation(response.data.validation);
+      setValidation((response as any).data.validation);
     } catch (err: any) {
       console.error('Failed to validate task data:', err);
     }
@@ -248,9 +248,9 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
       };
 
       const response = await api.post('/dev-bots/tasks/enhanced', cleanedTaskData);
-      
+
       if (onTaskCreated) {
-        onTaskCreated(response.data.task);
+        onTaskCreated((response as any).data.task);
       }
     } catch (err: any) {
       setError(err.response?.data?.error || 'Failed to create task');

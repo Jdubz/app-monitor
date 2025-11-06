@@ -17,7 +17,7 @@ const LOG_SOURCE_TO_SERVICE: Record<string, LocalService> = {
   'app-monitor-frontend': 'frontend-dev',
   'job-finder-backend': 'firebase-emulators',
   'job-finder-frontend': 'frontend-dev',
-  'job-finder-worker': 'job-finder-worker',
+  'job-finder-worker': 'python-worker',
 };
 
 const MinimalPanelContainer: React.FC = () => {

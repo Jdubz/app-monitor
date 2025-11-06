@@ -33,6 +33,7 @@ interface Task {
   files?: string[]; // New: files to be modified
   dependencies?: string[]; // New: task dependencies
   project?: string; // New: target project
+  priority?: number; // Task priority (1-10, higher is more important)
 
   // Simple retry fields
   retryCount?: number;
@@ -58,7 +59,7 @@ interface Task {
 
 interface WorkerStatus {
   id: string;
-  status: 'idle' | 'busy';
+  status: 'idle' | 'busy' | 'stopped';
   currentTask?: string;
   lastSeen: number;
   personality?: {
@@ -388,14 +389,12 @@ export const DevBotsPanel: React.FC<DevBotsPanelProps> = ({
     );
   }
 
-  const getPriorityColor = (priority: string) => {
-    switch (priority) {
-      case 'urgent': return '#ff4444';
-      case 'high': return '#ff8800';
-      case 'medium': return '#0088ff';
-      case 'low': return '#888888';
-      default: return '#888888';
-    }
+  const getPriorityColor = (priority: number | undefined) => {
+    if (priority === undefined) return '#888888';
+    if (priority >= 8) return '#ff4444'; // high priority
+    if (priority >= 5) return '#ff8800'; // medium priority
+    if (priority >= 3) return '#0088ff'; // low-medium priority
+    return '#888888'; // low priority
   };
 
   const getStatusColor = (status: string) => {
