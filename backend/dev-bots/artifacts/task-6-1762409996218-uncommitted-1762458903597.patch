@@ -1,0 +1,681 @@
+diff --git a/backend/src/services/taskPromptTemplates.ts b/backend/src/services/taskPromptTemplates.ts
+index d1c0b6e..e76714d 100644
+--- a/backend/src/services/taskPromptTemplates.ts
++++ b/backend/src/services/taskPromptTemplates.ts
+@@ -950,7 +950,8 @@ Use your specialized knowledge to ensure this implementation follows best practi
+   /**
+    * Get guidance text for confidence level
+    */
+-  private getConfidenceGuidance(confidence: string): string {
++  private getConfidenceGuidance(confidence: string | undefined): string {
++    if (!confidence) return '';
+     switch (confidence.toLowerCase()) {
+       case 'low':
+         return '(significant unknowns, estimate may be off by 2-3x)';
+diff --git a/backend/tests/integration/process-lifecycle.test.ts b/backend/tests/integration/process-lifecycle.test.ts
+index 013a0ad..018085f 100644
+--- a/backend/tests/integration/process-lifecycle.test.ts
++++ b/backend/tests/integration/process-lifecycle.test.ts
+@@ -1,30 +1,39 @@
+ /**
+  * Integration Tests for Process Lifecycle
+- * 
+- * Tests the full lifecycle of starting, stopping, and restarting processes
+- * in the dev-monitor system.
++ *
++ * Tests the full lifecycle of starting, stopping, and restarting services
++ * in the dev-monitor system using the actual ProcessManager API.
+  */
+ 
+-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
++import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+ import { ProcessManager } from '../../src/services/processManager/index.js';
++import { logger } from '../../src/utils/logger.js';
+ 
+-// TODO: These tests expect a different API than ProcessManager provides
+-// ProcessManager manages predefined services, not arbitrary processes
+-// These tests need to be rewritten to use the actual API
+-describe.skip('Process Lifecycle Integration', () => {
++// Mock logger to avoid noise in tests
++vi.mock('../../src/utils/logger.js');
++
++describe('Process Lifecycle Integration', () => {
+   let processManager: ProcessManager;
+ 
+   beforeEach(() => {
++    vi.clearAllMocks();
++
++    // Mock logger
++    vi.mocked(logger.info).mockImplementation(() => {});
++    vi.mocked(logger.warn).mockImplementation(() => {});
++    vi.mocked(logger.error).mockImplementation(() => {});
++    vi.mocked(logger.debug).mockImplementation(() => {});
++
+     processManager = new ProcessManager();
+   });
+ 
+   afterEach(async () => {
+-    // Clean up any running processes
+-    const processes = processManager.listProcesses();
+-    for (const proc of processes) {
+-      if (proc.status === 'running') {
++    // Clean up any running services
++    const services = await processManager.getAllStatuses();
++    for (const service of services) {
++      if (service.status === 'running') {
+         try {
+-          await processManager.stopProcess(proc.id);
++          await processManager.stopService(service.name);
+         } catch (error) {
+           // Ignore cleanup errors
+         }
+@@ -32,403 +41,254 @@ describe.skip('Process Lifecycle Integration', () => {
+     }
+   });
+ 
+-  describe('Start Process', () => {
+-    it('should start a simple process and track its state', async () => {
+-      const processId = 'test-echo-process';
+-      const config = {
+-        id: processId,
+-        name: 'Echo Test',
+-        displayName: 'Echo Test Process',
+-        command: 'echo',
+-        args: ['Hello, World!'],
+-        type: 'backend' as const,
+-        autoRestart: false,
+-      };
+-
+-      await processManager.startProcess(config);
+-      
+-      const processInfo = processManager.getProcess(processId);
+-      
+-      expect(processInfo).toBeDefined();
+-      expect(processInfo?.id).toBe(processId);
+-      expect(processInfo?.name).toBe('Echo Test');
+-      expect(['starting', 'running', 'stopped']).toContain(processInfo?.status);
+-    });
++  describe('Start Service', () => {
++    it('should start a service and track its state', async () => {
++      const serviceName = 'be-test';
+ 
+-    it('should prevent starting a process that is already running', async () => {
+-      const processId = 'test-long-running';
+-      const config = {
+-        id: processId,
+-        name: 'Long Running Test',
+-        displayName: 'Long Running Test',
+-        command: 'sleep',
+-        args: ['2'],
+-        type: 'backend' as const,
+-        autoRestart: false,
+-      };
+-
+-      await processManager.startProcess(config);
+-      
+-      // Try to start again
+-      await expect(async () => {
+-        await processManager.startProcess(config);
+-      }).rejects.toThrow();
+-    });
++      const result = await processManager.startService(serviceName);
++
++      expect(result).toBeDefined();
++      expect(result.name).toBe(serviceName);
++      expect(['starting', 'running']).toContain(result.status);
++
++      // Verify we can get the status
++      const status = await processManager.getServiceStatus(serviceName);
++      expect(status).toBeDefined();
++      expect(status.name).toBe(serviceName);
++    }, 30000); // Increased timeout for actual process start
++
++    it('should handle starting a service that is already running', async () => {
++      const serviceName = 'be-test';
+ 
+-    it('should handle process startup failures gracefully', async () => {
+-      const processId = 'test-invalid-command';
+-      const config = {
+-        id: processId,
+-        name: 'Invalid Command Test',
+-        displayName: 'Invalid Command',
+-        command: 'nonexistent-command-xyz',
+-        args: [],
+-        type: 'backend' as const,
+-        autoRestart: false,
+-      };
+-
+-      await expect(async () => {
+-        await processManager.startProcess(config);
+-      }).rejects.toThrow();
++      await processManager.startService(serviceName);
++
++      // Try to start again - should warn but not error
++      const result = await processManager.startService(serviceName);
++
++      expect(result).toBeDefined();
++      expect(result.status).toBe('running');
++      expect(logger.warn).toHaveBeenCalledWith(
++        expect.objectContaining({
++          message: expect.stringContaining('already running'),
++        })
++      );
++    }, 30000);
++
++    it('should handle invalid service names gracefully', async () => {
++      const serviceName = 'nonexistent-service-xyz';
++
++      await expect(processManager.startService(serviceName)).rejects.toThrow(
++        'Service "nonexistent-service-xyz" not found'
++      );
+     });
+   });
+ 
+-  describe('Stop Process', () => {
+-    it('should stop a running process', async () => {
+-      const processId = 'test-stoppable';
+-      const config = {
+-        id: processId,
+-        name: 'Stoppable Test',
+-        displayName: 'Stoppable Process',
+-        command: 'sleep',
+-        args: ['10'],
+-        type: 'backend' as const,
+-        autoRestart: false,
+-      };
+-
+-      await processManager.startProcess(config);
+-      await processManager.stopProcess(processId);
+-      
+-      const processInfo = processManager.getProcess(processId);
+-      
+-      expect(processInfo).toBeDefined();
+-      expect(['stopping', 'stopped']).toContain(processInfo?.status);
+-    });
++  describe('Stop Service', () => {
++    it('should stop a running service', async () => {
++      const serviceName = 'be-test';
+ 
+-    it('should handle stopping a non-existent process', async () => {
+-      await expect(async () => {
+-        await processManager.stopProcess('nonexistent-process');
+-      }).rejects.toThrow();
+-    });
++      await processManager.startService(serviceName);
++      const result = await processManager.stopService(serviceName);
++
++      expect(result).toBeDefined();
++      expect(result.name).toBe(serviceName);
++      expect(['stopping', 'stopped']).toContain(result.status);
++    }, 30000);
+ 
+-    it('should handle stopping an already stopped process', async () => {
+-      const processId = 'test-already-stopped';
+-      const config = {
+-        id: processId,
+-        name: 'Already Stopped',
+-        displayName: 'Already Stopped',
+-        command: 'echo',
+-        args: ['done'],
+-        type: 'backend' as const,
+-        autoRestart: false,
+-      };
+-
+-      await processManager.startProcess(config);
+-      
+-      // Wait a bit for echo to complete
+-      await new Promise(resolve => setTimeout(resolve, 500));
+-      
+-      // Try to stop an already completed process
+-      await expect(async () => {
+-        await processManager.stopProcess(processId);
+-      }).rejects.toThrow();
++    it('should handle stopping a non-existent service', async () => {
++      await expect(
++        processManager.stopService('nonexistent-service')
++      ).rejects.toThrow('Service "nonexistent-service" not found');
+     });
++
++    it('should handle stopping an already stopped service', async () => {
++      const serviceName = 'be-test';
++
++      await processManager.startService(serviceName);
++      await processManager.stopService(serviceName);
++
++      // Try to stop again - should throw error
++      await expect(processManager.stopService(serviceName)).rejects.toThrow(
++        'not running'
++      );
++    }, 30000);
+   });
+ 
+-  describe('Restart Process', () => {
+-    it('should restart a running process', async () => {
+-      const processId = 'test-restartable';
+-      const config = {
+-        id: processId,
+-        name: 'Restartable Test',
+-        displayName: 'Restartable Process',
+-        command: 'sleep',
+-        args: ['5'],
+-        type: 'backend' as const,
+-        autoRestart: false,
+-      };
+-
+-      await processManager.startProcess(config);
+-      const firstStart = processManager.getProcess(processId)?.startedAt;
+-      
+-      await new Promise(resolve => setTimeout(resolve, 500));
+-      
+-      await processManager.restartProcess(processId);
+-      const secondStart = processManager.getProcess(processId)?.startedAt;
+-      
++  describe('Restart Service', () => {
++    it('should restart a running service', async () => {
++      const serviceName = 'be-test';
++
++      await processManager.startService(serviceName);
++      const firstStatus = await processManager.getServiceStatus(serviceName);
++      const firstStart = firstStatus.startedAt;
++
++      await new Promise((resolve) => setTimeout(resolve, 1000));
++
++      const result = await processManager.restartService(serviceName);
++      const secondStatus = await processManager.getServiceStatus(serviceName);
++      const secondStart = secondStatus.startedAt;
++
++      expect(result).toBeDefined();
++      expect(result.status).toBe('running');
+       expect(secondStart).toBeDefined();
+       expect(secondStart).not.toBe(firstStart);
+-    });
++      expect(secondStart).toBeGreaterThan(firstStart || 0);
++    }, 30000);
+ 
+-    it('should handle restarting a stopped process', async () => {
+-      const processId = 'test-restart-stopped';
+-      const config = {
+-        id: processId,
+-        name: 'Restart Stopped',
+-        displayName: 'Restart Stopped',
+-        command: 'echo',
+-        args: ['restart'],
+-        type: 'backend' as const,
+-        autoRestart: false,
+-      };
+-
+-      await processManager.startProcess(config);
+-      await new Promise(resolve => setTimeout(resolve, 500));
+-      
+-      // Process should be stopped now
+-      await processManager.restartProcess(processId);
+-      
+-      const processInfo = processManager.getProcess(processId);
+-      expect(['starting', 'running']).toContain(processInfo?.status);
+-    });
++    it('should handle restarting a stopped service', async () => {
++      const serviceName = 'be-test';
++
++      await processManager.startService(serviceName);
++      await processManager.stopService(serviceName);
++
++      // Service is now stopped, try to restart
++      const result = await processManager.restartService(serviceName);
++
++      expect(result).toBeDefined();
++      expect(['starting', 'running']).toContain(result.status);
++    }, 30000);
+   });
+ 
+-  describe('List Processes', () => {
+-    it('should list all registered processes', async () => {
+-      const configs = [
+-        {
+-          id: 'test-list-1',
+-          name: 'List Test 1',
+-          displayName: 'List Test 1',
+-          command: 'echo',
+-          args: ['test1'],
+-          type: 'backend' as const,
+-          autoRestart: false,
+-        },
+-        {
+-          id: 'test-list-2',
+-          name: 'List Test 2',
+-          displayName: 'List Test 2',
+-          command: 'echo',
+-          args: ['test2'],
+-          type: 'frontend' as const,
+-          autoRestart: false,
+-        },
+-      ];
+-
+-      for (const config of configs) {
+-        await processManager.startProcess(config);
++  describe('List Services', () => {
++    it('should list all service statuses', async () => {
++      const serviceNames = ['be-test', 'fe-test'];
++
++      for (const serviceName of serviceNames) {
++        await processManager.startService(serviceName);
+       }
+ 
+-      const processes = processManager.listProcesses();
+-      
+-      expect(processes.length).toBeGreaterThanOrEqual(2);
+-      expect(processes.some(p => p.id === 'test-list-1')).toBe(true);
+-      expect(processes.some(p => p.id === 'test-list-2')).toBe(true);
+-    });
++      const statuses = await processManager.getAllStatuses();
+ 
+-    it('should return empty list when no processes registered', () => {
++      expect(statuses.length).toBeGreaterThanOrEqual(2);
++      expect(statuses.some((s) => s.name === 'be-test')).toBe(true);
++      expect(statuses.some((s) => s.name === 'fe-test')).toBe(true);
++    }, 60000);
++
++    it('should return statuses even when no services are running', async () => {
+       const newManager = new ProcessManager();
+-      const processes = newManager.listProcesses();
+-      
+-      expect(Array.isArray(processes)).toBe(true);
+-      expect(processes.length).toBe(0);
++      const statuses = await newManager.getAllStatuses();
++
++      expect(Array.isArray(statuses)).toBe(true);
++      // Should return all configured services with their current status
++      expect(statuses.length).toBeGreaterThan(0);
+     });
+   });
+ 
+-  describe('Process Events', () => {
+-    it('should emit events during process lifecycle', async () => {
+-      const processId = 'test-events';
+-      const config = {
+-        id: processId,
+-        name: 'Event Test',
+-        displayName: 'Event Test',
+-        command: 'echo',
+-        args: ['events'],
+-        type: 'backend' as const,
+-        autoRestart: false,
+-      };
++  describe('Service Events', () => {
++    it('should emit events during service lifecycle', async () => {
++      const serviceName = 'be-test';
+ 
+       const events: string[] = [];
+-      
+-      // Listen for events (if processManager extends EventEmitter)
+-      if (processManager instanceof EventEmitter) {
+-        processManager.on('process:started', () => events.push('started'));
+-        processManager.on('process:stopped', () => events.push('stopped'));
+-      }
+-
+-      await processManager.startProcess(config);
+-      await new Promise(resolve => setTimeout(resolve, 500));
+ 
+-      // Verify we tracked some events
+-      expect(events.length).toBeGreaterThanOrEqual(0); // May be 0 if no event emitter
+-    });
++      // ProcessManager extends EventEmitter
++      processManager.on('process:started', (data) => {
++        events.push(`started:${data?.name || 'unknown'}`);
++      });
++      processManager.on('process:stopped', (data) => {
++        events.push(`stopped:${data?.name || 'unknown'}`);
++      });
++
++      await processManager.startService(serviceName);
++      await new Promise((resolve) => setTimeout(resolve, 1000));
++      await processManager.stopService(serviceName);
++      await new Promise((resolve) => setTimeout(resolve, 500));
++
++      // Verify we tracked events
++      expect(events.length).toBeGreaterThan(0);
++    }, 30000);
+   });
+ 
+-  describe('Process Metadata', () => {
+-    it('should track process uptime', async () => {
+-      const processId = 'test-uptime';
+-      const config = {
+-        id: processId,
+-        name: 'Uptime Test',
+-        displayName: 'Uptime Test',
+-        command: 'sleep',
+-        args: ['3'],
+-        type: 'backend' as const,
+-        autoRestart: false,
+-      };
+-
+-      await processManager.startProcess(config);
+-      await new Promise(resolve => setTimeout(resolve, 1000));
+-      
+-      const processInfo = processManager.getProcess(processId);
+-      
+-      expect(processInfo?.startedAt).toBeDefined();
+-      if (processInfo?.startedAt) {
+-        const uptime = Date.now() - processInfo.startedAt;
++  describe('Service Metadata', () => {
++    it('should track service uptime', async () => {
++      const serviceName = 'be-test';
++
++      await processManager.startService(serviceName);
++      await new Promise((resolve) => setTimeout(resolve, 1000));
++
++      const serviceInfo = await processManager.getServiceStatus(serviceName);
++
++      expect(serviceInfo.startedAt).toBeDefined();
++      if (serviceInfo.startedAt) {
++        const uptime = Date.now() - serviceInfo.startedAt;
+         expect(uptime).toBeGreaterThan(500);
+       }
+-    });
++      expect(serviceInfo.uptime).toBeDefined();
++      expect(serviceInfo.uptime).toBeGreaterThan(0);
++    }, 30000);
+ 
+-    it('should track process type correctly', async () => {
+-      const configs = [
+-        {
+-          id: 'test-backend',
+-          name: 'Backend',
+-          displayName: 'Backend Process',
+-          command: 'echo',
+-          args: ['backend'],
+-          type: 'backend' as const,
+-          autoRestart: false,
+-        },
+-        {
+-          id: 'test-frontend',
+-          name: 'Frontend',
+-          displayName: 'Frontend Process',
+-          command: 'echo',
+-          args: ['frontend'],
+-          type: 'frontend' as const,
+-          autoRestart: false,
+-        },
+-        {
+-          id: 'test-worker',
+-          name: 'Worker',
+-          displayName: 'Worker Process',
+-          command: 'echo',
+-          args: ['worker'],
+-          type: 'worker' as const,
+-          autoRestart: false,
+-        },
+-      ];
+-
+-      for (const config of configs) {
+-        await processManager.startProcess(config);
+-        const processInfo = processManager.getProcess(config.id);
+-        expect(processInfo?.type).toBe(config.type);
+-      }
+-    });
++    it('should include service display name and metadata', async () => {
++      const serviceName = 'be-test';
++
++      await processManager.startService(serviceName);
++
++      const serviceInfo = await processManager.getServiceStatus(serviceName);
++
++      expect(serviceInfo.name).toBe(serviceName);
++      expect(serviceInfo.displayName).toBeDefined();
++      expect(serviceInfo.displayName).toBeTruthy();
++      expect(serviceInfo.pid).toBeDefined();
++    }, 30000);
+   });
+ 
+   describe('Error Handling', () => {
+-    it('should transition to error state on process crash', async () => {
+-      const processId = 'test-crash';
+-      const config = {
+-        id: processId,
+-        name: 'Crash Test',
+-        displayName: 'Crash Test',
+-        command: 'sh',
+-        args: ['-c', 'exit 1'],
+-        type: 'backend' as const,
+-        autoRestart: false,
+-      };
+-
+-      await processManager.startProcess(config);
+-      await new Promise(resolve => setTimeout(resolve, 500));
+-      
+-      const processInfo = processManager.getProcess(processId);
+-      
+-      // Should be in error or stopped state
+-      expect(['error', 'stopped']).toContain(processInfo?.status);
+-    });
++    it('should handle service errors gracefully', async () => {
++      const serviceName = 'be-test';
+ 
+-    it('should clean up resources on process exit', async () => {
+-      const processId = 'test-cleanup';
+-      const config = {
+-        id: processId,
+-        name: 'Cleanup Test',
+-        displayName: 'Cleanup Test',
+-        command: 'echo',
+-        args: ['cleanup'],
+-        type: 'backend' as const,
+-        autoRestart: false,
+-      };
+-
+-      await processManager.startProcess(config);
+-      await new Promise(resolve => setTimeout(resolve, 500));
+-      
+-      const processInfo = processManager.getProcess(processId);
+-      
+-      // Process should have exited cleanly
+-      expect(processInfo?.pid).toBeUndefined();
+-    });
++      await processManager.startService(serviceName);
++
++      // Service is running, verify status
++      const serviceInfo = await processManager.getServiceStatus(serviceName);
++      expect(['running', 'starting']).toContain(serviceInfo.status);
++    }, 30000);
++
++    it('should clean up resources on service stop', async () => {
++      const serviceName = 'be-test';
++
++      await processManager.startService(serviceName);
++      await processManager.stopService(serviceName);
++
++      const serviceInfo = await processManager.getServiceStatus(serviceName);
++
++      // Process should have stopped cleanly
++      expect(serviceInfo.status).toBe('stopped');
++      expect(serviceInfo.pid).toBeUndefined();
++    }, 30000);
+   });
+ 
+   describe('Concurrent Operations', () => {
+-    it('should handle multiple processes starting concurrently', async () => {
+-      const configs = Array.from({ length: 5 }, (_, i) => ({
+-        id: `test-concurrent-${i}`,
+-        name: `Concurrent ${i}`,
+-        displayName: `Concurrent Process ${i}`,
+-        command: 'echo',
+-        args: [`concurrent-${i}`],
+-        type: 'backend' as const,
+-        autoRestart: false,
+-      }));
+-
+-      // Start all processes concurrently
++    it('should handle multiple services starting concurrently', async () => {
++      const serviceNames = ['be-test', 'fe-test', 'fe-lint'];
++
++      // Start all services concurrently
+       await Promise.all(
+-        configs.map(config => processManager.startProcess(config))
++        serviceNames.map((name) => processManager.startService(name))
+       );
+ 
+-      const processes = processManager.listProcesses();
+-      const concurrentProcesses = processes.filter(p => 
+-        p.id.startsWith('test-concurrent-')
++      const statuses = await processManager.getAllStatuses();
++      const startedServices = statuses.filter((s) =>
++        serviceNames.includes(s.name)
+       );
+ 
+-      expect(concurrentProcesses.length).toBe(5);
+-    });
++      expect(startedServices.length).toBe(3);
++      startedServices.forEach((service) => {
++        expect(['starting', 'running']).toContain(service.status);
++      });
++    }, 60000);
+ 
+-    it('should handle start and stop operations on different processes', async () => {
+-      const config1 = {
+-        id: 'test-multi-1',
+-        name: 'Multi 1',
+-        displayName: 'Multi Process 1',
+-        command: 'sleep',
+-        args: ['3'],
+-        type: 'backend' as const,
+-        autoRestart: false,
+-      };
+-
+-      const config2 = {
+-        id: 'test-multi-2',
+-        name: 'Multi 2',
+-        displayName: 'Multi Process 2',
+-        command: 'sleep',
+-        args: ['3'],
+-        type: 'backend' as const,
+-        autoRestart: false,
+-      };
+-
+-      await processManager.startProcess(config1);
+-      await processManager.startProcess(config2);
+-      
+-      await processManager.stopProcess('test-multi-1');
+-      
+-      const proc1 = processManager.getProcess('test-multi-1');
+-      const proc2 = processManager.getProcess('test-multi-2');
+-
+-      expect(['stopping', 'stopped']).toContain(proc1?.status);
+-      expect(['starting', 'running']).toContain(proc2?.status);
+-    });
++    it('should handle start and stop operations on different services', async () => {
++      const service1 = 'be-test';
++      const service2 = 'fe-test';
++
++      await processManager.startService(service1);
++      await processManager.startService(service2);
++
++      await processManager.stopService(service1);
++
++      const status1 = await processManager.getServiceStatus(service1);
++      const status2 = await processManager.getServiceStatus(service2);
++
++      expect(['stopping', 'stopped']).toContain(status1.status);
++      expect(['starting', 'running']).toContain(status2.status);
++    }, 60000);
+   });
+ });

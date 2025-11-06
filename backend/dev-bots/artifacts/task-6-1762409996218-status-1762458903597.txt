@@ -1,0 +1,9 @@
+M backend/src/services/taskPromptTemplates.ts
+ M backend/tests/integration/process-lifecycle.test.ts
+?? add_jsdoc_final.py
+?? backend/.test-lock
+?? backend/cleanup-queue.js
+?? backend/dev-bots/
+?? backend/fix_jsdoc.py
+?? backend/fix_task_status.py
+?? backend/smart-cleanup-queue.js

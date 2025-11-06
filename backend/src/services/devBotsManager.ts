@@ -1268,14 +1268,35 @@ export class DevBotsManager extends EventEmitter {
     logger.info({
       category: 'process',
       action: 'task_assignment_check',
-      message: `Task assignment check: ${queueMetrics.pending} pending tasks, ${activeWorkers.length}/${this.MAX_CONCURRENT_WORKERS} active workers`
+      message: `Task assignment check: ${queueMetrics.pending} pending tasks, ${activeWorkers.length}/${this.MAX_CONCURRENT_WORKERS} active workers`,
+      workflow_insights: {
+        queue_depth: queueMetrics.pending,
+        active_workers: activeWorkers.length,
+        capacity_available: this.MAX_CONCURRENT_WORKERS - activeWorkers.length,
+        queue_health: queueMetrics.pending > 10 ? 'HIGH_LOAD' : queueMetrics.pending > 5 ? 'MODERATE' : 'HEALTHY',
+        infrastructure_recommendation:
+          queueMetrics.pending > 10 && activeWorkers.length >= this.MAX_CONCURRENT_WORKERS
+            ? 'Consider increasing MAX_CONCURRENT_WORKERS to reduce queue backlog'
+            : queueMetrics.pending === 0
+            ? 'Queue empty - consider adding more tasks'
+            : 'Infrastructure capacity balanced'
+      }
     });
 
     if (activeWorkers.length >= this.MAX_CONCURRENT_WORKERS) {
-      logger.info({
+      logger.warn({
         category: 'process',
         action: 'max_workers_active_skipping_assignment',
-        message: 'Maximum concurrent workers are active, skipping task assignment'
+        message: `Maximum concurrent workers active (${this.MAX_CONCURRENT_WORKERS}). ${queueMetrics.pending} tasks queued.`,
+        actionable_insights: {
+          bottleneck: 'CONCURRENCY_LIMIT',
+          recommendation: queueMetrics.pending > 5
+            ? 'Increase MAX_CONCURRENT_WORKERS to process queue faster'
+            : 'Wait for active workers to complete',
+          queue_wait_time_estimate: queueMetrics.avg_completion_time_ms
+            ? `~${Math.ceil((queueMetrics.pending * queueMetrics.avg_completion_time_ms) / (this.MAX_CONCURRENT_WORKERS * 60000))} minutes`
+            : 'Unknown'
+        }
       });
       return;
     }
@@ -1596,6 +1617,13 @@ export class DevBotsManager extends EventEmitter {
       });
     });
 
+    // Calculate task execution metrics
+    const executionDuration = Date.now() - Date.parse(task.assignedAt || task.createdAt);
+    const metrics = this.getQueueMetrics();
+    const activeWorkerCount = Array.from(this.ephemeralWorkers.values()).filter(
+      w => w.status !== 'destroyed'
+    ).length;
+
     logger.info({
       category: 'process',
       action: 'docker_run_completed',
@@ -1604,10 +1632,20 @@ export class DevBotsManager extends EventEmitter {
         taskId: task.id,
         taskTitle: task.title,
         exitCode,
+        executionDuration_ms: executionDuration,
+        executionDuration_human: `${Math.floor(executionDuration / 60000)}m ${Math.floor((executionDuration % 60000) / 1000)}s`,
         stdoutLength: stdout.length,
-        stderrLength: stderr.length,
-        stdoutPreview: stdout.substring(0, 200),
-        stderrPreview: stderr.substring(0, 200)
+        stderrLength: stderr.length
+      },
+      workflow_insights: {
+        queue_depth: metrics.pending,
+        active_workers: activeWorkerCount,
+        max_concurrency: this.MAX_CONCURRENT_WORKERS,
+        capacity_available: this.MAX_CONCURRENT_WORKERS - activeWorkerCount,
+        avg_completion_time_ms: metrics.avg_completion_time_ms,
+        task_success_rate: metrics.completed > 0
+          ? `${Math.round((metrics.completed / (metrics.completed + metrics.failed)) * 100)}%`
+          : 'N/A'
       }
     });
 
@@ -1623,8 +1661,22 @@ export class DevBotsManager extends EventEmitter {
         logger.info({
           category: 'process',
           action: 'task_completed_successfully',
-          message: `Task ${task.id} completed successfully`,
-          details: { claudeOutput }
+          message: `Task ${task.id} completed successfully in ${Math.floor(executionDuration / 60000)}m ${Math.floor((executionDuration % 60000) / 1000)}s`,
+          details: {
+            taskId: task.id,
+            taskTitle: task.title,
+            executionDuration_ms: executionDuration,
+            outputSize: JSON.stringify(claudeOutput).length
+          },
+          actionable_insights: {
+            recommendation: executionDuration > 600000
+              ? 'Task took >10min - consider breaking into smaller tasks'
+              : executionDuration > 300000
+              ? 'Task took >5min - monitor for potential optimization'
+              : 'Execution time within normal range',
+            next_task_available: metrics.pending > 0,
+            queue_health: metrics.pending > 10 ? 'HIGH_LOAD' : metrics.pending > 5 ? 'MODERATE' : 'HEALTHY'
+          }
         });
 
         // Update local task object for event emission
@@ -1665,6 +1717,7 @@ export class DevBotsManager extends EventEmitter {
         details: {
           taskId: task.id,
           taskTitle: task.title,
+          executionDuration_ms: executionDuration,
           exitCode,
           stdout,
           stderr
@@ -1680,8 +1733,24 @@ export class DevBotsManager extends EventEmitter {
       logger.error({
         category: 'process',
         action: 'task_failed',
-        message: `Task ${task.id} failed`,
-        details: { exitCode, stderr, stdout }
+        message: `Task ${task.id} failed after ${Math.floor(executionDuration / 60000)}m ${Math.floor((executionDuration % 60000) / 1000)}s`,
+        details: {
+          taskId: task.id,
+          taskTitle: task.title,
+          exitCode,
+          executionDuration_ms: executionDuration,
+          stderrPreview: stderr.substring(0, 500)
+        },
+        actionable_insights: {
+          failure_pattern: exitCode === 137 ? 'OOM_KILLED' : exitCode === 1 ? 'GENERAL_ERROR' : 'UNKNOWN',
+          recommendation: exitCode === 137
+            ? 'Increase Docker memory limit or optimize task complexity'
+            : exitCode === 1
+            ? 'Review stderr for Claude CLI errors or task configuration issues'
+            : 'Review Docker logs and task prompt for issues',
+          retry_suggested: exitCode === 137 || exitCode === 143,
+          queue_health: metrics.pending > 10 ? 'HIGH_LOAD' : metrics.pending > 5 ? 'MODERATE' : 'HEALTHY'
+        }
       });
 
       // Update local task object for event emission

@@ -22,6 +22,10 @@
   - [x] Delete `backend/src/routes/scripts.routes.ts` and `backend/src/routes/script-history.routes.ts`.
   - [x] Remove `ScriptManager` and `ScriptExecutionHistory` wiring from server bootstrap/tests.
   - [x] Update API documentation to reflect removal.
+- [ ] Purge lingering duplicate backend surfaces.
+  - [ ] Delete deprecated route/test mirrors (`backend/src/routes/api.ts.DEPRECATED`, `backend/src/routes/api.retry.test.ts.DEPRECATED`).
+  - [ ] Drop stale websocket backup test (`backend/src/services/websocket.integration.test.ts.bak`).
+  - [ ] Refactor `ProcessManager` barrel to avoid self-import duplication and circular dependencies.
 - [ ] Prune backup/temp artifacts pending SQLite migration.
   - [ ] Remove `.bak` and `.tmp` task JSON files once SQLite migration lands.
   - [ ] Ensure migration plan (`docs/plans/TASK_QUEUE_SQLITE_MIGRATION.md`) covers export/import needs.

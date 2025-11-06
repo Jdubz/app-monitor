@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ProcessManager } from '../../src/services/processManager/index.js';
+import { ProcessManager } from '../../src/services/processManager.js';
 import { logger } from '../../src/utils/logger.js';
 import { EventEmitter } from 'events';
 

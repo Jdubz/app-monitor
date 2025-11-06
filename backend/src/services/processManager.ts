@@ -10,11 +10,9 @@ import {
   stopDockerContainer,
 } from '../utils/portManager.js';
 import { checkPortsAvailable, getPortInfo } from '../utils/portCheck.js';
-import {
-  ProcessLifecycle,
-  ProcessEventManager,
-  PortConflictResolver,
-} from './processManager/index.js';
+import { ProcessLifecycle } from './processManager/lifecycle.js';
+import { ProcessEventManager } from './processManager/eventHandlers.js';
+import { PortConflictResolver } from './processManager/portConflict.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
