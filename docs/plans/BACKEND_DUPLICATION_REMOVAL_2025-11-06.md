@@ -15,12 +15,12 @@
   - [ ] Run tests with mirror temporarily removed to detect hidden dependencies.
 
 ## Remediation Tasks
-- [ ] Delete `dev-bots/mirror/backend` and enforce prevention.
-  - [ ] Remove or guard scripts that recreate the mirror (fail build if mirror would be reintroduced).
+- [x] Delete `dev-bots/mirror/backend` and enforce prevention.
+  - [x] Remove or guard scripts that recreate the mirror (fail build if mirror would be reintroduced).
   - [ ] Add CI check that flags the directory if committed.
-- [ ] Remove deprecated script routers and services.
-  - [ ] Delete `backend/src/routes/scripts.routes.ts` and `backend/src/routes/script-history.routes.ts`.
-  - [ ] Remove `ScriptManager` and `ScriptExecutionHistory` wiring from server bootstrap/tests.
+- [x] Remove deprecated script routers and services.
+  - [x] Delete `backend/src/routes/scripts.routes.ts` and `backend/src/routes/script-history.routes.ts`.
+  - [x] Remove `ScriptManager` and `ScriptExecutionHistory` wiring from server bootstrap/tests.
   - [ ] Update API documentation to reflect removal.
 - [ ] Prune backup/temp artifacts pending SQLite migration.
   - [ ] Remove `.bak` and `.tmp` task JSON files once SQLite migration lands.
