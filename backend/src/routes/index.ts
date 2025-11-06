@@ -54,9 +54,9 @@ export function createApiRouter(deps: {
 
   router.get('/health', (_req, res) => {
     res.json({
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
+      status: 'ok',
       uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
     });
   });
 
