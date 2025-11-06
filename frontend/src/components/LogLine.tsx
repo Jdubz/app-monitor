@@ -1,12 +1,28 @@
 import { memo } from 'react';
 import { LogLine as LogLineType } from '../types/log.types';
 import LogLevelBadge from './LogLevelBadge';
+import { cn } from '@/lib/utils';
 
 interface LogLineProps {
   log: LogLineType;
   searchText?: string;
-  showMetadata?: boolean; // If false, shows only the message
+  showMetadata?: boolean;
 }
+
+const SERVICE_SWATCHES: Record<string, string> = {
+  'firebase-emulators': 'text-orange-300',
+  'frontend-dev': 'text-sky-300',
+  'job-finder-worker': 'text-emerald-300',
+  'dev-monitor-backend': 'text-cyan-300',
+  all: 'text-muted-foreground',
+};
+
+const levelColors: Record<string, string> = {
+  ERROR: 'text-rose-200',
+  WARN: 'text-amber-200',
+  INFO: 'text-cyan-100',
+  DEBUG: 'text-slate-300',
+};
 
 const LogLine: React.FC<LogLineProps> = memo(({ log, searchText, showMetadata = true }) => {
   const formatTimestamp = (timestamp: number) => {
@@ -18,99 +34,53 @@ const LogLine: React.FC<LogLineProps> = memo(({ log, searchText, showMetadata = 
     return `${hours}:${minutes}:${seconds}.${ms}`;
   };
 
-  const highlightText = (text: string, highlight: string) => {
+  const highlightText = (text: string, highlight?: string) => {
     if (!highlight) return text;
-
     const parts = text.split(new RegExp(`(${highlight})`, 'gi'));
-    return (
-      <>
-        {parts.map((part, i) =>
-          part.toLowerCase() === highlight.toLowerCase() ? (
-            <span key={i} style={{ backgroundColor: '#ffeb3b', fontWeight: 600 }}>
-              {part}
-            </span>
-          ) : (
-            part
-          )
-        )}
-      </>
+    return parts.map((part, index) =>
+      part.toLowerCase() === highlight.toLowerCase() ? (
+        <mark
+          key={`${part}-${index}`}
+          className="rounded bg-primary/30 px-0.5 text-primary-foreground"
+        >
+          {part}
+        </mark>
+      ) : (
+        <span key={`${part}-${index}`}>{part}</span>
+      ),
     );
   };
 
-  const getServiceColor = (service: string) => {
-    const colors: Record<string, string> = {
-      'firebase-emulators': '#FFA500',
-      'frontend-dev': '#61DAFB',
-      'job-finder-worker': '#3776AB',
-      'dev-monitor-backend': '#00D9FF',
-      'all': '#6c757d',
-    };
-    return colors[service] || '#6c757d';
-  };
+  const messageClass = levelColors[log.level] ?? 'text-slate-200';
+  const serviceColor = SERVICE_SWATCHES[log.service] ?? 'text-muted-foreground';
 
-  const lineStyle: React.CSSProperties = {
-    display: 'flex',
-    gap: '8px',
-    padding: '4px 8px',
-    fontSize: '13px',
-    fontFamily: 'monospace',
-    borderBottom: '1px solid #2a2a2a',
-    alignItems: 'flex-start',
-    lineHeight: '1.5',
-    wordBreak: 'break-word',
-    userSelect: 'text', // Enable text selection for copying
-    cursor: 'text',
-  };
-
-  const timestampStyle: React.CSSProperties = {
-    color: '#888',
-    minWidth: '90px',
-    flexShrink: 0,
-  };
-
-  const serviceStyle: React.CSSProperties = {
-    color: getServiceColor(log.service),
-    fontWeight: 600,
-    minWidth: '120px',
-    flexShrink: 0,
-    overflow: 'hidden',
-    textOverflow: 'ellipsis',
-    whiteSpace: 'nowrap',
-  };
-
-  const messageStyle: React.CSSProperties = {
-    flex: 1,
-    color: log.level === 'ERROR' ? '#ff6b6b' : log.level === 'WARN' ? '#ffa94d' : '#e0e0e0',
-    whiteSpace: 'pre-wrap',
-  };
-
-  const messageOnlyStyle: React.CSSProperties = {
-    ...messageStyle,
-    flex: undefined,
-    width: '100%',
-  };
-
-  // If showMetadata is false, display only the message
   if (!showMetadata) {
     return (
-      <div style={lineStyle}>
-        <span style={messageOnlyStyle}>
-          {searchText ? highlightText(log.message, searchText) : log.message}
+      <div className="flex w-full items-start justify-between gap-3 px-2 py-1 text-[13px] leading-relaxed">
+        <span className={cn('flex-1 whitespace-pre-wrap text-slate-200', messageClass)}>
+          {highlightText(log.message, searchText)}
         </span>
       </div>
     );
   }
 
-  // Default: show full metadata
   return (
-    <div style={lineStyle}>
-      <span style={timestampStyle}>{formatTimestamp(log.timestamp)}</span>
-      <span style={serviceStyle} title={log.service}>
+    <div className="flex w-full items-start gap-4 px-2 py-1 text-[13px] leading-relaxed">
+      <span className="w-24 flex-shrink-0 font-sans text-[11px] uppercase tracking-[0.3em] text-muted-foreground/60">
+        {formatTimestamp(log.timestamp)}
+      </span>
+      <span
+        className={cn(
+          'w-40 flex-shrink-0 truncate font-semibold uppercase tracking-[0.25em]',
+          serviceColor,
+        )}
+        title={log.service}
+      >
         {log.service}
       </span>
       <LogLevelBadge level={log.level} />
-      <span style={messageStyle}>
-        {searchText ? highlightText(log.message, searchText) : log.message}
+      <span className={cn('flex-1 whitespace-pre-wrap', messageClass)}>
+        {highlightText(log.message, searchText)}
       </span>
     </div>
   );

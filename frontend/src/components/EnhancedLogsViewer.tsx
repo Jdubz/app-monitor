@@ -1,9 +1,11 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback, Fragment } from 'react';
 import { DevMonitorLogLine, DevMonitorLogLevel, LocalService } from '@jsdubzw/job-finder-shared-types';
 import LogLine from './LogLine';
 import LogFilters from './LogFilters';
-import styles from './EnhancedLogsViewer.module.css';
-import { StyledButton } from './common';
+import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface EnhancedLogsViewerProps {
   logs: DevMonitorLogLine[];
@@ -47,7 +49,7 @@ export const EnhancedLogsViewer: React.FC<EnhancedLogsViewerProps> = ({
   onToggleAutoScroll,
 }) => {
   const logsEndRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
   const [internalAutoScroll, setInternalAutoScroll] = useState(autoScroll);
   const [showLineNumbers, setShowLineNumbers] = useState(true);
   const [selectedLine, setSelectedLine] = useState<string | null>(null);
@@ -84,7 +86,7 @@ export const EnhancedLogsViewer: React.FC<EnhancedLogsViewerProps> = ({
 
       // Ctrl/Cmd + Up: Jump to top
       if ((e.ctrlKey || e.metaKey) && e.key === 'ArrowUp') {
-        containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+        viewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
         e.preventDefault();
       }
 
@@ -178,7 +180,7 @@ export const EnhancedLogsViewer: React.FC<EnhancedLogsViewerProps> = ({
   }, []);
 
   const jumpToTop = useCallback(() => {
-    containerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+    viewportRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
   const jumpToBottom = useCallback(() => {
@@ -186,71 +188,85 @@ export const EnhancedLogsViewer: React.FC<EnhancedLogsViewerProps> = ({
   }, []);
 
   return (
-    <div className={styles.container}>
+    <div className="relative flex h-full flex-col overflow-hidden rounded-2xl border border-border/50 bg-black/80 font-mono text-[13px] shadow-inner">
       {/* Toolbar */}
-      <div className={styles.toolbar}>
-        <div className={styles.buttonGroup}>
-          <StyledButton
-            variant={isPaused ? 'primary' : 'secondary'}
+      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-border/60 bg-black/50 px-4 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant={isPaused ? 'default' : 'outline'}
             size="sm"
             onClick={onTogglePause}
             title={`${isPaused ? 'Resume' : 'Pause'} (Ctrl+Space)`}
+            className={cn('gap-2', isPaused && 'shadow-glow')}
           >
             {isPaused ? '▶ Resume' : '⏸ Pause'}
-          </StyledButton>
+          </Button>
 
-          <StyledButton
-            variant={internalAutoScroll ? 'primary' : 'secondary'}
+          <Button
+            variant={internalAutoScroll ? 'default' : 'outline'}
             size="sm"
             onClick={handleToggleAutoScroll}
             title="Toggle auto-scroll to bottom"
+            className="gap-2"
           >
             {internalAutoScroll ? '↓ Auto-scroll: ON' : '↓ Auto-scroll: OFF'}
-          </StyledButton>
+          </Button>
 
-          <StyledButton
-            variant="secondary"
+          <Button
+            variant="outline"
             size="sm"
             onClick={() => setShowLineNumbers(!showLineNumbers)}
             title="Toggle line numbers (N)"
+            className="gap-2"
           >
             {showLineNumbers ? '# Lines: ON' : '# Lines: OFF'}
-          </StyledButton>
+          </Button>
 
-          <StyledButton
-            variant="secondary"
+          <Button
+            variant="outline"
             size="sm"
             onClick={onClear}
             title="Clear all logs (Ctrl+L)"
+            className="gap-2"
           >
             🗑 Clear
-          </StyledButton>
+          </Button>
 
-          <StyledButton
-            variant="secondary"
+          <Button
+            variant="outline"
             size="sm"
             onClick={copyAllLogs}
             title="Copy all logs to clipboard"
+            className="gap-2"
           >
             📋 Copy
-          </StyledButton>
+          </Button>
 
-          <StyledButton
-            variant="secondary"
+          <Button
+            variant="outline"
             size="sm"
             onClick={downloadLogs}
             title="Download logs (Ctrl+S)"
+            className="gap-2"
           >
             ⬇ Download
-          </StyledButton>
+          </Button>
         </div>
 
-        <div className={styles.stats}>
-          <span className={styles.statItem}>
+        <div className="flex flex-wrap items-center gap-3 text-[11px] uppercase tracking-[0.25em] text-muted-foreground">
+          <Badge variant="outline" className="border-border/60 bg-background/40 px-3 py-1 font-semibold uppercase tracking-[0.25em] text-[10px] text-muted-foreground">
             {logs.length.toLocaleString()} logs
-          </span>
-          {isPaused && <span className={styles.pausedIndicator}>PAUSED</span>}
-          {copiedNotification && <span className={styles.copiedIndicator}>✓ Copied!</span>}
+          </Badge>
+          {isPaused && (
+            <Badge variant="warning" className="bg-amber-500/20 text-amber-100">
+              Paused
+            </Badge>
+          )}
+          {copiedNotification && (
+            <Badge variant="success" className="bg-emerald-500/20 text-emerald-100">
+              Copied!
+            </Badge>
+          )}
         </div>
       </div>
 
@@ -270,68 +286,89 @@ export const EnhancedLogsViewer: React.FC<EnhancedLogsViewerProps> = ({
       />
 
       {/* Keyboard shortcuts help */}
-      <div className={styles.shortcutsHint}>
-        <span>Shortcuts:</span>
-        <span>Ctrl+K=Search</span>
-        <span>Ctrl+Space=Pause</span>
-        <span>Ctrl+L=Clear</span>
-        <span>Ctrl+S=Download</span>
-        <span>N=Line#</span>
+      <div className="flex flex-wrap items-center gap-3 border-b border-border/50 bg-black/40 px-4 py-2 text-[11px] text-muted-foreground">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.35em] text-primary">Shortcuts</span>
+        {[
+          ['Ctrl+K', 'Search'],
+          ['Ctrl+Space', 'Pause'],
+          ['Ctrl+L', 'Clear'],
+          ['Ctrl+S', 'Download'],
+          ['N', 'Line#'],
+        ].map(([key, label]) => (
+          <span key={key} className="flex items-center gap-2">
+            <kbd className="rounded bg-muted/40 px-2 py-1 font-sans text-[10px] font-medium text-muted-foreground">
+              {key}
+            </kbd>
+            <span className="text-[10px] uppercase tracking-[0.25em] text-muted-foreground/80">{label}</span>
+          </span>
+        ))}
       </div>
 
       {/* Logs container */}
-      <div ref={containerRef} className={styles.logsContainer}>
+      <ScrollArea viewportRef={viewportRef} className="flex-1 bg-black/70">
         {logs.length === 0 ? (
-          <div className={styles.emptyState}>
-            <div className={styles.emptyIcon}>📋</div>
-            <div className={styles.emptyText}>No logs to display</div>
-            <div className={styles.emptyHint}>
-              {isPaused ? 'Logs are paused - Resume to see new logs' : 'Start a service to see logs'}
+          <div className="flex h-[320px] flex-col items-center justify-center gap-3 px-8 text-center text-muted-foreground">
+            <div className="text-4xl opacity-70">📋</div>
+            <div className="text-sm font-semibold uppercase tracking-[0.45em] text-muted-foreground/80">
+              No logs to display
+            </div>
+            <div className="max-w-sm text-xs text-muted-foreground/70">
+              {isPaused ? 'Logs are paused — resume the stream to receive new entries.' : 'Start a service or open a stream to inspect live telemetry.'}
             </div>
           </div>
         ) : (
-          <div className={showLineNumbers ? styles.logsWithNumbers : styles.logs}>
+          <div className="relative">
             {logs.map((log, index) => (
-              <div 
-                key={log.id} 
-                className={`${styles.logRow} ${selectedLine === log.id ? styles.selected : ''}`}
-                onClick={() => copySelectedLog(log)}
-                title="Click to copy"
-              >
-                {showLineNumbers && (
-                  <span className={styles.lineNumber}>{index + 1}</span>
-                )}
-                <div className={styles.logContent}>
-                  <LogLine
-                    log={log}
-                    searchText={searchText}
-                    showMetadata={showMetadata}
-                  />
+              <Fragment key={log.id}>
+                <div
+                  className={cn(
+                    'group relative flex cursor-pointer select-text border-b border-white/5 transition-colors hover:bg-primary/10',
+                    selectedLine === log.id && 'bg-primary/15 ring-1 ring-primary/40',
+                  )}
+                  onClick={() => copySelectedLog(log)}
+                  title="Click to copy"
+                >
+                  {showLineNumbers && (
+                    <span className="flex w-14 flex-shrink-0 items-start justify-end border-r border-white/5 bg-black/60 px-3 py-2 text-[11px] text-muted-foreground/70">
+                      {(index + 1).toString().padStart(4, '0')}
+                    </span>
+                  )}
+                  <div className="flex-1 px-4 py-2">
+                    <LogLine
+                      log={log}
+                      searchText={searchText}
+                      showMetadata={showMetadata}
+                    />
+                  </div>
                 </div>
-              </div>
+              </Fragment>
             ))}
             <div ref={logsEndRef} />
           </div>
         )}
-      </div>
+      </ScrollArea>
 
       {/* Jump buttons */}
       {logs.length > 10 && (
-        <div className={styles.jumpButtons}>
-          <button 
-            className={styles.jumpButton}
+        <div className="pointer-events-none absolute bottom-6 right-6 flex flex-col gap-2">
+          <Button
+            variant="default"
+            size="sm"
             onClick={jumpToTop}
             title="Jump to top (Ctrl+ArrowUp)"
+            className="pointer-events-auto bg-primary/80 text-primary-foreground shadow-lg hover:bg-primary"
           >
             ↑ Top
-          </button>
-          <button 
-            className={styles.jumpButton}
+          </Button>
+          <Button
+            variant="default"
+            size="sm"
             onClick={jumpToBottom}
             title="Jump to bottom (Ctrl+ArrowDown)"
+            className="pointer-events-auto bg-primary/80 text-primary-foreground shadow-lg hover:bg-primary"
           >
             ↓ Bottom
-          </button>
+          </Button>
         </div>
       )}
     </div>

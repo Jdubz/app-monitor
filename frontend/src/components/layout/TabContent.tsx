@@ -1,5 +1,4 @@
 import { ReactNode } from 'react';
-import styles from './TabContent.module.css';
 
 interface TabContentProps {
   children: ReactNode;
@@ -7,10 +6,8 @@ interface TabContentProps {
 
 export function TabContent({ children }: TabContentProps) {
   return (
-    <div className={styles.wrapper}>
-      <div className={styles.content}>
-        {children}
-      </div>
-    </div>
+    <section className="flex-1 overflow-hidden rounded-2xl border border-border/60 bg-card/60 shadow-xl backdrop-blur">
+      <div className="flex h-full flex-col gap-6 p-6">{children}</div>
+    </section>
   );
 }
