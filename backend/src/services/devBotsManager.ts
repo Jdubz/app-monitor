@@ -1072,7 +1072,8 @@ export class DevBotsManager extends EventEmitter {
     const workerId = `bot-${agent.id}-${Date.now()}`;
 
     // Ensure we're on staging branch
-    const repoRoot = process.cwd();
+    // Get the project root (parent of backend directory)
+    const repoRoot = path.resolve(process.cwd(), '..');
     const baseBranch = 'staging';
     await this.execGitCommand(['checkout', baseBranch], repoRoot);
     await this.execGitCommand(['pull', 'origin', baseBranch], repoRoot);
