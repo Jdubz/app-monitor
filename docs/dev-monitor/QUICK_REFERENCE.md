@@ -101,8 +101,8 @@ backend/src/routes/
 ├── services.routes.ts        # 6 endpoints
 ├── socket-task.routes.ts     # 15 endpoints
 ├── docker.routes.ts          # 4 endpoints
-├── scripts.routes.ts         # 6 endpoints
-├── script-history.routes.ts  # 5 endpoints
+├── ~~scripts.routes.ts~~         # removed Nov 2025 (script runner deprecated)
+├── ~~script-history.routes.ts~~  # removed Nov 2025 (script history deprecated)
 ├── claude-workers.routes.ts  # 30 endpoints
 ├── logs.routes.ts            # 6 endpoints
 ├── ports.routes.ts           # 2 endpoints

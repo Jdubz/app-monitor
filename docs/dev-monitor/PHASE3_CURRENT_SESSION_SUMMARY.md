@@ -51,7 +51,7 @@
 3. `backend/src/routes/docker.routes.ts` - Fixed imports (2 changes)
 4. `backend/src/routes/claude-workers.routes.ts` - Fixed logger
 5. `backend/src/routes/script-history.routes.ts` - Fixed logger
-6. `backend/src/routes/scripts.routes.ts` - Fixed logger
+6. ~~`backend/src/routes/scripts.routes.ts` - Fixed logger~~ (module removed Nov 2025 during script-runner retirement)
 7. `backend/src/services/taskBridge.ts` - Fixed iteration
 8. `backend/data/tasks/tasks.json` - Auto-updated
 9. `backend/package.json` - Added tsx

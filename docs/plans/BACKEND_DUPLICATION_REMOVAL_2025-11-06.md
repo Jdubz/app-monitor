@@ -11,7 +11,7 @@
   - [ ] Audit CI/CD pipelines (`.github/`, `scripts/`, `dev-bots/monitoring/`) for mirror sync commands.
   - [ ] Add logging/instrumentation to any suspect scripts to confirm execution.
 - [ ] Confirm nothing imports from the mirror tree at runtime or tests.
-  - [ ] Search for `dev-bots/mirror` path references across repo.
+  - [x] Search for `dev-bots/mirror` path references across repo.
   - [ ] Run tests with mirror temporarily removed to detect hidden dependencies.
 
 ## Remediation Tasks
@@ -21,7 +21,7 @@
 - [x] Remove deprecated script routers and services.
   - [x] Delete `backend/src/routes/scripts.routes.ts` and `backend/src/routes/script-history.routes.ts`.
   - [x] Remove `ScriptManager` and `ScriptExecutionHistory` wiring from server bootstrap/tests.
-  - [ ] Update API documentation to reflect removal.
+  - [x] Update API documentation to reflect removal.
 - [ ] Prune backup/temp artifacts pending SQLite migration.
   - [ ] Remove `.bak` and `.tmp` task JSON files once SQLite migration lands.
   - [ ] Ensure migration plan (`docs/plans/TASK_QUEUE_SQLITE_MIGRATION.md`) covers export/import needs.

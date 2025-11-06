@@ -55,7 +55,7 @@ routes/
 ├── services.routes.ts (150 lines) - 6 endpoints
 ├── socket-task.routes.ts (447 lines) - 15 endpoints  
 ├── docker.routes.ts (225 lines) - 4 endpoints
-├── scripts.routes.ts (232 lines) - 6 endpoints
+├── ~~scripts.routes.ts (232 lines) - 6 endpoints~~ _(removed Nov 2025)_
 ├── script-history.routes.ts (187 lines) - 5 endpoints
 ├── claude-workers.routes.ts (756 lines) - 30 endpoints
 ├── logs.routes.ts (200 lines) - 6 endpoints

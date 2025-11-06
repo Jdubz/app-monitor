@@ -152,7 +152,7 @@ export function createApiRouter(deps: {
 | Module | Estimated Lines | Endpoints | Priority |
 |--------|----------------|-----------|----------|
 | docker.routes.ts | ~400 | 15-20 | High |
-| scripts.routes.ts | ~300 | 10-12 | High |
+| ~~scripts.routes.ts~~ | ~300 | 10-12 | _Removed Nov 2025_ |
 | claude-workers.routes.ts | ~800 | 25-30 | Medium |
 | ports.routes.ts | ~150 | 3-5 | Low |
 | logs.routes.ts | ~100 | 2-3 | Low |
@@ -215,7 +215,7 @@ export function createApiRouter(deps) {
    - Docker daemon control
    - Log streaming
 
-2. **Create scripts.routes.ts** (~300 lines)
+2. ~~**Create scripts.routes.ts** (~300 lines)~~ _(module removed Nov 2025)_
    - Script execution
    - Process management
    - Real-time output

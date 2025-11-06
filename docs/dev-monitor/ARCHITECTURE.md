@@ -149,8 +149,8 @@ getHistory(): ScriptExecution[]
 1. **services.routes.ts** (6) - Service control
 2. **socket-task.routes.ts** (15) - Task operations
 3. **docker.routes.ts** (4) - Container management  
-4. **scripts.routes.ts** (6) - Script execution
-5. **script-history.routes.ts** (5) - History tracking
+4. ~~**scripts.routes.ts** (6) - Script execution~~ _(removed Nov 2025; functionality retired)_
+5. ~~**script-history.routes.ts** (5) - History tracking~~ _(removed Nov 2025 alongside script runner deprecation)_
 6. **claude-workers.routes.ts** (30) - Worker management
 7. **logs.routes.ts** (6) - Log retrieval
 8. **ports.routes.ts** (2) - Port management
