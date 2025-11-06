@@ -234,14 +234,22 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
         warnings.forEach((warning) => logger.warn(warning));
       }
 
-      const task = await devBotsManager.addTask(type, title, documentation, acceptanceCriteria, {
+      const result = await devBotsManager.addTask({
+        type,
+        title,
+        description: documentation, // Map documentation to description
+        acceptanceCriteria: Array.isArray(acceptanceCriteria) ? acceptanceCriteria : [acceptanceCriteria],
         files,
         dependencies,
-        repository,
+        project: repository,
         assignedAgent,
         notes
       });
-      res.json({ task, message: 'Task added successfully' });
+      res.json({
+        task: result.task,
+        validation: result.validation,
+        message: 'Task added successfully'
+      });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -258,13 +266,18 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
 
   /**
    * POST /dev-bots/tasks/enhanced
-   * Create enhanced task with additional metadata
+   * DEPRECATED: Use POST /dev-bots/tasks instead
+   * Kept for backward compatibility - routes to unified addTask method
    */
   router.post('/tasks/enhanced', async (req: Request, res: Response) => {
     try {
       const taskData = req.body;
-      const task = await devBotsManager.addEnhancedTask(taskData);
-      res.json({ task, message: 'Enhanced task added successfully' });
+      const result = await devBotsManager.addTask(taskData);
+      res.json({
+        task: result.task,
+        validation: result.validation,
+        message: 'Task added successfully (Note: /tasks/enhanced is deprecated, use /tasks instead)'
+      });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -273,7 +286,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
         error
       });
       res.status(500).json({
-        error: 'Failed to add enhanced task',
+        error: 'Failed to add task',
         message: error instanceof Error ? error.message : String(error),
       });
     }
@@ -296,6 +309,64 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
       });
       res.status(500).json({
         error: 'Failed to get completed tasks',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  /**
+   * GET /dev-bots/metrics
+   * Get queue metrics and task duration statistics
+   */
+  router.get('/metrics', (_req: Request, res: Response) => {
+    try {
+      const metrics = devBotsManager.getQueueMetrics();
+      const stats = devBotsManager.getTaskDurationStats();
+      res.json({ metrics, stats });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_metrics',
+        message: `Error getting metrics: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to get metrics',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  /**
+   * POST /dev-bots/tasks/:taskId/timeout
+   * Manually timeout a task after verification
+   */
+  router.post('/tasks/:taskId/timeout', (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+      const { reason } = req.body;
+
+      if (!reason) {
+        return res.status(400).json({
+          error: 'Reason is required for manual timeout'
+        });
+      }
+
+      devBotsManager.manuallyTimeoutTask(taskId, reason);
+      res.json({
+        success: true,
+        message: `Task ${taskId} manually timed out`,
+        reason
+      });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_timing_out_task',
+        message: `Error timing out task: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to timeout task',
         message: error instanceof Error ? error.message : String(error),
       });
     }
