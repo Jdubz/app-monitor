@@ -93,17 +93,3 @@ export function createApiRouter(deps: {
 
   return router;
 }
-
-/**
- * Export singleton instances for backward compatibility
- * These will be gradually removed as we complete modularization
- */
-export const processManager = new ProcessManager();
-export const cloudLogging = new CloudLogging();
-export const devBotsManager = new DevBotsManager(processManager);
-
-/**
- * Default export for backward compatibility
- * This maintains the current API contract while we transition
- */
-export default Router();
