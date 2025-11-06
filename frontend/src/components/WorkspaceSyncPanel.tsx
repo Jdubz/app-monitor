@@ -39,7 +39,7 @@ interface SyncResult {
 }
 
 interface WorkspaceSyncPanelProps {
-  onStatusChange?: (status: any) => void;
+  onStatusChange?: (status: SyncStatus) => void;
 }
 
 export const WorkspaceSyncPanel: React.FC<WorkspaceSyncPanelProps> = ({
@@ -59,14 +59,12 @@ export const WorkspaceSyncPanel: React.FC<WorkspaceSyncPanelProps> = ({
   const fetchStatus = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/dev-bots/workspace-sync/status');
-      setStatus((response as any).data);
+      const response = await api.get<SyncStatus>('/dev-bots/workspace-sync/status');
+      setStatus(response);
       setError(null);
-      if (onStatusChange) {
-        onStatusChange((response as any).data);
-      }
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to fetch sync status');
+      onStatusChange?.(response);
+    } catch (err) {
+      setError(api.handleApiError(err) || 'Failed to fetch sync status');
       setStatus(null);
     } finally {
       setLoading(false);
@@ -78,14 +76,14 @@ export const WorkspaceSyncPanel: React.FC<WorkspaceSyncPanelProps> = ({
       setSyncInProgress(true);
       setError(null);
 
-      const response = await api.post('/dev-bots/workspace-sync/trigger', syncOptions);
-      setLastSyncResult((response as any).data.result);
+      const response = await api.post<SyncResult>('/dev-bots/workspace-sync/trigger', syncOptions);
+      setLastSyncResult(response);
 
       // Refresh status after sync
       await fetchStatus();
 
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to trigger sync');
+    } catch (err) {
+      setError(api.handleApiError(err) || 'Failed to trigger sync');
     } finally {
       setSyncInProgress(false);
     }
@@ -93,12 +91,12 @@ export const WorkspaceSyncPanel: React.FC<WorkspaceSyncPanelProps> = ({
 
   const updateConfig = async () => {
     try {
-      await api.put('/dev-bots/workspace-sync/config', {
+      await api.put<void>('/dev-bots/workspace-sync/config', {
         conflictStrategy: syncOptions.conflictStrategy
       });
       await fetchStatus();
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to update config');
+    } catch (err) {
+      setError(api.handleApiError(err) || 'Failed to update config');
     }
   };
 
@@ -359,5 +357,4 @@ export const WorkspaceSyncPanel: React.FC<WorkspaceSyncPanelProps> = ({
     </div>
   );
 };
-
 

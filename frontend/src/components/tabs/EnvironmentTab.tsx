@@ -4,7 +4,6 @@ import { Environment } from '../../types/log.types';
 
 interface EnvironmentTabProps {
   socket: Socket | null;
-  environment: string;
   environments: Record<string, Environment>;
 }
 

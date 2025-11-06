@@ -5,6 +5,19 @@ import StatusBadge from './StatusBadge';
 // import ControlButtons from './ControlButtons';
 import styles from './DevBotsPanel.module.css';
 
+const PRIORITY_THRESHOLDS = {
+  HIGH: 8,
+  MEDIUM: 5,
+  LOW_MEDIUM: 3,
+} as const;
+
+const PRIORITY_COLORS = {
+  DEFAULT: '#888888',
+  HIGH: '#ff4444',
+  MEDIUM: '#ff8800',
+  LOW_MEDIUM: '#0088ff',
+} as const;
+
 // interface RetryAttempt {
 //   attemptNumber: number;
 //   timestamp: string;
@@ -137,7 +150,7 @@ interface TaskTemplate {
 
 interface DevBotsPanelProps {
   serviceName?: string;
-  onStatusChange?: (status: any) => void;
+  onStatusChange?: (status: DevBotsStatus) => void;
   socket?: Socket | null;
 }
 
@@ -390,11 +403,19 @@ export const DevBotsPanel: React.FC<DevBotsPanelProps> = ({
   }
 
   const getPriorityColor = (priority: number | undefined) => {
-    if (priority === undefined) return '#888888';
-    if (priority >= 8) return '#ff4444'; // high priority
-    if (priority >= 5) return '#ff8800'; // medium priority
-    if (priority >= 3) return '#0088ff'; // low-medium priority
-    return '#888888'; // low priority
+    if (priority === undefined) {
+      return PRIORITY_COLORS.DEFAULT;
+    }
+    if (priority >= PRIORITY_THRESHOLDS.HIGH) {
+      return PRIORITY_COLORS.HIGH;
+    }
+    if (priority >= PRIORITY_THRESHOLDS.MEDIUM) {
+      return PRIORITY_COLORS.MEDIUM;
+    }
+    if (priority >= PRIORITY_THRESHOLDS.LOW_MEDIUM) {
+      return PRIORITY_COLORS.LOW_MEDIUM;
+    }
+    return PRIORITY_COLORS.DEFAULT;
   };
 
   const getStatusColor = (status: string) => {
