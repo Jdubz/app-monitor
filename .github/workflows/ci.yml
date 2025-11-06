@@ -5,58 +5,30 @@ on:
     branches: [ main ]
 
 jobs:
-  frontend-tests:
-    name: Frontend Tests
+  quality-checks:
+    name: Quality Checks (Node 20)
     runs-on: ubuntu-latest
-    
-    strategy:
-      matrix:
-        node-version: [18.x, 20.x]
-    
+
     steps:
       - uses: actions/checkout@v4
-      
-      - name: Setup Node.js ${{ matrix.node-version }}
+
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ matrix.node-version }}
+          node-version: '20'
+          cache: npm
 
-      - name: Install frontend dependencies
-        working-directory: ./frontend
-        run: npm install --ignore-scripts
-      
-      - name: Run linter
-        working-directory: ./frontend
-        run: npm run lint
-      
-      - name: Run unit tests
-        working-directory: ./frontend
-        run: npm test
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
 
-  backend-tests:
-    name: Backend Tests
-    runs-on: ubuntu-latest
-    
-    strategy:
-      matrix:
-        node-version: [18.x, 20.x]
-    
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
+      - name: Lint backend
+        run: npm run lint -w backend
 
-      - name: Install backend dependencies
-        working-directory: ./backend
-        run: npm install --ignore-scripts
-      
-      - name: Run linter
-        working-directory: ./backend
-        run: npm run lint
-      
-      - name: Run backend tests
-        working-directory: ./backend
-        run: npm test
+      - name: Test backend
+        run: npm run test -w backend
+
+      - name: Lint frontend
+        run: npm run lint -w frontend
+
+      - name: Test frontend
+        run: npm run test -w frontend
