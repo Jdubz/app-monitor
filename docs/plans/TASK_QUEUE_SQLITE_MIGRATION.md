@@ -23,6 +23,21 @@ Migrate dev-bot task queue from JSON file persistence to SQLite database for bet
 
 ### Migration: 002_task_queue_schema
 
+**STRICT SCOPE - EXACTLY 6 TABLES (DO NOT ADD MORE):**
+1. tasks - primary task queue table
+2. task_files - files associated with tasks
+3. task_dependencies - task dependency relationships
+4. task_acceptance_criteria - success criteria per task
+5. task_metadata - flexible key-value metadata
+6. task_estimated_effort - time/complexity estimates
+
+**EXPLICITLY EXCLUDED (for future phases):**
+- task_tags - Phase 2 feature (NOT IN THIS MIGRATION)
+- task_quality_metrics - Phase 3 feature (NOT IN THIS MIGRATION)
+- task_history - Phase 4 feature (NOT IN THIS MIGRATION)
+
+### Migration: 002_task_queue_schema
+
 ```sql
 -- ==============================================================================
 -- TASK QUEUE TABLES
