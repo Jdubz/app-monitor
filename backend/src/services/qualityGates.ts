@@ -14,7 +14,7 @@ export interface QualityGateResult {
   duration: number; // milliseconds
   output?: string;
   error?: string;
-  details?: Record<string, any>;
+  details?: Record<string, unknown>;
 }
 
 /**

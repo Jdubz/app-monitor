@@ -1057,6 +1057,7 @@ export class DevBotsManager extends EventEmitter {
 
   /**
    * Create a new ephemeral Docker container for a task
+   * Uses imagineer-style approach: create container, copy workspace in, then start
    */
   private async createEphemeralWorker(task: Task, agent: AgentPersonality): Promise<EphemeralWorker> {
     const activeWorkers = Array.from(this.ephemeralWorkers.values()).filter(
@@ -1067,26 +1068,35 @@ export class DevBotsManager extends EventEmitter {
       throw new Error('Maximum concurrent dev-bots are already active');
     }
 
-    const workspace = this.workspaceOrchestrator.createWorkspace(task.id, agent.id);
+    // No git branch creation - work directly on staging
+    const workspaceId = `${agent.id}-${task.id}-${Date.now()}`;
     const workerId = `bot-${agent.id}-${Date.now()}`;
     const containerName = `dev-bot-${workerId}`;
-    
+
     try {
+      // Ensure we're on staging branch (no new branch creation)
+      const repoRoot = process.cwd();
+      const baseBranch = 'staging';  // Always work from staging branch
+      await this.execGitCommand(['checkout', baseBranch], repoRoot);
+      await this.execGitCommand(['pull', 'origin', baseBranch], repoRoot);
+
+      // Prepare host-side resources
       const hostLogsDir = this.getHostLogsDir();
       if (!fs.existsSync(hostLogsDir)) {
         fs.mkdirSync(hostLogsDir, { recursive: true });
       }
 
-      const binds = [
-        `${process.cwd()}:/app:ro`,
-        `${workspace.hostPath}:/workspace:rw`,
+      // Setup minimal binds - only for logs and credentials
+      const binds: string[] = [
         `${hostLogsDir}:/app/logs:rw`
       ];
 
       const homeDir = os.homedir();
-      const claudeDir = path.join(homeDir, '.claude');
-      if (fs.existsSync(claudeDir)) {
-        binds.push(`${claudeDir}:/app/claude-context:ro`);
+
+      // Mount Claude credentials file (not directory) to /tmp
+      const claudeCredentials = path.join(homeDir, '.claude', 'credentials.json');
+      if (fs.existsSync(claudeCredentials)) {
+        binds.push(`${claudeCredentials}:/tmp/host-claude-credentials.json:ro`);
       }
 
       const gitCredentials = path.join(homeDir, '.git-credentials');
@@ -1104,8 +1114,8 @@ export class DevBotsManager extends EventEmitter {
         `AGENT_NAME=${agent.name}`,
         `TASK_ID=${task.id}`,
         `WORKER_ID=${workerId}`,
-        `WORKSPACE_BRANCH=${workspace.branchName}`,
-        `WORKSPACE_ID=${workspace.id}`
+        `WORKSPACE_BRANCH=staging`,
+        `WORKSPACE_ID=${workspaceId}`
       ];
 
       for (const key of this.getEnvPassthroughKeys()) {
@@ -1115,6 +1125,7 @@ export class DevBotsManager extends EventEmitter {
         }
       }
 
+      // Create container (not started yet)
       const container = await this.docker.createContainer({
         Image: this.getAgentDockerImage(agent),
         name: containerName,
@@ -1131,12 +1142,24 @@ export class DevBotsManager extends EventEmitter {
           'claude.worker.id': workerId,
           'claude.agent.id': agent.id,
           'claude.task.id': task.id,
-          'claude.workspace.id': workspace.id
+          'claude.workspace.id': workspaceId
         }
       });
 
+      // Copy workspace INTO container using tar
+      await this.copyWorkspaceToContainer(container.id, repoRoot);
+
+      // Now start the container with workspace already inside
       await container.start();
       await this.initializeWorkerLogFile(workerId);
+
+      const workspace = {
+        id: workspaceId,
+        hostPath: '', // No host path - workspace is inside container only
+        branchName: 'staging', // Always work on staging
+        mirrorPath: '', // No mirror
+        createdAt: new Date().toISOString()
+      };
 
       const ephemeralWorker: EphemeralWorker = {
         id: workerId,
@@ -1149,24 +1172,118 @@ export class DevBotsManager extends EventEmitter {
       };
 
       this.ephemeralWorkers.set(workerId, ephemeralWorker);
-      
+
       logger.info({
       category: 'process',
       action: 'created_ephemeral_worker_workerid_with_container_c',
       message: `Created ephemeral worker ${workerId} with container ${container.id}`
     });
       return ephemeralWorker;
-      
+
     } catch (error) {
       logger.error({
-      category: 'process',
-      action: 'failed_to_create_ephemeral_worker_workerid',
-      message: `Failed to create ephemeral worker ${workerId}:`,
-      error: error
-    });
-      this.workspaceOrchestrator.cleanupWorkspace(workspace);
+        category: 'process',
+        action: 'failed_to_create_ephemeral_worker_workerid',
+        message: `Failed to create ephemeral worker ${workerId}:`,
+        error: error
+      });
+      // No branch cleanup needed - we work directly on staging
       throw error;
     }
+  }
+
+  /**
+   * Copy workspace directory into container using tar pipe
+   * Mimics imagineer's approach for efficient workspace copying
+   */
+  private async copyWorkspaceToContainer(containerId: string, repoRoot: string): Promise<void> {
+    const { spawn } = await import('child_process');
+    logger.info({
+      category: 'process',
+      action: 'copying_workspace_to_container',
+      message: `Copying workspace from ${repoRoot} into container ${containerId}`
+    });
+
+    // Exclusions for tar (don't copy these into container)
+    const exclusions = [
+      '--exclude=node_modules',
+      '--exclude=venv',
+      '--exclude=.venv',
+      '--exclude=logs',
+      '--exclude=dev-bots',
+      '--exclude=__pycache__',
+      '--exclude=.mypy_cache',
+      '--exclude=dist',
+      '--exclude=build',
+      '--exclude=.git/objects', // Copy .git but not large objects
+    ];
+
+    return new Promise((resolve, reject) => {
+      // Create tar of workspace
+      const tarProc = spawn('tar', [
+        ...exclusions,
+        '-C', repoRoot,
+        '-cf', '-',
+        '.'
+      ]);
+
+      // Pipe into docker cp
+      const dockerCpProc = spawn('docker', [
+        'cp', '-',
+        `${containerId}:/workspace`
+      ]);
+
+      tarProc.stdout.pipe(dockerCpProc.stdin);
+
+      let stderr = '';
+      dockerCpProc.stderr.on('data', (data) => {
+        stderr += data.toString();
+      });
+
+      dockerCpProc.on('close', (code) => {
+        if (code !== 0) {
+          reject(new Error(`docker cp failed with code ${code}: ${stderr}`));
+        } else {
+          logger.info({
+            category: 'process',
+            action: 'workspace_copied_successfully',
+            message: `Workspace copied successfully to container ${containerId}`
+          });
+          resolve();
+        }
+      });
+
+      tarProc.on('error', (error) => {
+        reject(new Error(`tar process failed: ${error.message}`));
+      });
+
+      dockerCpProc.on('error', (error) => {
+        reject(new Error(`docker cp process failed: ${error.message}`));
+      });
+    });
+  }
+
+  /**
+   * Execute git command in specified directory
+   */
+  private async execGitCommand(args: string[], cwd: string): Promise<string> {
+    const { promisify } = await import('util');
+    const { exec } = await import('child_process');
+    const execAsync = promisify(exec);
+
+    const command = `git ${args.join(' ')}`;
+    const { stdout, stderr } = await execAsync(command, { cwd });
+
+    if (stderr && !stderr.includes('Switched to') && !stderr.includes('already exists')) {
+      logger.warn({
+        category: 'process',
+        action: 'git_command_warning',
+        message: `Git command warning: ${command}`,
+        details: { stderr }
+      });
+    }
+
+    return stdout.trim();
   }
 
   /**
@@ -1335,7 +1452,7 @@ export class DevBotsManager extends EventEmitter {
     const prepClaudeContext = [
       'rm -rf ~/.claude',
       'mkdir -p ~/.claude',
-      'if [ -d /app/claude-context ]; then cp -a /app/claude-context/. ~/.claude/; fi'
+      'if [ -f /tmp/host-claude-credentials.json ]; then cp /tmp/host-claude-credentials.json ~/.claude/credentials.json; fi'
     ];
 
     // Create a wrapper command that logs to the worker-specific file

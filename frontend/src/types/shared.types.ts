@@ -18,17 +18,8 @@ export interface LogHistory {
   logs: DevMonitorLogLine[];
 }
 
-// Service Types
-export type LocalService =
-  | 'app-monitor-backend'
-  | 'dev-monitor-backend' // legacy name
-  | 'app-monitor-frontend'
-  | 'frontend-dev'
-  | 'firebase-emulators'
-  | 'python-worker'
-  | 'dev-bot-a'
-  | 'dev-bot-b'
-  | 'all';
+// Service & Panel Types
+export type LocalService = string;
 
 export interface Service {
   name: string;
@@ -91,15 +82,24 @@ export interface HealthCheckResponse {
 }
 
 // Panel Types
-export type PanelLayoutType = '1-panel' | '2-panel-vertical' | '2-panel-horizontal' | '3-panel' | '4-panel';
+export type PanelLayoutType =
+  | 'single'
+  | 'horizontal'
+  | 'vertical'
+  | 'main-sidebar'
+  | 'quad'
+  | string;
 
-export type LogSource =
-  | { type: 'local'; service: LocalService }
-  | { type: 'cloud'; environment: string; service: string };
+export type LogSource = string;
 
 export interface PanelConfig {
   id: string;
   source: LogSource;
+  paused: boolean;
+  showMetadata: boolean;
+  searchText: string;
+  selectedServices: LocalService[];
+  selectedLevels: DevMonitorLogLevel[];
   filters?: {
     levels?: DevMonitorLogLevel[];
     searchText?: string;

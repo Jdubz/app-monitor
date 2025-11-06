@@ -1,5 +1,11 @@
-import React, { useRef, useEffect } from 'react';
-import { ParsedCloudLog, CloudLoggingStatus, LogLevel } from '../types/log.types';
+import React, { useEffect, useRef } from 'react';
+import { Loader2, Search, X } from 'lucide-react';
+
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
+import { CloudLoggingStatus, LogLevel, ParsedCloudLog } from '../types/log.types';
 import LogLevelBadge from './LogLevelBadge';
 
 interface CloudLogsViewerProps {
@@ -19,6 +25,16 @@ interface CloudLogsViewerProps {
   onClear: () => void;
 }
 
+const LOG_LEVELS: LogLevel[] = ['ERROR', 'WARN', 'INFO', 'DEBUG'];
+const DEFAULT_PROJECT_ID = 'static-sites-257923';
+
+const levelMessageClass: Record<LogLevel, string> = {
+  ERROR: 'text-destructive',
+  WARN: 'text-amber-400',
+  INFO: 'text-primary-foreground',
+  DEBUG: 'text-muted-foreground',
+};
+
 const CloudLogsViewer: React.FC<CloudLogsViewerProps> = ({
   logs,
   isLoading,
@@ -32,21 +48,15 @@ const CloudLogsViewer: React.FC<CloudLogsViewerProps> = ({
   onSelectAllLevels,
   onClearAllLevels,
   onClearSearch,
-  onRefresh: _onRefresh,
-  onClear: _onClear,
 }) => {
   const logsEndRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom when new logs arrive
   useEffect(() => {
-    if (logsEndRef.current) {
-      logsEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
-  const formatTimestamp = (timestamp: number) => {
-    const date = new Date(timestamp);
-    return date.toLocaleString('en-US', {
+  const formatTimestamp = (timestamp: number) =>
+    new Date(timestamp).toLocaleString('en-US', {
       month: 'short',
       day: '2-digit',
       hour: '2-digit',
@@ -54,286 +64,168 @@ const CloudLogsViewer: React.FC<CloudLogsViewerProps> = ({
       second: '2-digit',
       hour12: false,
     });
-  };
 
-  const getTraceUrl = (traceId: string, projectId: string) => {
+  const getTraceUrl = (traceId: string, projectId: string = DEFAULT_PROJECT_ID) => {
     if (!traceId) return null;
-    // Extract just the trace ID from the full path (projects/PROJECT_ID/traces/TRACE_ID)
     const parts = traceId.split('/');
-    const actualTraceId = parts[parts.length - 1];
-    return `https://console.cloud.google.com/traces/list?project=${projectId}&tid=${actualTraceId}`;
-  };
-
-  const getResourceType = (resource: Record<string, unknown> | undefined): string | null => {
-    if (!resource || !resource.type) return null;
-    return String(resource.type);
+    return `https://console.cloud.google.com/traces/list?project=${projectId}&tid=${parts[parts.length - 1]}`;
   };
 
   const highlightText = (text: string, highlight: string) => {
     if (!highlight) return text;
-
     const parts = text.split(new RegExp(`(${highlight})`, 'gi'));
-    return (
-      <>
-        {parts.map((part, i) =>
-          part.toLowerCase() === highlight.toLowerCase() ? (
-            <span key={i} style={{ backgroundColor: '#ffeb3b', fontWeight: 600 }}>
-              {part}
-            </span>
-          ) : (
-            part
-          )
-        )}
-      </>
+    return parts.map((part, index) =>
+      part.toLowerCase() === highlight.toLowerCase() ? (
+        <mark
+          key={`${part}-${index}`}
+          className="rounded bg-primary/30 px-1 text-primary-foreground"
+        >
+          {part}
+        </mark>
+      ) : (
+        <span key={`${part}-${index}`}>{part}</span>
+      ),
     );
   };
 
-  // Render cloud log line with metadata
-  const renderCloudLogLine = (log: ParsedCloudLog) => {
-    const lineStyle: React.CSSProperties = {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '4px',
-      padding: '8px',
-      fontSize: '13px',
-      fontFamily: 'monospace',
-      borderBottom: '1px solid #2a2a2a',
-      lineHeight: '1.5',
-    };
+  const renderMetadata = (log: ParsedCloudLog) => {
+    const resourceType =
+      typeof log.metadata.resource === 'object' && log.metadata.resource
+        ? String((log.metadata.resource as Record<string, unknown>).type ?? '')
+        : '';
 
-    const mainLineStyle: React.CSSProperties = {
-      display: 'flex',
-      gap: '8px',
-      alignItems: 'flex-start',
-    };
-
-    const timestampStyle: React.CSSProperties = {
-      color: '#888',
-      minWidth: '120px',
-      flexShrink: 0,
-      fontSize: '12px',
-    };
-
-    const messageStyle: React.CSSProperties = {
-      flex: 1,
-      color: log.level === 'ERROR' ? '#ff6b6b' : log.level === 'WARN' ? '#ffa94d' : '#e0e0e0',
-      whiteSpace: 'pre-wrap',
-      wordBreak: 'break-word',
-    };
-
-    const metadataStyle: React.CSSProperties = {
-      display: 'flex',
-      gap: '12px',
-      fontSize: '11px',
-      color: '#666',
-      paddingLeft: '128px',
-      flexWrap: 'wrap',
-    };
-
-    const traceLinkStyle: React.CSSProperties = {
-      color: '#4dabf7',
-      textDecoration: 'none',
-      cursor: 'pointer',
-    };
-
-    const resourceType = getResourceType(log.metadata.resource);
+    if (
+      !showMetadata ||
+      (!log.metadata.trace && !log.metadata.spanId && !log.metadata.severity && !resourceType)
+    ) {
+      return null;
+    }
 
     return (
-      <div key={log.id} style={lineStyle}>
-        <div style={mainLineStyle}>
-          {showMetadata && (
-            <span style={timestampStyle}>{formatTimestamp(log.timestamp)}</span>
-          )}
-          <LogLevelBadge level={log.level} />
-          <span style={messageStyle}>
-            {searchText ? highlightText(log.message, searchText) : log.message}
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground/80">
+        {log.metadata.trace && (
+          <span>
+            Trace:{' '}
+            <a
+              href={getTraceUrl(log.metadata.trace) ?? '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary underline-offset-2 hover:underline"
+            >
+              {log.metadata.trace.split('/').pop()?.substring(0, 8)}...
+            </a>
           </span>
-        </div>
-        {showMetadata && (log.metadata.trace || log.metadata.spanId || log.metadata.severity || resourceType) && (
-          <div style={metadataStyle}>
-            {log.metadata.trace && (
-              <span>
-                Trace:{' '}
-                <a
-                  href={getTraceUrl(log.metadata.trace, 'static-sites-257923') || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={traceLinkStyle}
-                >
-                  {log.metadata.trace.split('/').pop()?.substring(0, 8)}...
-                </a>
-              </span>
-            )}
-            {log.metadata.spanId && <span>Span: {log.metadata.spanId}</span>}
-            {log.metadata.severity && <span>Severity: {log.metadata.severity}</span>}
-            {resourceType && <span>Resource: {resourceType}</span>}
-          </div>
         )}
+        {log.metadata.spanId && <span>Span: {log.metadata.spanId}</span>}
+        {log.metadata.severity && <span>Severity: {log.metadata.severity}</span>}
+        {resourceType && <span>Resource: {resourceType}</span>}
       </div>
     );
   };
 
-  const containerStyle: React.CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100%',
-    backgroundColor: '#1a1a1a',
-    fontFamily: 'monospace',
-  };
-
-  const toolbarStyle: React.CSSProperties = {
-    display: 'flex',
-    gap: '8px',
-    padding: '8px 12px',
-    backgroundColor: '#2a2a2a',
-    borderBottom: '1px solid #444',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    fontSize: '12px',
-  };
-
-  const filterButtonStyle = (active: boolean): React.CSSProperties => ({
-    padding: '4px 8px',
-    backgroundColor: active ? '#4dabf7' : '#444',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '4px',
-    fontSize: '12px',
-    cursor: 'pointer',
-    fontWeight: active ? 600 : 400,
-  });
-
-  const searchInputStyle: React.CSSProperties = {
-    flex: 1,
-    minWidth: '150px',
-    padding: '4px 6px',
-    backgroundColor: '#1a1a1a',
-    color: '#e0e0e0',
-    border: '1px solid #444',
-    borderRadius: '4px',
-    fontSize: '12px',
-  };
-
-  const buttonStyle: React.CSSProperties = {
-    padding: '4px 8px',
-    backgroundColor: '#4dabf7',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '4px',
-    fontSize: '12px',
-    cursor: 'pointer',
-    fontWeight: 600,
-  };
-
-  const logsContainerStyle: React.CSSProperties = {
-    flex: 1,
-    overflowY: 'auto',
-    overflowX: 'hidden',
-    backgroundColor: '#1a1a1a',
-  };
-
-  const emptyStateStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    color: '#666',
-    fontSize: '14px',
-    flexDirection: 'column',
-    gap: '12px',
-  };
-
-  const warningStyle: React.CSSProperties = {
-    padding: '8px 12px',
-    backgroundColor: '#fff3cd',
-    color: '#856404',
-    borderBottom: '1px solid #ffc107',
-    fontSize: '12px',
-  };
-
-  const errorStyle: React.CSSProperties = {
-    padding: '8px 12px',
-    backgroundColor: '#f8d7da',
-    color: '#721c24',
-    borderBottom: '1px solid #f5c6cb',
-    fontSize: '12px',
-  };
-
   return (
-    <div style={containerStyle}>
-      {/* Warning if cloud logging not available */}
+    <div className="flex h-full flex-col bg-background/40 text-xs text-muted-foreground">
       {cloudLoggingStatus && !cloudLoggingStatus.available && (
-        <div style={warningStyle}>
-          Cloud Logging is not available: {cloudLoggingStatus.message}
+        <div className="border-b border-warning/40 bg-warning/10 px-3 py-2 text-[11px] text-warning-foreground">
+          Cloud Logging unavailable: {cloudLoggingStatus.message}
         </div>
       )}
 
-      {/* Error message */}
       {error && (
-        <div style={errorStyle}>
+        <div className="border-b border-destructive/40 bg-destructive/10 px-3 py-2 text-[11px] text-destructive">
           Error: {error}
         </div>
       )}
 
-      {/* Toolbar */}
-      <div style={toolbarStyle}>
-        <span style={{ color: '#888' }}>Filter by level:</span>
-        <button onClick={() => onToggleLevel('ERROR')} style={filterButtonStyle(selectedLevels.includes('ERROR'))}>
-          ERROR
-        </button>
-        <button onClick={() => onToggleLevel('WARN')} style={filterButtonStyle(selectedLevels.includes('WARN'))}>
-          WARN
-        </button>
-        <button onClick={() => onToggleLevel('INFO')} style={filterButtonStyle(selectedLevels.includes('INFO'))}>
-          INFO
-        </button>
-        <button onClick={() => onToggleLevel('DEBUG')} style={filterButtonStyle(selectedLevels.includes('DEBUG'))}>
-          DEBUG
-        </button>
-        <button onClick={onSelectAllLevels} style={{ ...buttonStyle, backgroundColor: '#868e96' }}>
+      <div className="flex flex-wrap items-center gap-2 border-b border-border/60 bg-card/80 px-3 py-2">
+        <span className="text-[11px] uppercase tracking-[0.3em] text-muted-foreground">Levels</span>
+        {LOG_LEVELS.map((level) => {
+          const active = selectedLevels.includes(level);
+          return (
+            <Button
+              key={level}
+              type="button"
+              size="sm"
+              variant={active ? 'secondary' : 'outline'}
+              className="font-mono text-[10px] uppercase tracking-[0.3em]"
+              onClick={() => onToggleLevel(level)}
+            >
+              {level}
+            </Button>
+          );
+        })}
+        <Button type="button" variant="ghost" size="sm" onClick={onSelectAllLevels}>
           All
-        </button>
-        <button onClick={onClearAllLevels} style={{ ...buttonStyle, backgroundColor: '#868e96' }}>
+        </Button>
+        <Button type="button" variant="ghost" size="sm" onClick={onClearAllLevels}>
           None
-        </button>
+        </Button>
 
-        <span style={{ color: '#888', marginLeft: '16px' }}>Search:</span>
-        <input
-          type="text"
-          value={searchText}
-          onChange={(e) => onSearchChange(e.target.value)}
-          placeholder="Search logs..."
-          style={searchInputStyle}
-        />
-        {searchText && (
-          <button onClick={onClearSearch} style={{ ...buttonStyle, backgroundColor: '#868e96' }}>
-            Clear
-          </button>
-        )}
-
-        <span style={{ color: '#888', marginLeft: 'auto' }}>
-          {logs.length} logs
-        </span>
+        <div className="ml-auto flex min-w-[220px] flex-1 items-center gap-2">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={searchText}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="Search logs..."
+              className="h-9 w-full bg-background pl-9 pr-8 text-xs"
+            />
+            {searchText && (
+              <button
+                type="button"
+                onClick={onClearSearch}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                aria-label="Clear search"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+          <Badge variant="outline" className="text-[10px] uppercase tracking-[0.2em]">
+            {logs.length} logs
+          </Badge>
+        </div>
       </div>
 
-      {/* Logs Container */}
-      <div style={logsContainerStyle}>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden bg-background/20">
         {isLoading && logs.length === 0 ? (
-          <div style={emptyStateStyle}>
-            <div>Loading cloud logs...</div>
+          <div className="flex h-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Loading cloud logs…
           </div>
         ) : logs.length === 0 ? (
-          <div style={emptyStateStyle}>
-            <div>No cloud logs available</div>
-            <div style={{ fontSize: '12px', color: '#555' }}>
-              Click Refresh to fetch logs
-            </div>
+          <div className="flex h-full flex-col items-center justify-center gap-1 text-sm text-muted-foreground">
+            <span>No cloud logs available</span>
+            <span className="text-[11px] text-muted-foreground/70">
+              Adjust filters or trigger a refresh
+            </span>
           </div>
         ) : (
-          <>
-            {logs.map(log => renderCloudLogLine(log))}
+          <div className="divide-y divide-border/40">
+            {logs.map((log) => (
+              <div key={log.id} className="px-3 py-2">
+                <div className="flex items-start gap-3">
+                  {showMetadata && (
+                    <span className="min-w-[110px] font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground/70">
+                      {formatTimestamp(log.timestamp)}
+                    </span>
+                  )}
+                  <LogLevelBadge level={log.level} />
+                  <span
+                    className={cn(
+                      'flex-1 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed',
+                      levelMessageClass[log.level],
+                      !levelMessageClass[log.level] && 'text-foreground',
+                    )}
+                  >
+                    {searchText ? highlightText(log.message, searchText) : log.message}
+                  </span>
+                </div>
+                {renderMetadata(log)}
+              </div>
+            ))}
             <div ref={logsEndRef} />
-          </>
+          </div>
         )}
       </div>
     </div>
