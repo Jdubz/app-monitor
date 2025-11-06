@@ -17,7 +17,7 @@
 ## Remediation Tasks
 - [x] Delete `dev-bots/mirror/backend` and enforce prevention.
   - [x] Remove or guard scripts that recreate the mirror (fail build if mirror would be reintroduced).
-  - [ ] Add CI check that flags the directory if committed.
+  - [x] Add CI check that flags the directory if committed.
 - [x] Remove deprecated script routers and services.
   - [x] Delete `backend/src/routes/scripts.routes.ts` and `backend/src/routes/script-history.routes.ts`.
   - [x] Remove `ScriptManager` and `ScriptExecutionHistory` wiring from server bootstrap/tests.

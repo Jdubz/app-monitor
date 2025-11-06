@@ -11,6 +11,8 @@ build/
 backend/data/
 backend/logs/
 dev-bots/logs/
+dev-bots/mirror/
+dev-bots/artifacts/
 frontend/logs/
 logs/
 
