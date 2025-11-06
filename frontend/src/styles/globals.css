@@ -1,0 +1,33 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --app-background: 222 47% 5%;
+  --app-foreground: 210 40% 96%;
+  --app-card: 222 44% 7%;
+  --app-card-foreground: 210 40% 96%;
+  --app-popover: 222 38% 6%;
+  --app-popover-foreground: 210 40% 96%;
+  --app-primary: 191 97% 45%;
+  --app-primary-foreground: 222 40% 12%;
+  --app-secondary: 222 37% 15%;
+  --app-secondary-foreground: 210 40% 96%;
+  --app-muted: 222 27% 20%;
+  --app-muted-foreground: 215 20% 70%;
+  --app-accent: 261 83% 72%;
+  --app-accent-foreground: 222 40% 12%;
+  --app-destructive: 0 72% 51%;
+  --app-destructive-foreground: 210 40% 96%;
+  --app-border: 222 37% 15%;
+  --app-ring: 191 97% 45%;
+  --app-radius: 0.75rem;
+}
+
+body {
+  @apply bg-background text-foreground font-sans antialiased;
+}
+
+code, pre {
+  @apply font-mono;
+}

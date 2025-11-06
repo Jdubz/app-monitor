@@ -33,7 +33,11 @@
     "experimentalDecorators": false,
     "emitDecoratorMetadata": false,
     "lib": ["ES2020", "DOM"],
-    "types": ["node"]
+    "types": ["node"],
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    }
   },
   "include": ["src/**/*", "tests/**/*", "scripts/**/*", "*.js", "*.ts"],
   "exclude": [

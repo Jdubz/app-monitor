@@ -1,0 +1,39 @@
+[Unit]
+Description=App Monitor Backend - PRODUCTION
+Documentation=https://github.com/Jdubz/app-monitor
+After=network.target
+
+# ⚠️  PRODUCTION SERVICE - DO NOT USE FOR DEVELOPMENT
+# This service runs the production backend server
+# Development: Use 'npm run dev -w backend' in your dev directory
+
+[Service]
+Type=simple
+User={PRODUCTION_USER}
+WorkingDirectory={PRODUCTION_DIR}/backend
+Environment=NODE_ENV=production
+EnvironmentFile={PRODUCTION_DIR}/.env
+
+# Restart strategy for production stability
+Restart=always
+RestartSec=10
+StartLimitInterval=600
+StartLimitBurst=5
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={PRODUCTION_DIR}
+
+# Start command
+ExecStart=/usr/bin/node {PRODUCTION_DIR}/backend/dist/index.js
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=app-monitor-backend-prod
+
+[Install]
+WantedBy=multi-user.target

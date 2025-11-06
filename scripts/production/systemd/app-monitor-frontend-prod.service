@@ -1,0 +1,39 @@
+[Unit]
+Description=App Monitor Frontend - PRODUCTION
+Documentation=https://github.com/Jdubz/app-monitor
+After=network.target app-monitor-backend-prod.service
+
+# ⚠️  PRODUCTION SERVICE - DO NOT USE FOR DEVELOPMENT
+# This service serves the production-built frontend
+# Development: Use 'npm run dev -w frontend' in your dev directory
+
+[Service]
+Type=simple
+User={PRODUCTION_USER}
+WorkingDirectory={PRODUCTION_DIR}/frontend
+Environment=NODE_ENV=production
+EnvironmentFile={PRODUCTION_DIR}/.env
+
+# Restart strategy for production stability
+Restart=always
+RestartSec=10
+StartLimitInterval=600
+StartLimitBurst=5
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths={PRODUCTION_DIR}
+
+# Start command - using vite preview for production build
+ExecStart=/usr/bin/npm run preview
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=app-monitor-frontend-prod
+
+[Install]
+WantedBy=multi-user.target
