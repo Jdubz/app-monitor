@@ -1563,7 +1563,9 @@ export class DevBotsManager extends EventEmitter {
         workerId,
         agent: agent.id,
         taskTitle: task.title,
-        dockerCommand: dockerArgs.join(' ')
+        taskId: task.id,
+        image: this.getAgentDockerImage(agent),
+        promptLength: promptText.length
       }
     });
 
