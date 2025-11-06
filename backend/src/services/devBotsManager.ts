@@ -1279,6 +1279,17 @@ export class DevBotsManager extends EventEmitter {
     const { spawn } = await import('child_process');
     const workerId = `bot-${agent.id}-${Date.now()}`;
 
+    // Register worker in ephemeralWorkers to enforce concurrency limit
+    const ephemeralWorker: EphemeralWorker = {
+      id: workerId,
+      agent: agent.id,
+      status: 'running',
+      taskId: task.id,
+      createdAt: Date.now()
+    };
+    this.ephemeralWorkers.set(workerId, ephemeralWorker);
+
+    try {
     // Ensure we're on staging branch
     // Get the project root (parent of backend directory)
     const repoRoot = path.resolve(process.cwd(), '..');
@@ -1473,6 +1484,15 @@ export class DevBotsManager extends EventEmitter {
 
     // Try to assign next task
     this.assignNextTask();
+    } finally {
+      // Always remove worker from ephemeralWorkers to allow next task assignment
+      this.ephemeralWorkers.delete(workerId);
+      logger.info({
+        category: 'process',
+        action: 'ephemeral_worker_cleaned_up',
+        message: `Removed ephemeral worker ${workerId} from tracking (active workers: ${this.ephemeralWorkers.size})`
+      });
+    }
   }
 
   /**
