@@ -120,6 +120,14 @@ export class DevBotsDatabase {
         CREATE INDEX idx_failure_patterns_category ON failure_patterns(category);
       `);
     });
+
+    // Migration 004: Task Context & Automation Run Tracking
+    this.applyMigration('004_task_context', () => {
+      this.db.exec(fs.readFileSync(
+        path.join(__dirname, '..', '..', 'migrations', '004_task_context.sql'),
+        'utf-8'
+      ));
+    });
   }
 
   private applyMigration(name: string, migration: () => void): void {
