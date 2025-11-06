@@ -831,10 +831,26 @@ export class DevBotsManager extends EventEmitter {
 
   /**
    * Start heartbeat monitoring to detect stalled workers
+   *
+   * NOTE: Disabled for ephemeral containers (docker run --rm)
+   * Ephemeral containers are monitored via Docker process exit codes instead.
+   * This avoids false positives from containers that don't send heartbeats.
+   *
+   * If persistent workers are added in the future, re-enable this monitor.
    */
   private startHeartbeatMonitor(): void {
+    // DISABLED: Ephemeral containers don't send heartbeats
+    // They auto-cleanup on exit (--rm flag) and are monitored via process.on('close')
+
+    logger.info({
+      category: 'process',
+      action: 'heartbeat_monitor_disabled',
+      message: 'Worker heartbeat monitor disabled (using Docker process monitoring for ephemeral containers)'
+    });
+
+    // Uncomment below to enable heartbeat monitoring for persistent workers:
+    /*
     setInterval(() => {
-      // Detect stalled workers
       const stalledWorkers = this.taskQueue.detectStalledWorkers();
       if (stalledWorkers.length > 0) {
         logger.warn({
@@ -844,19 +860,12 @@ export class DevBotsManager extends EventEmitter {
           details: stalledWorkers
         });
 
-        // Tasks from stalled workers are automatically failed by detectStalledWorkers()
-        // Try to assign next tasks to replace them
         for (let i = 0; i < stalledWorkers.length; i++) {
           this.assignNextTask();
         }
       }
-    }, 60000); // Check every minute
-
-    logger.info({
-      category: 'process',
-      action: 'heartbeat_monitor_started',
-      message: 'Worker heartbeat monitor started (check interval: 60s, timeout: 30s)'
-    });
+    }, 60000);
+    */
   }
 
   /**

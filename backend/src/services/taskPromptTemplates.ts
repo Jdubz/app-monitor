@@ -950,7 +950,8 @@ Use your specialized knowledge to ensure this implementation follows best practi
   /**
    * Get guidance text for confidence level
    */
-  private getConfidenceGuidance(confidence: string): string {
+  private getConfidenceGuidance(confidence: string | undefined): string {
+    if (!confidence) return '';
     switch (confidence.toLowerCase()) {
       case 'low':
         return '(significant unknowns, estimate may be off by 2-3x)';
