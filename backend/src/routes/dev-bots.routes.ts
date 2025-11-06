@@ -17,6 +17,10 @@ import { Router, Request, Response } from 'express';
 import type { DevBotsManager } from '../services/devBotsManager.js';
 import { logger } from '../utils/logger.js';
 
+const TECHNICAL_TASK_TYPES = new Set(['refactor', 'implementation', 'bug', 'feature']);
+const MIN_DOCUMENTATION_LENGTH = 50;
+const MIN_ACCEPTANCE_CRITERION_LENGTH = 30;
+
 /**
  * Create Dev-Bots router
  * 
@@ -153,7 +157,17 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
    */
   router.post('/tasks', async (req: Request, res: Response) => {
     try {
-      const { type, title, documentation, acceptanceCriteria, files, dependencies, repository, assignedAgent, notes } = req.body;
+      const {
+        type,
+        title,
+        documentation,
+        acceptanceCriteria,
+        files,
+        dependencies,
+        repository,
+        assignedAgent,
+        notes,
+      } = req.body;
 
       if (!type || !title || !documentation || !acceptanceCriteria) {
         return res.status(400).json({
@@ -169,6 +183,55 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
             error: `Invalid agent: ${assignedAgent}. Valid agents: ${validAgents.join(', ')}`
           });
         }
+      }
+
+      if (TECHNICAL_TASK_TYPES.has(type)) {
+        const warnings: Array<{
+          category: string;
+          action: string;
+          message: string;
+          details: { taskId: string };
+        }> = [];
+
+        if (!Array.isArray(files) || files.length === 0) {
+          warnings.push({
+            category: 'api',
+            action: 'task_missing_files_array',
+            message: `Technical task type '${type}' created without files array`,
+            details: { taskId: title },
+          });
+        }
+
+        const documentationLength = typeof documentation === 'string' ? documentation.trim().length : 0;
+        if (documentationLength < MIN_DOCUMENTATION_LENGTH) {
+          warnings.push({
+            category: 'api',
+            action: 'task_missing_description',
+            message: `Technical task type '${type}' created without detailed description`,
+            details: { taskId: title },
+          });
+        }
+
+        const criteriaArray = Array.isArray(acceptanceCriteria)
+          ? acceptanceCriteria
+          : typeof acceptanceCriteria === 'string'
+          ? [acceptanceCriteria]
+          : [];
+
+        if (criteriaArray.length === 1) {
+          const rawCriterion = criteriaArray[0];
+          const criterionText = typeof rawCriterion === 'string' ? rawCriterion : '';
+          if (criterionText.trim().length > 0 && criterionText.trim().length < MIN_ACCEPTANCE_CRITERION_LENGTH) {
+            warnings.push({
+              category: 'api',
+              action: 'vague_acceptance_criteria',
+              message: `Task has vague acceptance criteria: "${criterionText}"`,
+              details: { taskId: title },
+            });
+          }
+        }
+
+        warnings.forEach((warning) => logger.warn(warning));
       }
 
       const task = await devBotsManager.addTask(type, title, documentation, acceptanceCriteria, {

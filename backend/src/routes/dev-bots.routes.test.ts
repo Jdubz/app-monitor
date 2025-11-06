@@ -32,7 +32,6 @@ describe('Dev-Bots Routes - Task Quality Validation', () => {
     // Reset mocks
     vi.clearAllMocks();
     responseJson = {};
-    responseStatus = 200;
 
     // Mock DevBotsManager
     mockDevBotsManager = {
