@@ -407,12 +407,12 @@ export class TaskQueueService {
         AND t.id != ?
       `);
 
-      const conflict = conflictStmt.get(task.id, task.id);
+      const conflict = conflictStmt.get(task.id, task.id) as { file_path: string; conflicting_task_id: string } | undefined;
       if (conflict) {
         logger.info({
           category: 'process',
           action: 'task_assignment_blocked_by_file_conflict',
-          message: `Task ${task.id} blocked by file conflict with task ${(conflict as any).conflicting_task_id}`
+          message: `Task ${task.id} blocked by file conflict with task ${conflict.conflicting_task_id}`
         });
         return null;
       }
