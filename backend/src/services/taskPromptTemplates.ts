@@ -71,6 +71,9 @@ export class TaskPromptTemplateManager {
   private getUniversalTemplateString(): string {
     return `# 🎯 Task Assignment
 
+## ⚠️ CRITICAL: Read This Entire Prompt BEFORE Starting
+**DO NOT start coding until you have read and understood ALL sections of this prompt.**
+
 ## Task Overview
 **Agent**: {{agent.name}} ({{agent.role}})
 **Task ID**: {{task.id}}
@@ -78,6 +81,49 @@ export class TaskPromptTemplateManager {
 **Type**: {{task.type}}
 **Repository**: {{repository}}
 **Environment**: {{environment}}
+
+## 🚨 Common Failure Modes to AVOID (Learn from Past Mistakes)
+
+### ❌ FAILURE MODE 1: Inventing Features Not Requested
+**Problem**: Adding "nice to have" features or extra functionality beyond requirements
+**Example**: Asked for 6 tables, created 8 tables (adding unrequested extras)
+**Prevention**:
+- Read acceptance criteria word-for-word
+- If criteria says "EXACTLY 6 tables", create EXACTLY 6, no more
+- When in doubt, do LESS not MORE
+
+### ❌ FAILURE MODE 2: Skipping Investigation Phase
+**Problem**: Writing code without first checking if similar functionality exists
+**Example**: Creating new validation function when one already exists in utils/
+**Prevention**:
+- ALWAYS run grep/find commands to search for existing patterns
+- READ existing similar files before writing new code
+- Document what you found and why you can/cannot reuse it
+
+### ❌ FAILURE MODE 3: Git Workflow Failure
+**Problem**: Not committing code or not pushing to remote
+**Example**: Task completes but changes remain uncommitted
+**Prevention**:
+- Git commit is NOT optional - it's MANDATORY for all code tasks
+- Run \`git add .\` before \`git commit\`
+- Run \`git push origin staging\` after commit
+- Verify push succeeded with \`git status\`
+
+### ❌ FAILURE MODE 4: Completing with Questions Instead of Implementation
+**Problem**: Asking user for more information instead of implementing based on prompt
+**Example**: "Should I add feature X?" when prompt already specifies requirements
+**Prevention**:
+- This prompt contains ALL information you need
+- If acceptance criteria are clear, implement them
+- Only ask questions if there's a true blocker or ambiguity
+
+### ❌ FAILURE MODE 5: Over-Engineering Simple Tasks
+**Problem**: Building entire systems when asked for simple changes
+**Example**: Asked to add a button, created entire component library
+**Prevention**:
+- Implement ONLY what's in acceptance criteria
+- Simple tasks need simple solutions
+- Respect scope boundaries - do not expand
 
 ## 🎯 Strategic Context & Purpose
 **Parent Initiative:** {{task.parentInitiative}}
@@ -89,6 +135,27 @@ export class TaskPromptTemplateManager {
 {{task.relatedTasks}}
 
 **Why This Matters:** Understanding the strategic context helps you make better technical decisions and identify opportunities to establish patterns for future work.
+
+## 📋 PRE-TASK SELF-ASSESSMENT (Complete BEFORE Starting)
+
+Before you begin implementation, answer these questions to verify you understand the task:
+
+1. **Scope Check**: Can you state in one sentence what this task accomplishes?
+   - If NO: Re-read the task description and acceptance criteria
+
+2. **Investigation Check**: Do you know what existing code to review before implementing?
+   - If NO: Review the investigation section below
+
+3. **Boundaries Check**: Do you know what you MUST NOT change or create?
+   - If NO: Review the context boundaries and constraints sections
+
+4. **Git Workflow Check**: Do you know you MUST commit and push your changes?
+   - If NO: Review Step 4 of the development workflow
+
+5. **Success Metrics Check**: Can you list the measurable outcomes that define success?
+   - If NO: Review the Success Metrics section
+
+**If you answered NO to any question above, STOP and re-read those sections before proceeding.**
 
 ## 🔍 CRITICAL: Code Reuse Analysis (MANDATORY FIRST STEP)
 
@@ -430,10 +497,14 @@ npm run build
 - ✅ ALWAYS meet minimum 80% test coverage
 - ✅ ALWAYS resolve merge conflicts before committing
 
-### Step 4: Commit and Push
+### Step 4: Commit and Push (MANDATORY - DO NOT SKIP)
 \`\`\`bash
 # Stage your changes
 git add .
+
+# Verify what will be committed
+git status
+git diff --cached --stat
 
 # Commit with descriptive message (semantic commit format)
 git commit -m "{{task.type}}: {{task.title}}
@@ -444,11 +515,27 @@ Acceptance criteria:
 {{task.acceptanceCriteriaList}}
 
 Files modified: {{task.files}}
+
+🤖 Generated with Claude Code
+Co-Authored-By: Claude <noreply@anthropic.com>
 "
 
 # Push directly to staging
 git push origin staging
+
+# Verify push succeeded
+git log --oneline -1
+git status
 \`\`\`
+
+**CRITICAL GIT WORKFLOW VERIFICATION:**
+After running the above commands, you MUST verify:
+1. ✅ \`git commit\` succeeded (no error message)
+2. ✅ \`git push origin staging\` succeeded (no error message)
+3. ✅ \`git status\` shows "Your branch is up to date with 'origin/staging'"
+4. ✅ \`git log\` shows your new commit as the most recent
+
+**If ANY of the above fail, the task is NOT complete. Debug and fix the git workflow before proceeding.**
 
 **Commit Message Guidelines:**
 - Use semantic commit format: \`feat:\`, \`fix:\`, \`refactor:\`, \`docs:\`, \`test:\`, \`chore:\`
@@ -584,6 +671,29 @@ Before marking task complete, verify:
 
 ## ✅ Final Success Checklist
 Before marking this task as complete, verify ALL of the following:
+
+## 🔍 PRE-COMPLETION VALIDATION (Answer These Questions)
+
+**STOP: Before checking boxes below, honestly answer these critical questions:**
+
+1. **Did you READ existing code before writing new code?**
+   - If NO: You may have duplicated existing functionality - go back and check
+
+2. **Did you create EXACTLY what was requested (no more, no less)?**
+   - If NO: Remove extra features or add missing requirements
+
+3. **Did you COMMIT and PUSH your changes to staging?**
+   - Run: \`git log --oneline -1\` - Do you see your commit?
+   - Run: \`git status\` - Does it say "up to date with origin/staging"?
+   - If NO to either: Complete the git workflow before proceeding
+
+4. **Did you write and run TESTS for your changes?**
+   - If NO: Write tests now before marking complete
+
+5. **Did all tests and linters PASS without using --no-verify?**
+   - If NO: Fix failures before marking complete
+
+**If you answered NO to ANY question above, the task is NOT complete. Go back and address the issues.**
 
 ### Acceptance Criteria (Qualitative)
 - [ ] All acceptance criteria met
