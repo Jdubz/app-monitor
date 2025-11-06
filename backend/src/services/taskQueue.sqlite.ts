@@ -209,7 +209,7 @@ export class TaskQueueService {
       CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority DESC, created_at ASC);
       CREATE INDEX IF NOT EXISTS idx_tasks_fingerprint ON tasks(fingerprint);
       CREATE INDEX IF NOT EXISTS idx_tasks_assigned_worker ON tasks(assigned_worker);
-      CREATE INDEX IF NOT EXISTS idx_tasks_agent_type ON tasks(agent_type);
+      -- Note: idx_tasks_agent_type is created in migration, not here
 
       -- Worker tracking
       CREATE TABLE IF NOT EXISTS workers (
