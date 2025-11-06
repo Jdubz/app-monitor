@@ -15,6 +15,7 @@ dev-bots/mirror/
 dev-bots/artifacts/
 frontend/logs/
 logs/
+backend/dev-bots/
 
 # Database files
 *.db

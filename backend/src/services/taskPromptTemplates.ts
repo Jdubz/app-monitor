@@ -27,6 +27,91 @@ export interface TaskContext {
   environment: 'development' | 'staging' | 'production';
 }
 
+type DocSuggestionRule = {
+  pattern: RegExp;
+  docs: readonly string[] | ((context: TaskContext) => string[]);
+};
+
+const BACKEND_PROJECTS = new Set(['backend', 'job-finder-be']);
+const WORKER_PROJECTS = new Set(['worker', 'job-finder-worker']);
+
+const DOC_SUGGESTION_RULES: DocSuggestionRule[] = [
+  {
+    pattern: /\b(test|testing|unit test|integration test|e2e|coverage)\b/i,
+    docs: [
+      '- [Testing Strategy](../docs/dev-bots/TESTING_STRATEGY.md)',
+      '- [Testing and Task Summary](../docs/dev-bots/TESTING_AND_TASK_SUMMARY.md)'
+    ]
+  },
+  {
+    pattern: /\b(database|sqlite|sql|query|schema|migration)\b/i,
+    docs: (context) => {
+      const docs = [
+        '- [Database Schema](../docs/architecture/database-schema.md)',
+        '- [SQLite Integration Plan](../docs/dev-bots/SQLITE_INTEGRATION_PLAN.md)'
+      ];
+      if (BACKEND_PROJECTS.has(normalizeProject(context.project))) {
+        docs.push('- [Firestore Setup](../docs/deployment/FIRESTORE_COMPLETE_SETUP.md)');
+      }
+      return docs;
+    }
+  },
+  {
+    pattern: /\b(docker|container|deployment|deploy|build)\b/i,
+    docs: (context) => {
+      const docs = ['- [Deployment Checklist](../docs/dev-bots/DEPLOYMENT_CHECKLIST.md)'];
+      if (WORKER_PROJECTS.has(normalizeProject(context.project))) {
+        docs.push('- [Worker Docker Development](../docs/development/WORKER_DOCKER_DEV.md)');
+      }
+      return docs;
+    }
+  },
+  {
+    pattern: /\b(api|endpoint|route|controller|rest|graphql)\b/i,
+    docs: ['- [Backend Architecture](../docs/architecture/backend.md)']
+  },
+  {
+    pattern: /\b(auth|authentication|login|security|jwt|token)\b/i,
+    docs: ['- [Firebase Functions Guide](../docs/deployment/FIREBASE_FUNCTIONS_V2_PERMISSIONS_GUIDE.md)']
+  },
+  {
+    pattern: /\b(ui|frontend|component|react|vue|angular)\b/i,
+    docs: [
+      '- [Frontend Architecture](../docs/architecture/frontend.md)',
+      '- [Development Stack](../docs/development/DEVELOPMENT_STACK.md)'
+    ]
+  },
+  {
+    pattern: /\b(queue|task|bot|agent|worker|coordinator)\b/i,
+    docs: [
+      '- [Task Queue Architecture](../docs/dev-bots/task-queue.md)',
+      '- [Coordinator Integration Analysis](../docs/dev-bots/COORDINATOR_INTEGRATION_ANALYSIS.md)'
+    ]
+  },
+  {
+    pattern: /\b(scope|complex|refactor|architecture)\b/i,
+    docs: [
+      '- [Scope Control System](../docs/dev-bots/SCOPE_CONTROL_SYSTEM.md)',
+      '- [Mode Decision Tree](../docs/dev-bots/MODE_DECISION_TREE.md)'
+    ]
+  },
+  {
+    pattern: /\b(log|logging|logger|monitoring)\b/i,
+    docs: [
+      '- [Logging Architecture](../docs/operations/logging-architecture.md)',
+      '- [Structured Logging Migration](../docs/operations/STRUCTURED_LOGGING_MIGRATION.md)'
+    ]
+  },
+  {
+    pattern: /\b(agent|claude|codex|comparison|metrics|performance)\b/i,
+    docs: ['- [Bot Test Execution Findings](../docs/dev-bots/BOT_TEST_EXECUTION_FINDINGS_2025-11-06.md)']
+  }
+];
+
+function normalizeProject(project?: string): string {
+  return (project ?? '').toLowerCase();
+}
+
 export class TaskPromptTemplateManager {
   private template: TaskPromptTemplate;
   private variableProcessors: Map<string, (context: TaskContext) => string> = new Map();
@@ -1056,5 +1141,21 @@ Use your specialized knowledge to ensure this implementation follows best practi
     }
     
     return archDocs;
+  }
+
+  /**
+   * Intelligently discover relevant documentation based on task content
+   * Analyzes task title, description, and type to suggest helpful docs
+   */
+  private discoverRelevantDocumentation(context: TaskContext): string[] {
+    const searchText = `${context.task.title} ${context.task.description || ''} ${context.task.type || ''}`.toLowerCase();
+
+    return DOC_SUGGESTION_RULES.reduce<string[]>((docs, rule) => {
+      if (rule.pattern.test(searchText)) {
+        const entries = typeof rule.docs === 'function' ? rule.docs(context) : rule.docs;
+        docs.push(...entries);
+      }
+      return docs;
+    }, []);
   }
 }
