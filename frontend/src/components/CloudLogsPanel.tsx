@@ -1,10 +1,25 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { RefreshCw, Trash2, Search, Filter } from 'lucide-react';
 import { Socket } from 'socket.io-client';
+
 import { useCloudLogs } from '../hooks/useCloudLogs';
 import { useLogFilter } from '../hooks/useLogFilter';
 import { getEnvironmentServices } from '../services/api';
-import { CloudService, ParsedCloudLog } from '../types/log.types';
+import { CloudService, ParsedCloudLog, LogLevel } from '../types/log.types';
 import LogLevelBadge from './LogLevelBadge';
+import {
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  CardDescription,
+} from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import { cn } from '@/lib/utils';
 
 interface CloudLogsPanelProps {
   socket: Socket | null;
@@ -12,21 +27,22 @@ interface CloudLogsPanelProps {
   projectId: string;
 }
 
-const CloudLogsPanel: React.FC<CloudLogsPanelProps> = ({ socket, environment, projectId }) => {
+const LOG_LEVEL_ORDER: LogLevel[] = ['ERROR', 'WARN', 'INFO', 'DEBUG'];
+
+const CloudLogsPanel = ({ socket, environment, projectId }: CloudLogsPanelProps) => {
   const [services, setServices] = useState<CloudService[]>([]);
   const [selectedService, setSelectedService] = useState<string>('all-functions');
   const [selectedSeverity, setSelectedSeverity] = useState<string>('');
   const [timeRange, setTimeRange] = useState<string>('1h');
   const logsEndRef = useRef<HTMLDivElement>(null);
 
-  // Fetch services for environment
   useEffect(() => {
     const fetchServices = async () => {
       try {
         const envServices = await getEnvironmentServices(environment);
         setServices(envServices);
-      } catch (error) {
-        console.error('Failed to fetch services:', error);
+      } catch (serviceError) {
+        console.error('Failed to fetch services:', serviceError);
       }
     };
 
@@ -49,7 +65,11 @@ const CloudLogsPanel: React.FC<CloudLogsPanelProps> = ({ socket, environment, pr
     selectAllLevels,
     clearAllLevels,
     clearSearch,
-  } = useLogFilter(logs as any); // Type assertion since both log types are compatible
+  } = useLogFilter<ParsedCloudLog>(logs);
+
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [filteredLogs]);
 
   const formatTimestamp = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -65,22 +85,9 @@ const CloudLogsPanel: React.FC<CloudLogsPanelProps> = ({ socket, environment, pr
 
   const getTraceUrl = (traceId: string) => {
     if (!traceId) return null;
-    // Extract just the trace ID from the full path (projects/PROJECT_ID/traces/TRACE_ID)
     const parts = traceId.split('/');
     const actualTraceId = parts[parts.length - 1];
     return `https://console.cloud.google.com/traces/list?project=${projectId}&tid=${actualTraceId}`;
-  };
-
-  const handleRefresh = () => {
-    refreshLogs();
-  };
-
-  const handleServiceChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedService(e.target.value);
-  };
-
-  const handleSeverityChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setSelectedSeverity(e.target.value);
   };
 
   const handleTimeRangeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -89,71 +96,63 @@ const CloudLogsPanel: React.FC<CloudLogsPanelProps> = ({ socket, environment, pr
   };
 
   const getResourceType = (resource: Record<string, unknown> | undefined): string | null => {
-    if (!resource || !resource.type) return null;
-    return String(resource.type);
+    if (!resource || typeof resource.type !== 'string') {
+      return null;
+    }
+
+    const type = resource.type.split('/');
+    return type[type.length - 1] ?? null;
   };
 
-  // Render cloud log line with metadata
-  const renderCloudLogLine = (log: ParsedCloudLog) => {
-    const lineStyle: React.CSSProperties = {
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '4px',
-      padding: '8px',
-      fontSize: '13px',
-      fontFamily: 'monospace',
-      borderBottom: '1px solid #2a2a2a',
-      lineHeight: '1.5',
-    };
+  const highlightText = (text: string, highlight: string) => {
+    if (!highlight) return text;
+    const parts = text.split(new RegExp(`(${highlight})`, 'gi'));
 
-    const mainLineStyle: React.CSSProperties = {
-      display: 'flex',
-      gap: '8px',
-      alignItems: 'flex-start',
-    };
+    return parts.map((part, index) =>
+      part.toLowerCase() === highlight.toLowerCase() ? (
+        <mark
+          key={`${part}-${index}`}
+          className="rounded bg-primary/30 px-1 text-primary-foreground"
+        >
+          {part}
+        </mark>
+      ) : (
+        <span key={`${part}-${index}`}>{part}</span>
+      ),
+    );
+  };
 
-    const timestampStyle: React.CSSProperties = {
-      color: '#888',
-      minWidth: '120px',
-      flexShrink: 0,
-      fontSize: '12px',
-    };
-
-    const messageStyle: React.CSSProperties = {
-      flex: 1,
-      color: log.level === 'ERROR' ? '#ff6b6b' : log.level === 'WARN' ? '#ffa94d' : '#e0e0e0',
-      whiteSpace: 'pre-wrap',
-      wordBreak: 'break-word',
-    };
-
-    const metadataStyle: React.CSSProperties = {
-      display: 'flex',
-      gap: '12px',
-      fontSize: '11px',
-      color: '#666',
-      paddingLeft: '128px',
-      flexWrap: 'wrap',
-    };
-
-    const traceLinkStyle: React.CSSProperties = {
-      color: '#4dabf7',
-      textDecoration: 'none',
-      cursor: 'pointer',
-    };
-
+  const renderLogLine = (log: ParsedCloudLog) => {
     const resourceType = getResourceType(log.metadata.resource);
 
     return (
-      <div key={log.id} style={lineStyle}>
-        <div style={mainLineStyle}>
-          <span style={timestampStyle}>{formatTimestamp(log.timestamp)}</span>
-          <LogLevelBadge level={log.level} />
-          <span style={messageStyle}>
-            {searchText ? highlightText(log.message, searchText) : log.message}
-          </span>
+      <div
+        key={log.id}
+        className="rounded-lg border border-border/40 bg-muted/10 p-4 text-sm text-muted-foreground shadow-sm"
+      >
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex flex-1 items-start gap-3">
+            <span className="min-w-[90px] font-mono text-[11px] uppercase tracking-[0.2em] text-muted-foreground/70">
+              {formatTimestamp(log.timestamp)}
+            </span>
+            <LogLevelBadge level={log.level} />
+            <p className="flex-1 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-foreground">
+              {searchText ? highlightText(log.message, searchText) : log.message}
+            </p>
+          </div>
+          {log.metadata?.insertId && (
+            <Badge variant="outline" className="font-mono text-[10px] uppercase tracking-[0.2em]">
+              {log.metadata.insertId}
+            </Badge>
+          )}
         </div>
-        {(log.metadata.trace || log.metadata.spanId || log.metadata.severity || resourceType) && (
-          <div style={metadataStyle}>
+
+        {(log.metadata.trace ||
+          log.metadata.spanId ||
+          log.metadata.severity ||
+          resourceType ||
+          log.metadata.logName) && (
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-[11px] text-muted-foreground/80">
             {log.metadata.trace && (
               <span>
                 Trace:{' '}
@@ -161,7 +160,7 @@ const CloudLogsPanel: React.FC<CloudLogsPanelProps> = ({ socket, environment, pr
                   href={getTraceUrl(log.metadata.trace) || '#'}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={traceLinkStyle}
+                  className="text-primary hover:underline"
                 >
                   {log.metadata.trace.split('/').pop()?.substring(0, 8)}...
                 </a>
@@ -170,286 +169,211 @@ const CloudLogsPanel: React.FC<CloudLogsPanelProps> = ({ socket, environment, pr
             {log.metadata.spanId && <span>Span: {log.metadata.spanId}</span>}
             {log.metadata.severity && <span>Severity: {log.metadata.severity}</span>}
             {resourceType && <span>Resource: {resourceType}</span>}
+            {log.metadata.logName && <span>Stream: {log.metadata.logName.split('/').pop()}</span>}
           </div>
         )}
       </div>
     );
   };
-
-  const highlightText = (text: string, highlight: string) => {
-    if (!highlight) return text;
-
-    const parts = text.split(new RegExp(`(${highlight})`, 'gi'));
-    return (
-      <>
-        {parts.map((part, i) =>
-          part.toLowerCase() === highlight.toLowerCase() ? (
-            <span key={i} style={{ backgroundColor: '#ffeb3b', fontWeight: 600 }}>
-              {part}
-            </span>
-          ) : (
-            part
-          )
-        )}
-      </>
-    );
-  };
-
-  const containerStyle: React.CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '600px',
-    backgroundColor: '#1a1a1a',
-    border: '1px solid #444',
-    borderRadius: '8px',
-    overflow: 'hidden',
-    fontFamily: 'monospace',
-  };
-
-  const toolbarStyle: React.CSSProperties = {
-    display: 'flex',
-    gap: '12px',
-    padding: '12px',
-    backgroundColor: '#2a2a2a',
-    borderBottom: '1px solid #444',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-  };
-
-  const selectStyle: React.CSSProperties = {
-    padding: '6px 8px',
-    backgroundColor: '#1a1a1a',
-    color: '#e0e0e0',
-    border: '1px solid #444',
-    borderRadius: '4px',
-    fontSize: '13px',
-    cursor: 'pointer',
-  };
-
-  const buttonStyle: React.CSSProperties = {
-    padding: '6px 12px',
-    backgroundColor: '#4dabf7',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '4px',
-    fontSize: '13px',
-    cursor: 'pointer',
-    fontWeight: 600,
-  };
-
-  const badgeStyle: React.CSSProperties = {
-    padding: '4px 8px',
-    backgroundColor: '#ffa94d',
-    color: '#fff',
-    borderRadius: '4px',
-    fontSize: '11px',
-    fontWeight: 600,
-  };
-
-  const searchInputStyle: React.CSSProperties = {
-    flex: 1,
-    minWidth: '200px',
-    padding: '6px 8px',
-    backgroundColor: '#1a1a1a',
-    color: '#e0e0e0',
-    border: '1px solid #444',
-    borderRadius: '4px',
-    fontSize: '13px',
-  };
-
-  const logsContainerStyle: React.CSSProperties = {
-    flex: 1,
-    overflowY: 'auto',
-    overflowX: 'hidden',
-    backgroundColor: '#1a1a1a',
-  };
-
-  const emptyStateStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    color: '#666',
-    fontSize: '14px',
-    flexDirection: 'column',
-    gap: '12px',
-  };
-
-  const warningStyle: React.CSSProperties = {
-    padding: '12px',
-    backgroundColor: '#fff3cd',
-    color: '#856404',
-    borderBottom: '1px solid #ffc107',
-    fontSize: '13px',
-  };
-
-  const errorStyle: React.CSSProperties = {
-    padding: '12px',
-    backgroundColor: '#f8d7da',
-    color: '#721c24',
-    borderBottom: '1px solid #f5c6cb',
-    fontSize: '13px',
-  };
-
-  const filterBarStyle: React.CSSProperties = {
-    display: 'flex',
-    gap: '8px',
-    padding: '8px 12px',
-    backgroundColor: '#2a2a2a',
-    borderBottom: '1px solid #444',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    fontSize: '12px',
-  };
-
-  const filterButtonStyle = (active: boolean): React.CSSProperties => ({
-    padding: '4px 8px',
-    backgroundColor: active ? '#4dabf7' : '#444',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '4px',
-    fontSize: '12px',
-    cursor: 'pointer',
-    fontWeight: active ? 600 : 400,
-  });
 
   return (
-    <div style={{ position: 'relative' }}>
-      <div style={containerStyle}>
-        {/* Warning if cloud logging not available */}
-        {cloudLoggingStatus && !cloudLoggingStatus.available && (
-          <div style={warningStyle}>
-            Cloud Logging is not available: {cloudLoggingStatus.message}
-          </div>
-        )}
+    <Card className="flex h-full flex-col border border-border/60 bg-card/70 text-foreground shadow-xl">
+      <CardHeader className="flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <CardTitle className="text-xl font-semibold tracking-tight">
+            {environment.toUpperCase()} Cloud Logs
+          </CardTitle>
+          <CardDescription className="text-xs uppercase tracking-[0.3em] text-muted-foreground/80">
+            Project: {projectId}
+          </CardDescription>
+        </div>
 
-        {/* Error message */}
-        {error && (
-          <div style={errorStyle}>
-            Error: {error}
-          </div>
-        )}
-
-        {/* Toolbar */}
-        <div style={toolbarStyle}>
-          <span style={badgeStyle}>READ ONLY</span>
-
-          <select value={selectedService} onChange={handleServiceChange} style={selectStyle}>
-            <option value="all-functions">All Functions</option>
-            {services.map(svc => (
-              <option key={svc.name} value={svc.name}>
-                {svc.displayName}
-              </option>
-            ))}
-          </select>
-
-          <select value={selectedSeverity} onChange={handleSeverityChange} style={selectStyle}>
-            <option value="">All Severities</option>
-            <option value="DEBUG">DEBUG</option>
-            <option value="INFO">INFO</option>
-            <option value="WARNING">WARNING</option>
-            <option value="ERROR">ERROR</option>
-          </select>
-
-          <select value={timeRange} onChange={handleTimeRangeChange} style={selectStyle}>
-            <option value="1h">Last 1 hour</option>
-            <option value="6h">Last 6 hours</option>
-            <option value="24h">Last 24 hours</option>
-            <option value="all">All time</option>
-          </select>
-
-          <button onClick={handleRefresh} disabled={isLoading} style={buttonStyle}>
-            {isLoading ? 'Loading...' : 'Refresh'}
-          </button>
-
-          <button onClick={clearLogs} style={{ ...buttonStyle, backgroundColor: '#868e96' }}>
+        <div className="flex flex-wrap items-center gap-2">
+          {cloudLoggingStatus && (
+            <Badge
+              variant={cloudLoggingStatus.available ? 'success' : 'destructive'}
+              className="gap-1 text-[11px]"
+            >
+              <Filter className="h-3 w-3" />
+              {cloudLoggingStatus.available ? 'Connected' : 'Unavailable'}
+            </Badge>
+          )}
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => refreshLogs()}
+            disabled={isLoading}
+            className="border-primary/40 bg-primary/10 text-primary-foreground hover:bg-primary/20"
+          >
+            <RefreshCw className="mr-1 h-3.5 w-3.5" />
+            Refresh
+          </Button>
+          <Button variant="destructive" size="sm" onClick={clearLogs} className="gap-1">
+            <Trash2 className="h-3.5 w-3.5" />
             Clear
-          </button>
+          </Button>
+        </div>
+      </CardHeader>
 
-          <span style={{ color: '#888', fontSize: '12px', marginLeft: 'auto' }}>
-            {filteredLogs.length} logs
+      <CardContent className="flex flex-1 flex-col gap-4">
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="space-y-1">
+            <label className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+              Service
+            </label>
+            <select
+              value={selectedService}
+              onChange={(e) => setSelectedService(e.target.value)}
+              className="w-full rounded-md border border-border/60 bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="all-functions">All Functions</option>
+              {services.map((service) => (
+                <option key={service.name} value={service.name}>
+                  {service.displayName}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+              Severity
+            </label>
+            <select
+              value={selectedSeverity}
+              onChange={(e) => setSelectedSeverity(e.target.value)}
+              className="w-full rounded-md border border-border/60 bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="">All Severities</option>
+              {LOG_LEVEL_ORDER.map((level) => (
+                <option key={level} value={level}>
+                  {level}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+              Time Range
+            </label>
+            <select
+              value={timeRange}
+              onChange={handleTimeRangeChange}
+              className="w-full rounded-md border border-border/60 bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              <option value="15m">Last 15 minutes</option>
+              <option value="1h">Last 1 hour</option>
+              <option value="6h">Last 6 hours</option>
+              <option value="24h">Last 24 hours</option>
+              <option value="7d">Last 7 days</option>
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+              Search Logs
+            </label>
+            <div className="flex gap-2">
+              <Input
+                value={searchText}
+                onChange={(e) => setSearchText(e.target.value)}
+                placeholder="Message contains..."
+                className="bg-background/80 text-sm"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={clearSearch}
+                disabled={!searchText}
+              >
+                <Search className="mr-1 h-3.5 w-3.5" />
+                Clear
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border/60 bg-muted/10 px-3 py-2">
+          <div className="flex flex-wrap items-center gap-2">
+            {LOG_LEVEL_ORDER.map((level) => {
+              const isActive = selectedLevels.includes(level);
+              return (
+                <Button
+                  key={level}
+                  type="button"
+                  variant={isActive ? 'secondary' : 'outline'}
+                  size="sm"
+                  onClick={() => toggleLevel(level)}
+                  className={cn(
+                    'font-mono text-[10px] uppercase tracking-[0.3em]',
+                    !isActive && 'text-muted-foreground',
+                  )}
+                >
+                  {level}
+                </Button>
+              );
+            })}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button type="button" variant="ghost" size="sm" onClick={selectAllLevels}>
+              Enable All
+            </Button>
+            <Button type="button" variant="ghost" size="sm" onClick={clearAllLevels}>
+              Disable All
+            </Button>
+          </div>
+        </div>
+
+        {error && (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
+        <ScrollArea className="flex-1 rounded-md border border-border/60 bg-background/60 p-4">
+          <div className="flex flex-col gap-3">
+            {isLoading && (
+              <div className="rounded-md border border-border/60 bg-muted/10 px-3 py-2 text-xs text-muted-foreground">
+                Loading latest logs…
+              </div>
+            )}
+
+            {!isLoading && filteredLogs.length === 0 ? (
+              <div className="rounded-md border border-border/60 bg-muted/10 px-4 py-6 text-center text-sm text-muted-foreground">
+                No logs match the current filters.
+              </div>
+            ) : (
+              filteredLogs.map(renderLogLine)
+            )}
+
+            <div ref={logsEndRef} />
+          </div>
+        </ScrollArea>
+
+        <Separator className="opacity-50" />
+
+        <div className="flex flex-wrap items-center justify-between gap-3 text-xs text-muted-foreground/80">
+          <span>
+            Showing{' '}
+            <strong className="text-foreground">
+              {filteredLogs.length}
+            </strong>{' '}
+            log{filteredLogs.length === 1 ? '' : 's'}
+          </span>
+          <span>
+            Filters:{' '}
+            {selectedLevels.length === LOG_LEVEL_ORDER.length
+              ? 'All levels'
+              : selectedLevels.join(', ') || 'None'}
+            {selectedSeverity && ` • Severity: ${selectedSeverity}`}
+            {selectedService && ` • Service: ${selectedService}`}
+            {searchText && ` • Search: "${searchText}"`}
           </span>
         </div>
-
-        {/* Filter Bar */}
-        <div style={filterBarStyle}>
-          <span style={{ color: '#888' }}>Filter by level:</span>
-          <button onClick={() => toggleLevel('ERROR')} style={filterButtonStyle(selectedLevels.includes('ERROR'))}>
-            ERROR
-          </button>
-          <button onClick={() => toggleLevel('WARN')} style={filterButtonStyle(selectedLevels.includes('WARN'))}>
-            WARN
-          </button>
-          <button onClick={() => toggleLevel('INFO')} style={filterButtonStyle(selectedLevels.includes('INFO'))}>
-            INFO
-          </button>
-          <button onClick={() => toggleLevel('DEBUG')} style={filterButtonStyle(selectedLevels.includes('DEBUG'))}>
-            DEBUG
-          </button>
-          <button onClick={selectAllLevels} style={{ ...buttonStyle, backgroundColor: '#868e96', padding: '4px 8px', fontSize: '12px' }}>
-            All
-          </button>
-          <button onClick={clearAllLevels} style={{ ...buttonStyle, backgroundColor: '#868e96', padding: '4px 8px', fontSize: '12px' }}>
-            None
-          </button>
-
-          <span style={{ color: '#888', marginLeft: '16px' }}>Search:</span>
-          <input
-            type="text"
-            value={searchText}
-            onChange={(e) => setSearchText(e.target.value)}
-            placeholder="Search logs..."
-            style={searchInputStyle}
-          />
-          {searchText && (
-            <button onClick={clearSearch} style={{ ...buttonStyle, backgroundColor: '#868e96', padding: '4px 8px', fontSize: '12px' }}>
-              Clear
-            </button>
-          )}
-        </div>
-
-        {/* Logs Container */}
-        <div style={logsContainerStyle}>
-          {isLoading && logs.length === 0 ? (
-            <div style={emptyStateStyle}>
-              <div>Loading cloud logs...</div>
-            </div>
-          ) : filteredLogs.length === 0 ? (
-            <div style={emptyStateStyle}>
-              {logs.length === 0 ? (
-                <div>
-                  <div>No cloud logs available</div>
-                  <div style={{ fontSize: '12px', color: '#555', marginTop: '8px' }}>
-                    Click Refresh to fetch logs
-                  </div>
-                </div>
-              ) : (
-                <div>
-                  <div>No logs match the current filters</div>
-                  <div style={{ fontSize: '12px', color: '#555', marginTop: '8px' }}>
-                    Try adjusting your filters
-                  </div>
-                </div>
-              )}
-            </div>
-          ) : (
-            <>
-              {filteredLogs.map(log => renderCloudLogLine(log as ParsedCloudLog))}
-              <div ref={logsEndRef} />
-            </>
-          )}
-        </div>
-      </div>
-
-      <div style={{
-        marginTop: '8px',
-        fontSize: '12px',
-        color: '#666',
-        textAlign: 'center',
-      }}>
-        Viewing {environment} environment - Read-only access
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   );
 };
 

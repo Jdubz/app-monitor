@@ -1,5 +1,9 @@
-import React, { useState, useRef, useEffect } from 'react';
-import { DevMonitorLogLine, LocalService } from '@jsdubzw/job-finder-shared-types';
+import { useState, useRef, useEffect } from 'react';
+import { DevMonitorLogLine, LocalService } from '../types/shared.types';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { cn } from '@/lib/utils';
 
 interface MinimalLogsPanelProps {
   panelId: string;
@@ -14,8 +18,7 @@ interface MinimalLogsPanelProps {
   canRemove: boolean;
 }
 
-const MinimalLogsPanel: React.FC<MinimalLogsPanelProps> = ({
-  panelId: _panelId,
+const MinimalLogsPanel = ({
   selectedSource,
   availableSources,
   logs,
@@ -25,224 +28,108 @@ const MinimalLogsPanel: React.FC<MinimalLogsPanelProps> = ({
   onSourceChange,
   onRemove,
   canRemove,
-}) => {
+}: MinimalLogsPanelProps) => {
   const [showErrorsOnly, setShowErrorsOnly] = useState(false);
   const logsEndRef = useRef<HTMLDivElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Auto-scroll to bottom
   useEffect(() => {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs]);
 
-  const filteredLogs = showErrorsOnly
-    ? logs.filter(log => log.level === 'ERROR')
-    : logs;
+  const filteredLogs = showErrorsOnly ? logs.filter(log => log.level === 'ERROR') : logs;
 
   return (
-    <div style={{
-      display: 'flex',
-      flexDirection: 'column',
-      minWidth: '400px',
-      height: '100%',
-      border: '1px solid #333',
-      borderRadius: '6px',
-      backgroundColor: '#1a1a1a',
-      overflow: 'hidden',
-      flex: '1 1 400px',
-    }}>
-      {/* Minimal Header */}
-      <div style={{
-        display: 'flex',
-        gap: '8px',
-        padding: '8px',
-        borderBottom: '1px solid #333',
-        backgroundColor: '#222',
-        alignItems: 'center',
-      }}>
-        {/* Source Dropdown */}
+    <div className="flex min-w-[340px] flex-1 flex-col rounded-xl border border-border/60 bg-black/85 shadow-inner">
+      <div className="flex items-center gap-3 border-b border-border/60 bg-black/70 px-3 py-2">
         <select
           value={selectedSource || ''}
           onChange={(e) => onSourceChange(e.target.value as LocalService)}
-          style={{
-            flex: 1,
-            padding: '4px 8px',
-            backgroundColor: '#2a2a2a',
-            color: '#fff',
-            border: '1px solid #444',
-            borderRadius: '4px',
-            fontSize: '12px',
-            outline: 'none',
-            cursor: 'pointer',
-          }}
+          className="flex-1 rounded-lg border border-border/70 bg-background/40 px-3 py-2 text-xs uppercase tracking-[0.25em] text-muted-foreground transition focus:border-primary focus:outline-none"
           disabled={isLoading || availableSources.length === 0}
         >
           <option value="" disabled>Select source...</option>
           {availableSources.map(source => (
-            <option key={source} value={source}>
+            <option key={source} value={source} className="text-foreground">
               {source}
             </option>
           ))}
         </select>
 
-        {/* Error Filter */}
-        <label style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '4px',
-          fontSize: '11px',
-          color: '#999',
-          cursor: 'pointer',
-          whiteSpace: 'nowrap',
-        }}>
+        <label className="flex items-center gap-2 text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
           <input
             type="checkbox"
             checked={showErrorsOnly}
             onChange={(e) => setShowErrorsOnly(e.target.checked)}
-            style={{ cursor: 'pointer' }}
+            className="h-4 w-4 accent-primary"
           />
-          Errors Only
+          Errors
         </label>
 
-        {/* Remove Button */}
         {canRemove && (
-          <button
+          <Button
+            variant="destructive"
+            size="icon"
             onClick={onRemove}
-            style={{
-              padding: '4px 8px',
-              backgroundColor: '#dc3545',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '4px',
-              fontSize: '11px',
-              cursor: 'pointer',
-              fontWeight: 600,
-            }}
             title="Remove panel"
+            className="h-7 w-7 rounded-full"
           >
             ×
-          </button>
+          </Button>
         )}
       </div>
 
-      {/* Logs Container */}
-      <div
-        ref={containerRef}
-        style={{
-          flex: 1,
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          fontFamily: 'monospace',
-          fontSize: '12px',
-          lineHeight: '1.4',
-        }}
-      >
-        {/* Loading State */}
+      <ScrollArea className="flex-1 font-mono text-[12px] leading-relaxed">
         {isLoading && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-            color: '#666',
-          }}>
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: '8px',
-            }}>
-              <div style={{
-                width: '24px',
-                height: '24px',
-                border: '3px solid #333',
-                borderTop: '3px solid #007bff',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite',
-              }} />
-              <div>Loading logs...</div>
-            </div>
+          <div className="flex h-[260px] flex-col items-center justify-center gap-3 text-muted-foreground">
+            <span className="h-6 w-6 animate-spin rounded-full border-2 border-border/80 border-t-primary" />
+            <span className="text-xs uppercase tracking-[0.3em]">Loading logs…</span>
           </div>
         )}
 
-        {/* Error State */}
         {!isLoading && hasError && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-            padding: '20px',
-            textAlign: 'center',
-          }}>
-            <div style={{
-              padding: '16px',
-              backgroundColor: '#dc3545',
-              color: '#fff',
-              borderRadius: '6px',
-              fontSize: '13px',
-            }}>
-              <div style={{ fontWeight: 600, marginBottom: '8px' }}>
-                ⚠️ Error
-              </div>
+          <div className="flex h-[260px] items-center justify-center px-4 text-center">
+            <div className="w-full rounded-lg border border-destructive/40 bg-destructive/15 p-4 text-xs text-destructive-foreground shadow">
+              <div className="mb-2 font-semibold uppercase tracking-[0.3em]">Error</div>
               <div>{errorMessage || 'Invalid source. Please select a new source.'}</div>
             </div>
           </div>
         )}
 
-        {/* Logs Display */}
         {!isLoading && !hasError && (
           <>
             {filteredLogs.length === 0 ? (
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                height: '100%',
-                color: '#666',
-              }}>
-                {selectedSource ? 'No logs available' : 'Select a source to view logs'}
+              <div className="flex h-[260px] flex-col items-center justify-center gap-2 text-xs text-muted-foreground">
+                <span className="text-3xl">🛰️</span>
+                <span className="uppercase tracking-[0.3em]">No logs yet</span>
               </div>
             ) : (
-              <>
-                {filteredLogs.map(log => {
-                  const date = new Date(log.timestamp);
-                  const timeStr = `${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}:${date.getSeconds().toString().padStart(2, '0')}.${date.getMilliseconds().toString().padStart(3, '0')}`;
-
-                  let color = '#ccc';
-                  if (log.level === 'ERROR') color = '#dc3545';
-                  else if (log.level === 'WARN') color = '#ffc107';
-                  else if (log.level === 'DEBUG') color = '#6c757d';
-
-                  return (
-                    <div
-                      key={log.id}
-                      style={{
-                        padding: '2px 8px',
-                        borderBottom: '1px solid #222',
-                        color,
-                        wordBreak: 'break-word',
-                      }}
-                    >
-                      <span style={{ color: '#666', marginRight: '8px' }}>{timeStr}</span>
-                      <span style={{ color: '#888', marginRight: '8px' }}>[{log.level}]</span>
+              <div className="space-y-2 px-3 py-2">
+                {filteredLogs.map(log => (
+                  <div
+                    key={log.id}
+                    className={cn(
+                      'rounded-lg border border-border/40 bg-black/60 px-3 py-2 shadow-sm transition hover:bg-black/40',
+                      log.level === 'ERROR' && 'border-rose-500/40 bg-rose-500/10',
+                      log.level === 'WARN' && 'border-amber-500/40 bg-amber-500/10',
+                    )}
+                  >
+                    <div className="flex items-center justify-between text-[10px] uppercase tracking-[0.4em] text-muted-foreground/80">
+                      <span>{new Date(log.timestamp).toLocaleTimeString()}</span>
+                      <Badge variant="outline" className="border-border/60 bg-background/40 font-mono text-[10px]">
+                        {log.level}
+                      </Badge>
+                    </div>
+                    <div className="mt-1 font-mono text-xs text-slate-200">
                       {log.message}
                     </div>
-                  );
-                })}
+                  </div>
+                ))}
                 <div ref={logsEndRef} />
-              </>
+              </div>
             )}
           </>
         )}
-      </div>
-
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
+      </ScrollArea>
     </div>
   );
 };

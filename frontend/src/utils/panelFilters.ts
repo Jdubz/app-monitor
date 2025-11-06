@@ -9,7 +9,7 @@ import {
   LocalService,
   DevMonitorLogLine,
   DevMonitorLogLevel,
-} from '@jsdubzw/job-finder-shared-types';
+} from '../types/shared.types';
 
 /**
  * Map a LogSource to the services it includes

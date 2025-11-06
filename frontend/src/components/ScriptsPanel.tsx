@@ -4,6 +4,8 @@ import { useScripts } from '../hooks/useScripts';
 import ScriptCard from './ScriptCard';
 import ScriptOutputModal from './ScriptOutputModal';
 import { ScriptCategory } from '../types/script.types';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
 interface ScriptsPanelProps {
   socket: Socket | null;
@@ -34,11 +36,19 @@ export default function ScriptsPanel({ socket }: ScriptsPanelProps) {
   };
 
   if (loading) {
-    return <div>Loading scripts...</div>;
+    return (
+      <div className="rounded-xl border border-border/60 bg-card/70 px-6 py-10 text-center text-sm text-muted-foreground">
+        Loading scripts…
+      </div>
+    );
   }
 
   if (error) {
-    return <div style={{ color: '#c92a2a' }}>{error}</div>;
+    return (
+      <div className="rounded-xl border border-destructive/40 bg-destructive/15 px-6 py-4 text-sm text-destructive-foreground shadow">
+        {error}
+      </div>
+    );
   }
 
   const categories: { name: string; key: ScriptCategory; icon: string }[] = [
@@ -50,75 +60,62 @@ export default function ScriptsPanel({ socket }: ScriptsPanelProps) {
   ];
 
   return (
-    <div>
-      {/* Active Executions */}
+    <div className="space-y-8">
       {activeExecutions.size > 0 && (
-        <div style={{
-          marginBottom: '24px',
-          padding: '16px',
-          backgroundColor: '#e7f5ff',
-          borderRadius: '8px',
-          border: '2px solid #339af0',
-        }}>
-          <h3 style={{ margin: '0 0 8px 0', fontSize: '16px', fontWeight: 600 }}>
-            ⏳ Running ({activeExecutions.size})
-          </h3>
-          {executions
-            .filter(exec => activeExecutions.has(exec.id))
-            .map(exec => (
-              <div key={exec.id} style={{
-                marginTop: '8px',
-                fontSize: '14px',
-                color: '#1971c2',
-              }}>
-                {exec.config.displayName} - {exec.output.length} lines
-              </div>
-            ))}
-        </div>
+        <Card className="border border-sky-500/40 bg-sky-500/10 text-sky-100 shadow-lg">
+          <CardHeader className="space-y-1">
+            <CardTitle className="flex items-center gap-2 text-base font-semibold tracking-tight">
+              ⏳ Running ({activeExecutions.size})
+            </CardTitle>
+            <Badge variant="info" className="w-fit uppercase tracking-[0.3em]">
+              Active Executions
+            </Badge>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {executions
+              .filter(exec => activeExecutions.has(exec.id))
+              .map(exec => (
+                <div key={exec.id} className="flex items-center justify-between rounded-lg border border-sky-500/30 bg-black/30 px-3 py-2 font-mono text-xs">
+                  <span>{exec.config.displayName}</span>
+                  <span className="text-sky-200/80">{exec.output.length} lines</span>
+                </div>
+              ))}
+          </CardContent>
+        </Card>
       )}
 
-      {/* Script Categories */}
       {categories.map(category => {
         const categoryScripts = scripts.filter(s => s.category === category.key);
-
         if (categoryScripts.length === 0) return null;
 
         return (
-          <div key={category.key} style={{ marginBottom: '32px' }}>
-            <h2 style={{
-              margin: '0 0 16px 0',
-              fontSize: '18px',
-              fontWeight: 600,
-              color: '#333',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}>
-              <span>{category.icon}</span>
-              {category.name}
-            </h2>
+          <section key={category.key} className="space-y-4">
+            <div className="flex items-center gap-3">
+              <span className="text-lg">{category.icon}</span>
+              <h2 className="text-lg font-semibold tracking-tight text-foreground">
+                {category.name}
+              </h2>
+              <Badge variant="outline" className="border-border/60 bg-background/40 text-xs uppercase tracking-[0.3em]">
+                {categoryScripts.length} scripts
+              </Badge>
+            </div>
 
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-              gap: '16px',
-            }}>
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {categoryScripts.map(script => (
                 <ScriptCard
                   key={script.id}
                   script={script}
                   isRunning={Array.from(activeExecutions).some(id =>
-                    executions.find(e => e.id === id)?.scriptId === script.id
+                    executions.find(e => e.id === id)?.scriptId === script.id,
                   )}
                   onExecute={handleExecuteScript}
                 />
               ))}
             </div>
-          </div>
+          </section>
         );
       })}
 
-      {/* Script Output Modal */}
       {modalExecutionId && (
         <ScriptOutputModal
           socket={socket}

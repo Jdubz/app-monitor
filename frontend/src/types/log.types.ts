@@ -1,11 +1,18 @@
-// Log types - re-export from shared-types for consistency
+// Log types - re-export from local shared types
 
-export {
-  type DevMonitorLogLine,
-  type DevMonitorLogLevel,
-  type LogHistory,
-  type LocalService,
-} from '@jsdubzw/job-finder-shared-types';
+import type {
+  DevMonitorLogLine,
+  DevMonitorLogLevel,
+  LogHistory,
+  LocalService,
+} from './shared.types';
+
+// Re-export all types
+export type { DevMonitorLogLine, DevMonitorLogLevel, LogHistory, LocalService };
+
+// Type aliases for convenience
+export type LogLine = DevMonitorLogLine;
+export type LogLevel = DevMonitorLogLevel;
 
 // Filter types
 export interface LogFilters {
@@ -58,8 +65,3 @@ export interface CloudLoggingStatus {
   available: boolean;
   message: string;
 }
-
-// Re-import for correct typing
-import { DevMonitorLogLine, DevMonitorLogLevel } from '@jsdubzw/job-finder-shared-types';
-export type LogLine = DevMonitorLogLine;
-export type LogLevel = DevMonitorLogLevel;

@@ -2,7 +2,6 @@ import ServiceGrid from '../ServiceGrid';
 import MinimalPanelContainer from '../MinimalPanelContainer';
 import { QuickActions } from '../common';
 import type { QuickAction } from '../common';
-import styles from './LocalTab.module.css';
 
 export function LocalTab() {
   // Quick actions for services
@@ -50,19 +49,28 @@ export function LocalTab() {
   ];
 
   return (
-    <>
-      <QuickActions actions={serviceActions} title="Service Actions" collapsible />
+    <div className="flex flex-col gap-6">
+      <QuickActions
+        actions={serviceActions}
+        title="Service Actions"
+        collapsible
+      />
 
-      <section className={styles.section}>
-        <div className={styles.sectionHeader}>
-          <h2 className={styles.sectionTitle}>Services</h2>
+      <section className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold tracking-tight text-foreground">
+            Services
+          </h2>
+          <span className="text-xs uppercase tracking-[0.35em] text-muted-foreground">
+            Local control plane
+          </span>
         </div>
         <ServiceGrid />
       </section>
 
-      <section className={styles.logsSection}>
+      <section className="rounded-2xl border border-border/60 bg-card/70 p-4 shadow-inner">
         <MinimalPanelContainer />
       </section>
-    </>
+    </div>
   );
 }

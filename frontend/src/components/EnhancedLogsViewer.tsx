@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback, Fragment } from 'react';
-import { DevMonitorLogLine, DevMonitorLogLevel, LocalService } from '@jsdubzw/job-finder-shared-types';
+import { DevMonitorLogLine, DevMonitorLogLevel, LocalService } from '../types/shared.types';
 import LogLine from './LogLine';
 import LogFilters from './LogFilters';
 import { Button } from '@/components/ui/button';
