@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as crypto from 'crypto';
 import os from 'os';
 import { logger } from '../utils/logger.js';
 import { ProcessManager, ProcessInfo } from './processManager.js';
@@ -562,6 +563,8 @@ export class DevBotsManager extends EventEmitter {
   private activeTasks = new Map<string, Task>();
   private completedTasks: Task[] = [];
   private taskIdCounter = 1;
+  private taskFingerprints = new Map<string, string>(); // fingerprint -> taskId
+  private fileModificationLocks = new Map<string, string>(); // file -> taskId
 
   // Worker management
   private workers = new Map<string, WorkerInfo>();
@@ -957,6 +960,46 @@ export class DevBotsManager extends EventEmitter {
     return task;
   }
 
+  /**
+   * Calculate task fingerprint for deduplication
+   * Uses title, files, and acceptance criteria to detect duplicate tasks
+   */
+  private calculateTaskFingerprint(taskData: EnhancedTaskData): string {
+    const fingerprintData = {
+      title: taskData.title.toLowerCase().trim(),
+      files: taskData.files?.sort() || [],
+      acceptanceCriteria: taskData.acceptanceCriteria?.slice(0, 3) || [] // First 3 criteria
+    };
+    const fingerprintString = JSON.stringify(fingerprintData);
+    return crypto.createHash('md5').update(fingerprintString).digest('hex');
+  }
+
+  /**
+   * Check for duplicate task based on fingerprint
+   * Returns the existing task if found and still active
+   */
+  private checkDuplicateTask(fingerprint: string): Task | null {
+    const existingTaskId = this.taskFingerprints.get(fingerprint);
+    if (!existingTaskId) {
+      return null;
+    }
+
+    // Check in queue
+    const queuedTask = this.taskQueue.find(t => t.id === existingTaskId);
+    if (queuedTask) {
+      return queuedTask;
+    }
+
+    // Check in active tasks
+    const activeTask = this.activeTasks.get(existingTaskId);
+    if (activeTask) {
+      return activeTask;
+    }
+
+    // Task completed or failed, fingerprint slot is available
+    return null;
+  }
+
   // Enhanced task creation with comprehensive guidelines
   async addEnhancedTask(taskData: EnhancedTaskData): Promise<{
     task: Task;
@@ -967,6 +1010,18 @@ export class DevBotsManager extends EventEmitter {
       suggestions: string[];
     };
   }> {
+    // Check for duplicate task submission
+    const fingerprint = this.calculateTaskFingerprint(taskData);
+    const duplicateTask = this.checkDuplicateTask(fingerprint);
+    if (duplicateTask) {
+      logger.warn({
+        category: 'process',
+        action: 'duplicate_task_detected',
+        message: `Duplicate task detected: "${taskData.title}" matches existing task ${duplicateTask.id} (${duplicateTask.status})`
+      });
+      throw new Error(`Duplicate task detected. Task "${duplicateTask.title}" (${duplicateTask.id}) is already ${duplicateTask.status}. Wait for it to complete or modify your task to be unique.`);
+    }
+
     // Validate task data against guidelines
     const validation = this.guidelinesManager.validateTaskData(taskData, taskData.type);
     
@@ -1029,15 +1084,18 @@ export class DevBotsManager extends EventEmitter {
     };
     
     this.taskQueue.push(task);
-    
+
+    // Store fingerprint to prevent duplicates
+    this.taskFingerprints.set(fingerprint, task.id);
+
     // Save to persistence
     this.saveTasksToPersistence();
-    
+
     this.emit('taskAdded', task);
     logger.info({
       category: 'process',
       action: 'enhanced_task_added_with_guidelines_agent',
-      message: `Enhanced task added with guidelines: ${task.id} - ${taskData.title} (Agent: ${taskData.assignedAgent || 'auto-assign'})`
+      message: `Enhanced task added with guidelines: ${task.id} - ${taskData.title} (Agent: ${taskData.assignedAgent || 'auto-assign'}, fingerprint: ${fingerprint.substring(0, 8)}...)`
     });
     
     // Try to assign immediately
