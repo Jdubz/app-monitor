@@ -1,11 +1,15 @@
 # Production Setup - Quick Start
 
+## ⚠️ SECURITY NOTICE
+
+Production deployment scripts have been moved outside the repository for security reasons.
+
 ## Run This Command
 
 Copy and paste this command into your terminal:
 
 ```bash
-cd ~/Development/app-monitor && ./scripts/production/setup-production-interactive.sh
+~/app-monitor-deployment/setup-production-interactive.sh
 ```
 
 **What it will do:**
@@ -74,9 +78,21 @@ sudo systemctl enable app-monitor-frontend-prod.service
 
 ---
 
-## Next: Set Up GitHub Actions (for CI/CD)
+## Production Scripts Location
 
-See: [docs/production/GITHUB_ACTIONS_SETUP.md](./docs/production/GITHUB_ACTIONS_SETUP.md)
+All production deployment scripts are located in:
+```
+~/app-monitor-deployment/
+├── setup-production-interactive.sh
+├── setup-production.sh
+├── deploy.sh
+├── setup-production-manual.md
+└── systemd/
+    ├── app-monitor-backend-prod.service
+    └── app-monitor-frontend-prod.service
+```
+
+These scripts are **NOT** stored in the git repository for security reasons.
 
 ---
 
