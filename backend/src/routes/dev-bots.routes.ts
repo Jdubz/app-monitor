@@ -395,6 +395,33 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
     }
   });
 
+  /**
+   * POST /dev-bots/assign
+   * Manually trigger task assignment
+   */
+  router.post('/assign', async (_req: Request, res: Response) => {
+    try {
+      await devBotsManager.assignNextTask();
+      const metrics = devBotsManager.getQueueMetrics();
+      res.json({
+        success: true,
+        message: 'Task assignment triggered',
+        metrics
+      });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_assigning_task',
+        message: `Error assigning task: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to assign task',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
   // ============================================================================
   // Agent Management
   // ============================================================================

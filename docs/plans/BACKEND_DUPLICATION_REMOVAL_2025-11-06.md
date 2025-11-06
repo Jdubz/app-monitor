@@ -7,8 +7,8 @@
 
 ## Investigation Tasks
 - [ ] Trace why `dev-bots/mirror/backend` is regenerated (cron job, build step, or manual script).
-  - [ ] Inspect `dev-bots/` Makefiles and scripts for mirror creation.
-  - [ ] Audit CI/CD pipelines (`.github/`, `scripts/`, `dev-bots/monitoring/`) for mirror sync commands.
+  - [x] Inspect `dev-bots/` Makefiles and scripts for mirror creation.
+  - [x] Audit CI/CD pipelines (`.github/`, `scripts/`, `dev-bots/monitoring/`) for mirror sync commands.
   - [ ] Add logging/instrumentation to any suspect scripts to confirm execution.
 - [ ] Confirm nothing imports from the mirror tree at runtime or tests.
   - [x] Search for `dev-bots/mirror` path references across repo.
