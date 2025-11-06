@@ -154,11 +154,21 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
   router.post('/tasks', async (req: Request, res: Response) => {
     try {
       const { type, title, documentation, acceptanceCriteria, files, dependencies, repository, assignedAgent, notes } = req.body;
-      
+
       if (!type || !title || !documentation || !acceptanceCriteria) {
         return res.status(400).json({
           error: 'Type, title, documentation, and acceptanceCriteria are required'
         });
+      }
+
+      // Validate assignedAgent if provided
+      if (assignedAgent) {
+        const validAgents = devBotsManager.getValidAgents();
+        if (!validAgents.includes(assignedAgent)) {
+          return res.status(400).json({
+            error: `Invalid agent: ${assignedAgent}. Valid agents: ${validAgents.join(', ')}`
+          });
+        }
       }
 
       const task = await devBotsManager.addTask(type, title, documentation, acceptanceCriteria, {
