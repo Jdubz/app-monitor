@@ -575,6 +575,10 @@ export class DevBotsManager extends EventEmitter {
   private ephemeralWorkers = new Map<string, EphemeralWorker>();
   private readonly MAX_CONCURRENT_WORKERS = 2; // Maximum 2 workers as per architecture
 
+  // Agent type rotation configuration
+  private readonly AGENT_ROTATION_STRATEGY: 'alternate' | 'random' | 'claude-only' | 'codex-only' = 'alternate';
+  private lastAgentType: 'claude' | 'codex' = 'claude';
+
   // Enhanced services
   private taskPersistence!: TaskPersistence; // Deprecated - keeping for migration only
   private taskQueue!: TaskQueueService; // SQLite-based queue (replaces in-memory arrays)
@@ -908,6 +912,13 @@ export class DevBotsManager extends EventEmitter {
    */
   public getTaskDurationStats(daysBack: number = 30) {
     return this.taskQueue.getTaskDurationStats(daysBack);
+  }
+
+  /**
+   * Get agent comparison metrics (Claude vs Codex)
+   */
+  public getAgentComparisonMetrics() {
+    return this.taskQueue.getAgentComparisonMetrics();
   }
 
   /**
@@ -1510,12 +1521,41 @@ export class DevBotsManager extends EventEmitter {
 
 
   /**
+   * Choose which agent type (CLI tool) to use for the next task
+   * Implements rotation strategy for agent comparison
+   */
+  private chooseAgentType(): 'claude' | 'codex' {
+    switch (this.AGENT_ROTATION_STRATEGY) {
+      case 'alternate':
+        // Alternate between Claude and Codex
+        this.lastAgentType = this.lastAgentType === 'claude' ? 'codex' : 'claude';
+        return this.lastAgentType;
+
+      case 'random':
+        // Randomly choose between Claude and Codex
+        return Math.random() < 0.5 ? 'claude' : 'codex';
+
+      case 'claude-only':
+        return 'claude';
+
+      case 'codex-only':
+        return 'codex';
+
+      default:
+        return 'claude';
+    }
+  }
+
+  /**
    * Execute task using docker run with ephemeral container (imagineer pattern)
    * This replaces the old createEphemeralWorker + executeTaskInEphemeralWorker approach
    */
-  private async executeTaskWithDockerRun(task: Task, agent: AgentPersonality): Promise<void> {
+  private async executeTaskWithDockerRun(task: Task, agent: AgentPersonality, agentType?: 'claude' | 'codex'): Promise<void> {
     const { spawn } = await import('child_process');
-    const workerId = `bot-${agent.id}-${Date.now()}`;
+
+    // Choose agent type if not specified
+    const chosenAgentType = agentType || this.chooseAgentType();
+    const workerId = `bot-${chosenAgentType}-${agent.id}-${Date.now()}`;
 
     // Register worker in ephemeralWorkers to enforce concurrency limit
     const ephemeralWorker: EphemeralWorker = {
@@ -1543,46 +1583,72 @@ export class DevBotsManager extends EventEmitter {
 
     const homeDir = os.homedir();
 
-    // Find Claude credentials file
-    const claudeCredentialsNew = path.join(homeDir, '.claude', '.credentials.json');
-    const claudeCredentialsOld = path.join(homeDir, '.claude', 'credentials.json');
-    const claudeCredentials = fs.existsSync(claudeCredentialsNew) ? claudeCredentialsNew : claudeCredentialsOld;
-
-    if (!fs.existsSync(claudeCredentials)) {
-      throw new Error('Claude credentials file not found. Please run "claude login" first.');
-    }
-
     // Escape prompt for shell (use single quotes and escape any single quotes in content)
     const promptText = (task.prompt || task.description || task.title).replace(/'/g, "'\\''");
 
-    // Build docker run command (imagineer pattern)
-    const dockerArgs = [
-      'run',
-      '--rm',  // Auto-remove container after exit
-      '-v', `${repoRoot}:/workspace:rw`,  // Mount workspace directly
-      '-v', `${hostLogsDir}:/logs:rw`,  // Mount logs
-      '--tmpfs', '/home/node/.claude:uid=1000,gid=1000',  // Writable temp for Claude CLI
-      '-v', `${claudeCredentials}:/tmp/host-creds.json:ro`,  // Mount Claude credentials
-      // Mount Codex credentials for agent comparison
-      '-v', `${homeDir}/.codex:/home/node/.codex:ro`,  // Codex config and credentials
-      // Mount git credentials for committing and pushing
-      '-v', `${homeDir}/.gitconfig:/home/node/.gitconfig:ro`,  // Git config
-      '-v', `${homeDir}/.ssh:/home/node/.ssh:ro`,  // SSH keys for git push
-      '-v', `${homeDir}/.config/gh:/home/node/.config/gh:ro`,  // GitHub CLI auth
-      this.getAgentDockerImage(agent),
-      'sh', '-c',
-      // Copy credentials and run Claude with JSON output (bypass permissions for git access)
-      `cp /tmp/host-creds.json /home/node/.claude/.credentials.json && ` +
-      `claude --print --dangerously-skip-permissions --permission-mode bypassPermissions --allowedTools 'Bash(git:*)' --output-format json '${promptText}'`
-    ];
+    // Build docker run command based on agent type
+    let dockerArgs: string[];
+    let cliCommand: string;
+
+    if (chosenAgentType === 'codex') {
+      // Codex execution
+      dockerArgs = [
+        'run',
+        '--rm',  // Auto-remove container after exit
+        '-v', `${repoRoot}:/workspace:rw`,  // Mount workspace directly
+        '-v', `${hostLogsDir}:/logs:rw`,  // Mount logs
+        '--tmpfs', '/home/node/.codex:uid=1000,gid=1000',  // Writable temp for Codex CLI
+        '-v', `${homeDir}/.codex:/tmp/host-codex:ro`,  // Mount Codex credentials
+        // Mount git credentials for committing and pushing
+        '-v', `${homeDir}/.gitconfig:/home/node/.gitconfig:ro`,  // Git config
+        '-v', `${homeDir}/.ssh:/home/node/.ssh:ro`,  // SSH keys for git push
+        '-v', `${homeDir}/.config/gh:/home/node/.config/gh:ro`,  // GitHub CLI auth
+        this.getAgentDockerImage(agent),
+        'sh', '-c',
+        // Copy credentials and run Codex with JSON output
+        `cp -r /tmp/host-codex/* /home/node/.codex/ 2>/dev/null || true && ` +
+        `codex --output-format json '${promptText}'`
+      ];
+      cliCommand = 'codex';
+    } else {
+      // Claude execution
+      const claudeCredentialsNew = path.join(homeDir, '.claude', '.credentials.json');
+      const claudeCredentialsOld = path.join(homeDir, '.claude', 'credentials.json');
+      const claudeCredentials = fs.existsSync(claudeCredentialsNew) ? claudeCredentialsNew : claudeCredentialsOld;
+
+      if (!fs.existsSync(claudeCredentials)) {
+        throw new Error('Claude credentials file not found. Please run "claude login" first.');
+      }
+
+      dockerArgs = [
+        'run',
+        '--rm',  // Auto-remove container after exit
+        '-v', `${repoRoot}:/workspace:rw`,  // Mount workspace directly
+        '-v', `${hostLogsDir}:/logs:rw`,  // Mount logs
+        '--tmpfs', '/home/node/.claude:uid=1000,gid=1000',  // Writable temp for Claude CLI
+        '-v', `${claudeCredentials}:/tmp/host-creds.json:ro`,  // Mount Claude credentials
+        // Mount git credentials for committing and pushing
+        '-v', `${homeDir}/.gitconfig:/home/node/.gitconfig:ro`,  // Git config
+        '-v', `${homeDir}/.ssh:/home/node/.ssh:ro`,  // SSH keys for git push
+        '-v', `${homeDir}/.config/gh:/home/node/.config/gh:ro`,  // GitHub CLI auth
+        this.getAgentDockerImage(agent),
+        'sh', '-c',
+        // Copy credentials and run Claude with JSON output (bypass permissions for git access)
+        `cp /tmp/host-creds.json /home/node/.claude/.credentials.json && ` +
+        `claude --print --dangerously-skip-permissions --permission-mode bypassPermissions --allowedTools 'Bash(git:*)' --output-format json '${promptText}'`
+      ];
+      cliCommand = 'claude';
+    }
 
     logger.info({
       category: 'process',
       action: 'executing_task_with_docker_run',
-      message: `Executing task ${task.id} with docker run (ephemeral container)`,
+      message: `Executing task ${task.id} with ${cliCommand} (ephemeral container)`,
       details: {
         workerId,
         agent: agent.id,
+        agentType: chosenAgentType,
+        cliTool: cliCommand,
         taskTitle: task.title,
         taskId: task.id,
         image: this.getAgentDockerImage(agent),
@@ -1675,11 +1741,11 @@ export class DevBotsManager extends EventEmitter {
     // Handle task completion
     if (exitCode === 0) {
       try {
-        // Parse JSON output from Claude
-        const claudeOutput = JSON.parse(stdout);
+        // Parse JSON output from Claude/Codex
+        const cliOutput = JSON.parse(stdout);
 
-        // Complete task in SQLite
-        this.taskQueue.completeTask(task.id, JSON.stringify(claudeOutput));
+        // Complete task in SQLite with agent type for comparison tracking
+        this.taskQueue.completeTask(task.id, JSON.stringify(cliOutput), chosenAgentType);
 
         logger.info({
           category: 'process',

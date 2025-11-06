@@ -338,6 +338,28 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
   });
 
   /**
+   * GET /dev-bots/agent-comparison
+   * Get performance comparison metrics between Claude and Codex agents
+   */
+  router.get('/agent-comparison', (_req: Request, res: Response) => {
+    try {
+      const comparison = devBotsManager.getAgentComparisonMetrics();
+      res.json({ comparison });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_agent_comparison',
+        message: `Error getting agent comparison metrics: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to get agent comparison metrics',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  /**
    * POST /dev-bots/tasks/:taskId/timeout
    * Manually timeout a task after verification
    */

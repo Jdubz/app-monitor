@@ -53,6 +53,7 @@ export interface Task {
   completed_at?: number;
   assigned_agent: string;
   assigned_worker?: string;
+  agent_type?: 'claude' | 'codex'; // Track which CLI tool executed the task
   prompt?: string;
   output?: string;
   error?: string;
@@ -133,11 +134,42 @@ export class TaskQueueService {
     // Create schema
     this.createSchema();
 
+    // Run migrations for existing databases
+    this.runMigrations();
+
     logger.info({
       category: 'process',
       action: 'sqlite_queue_initialized',
       message: `SQLite task queue initialized at ${this.dbPath}`
     });
+  }
+
+  private runMigrations(): void {
+    // Check if agent_type column exists, add if missing
+    const columns = this.db.prepare(`PRAGMA table_info(tasks)`).all() as Array<{name: string}>;
+    const hasAgentType = columns.some(col => col.name === 'agent_type');
+
+    if (!hasAgentType) {
+      logger.info({
+        category: 'process',
+        action: 'adding_agent_type_column',
+        message: 'Adding agent_type column to tasks table for agent comparison tracking'
+      });
+
+      this.db.exec(`
+        ALTER TABLE tasks ADD COLUMN agent_type TEXT CHECK(agent_type IN ('claude', 'codex'));
+      `);
+
+      this.db.exec(`
+        CREATE INDEX IF NOT EXISTS idx_tasks_agent_type ON tasks(agent_type);
+      `);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'agent_type column added successfully'
+      });
+    }
   }
 
   private createSchema(): void {
@@ -158,6 +190,7 @@ export class TaskQueueService {
         completed_at INTEGER,
         assigned_agent TEXT NOT NULL,
         assigned_worker TEXT,
+        agent_type TEXT CHECK(agent_type IN ('claude', 'codex')), -- Track which CLI tool executed
         prompt TEXT,
         output TEXT,
         error TEXT,
@@ -176,6 +209,7 @@ export class TaskQueueService {
       CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority DESC, created_at ASC);
       CREATE INDEX IF NOT EXISTS idx_tasks_fingerprint ON tasks(fingerprint);
       CREATE INDEX IF NOT EXISTS idx_tasks_assigned_worker ON tasks(assigned_worker);
+      CREATE INDEX IF NOT EXISTS idx_tasks_agent_type ON tasks(agent_type);
 
       -- Worker tracking
       CREATE TABLE IF NOT EXISTS workers (
@@ -467,7 +501,7 @@ export class TaskQueueService {
   /**
    * Complete a task (idempotent)
    */
-  completeTask(taskId: string, output: string): void {
+  completeTask(taskId: string, output: string, agentType?: 'claude' | 'codex'): void {
     this.transaction(() => {
       const taskStmt = this.db.prepare('SELECT status FROM tasks WHERE id = ?');
       const task = taskStmt.get(taskId) as { status: TaskStatus } | undefined;
@@ -488,16 +522,17 @@ export class TaskQueueService {
 
       const now = Date.now();
 
-      // Update task
+      // Update task with agent_type for comparison tracking
       const updateStmt = this.db.prepare(`
         UPDATE tasks
         SET status = 'completed',
             output = ?,
-            completed_at = ?
+            completed_at = ?,
+            agent_type = ?
         WHERE id = ?
       `);
 
-      updateStmt.run(output, now, taskId);
+      updateStmt.run(output, now, agentType || null, taskId);
 
       // Update execution record
       const executionStmt = this.db.prepare(`
@@ -949,6 +984,73 @@ export class TaskQueueService {
     const stmt = this.db.prepare('SELECT metric FROM task_success_metrics WHERE task_id = ? ORDER BY sort_order');
     const rows = stmt.all(taskId) as { metric: string }[];
     return rows.map(r => r.metric);
+  }
+
+  /**
+   * Get agent comparison metrics
+   * Compare performance between Claude and Codex agents
+   */
+  getAgentComparisonMetrics(): {
+    claude: {
+      total: number;
+      completed: number;
+      failed: number;
+      avg_duration_ms?: number;
+      success_rate: number;
+    };
+    codex: {
+      total: number;
+      completed: number;
+      failed: number;
+      avg_duration_ms?: number;
+      success_rate: number;
+    };
+  } {
+    const agentStats = this.db.prepare(`
+      SELECT
+        agent_type,
+        COUNT(*) as total,
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+        AVG(CASE
+          WHEN status = 'completed' AND completed_at IS NOT NULL AND started_at IS NOT NULL
+          THEN completed_at - started_at
+          ELSE NULL
+        END) as avg_duration_ms
+      FROM tasks
+      WHERE agent_type IS NOT NULL AND agent_type IN ('claude', 'codex')
+      GROUP BY agent_type
+    `).all() as Array<{
+      agent_type: 'claude' | 'codex';
+      total: number;
+      completed: number;
+      failed: number;
+      avg_duration_ms: number | null;
+    }>;
+
+    const claudeStats = agentStats.find(s => s.agent_type === 'claude');
+    const codexStats = agentStats.find(s => s.agent_type === 'codex');
+
+    return {
+      claude: {
+        total: claudeStats?.total || 0,
+        completed: claudeStats?.completed || 0,
+        failed: claudeStats?.failed || 0,
+        avg_duration_ms: claudeStats?.avg_duration_ms || undefined,
+        success_rate: claudeStats
+          ? (claudeStats.completed / (claudeStats.completed + claudeStats.failed)) * 100
+          : 0
+      },
+      codex: {
+        total: codexStats?.total || 0,
+        completed: codexStats?.completed || 0,
+        failed: codexStats?.failed || 0,
+        avg_duration_ms: codexStats?.avg_duration_ms || undefined,
+        success_rate: codexStats
+          ? (codexStats.completed / (codexStats.completed + codexStats.failed)) * 100
+          : 0
+      }
+    };
   }
 
   /**
