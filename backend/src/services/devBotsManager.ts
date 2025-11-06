@@ -596,6 +596,19 @@ export class DevBotsManager extends EventEmitter {
       action: 'loaded_persistedtasks_length_persisted_tasks_this_',
       message: `Loaded ${persistedTasks.length} persisted tasks: ${this.taskQueue.length} pending, ${this.activeTasks.size} active, ${this.completedTasks.length} completed`
     });
+
+      // Trigger assignment for any pending tasks after load
+      if (this.taskQueue.length > 0) {
+        logger.info({
+          category: 'process',
+          action: 'triggering_assignment_for_pending_tasks',
+          message: `Triggering task assignment for ${this.taskQueue.length} pending tasks after startup`
+        });
+        // Use setTimeout to allow initialization to complete
+        setTimeout(() => {
+          this.assignNextTask();
+        }, 1000);
+      }
     } catch (error) {
       logger.error({
       category: 'process',
