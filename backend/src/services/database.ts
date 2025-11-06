@@ -121,6 +121,14 @@ export class DevBotsDatabase {
       `);
     });
 
+    // Migration 002: Tasks Table
+    this.applyMigration('002_tasks_table', () => {
+      this.db.exec(fs.readFileSync(
+        path.join(__dirname, '..', '..', 'migrations', '002_tasks_table.sql'),
+        'utf-8'
+      ));
+    });
+
     // Migration 004: Task Context & Automation Run Tracking
     this.applyMigration('004_task_context', () => {
       this.db.exec(fs.readFileSync(

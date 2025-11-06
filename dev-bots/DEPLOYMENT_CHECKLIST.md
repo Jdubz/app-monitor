@@ -3,7 +3,7 @@
 ## 🚀 **Pre-Deployment Checklist**
 
 ### **✅ Environment Setup**
-- [ ] Claude API key configured (`CLAUDE_API_KEY`)
+- [ ] `~/.claude/.credentials.json` exists (read-only mount for dev-bots)
 - [ ] GitHub token configured (`GITHUB_TOKEN`)
 - [ ] Node.js 18+ installed
 - [ ] Docker & Docker Compose installed (for Docker deployment)
@@ -27,8 +27,9 @@
 
 ### **Option 1: Docker Deployment (Recommended)**
 ```bash
-# 1. Set environment variables
-export CLAUDE_API_KEY="your-api-key"
+# 1. Ensure credentials are present
+ls ~/.claude/.credentials.json
+# (Optional) export any additional env vars needed by your work-target
 export GITHUB_TOKEN="your-token"
 
 # 2. Start with Docker

@@ -238,7 +238,7 @@ make env-check        # Check environment
    ```bash
    make setup
    make env-setup
-   # Edit .env file with your API keys
+   # Ensure ~/.claude/.credentials.json exists (read-only mount for dev-bots)
    ```
 
 2. **Start Development**

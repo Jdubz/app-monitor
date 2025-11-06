@@ -1,0 +1,37 @@
+{
+  "safety": {
+    "enabled": true,
+    "maxTaskDuration": 1800000,
+    "maxFileSize": 10485760,
+    "allowedFileTypes": [
+      ".ts",
+      ".js",
+      ".tsx",
+      ".jsx",
+      ".json",
+      ".md",
+      ".yml",
+      ".yaml"
+    ],
+    "blockedPaths": [
+      "/etc",
+      "/usr",
+      "/bin",
+      "/sbin",
+      "/var",
+      "/opt",
+      "/home/jdubz/.ssh",
+      "/home/jdubz/.config",
+      "/home/jdubz/.local"
+    ],
+    "allowedPaths": [
+      "/home/jdubz/Development/job-finder-app-manager/worktrees",
+      "/home/jdubz/Development/job-finder-app-manager/claude-workers"
+    ],
+    "resourceLimits": {
+      "maxMemoryMB": 1024,
+      "maxCpuPercent": 50,
+      "maxDiskUsageMB": 100
+    }
+  }
+}

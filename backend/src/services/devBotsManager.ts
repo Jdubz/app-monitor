@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import * as fs from 'fs';
 import * as path from 'path';
+import os from 'os';
 import { logger } from '../utils/logger.js';
 import { ProcessManager, ProcessInfo } from './processManager.js';
 import Docker from 'dockerode';
@@ -1076,28 +1077,55 @@ export class DevBotsManager extends EventEmitter {
         fs.mkdirSync(hostLogsDir, { recursive: true });
       }
 
+      const binds = [
+        `${process.cwd()}:/app:ro`,
+        `${workspace.hostPath}:/workspace:rw`,
+        `${hostLogsDir}:/app/logs:rw`
+      ];
+
+      const homeDir = os.homedir();
+      const claudeDir = path.join(homeDir, '.claude');
+      if (fs.existsSync(claudeDir)) {
+        binds.push(`${claudeDir}:/app/claude-context:ro`);
+      }
+
+      const gitCredentials = path.join(homeDir, '.git-credentials');
+      if (fs.existsSync(gitCredentials)) {
+        binds.push(`${gitCredentials}:/home/worker/.git-credentials:ro`);
+      }
+
+      const sshDir = path.join(homeDir, '.ssh');
+      if (fs.existsSync(sshDir)) {
+        binds.push(`${sshDir}:/home/worker/.ssh:ro`);
+      }
+
+      const envVars = [
+        `AGENT_ID=${agent.id}`,
+        `AGENT_NAME=${agent.name}`,
+        `TASK_ID=${task.id}`,
+        `WORKER_ID=${workerId}`,
+        `WORKSPACE_BRANCH=${workspace.branchName}`,
+        `WORKSPACE_ID=${workspace.id}`
+      ];
+
+      for (const key of this.getEnvPassthroughKeys()) {
+        const value = process.env[key];
+        if (value && value.length > 0) {
+          envVars.push(`${key}=${value}`);
+        }
+      }
+
       const container = await this.docker.createContainer({
         Image: this.getAgentDockerImage(agent),
         name: containerName,
         Cmd: ['/bin/bash', '-c', 'tail -f /dev/null'],
-        Env: [
-          `AGENT_ID=${agent.id}`,
-          `AGENT_NAME=${agent.name}`,
-          `TASK_ID=${task.id}`,
-          `WORKER_ID=${workerId}`,
-          `WORKSPACE_BRANCH=${workspace.branchName}`,
-          `WORKSPACE_ID=${workspace.id}`
-        ],
+        Env: envVars,
         WorkingDir: `/workspace`,
         HostConfig: {
           Memory: 512 * 1024 * 1024,
           CpuQuota: 50000,
           AutoRemove: true,
-          Binds: [
-            `${process.cwd()}:/app:ro`,
-            `${workspace.hostPath}:/workspace:rw`,
-            `${hostLogsDir}:/app/logs:rw`
-          ]
+          Binds: binds
         },
         Labels: {
           'claude.worker.id': workerId,
@@ -1156,6 +1184,14 @@ export class DevBotsManager extends EventEmitter {
    */
   private getHostLogsDir(): string {
     return path.resolve(process.cwd(), '../../logs');
+  }
+
+  private getEnvPassthroughKeys(): string[] {
+    const defaults: string[] = [];
+    const extra =
+      process.env.DEV_BOT_PASSTHROUGH_ENVS?.split(',').map(entry => entry.trim()).filter(Boolean) ??
+      [];
+    return Array.from(new Set([...defaults, ...extra]));
   }
 
   /**
@@ -1295,7 +1331,13 @@ export class DevBotsManager extends EventEmitter {
     }
 
     const claudeCommand = command.join(' ');
-    
+
+    const prepClaudeContext = [
+      'rm -rf ~/.claude',
+      'mkdir -p ~/.claude',
+      'if [ -d /app/claude-context ]; then cp -a /app/claude-context/. ~/.claude/; fi'
+    ];
+
     // Create a wrapper command that logs to the worker-specific file
     const wrapperCommand = [
       'echo "=== Worker Task Execution Started ===" >> ' + logFile,
@@ -1303,6 +1345,7 @@ export class DevBotsManager extends EventEmitter {
       'echo "Worker: ' + agent.name + '" >> ' + logFile,
       'echo "Task: ' + task.title + '" >> ' + logFile,
       'echo "=====================================" >> ' + logFile,
+      ...prepClaudeContext,
       claudeCommand + ' 2>&1 | tee -a ' + logFile,
       'echo "=== Worker Task Execution Completed ===" >> ' + logFile,
       'echo "Exit Code: $?" >> ' + logFile,

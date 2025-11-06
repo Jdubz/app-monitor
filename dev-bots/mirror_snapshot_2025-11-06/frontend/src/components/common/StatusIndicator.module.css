@@ -1,0 +1,102 @@
+.indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.dot {
+  display: inline-block;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.small .dot {
+  width: 8px;
+  height: 8px;
+}
+
+.medium .dot {
+  width: 12px;
+  height: 12px;
+}
+
+.large .dot {
+  width: 16px;
+  height: 16px;
+}
+
+/* Status Colors */
+.success {
+  background-color: var(--color-success);
+  box-shadow: 0 0 0 2px var(--color-success-light);
+}
+
+.warning {
+  background-color: var(--color-warning);
+  box-shadow: 0 0 0 2px var(--color-warning-light);
+}
+
+.error {
+  background-color: var(--color-danger);
+  box-shadow: 0 0 0 2px var(--color-danger-light);
+}
+
+.info {
+  background-color: var(--color-info);
+  box-shadow: 0 0 0 2px var(--color-info-light);
+}
+
+.loading {
+  background-color: var(--color-primary);
+  box-shadow: 0 0 0 2px var(--color-primary-light);
+}
+
+/* Pulse Animation */
+.pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.label {
+  font-size: var(--font-size-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+}
+
+/* Connection Status */
+.connectionStatus {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+}
+
+.timestamp {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+/* Process Status */
+.processStatus {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.uptime {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  font-family: var(--font-mono);
+}

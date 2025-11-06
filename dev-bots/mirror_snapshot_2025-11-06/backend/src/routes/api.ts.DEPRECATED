@@ -1,0 +1,2828 @@
+import { Router, Request, Response } from 'express';
+import { fileURLToPath } from 'url';
+import { ProcessManager } from '../services/processManager.js';
+import { CloudLogging } from '../services/cloudLogging.js';
+import { ScriptManager } from '../services/scriptManager.js';
+import { ClaudeWorkersManager } from '../services/claudeWorkersManager.js';
+import { logger } from '../utils/logger.js';
+import { getPortInfo, killPortProcess, getDockerContainerInfo, stopDockerContainer } from '../utils/portManager.js';
+import { services } from '../config.js';
+import { logRotation, logStreamer } from '../server.js';
+import * as fs from 'fs';
+import * as path from 'path';
+import { spawn } from 'child_process';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Resolve logs directory relative to this file (routes -> src -> backend -> dev-monitor -> root -> logs)
+const LOGS_DIR = path.resolve(__dirname, '../../../../logs');
+
+const router = Router();
+const processManager = new ProcessManager();
+const cloudLogging = new CloudLogging();
+const scriptManager = new ScriptManager();
+const claudeWorkersManager = new ClaudeWorkersManager(processManager);
+
+// Health check endpoint
+router.get('/health', (_req: Request, res: Response) => {
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+  });
+});
+
+// Get status of all services
+router.get('/services/status', async (_req: Request, res: Response) => {
+  try {
+    const statuses = await processManager.getAllStatuses();
+    res.json(statuses);
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'get_all_statuses_failed',
+      message: 'Failed to get all service statuses',
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get service statuses',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Get status of a specific service
+router.get('/services/:serviceName/status', async (req: Request, res: Response) => {
+  try {
+    const { serviceName } = req.params;
+    const status = await processManager.getServiceStatus(serviceName);
+    res.json(status);
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_status_for_req_params_servicename_error',
+      message: `Error getting status for ${req.params.serviceName}: ${error}`,
+      error
+    });
+    res.status(404).json({
+      error: 'Service not found',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Start a service
+router.post('/services/:serviceName/start', async (req: Request, res: Response) => {
+  try {
+    const { serviceName } = req.params;
+    logger.info({
+      category: 'api',
+      action: 'api_starting_service_servicename',
+      message: `API: Starting service ${serviceName}`
+    });
+    const status = await processManager.startService(serviceName);
+    res.json(status);
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_starting_service_req_params_servicename_error',
+      message: `Error starting service ${req.params.serviceName}: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to start service',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Stop a service (graceful or force)
+router.post('/services/:serviceName/stop', async (req: Request, res: Response) => {
+  try {
+    const { serviceName } = req.params;
+    const graceful = req.query.graceful !== 'false'; // Default to true
+    logger.info({
+      category: 'api',
+      action: 'api_stopping_service_servicename_graceful_graceful',
+      message: `API: Stopping service ${serviceName} (graceful: ${graceful})`
+    });
+    const status = await processManager.stopService(serviceName, graceful);
+    res.json(status);
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_stopping_service_req_params_servicename_error',
+      message: `Error stopping service ${req.params.serviceName}: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to stop service',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Kill a service (force stop)
+router.post('/services/:serviceName/kill', async (req: Request, res: Response) => {
+  try {
+    const { serviceName } = req.params;
+    logger.info({
+      category: 'api',
+      action: 'api_killing_service_servicename',
+      message: `API: Killing service ${serviceName}`
+    });
+    const status = await processManager.killService(serviceName);
+    res.json(status);
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_killing_service_req_params_servicename_error',
+      message: `Error killing service ${req.params.serviceName}: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to kill service',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Restart a service
+router.post('/services/:serviceName/restart', async (req: Request, res: Response) => {
+  try {
+    const { serviceName } = req.params;
+    const graceful = req.query.graceful !== 'false'; // Default to true
+    logger.info({
+      category: 'api',
+      action: 'api_restarting_service_servicename_graceful_graceful',
+      message: `API: Restarting service ${serviceName} (graceful: ${graceful})`
+    });
+    const status = await processManager.restartService(serviceName, graceful);
+    res.json(status);
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_restarting_service_req_params_servicename_error',
+      message: `Error restarting service ${req.params.serviceName}: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to restart service',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// ============================================================================
+// Docker Service-Specific Routes
+// ============================================================================
+
+// Start docker container
+router.post('/services/:name/docker/start-container', async (req: Request, res: Response) => {
+  const { name } = req.params;
+
+  if (name !== 'python-worker') {
+    res.status(400).json({ error: 'Docker operations only supported for python-worker' });
+    return;
+  }
+
+  try {
+    logger.info({
+      category: 'api',
+      action: 'starting_docker_container_for_name',
+      message: `Starting docker container for ${name}`
+    });
+    const { execAsync } = await import('../utils/portManager.js');
+    const config = services[name];
+
+    if (!config) {
+      res.status(404).json({ error: `Service ${name} not found` });
+      return;
+    }
+
+    // Use absolute path from config instead of relative path
+    await execAsync(
+      `cd ${config.cwd} && docker compose -f docker-compose.dev.yml up -d`
+    );
+
+    res.json({ success: true, message: 'Container started' });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_starting_container_error',
+      message: `Error starting container: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+// Stop docker container
+router.post('/services/:name/docker/stop-container', async (req: Request, res: Response) => {
+  const { name } = req.params;
+
+  if (name !== 'python-worker') {
+    res.status(400).json({ error: 'Docker operations only supported for python-worker' });
+    return;
+  }
+
+  try {
+    logger.info({
+      category: 'api',
+      action: 'stopping_docker_container_for_name',
+      message: `Stopping docker container for ${name}`
+    });
+    const containerNames = ['job-finder-local-dev', 'job-finder-dev'];
+    for (const containerName of containerNames) {
+      await stopDockerContainer(containerName);
+    }
+
+    res.json({ success: true, message: 'Container stopped' });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_stopping_container_error',
+      message: `Error stopping container: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+// Restart worker process inside container
+router.post('/services/:name/docker/restart-worker', async (req: Request, res: Response) => {
+  const { name } = req.params;
+
+  if (name !== 'python-worker') {
+    res.status(400).json({ error: 'Docker operations only supported for python-worker' });
+    return;
+  }
+
+  try {
+    logger.info({
+      category: 'api',
+      action: 'restarting_worker_process_in_docker_container_for_name',
+      message: `Restarting worker process in docker container for ${name}`
+    });
+    const { execAsync } = await import('../utils/portManager.js');
+    const containerNames = ['job-finder-local-dev', 'job-finder-dev'];
+
+    let restarted = false;
+    for (const containerName of containerNames) {
+      try {
+        // Kill the queue_worker.py process
+        await execAsync(
+          `docker exec ${containerName} pkill -f queue_worker.py`
+        );
+
+        // The container's command will restart it automatically
+        restarted = true;
+        logger.info({
+      category: 'api',
+      action: 'worker_process_restarted_in_container_containername',
+      message: `Worker process restarted in container ${containerName}`
+    });
+        break;
+      } catch (error) {
+        // Try next container name
+      }
+    }
+
+    if (restarted) {
+      res.json({ success: true, message: 'Worker process restarted' });
+    } else {
+      res.status(404).json({ error: 'No running container found' });
+    }
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_restarting_worker_error',
+      message: `Error restarting worker: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+// Get logs for a service
+router.get('/services/:serviceName/logs', (req: Request, res: Response) => {
+  try {
+    const { serviceName } = req.params;
+    const lines = parseInt(req.query.lines as string) || 100;
+    // Use LogWatcher for file-based log reading
+    const logWatcher = processManager.getLogWatcher();
+    const logs = logWatcher.getRecentLogs(serviceName, lines);
+    res.json({ serviceName, logs });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_logs_for_req_params_servicename_error',
+      message: `Error getting logs for ${req.params.serviceName}: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get logs',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Get available environments
+router.get('/environments', (_req: Request, res: Response) => {
+  try {
+    const environments = cloudLogging.getEnvironments();
+    res.json(environments);
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_environments_error',
+      message: `Error getting environments: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get environments',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Get services for an environment
+router.get('/environments/:environment/services', (req: Request, res: Response) => {
+  try {
+    const { environment } = req.params;
+    const services = cloudLogging.getServicesForEnvironment(environment);
+    res.json(services);
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_services_for_req_params_environment_error',
+      message: `Error getting services for ${req.params.environment}: ${error}`,
+      error
+    });
+    res.status(404).json({
+      error: 'Environment not found',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Get cloud logs
+router.get('/logs/cloud/:environment/:service', async (req: Request, res: Response) => {
+  try {
+    const { environment, service } = req.params;
+    const { severity, limit, startTime, endTime } = req.query;
+
+    const query = {
+      environment,
+      service,
+      severity: severity as string,
+      limit: limit ? parseInt(limit as string) : 100,
+      timeRange: startTime && endTime ? {
+        start: new Date(startTime as string),
+        end: new Date(endTime as string),
+      } : undefined,
+    };
+
+    const logs = await cloudLogging.getLogs(query);
+    res.json({
+      environment,
+      service,
+      count: logs.length,
+      logs,
+    });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_cloud_logs_error',
+      message: `Error getting cloud logs: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get cloud logs',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Check if cloud logging is available
+router.get('/logs/cloud/status', (_req: Request, res: Response) => {
+  const available = cloudLogging.isAvailable();
+  res.json({
+    available,
+    message: available
+      ? 'Cloud Logging is available'
+      : 'Cloud Logging is not available. Check credentials configuration.',
+  });
+});
+
+// Get available log sources (dynamically discovered from /logs directory)
+router.get('/logs/sources', (_req: Request, res: Response) => {
+  try {
+    const logWatcher = logStreamer.getLogWatcher();
+    const sources = logWatcher.getAvailableSources();
+    res.json({
+      count: sources.length,
+      sources,
+    });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'get_sources_failed',
+      message: 'Failed to get log sources',
+      error: error instanceof Error ? error : new Error(String(error)),
+    });
+    res.status(500).json({
+      error: 'Failed to get log sources',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// ============================================================================
+// Script Management Routes
+// ============================================================================
+
+// Get all available scripts
+router.get('/scripts', (_req: Request, res: Response) => {
+  try {
+    const allScripts = scriptManager.getScripts();
+    res.json({
+      count: allScripts.length,
+      scripts: allScripts,
+    });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_scripts_error',
+      message: `Error getting scripts: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get scripts',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Execute a script (non-blocking - returns immediately with 201)
+// Use Socket.IO events to monitor progress:
+// - script:started
+// - script:output (line-by-line output)
+// - script:completed
+// - script:failed
+router.post('/scripts/:scriptId/execute', (req: Request, res: Response) => {
+  try {
+    const { scriptId } = req.params;
+    logger.info({
+      category: 'api',
+      action: 'starting_script_scriptid',
+      message: `Starting script: ${scriptId}`
+    });
+
+    // Start script asynchronously (returns immediately)
+    const execution = scriptManager.startScript(scriptId);
+
+    // Return 201 Created with execution ID
+    // Client should listen to Socket.IO events for progress
+    res.status(201).json({
+      success: true,
+      message: 'Script started successfully. Monitor progress via Socket.IO events.',
+      execution: {
+        id: execution.id,
+        scriptId: execution.scriptId,
+        displayName: execution.config.displayName,
+        status: execution.status,
+        startTime: execution.startTime,
+      },
+    });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_starting_script_req_params_scriptid_error',
+      message: `Error starting script ${req.params.scriptId}: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to start script',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Get all script executions
+router.get('/scripts/executions', (_req: Request, res: Response) => {
+  try {
+    const executions = scriptManager.getExecutions();
+    res.json({
+      count: executions.length,
+      executions: executions.map(exec => ({
+        id: exec.id,
+        scriptId: exec.scriptId,
+        displayName: exec.config.displayName,
+        status: exec.status,
+        exitCode: exec.exitCode,
+        startTime: exec.startTime,
+        endTime: exec.endTime,
+        outputLines: exec.output.length,
+      })),
+    });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_executions_error',
+      message: `Error getting executions: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get executions',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Get a specific execution
+router.get('/scripts/executions/:executionId', (req: Request, res: Response) => {
+  try {
+    const { executionId } = req.params;
+    const execution = scriptManager.getExecution(executionId);
+
+    if (!execution) {
+      res.status(404).json({
+        error: 'Execution not found',
+        message: `No execution found with ID: ${executionId}`,
+      });
+      return;
+    }
+
+    res.json(execution);
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_execution_req_params_executionid_error',
+      message: `Error getting execution ${req.params.executionId}: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get execution',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Kill a running script
+router.post('/scripts/executions/:executionId/kill', (req: Request, res: Response) => {
+  try {
+    const { executionId } = req.params;
+    const killed = scriptManager.killScript(executionId);
+
+    if (!killed) {
+      res.status(404).json({
+        error: 'Failed to kill script',
+        message: 'Script not found or already completed',
+      });
+      return;
+    }
+
+    res.json({
+      success: true,
+      message: 'Script killed successfully',
+    });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_killing_script_req_params_executionid_error',
+      message: `Error killing script ${req.params.executionId}: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to kill script',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Clear execution history
+router.delete('/scripts/executions', (_req: Request, res: Response) => {
+  try {
+    scriptManager.clearHistory();
+    res.json({
+      success: true,
+      message: 'Execution history cleared',
+    });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_clearing_history_error',
+      message: `Error clearing history: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to clear history',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// ============================================================================
+// Script Execution History Routes
+// ============================================================================
+
+/**
+ * Get script execution history
+ */
+router.get('/scripts/history', (req: Request, res: Response) => {
+  try {
+    const { scriptExecutionHistory } = require('../server.js');
+    const limit = req.query.limit ? parseInt(req.query.limit as string) : 50;
+    
+    const executions = scriptExecutionHistory.getRecentExecutions(limit);
+    
+    res.json({
+      success: true,
+      executions,
+      count: executions.length
+    });
+  } catch (error) {
+    logger.error({
+      category: 'scripts',
+      action: 'get_history_error',
+      message: 'Failed to get script history',
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get script history',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Get history for specific script
+ */
+router.get('/scripts/:scriptId/history', (req: Request, res: Response) => {
+  try {
+    const { scriptId } = req.params;
+    const { scriptExecutionHistory } = require('../server.js');
+    
+    const executions = scriptExecutionHistory.getExecutionsByScript(scriptId);
+    
+    res.json({
+      success: true,
+      scriptId,
+      executions,
+      count: executions.length
+    });
+  } catch (error) {
+    logger.error({
+      category: 'scripts',
+      action: 'get_script_history_error',
+      message: `Failed to get history for script ${req.params.scriptId}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get script history',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Get script execution summary
+ */
+router.get('/scripts/:scriptId/summary', (req: Request, res: Response) => {
+  try {
+    const { scriptId } = req.params;
+    const { scriptExecutionHistory } = require('../server.js');
+    
+    const summary = scriptExecutionHistory.getScriptSummary(scriptId);
+    
+    res.json({
+      success: true,
+      summary
+    });
+  } catch (error) {
+    logger.error({
+      category: 'scripts',
+      action: 'get_script_summary_error',
+      message: `Failed to get summary for script ${req.params.scriptId}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get script summary',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Get overall script execution statistics
+ */
+router.get('/scripts/stats/overall', (_req: Request, res: Response) => {
+  try {
+    const { scriptExecutionHistory } = require('../server.js');
+    
+    const stats = scriptExecutionHistory.getStats();
+    
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    logger.error({
+      category: 'scripts',
+      action: 'get_stats_error',
+      message: 'Failed to get script statistics',
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get script statistics',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Delete old script executions
+ */
+router.delete('/scripts/history/old', (req: Request, res: Response) => {
+  try {
+    const { scriptExecutionHistory } = require('../server.js');
+    const daysToKeep = req.query.days ? parseInt(req.query.days as string) : 30;
+    
+    const deleted = scriptExecutionHistory.deleteOldExecutions(daysToKeep);
+    
+    res.json({
+      success: true,
+      message: `Deleted ${deleted} old executions`,
+      deleted,
+      daysToKeep
+    });
+  } catch (error) {
+    logger.error({
+      category: 'scripts',
+      action: 'delete_old_history_error',
+      message: 'Failed to delete old script executions',
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to delete old executions',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Clear all script execution history
+ */
+router.delete('/scripts/history', (_req: Request, res: Response) => {
+  try {
+    const { scriptExecutionHistory } = require('../server.js');
+    scriptExecutionHistory.clearHistory();
+    
+    res.json({
+      success: true,
+      message: 'Script execution history cleared'
+    });
+  } catch (error) {
+    logger.error({
+      category: 'scripts',
+      action: 'clear_history_error',
+      message: 'Failed to clear script history',
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to clear history',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Export script execution history
+ */
+router.post('/scripts/history/export', (req: Request, res: Response) => {
+  try {
+    const { scriptExecutionHistory } = require('../server.js');
+    const { filePath } = req.body;
+    
+    if (!filePath) {
+      return res.status(400).json({
+        error: 'Missing required field: filePath'
+      });
+    }
+    
+    scriptExecutionHistory.exportHistory(filePath);
+    
+    res.json({
+      success: true,
+      message: `History exported to ${filePath}`,
+      filePath
+    });
+  } catch (error) {
+    logger.error({
+      category: 'scripts',
+      action: 'export_history_error',
+      message: 'Failed to export script history',
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to export history',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+// ============================================================================
+// Port Management Routes
+// ============================================================================
+
+// Get port status for all services
+router.get('/ports/status', async (_req: Request, res: Response) => {
+  try {
+    const portStatuses: Record<string, any> = {};
+
+    // Check ports for all configured services
+    for (const [serviceName, serviceConfig] of Object.entries(services)) {
+      if (serviceConfig.ports && serviceConfig.ports.length > 0) {
+        const ports = await Promise.all(
+          serviceConfig.ports.map(async (port) => {
+            const info = await getPortInfo(port);
+            return info; // Already contains port, pid, inUse
+          })
+        );
+        portStatuses[serviceName] = ports;
+      }
+    }
+
+    res.json(portStatuses);
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_port_statuses_error',
+      message: `Error getting port statuses: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get port statuses',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Kill process on a specific port
+router.post('/ports/:port/kill', async (req: Request, res: Response) => {
+  try {
+    const port = parseInt(req.params.port);
+
+    if (isNaN(port) || port < 1 || port > 65535) {
+      res.status(400).json({
+        error: 'Invalid port',
+        message: 'Port must be a number between 1 and 65535',
+      });
+      return;
+    }
+
+    logger.info({
+      category: 'api',
+      action: 'api_killing_process_on_port_port',
+      message: `API: Killing process on port ${port}`
+    });
+    const info = await getPortInfo(port);
+
+    if (!info.inUse) {
+      res.json({
+        success: true,
+        message: `Port ${port} is not in use`,
+        port,
+        wasInUse: false,
+      });
+      return;
+    }
+
+    const killed = await killPortProcess(port);
+
+    res.json({
+      success: killed,
+      message: killed
+        ? `Process on port ${port} (PID: ${info.pid}) killed successfully`
+        : `Failed to kill process on port ${port}`,
+      port,
+      pid: info.pid,
+      wasInUse: true,
+    });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_killing_process_on_port_req_params_port_error',
+      message: `Error killing process on port ${req.params.port}: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to kill port process',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Frontend logging endpoint
+// Receives logs from frontend and writes to /logs/frontend.log or /logs/browser-console.log
+router.post('/logs/frontend', (req: Request, res: Response) => {
+  try {
+    const logEntry = req.body;
+
+    // Validate required fields
+    if (!logEntry.severity || !logEntry.message) {
+      res.status(400).json({
+        error: 'Invalid log entry',
+        message: 'severity and message are required',
+      });
+      return;
+    }
+
+    // Determine service and log file
+    let service = logEntry.service || 'frontend';
+    let logFileName = 'frontend.log';
+
+    // If service is 'frontend-browser', write to browser-console.log
+    if (service === 'frontend-browser') {
+      logFileName = 'browser-console.log';
+    } else {
+      // Default to 'frontend' service
+      service = 'frontend';
+      logEntry.service = service;
+    }
+
+    // Ensure environment is set
+    if (!logEntry.environment) {
+      logEntry.environment = 'development';
+    }
+
+    // Ensure timestamp exists
+    if (!logEntry.timestamp) {
+      logEntry.timestamp = new Date().toISOString();
+    }
+
+    // Write to appropriate log file
+    const LOG_FILE = path.join(LOGS_DIR, logFileName);
+    const logLine = JSON.stringify(logEntry) + '\n';
+
+    // Ensure log directory exists
+    const logDir = path.dirname(LOG_FILE);
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+
+    fs.appendFileSync(LOG_FILE, logLine);
+
+    res.status(201).json({ success: true });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'log_failed',
+      message: 'Failed to write frontend log',
+      error: error instanceof Error ? error : new Error(String(error)),
+    });
+    res.status(500).json({
+      error: 'Failed to write log',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// ============================================================================
+// Log Rotation Routes
+// ============================================================================
+
+// Get log rotation status
+router.get('/logs/rotation/status', (_req: Request, res: Response) => {
+  try {
+    const status = logRotation.getStatus();
+    res.json({
+      status,
+      config: {
+        maxSize: '10 MB',
+        maxAge: '7 days',
+        checkInterval: '1 minute',
+        compress: true,
+      },
+    });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'rotation_status_failed',
+      message: 'Failed to get log rotation status',
+      error: error instanceof Error ? error : new Error(String(error)),
+    });
+    res.status(500).json({
+      error: 'Failed to get rotation status',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// ============================================================================
+// Docker Container Routes
+// ============================================================================
+
+// Get Docker container info
+router.get('/docker/container-info', async (_req: Request, res: Response) => {
+  try {
+    const containerInfo = await getDockerContainerInfo('job-finder-local-build');
+    res.json(containerInfo);
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_container_info_error',
+      message: `Error getting container info: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get container info',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Start Docker container
+router.post('/docker/start', async (_req: Request, res: Response) => {
+  try {
+    logger.info({
+      category: 'api',
+      action: 'docker_start',
+      message: 'Starting Docker container...'
+    });
+    
+    // Start the container using docker compose
+    const config = services['python-worker'];
+    const childProcess = spawn('docker', ['compose', '-f', 'docker-compose.dev.yml', 'up', '-d'], {
+      cwd: config.cwd,
+      env: config.env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    childProcess.on('close', (code) => {
+      if (code === 0) {
+        logger.info({
+          category: 'api',
+          action: 'docker_started',
+          message: 'Docker container started successfully'
+        });
+      } else {
+        logger.error({
+          category: 'api',
+          action: 'docker_container_start_failed',
+          message: `Docker container start failed with code ${code}`,
+          details: { code }
+        });
+      }
+    });
+
+    childProcess.on('error', (error) => {
+      logger.error({
+      category: 'api',
+      action: 'failed_to_start_docker_container_error',
+      message: `Failed to start Docker container: ${error}`,
+      error
+    });
+    });
+
+    res.json({ success: true, message: 'Starting Docker container...' });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_starting_container_error',
+      message: `Error starting container: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to start container',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Stop Docker container
+router.post('/docker/stop', async (_req: Request, res: Response) => {
+  try {
+    logger.info({
+      category: 'api',
+      action: 'docker_stop',
+      message: 'Stopping Docker container...'
+    });
+    const success = await stopDockerContainer('job-finder-local-build');
+    
+    if (success) {
+      res.json({ success: true, message: 'Docker container stopped' });
+    } else {
+      res.status(500).json({ error: 'Failed to stop container' });
+    }
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_stopping_container_error',
+      message: `Error stopping container: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to stop container',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Restart Docker container
+router.post('/docker/restart', async (_req: Request, res: Response) => {
+  try {
+    logger.info({
+      category: 'api',
+      action: 'docker_restart',
+      message: 'Restarting Docker container...'
+    });
+    
+    // First stop the container
+    const stopSuccess = await stopDockerContainer('job-finder-local-build');
+    if (!stopSuccess) {
+      res.status(500).json({ error: 'Failed to stop container' });
+      return;
+    }
+
+    // Wait a moment for the container to fully stop
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    // Then start it again
+    const config = services['python-worker'];
+    const childProcess = spawn('docker', ['compose', '-f', 'docker-compose.dev.yml', 'up', '-d'], {
+      cwd: config.cwd,
+      env: config.env,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    childProcess.on('close', (code) => {
+      if (code === 0) {
+        logger.info({
+          category: 'api',
+          action: 'docker_restarted',
+          message: 'Docker container restarted successfully'
+        });
+      } else {
+        logger.error({
+          category: 'api',
+          action: 'docker_container_restart_failed',
+          message: `Docker container restart failed with code ${code}`,
+          details: { code }
+        });
+      }
+    });
+
+    childProcess.on('error', (error) => {
+      logger.error({
+      category: 'api',
+      action: 'failed_to_restart_docker_container_error',
+      message: `Failed to restart Docker container: ${error}`,
+      error
+    });
+    });
+
+    res.json({ success: true, message: 'Restarting Docker container...' });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_restarting_container_error',
+      message: `Error restarting container: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to restart container',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Claude Workers API endpoints
+router.get('/claude-workers/status', async (_req: Request, res: Response) => {
+  try {
+    const status = await claudeWorkersManager.getSystemStatus();
+    if (status) {
+      res.json(status);
+    } else {
+      res.status(503).json({
+        error: 'Claude Workers coordinator is not available',
+        healthy: claudeWorkersManager.isHealthy()
+      });
+    }
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_claude_workers_status_error',
+      message: `Error getting Claude Workers status: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get Claude Workers status',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.get('/claude-workers/tasks', async (_req: Request, res: Response) => {
+  try {
+    const tasks = await claudeWorkersManager.getTasks();
+    if (tasks) {
+      res.json(tasks);
+    } else {
+      res.status(503).json({
+        error: 'Claude Workers coordinator is not available',
+        healthy: claudeWorkersManager.isHealthy()
+      });
+    }
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_claude_workers_tasks_error',
+      message: `Error getting Claude Workers tasks: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get Claude Workers tasks',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.post('/claude-workers/tasks', async (req: Request, res: Response) => {
+  try {
+    const { type, title, documentation, acceptanceCriteria, files, dependencies, repository, assignedAgent, notes } = req.body;
+    
+    if (!type || !title || !documentation || !acceptanceCriteria) {
+      return res.status(400).json({
+        error: 'Type, title, documentation, and acceptanceCriteria are required'
+      });
+    }
+
+    const task = await claudeWorkersManager.addTask(type, title, documentation, acceptanceCriteria, {
+      files,
+      dependencies,
+      repository,
+      assignedAgent,
+      notes
+    });
+    res.json({ task, message: 'Task added successfully' });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_adding_claude_workers_task_error',
+      message: `Error adding Claude Workers task: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to add task',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.get('/claude-workers/health', (_req: Request, res: Response) => {
+  res.json({
+    healthy: claudeWorkersManager.isHealthy(),
+    status: claudeWorkersManager.isHealthy() ? 'healthy' : 'unhealthy'
+  });
+});
+
+// Enhanced API endpoints
+router.get('/claude-workers/agents', (_req: Request, res: Response) => {
+  try {
+    const agents = claudeWorkersManager.getAgentPersonalities();
+    res.json({ agents });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_agent_personalities_error',
+      message: `Error getting agent personalities: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get agent personalities',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.get('/claude-workers/templates', (_req: Request, res: Response) => {
+  try {
+    const templates = claudeWorkersManager.getTaskTemplates();
+    res.json({ templates });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_task_templates_error',
+      message: `Error getting task templates: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get task templates',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.post('/claude-workers/onboarding/complete', async (req: Request, res: Response) => {
+  try {
+    const { workerId } = req.body;
+    
+    if (!workerId) {
+      return res.status(400).json({
+        error: 'Worker ID is required'
+      });
+    }
+
+    claudeWorkersManager.completeWorkerOnboarding(workerId);
+    res.json({ message: 'Worker onboarding completed successfully' });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_completing_worker_onboarding_error',
+      message: `Error completing worker onboarding: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to complete worker onboarding',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.post('/claude-workers/export', async (req: Request, res: Response) => {
+  try {
+    const { exportPath } = req.body;
+    
+    if (!exportPath) {
+      return res.status(400).json({
+        error: 'Export path is required'
+      });
+    }
+
+    claudeWorkersManager.exportTasks(exportPath);
+    res.json({ message: 'Tasks exported successfully', path: exportPath });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_exporting_tasks_error',
+      message: `Error exporting tasks: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to export tasks',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.post('/claude-workers/import', async (req: Request, res: Response) => {
+  try {
+    const { importPath } = req.body;
+    
+    if (!importPath) {
+      return res.status(400).json({
+        error: 'Import path is required'
+      });
+    }
+
+    claudeWorkersManager.importTasks(importPath);
+    res.json({ message: 'Tasks imported successfully', path: importPath });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_importing_tasks_error',
+      message: `Error importing tasks: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to import tasks',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Enhanced task creation endpoints
+router.post('/claude-workers/tasks/enhanced', async (req: Request, res: Response) => {
+  try {
+    const taskData = req.body;
+    
+    if (!taskData.type || !taskData.title || !taskData.documentation || !taskData.acceptanceCriteria) {
+      return res.status(400).json({
+        error: 'Type, title, documentation, and acceptanceCriteria are required'
+      });
+    }
+
+    const result = await claudeWorkersManager.addEnhancedTask(taskData);
+    res.json({ 
+      task: result.task, 
+      validation: result.validation,
+      message: 'Enhanced task added successfully' 
+    });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_adding_enhanced_task_error',
+      message: `Error adding enhanced task: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to add enhanced task',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.get('/claude-workers/guidelines', (_req: Request, res: Response) => {
+  try {
+    const guidelines = claudeWorkersManager.getTaskGuidelines();
+    res.json({ guidelines });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_task_guidelines_error',
+      message: `Error getting task guidelines: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get task guidelines',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.get('/claude-workers/guidelines/:taskType', (req: Request, res: Response) => {
+  try {
+    const { taskType } = req.params;
+    const guidelines = claudeWorkersManager.getTaskGuidelines(taskType);
+    
+    if (!guidelines) {
+      return res.status(404).json({
+        error: `No guidelines found for task type: ${taskType}`
+      });
+    }
+    
+    res.json({ guidelines });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_task_guidelines_error',
+      message: `Error getting task guidelines: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get task guidelines',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.get('/claude-workers/examples/:taskType', (req: Request, res: Response) => {
+  try {
+    const { taskType } = req.params;
+    const example = claudeWorkersManager.getTaskExample(taskType);
+    
+    if (!example) {
+      return res.status(404).json({
+        error: `No example found for task type: ${taskType}`
+      });
+    }
+    
+    res.json({ example });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_task_example_error',
+      message: `Error getting task example: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get task example',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.get('/claude-workers/checklist/:taskType', (req: Request, res: Response) => {
+  try {
+    const { taskType } = req.params;
+    const checklist = claudeWorkersManager.getTaskChecklist(taskType);
+    
+    res.json({ checklist });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_task_checklist_error',
+      message: `Error getting task checklist: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get task checklist',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.post('/claude-workers/validate', async (req: Request, res: Response) => {
+  try {
+    const { taskData, taskType } = req.body;
+    
+    if (!taskData || !taskType) {
+      return res.status(400).json({
+        error: 'Task data and task type are required'
+      });
+    }
+
+    const validation = claudeWorkersManager.validateTaskData(taskData, taskType);
+    res.json({ validation });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_validating_task_data_error',
+      message: `Error validating task data: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to validate task data',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.get('/claude-workers/projects', (_req: Request, res: Response) => {
+  try {
+    const projects = claudeWorkersManager.getValidProjects();
+    res.json({ projects });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_valid_projects_error',
+      message: `Error getting valid projects: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get valid projects',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.get('/claude-workers/agents/valid', (_req: Request, res: Response) => {
+  try {
+    const agents = claudeWorkersManager.getValidAgents();
+    res.json({ agents });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_valid_agents_error',
+      message: `Error getting valid agents: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get valid agents',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.get('/claude-workers/tasks/completed', (_req: Request, res: Response) => {
+  try {
+    const completedTasks = claudeWorkersManager.getCompletedTasks();
+    res.json({ 
+      completedTasks,
+      total: completedTasks.length,
+      message: 'Completed tasks retrieved successfully'
+    });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_completed_tasks_error',
+      message: `Error getting completed tasks: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get completed tasks',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.post('/claude-workers/start', (_req: Request, res: Response) => {
+  try {
+    claudeWorkersManager.startSystem();
+    res.json({ 
+      success: true,
+      message: 'Claude Workers system started successfully'
+    });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_starting_claude_workers_system_error',
+      message: `Error starting Claude Workers system: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to start Claude Workers system',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.post('/claude-workers/stop', (_req: Request, res: Response) => {
+  try {
+    claudeWorkersManager.stopSystem();
+    res.json({ 
+      success: true,
+      message: 'Claude Workers system stopped successfully'
+    });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_stopping_claude_workers_system_error',
+      message: `Error stopping Claude Workers system: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to stop Claude Workers system',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Scope control and cleanup endpoints
+router.get('/claude-workers/scope-violations', async (_req: Request, res: Response) => {
+  try {
+    const violations = await claudeWorkersManager.getScopeViolations();
+    res.json({ violations });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_scope_violations_error',
+      message: `Error getting scope violations: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get scope violations',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.post('/claude-workers/emergency-recovery', async (_req: Request, res: Response) => {
+  try {
+    const recoveryTask = await claudeWorkersManager.triggerEmergencyRecovery();
+    res.json({ 
+      task: recoveryTask, 
+      message: 'Emergency recovery task created successfully' 
+    });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_triggering_emergency_recovery_error',
+      message: `Error triggering emergency recovery: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to trigger emergency recovery',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.get('/claude-workers/cleanup-status', async (_req: Request, res: Response) => {
+  try {
+    const status = await claudeWorkersManager.getCleanupStatus();
+    res.json(status);
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_cleanup_status_error',
+      message: `Error getting cleanup status: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get cleanup status',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.post('/claude-workers/trigger-cleanup', async (req: Request, res: Response) => {
+  try {
+    const { type } = req.body;
+    
+    if (!type) {
+      return res.status(400).json({
+        error: 'Cleanup type is required'
+      });
+    }
+
+    const cleanupTask = await claudeWorkersManager.triggerCleanup(type);
+    res.json({ 
+      task: cleanupTask, 
+      message: `${type} cleanup task created successfully` 
+    });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_triggering_cleanup_error',
+      message: `Error triggering cleanup: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to trigger cleanup',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Workspace sync endpoints
+router.get('/claude-workers/workspace-sync/status', async (_req: Request, res: Response) => {
+  try {
+    const status = await claudeWorkersManager.getWorkspaceSyncStatus();
+    res.json(status);
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_workspace_sync_status_error',
+      message: `Error getting workspace sync status: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get workspace sync status',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.post('/claude-workers/workspace-sync/trigger', async (req: Request, res: Response) => {
+  try {
+    const { dryRun, verbose, conflictStrategy } = req.body;
+    
+    const syncResult = await claudeWorkersManager.triggerWorkspaceSync({
+      dryRun: dryRun || false,
+      verbose: verbose || false,
+      conflictStrategy: conflictStrategy || 'auto-merge'
+    });
+    
+    res.json({ 
+      success: true,
+      result: syncResult,
+      message: 'Workspace sync completed successfully' 
+    });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_triggering_workspace_sync_error',
+      message: `Error triggering workspace sync: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to trigger workspace sync',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Docker management endpoints
+router.get('/claude-workers/docker/status', async (_req: Request, res: Response) => {
+  try {
+    const dockerStatus = claudeWorkersManager.getDockerStatus();
+    res.json(dockerStatus);
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_docker_status_error',
+      message: `Error getting Docker status: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get Docker status',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.post('/claude-workers/docker/revalidate', async (_req: Request, res: Response) => {
+  try {
+    const validation = await claudeWorkersManager.revalidateDockerEnvironment();
+    res.json(validation);
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_revalidating_docker_error',
+      message: `Error revalidating Docker: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to revalidate Docker environment',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.post('/claude-workers/docker/cleanup', async (_req: Request, res: Response) => {
+  try {
+    const result = await claudeWorkersManager.cleanupOrphanedResources();
+    res.json({
+      success: true,
+      ...result,
+      message: `Cleaned up ${result.volumesCleaned} volumes and ${result.networksCleaned} networks`
+    });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_cleaning_up_docker_resources_error',
+      message: `Error cleaning up Docker resources: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to cleanup Docker resources',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.get('/claude-workers/containers/:containerId/health', async (req: Request, res: Response) => {
+  try {
+    const { containerId } = req.params;
+    const health = await claudeWorkersManager.getContainerHealth(containerId);
+    res.json(health);
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_getting_container_health_error',
+      message: `Error getting container health: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get container health',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+router.put('/claude-workers/workspace-sync/config', async (req: Request, res: Response) => {
+  try {
+    const { baseDir, repositories, workers, conflictStrategy } = req.body;
+
+    claudeWorkersManager.updateWorkspaceSyncConfig({
+      baseDir,
+      repositories,
+      workers,
+      conflictStrategy
+    });
+    
+    res.json({ 
+      success: true,
+      message: 'Workspace sync configuration updated successfully' 
+    });
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_updating_workspace_sync_config_error',
+      message: `Error updating workspace sync config: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to update workspace sync configuration',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// ============================================================================
+// Retry System API Endpoints
+// ============================================================================
+
+// Retry a failed task
+router.post('/claude-workers/tasks/:taskId/retry', async (req: Request, res: Response) => {
+  try {
+    const { taskId } = req.params;
+    const { reason } = req.body;
+    
+    const result = await claudeWorkersManager.retryTask(taskId, reason);
+    
+    if (result.success) {
+      res.json({
+        success: true,
+        message: result.message
+      });
+    } else {
+      res.status(400).json({
+        success: false,
+        error: result.message
+      });
+    }
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'error_retrying_task_error',
+      message: `Error retrying task: ${error}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to retry task',
+      message: error instanceof Error ? error.message : String(error),
+    });
+  }
+});
+
+// Cancel retry removed - manual retry only
+
+// Retry info endpoint removed - manual retry only
+
+// Complex retry endpoints removed - manual retry only
+
+// ============================================================================
+// Docker Container Management Routes
+// ============================================================================
+
+/**
+ * List all Docker containers
+ */
+router.get('/docker/containers', async (req: Request, res: Response) => {
+  try {
+    const all = req.query.all === 'true';
+    const dockerManager = claudeWorkersManager.getDockerManager();
+    const containers = await dockerManager.listContainers({ all });
+    
+    res.json({
+      success: true,
+      containers,
+      count: containers.length
+    });
+  } catch (error) {
+    logger.error({
+      category: 'docker',
+      action: 'list_containers_error',
+      message: 'Failed to list containers',
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to list containers',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Get container details
+ */
+router.get('/docker/containers/:containerId', async (req: Request, res: Response) => {
+  try {
+    const { containerId } = req.params;
+    const dockerManager = claudeWorkersManager.getDockerManager();
+    const info = await dockerManager.inspectContainer(containerId);
+    
+    if (!info) {
+      return res.status(404).json({
+        error: 'Container not found',
+        containerId
+      });
+    }
+    
+    res.json({
+      success: true,
+      container: info
+    });
+  } catch (error) {
+    logger.error({
+      category: 'docker',
+      action: 'inspect_container_error',
+      message: `Failed to inspect container ${req.params.containerId}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to inspect container',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Start a container
+ */
+router.post('/docker/containers/:containerId/start', async (req: Request, res: Response) => {
+  try {
+    const { containerId } = req.params;
+    const dockerManager = claudeWorkersManager.getDockerManager();
+    const success = await dockerManager.startContainer(containerId);
+    
+    if (success) {
+      res.json({
+        success: true,
+        message: `Container ${containerId} started`,
+        containerId
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to start container'
+      });
+    }
+  } catch (error) {
+    logger.error({
+      category: 'docker',
+      action: 'start_container_error',
+      message: `Failed to start container ${req.params.containerId}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to start container',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Stop a container
+ */
+router.post('/docker/containers/:containerId/stop', async (req: Request, res: Response) => {
+  try {
+    const { containerId } = req.params;
+    const timeout = parseInt(req.body.timeout || '10', 10);
+    const dockerManager = claudeWorkersManager.getDockerManager();
+    const success = await dockerManager.stopContainer(containerId, timeout);
+    
+    if (success) {
+      res.json({
+        success: true,
+        message: `Container ${containerId} stopped`,
+        containerId
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to stop container'
+      });
+    }
+  } catch (error) {
+    logger.error({
+      category: 'docker',
+      action: 'stop_container_error',
+      message: `Failed to stop container ${req.params.containerId}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to stop container',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Restart a container
+ */
+router.post('/docker/containers/:containerId/restart', async (req: Request, res: Response) => {
+  try {
+    const { containerId } = req.params;
+    const timeout = parseInt(req.body.timeout || '10', 10);
+    const dockerManager = claudeWorkersManager.getDockerManager();
+    const success = await dockerManager.restartContainer(containerId, timeout);
+    
+    if (success) {
+      res.json({
+        success: true,
+        message: `Container ${containerId} restarted`,
+        containerId
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to restart container'
+      });
+    }
+  } catch (error) {
+    logger.error({
+      category: 'docker',
+      action: 'restart_container_error',
+      message: `Failed to restart container ${req.params.containerId}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to restart container',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Remove a container
+ */
+router.delete('/docker/containers/:containerId', async (req: Request, res: Response) => {
+  try {
+    const { containerId } = req.params;
+    const force = req.query.force === 'true';
+    const dockerManager = claudeWorkersManager.getDockerManager();
+    const success = await dockerManager.removeContainer(containerId, force);
+    
+    if (success) {
+      res.json({
+        success: true,
+        message: `Container ${containerId} removed`,
+        containerId
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: 'Failed to remove container'
+      });
+    }
+  } catch (error) {
+    logger.error({
+      category: 'docker',
+      action: 'remove_container_error',
+      message: `Failed to remove container ${req.params.containerId}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to remove container',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Get container logs
+ */
+router.get('/docker/containers/:containerId/logs', async (req: Request, res: Response) => {
+  try {
+    const { containerId } = req.params;
+    const tail = parseInt(req.query.tail as string || '100', 10);
+    const dockerManager = claudeWorkersManager.getDockerManager();
+    const logs = await dockerManager.getContainerLogs(containerId, tail);
+    
+    res.json({
+      success: true,
+      logs,
+      containerId
+    });
+  } catch (error) {
+    logger.error({
+      category: 'docker',
+      action: 'get_logs_error',
+      message: `Failed to get logs for container ${req.params.containerId}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get container logs',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Get container stats
+ */
+router.get('/docker/containers/:containerId/stats', async (req: Request, res: Response) => {
+  try {
+    const { containerId } = req.params;
+    const dockerManager = claudeWorkersManager.getDockerManager();
+    const stats = await dockerManager.getContainerStats(containerId);
+    
+    if (!stats) {
+      return res.status(404).json({
+        error: 'Failed to get container stats',
+        containerId
+      });
+    }
+    
+    res.json({
+      success: true,
+      stats,
+      containerId
+    });
+  } catch (error) {
+    logger.error({
+      category: 'docker',
+      action: 'get_stats_error',
+      message: `Failed to get stats for container ${req.params.containerId}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get container stats',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+// ============================================================================
+// Socket.IO Connection Monitoring Routes
+// ============================================================================
+
+/**
+ * Get Socket.IO connection statistics
+ */
+router.get('/socket/stats', (_req: Request, res: Response) => {
+  try {
+    // Note: connectionManager will be imported from server
+    const { connectionManager } = require('../server.js');
+    const stats = connectionManager.getStats();
+    
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    logger.error({
+      category: 'socket',
+      action: 'get_stats_error',
+      message: 'Failed to get connection stats',
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get connection statistics',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Get all active connections
+ */
+router.get('/socket/connections', (_req: Request, res: Response) => {
+  try {
+    const { connectionManager } = require('../server.js');
+    const connections = connectionManager.getAllConnections();
+    
+    res.json({
+      success: true,
+      connections: connections.map((conn: any) => ({
+        socketId: conn.socketId,
+        connectedAt: conn.connectedAt,
+        lastPing: conn.lastPing,
+        isHealthy: conn.isHealthy,
+        reconnectCount: conn.reconnectCount,
+        subscriptions: Array.from(conn.subscriptions),
+        monitors: Array.from(conn.monitors),
+      })),
+      count: connections.length
+    });
+  } catch (error) {
+    logger.error({
+      category: 'socket',
+      action: 'get_connections_error',
+      message: 'Failed to get connections',
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get connections',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Get specific connection info
+ */
+router.get('/socket/connections/:socketId', (req: Request, res: Response) => {
+  try {
+    const { socketId } = req.params;
+    const { connectionManager } = require('../server.js');
+    const info = connectionManager.getConnectionInfo(socketId);
+    
+    if (!info) {
+      return res.status(404).json({
+        error: 'Connection not found',
+        socketId
+      });
+    }
+    
+    res.json({
+      success: true,
+      connection: {
+        socketId: info.socketId,
+        connectedAt: info.connectedAt,
+        lastPing: info.lastPing,
+        isHealthy: info.isHealthy,
+        reconnectCount: info.reconnectCount,
+        subscriptions: Array.from(info.subscriptions),
+        monitors: Array.from(info.monitors),
+      }
+    });
+  } catch (error) {
+    logger.error({
+      category: 'socket',
+      action: 'get_connection_error',
+      message: `Failed to get connection ${req.params.socketId}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get connection info',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+// ============================================================================
+// Task Management Routes
+// ============================================================================
+
+/**
+ * Create a new task
+ */
+router.post('/tasks', (req: Request, res: Response) => {
+  try {
+    const { taskQueueManager } = require('../server.js');
+    
+    const task = taskQueueManager.createTask(req.body);
+    
+    res.status(201).json({
+      success: true,
+      task
+    });
+  } catch (error) {
+    logger.error({
+      category: 'process',
+      action: 'create_task_error',
+      message: 'Failed to create task',
+      error
+    });
+    res.status(400).json({
+      error: 'Failed to create task',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Get all tasks with optional filters
+ */
+router.get('/tasks', (req: Request, res: Response) => {
+  try {
+    const { taskQueueManager } = require('../server.js');
+    // Use singleton taskQueueManager
+    
+    const query = {
+      status: req.query.status as string | undefined,
+      type: req.query.type as string | undefined,
+      assignedAgent: req.query.assignedAgent as string | undefined,
+      assignedWorker: req.query.assignedWorker as string | undefined,
+      project: req.query.project as string | undefined,
+      limit: req.query.limit ? parseInt(req.query.limit as string) : undefined,
+      offset: req.query.offset ? parseInt(req.query.offset as string) : undefined,
+      sortBy: req.query.sortBy as any,
+      sortOrder: req.query.sortOrder as any,
+    };
+    
+    const tasks = taskQueueManager.queryTasks(query);
+    
+    res.json({
+      success: true,
+      tasks,
+      count: tasks.length
+    });
+  } catch (error) {
+    logger.error({
+      category: 'process',
+      action: 'get_tasks_error',
+      message: 'Failed to get tasks',
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get tasks',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Get task by ID
+ */
+router.get('/tasks/:taskId', (req: Request, res: Response) => {
+  try {
+    const { taskId } = req.params;
+    const { taskQueueManager } = require('../server.js');
+    // Use singleton taskQueueManager
+    
+    const task = taskQueueManager.getTask(taskId);
+    
+    if (!task) {
+      return res.status(404).json({
+        error: 'Task not found',
+        taskId
+      });
+    }
+    
+    res.json({
+      success: true,
+      task
+    });
+  } catch (error) {
+    logger.error({
+      category: 'process',
+      action: 'get_task_error',
+      message: `Failed to get task ${req.params.taskId}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get task',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Update task
+ */
+router.patch('/tasks/:taskId', (req: Request, res: Response) => {
+  try {
+    const { taskId } = req.params;
+    const { taskQueueManager } = require('../server.js');
+    // Use singleton taskQueueManager
+    
+    const task = taskQueueManager.updateTask(taskId, req.body);
+    
+    if (!task) {
+      return res.status(404).json({
+        error: 'Task not found or update failed',
+        taskId
+      });
+    }
+    
+    res.json({
+      success: true,
+      task
+    });
+  } catch (error) {
+    logger.error({
+      category: 'process',
+      action: 'update_task_error',
+      message: `Failed to update task ${req.params.taskId}`,
+      error
+    });
+    res.status(400).json({
+      error: 'Failed to update task',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Delete task
+ */
+router.delete('/tasks/:taskId', (req: Request, res: Response) => {
+  try {
+    const { taskId } = req.params;
+    const { taskQueueManager } = require('../server.js');
+    // Use singleton taskQueueManager
+    
+    const deleted = taskQueueManager.deleteTask(taskId);
+    
+    if (!deleted) {
+      return res.status(404).json({
+        error: 'Task not found',
+        taskId
+      });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Task deleted',
+      taskId
+    });
+  } catch (error) {
+    logger.error({
+      category: 'process',
+      action: 'delete_task_error',
+      message: `Failed to delete task ${req.params.taskId}`,
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to delete task',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Get task statistics
+ */
+router.get('/tasks-stats', (req: Request, res: Response) => {
+  try {
+    const { taskQueueManager } = require('../server.js');
+    // Use singleton taskQueueManager
+    
+    const stats = taskQueueManager.getStats();
+    
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    logger.error({
+      category: 'process',
+      action: 'get_task_stats_error',
+      message: 'Failed to get task statistics',
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get task statistics',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Get next pending task
+ */
+router.get('/tasks-next', (req: Request, res: Response) => {
+  try {
+    const { taskQueueManager } = require('../server.js');
+    // Use singleton taskQueueManager
+    
+    const task = taskQueueManager.getNextPendingTask();
+    
+    if (!task) {
+      return res.json({
+        success: true,
+        task: null,
+        message: 'No pending tasks'
+      });
+    }
+    
+    res.json({
+      success: true,
+      task
+    });
+  } catch (error) {
+    logger.error({
+      category: 'process',
+      action: 'get_next_task_error',
+      message: 'Failed to get next pending task',
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get next pending task',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Assign task to worker
+ */
+router.post('/tasks/:taskId/assign', (req: Request, res: Response) => {
+  try {
+    const { taskId } = req.params;
+    const { workerId, agentId } = req.body;
+    
+    if (!workerId || !agentId) {
+      return res.status(400).json({
+        error: 'Missing required fields',
+        required: ['workerId', 'agentId']
+      });
+    }
+    
+    const { taskQueueManager } = require('../server.js');
+    // Use singleton taskQueueManager
+    
+    const task = taskQueueManager.assignTask(taskId, workerId, agentId);
+    
+    if (!task) {
+      return res.status(404).json({
+        error: 'Task not found or cannot be assigned',
+        taskId
+      });
+    }
+    
+    res.json({
+      success: true,
+      task
+    });
+  } catch (error) {
+    logger.error({
+      category: 'process',
+      action: 'assign_task_error',
+      message: `Failed to assign task ${req.params.taskId}`,
+      error
+    });
+    res.status(400).json({
+      error: 'Failed to assign task',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Start task execution
+ */
+router.post('/tasks/:taskId/start', (req: Request, res: Response) => {
+  try {
+    const { taskId } = req.params;
+    const { taskQueueManager } = require('../server.js');
+    // Use singleton taskQueueManager
+    
+    const task = taskQueueManager.startTask(taskId);
+    
+    if (!task) {
+      return res.status(404).json({
+        error: 'Task not found or cannot be started',
+        taskId
+      });
+    }
+    
+    res.json({
+      success: true,
+      task
+    });
+  } catch (error) {
+    logger.error({
+      category: 'process',
+      action: 'start_task_error',
+      message: `Failed to start task ${req.params.taskId}`,
+      error
+    });
+    res.status(400).json({
+      error: 'Failed to start task',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Complete task successfully
+ */
+router.post('/tasks/:taskId/complete', (req: Request, res: Response) => {
+  try {
+    const { taskId } = req.params;
+    const { output } = req.body;
+    
+    const { taskQueueManager } = require('../server.js');
+    // Use singleton taskQueueManager
+    
+    const task = taskQueueManager.completeTask(taskId, output);
+    
+    if (!task) {
+      return res.status(404).json({
+        error: 'Task not found',
+        taskId
+      });
+    }
+    
+    res.json({
+      success: true,
+      task
+    });
+  } catch (error) {
+    logger.error({
+      category: 'process',
+      action: 'complete_task_error',
+      message: `Failed to complete task ${req.params.taskId}`,
+      error
+    });
+    res.status(400).json({
+      error: 'Failed to complete task',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Fail task
+ */
+router.post('/tasks/:taskId/fail', (req: Request, res: Response) => {
+  try {
+    const { taskId } = req.params;
+    const { error: taskError, exitCode } = req.body;
+    
+    if (!taskError) {
+      return res.status(400).json({
+        error: 'Missing required field: error'
+      });
+    }
+    
+    const { taskQueueManager } = require('../server.js');
+    // Use singleton taskQueueManager
+    
+    const task = taskQueueManager.failTask(taskId, taskError, exitCode);
+    
+    if (!task) {
+      return res.status(404).json({
+        error: 'Task not found',
+        taskId
+      });
+    }
+    
+    res.json({
+      success: true,
+      task
+    });
+  } catch (error) {
+    logger.error({
+      category: 'process',
+      action: 'fail_task_error',
+      message: `Failed to mark task as failed ${req.params.taskId}`,
+      error
+    });
+    res.status(400).json({
+      error: 'Failed to mark task as failed',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Retry task
+ */
+router.post('/tasks/:taskId/retry', (req: Request, res: Response) => {
+  try {
+    const { taskId } = req.params;
+    const { taskQueueManager } = require('../server.js');
+    // Use singleton taskQueueManager
+    
+    const task = taskQueueManager.retryTask(taskId);
+    
+    if (!task) {
+      return res.status(404).json({
+        error: 'Task not found or cannot be retried',
+        taskId
+      });
+    }
+    
+    res.json({
+      success: true,
+      task
+    });
+  } catch (error) {
+    logger.error({
+      category: 'process',
+      action: 'retry_task_error',
+      message: `Failed to retry task ${req.params.taskId}`,
+      error
+    });
+    res.status(400).json({
+      error: 'Failed to retry task',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+// ============================================================================
+// Task Bridge Routes
+// ============================================================================
+
+/**
+ * Get task bridge statistics
+ */
+router.get('/tasks/bridge/stats', (_req: Request, res: Response) => {
+  try {
+    const { taskBridge } = require('../server.js');
+    const stats = taskBridge.getStats();
+    
+    res.json({
+      success: true,
+      stats
+    });
+  } catch (error) {
+    logger.error({
+      category: 'process',
+      action: 'get_bridge_stats_error',
+      message: 'Failed to get task bridge statistics',
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to get bridge statistics',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+/**
+ * Manually trigger task synchronization
+ */
+router.post('/tasks/bridge/sync', async (_req: Request, res: Response) => {
+  try {
+    const { taskBridge } = require('../server.js');
+    await taskBridge.syncTasks();
+    
+    res.json({
+      success: true,
+      message: 'Tasks synchronized successfully'
+    });
+  } catch (error) {
+    logger.error({
+      category: 'process',
+      action: 'sync_tasks_error',
+      message: 'Failed to synchronize tasks',
+      error
+    });
+    res.status(500).json({
+      error: 'Failed to synchronize tasks',
+      message: error instanceof Error ? error.message : String(error)
+    });
+  }
+});
+
+// Export the processManager, cloudLogging, scriptManager, and claudeWorkersManager instances for use in Socket.IO
+export { processManager, cloudLogging, scriptManager, claudeWorkersManager };
+export default router;
