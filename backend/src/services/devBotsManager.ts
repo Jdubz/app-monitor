@@ -37,65 +37,114 @@ export interface WorkerInfo {
   currentTask?: string;
 }
 
+/**
+ * Task interface representing a unit of work for dev-bots agents
+ */
 export interface Task {
+  /** @type {string} Unique identifier for the task */
   id: string;
+  /** @type {string} Type of task (e.g., implementation, bug fix, refactoring) */
   type: string;
-  title: string; // Specific task title
-  description?: string; // Task description
-  documentation?: string; // What the worker should read before starting
-  notes?: string; // Optional: additional notes or context
+  /** @type {string} Specific title describing the task */
+  title: string;
+  /** @type {string} Detailed description of what needs to be done */
+  description?: string;
+  /** @type {string} Documentation the worker should read before starting */
+  documentation?: string;
+  /** @type {string} Additional context or notes for task execution */
+  notes?: string;
+  /** @type {'pending' | 'assigned' | 'active' | 'completed' | 'failed' | 'retrying'} Current status of the task */
   status: 'pending' | 'assigned' | 'active' | 'completed' | 'failed' | 'retrying';
+  /** @type {string} ISO timestamp when task was created */
   createdAt: string;
+  /** @type {string} ID of the worker assigned to this task */
   assignedWorker?: string;
-  assignedAgent: string; // Assigned agent personality (required)
+  /** @type {string} Agent personality assigned to execute this task */
+  assignedAgent: string;
+  /** @type {string} ISO timestamp when task was assigned */
   assignedAt?: string;
+  /** @type {string} ISO timestamp when task was completed */
   completedAt?: string;
+  /** @type {string} Output produced by task execution */
   output?: string;
+  /** @type {string} Error message if task failed */
   error?: string;
+  /** @type {number} Exit code from task execution */
   exitCode?: number;
-  prompt?: string; // Generated prompt for the task
-  files?: string[]; // Files to be modified
-  dependencies?: string[]; // Task dependencies
-  project?: string; // Target project
-  qualityValidation?: QualityValidationResult; // Quality gate validation results
+  /** @type {string} Generated prompt used for task execution */
+  prompt?: string;
+  /** @type {string[]} List of files to be modified by this task */
+  files?: string[];
+  /** @type {string[]} Task IDs that must complete before this task */
+  dependencies?: string[];
+  /** @type {string} Target project for this task */
+  project?: string;
+  /** @type {QualityValidationResult} Quality gate validation results */
+  qualityValidation?: QualityValidationResult;
 
   // Retry system fields
-  retryCount?: number; // Number of retry attempts made
-  maxRetries?: number; // Maximum number of retries allowed
-  retryDelay?: number; // Delay in milliseconds before retry
-  retryReason?: string; // Reason for the retry
-  retryHistory?: RetryAttempt[]; // History of retry attempts
-  canRetry?: boolean; // Whether this task can be retried
-  retryStrategy?: 'immediate' | 'exponential' | 'linear' | 'manual'; // Retry strategy
+  /** @type {number} Number of retry attempts made so far */
+  retryCount?: number;
+  /** @type {number} Maximum number of retries allowed for this task */
+  maxRetries?: number;
+  /** @type {number} Delay in milliseconds before next retry */
+  retryDelay?: number;
+  /** @type {string} Explanation of why retry was triggered */
+  retryReason?: string;
+  /** @type {RetryAttempt[]} History of all retry attempts */
+  retryHistory?: RetryAttempt[];
+  /** @type {boolean} Whether this task is eligible for retry */
+  canRetry?: boolean;
+  /** @type {'immediate' | 'exponential' | 'linear' | 'manual'} Strategy for retry timing */
+  retryStrategy?: 'immediate' | 'exponential' | 'linear' | 'manual';
 
   // Enhanced task specification
-  acceptanceCriteria?: string[]; // Explicit acceptance criteria (array of criteria)
-  architectureReferences?: string[]; // New: architecture documentation references
-  longTermGoals?: string[]; // New: connection to larger initiatives
-  estimatedEffort?: { // New: effort estimation
+  /** @type {string[]} Explicit acceptance criteria that define task completion */
+  acceptanceCriteria?: string[];
+  /** @type {string[]} References to relevant architecture documentation */
+  architectureReferences?: string[];
+  /** @type {string[]} Connection to larger initiatives or strategic goals */
+  longTermGoals?: string[];
+  /** @type {object} Effort estimation for task completion */
+  estimatedEffort?: {
     hours: number;
     complexity: 'simple' | 'medium' | 'complex' | 'expert';
     confidence: 'low' | 'medium' | 'high';
   };
-  prerequisites?: string[]; // New: required knowledge/setup
-  contextBoundaries?: { // New: what not to change
+  /** @type {string[]} Required knowledge or setup before starting */
+  prerequisites?: string[];
+  /** @type {object} Boundaries defining what should not be changed */
+  contextBoundaries?: {
     mustNotChange: string[];
     mustNotAffect: string[];
     integrationPoints: string[];
   };
-  validationSteps?: string[]; // New: how to verify completion
-  rollbackPlan?: string[]; // New: what to do if things go wrong
-  successMetrics?: string[]; // New: measurable outcomes
-  testingRequirements?: string[]; // New: testing requirements
-  documentationRequirements?: string[]; // New: documentation requirements
-  requiredSkills?: string[]; // New: required agent skills
-  parentInitiative?: string; // New: parent initiative or project
-  relatedTasks?: string[]; // New: related task IDs
-  blockers?: string[]; // New: blocking issues
-  assumptions?: string[]; // New: documented assumptions
-  risks?: string[]; // New: identified risks
-  alternatives?: string[]; // New: alternative approaches
+  /** @type {string[]} Steps to verify task completion */
+  validationSteps?: string[];
+  /** @type {string[]} Actions to take if implementation causes issues */
+  rollbackPlan?: string[];
+  /** @type {string[]} Measurable outcomes that define success */
+  successMetrics?: string[];
+  /** @type {string[]} Testing requirements for this task */
+  testingRequirements?: string[];
+  /** @type {string[]} Documentation requirements for this task */
+  documentationRequirements?: string[];
+  /** @type {string[]} Required agent skills or expertise areas */
+  requiredSkills?: string[];
+  /** @type {string} Parent initiative or project this task belongs to */
+  parentInitiative?: string;
+  /** @type {string[]} IDs of related tasks */
+  relatedTasks?: string[];
+  /** @type {string[]} Blocking issues preventing task completion */
+  blockers?: string[];
+  /** @type {string[]} Documented assumptions made during planning */
+  assumptions?: string[];
+  /** @type {string[]} Identified risks for this task */
+  risks?: string[];
+  /** @type {string[]} Alternative approaches considered but not chosen */
+  alternatives?: string[];
   
+  /** @type {object} Scope constraints for task execution */
   scope?: {
     type: string;
     boundaries: {
@@ -108,7 +157,9 @@ export interface Task {
       allowedPatterns: string[];
     };
   };
+  /** @type {boolean} Whether this task requires urgent attention */
   isEmergency?: boolean;
+  /** @type {string} Chain ID for task dependencies or sequencing */
   chainId?: string;
 }
 
