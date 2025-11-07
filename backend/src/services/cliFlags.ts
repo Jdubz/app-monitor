@@ -275,11 +275,13 @@ export function buildCLICommand(tool: CLITool, flags: CLIFlags, prompt: string):
  */
 export function validateCLIFlags(tool: CLITool, flags: CLIFlags): void {
   if (tool === 'codex') {
-    // Codex exec mode incompatibilities
-    if (flags.printMode && flags.approvalPolicy) {
+    // Codex does not support approval policy in practice since we always use codex exec
+    // which doesn't support --ask-for-approval flag
+    if (flags.approvalPolicy) {
       throw new Error(
-        'Codex exec mode does NOT support --ask-for-approval flag. ' +
-        'Use --dangerously-bypass-approvals-and-sandbox instead or set bypassPermissions: true'
+        'Codex does NOT support --ask-for-approval flag. ' +
+        'Use --dangerously-bypass-approvals-and-sandbox instead or set bypassPermissions: true. ' +
+        'Note: codex exec (non-interactive mode) never supports approval policies.'
       );
     }
 
