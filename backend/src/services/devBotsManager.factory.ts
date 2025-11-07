@@ -18,6 +18,7 @@ import { TaskPersistence, TaskStorageConfig } from './taskPersistence.js';
 import { WorkspaceOrchestrator } from './workspaceOrchestrator.js';
 import { ScopeControlService } from './scopeControl.service.js';
 import { EphemeralWorkerService } from './ephemeralWorker.service.js';
+import { resolveArtifactsDir } from '../utils/repoPaths.js';
 import { TaskExecutionService } from './taskExecution.service.js';
 import { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
@@ -127,7 +128,7 @@ export async function createDevBotsManagerDependencies(
       maxConcurrentWorkers: 2,
       stuckCheckInterval: 60000,
       absoluteMaxDuration: 60 * 60 * 1000,
-      artifactsDir: './dev-bots/artifacts',
+      artifactsDir: resolveArtifactsDir(),
       recovery: {
         enabled: config.recovery?.enabled ?? true,
         dryRun: config.recovery?.dryRun ?? false
