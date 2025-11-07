@@ -631,3 +631,57 @@ describe('isV3Template', () => {
     expect(isV3Template('test')).toBe(false);
   });
 });
+
+describe('isV3Template edge cases', () => {
+  it('should allow empty arrays for checklist and constraints', () => {
+    const template = {
+      type: 'implementation',
+      title: 'Empty arrays still valid',
+      description: 'Ensure empty arrays pass the guard',
+      investigation: {
+        required: true,
+        steps: [],
+        mustFind: [],
+        mustNotDuplicate: []
+      },
+      preImplementationChecklist: [],
+      constraints: [],
+      gitWorkflow: { required: true, branch: 'main', commitMessage: 'test' }
+    };
+
+    expect(isV3Template(template)).toBe(true);
+  });
+
+  it('should return false when gitWorkflow is explicitly null', () => {
+    const template = {
+      type: 'implementation',
+      title: 'Null git workflow',
+      description: 'Ensure null gitWorkflow fails',
+      investigation: {
+        required: true,
+        steps: ['READ something'],
+        mustFind: ['find'],
+        mustNotDuplicate: ['duplicate']
+      },
+      preImplementationChecklist: ['[ ] Step'],
+      constraints: ['Do not break prod'],
+      gitWorkflow: null
+    };
+
+    expect(isV3Template(template)).toBe(false);
+  });
+
+  it('should return false when investigation metadata is null', () => {
+    const template = {
+      type: 'implementation',
+      title: 'Null investigation',
+      description: 'Ensure null investigation fails',
+      investigation: null,
+      preImplementationChecklist: ['[ ] Step'],
+      constraints: ['Do not break prod'],
+      gitWorkflow: { required: true, branch: 'main', commitMessage: 'test' }
+    };
+
+    expect(isV3Template(template)).toBe(false);
+  });
+});
