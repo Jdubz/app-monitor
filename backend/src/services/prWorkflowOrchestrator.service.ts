@@ -171,7 +171,7 @@ export class PRWorkflowOrchestrator {
 
     // Try to extract from GitHub PR URL in output
     if (!prNumber || !prUrl) {
-      const githubUrlMatch = output.match(/https:\/\/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/i);
+      const githubUrlMatch = output.match(/https:\/\/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/i);
       if (githubUrlMatch) {
         prUrl = githubUrlMatch[0];
         prNumber = parseInt(githubUrlMatch[3], 10);

@@ -527,44 +527,107 @@ describe('TaskTemplateValidator', () => {
     });
   });
 
-  describe('isV3Template', () => {
-    it('should return true for v3 template', () => {
-      const template = {
-        type: 'test',
-        title: 'test',
-        description: 'test',
-        investigation: {
-          required: true,
-          steps: ['test'],
-          mustFind: ['test'],
-          mustNotDuplicate: ['test']
-        },
-        preImplementationChecklist: ['test'],
-        constraints: ['test'],
-        files: ['test'],
-        gitWorkflow: { required: true, branch: 'main', commitMessage: 'test' }
-      };
+});
 
-      expect(isV3Template(template)).toBe(true);
-    });
+describe('isV3Template', () => {
+  it('should return true when all required v3 sections are present', () => {
+    const template = {
+      type: 'implementation',
+      title: 'Add retry limit',
+      description: 'Extend tasks schema with retry_limit',
+      investigation: {
+        required: true,
+        steps: ['READ backend/src/services/database.ts'],
+        mustFind: ['Current tasks schema'],
+        mustNotDuplicate: ['Existing migrations']
+      },
+      preImplementationChecklist: ['[ ] Review database schema'],
+      constraints: ['MUST NOT break existing tasks'],
+      files: ['backend/src/services/database.ts'],
+      gitWorkflow: {
+        required: true,
+        branch: 'staging',
+        commitMessage: 'feat: add retry limit'
+      }
+    };
 
-    it('should return false for non-v3 template', () => {
-      const template = {
-        type: 'test',
-        title: 'test',
-        description: 'test'
-        // Missing v3 fields
-      };
+    expect(isV3Template(template)).toBe(true);
+  });
 
-      expect(isV3Template(template)).toBe(false);
-    });
+  it('should return false when investigation section is missing', () => {
+    const template = {
+      type: 'implementation',
+      title: 'Test',
+      description: 'Test',
+      preImplementationChecklist: ['[ ] Do something'],
+      constraints: ['MUST NOT break prod'],
+      gitWorkflow: { required: true, branch: 'main', commitMessage: 'test' }
+    };
 
-    it('should return false for null', () => {
-      expect(isV3Template(null)).toBe(false);
-    });
+    expect(isV3Template(template)).toBe(false);
+  });
 
-    it('should return false for non-object', () => {
-      expect(isV3Template('test')).toBe(false);
-    });
+  it('should return false when preImplementationChecklist is not an array', () => {
+    const template = {
+      type: 'implementation',
+      title: 'Test',
+      description: 'Test',
+      investigation: {
+        required: true,
+        steps: ['READ something'],
+        mustFind: ['find'],
+        mustNotDuplicate: ['duplicate']
+      },
+      preImplementationChecklist: '[ ] string instead of array',
+      constraints: ['MUST NOT break prod'],
+      gitWorkflow: { required: true, branch: 'main', commitMessage: 'test' }
+    };
+
+    expect(isV3Template(template)).toBe(false);
+  });
+
+  it('should return false when constraints is not an array', () => {
+    const template = {
+      type: 'implementation',
+      title: 'Test',
+      description: 'Test',
+      investigation: {
+        required: true,
+        steps: ['READ something'],
+        mustFind: ['find'],
+        mustNotDuplicate: ['duplicate']
+      },
+      preImplementationChecklist: ['[ ] Step'],
+      constraints: 'MUST NOT break prod',
+      gitWorkflow: { required: true, branch: 'main', commitMessage: 'test' }
+    };
+
+    expect(isV3Template(template)).toBe(false);
+  });
+
+  it('should return false when gitWorkflow metadata is missing', () => {
+    const template = {
+      type: 'implementation',
+      title: 'Test',
+      description: 'Test',
+      investigation: {
+        required: true,
+        steps: ['READ something'],
+        mustFind: ['find'],
+        mustNotDuplicate: ['duplicate']
+      },
+      preImplementationChecklist: ['[ ] Step'],
+      constraints: ['MUST NOT break prod']
+    };
+
+    expect(isV3Template(template)).toBe(false);
+  });
+
+  it('should return false for null input', () => {
+    expect(isV3Template(null)).toBe(false);
+  });
+
+  it('should return false for non-object input', () => {
+    expect(isV3Template('test')).toBe(false);
   });
 });
