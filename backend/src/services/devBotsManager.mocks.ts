@@ -362,6 +362,7 @@ export function createMockEphemeralWorkerService(): EphemeralWorkerService {
 export function createMockTaskExecutionService(): TaskExecutionService {
   return {
     assignNextTask: vi.fn().mockResolvedValue(undefined),
+    setRecovery: vi.fn(),
   } as any;
 }
 
