@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 
-export function findRepoRoot(startDir: string): string {
+export function findRepoRoot(startDir) {
   let current = path.resolve(startDir);
 
   while (!fs.existsSync(path.join(current, '.git'))) {
@@ -15,7 +15,7 @@ export function findRepoRoot(startDir: string): string {
   return current;
 }
 
-export function resolveArtifactsDir(startDir: string = process.cwd()): string {
+export function resolveArtifactsDir(startDir = process.cwd()) {
   const repoRoot = findRepoRoot(startDir);
   return path.join(repoRoot, 'dev-bots', 'artifacts');
 }

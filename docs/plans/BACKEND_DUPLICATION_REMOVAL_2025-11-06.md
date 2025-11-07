@@ -13,9 +13,9 @@
   - [x] Add optional `MIRROR_DEBUG=1` telemetry in `WorkspaceOrchestrator` so we can capture caller + cwd each time a mirror bootstrap is attempted. _(Nov 7, 2025 — MIRROR_DEBUG=1 appends JSON events to `logs/mirror-watch/mirror-events.log`.)_
   - [x] Run `safe-test-runner` and local CLI flows with telemetry enabled to capture which process attempts to rehydrate the mirror. _(Nov 7, 2025 — backend safe-test-runner executed with MIRROR_DEBUG=1; events recorded under `logs/mirror-watch/`.)_
   - [x] Capture and archive telemetry logs in `logs/mirror-watch/` for regression diffs. _(Nov 7, 2025 — helper now auto-creates the mirror-watch log inside the repo for diffs.)_
-- [ ] Confirm nothing imports from the mirror tree at runtime or tests.
+- [x] Confirm nothing imports from the mirror tree at runtime or tests.
   - [x] Search for `dev-bots/mirror` path references across repo.
-  - [ ] Run tests with mirror temporarily removed to detect hidden dependencies.
+  - [x] Run tests with mirror temporarily removed to detect hidden dependencies. _(Nov 7, 2025 — deleted `/tmp/app-monitor-dev-bots/mirror` and reran `npm run test:backend`; suite passed without recreating the mirror.)_
 - [x] Investigate new `backend/dev-bots/artifacts/*` outputs (should not exist). _(Nov 7, 2025 — artifact destinations now resolve via repo-root helpers, preventing `backend/dev-bots` writes.)_
   - [x] Identify which script writes under `backend/dev-bots` instead of root-level `dev-bots`. _(Nov 7, 2025 — TaskExecutionService and WorkspaceOrchestrator now call `resolveArtifactsDir`.)_
   - [x] Update `.gitignore`/guards to block the backend-local artifacts path. _(Nov 7, 2025 — `.husky/pre-push` aborts when `backend/dev-bots` exists.)_

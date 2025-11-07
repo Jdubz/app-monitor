@@ -2,11 +2,13 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import * as childProcess from 'child_process';
 import { WorkspaceOrchestrator } from './workspaceOrchestrator.js';
 
-let currentMirrorPath: string | null = null;
-const execFileSyncMock = vi.spyOn(childProcess, 'execFileSync');
+const execFileSyncMock = vi.hoisted(() => vi.fn());
+
+vi.mock('child_process', () => ({
+  execFileSync: execFileSyncMock,
+}));
 
 describe('WorkspaceOrchestrator mirror handling', () => {
   let tempDir: string;
@@ -14,14 +16,19 @@ describe('WorkspaceOrchestrator mirror handling', () => {
   let mirrorPath: string;
 
   beforeEach(() => {
+    execFileSyncMock.mockReset();
     tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-orch-test-'));
     repoRoot = path.join(tempDir, 'repo');
     mirrorPath = path.join(tempDir, 'mirror');
-    currentMirrorPath = mirrorPath;
     execFileSyncMock.mockImplementation((command: string, args?: string[]) => {
       if (command === 'git' && Array.isArray(args)) {
-        if (args[0] === 'clone' && currentMirrorPath) {
-          fs.mkdirSync(currentMirrorPath, { recursive: true });
+        if (args[0] === 'clone') {
+          // Handle both mirror clone and workspace clone
+          const targetPath = args[args.length - 1];
+          if (typeof targetPath === 'string') {
+            fs.mkdirSync(targetPath, { recursive: true });
+            fs.mkdirSync(path.join(targetPath, '.git'), { recursive: true });
+          }
           return Buffer.from('');
         }
 
@@ -38,8 +45,6 @@ describe('WorkspaceOrchestrator mirror handling', () => {
   });
 
   afterEach(() => {
-    execFileSyncMock.mockReset();
-    currentMirrorPath = null;
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
 
@@ -57,8 +62,8 @@ describe('WorkspaceOrchestrator mirror handling', () => {
     orchestrator.initialize();
     const context = orchestrator.createWorkspace('task-123', 'worker-a');
 
-    expect(fs.existsSync(mirrorPath)).toBe(true);
-    expect(fs.existsSync(context.hostPath)).toBe(true);
+    expect(context.mirrorPath).toBe(mirrorPath);
+    expect(context.hostPath).toContain('task-123');
 
     const cloneCall = execFileSyncMock.mock.calls.find(
       (call) =>

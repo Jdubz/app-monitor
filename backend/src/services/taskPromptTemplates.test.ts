@@ -409,10 +409,11 @@ describe('TaskPromptTemplateManager', () => {
       };
 
       const prompt = templateManager.generatePrompt(context);
+      const sanitizedPrompt = prompt.replace(/\/dev\/null/gi, '');
 
-      // Should not contain undefined or null values
+      // Should not contain undefined or null values (excluding intentional /dev/null occurrences)
       expect(prompt).not.toContain('undefined');
-      expect(prompt).not.toContain('null');
+      expect(sanitizedPrompt).not.toMatch(/\bnull\b/i);
       expect(prompt).not.toContain('{{');
     });
 
@@ -1381,9 +1382,10 @@ describe('TaskPromptTemplateManager', () => {
       expect(prompt).not.toContain('{{');
       expect(prompt).not.toContain('}}');
 
-      // Verify no undefined/null values
+      // Verify no undefined/null values (ignoring intentional /dev/null references)
+      const sanitizedPrompt = prompt.replace(/\/dev\/null/gi, '');
       expect(prompt).not.toContain('undefined');
-      expect(prompt).not.toContain('null');
+      expect(sanitizedPrompt).not.toMatch(/\bnull\b/i);
     });
 
     it('should achieve 100% field utilization', () => {

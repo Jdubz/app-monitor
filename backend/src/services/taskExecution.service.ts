@@ -24,7 +24,7 @@ import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskPersistence } from './taskPersistence.js';
 import { isTaskStuck, detectFailurePattern } from './taskFailureGuards.js';
 import type { SimpleFailureRecovery } from './failureRecovery.js';
-import { resolveArtifactsDir } from '../utils/repoPaths.ts';
+import { resolveArtifactsDir } from '../utils/repoPaths.js';
 
 // ============================================================================
 // Types & Interfaces

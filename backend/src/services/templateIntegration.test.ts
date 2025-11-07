@@ -487,10 +487,11 @@ describe('Template Integration Tests', () => {
       };
 
       const prompt = templateManager.generatePrompt(context);
+      const sanitizedPrompt = prompt.replace(/\/dev\/null/gi, '');
 
-      // Should not contain undefined or null values
+      // Should not contain undefined or null values (excluding intentional /dev/null usage)
       expect(prompt).not.toContain('undefined');
-      expect(prompt).not.toContain('null');
+      expect(sanitizedPrompt).not.toMatch(/\bnull\b/i);
       expect(prompt).not.toContain('{{');
       expect(prompt).not.toContain('}}');
 
@@ -543,4 +544,3 @@ describe('Template Integration Tests', () => {
     });
   });
 });
-
