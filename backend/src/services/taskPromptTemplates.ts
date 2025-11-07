@@ -580,12 +580,11 @@ For ANY new code, functionality, or changes, you MUST:
 BEFORE committing, ensure quality standards are met:
 
 \`\`\`bash
-# Pull staging again to catch any new changes
-git pull origin staging
+# Ensure your feature branch is rebased on the latest main
+git fetch origin main
+git rebase origin/main
 
-# Fix any merge conflicts if they occur
-# Review conflict markers carefully
-# Test after resolving conflicts
+# If conflicts occur, resolve them carefully and rerun all tests
 
 # Run linting (MUST pass)
 npm run lint
@@ -962,10 +961,10 @@ Before marking this task as complete, verify ALL of the following:
 2. **Did you create EXACTLY what was requested (no more, no less)?**
    - If NO: Remove extra features or add missing requirements
 
-3. **Did you COMMIT and PUSH your changes to staging?**
-   - Run: \`git log --oneline -1\` - Do you see your commit?
-   - Run: \`git status\` - Does it say "up to date with origin/staging"?
-   - If NO to either: Complete the git workflow before proceeding
+3. **Did you commit and push your feature branch to origin?**
+   - Run: \`git log --oneline -1\` - Do you see your latest commit?
+   - Run: \`git status\` - Does it say "up to date with origin/<your-branch>"?
+   - If NO to either: complete the git workflow before proceeding
 
 4. **Did you write and run TESTS for your changes?**
    - If NO: Write tests now before marking complete
@@ -1006,7 +1005,7 @@ Before marking this task as complete, verify ALL of the following:
 
 ### Process & Integration
 - [ ] No merge conflicts remaining
-- [ ] Changes pushed to staging successfully
+- [ ] Feature branch pushed to origin and PR opened (gh pr create)
 - [ ] **Existing documentation updated** instead of creating new files
 - [ ] **Architecture docs updated** to reflect new patterns and changes
 - [ ] **API docs updated** if endpoints were modified or added
