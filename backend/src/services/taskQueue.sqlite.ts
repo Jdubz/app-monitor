@@ -123,6 +123,29 @@ export interface Task {
   is_repair_bot?: boolean; // True if this is a cleanup or follow-up bot
   original_task_id?: string; // ID of the original failed task (for repair bots)
   repair_stage?: 'cleanup' | 'followup'; // Which stage of recovery this bot represents
+  // Enhanced task fields for comprehensive task planning
+  parent_initiative?: string;
+  long_term_goals?: string[];
+  related_tasks?: string[];
+  estimated_effort?: {
+    hours: number;
+    complexity: 'simple' | 'medium' | 'complex' | 'expert';
+    confidence: 'low' | 'medium' | 'high';
+  };
+  required_skills?: string[];
+  assumptions?: string[];
+  alternatives?: string[];
+  context_boundaries?: {
+    mustNotChange: string[];
+    mustNotAffect: string[];
+    integrationPoints: string[];
+  };
+  prerequisites?: string[];
+  testing_requirements?: string[];
+  documentation_requirements?: string[];
+  rollback_plan?: string[];
+  blockers?: string[];
+  risks?: string[];
 }
 
 export interface Worker {

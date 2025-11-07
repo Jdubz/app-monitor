@@ -144,7 +144,7 @@ describe('TaskPromptTemplateManager', () => {
       const context: TaskContext = {
         task: { ...mockTask },
         agent: mockAgent,
-        project: 'job-finder-BE',
+        project: 'job-finder-FE',
         worktree: '[dynamic workspace provisioned per task]',
         environment: 'development'
       };
@@ -160,7 +160,7 @@ describe('TaskPromptTemplateManager', () => {
       const context: TaskContext = {
         task: { ...mockTask },
         agent: mockAgent,
-        project: 'job-finder-BE',
+        project: 'job-finder-worker',
         worktree: '[dynamic workspace provisioned per task]',
         environment: 'development'
       };
@@ -176,7 +176,7 @@ describe('TaskPromptTemplateManager', () => {
       const context: TaskContext = {
         task: { ...mockTask },
         agent: mockAgent,
-        project: 'job-finder-BE',
+        project: 'dev-monitor',
         worktree: '[dynamic workspace provisioned per task]',
         environment: 'development'
       };
@@ -193,7 +193,7 @@ describe('TaskPromptTemplateManager', () => {
       const context: TaskContext = {
         task: { ...mockTask },
         agent: mockAgent,
-        project: 'job-finder-BE',
+        project: 'job-finder-shared-types',
         worktree: '[dynamic workspace provisioned per task]',
         environment: 'development'
       };
@@ -208,7 +208,7 @@ describe('TaskPromptTemplateManager', () => {
       const context: TaskContext = {
         task: { ...mockTask },
         agent: mockAgent,
-        project: 'job-finder-BE',
+        project: 'unknown-project',
         worktree: '[dynamic workspace provisioned per task]',
         environment: 'development'
       };
@@ -246,12 +246,11 @@ describe('TaskPromptTemplateManager', () => {
         'BACKEND'
       ];
 
-      testCases.forEach(project => {
+      testCases.forEach(_project => {
         const context: TaskContext = {
-          task: { ...mockTask, project },
+          task: { ...mockTask },
           agent: mockAgent,
-          project,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -579,7 +578,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: taskWithParent,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -593,7 +592,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: mockTask,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -619,7 +618,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: taskWithRelated,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -636,7 +635,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: mockTask,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -655,7 +654,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: taskWithEmptyRelated,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -680,7 +679,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: taskWithEffort,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -713,7 +712,7 @@ describe('TaskPromptTemplateManager', () => {
           const context: TaskContext = {
             task: taskWithEffort,
             agent: mockAgent,
-        project: 'job-finder-BE',
+            project: 'job-finder-BE',
             worktree: '[dynamic workspace provisioned per task]',
             environment: 'development'
           };
@@ -728,7 +727,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: mockTask,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -755,7 +754,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: taskWithMetrics,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -771,7 +770,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: mockTask,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -792,7 +791,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: taskWithEmptyMetrics,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -815,7 +814,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: taskWithSkills,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -832,7 +831,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: mockTask,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -853,7 +852,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: taskWithEmptySkills,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -880,7 +879,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: taskWithAssumptions,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -896,7 +895,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: mockTask,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -915,7 +914,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: taskWithEmptyAssumptions,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -940,7 +939,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: taskWithAlternatives,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -956,7 +955,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: mockTask,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -976,7 +975,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: taskWithEmptyAlternatives,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -1002,7 +1001,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: taskWithBoundaries,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -1033,7 +1032,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: taskWithPartialBoundaries,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -1048,7 +1047,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: mockTask,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -1074,7 +1073,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: taskWithValidation,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -1091,7 +1090,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: mockTask,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -1112,7 +1111,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: taskWithEmptyValidation,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -1251,7 +1250,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: taskWithComplexity,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -1289,7 +1288,7 @@ describe('TaskPromptTemplateManager', () => {
         const context: TaskContext = {
           task: taskWithConfidence,
           agent: mockAgent,
-        project: 'job-finder-BE',
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
