@@ -1,5 +1,7 @@
 # App Monitor
 
+<!-- Dev-bot verification comment: README touched on November 7, 2025 to validate automated pushes. -->
+
 Developer monitoring and automation tool for the job-finder-app-manager ecosystem.
 
 ## 📊 Project Status: Pre-POC Stabilization
