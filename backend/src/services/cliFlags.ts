@@ -267,3 +267,49 @@ export function buildCLICommand(tool: CLITool, flags: CLIFlags, prompt: string):
   const argsStr = args.join(' ');
   return `${tool} ${argsStr} '${escapedPrompt}'`;
 }
+
+/**
+ * Validate CLI flags for the specified tool
+ *
+ * Throws an error if incompatible flags are used
+ */
+export function validateCLIFlags(tool: CLITool, flags: CLIFlags): void {
+  if (tool === 'codex') {
+    // Codex does not support approval policy in practice since we always use codex exec
+    // which doesn't support --ask-for-approval flag
+    if (flags.approvalPolicy) {
+      throw new Error(
+        'Codex does NOT support --ask-for-approval flag. ' +
+        'Use --dangerously-bypass-approvals-and-sandbox instead or set bypassPermissions: true. ' +
+        'Note: codex exec (non-interactive mode) never supports approval policies.'
+      );
+    }
+
+    // Sandbox policy vs sandbox
+    if (flags.permissionMode) {
+      throw new Error(
+        'Codex does NOT support --permission-mode. Use --sandbox <mode> instead'
+      );
+    }
+
+    // Check for common mistakes
+    if (flags.allowedTools) {
+      throw new Error(
+        'Codex does NOT support --allowedTools. Use --ask-for-approval policy or --dangerously-bypass-approvals-and-sandbox'
+      );
+    }
+  } else if (tool === 'claude') {
+    // Claude incompatibilities
+    if (flags.sandbox) {
+      throw new Error(
+        'Claude does NOT support --sandbox. Use --permission-mode instead'
+      );
+    }
+
+    if (flags.approvalPolicy) {
+      throw new Error(
+        'Claude does NOT support --ask-for-approval. Use --allowedTools instead'
+      );
+    }
+  }
+}
