@@ -267,3 +267,63 @@ export function buildCLICommand(tool: CLITool, flags: CLIFlags, prompt: string):
   const argsStr = args.join(' ');
   return `${tool} ${argsStr} '${escapedPrompt}'`;
 }
+
+/**
+ * CLI Flag Compatibility guard.
+ *
+ * Part of the CLI Flag Compatibility architecture pattern, this helper enforces
+ * the contract between conceptual flags and the actual Claude/Codex CLIs before
+ * we attempt to build argument lists. It prevents dev-bots from mixing sandbox
+ * semantics across tools (for example, Codex uses `--sandbox` while Claude uses
+ * `--permission-mode`) and fails fast when unsupported approval policies are
+ * provided.
+ *
+ * Call this before `buildCLIArgs`/`buildCLICommand` so we surface actionable
+ * errors at configuration time instead of letting the downstream CLI reject the
+ * invocation.
+ *
+ * @param {CLITool} tool Identifier of the CLI tool we are targeting (`claude` or `codex`)
+ * @param {CLIFlags} flags Conceptual flag set that should be validated against the target CLI
+ * @throws {Error} When a flag is not supported by the specified CLI tool
+ * @see docs/plans/CONTEXT_BLOB_PRELOADING.md (CLI Flag Compatibility pattern)
+ */
+export function validateCLIFlags(tool: CLITool, flags: CLIFlags): void {
+  if (tool === 'codex') {
+    // Codex does not support approval policy in practice since we always use codex exec
+    // which doesn't support --ask-for-approval flag
+    if (flags.approvalPolicy) {
+      throw new Error(
+        'Codex does NOT support --ask-for-approval flag. ' +
+        'Use --dangerously-bypass-approvals-and-sandbox instead or set bypassPermissions: true. ' +
+        'Note: codex exec (non-interactive mode) never supports approval policies.'
+      );
+    }
+
+    // Sandbox policy vs sandbox
+    if (flags.permissionMode) {
+      throw new Error(
+        'Codex does NOT support --permission-mode. Use --sandbox <mode> instead'
+      );
+    }
+
+    // Check for common mistakes
+    if (flags.allowedTools) {
+      throw new Error(
+        'Codex does NOT support --allowedTools. Use --ask-for-approval policy or --dangerously-bypass-approvals-and-sandbox'
+      );
+    }
+  } else if (tool === 'claude') {
+    // Claude incompatibilities
+    if (flags.sandbox) {
+      throw new Error(
+        'Claude does NOT support --sandbox. Use --permission-mode instead'
+      );
+    }
+
+    if (flags.approvalPolicy) {
+      throw new Error(
+        'Claude does NOT support --ask-for-approval. Use --allowedTools instead'
+      );
+    }
+  }
+}
