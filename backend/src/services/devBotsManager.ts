@@ -156,6 +156,9 @@ export class DevBotsManager extends EventEmitter {
       { enableQualityGates: true }
     );
 
+    // Wire recovery into task execution service
+    this.taskExecutionService.setRecovery(this.recovery);
+
     // Validate Docker environment and initialize
     this.initializeDockerEnvironment();
 
