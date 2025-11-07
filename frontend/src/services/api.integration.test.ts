@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMockApiClient } from '../test/test-utils';
 import * as apiModule from './api';
+import type { ApiSuccess, ApiError } from '@app-monitor/api-contracts';
 
 // Mock the ApiClient
 vi.mock('./ApiClient', () => ({
@@ -9,6 +10,13 @@ vi.mock('./ApiClient', () => ({
 
 // Get reference to mock API client
 const mockApiClient = (await import('./ApiClient')).apiClient;
+
+const success = <T>(data: T): ApiSuccess<T> => ({ success: true, data });
+const apiError = (error: string, message?: string): ApiError => ({
+  success: false,
+  error,
+  ...(message ? { message } : {}),
+});
 
 describe('API Service Integration Tests', () => {
   beforeEach(() => {
@@ -48,10 +56,12 @@ describe('API Service Integration Tests', () => {
       };
 
       // Mock API responses
-      vi.mocked(mockApiClient.get).mockResolvedValueOnce([mockService]);
-      vi.mocked(mockApiClient.post).mockResolvedValueOnce({ ...mockService, status: 'starting' });
-      vi.mocked(mockApiClient.post).mockResolvedValueOnce({ ...mockService, status: 'running' });
-      vi.mocked(mockApiClient.get).mockResolvedValueOnce({ serviceName: 'test-service', logs: ['Service started'] });
+      vi.mocked(mockApiClient.get).mockResolvedValueOnce(success([mockService]));
+      vi.mocked(mockApiClient.post).mockResolvedValueOnce(success({ ...mockService, status: 'starting' }));
+      vi.mocked(mockApiClient.post).mockResolvedValueOnce(success({ ...mockService, status: 'running' }));
+      vi.mocked(mockApiClient.get).mockResolvedValueOnce(
+        success({ serviceName: 'test-service', logs: ['Service started'] }),
+      );
 
       // Test complete service lifecycle
       const services = await apiModule.getAllStatuses();
@@ -70,17 +80,17 @@ describe('API Service Integration Tests', () => {
     });
 
     it('should handle service errors gracefully', async () => {
-      const error = new Error('Service not found');
-      vi.mocked(mockApiClient.get).mockRejectedValueOnce(error);
+      const errorPayload = apiError('Service not found');
+      vi.mocked(mockApiClient.get).mockRejectedValueOnce(errorPayload);
 
-      await expect(apiModule.getAllStatuses()).rejects.toThrow('Service not found');
+      await expect(apiModule.getAllStatuses()).rejects.toEqual(errorPayload);
     });
 
     it('should handle network errors', async () => {
-      const networkError = new Error('Network error - please check your connection');
+      const networkError = apiError('Network error - please check your connection');
       vi.mocked(mockApiClient.post).mockRejectedValueOnce(networkError);
 
-      await expect(apiModule.startService('test-service')).rejects.toThrow('Network error');
+      await expect(apiModule.startService('test-service')).rejects.toEqual(networkError);
     });
   });
 
@@ -107,8 +117,8 @@ describe('API Service Integration Tests', () => {
         wasInUse: true
       };
 
-      vi.mocked(mockApiClient.get).mockResolvedValueOnce(mockPortStatuses);
-      vi.mocked(mockApiClient.post).mockResolvedValueOnce(mockKillResponse);
+      vi.mocked(mockApiClient.get).mockResolvedValueOnce(success(mockPortStatuses));
+      vi.mocked(mockApiClient.post).mockResolvedValueOnce(success(mockKillResponse));
 
       const portStatuses = await apiModule.getPortStatuses();
       expect(portStatuses['test-service']).toHaveLength(1);
@@ -123,30 +133,31 @@ describe('API Service Integration Tests', () => {
   describe('Error Handling Integration', () => {
     it('should handle different types of API errors', async () => {
       // Test 404 error
-      const notFoundError = new Error('Not Found');
+      const notFoundError = apiError('Not Found');
       vi.mocked(mockApiClient.get).mockRejectedValueOnce(notFoundError);
 
-      await expect(apiModule.getServiceStatus('nonexistent')).rejects.toThrow('Not Found');
+      await expect(apiModule.getServiceStatus('nonexistent')).rejects.toEqual(notFoundError);
 
       // Test 500 error
-      const serverError = new Error('Internal Server Error');
+      const serverError = apiError('Internal Server Error');
       vi.mocked(mockApiClient.post).mockRejectedValueOnce(serverError);
 
-      await expect(apiModule.startService('test-service')).rejects.toThrow('Internal Server Error');
+      await expect(apiModule.startService('test-service')).rejects.toEqual(serverError);
 
       // Test timeout error
-      const timeoutError = new Error('Request timeout');
+      const timeoutError = apiError('Request timeout');
       vi.mocked(mockApiClient.get).mockRejectedValueOnce(timeoutError);
 
-      await expect(apiModule.getAllStatuses()).rejects.toThrow('Request timeout');
+      await expect(apiModule.getAllStatuses()).rejects.toEqual(timeoutError);
     });
 
     it('should handle malformed responses', async () => {
       // Test malformed JSON response
       vi.mocked(mockApiClient.get).mockResolvedValueOnce(null);
 
-      const result = await apiModule.getAllStatuses();
-      expect(result).toBeNull();
+      await expect(apiModule.getAllStatuses()).rejects.toThrow(
+        'Malformed API response while fetching all service statuses',
+      );
     });
   });
 
@@ -162,8 +173,8 @@ describe('API Service Integration Tests', () => {
         'service-2': [{ port: 3001, pid: null, inUse: false }]
       };
 
-      vi.mocked(mockApiClient.get).mockResolvedValueOnce(mockServices);
-      vi.mocked(mockApiClient.get).mockResolvedValueOnce(mockPortStatuses);
+      vi.mocked(mockApiClient.get).mockResolvedValueOnce(success(mockServices));
+      vi.mocked(mockApiClient.get).mockResolvedValueOnce(success(mockPortStatuses));
 
       // Make concurrent calls
       const [services, portStatuses] = await Promise.all([

@@ -1,9 +1,35 @@
 import express, { Request, Response } from 'express';
+import {
+  ApiError,
+  TokenBudgetResponse,
+  TokenBudgetUpdateResponse,
+  TokenCanUseResponse,
+  TokenRemainingResponse,
+  TokenResetResponse,
+  TokenSummariesResponse,
+  TokenSummaryResponse,
+} from '@app-monitor/api-contracts';
 import { getTokenTrackingService, TokenBudget } from '../services/tokenTracking.js';
 import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 const tokenTracking = getTokenTrackingService();
+
+const respondSuccess = <T>(res: Response, data: T, status = 200) => {
+  return res.status(status).json({
+    success: true,
+    data,
+  });
+};
+
+const respondError = (res: Response, status: number, error: string, message?: string) => {
+  const payload: ApiError = {
+    success: false,
+    error,
+    ...(message ? { message } : {}),
+  };
+  return res.status(status).json(payload);
+};
 
 /**
  * GET /token-tracking/summary
@@ -12,10 +38,10 @@ const tokenTracking = getTokenTrackingService();
 router.get('/summary', (req: Request, res: Response) => {
   try {
     const summaries = tokenTracking.getAllSummaries();
-    res.json({ summaries });
+    respondSuccess(res, { summaries } satisfies TokenSummariesResponse['data']);
   } catch (error) {
     logger.error('Error getting token usage summaries:', error);
-    res.status(500).json({ error: 'Failed to get token usage summaries' });
+    respondError(res, 500, 'FAILED_TO_GET_TOKEN_SUMMARIES', 'Failed to get token usage summaries');
   }
 });
 
@@ -27,10 +53,10 @@ router.get('/summary/:provider', (req: Request, res: Response) => {
   try {
     const { provider } = req.params;
     const summary = tokenTracking.getDailySummary(provider);
-    res.json(summary);
+    respondSuccess<TokenSummaryResponse['data']>(res, summary);
   } catch (error) {
     logger.error(`Error getting token usage summary for ${req.params.provider}:`, error);
-    res.status(500).json({ error: 'Failed to get token usage summary' });
+    respondError(res, 500, 'FAILED_TO_GET_TOKEN_SUMMARY', 'Failed to get token usage summary');
   }
 });
 
@@ -44,13 +70,18 @@ router.get('/budget/:provider', (req: Request, res: Response) => {
     const budget = tokenTracking.getBudget(provider);
 
     if (!budget) {
-      return res.status(404).json({ error: `No budget configured for provider: ${provider}` });
+      return respondError(
+        res,
+        404,
+        'TOKEN_BUDGET_NOT_FOUND',
+        `No budget configured for provider: ${provider}`,
+      );
     }
 
-    res.json(budget);
+    respondSuccess<TokenBudgetResponse['data']>(res, budget);
   } catch (error) {
     logger.error(`Error getting budget for ${req.params.provider}:`, error);
-    res.status(500).json({ error: 'Failed to get budget' });
+    respondError(res, 500, 'FAILED_TO_GET_BUDGET', 'Failed to get budget');
   }
 });
 
@@ -64,30 +95,30 @@ router.put('/budget', (req: Request, res: Response) => {
 
     // Validate budget
     if (!budget.provider) {
-      return res.status(400).json({ error: 'Provider is required' });
+      return respondError(res, 400, 'INVALID_BUDGET', 'Provider is required');
     }
     if (typeof budget.dailyLimit !== 'number' || budget.dailyLimit <= 0) {
-      return res.status(400).json({ error: 'Daily limit must be a positive number' });
+      return respondError(res, 400, 'INVALID_BUDGET', 'Daily limit must be a positive number');
     }
     if (typeof budget.costPerMillionInput !== 'number' || budget.costPerMillionInput < 0) {
-      return res.status(400).json({ error: 'Cost per million input must be a non-negative number' });
+      return respondError(res, 400, 'INVALID_BUDGET', 'Cost per million input must be a non-negative number');
     }
     if (typeof budget.costPerMillionOutput !== 'number' || budget.costPerMillionOutput < 0) {
-      return res.status(400).json({ error: 'Cost per million output must be a non-negative number' });
+      return respondError(res, 400, 'INVALID_BUDGET', 'Cost per million output must be a non-negative number');
     }
     if (typeof budget.warningThreshold !== 'number' || budget.warningThreshold < 0 || budget.warningThreshold > 100) {
-      return res.status(400).json({ error: 'Warning threshold must be between 0 and 100' });
+      return respondError(res, 400, 'INVALID_BUDGET', 'Warning threshold must be between 0 and 100');
     }
 
     tokenTracking.setBudget(budget);
 
-    res.json({
+    respondSuccess<TokenBudgetUpdateResponse['data']>(res, {
       message: `Budget set for provider: ${budget.provider}`,
-      budget
+      budget,
     });
   } catch (error) {
     logger.error('Error setting budget:', error);
-    res.status(500).json({ error: 'Failed to set budget' });
+    respondError(res, 500, 'FAILED_TO_SET_BUDGET', 'Failed to set budget');
   }
 });
 
@@ -101,14 +132,14 @@ router.get('/can-use/:provider', (req: Request, res: Response) => {
     const canUse = tokenTracking.canUseProvider(provider);
     const remaining = tokenTracking.getRemainingTokens(provider);
 
-    res.json({
+    respondSuccess<TokenCanUseResponse['data']>(res, {
       provider,
       canUse,
-      remainingTokens: remaining
+      remainingTokens: remaining,
     });
   } catch (error) {
     logger.error(`Error checking if can use ${req.params.provider}:`, error);
-    res.status(500).json({ error: 'Failed to check provider availability' });
+    respondError(res, 500, 'FAILED_TO_CHECK_PROVIDER', 'Failed to check provider availability');
   }
 });
 
@@ -122,16 +153,16 @@ router.get('/remaining/:provider', (req: Request, res: Response) => {
     const remaining = tokenTracking.getRemainingTokens(provider);
     const summary = tokenTracking.getDailySummary(provider);
 
-    res.json({
+    respondSuccess<TokenRemainingResponse['data']>(res, {
       provider,
       remaining,
       limit: summary.budgetLimit,
       used: summary.totalTokens,
-      percentUsed: summary.percentUsed
+      percentUsed: summary.percentUsed,
     });
   } catch (error) {
     logger.error(`Error getting remaining tokens for ${req.params.provider}:`, error);
-    res.status(500).json({ error: 'Failed to get remaining tokens' });
+    respondError(res, 500, 'FAILED_TO_GET_REMAINING', 'Failed to get remaining tokens');
   }
 });
 
@@ -142,10 +173,10 @@ router.get('/remaining/:provider', (req: Request, res: Response) => {
 router.post('/reset', (req: Request, res: Response) => {
   try {
     tokenTracking.resetDailyTracking();
-    res.json({ message: 'Daily tracking reset' });
+    respondSuccess<TokenResetResponse['data']>(res, { message: 'Daily tracking reset' });
   } catch (error) {
     logger.error('Error resetting daily tracking:', error);
-    res.status(500).json({ error: 'Failed to reset daily tracking' });
+    respondError(res, 500, 'FAILED_TO_RESET_TOKEN_TRACKING', 'Failed to reset daily tracking');
   }
 });
 

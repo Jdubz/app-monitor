@@ -1,0 +1,16 @@
+{
+  "type": "implementation",
+  "title": "Add simple test comment",
+  "description": "Add a comment to the top of backend/test-file.txt that says 'Test executed successfully at' followed by the current timestamp",
+  "documentation": "This is a simple test task. Just add a comment to the test file with a timestamp.",
+  "acceptanceCriteria": [
+    "File backend/test-file.txt exists",
+    "Comment added at the top of the file",
+    "Comment includes timestamp",
+    "File is committed to git"
+  ],
+  "files": ["backend/test-file.txt"],
+  "estimatedEffort": "5 minutes",
+  "priority": 100,
+  "assignedAgent": "backend-specialist"
+}

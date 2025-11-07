@@ -10,11 +10,11 @@ import type { LogStreamer } from '../../src/services/logStreamer.js';
 import type { ProcessManager } from '../../src/services/processManager.js';
 import type { ServiceConfig } from '../../src/config.js';
 import type {
-  EnvironmentsResponse,
-  EnvironmentServicesResponse,
-  PortStatusMap,
-  PortKillResponse,
-  ServiceLogsResponse,
+  EnvironmentsApiResponse,
+  EnvironmentServicesApiResponse,
+  PortStatusesResponse,
+  PortKillApiResponse,
+  ServiceLogsApiResponse,
 } from '@app-monitor/api-contracts';
 
 vi.mock('../../src/utils/portManager.js', () => ({
@@ -64,13 +64,14 @@ describe('API contract alignment', () => {
 
     const envRes = await request(app).get('/environments');
     expect(envRes.status).toBe(200);
-    expectTypeOf(envRes.body).toMatchTypeOf<EnvironmentsResponse>();
-    expect(envRes.body.staging.displayName).toBe('Staging');
+    expectTypeOf(envRes.body).toMatchTypeOf<EnvironmentsApiResponse>();
+    expect(envRes.body.success).toBe(true);
+    expect(envRes.body.data.staging.displayName).toBe('Staging');
 
     const servicesRes = await request(app).get('/environments/staging/services');
     expect(servicesRes.status).toBe(200);
-    expectTypeOf(servicesRes.body).toMatchTypeOf<EnvironmentServicesResponse>();
-    expect(Array.isArray(servicesRes.body)).toBe(true);
+    expectTypeOf(servicesRes.body).toMatchTypeOf<EnvironmentServicesApiResponse>();
+    expect(servicesRes.body.data).toHaveLength(1);
   });
 
   it('returns shared contract payloads for port status + kill endpoints', async () => {
@@ -95,13 +96,13 @@ describe('API contract alignment', () => {
 
     const statusRes = await request(app).get('/ports/status');
     expect(statusRes.status).toBe(200);
-    expectTypeOf(statusRes.body).toMatchTypeOf<PortStatusMap>();
-    expect(statusRes.body['test-service'][0].inUse).toBe(true);
+    expectTypeOf(statusRes.body).toMatchTypeOf<PortStatusesResponse>();
+    expect(statusRes.body.data['test-service'][0].inUse).toBe(true);
 
     const killRes = await request(app).post('/ports/3000/kill');
     expect(killRes.status).toBe(200);
-    expectTypeOf(killRes.body).toMatchTypeOf<PortKillResponse>();
-    expect(killRes.body.wasInUse).toBe(true);
+    expectTypeOf(killRes.body).toMatchTypeOf<PortKillApiResponse>();
+    expect(killRes.body.data.wasInUse).toBe(true);
   });
 
   it('returns shared contract payloads for service log requests', async () => {
@@ -130,7 +131,7 @@ describe('API contract alignment', () => {
 
     const logsRes = await request(app).get('/logs/services/api/logs?lines=2');
     expect(logsRes.status).toBe(200);
-    expectTypeOf(logsRes.body).toMatchTypeOf<ServiceLogsResponse>();
-    expect(logsRes.body.logs).toHaveLength(2);
+    expectTypeOf(logsRes.body).toMatchTypeOf<ServiceLogsApiResponse>();
+    expect(logsRes.body.data.logs).toHaveLength(2);
   });
 });

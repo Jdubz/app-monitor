@@ -142,6 +142,9 @@ export async function createDevBotsManagerDependencies(
     monitorPollIntervalMs: config.prMonitorPollIntervalMs ?? 60000
   });
 
+  // Initialize PR monitoring for existing unmerged PRs
+  await prWorkflowOrchestrator.initialize();
+
   // Note: SimpleFailureRecovery and TaskCompletionService require DevBotsManager instance
   // They will be created after DevBotsManager is instantiated
   // For now, create placeholders that will be replaced

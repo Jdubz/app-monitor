@@ -6,18 +6,7 @@
  */
 
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
-
-export interface ApiResponse<T = any> {
-  data: T;
-  status: number;
-  message?: string;
-}
-
-export interface ApiError {
-  error: string;
-  code?: string;
-  details?: Record<string, unknown>;
-}
+import type { ApiError } from '@app-monitor/api-contracts';
 
 export class ApiClient {
   private client: AxiosInstance;
@@ -58,24 +47,34 @@ export class ApiClient {
       (error) => {
         // Centralized error handling
         if (error.response) {
-          // Server responded with error status
+          const payload = error.response.data;
+          if (payload?.success === false && typeof payload?.error === 'string') {
+            return Promise.reject(payload as ApiError);
+          }
+
           const apiError: ApiError = {
-            error: error.response.data?.error || error.response.data?.message || 'Request failed',
-            code: error.response.data?.code,
-            details: error.response.data?.details,
+            success: false,
+            error: payload?.error || payload?.message || 'Request failed',
+            message: payload?.message ?? payload?.error,
+            code: payload?.code,
+            details: payload?.details,
           };
           return Promise.reject(apiError);
         } else if (error.request) {
           // Network error
           const apiError: ApiError = {
+            success: false,
             error: 'Network error - please check your connection',
+            message: 'Network error - please check your connection',
             code: 'NETWORK_ERROR',
           };
           return Promise.reject(apiError);
         } else {
           // Other error
           const apiError: ApiError = {
+            success: false,
             error: error.message || 'An unexpected error occurred',
+            message: error.message || 'An unexpected error occurred',
             code: 'UNKNOWN_ERROR',
           };
           return Promise.reject(apiError);

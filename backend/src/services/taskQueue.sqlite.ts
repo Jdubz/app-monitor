@@ -992,6 +992,22 @@ export class TaskQueueService {
   }
 
   /**
+   * Get all tasks with unmerged PRs for monitoring
+   * Used to resume PR monitoring on startup
+   */
+  getTasksWithUnmergedPRs(): Task[] {
+    const stmt = this.db.prepare(`
+      SELECT * FROM tasks
+      WHERE pr_number IS NOT NULL
+        AND pr_url IS NOT NULL
+        AND pr_branch IS NOT NULL
+        AND (pr_status IS NULL OR pr_status != 'merged')
+      ORDER BY pr_created_at DESC
+    `);
+    return stmt.all() as Task[];
+  }
+
+  /**
    * Get task duration statistics by type and complexity
    * Useful for learning baseline durations before setting timeouts
    */

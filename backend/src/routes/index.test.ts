@@ -63,31 +63,35 @@ describe('API Routes Index', () => {
 
     it('should return status field with value "ok"', async () => {
       const response = await request(app).get('/api/health');
-      expect(response.body).toHaveProperty('status');
-      expect(response.body.status).toBe('ok');
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toHaveProperty('status');
+      expect(response.body.data.status).toBe('ok');
     });
 
     it('should return uptime field as a number', async () => {
       const response = await request(app).get('/api/health');
-      expect(response.body).toHaveProperty('uptime');
-      expect(typeof response.body.uptime).toBe('number');
-      expect(response.body.uptime).toBeGreaterThanOrEqual(0);
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toHaveProperty('uptime');
+      expect(typeof response.body.data.uptime).toBe('number');
+      expect(response.body.data.uptime).toBeGreaterThanOrEqual(0);
     });
 
     it('should return timestamp field in ISO 8601 format', async () => {
       const response = await request(app).get('/api/health');
-      expect(response.body).toHaveProperty('timestamp');
-      expect(typeof response.body.timestamp).toBe('string');
+      expect(response.body.success).toBe(true);
+      expect(response.body.data).toHaveProperty('timestamp');
+      expect(typeof response.body.data.timestamp).toBe('string');
 
       // Validate ISO 8601 format
-      const isoTimestamp = new Date(response.body.timestamp);
+      const isoTimestamp = new Date(response.body.data.timestamp);
       expect(isoTimestamp).toBeInstanceOf(Date);
-      expect(isoTimestamp.toISOString()).toBe(response.body.timestamp);
+      expect(isoTimestamp.toISOString()).toBe(response.body.data.timestamp);
     });
 
     it('should return exactly three fields: status, uptime, timestamp', async () => {
       const response = await request(app).get('/api/health');
-      const keys = Object.keys(response.body);
+      expect(response.body.success).toBe(true);
+      const keys = Object.keys(response.body.data);
       expect(keys).toHaveLength(3);
       expect(keys).toContain('status');
       expect(keys).toContain('uptime');
@@ -102,20 +106,20 @@ describe('API Routes Index', () => {
       expect(Object.keys(response1.body).sort()).toEqual(Object.keys(response2.body).sort());
 
       // Status should always be "ok"
-      expect(response1.body.status).toBe('ok');
-      expect(response2.body.status).toBe('ok');
+      expect(response1.body.data.status).toBe('ok');
+      expect(response2.body.data.status).toBe('ok');
 
       // Uptime should increase between calls (with small delay)
       await new Promise(resolve => setTimeout(resolve, 10));
       const response3 = await request(app).get('/api/health');
-      expect(response3.body.uptime).toBeGreaterThanOrEqual(response1.body.uptime);
+      expect(response3.body.data.uptime).toBeGreaterThanOrEqual(response1.body.data.uptime);
     });
 
     it('should handle timestamp timezone correctly', async () => {
       const response = await request(app).get('/api/health');
 
       // ISO 8601 timestamps should end with 'Z' for UTC
-      expect(response.body.timestamp).toMatch(/Z$/);
+      expect(response.body.data.timestamp).toMatch(/Z$/);
     });
   });
 });
