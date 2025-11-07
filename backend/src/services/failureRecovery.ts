@@ -11,12 +11,13 @@
  */
 
 import { logger } from '../utils/logger.js';
-import { Task } from '../types/task.js';
+import type { Task as DevBotsTask } from './devBotsManager.js';
 import { FailurePattern } from './taskFailureGuards.js';
 import { DevBotsManager } from './devBotsManager.js';
+import type { Task as SQLiteTask } from './taskQueue.sqlite.js';
 
 export interface FailureContext {
-  task: Task;
+  task: DevBotsTask;
   failurePattern: FailurePattern;
   stderr: string;
   stdout: string;
@@ -36,6 +37,21 @@ export class SimpleFailureRecovery {
    */
   async attemptRecovery(context: FailureContext): Promise<{ recovered: boolean; cleanupTaskId?: string }> {
     const { task, failurePattern } = context;
+
+    // CIRCULAR RECOVERY PREVENTION: Never attempt recovery on repair bots themselves
+    if (task.metadata?.isRepairBot) {
+      logger.warn({
+        category: 'recovery',
+        action: 'circular_recovery_prevented',
+        message: `Preventing circular recovery: task ${task.id} is already a repair bot`,
+        details: {
+          taskId: task.id,
+          repairStage: task.metadata.repairStage,
+          originalTaskId: task.metadata.originalTaskId
+        }
+      });
+      return { recovered: false };
+    }
 
     // Check if this task already has a repair process running
     if (await this.hasActiveRepair(task.id)) {
@@ -80,7 +96,7 @@ export class SimpleFailureRecovery {
    * Create followup task after cleanup completes
    * Called by task completion handler when cleanup task finishes
    */
-  async createFollowupTask(cleanupTask: Task): Promise<{ task: Task } | null> {
+  async createFollowupTask(cleanupTask: DevBotsTask): Promise<{ task: DevBotsTask } | null> {
     if (!cleanupTask.metadata?.isRepairBot || cleanupTask.metadata?.repairStage !== 'cleanup') {
       return null;
     }
@@ -112,7 +128,7 @@ export class SimpleFailureRecovery {
       type: originalTask.type,
       title: `[FOLLOWUP] ${originalTask.title}`,
       description: this.buildFollowupPrompt(originalTask, cleanupTask),
-      assignedAgent: originalTask.assigned_agent,
+      assignedAgent: originalTask.assigned_agent ?? 'backend-specialist',
       priority: 100, // High priority
       metadata: {
         isRepairBot: true,
@@ -188,7 +204,7 @@ export class SimpleFailureRecovery {
    * Build prompt for cleanup task (simple: just fix the error)
    */
   private buildCleanupPrompt(
-    originalTask: Task,
+    originalTask: DevBotsTask,
     failurePattern: FailurePattern,
     stderr: string,
     exitCode: number
@@ -226,7 +242,7 @@ The followup bot will complete the original goal.
   /**
    * Build prompt for followup task (simple: complete the goal)
    */
-  private buildFollowupPrompt(originalTask: Task, cleanupTask: Task): string {
+  private buildFollowupPrompt(originalTask: SQLiteTask, cleanupTask: DevBotsTask): string {
     return `# Followup Task: Complete Original Goal
 
 ## Original Task

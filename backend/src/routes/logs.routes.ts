@@ -7,6 +7,7 @@ import { LogStreamer } from '../services/logStreamer.js';
 import { ProcessManager } from '../services/processManager.js';
 import { logSourceManager } from '../server.js';
 import { logger } from '../utils/logger.js';
+import type { ServiceLogsResponse } from '@app-monitor/api-contracts';
 
 const LOGS_DIR = path.join(process.cwd(), 'logs');
 
@@ -116,8 +117,18 @@ export function createLogsRoutes(deps: LogsRoutesDependencies): Router {
       if (!logWatcher) {
         return res.status(503).json({ error: 'Log watcher not available' });
       }
-      const logs = logWatcher.getRecentLogs(serviceName, lines);
-      res.json({ serviceName, logs });
+      const structuredLogs = logWatcher.getRecentLogs(serviceName, lines);
+      const logLines = structuredLogs.map((entry) => {
+        if (typeof entry.message === 'string' && entry.message.length > 0) {
+          return entry.message;
+        }
+        if (entry.details && typeof entry.details.message === 'string') {
+          return entry.details.message;
+        }
+        return JSON.stringify(entry);
+      });
+      const payload: ServiceLogsResponse = { serviceName, logs: logLines };
+      res.json(payload);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -181,28 +192,7 @@ export function createLogsRoutes(deps: LogsRoutesDependencies): Router {
     });
   });
 
-  // Get available log sources (legacy - kept for backwards compatibility)
-  router.get('/sources/legacy', (_req: Request, res: Response) => {
-    try {
-      const logWatcher = logStreamer.getLogWatcher();
-      const sources = logWatcher.getAvailableSources();
-      res.json({
-        count: sources.length,
-        sources,
-      });
-    } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'get_sources_failed',
-        message: 'Failed to get log sources',
-        error: error instanceof Error ? error : new Error(String(error)),
-      });
-      res.status(500).json({
-        error: 'Failed to get log sources',
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
-  });
+  // REMOVED: GET /sources/legacy endpoint (no longer used by any clients)
 
   // Frontend logging endpoint
   router.post('/frontend', (req: Request, res: Response) => {

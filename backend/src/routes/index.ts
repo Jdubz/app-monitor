@@ -18,6 +18,7 @@ import type { TaskBridge } from '../services/taskBridge.js';
 import type { LogRotation } from '../services/logRotation.js';
 import type { LogStreamer } from '../services/logStreamer.js';
 import type { ServiceConfig } from '../config.js';
+import type { HealthCheckResponse } from '@app-monitor/api-contracts';
 
 import { createServicesRouter } from './services.routes.js';
 import { createSocketRoutes, createTaskRoutes } from './socket-task.routes.js';
@@ -53,11 +54,12 @@ export function createApiRouter(deps: {
   const router = Router();
 
   router.get('/health', (_req, res) => {
-    res.json({
+    const payload: HealthCheckResponse = {
       status: 'ok',
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
-    });
+    };
+    res.json(payload);
   });
 
   router.use('/services', createServicesRouter(deps.processManager));

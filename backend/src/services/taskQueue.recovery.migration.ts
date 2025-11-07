@@ -39,17 +39,16 @@ export class RecoveryMigration {
         message: 'Starting recovery system database migration'
       });
 
-      // Step 1: Add repair bot fields to tasks table
+      // Step 1: Add repair bot fields to tasks table (ONLY NEEDED FIELDS)
       this.addRepairBotFields(result);
 
-      // Step 2: Create recovery_attempts table
-      this.createRecoveryAttemptsTable(result);
-
-      // Step 3: Create recovery_safety_checks table
-      this.createRecoverySafetyChecksTable(result);
-
-      // Step 4: Create indexes
+      // Step 2: Create indexes for repair bot fields
       this.createIndexes(result);
+
+      // NOTE: recovery_attempts and recovery_safety_checks tables removed
+      // The simplified recovery system only uses task metadata fields
+      // (is_repair_bot, original_task_id, repair_stage) which are tracked
+      // in the tasks table directly.
 
       result.success = result.errors.length === 0;
 
@@ -141,102 +140,25 @@ export class RecoveryMigration {
     }
   }
 
-  /**
-   * Create recovery_attempts table
-   */
-  private createRecoveryAttemptsTable(result: RecoveryMigrationResult): void {
-    try {
-      this.db.exec(`
-        CREATE TABLE IF NOT EXISTS recovery_attempts (
-          id TEXT PRIMARY KEY,
-          task_id TEXT NOT NULL,
-          original_failure_pattern TEXT NOT NULL,
-          cleanup_bot_task_id TEXT,
-          followup_bot_task_id TEXT,
-          status TEXT NOT NULL CHECK(status IN ('running', 'recovered', 'failed', 'abandoned')),
-          stage TEXT NOT NULL CHECK(stage IN ('evaluating', 'cleanup', 'followup', 'complete')),
-          started_at INTEGER NOT NULL,
-          completed_at INTEGER,
-          total_duration_ms INTEGER,
-          recovery_summary TEXT,
-
-          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE,
-          FOREIGN KEY (cleanup_bot_task_id) REFERENCES tasks(id) ON DELETE SET NULL,
-          FOREIGN KEY (followup_bot_task_id) REFERENCES tasks(id) ON DELETE SET NULL
-        )
-      `);
-
-      result.tablesCreated++;
-      logger.info({
-        category: 'process',
-        action: 'table_created',
-        message: 'Created recovery_attempts table'
-      });
-    } catch (error) {
-      const errorMsg = `Failed to create recovery_attempts table: ${error instanceof Error ? error.message : String(error)}`;
-      result.errors.push(errorMsg);
-      logger.error({
-        category: 'process',
-        action: 'create_table_failed',
-        message: errorMsg,
-        error
-      });
-    }
-  }
+  // NOTE: Removed unused table creation methods:
+  // - createRecoveryAttemptsTable()
+  // - createRecoverySafetyChecksTable()
+  //
+  // The simplified recovery system (73% code reduction) only uses
+  // task metadata fields for tracking repair bots:
+  // - is_repair_bot (boolean)
+  // - original_task_id (references failed task)
+  // - repair_stage ('cleanup' | 'followup')
 
   /**
-   * Create recovery_safety_checks table
-   */
-  private createRecoverySafetyChecksTable(result: RecoveryMigrationResult): void {
-    try {
-      this.db.exec(`
-        CREATE TABLE IF NOT EXISTS recovery_safety_checks (
-          id TEXT PRIMARY KEY,
-          recovery_attempt_id TEXT NOT NULL,
-          check_type TEXT NOT NULL CHECK(check_type IN ('cleanup', 'followup')),
-          files_modified INTEGER NOT NULL,
-          lines_changed INTEGER NOT NULL,
-          critical_paths_touched TEXT, -- JSON array
-          destructive_ops_detected INTEGER NOT NULL, -- 0 = false, 1 = true
-          external_deps_added INTEGER NOT NULL, -- 0 = false, 1 = true
-          is_safe INTEGER NOT NULL, -- 0 = false, 1 = true
-          violations TEXT, -- JSON array
-          analysis_details TEXT, -- JSON object
-          checked_at INTEGER NOT NULL,
-
-          FOREIGN KEY (recovery_attempt_id) REFERENCES recovery_attempts(id) ON DELETE CASCADE
-        )
-      `);
-
-      result.tablesCreated++;
-      logger.info({
-        category: 'process',
-        action: 'table_created',
-        message: 'Created recovery_safety_checks table'
-      });
-    } catch (error) {
-      const errorMsg = `Failed to create recovery_safety_checks table: ${error instanceof Error ? error.message : String(error)}`;
-      result.errors.push(errorMsg);
-      logger.error({
-        category: 'process',
-        action: 'create_table_failed',
-        message: errorMsg,
-        error
-      });
-    }
-  }
-
-  /**
-   * Create indexes for recovery tables
+   * Create indexes for repair bot fields
    */
   private createIndexes(result: RecoveryMigrationResult): void {
     try {
+      // Only indexes needed for simplified recovery system
       const indexes = [
         'CREATE INDEX IF NOT EXISTS idx_tasks_repair_bot ON tasks(is_repair_bot, status)',
-        'CREATE INDEX IF NOT EXISTS idx_tasks_original_task ON tasks(original_task_id)',
-        'CREATE INDEX IF NOT EXISTS idx_recovery_attempts_task ON recovery_attempts(task_id)',
-        'CREATE INDEX IF NOT EXISTS idx_recovery_attempts_status ON recovery_attempts(status)',
-        'CREATE INDEX IF NOT EXISTS idx_recovery_safety_attempt ON recovery_safety_checks(recovery_attempt_id)'
+        'CREATE INDEX IF NOT EXISTS idx_tasks_original_task ON tasks(original_task_id)'
       ];
 
       for (const indexSql of indexes) {
@@ -246,7 +168,7 @@ export class RecoveryMigration {
       logger.info({
         category: 'process',
         action: 'indexes_created',
-        message: `Created ${indexes.length} indexes for recovery tables`
+        message: `Created ${indexes.length} indexes for repair bot fields`
       });
     } catch (error) {
       const errorMsg = `Failed to create recovery indexes: ${error instanceof Error ? error.message : String(error)}`;

@@ -31,6 +31,10 @@ describe('ProcessManager Core Functionality', () => {
   let mockProcesses: Map<number, EventEmitter>;
   let nextPid: number;
 
+  const getLastSpawnedProcess = () => {
+    return (mockSpawn.mock.results.at(-1)?.value ?? null) as ReturnType<typeof createMockChildProcess> | null;
+  };
+
   const createMockChildProcess = () => {
     const emitter = new EventEmitter();
     const stdout = new EventEmitter();
@@ -62,7 +66,7 @@ describe('ProcessManager Core Functionality', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockProcesses = new Map();
-    nextPid = 1000;
+    nextPid = 12345;
 
     processOnSpy = vi.spyOn(process, 'on').mockImplementation(() => process);
     processKillSpy = vi
@@ -103,6 +107,13 @@ describe('ProcessManager Core Functionality', () => {
     vi.mocked(logger.error).mockImplementation(() => {});
     vi.mocked(logger.debug).mockImplementation(() => {});
 
+    vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+    vi
+      .spyOn(ProcessManager.prototype as any, 'waitForProcessStart')
+      .mockImplementation(async () => {
+        await new Promise((resolve) => setImmediate(resolve));
+      });
+
     processManager = new ProcessManager();
   });
 
@@ -141,33 +152,28 @@ describe('ProcessManager Core Functionality', () => {
     it('should stop service with graceful shutdown', async () => {
       // Given: Service is running
       const serviceName = 'job-finder-backend';
-      const mockProcess = createMockChildProcess();
-      mockSpawn.mockReturnValue(mockProcess);
       await processManager.startService(serviceName);
+      const runningProcess = getLastSpawnedProcess();
+      expect(runningProcess).toBeTruthy();
 
-      const resultPromise = processManager.stopService(serviceName);
+      const result = await processManager.stopService(serviceName);
 
-      // Simulate the exit event that gracefulStop waits for
-      mockProcesses.get(mockProcess.pid)?.emit('exit', 0, 'SIGTERM');
-      const result = await resultPromise;
-
-      expect(processKillSpy).toHaveBeenCalledWith(-mockProcess.pid, 'SIGTERM');
+      expect(processKillSpy).toHaveBeenCalledWith(-runningProcess!.pid, 'SIGTERM');
       expect(result.status).toBe('stopped');
     });
 
     it('should restart service (stop then start)', async () => {
       // Given: Service is running
       const serviceName = 'job-finder-backend';
-      const mockProcess = createMockChildProcess();
-      mockSpawn.mockReturnValue(mockProcess);
       await processManager.startService(serviceName);
+      const firstProcess = getLastSpawnedProcess();
+      expect(firstProcess).toBeTruthy();
 
-      const restartPromise = processManager.restartService(serviceName);
-      mockProcesses.get(mockProcess.pid)?.emit('exit', 0, 'SIGTERM');
-      const result = await restartPromise;
+      const result = await processManager.restartService(serviceName);
 
-      expect(processKillSpy).toHaveBeenCalledWith(-mockProcess.pid, 'SIGTERM');
+      expect(processKillSpy).toHaveBeenCalledWith(-firstProcess!.pid, 'SIGTERM');
       expect(mockSpawn).toHaveBeenCalledTimes(2);
+      expect(result.pid).not.toBe(firstProcess!.pid);
       expect(result.status).toBe('running');
     });
 
@@ -373,21 +379,15 @@ describe('ProcessManager Core Functionality', () => {
     it('should handle service stop failures', async () => {
       // Given: Service is running but stop fails
       const serviceName = 'job-finder-backend';
-      const mockProcess = {
-        pid: 12345,
-        stdout: { on: vi.fn() },
-        stderr: { on: vi.fn() },
-        on: vi.fn(),
-        once: vi.fn(),
-        removeListener: vi.fn(),
-        kill: vi.fn().mockImplementation(() => {
-          throw new Error('Stop failed');
-        }),
-        exitCode: null
-      } as any;
-
-      mockSpawn.mockReturnValue(mockProcess);
       await processManager.startService(serviceName);
+      const runningProcess = getLastSpawnedProcess();
+      expect(runningProcess).toBeTruthy();
+      runningProcess!.kill = vi.fn(() => {
+        throw new Error('Stop failed');
+      });
+      processKillSpy.mockImplementationOnce(() => {
+        throw new Error('process kill failed');
+      });
 
       // When: Service stop is attempted
       await expect(processManager.stopService(serviceName))
@@ -413,61 +413,31 @@ describe('ProcessManager Core Functionality', () => {
       const serviceName1 = 'job-finder-backend';
       const serviceName2 = 'job-finder-frontend';
 
-      const mockProcess1 = {
-        pid: 12345,
-        stdout: { on: vi.fn() },
-        stderr: { on: vi.fn() },
-        on: vi.fn(),
-        once: vi.fn(),
-        removeListener: vi.fn(),
-        kill: vi.fn(),
-        exitCode: null
-      } as any;
-
-      const mockProcess2 = {
-        pid: 12346,
-        stdout: { on: vi.fn() },
-        stderr: { on: vi.fn() },
-        on: vi.fn(),
-        once: vi.fn(),
-        removeListener: vi.fn(),
-        kill: vi.fn(),
-        exitCode: null
-      } as any;
-
-      mockSpawn
-        .mockReturnValueOnce(mockProcess1)
-        .mockReturnValueOnce(mockProcess2);
-
       await processManager.startService(serviceName1);
       await processManager.startService(serviceName2);
+      const firstProcess = mockSpawn.mock.results[0].value as ReturnType<typeof createMockChildProcess>;
+      const secondProcess = mockSpawn.mock.results[1].value as ReturnType<typeof createMockChildProcess>;
 
       // When: Cleanup is triggered
       await processManager.cleanupAll();
 
-      // Then: All processes are killed
-      expect(mockProcess1.kill).toHaveBeenCalledWith('SIGTERM');
-      expect(mockProcess2.kill).toHaveBeenCalledWith('SIGTERM');
+      // Then: All processes receive termination signals
+      expect(processKillSpy).toHaveBeenCalledWith(-firstProcess.pid, 'SIGTERM');
+      expect(processKillSpy).toHaveBeenCalledWith(-secondProcess.pid, 'SIGTERM');
     });
 
     it('should handle cleanup errors gracefully', async () => {
       // Given: Process with kill error
       const serviceName = 'job-finder-backend';
-      const mockProcess = {
-        pid: 12345,
-        stdout: { on: vi.fn() },
-        stderr: { on: vi.fn() },
-        on: vi.fn(),
-        once: vi.fn(),
-        removeListener: vi.fn(),
-        kill: vi.fn().mockImplementation(() => {
-          throw new Error('Kill failed');
-        }),
-        exitCode: null
-      } as any;
-
-      mockSpawn.mockReturnValue(mockProcess);
       await processManager.startService(serviceName);
+      const failingProcess = getLastSpawnedProcess();
+      expect(failingProcess).toBeTruthy();
+      failingProcess!.kill = vi.fn(() => {
+        throw new Error('Kill failed');
+      });
+      processKillSpy.mockImplementationOnce(() => {
+        throw new Error('process kill failed');
+      });
 
       // When: Cleanup is attempted
       await expect(processManager.cleanupAll()).resolves.not.toThrow();

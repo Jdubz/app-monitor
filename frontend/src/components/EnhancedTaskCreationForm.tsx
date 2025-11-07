@@ -311,7 +311,7 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
         },
       };
 
-      const response = await api.post("/dev-bots/tasks/enhanced", cleanedTaskData);
+      const response = await api.post("/dev-bots/tasks", cleanedTaskData);
 
       if (onTaskCreated) {
         onTaskCreated((response as any).data.task);
@@ -611,7 +611,6 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
                       <option value="job-finder-shared-types">job-finder-shared-types</option>
                       <option value="job-finder-worker">job-finder-worker</option>
                       <option value="docs">docs</option>
-                      <option value="scripts">scripts</option>
                       <option value="infrastructure">infrastructure</option>
                     </select>
                   </div>

@@ -109,7 +109,7 @@ export interface Task {
   can_retry: boolean;
   retry_count: number;
   max_retries: number;
-  timeout_ms: number;
+  timeout_ms: number | null;
   fingerprint?: string;
   estimated_hours?: number;
   complexity?: string;
@@ -384,7 +384,7 @@ export class TaskQueueService {
       can_retry: taskData.can_retry !== undefined ? taskData.can_retry : true,
       retry_count: 0,
       max_retries: taskData.max_retries || 3,
-      timeout_ms: taskData.timeout_ms || null, // NULL = no automatic timeout
+      timeout_ms: taskData.timeout_ms !== undefined ? taskData.timeout_ms : null, // NULL = no automatic timeout
       fingerprint: taskData.fingerprint,
       estimated_hours: taskData.estimated_hours,
       complexity: taskData.complexity
@@ -795,7 +795,7 @@ export class TaskQueueService {
           id: t.id,
           title: t.title,
           duration_minutes: Math.round(t.duration_ms / 60000)
-        }))
+        })) as unknown as Record<string, unknown>
       });
     }
 
@@ -1157,7 +1157,7 @@ export class TaskQueueService {
       ORDER BY created_at ASC
     `).all(originalTaskId) as Task[];
 
-    return rows.map(row => this.hydrateTask(row));
+    return rows;
   }
 
   /**

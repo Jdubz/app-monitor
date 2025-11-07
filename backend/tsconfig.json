@@ -6,6 +6,10 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "moduleResolution": "node",
+    "baseUrl": ".",
+    "paths": {
+      "@app-monitor/api-contracts": ["../packages/api-contracts/dist/index.d.ts"]
+    },
     "resolveJsonModule": true,
     "allowJs": true,
     "sourceMap": true,

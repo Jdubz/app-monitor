@@ -13,28 +13,13 @@ import { checkPortsAvailable, getPortInfo } from '../utils/portCheck.js';
 import { ProcessLifecycle } from './processManager/lifecycle.js';
 import { ProcessEventManager } from './processManager/eventHandlers.js';
 import { PortConflictResolver } from './processManager/portConflict.js';
+import type { ProcessInfo } from '@app-monitor/api-contracts';
+export type { ProcessInfo } from '@app-monitor/api-contracts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '../../..');
 const PLAIN_LOGS_DIR = path.join(ROOT_DIR, 'logs/plain');
-
-export interface ProcessInfo {
-  name: string;
-  displayName: string;
-  status: 'running' | 'stopped' | 'starting' | 'stopping' | 'error';
-  pid?: number;
-  ports?: number[];
-  uptime?: number;
-  error?: string;
-  startedAt?: number;
-  dockerContainer?: {
-    name: string;
-    status: 'running' | 'stopped' | 'exited' | 'unknown';
-    workerStatus?: 'running' | 'idle' | 'stopped' | 'unknown';
-    containerId?: string;
-  };
-}
 
 interface ManagedProcess {
   process: ChildProcess;
@@ -274,6 +259,16 @@ export class ProcessManager extends EventEmitter {
       message: `Stopping service "${serviceName}" (graceful: ${graceful})`
     });
     managed.status = 'stopping';
+    if (managed.lifecycle) {
+      const currentState = managed.lifecycle.getState();
+      if (currentState !== 'stopping') {
+        if (managed.lifecycle.canTransitionTo('stopping')) {
+          managed.lifecycle.transitionTo('stopping');
+        } else {
+          managed.lifecycle.forceTransition('stopping');
+        }
+      }
+    }
     this.emit('status_change', { serviceName, status: 'stopping' });
 
     try {

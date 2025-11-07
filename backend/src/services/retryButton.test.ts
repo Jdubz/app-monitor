@@ -2,7 +2,7 @@
  * Tests for Manual Retry Button Functionality
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { DevBotsManager } from './devBotsManager.js';
 import { ProcessManager } from './processManager.js';
 import { Task } from './devBotsManager.js';
@@ -45,10 +45,38 @@ vi.mock('../utils/logger.js', () => ({
 describe('Retry Button Functionality', () => {
   let manager: DevBotsManager;
   let mockProcessManager: ProcessManager;
+  let initializeSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
     mockProcessManager = new ProcessManager();
+    initializeSpy = vi
+      .spyOn(DevBotsManager.prototype as any, 'initializeEnhancedServices')
+      .mockImplementation(async function () {
+        (this as any).taskQueue = [];
+        (this as any).completedTasks = [];
+        (this as any).retryManager = {
+          canRetryTask: vi.fn().mockReturnValue(true),
+          retryTask: vi.fn().mockImplementation((task: Task) => ({
+            success: true,
+            task: { ...task, status: 'pending' },
+            retryAttempt: { attemptNumber: 1, timestamp: new Date().toISOString(), reason: 'Manual retry' },
+          })),
+          getRetryHistory: vi.fn().mockReturnValue([]),
+          getRetryStats: vi.fn().mockReturnValue({ totalRetries: 0, successfulRetries: 0, failedRetries: 0 }),
+          updateConfig: vi.fn(),
+          getConfig: vi.fn().mockReturnValue({ maxRetries: 3 }),
+          clearRetryHistory: vi.fn(),
+          clearAllRetries: vi.fn(),
+          on: vi.fn(),
+          emit: vi.fn(),
+          removeListener: vi.fn(),
+        };
+      });
     manager = new DevBotsManager(mockProcessManager);
+  });
+
+  afterEach(() => {
+    initializeSpy?.mockRestore();
   });
 
   describe('Failed Task Retry', () => {

@@ -90,31 +90,30 @@ export class TaskBridge extends EventEmitter {
   private async onQueueTaskCreated(task: QueueTask): Promise<void> {
     try {
       // Create task in DevBotsManager
-      const claudeTask = await this.devBotsManager.addTask(
-        task.type,
-        task.title,
-        task.documentation || '',
-        task.description || '',
-        {
-          files: task.files,
-          dependencies: task.dependencies,
-          repository: task.project,
-          assignedAgent: task.assignedAgent,
-          notes: task.notes,
-        }
-      );
+      const claudeTask = await this.devBotsManager.addTask({
+        type: task.type,
+        title: task.title,
+        documentation: task.documentation || '',
+        description: task.description || '',
+        files: task.files,
+        dependencies: task.dependencies,
+        project: task.project,
+        assignedAgent: task.assignedAgent,
+        notes: task.notes,
+        acceptanceCriteria: task.acceptanceCriteria
+      });
 
       // Store mapping
-      this.taskMapping.set(task.id, claudeTask.id);
+      this.taskMapping.set(task.id, claudeTask.task.id);
 
       logger.info({
         category: 'process',
         action: 'task_synced_to_claude',
-        message: `Task ${task.id} synced to Claude as ${claudeTask.id}`,
-        details: { queueTaskId: task.id, claudeTaskId: claudeTask.id }
+        message: `Task ${task.id} synced to Claude as ${claudeTask.task.id}`,
+        details: { queueTaskId: task.id, claudeTaskId: claudeTask.task.id }
       });
 
-      this.emit('taskSynced', { queueTask: task, claudeTask });
+      this.emit('taskSynced', { queueTask: task, claudeTask: claudeTask.task });
     } catch (error) {
       logger.error({
         category: 'process',

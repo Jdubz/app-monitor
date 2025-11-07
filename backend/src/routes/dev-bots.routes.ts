@@ -16,6 +16,8 @@
 import { Router, Request, Response } from 'express';
 import type { DevBotsManager } from '../services/devBotsManager.js';
 import { logger } from '../utils/logger.js';
+import type { LogEntry } from '../utils/logger.js';
+import { validateTaskTemplate, formatValidationErrors, isV3Template } from '../services/taskTemplateValidator.js';
 
 const TECHNICAL_TASK_TYPES = new Set(['refactor', 'implementation', 'bug', 'feature']);
 const MIN_DOCUMENTATION_LENGTH = 50;
@@ -194,13 +196,55 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
         }
       }
 
+      // V3 Template Validation (PE-API-VALIDATION-001)
+      // If the request body matches v3 template structure, enforce validation
+      if (isV3Template(req.body)) {
+        const validationResult = validateTaskTemplate(req.body);
+
+        // Log validation warnings even if template passes
+        if (validationResult.warnings.length > 0) {
+          logger.warn({
+            category: 'api',
+            action: 'v3_template_warnings',
+            message: 'V3 template validation warnings',
+            details: {
+              taskTitle: title,
+              warnings: validationResult.warnings
+            }
+          });
+        }
+
+        // Return error if template is invalid
+        if (!validationResult.isValid) {
+          logger.error({
+            category: 'api',
+            action: 'v3_template_validation_failed',
+            message: 'V3 template validation failed',
+            details: {
+              taskTitle: title,
+              errors: validationResult.errors,
+              warnings: validationResult.warnings
+            }
+          });
+
+          return res.status(400).json({
+            error: 'Task template validation failed',
+            details: formatValidationErrors(validationResult),
+            errors: validationResult.errors,
+            warnings: validationResult.warnings
+          });
+        }
+
+        logger.info({
+          category: 'api',
+          action: 'v3_template_validated',
+          message: 'V3 template passed validation',
+          details: { taskTitle: title }
+        });
+      }
+
       if (TECHNICAL_TASK_TYPES.has(type)) {
-        const warnings: Array<{
-          category: string;
-          action: string;
-          message: string;
-          details: { taskId: string };
-        }> = [];
+        const warnings: Array<Pick<LogEntry, 'category' | 'action' | 'message' | 'details'>> = [];
 
         if (!Array.isArray(files) || files.length === 0) {
           warnings.push({
@@ -277,33 +321,8 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
     }
   });
 
-  /**
-   * POST /dev-bots/tasks/enhanced
-   * DEPRECATED: Use POST /dev-bots/tasks instead
-   * Kept for backward compatibility - routes to unified addTask method
-   */
-  router.post('/tasks/enhanced', async (req: Request, res: Response) => {
-    try {
-      const taskData = req.body;
-      const result = await devBotsManager.addTask(taskData);
-      res.json({
-        task: result.task,
-        validation: result.validation,
-        message: 'Task added successfully (Note: /tasks/enhanced is deprecated, use /tasks instead)'
-      });
-    } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'error_adding_enhanced_task_error',
-        message: `Error adding enhanced task: ${error}`,
-        error
-      });
-      res.status(500).json({
-        error: 'Failed to add task',
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
-  });
+  // REMOVED: POST /tasks/enhanced endpoint (deprecated)
+  // All clients now use POST /dev-bots/tasks
 
   /**
    * GET /dev-bots/tasks/completed

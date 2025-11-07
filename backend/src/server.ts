@@ -167,7 +167,7 @@ export async function createApp() {
       category: 'process',
       action: 'docker_warning_emitted_to_clients',
       message: 'Docker warning emitted to clients',
-      warning,
+      details: { warning },
     });
   });
 

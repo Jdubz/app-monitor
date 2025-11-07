@@ -6,7 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "bash scripts/safe-dev.sh",
-    "build": "tsc --project tsconfig.build.json",
+    "build": "tsc --build tsconfig.build.json",
     "start": "node dist/index.js",
     "test": "node safe-test-runner.cjs",
     "test:unit": "node safe-test-runner.cjs",
@@ -29,6 +29,7 @@
   "author": "Job Finder App Manager",
   "license": "MIT",
   "dependencies": {
+    "@app-monitor/api-contracts": "workspace:*",
     "@google-cloud/logging": "^11.2.1",
     "@types/uuid": "^10.0.0",
     "better-sqlite3": "^9.2.2",

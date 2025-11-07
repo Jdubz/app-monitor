@@ -217,11 +217,11 @@ export class TaskQueueMigration {
       notes: legacyTask.notes,
       assigned_agent: legacyTask.assignedAgent,
       prompt: legacyTask.prompt,
-      priority: legacyTask.priority || 5,
-      can_retry: legacyTask.canRetry !== undefined ? legacyTask.canRetry : true,
+      priority: (legacyTask as any).priority || 5,
+      can_retry: (legacyTask as any).canRetry !== undefined ? (legacyTask as any).canRetry : true,
       retry_count: legacyTask.retryCount || 0,
-      max_retries: legacyTask.maxRetries || 3,
-      timeout_ms: null, // Conservative: no automatic timeout
+      max_retries: (legacyTask as any).maxRetries || 3,
+      timeout_ms: (legacyTask as any).timeout_ms || null, // Conservative: no automatic timeout
       fingerprint,
       estimated_hours: legacyTask.estimatedEffort?.hours,
       complexity: legacyTask.estimatedEffort?.complexity,
@@ -239,8 +239,8 @@ export class TaskQueueMigration {
     if (legacyTask.assignedAt) {
       sqliteTask.assigned_at = new Date(legacyTask.assignedAt).getTime();
     }
-    if (legacyTask.startedAt) {
-      sqliteTask.started_at = new Date(legacyTask.startedAt).getTime();
+    if ((legacyTask as any).startedAt) {
+      sqliteTask.started_at = new Date((legacyTask as any).startedAt).getTime();
     }
     if (legacyTask.completedAt) {
       sqliteTask.completed_at = new Date(legacyTask.completedAt).getTime();
@@ -250,7 +250,7 @@ export class TaskQueueMigration {
     if (status === 'completed' && legacyTask.output) {
       sqliteTask.output = typeof legacyTask.output === 'string' ? legacyTask.output : JSON.stringify(legacyTask.output);
     }
-    if ((status === 'failed' || status === 'timeout') && legacyTask.error) {
+    if ((status === 'failed') && legacyTask.error) {
       sqliteTask.error = legacyTask.error;
     }
 

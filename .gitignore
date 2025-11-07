@@ -42,6 +42,9 @@ Thumbs.db
 coverage/
 .nyc_output/
 
+# TypeScript build info
+*.tsbuildinfo
+
 # Temporary files
 *.tmp
 tmp/

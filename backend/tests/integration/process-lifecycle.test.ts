@@ -129,25 +129,13 @@ describe('Process Lifecycle Integration', () => {
 
     gracefulStopSpy = vi
       .spyOn(ProcessManager.prototype as any, 'gracefulStop')
-      .mockImplementation(async function (this: any, serviceName: string, managed: any) {
-        managed.status = 'stopping';
-        managed.lifecycle.transitionTo('stopping');
-        this.emit('status_change', { serviceName, status: 'stopping' });
-        managed.status = 'stopped';
-        managed.lifecycle.transitionTo('stopped');
-        this.emit('status_change', { serviceName, status: 'stopped' });
+      .mockImplementation(async function (_serviceName: string, managed: any) {
         managed.process.emit('exit', 0, 'SIGTERM');
       });
 
     forceKillSpy = vi
       .spyOn(ProcessManager.prototype as any, 'forceKill')
-      .mockImplementation(async function (this: any, serviceName: string, managed: any) {
-        managed.status = 'stopping';
-        managed.lifecycle.transitionTo('stopping');
-        this.emit('status_change', { serviceName, status: 'stopping' });
-        managed.status = 'stopped';
-        managed.lifecycle.transitionTo('stopped');
-        this.emit('status_change', { serviceName, status: 'stopped' });
+      .mockImplementation(async function (_serviceName: string, managed: any) {
         managed.process.emit('exit', 0, 'SIGKILL');
       });
 
