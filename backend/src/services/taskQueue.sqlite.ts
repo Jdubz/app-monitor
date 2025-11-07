@@ -119,6 +119,10 @@ export interface Task {
   architecture_references?: string[];
   validation_steps?: string[];
   success_metrics?: string[];
+  // Recovery system fields
+  is_repair_bot?: boolean; // True if this is a cleanup or follow-up bot
+  original_task_id?: string; // ID of the original failed task (for repair bots)
+  repair_stage?: 'cleanup' | 'followup'; // Which stage of recovery this bot represents
 }
 
 export interface Worker {
