@@ -13,6 +13,8 @@
   },
   "scripts": {
     "build": "tsc --build tsconfig.json",
+    "lint": "tsc --noEmit",
+    "test": "npm run lint",
     "clean": "tsc --build tsconfig.json --clean"
   },
   "license": "MIT"

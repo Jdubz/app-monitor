@@ -3,7 +3,7 @@ import path from 'path';
 import fs from 'fs';
 import { LogRotation } from '../services/logRotation.js';
 import { CloudLogging } from '../services/cloudLogging.js';
-import { LogStreamer } from '../services/logStreamer.js';
+import type { LogStreamer } from '../services/logStreamer.js';
 import { ProcessManager } from '../services/processManager.js';
 import { logSourceManager } from '../server.js';
 import { logger } from '../utils/logger.js';
@@ -20,7 +20,7 @@ export interface LogsRoutesDependencies {
 
 export function createLogsRoutes(deps: LogsRoutesDependencies): Router {
   const router = Router();
-  const { logRotation, cloudLogging, logStreamer, processManager } = deps;
+  const { logRotation, cloudLogging, processManager } = deps;
 
   /**
    * GET /api/logs/sources
