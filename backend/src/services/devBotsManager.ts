@@ -25,7 +25,7 @@ import {
   isTaskStuck,
   TIME_BASED_GUARDS
 } from './taskFailureGuards.js';
-import { FailureRecoveryOrchestrator } from './failureRecovery.js';
+import { SimpleFailureRecovery } from './failureRecovery.js';
 import { config } from '../config.js';
 
 // Temporary reference until the stuck-task guards are wired into the active code paths.
@@ -322,6 +322,19 @@ export interface Task {
    * @type {string}
    */
   chainId?: string;
+  /**
+   * Additional metadata for task tracking and recovery
+   * @type {object}
+   */
+  metadata?: {
+    isRepairBot?: boolean;
+    repairStage?: 'cleanup' | 'followup';
+    originalTaskId?: string;
+    cleanupTaskId?: string;
+    originalFailurePattern?: string;
+    countsTowardsConcurrencyLimit?: boolean;
+    [key: string]: unknown;
+  };
 }
 
 export interface EphemeralWorker {
@@ -601,7 +614,7 @@ export class DevBotsManager extends EventEmitter {
   private retryManager!: RetryManager;
   private workspaceOrchestrator!: WorkspaceOrchestrator;
   private pushCoordinator: PushCoordinator = new PushCoordinator();
-  private recoveryOrchestrator!: FailureRecoveryOrchestrator;
+  private recovery!: SimpleFailureRecovery;
 
   // Scope control systems
   private scopeCreepDetector = new ScopeCreepDetector();
@@ -832,8 +845,8 @@ export class DevBotsManager extends EventEmitter {
       maxRetries: 3
     };
 
-    // Initialize failure recovery orchestrator
-    this.recoveryOrchestrator = new FailureRecoveryOrchestrator(this);
+    // Initialize simple failure recovery
+    this.recovery = new SimpleFailureRecovery(this);
     this.retryManager = new RetryManager(retryConfig);
 
     // Listen for retry events
@@ -1239,6 +1252,16 @@ export class DevBotsManager extends EventEmitter {
     project?: string;
     assignedAgent?: string;
     notes?: string;
+    priority?: number;
+    metadata?: {
+      isRepairBot?: boolean;
+      repairStage?: 'cleanup' | 'followup';
+      originalTaskId?: string;
+      cleanupTaskId?: string;
+      originalFailurePattern?: string;
+      countsTowardsConcurrencyLimit?: boolean;
+      [key: string]: unknown;
+    };
   }): Promise<{
     task: Task;
     validation: {
@@ -1333,7 +1356,7 @@ export class DevBotsManager extends EventEmitter {
       title: normalizedData.title,
       description: normalizedData.description,
       assigned_agent: normalizedData.assignedAgent,
-      priority: normalizedData.estimatedEffort?.priority || 5,
+      priority: ('priority' in taskData && taskData.priority !== undefined) ? taskData.priority : (normalizedData.estimatedEffort?.priority || 5),
       estimated_hours: normalizedData.estimatedEffort?.hours,
       complexity: normalizedData.estimatedEffort?.complexity,
       files: normalizedData.files,
@@ -1341,7 +1364,11 @@ export class DevBotsManager extends EventEmitter {
       architecture_references: normalizedData.architectureReferences,
       validation_steps: normalizedData.validationSteps,
       success_metrics: normalizedData.successMetrics,
-      fingerprint
+      fingerprint,
+      // Recovery metadata fields
+      is_repair_bot: ('metadata' in taskData && taskData.metadata?.isRepairBot) || false,
+      original_task_id: ('metadata' in taskData && taskData.metadata?.originalTaskId) || undefined,
+      repair_stage: ('metadata' in taskData && taskData.metadata?.repairStage) || undefined
     });
 
     // Convert SQLite task to legacy Task format for return value
@@ -1373,7 +1400,8 @@ export class DevBotsManager extends EventEmitter {
       blockers: normalizedData.blockers,
       assumptions: normalizedData.assumptions,
       risks: normalizedData.risks,
-      alternatives: normalizedData.alternatives
+      alternatives: normalizedData.alternatives,
+      metadata: ('metadata' in taskData && taskData.metadata) ? taskData.metadata : undefined
     };
 
     this.emit('taskAdded', task);
@@ -1908,6 +1936,11 @@ export class DevBotsManager extends EventEmitter {
         task.output = JSON.stringify(claudeOutput);
         task.completedAt = new Date().toISOString();
 
+        // Check if this was a cleanup task - if so, create followup task
+        if (task.metadata?.isRepairBot && task.metadata?.repairStage === 'cleanup') {
+          await this.recovery.createFollowupTask(task);
+        }
+
         this.emit('taskCompleted', task);
 
       } catch (parseError) {
@@ -1974,24 +2007,16 @@ export class DevBotsManager extends EventEmitter {
             });
             // Continue with normal failure handling in dry run mode
           } else {
-            // Get uncommitted changes for recovery context
-            const repoRoot = path.resolve(process.cwd(), '..');
-            const { stdout: uncommittedChanges } = await this.execGitCommand(['diff'], repoRoot);
+            // Attempt simplified recovery
+            const recoveryResult = await this.recovery.attemptRecovery({
+              task,
+              failurePattern,
+              stderr,
+              stdout,
+              exitCode
+            });
 
-            const recoveryResult = await this.recoveryOrchestrator.attemptRecovery({
-            task,
-            failurePattern,
-            stderr,
-            stdout,
-            exitCode,
-            uncommittedChanges,
-            artifacts: {
-              logs: [stdoutLogPath, stderrLogPath].filter(p => p && fs.existsSync(p)),
-              patches: []
-            }
-          });
-
-            if (recoveryResult.status === 'recovered') {
+            if (recoveryResult.recovered) {
               logger.info({
                 category: 'recovery',
                 action: 'task_auto_recovered',

@@ -45,6 +45,7 @@ type LogCategory =
   | 'process'
   | 'quality'
   | 'quality-gates'
+  | 'recovery'
   | 'scripts'
   | 'socket'
   | 'system'
