@@ -26,6 +26,7 @@ import {
   TIME_BASED_GUARDS
 } from './taskFailureGuards.js';
 import { FailureRecoveryOrchestrator } from './failureRecovery.js';
+import { config } from '../config.js';
 
 // Temporary reference until the stuck-task guards are wired into the active code paths.
 void isTaskStuck;
@@ -1956,14 +1957,28 @@ export class DevBotsManager extends EventEmitter {
         }
       });
 
-      // Attempt automatic recovery if failure pattern detected
-      if (failurePattern) {
+      // Attempt automatic recovery if failure pattern detected and feature flag enabled
+      if (failurePattern && config.recovery.enabled) {
         try {
-          // Get uncommitted changes for recovery context
-          const repoRoot = path.resolve(process.cwd(), '..');
-          const { stdout: uncommittedChanges } = await this.execGitCommand(['diff'], repoRoot);
+          // Check dry run mode
+          if (config.recovery.dryRun) {
+            logger.info({
+              category: 'recovery',
+              action: 'recovery_dry_run',
+              message: `Would attempt recovery for task ${task.id} (dry run mode)`,
+              details: {
+                taskId: task.id,
+                failurePattern: failurePattern.name,
+                category: failurePattern.category
+              }
+            });
+            // Continue with normal failure handling in dry run mode
+          } else {
+            // Get uncommitted changes for recovery context
+            const repoRoot = path.resolve(process.cwd(), '..');
+            const { stdout: uncommittedChanges } = await this.execGitCommand(['diff'], repoRoot);
 
-          const recoveryResult = await this.recoveryOrchestrator.attemptRecovery({
+            const recoveryResult = await this.recoveryOrchestrator.attemptRecovery({
             task,
             failurePattern,
             stderr,
@@ -1976,18 +1991,19 @@ export class DevBotsManager extends EventEmitter {
             }
           });
 
-          if (recoveryResult.status === 'recovered') {
-            logger.info({
-              category: 'recovery',
-              action: 'task_auto_recovered',
-              message: `Task ${task.id} automatically recovered`,
-              details: recoveryResult
-            });
+            if (recoveryResult.status === 'recovered') {
+              logger.info({
+                category: 'recovery',
+                action: 'task_auto_recovered',
+                message: `Task ${task.id} automatically recovered`,
+                details: recoveryResult
+              });
 
-            // Recovery successful - task was handled by cleanup + followup bots
-            // Skip normal failure handling
-            this.ephemeralWorkers.delete(workerId);
-            return;
+              // Recovery successful - task was handled by cleanup + followup bots
+              // Skip normal failure handling
+              this.ephemeralWorkers.delete(workerId);
+              return;
+            }
           }
         } catch (recoveryError) {
           logger.error({
