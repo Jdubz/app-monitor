@@ -982,5 +982,124 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
     }
   });
 
+  // ============================================================================
+  // PR Workflow Monitoring
+  // ============================================================================
+
+  /**
+   * GET /dev-bots/pr-monitor/status
+   * Get PR workflow orchestrator status
+   */
+  router.get('/pr-monitor/status', async (_req: Request, res: Response) => {
+    try {
+      const orchestrator = devBotsManager.getPRWorkflowOrchestrator();
+      if (!orchestrator) {
+        res.status(503).json({
+          error: 'PR workflow orchestrator not available',
+          message: 'PR monitoring is not enabled or not initialized'
+        });
+        return;
+      }
+
+      const status = orchestrator.getStatus();
+      res.json(status);
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_pr_monitor_status',
+        message: `Error getting PR monitor status: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to get PR monitor status',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  /**
+   * GET /dev-bots/pr-monitor/prs
+   * Get all monitored PRs
+   */
+  router.get('/pr-monitor/prs', async (_req: Request, res: Response) => {
+    try {
+      const orchestrator = devBotsManager.getPRWorkflowOrchestrator();
+      if (!orchestrator) {
+        res.status(503).json({
+          error: 'PR workflow orchestrator not available',
+          message: 'PR monitoring is not enabled or not initialized'
+        });
+        return;
+      }
+
+      const prs = orchestrator.getMonitoredPRs();
+      res.json({
+        count: prs.length,
+        prs
+      });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_pr_monitor_prs',
+        message: `Error getting monitored PRs: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to get monitored PRs',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  /**
+   * GET /dev-bots/pr-monitor/pr/:number
+   * Get status of a specific PR
+   */
+  router.get('/pr-monitor/pr/:number', async (req: Request, res: Response) => {
+    try {
+      const prNumber = parseInt(req.params.number, 10);
+      if (isNaN(prNumber)) {
+        res.status(400).json({
+          error: 'Invalid PR number',
+          message: 'PR number must be a valid integer'
+        });
+        return;
+      }
+
+      const orchestrator = devBotsManager.getPRWorkflowOrchestrator();
+      if (!orchestrator) {
+        res.status(503).json({
+          error: 'PR workflow orchestrator not available',
+          message: 'PR monitoring is not enabled or not initialized'
+        });
+        return;
+      }
+
+      const prs = orchestrator.getMonitoredPRs();
+      const pr = prs.find(p => p.pr_number === prNumber);
+
+      if (!pr) {
+        res.status(404).json({
+          error: 'PR not found',
+          message: `PR #${prNumber} is not being monitored`
+        });
+        return;
+      }
+
+      res.json(pr);
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_pr_monitor_pr',
+        message: `Error getting PR status: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to get PR status',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
   return router;
 }

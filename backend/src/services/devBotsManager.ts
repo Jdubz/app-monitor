@@ -1190,6 +1190,14 @@ export class DevBotsManager extends EventEmitter {
     return recoveryTask;
   }
 
+  /**
+   * Get PR workflow orchestrator instance
+   * @returns PR workflow orchestrator or undefined if not initialized
+   */
+  getPRWorkflowOrchestrator(): PRWorkflowOrchestrator | undefined {
+    return this.prWorkflowOrchestrator;
+  }
+
   async getCleanupStatus(): Promise<{ schedules: string[]; recentTasks: Task[] }> {
     const completedTasks = this.taskQueue.getTasksByStatus('completed');
     const recentCleanupTasks = completedTasks

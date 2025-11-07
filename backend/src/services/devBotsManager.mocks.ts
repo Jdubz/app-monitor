@@ -413,6 +413,14 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     taskExecutionService,
     taskCompletionService,
     recovery: null as any, // Will be created by DevBotsManager
-    prWorkflowOrchestrator: null as any, // Will be created by DevBotsManager
+    prWorkflowOrchestrator: {
+      handleTaskCompletion: vi.fn().mockResolvedValue(undefined),
+      getMonitoredPRs: vi.fn().mockReturnValue([]),
+      getStatus: vi.fn().mockReturnValue({
+        monitoredPRs: 0,
+        config: { enableAutoMerge: true }
+      }),
+      stop: vi.fn()
+    } as any,
   };
 }
