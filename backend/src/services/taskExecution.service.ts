@@ -464,10 +464,9 @@ export class TaskExecutionService {
         this.getAgentDockerImage(agent),
         'sh', '-c',
         // Copy credentials and run Codex with full access for git operations
-        // Use 'exec' subcommand for non-interactive execution
-        // Note: codex exec uses --dangerously-bypass-approvals-and-sandbox instead of --ask-for-approval
+        // Use 'exec' subcommand for non-interactive execution with sandbox bypass
         `cp -r /tmp/host-codex/* /home/node/.codex/ 2>/dev/null || true && ` +
-        `codex exec --dangerously-bypass-approvals-and-sandbox '${promptText}'`
+        `codex exec --sandbox bypass-all '${promptText}'`
       ];
       cliCommand = 'codex';
     } else {
@@ -493,12 +492,24 @@ export class TaskExecutionService {
         '-v', `${homeDir}/.config/gh:/home/node/.config/gh:ro`,  // GitHub CLI auth
         this.getAgentDockerImage(agent),
         'sh', '-c',
-        // Copy credentials and run Claude (bypass permissions for git access)
+        // Copy credentials and run Claude in non-interactive mode
         `cp /tmp/host-creds.json /home/node/.claude/.credentials.json && ` +
-        `claude --print --dangerously-skip-permissions --permission-mode bypassPermissions --allowedTools 'Bash(git:*)' '${promptText}'`
+        `claude --no-color --non-interactive '${promptText}'`
       ];
       cliCommand = 'claude';
     }
+
+    // Log the full docker command for debugging
+    const fullCommand = ['docker', ...dockerArgs].join(' ');
+    logger.info({
+      category: 'process',
+      action: 'docker_command_debug',
+      message: `Full Docker command: ${fullCommand.substring(0, 500)}...`,
+      details: {
+        dockerCommandLength: fullCommand.length,
+        dockerArgs: dockerArgs.slice(0, 10) // Log first 10 args for debugging
+      }
+    });
 
     logger.info({
       category: 'process',
