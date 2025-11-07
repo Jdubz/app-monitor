@@ -29,6 +29,7 @@ import { SimpleFailureRecovery } from './failureRecovery.js';
 import { config } from '../config.js';
 import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
 import type { ScopeControlService } from './scopeControl.service.js';
+import type { EphemeralWorkerService, EphemeralWorker as EphemeralWorkerType } from './ephemeralWorker.service.js';
 
 export interface RetryAttempt {
   attemptNumber: number;
@@ -56,16 +57,9 @@ export interface WorkerInfo {
 export type TaskStatus = SQLiteTaskStatus;
 export type { Task } from './taskQueue.sqlite.js';
 
-export interface EphemeralWorker {
-  id: string;
-  containerId: string;
-  agent: AgentPersonality;
-  task: Task;
-  status: 'starting' | 'running' | 'completing' | 'destroyed';
-  createdAt: string;
-  workspace: WorkspaceContext;
-  destroyedAt?: string;
-}
+// EphemeralWorker now managed by EphemeralWorkerService
+// Re-export for backward compatibility
+export type EphemeralWorker = EphemeralWorkerType;
 
 export interface WorkerStatus {
   id: string;
@@ -115,8 +109,7 @@ export class DevBotsManager extends EventEmitter {
 
   // Worker management
   private workers = new Map<string, WorkerInfo>();
-  private ephemeralWorkers = new Map<string, EphemeralWorker>();
-  private readonly MAX_CONCURRENT_WORKERS = 2; // Maximum 2 workers as per architecture
+  // ephemeralWorkers now managed by ephemeralWorkerService
 
   // Agent type rotation configuration
   private readonly AGENT_ROTATION_STRATEGY: 'alternate' | 'random' | 'claude-only' | 'codex-only' = 'alternate';
@@ -134,6 +127,7 @@ export class DevBotsManager extends EventEmitter {
   private pushCoordinator: PushCoordinator = new PushCoordinator();
   private recovery!: SimpleFailureRecovery;
   private scopeControl!: ScopeControlService;
+  private ephemeralWorkerService!: EphemeralWorkerService;
 
   // System state
   private startTime = Date.now();
@@ -154,6 +148,7 @@ export class DevBotsManager extends EventEmitter {
     this.workspaceOrchestrator = dependencies.workspaceOrchestrator;
     this.taskPersistence = dependencies.taskPersistence;
     this.scopeControl = dependencies.scopeControl;
+    this.ephemeralWorkerService = dependencies.ephemeralWorkerService;
 
     // Initialize SimpleFailureRecovery with this instance
     this.recovery = new SimpleFailureRecovery(this);
@@ -414,7 +409,7 @@ export class DevBotsManager extends EventEmitter {
         for (const task of stuck) {
           try {
             // Force kill any Docker containers for this task
-            await this.cleanupStuckTaskContainers(task.id);
+            await this.ephemeralWorkerService.cleanupStuckTaskContainers(task.id);
 
             // Mark task as failed in database
             this.taskQueue.failTask(
@@ -459,57 +454,7 @@ export class DevBotsManager extends EventEmitter {
     });
   }
 
-  /**
-   * Cleanup Docker containers for stuck task
-   */
-  private async cleanupStuckTaskContainers(taskId: string): Promise<void> {
-    const docker = new Docker();
-
-    try {
-      // List all containers (including stopped) with this task ID in name
-      const containers = await docker.listContainers({ all: true });
-      const taskContainers = containers.filter(c =>
-        c.Names.some(name => name.includes(taskId))
-      );
-
-      for (const containerInfo of taskContainers) {
-        try {
-          const container = docker.getContainer(containerInfo.Id);
-
-          // Force kill if running
-          if (containerInfo.State === 'running') {
-            logger.info({
-              category: 'process',
-              action: 'force_killing_stuck_container',
-              message: `Force killing container ${containerInfo.Id.substring(0, 12)} for stuck task ${taskId}`
-            });
-            await container.kill();
-          }
-
-          // Remove container
-          await container.remove({ force: true });
-
-          logger.info({
-            category: 'process',
-            action: 'stuck_container_removed',
-            message: `Removed container ${containerInfo.Id.substring(0, 12)} for task ${taskId}`
-          });
-        } catch (error) {
-          logger.warn({
-            category: 'process',
-            action: 'container_cleanup_error',
-            message: `Error cleaning up container ${containerInfo.Id.substring(0, 12)}: ${error instanceof Error ? error.message : String(error)}`
-          });
-        }
-      }
-    } catch (error) {
-      logger.error({
-        category: 'process',
-        action: 'container_list_error',
-        message: `Failed to list containers for cleanup: ${error instanceof Error ? error.message : String(error)}`
-      });
-    }
-  }
+  // cleanupStuckTaskContainers moved to EphemeralWorkerService
 
   /**
    * Get queue metrics for monitoring
@@ -813,7 +758,7 @@ export class DevBotsManager extends EventEmitter {
   
   async assignNextTask(): Promise<void> {
     // Check active worker count against concurrency limit
-    const activeWorkers = Array.from(this.ephemeralWorkers.values()).filter(
+    const activeWorkers = Array.from(this.ephemeralWorkerService.getAllWorkers().values()).filter(
       worker => worker.status !== 'destroyed'
     );
 
@@ -821,14 +766,14 @@ export class DevBotsManager extends EventEmitter {
     logger.info({
       category: 'process',
       action: 'task_assignment_check',
-      message: `Task assignment check: ${queueMetrics.pending} pending tasks, ${activeWorkers.length}/${this.MAX_CONCURRENT_WORKERS} active workers`,
+      message: `Task assignment check: ${queueMetrics.pending} pending tasks, ${activeWorkers.length}/${2} active workers`,
       details: {
         queue_depth: queueMetrics.pending,
         active_workers: activeWorkers.length,
-        capacity_available: this.MAX_CONCURRENT_WORKERS - activeWorkers.length,
+        capacity_available: 2 - activeWorkers.length,
         queue_health: queueMetrics.pending > 10 ? 'HIGH_LOAD' : queueMetrics.pending > 5 ? 'MODERATE' : 'HEALTHY',
         infrastructure_recommendation:
-          queueMetrics.pending > 10 && activeWorkers.length >= this.MAX_CONCURRENT_WORKERS
+          queueMetrics.pending > 10 && activeWorkers.length >= 2
             ? 'Consider increasing MAX_CONCURRENT_WORKERS to reduce queue backlog'
             : queueMetrics.pending === 0
             ? 'Queue empty - consider adding more tasks'
@@ -836,18 +781,18 @@ export class DevBotsManager extends EventEmitter {
       }
     });
 
-    if (activeWorkers.length >= this.MAX_CONCURRENT_WORKERS) {
+    if (activeWorkers.length >= 2) {
       logger.warn({
         category: 'process',
         action: 'max_workers_active_skipping_assignment',
-        message: `Maximum concurrent workers active (${this.MAX_CONCURRENT_WORKERS}). ${queueMetrics.pending} tasks queued.`,
+        message: `Maximum concurrent workers active (${2}). ${queueMetrics.pending} tasks queued.`,
         details: {
           bottleneck: 'CONCURRENCY_LIMIT',
           recommendation: queueMetrics.pending > 5
             ? 'Increase MAX_CONCURRENT_WORKERS to process queue faster'
             : 'Wait for active workers to complete',
           queue_wait_time_estimate: queueMetrics.avg_completion_time_ms
-            ? `~${Math.ceil((queueMetrics.pending * queueMetrics.avg_completion_time_ms) / (this.MAX_CONCURRENT_WORKERS * 60000))} minutes`
+            ? `~${Math.ceil((queueMetrics.pending * queueMetrics.avg_completion_time_ms) / (2 * 60000))} minutes`
             : 'Unknown'
         }
       });
@@ -1018,11 +963,11 @@ export class DevBotsManager extends EventEmitter {
   }
 
   public getWorkerCount(): number {
-    return this.ephemeralWorkers.size;
+    return this.ephemeralWorkerService.getActiveWorkers().length;
   }
 
   public getMaxWorkers(): number {
-    return this.MAX_CONCURRENT_WORKERS;
+    return 2;
   }
 
 
@@ -1080,7 +1025,7 @@ export class DevBotsManager extends EventEmitter {
         createdAt: new Date().toISOString()
       }
     };
-    this.ephemeralWorkers.set(workerId, ephemeralWorker);
+    // Managed by ephemeralWorkerService;
 
     try {
     // Ensure we're on staging branch
@@ -1250,7 +1195,7 @@ export class DevBotsManager extends EventEmitter {
     // Calculate task execution metrics
     const executionDuration = Date.now() - (task.assigned_at || task.created_at);
     const metrics = this.getQueueMetrics();
-    const activeWorkerCount = Array.from(this.ephemeralWorkers.values()).filter(
+    const activeWorkerCount = Array.from(this.ephemeralWorkerService.getAllWorkers().values()).filter(
       w => w.status !== 'destroyed'
     ).length;
 
@@ -1270,8 +1215,8 @@ export class DevBotsManager extends EventEmitter {
         stderrLog: stderr.length > 0 ? stderrLogPath : null,
         queue_depth: metrics.pending,
         active_workers: activeWorkerCount,
-        max_concurrency: this.MAX_CONCURRENT_WORKERS,
-        capacity_available: this.MAX_CONCURRENT_WORKERS - activeWorkerCount,
+        max_concurrency: 2,
+        capacity_available: 2 - activeWorkerCount,
         avg_completion_time_ms: metrics.avg_completion_time_ms,
         task_success_rate: metrics.completed > 0
           ? `${Math.round((metrics.completed / (metrics.completed + metrics.failed)) * 100)}%`
@@ -1402,7 +1347,7 @@ export class DevBotsManager extends EventEmitter {
 
               // Recovery successful - task was handled by cleanup + followup bots
               // Skip normal failure handling
-              this.ephemeralWorkers.delete(workerId);
+              // Managed by ephemeralWorkerService;
               return;
             }
           }
@@ -1471,11 +1416,11 @@ export class DevBotsManager extends EventEmitter {
     this.assignNextTask();
     } finally {
       // Always remove worker from ephemeralWorkers to allow next task assignment
-      this.ephemeralWorkers.delete(workerId);
+      // Managed by ephemeralWorkerService;
       logger.info({
         category: 'process',
         action: 'ephemeral_worker_cleaned_up',
-        message: `Removed ephemeral worker ${workerId} from tracking (active workers: ${this.ephemeralWorkers.size})`
+        message: `Removed ephemeral worker ${workerId} from tracking (active workers: ${this.ephemeralWorkerService.getActiveWorkers().length})`
       });
     }
   }
@@ -1599,306 +1544,6 @@ export class DevBotsManager extends EventEmitter {
    * Create a new ephemeral Docker container for a task
    * Uses imagineer-style approach: create container, copy workspace in, then start
    */
-  private async createEphemeralWorker(task: Task, agent: AgentPersonality): Promise<EphemeralWorker> {
-    const activeWorkers = Array.from(this.ephemeralWorkers.values()).filter(
-      worker => worker.status !== 'destroyed'
-    );
-
-    if (activeWorkers.length >= this.MAX_CONCURRENT_WORKERS) {
-      throw new Error('Maximum concurrent dev-bots are already active');
-    }
-
-    // No git branch creation - work directly on staging
-    const workspaceId = `${agent.id}-${task.id}-${Date.now()}`;
-    const workerId = `bot-${agent.id}-${Date.now()}`;
-    const containerName = `dev-bot-${workerId}`;
-
-    try {
-      // Ensure we're on staging branch (no new branch creation)
-      const repoRoot = process.cwd();
-      const baseBranch = 'staging';  // Always work from staging branch
-      await this.execGitCommand(['checkout', baseBranch], repoRoot);
-      await this.execGitCommand(['pull', 'origin', baseBranch], repoRoot);
-
-      // Prepare host-side resources
-      const hostLogsDir = this.getHostLogsDir();
-      if (!fs.existsSync(hostLogsDir)) {
-        fs.mkdirSync(hostLogsDir, { recursive: true });
-      }
-
-      // Setup minimal binds - only for logs and credentials
-      const binds: string[] = [
-        `${hostLogsDir}:/app/logs:rw`
-      ];
-
-      const homeDir = os.homedir();
-
-      // Mount Claude credentials file to temp location (will be copied inside container)
-      // Try both .credentials.json (newer) and credentials.json (older)
-      const claudeCredentialsNew = path.join(homeDir, '.claude', '.credentials.json');
-      const claudeCredentialsOld = path.join(homeDir, '.claude', 'credentials.json');
-      const claudeCredentials = fs.existsSync(claudeCredentialsNew) ? claudeCredentialsNew : claudeCredentialsOld;
-
-      if (fs.existsSync(claudeCredentials)) {
-        // Mount to temp location - will be copied to .claude directory by shell command
-        binds.push(`${claudeCredentials}:/tmp/host-creds.json:ro`);
-        logger.info({
-          category: 'process',
-          action: 'claude_credentials_mounted',
-          message: `Mounting Claude credentials from: ${claudeCredentials}`
-        });
-      } else {
-        logger.warn({
-          category: 'process',
-          action: 'claude_credentials_not_found',
-          message: 'Claude credentials file not found, container may not authenticate'
-        });
-      }
-
-      const gitCredentials = path.join(homeDir, '.git-credentials');
-      if (fs.existsSync(gitCredentials)) {
-        binds.push(`${gitCredentials}:/home/worker/.git-credentials:ro`);
-      }
-
-      const sshDir = path.join(homeDir, '.ssh');
-      if (fs.existsSync(sshDir)) {
-        binds.push(`${sshDir}:/home/worker/.ssh:ro`);
-      }
-
-      const envVars = [
-        `AGENT_ID=${agent.id}`,
-        `AGENT_NAME=${agent.name}`,
-        `TASK_ID=${task.id}`,
-        `WORKER_ID=${workerId}`,
-        `WORKSPACE_BRANCH=staging`,
-        `WORKSPACE_ID=${workspaceId}`
-      ];
-
-      for (const key of this.getEnvPassthroughKeys()) {
-        const value = process.env[key];
-        if (value && value.length > 0) {
-          envVars.push(`${key}=${value}`);
-        }
-      }
-
-      // Create container (not started yet)
-      const container = await this.docker.createContainer({
-        Image: this.getAgentDockerImage(agent),
-        name: containerName,
-        Cmd: ['/bin/bash', '-c', 'tail -f /dev/null'],
-        Env: envVars,
-        WorkingDir: `/workspace`,
-        HostConfig: {
-          Memory: 512 * 1024 * 1024,
-          CpuQuota: 50000,
-          AutoRemove: true,
-          Binds: binds,
-          Tmpfs: {
-            '/home/worker/.claude': 'uid=1001,gid=1001'  // Writable temp for Claude CLI
-          }
-        },
-        Labels: {
-          'claude.worker.id': workerId,
-          'claude.agent.id': agent.id,
-          'claude.task.id': task.id,
-          'claude.workspace.id': workspaceId
-        }
-      });
-
-      // Start the container FIRST so we can exec commands
-      await container.start();
-
-      // Wait for container to be fully running before exec commands
-      await new Promise(resolve => setTimeout(resolve, 1000));
-
-      // Copy workspace INTO container using tar (container must be running for chown)
-      await this.copyWorkspaceToContainer(container.id, repoRoot);
-
-      await this.initializeWorkerLogFile(workerId);
-
-      const workspace = {
-        id: workspaceId,
-        hostPath: '', // No host path - workspace is inside container only
-        branchName: 'staging', // Always work on staging
-        mirrorPath: '', // No mirror
-        createdAt: new Date().toISOString()
-      };
-
-      const ephemeralWorker: EphemeralWorker = {
-        id: workerId,
-        containerId: container.id,
-        agent,
-        task,
-        status: 'starting',
-        createdAt: new Date().toISOString(),
-        workspace
-      };
-
-      this.ephemeralWorkers.set(workerId, ephemeralWorker);
-
-      logger.info({
-      category: 'process',
-      action: 'created_ephemeral_worker_workerid_with_container_c',
-      message: `Created ephemeral worker ${workerId} with container ${container.id}`
-    });
-      return ephemeralWorker;
-
-    } catch (error) {
-      logger.error({
-        category: 'process',
-        action: 'failed_to_create_ephemeral_worker_workerid',
-        message: `Failed to create ephemeral worker ${workerId}:`,
-        error: error
-      });
-      // No branch cleanup needed - we work directly on staging
-      throw error;
-    }
-  }
-
-  /**
-   * Copy workspace directory into container using tar pipe
-   * Mimics imagineer's approach for efficient workspace copying
-   */
-  private async copyWorkspaceToContainer(containerId: string, repoRoot: string): Promise<void> {
-    const { spawn } = await import('child_process');
-    logger.info({
-      category: 'process',
-      action: 'copying_workspace_to_container',
-      message: `Copying workspace from ${repoRoot} into container ${containerId}`
-    });
-
-    // Create /workspace directory in container first
-    try {
-      logger.info({
-        category: 'process',
-        action: 'creating_workspace_directory',
-        message: `About to create /workspace directory in container ${containerId}`
-      });
-
-      const container = this.docker.getContainer(containerId);
-      const mkdirExec = await container.exec({
-        Cmd: ['/bin/sh', '-c', 'mkdir -p /workspace && chown worker:worker /workspace'],
-        User: 'root',
-        AttachStdout: true,
-        AttachStderr: true
-      });
-
-      logger.info({
-        category: 'process',
-        action: 'exec_created_starting',
-        message: `Exec created, now starting mkdir in container ${containerId}`
-      });
-
-      await mkdirExec.start({ Detach: false, Tty: false });
-
-      // Wait for exec to complete by polling inspect
-      for (let i = 0; i < 10; i++) {
-        const inspect = await mkdirExec.inspect();
-        if (!inspect.Running) {
-          if (inspect.ExitCode !== 0) {
-            throw new Error(`mkdir command failed with exit code ${inspect.ExitCode}`);
-          }
-          break;
-        }
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-
-      logger.info({
-        category: 'process',
-        action: 'workspace_directory_created',
-        message: `Created /workspace directory in container ${containerId}`
-      });
-    } catch (error) {
-      logger.error({
-        category: 'process',
-        action: 'failed_to_create_workspace_directory',
-        message: `Failed to create /workspace directory: ${error instanceof Error ? error.message : String(error)}`
-      });
-      throw error;
-    }
-
-    // Exclusions for tar (don't copy these into container)
-    const exclusions = [
-      '--exclude=node_modules',
-      '--exclude=venv',
-      '--exclude=.venv',
-      '--exclude=logs',
-      '--exclude=dev-bots',
-      '--exclude=__pycache__',
-      '--exclude=.mypy_cache',
-      '--exclude=dist',
-      '--exclude=build',
-      '--exclude=.git/objects', // Copy .git but not large objects
-    ];
-
-    return new Promise((resolve, reject) => {
-      // Create tar of workspace
-      const tarProc = spawn('tar', [
-        ...exclusions,
-        '-C', repoRoot,
-        '-cf', '-',
-        '.'
-      ]);
-
-      // Pipe into docker cp
-      const dockerCpProc = spawn('docker', [
-        'cp', '-',
-        `${containerId}:/workspace`
-      ]);
-
-      tarProc.stdout.pipe(dockerCpProc.stdin);
-
-      let stderr = '';
-      dockerCpProc.stderr.on('data', (data) => {
-        stderr += data.toString();
-      });
-
-      dockerCpProc.on('close', async (code) => {
-        if (code !== 0) {
-          reject(new Error(`docker cp failed with code ${code}: ${stderr}`));
-        } else {
-          // Fix ownership of workspace for worker user (must run as root)
-          try {
-            const container = this.docker.getContainer(containerId);
-            const chownExec = await container.exec({
-              Cmd: ['/bin/sh', '-c', 'chown -R worker:worker /workspace'],
-              User: 'root',  // Run as root to be able to chown
-              AttachStdout: true,
-              AttachStderr: true
-            });
-            await chownExec.start({ Detach: false });
-
-            logger.info({
-              category: 'process',
-              action: 'workspace_copied_successfully',
-              message: `Workspace copied and ownership fixed for container ${containerId}`
-            });
-            resolve();
-          } catch (chownError) {
-            logger.warn({
-              category: 'process',
-              action: 'workspace_chown_failed',
-              message: `Failed to fix workspace ownership: ${chownError instanceof Error ? chownError.message : String(chownError)}`
-            });
-            // Don't fail - the copy succeeded, ownership might not be critical
-            resolve();
-          }
-        }
-      });
-
-      tarProc.on('error', (error) => {
-        reject(new Error(`tar process failed: ${error.message}`));
-      });
-
-      dockerCpProc.on('error', (error) => {
-        reject(new Error(`docker cp process failed: ${error.message}`));
-      });
-    });
-  }
-
-  /**
-   * Execute git command in specified directory
-   */
   private async execGitCommand(args: string[], cwd: string): Promise<string> {
     const { promisify } = await import('util');
     const { exec } = await import('child_process');
@@ -1946,71 +1591,6 @@ export class DevBotsManager extends EventEmitter {
 
   /**
    * Execute task in ephemeral worker container
-   */
-  private async executeTaskInEphemeralWorker(worker: EphemeralWorker): Promise<void> {
-    try {
-      worker.status = 'running';
-      
-      const container = this.docker.getContainer(worker.containerId);
-      
-      // Determine log file path per worker
-      const sanitizedId = worker.id.replace(/[^a-zA-Z0-9-_]/g, '_');
-      const logFile = `/app/logs/${sanitizedId}.log`;
-      
-      // Generate task execution command with logging
-      const executionCommand = this.generateTaskExecutionCommandWithLogging(worker.task, worker.agent, logFile);
-      
-      // Execute task in container
-      const exec = await container.exec({
-        Cmd: ['/bin/bash', '-c', executionCommand],
-        AttachStdout: true,
-        AttachStderr: true
-      });
-
-      const stream = await exec.start({
-        Detach: false,
-        Tty: false
-      });
-
-      let output = '';
-      let errorOutput = '';
-
-      stream.on('data', (data: Buffer) => {
-        const chunk = data.toString();
-        if (chunk.startsWith('1:')) {
-          output += chunk.substring(2);
-        } else if (chunk.startsWith('2:')) {
-          errorOutput += chunk.substring(2);
-        }
-      });
-
-      // Wait for execution to complete
-      await new Promise((resolve, reject) => {
-        stream.on('end', resolve);
-        stream.on('error', reject);
-      });
-
-      // Get exit code
-      const inspect = await exec.inspect();
-      const exitCode = inspect.ExitCode || 0;
-
-      // Complete the task
-      await this.completeEphemeralTask(worker, output, errorOutput, exitCode);
-      
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'task_execution_failed_for_worker_worker_id',
-      message: `Task execution failed for worker ${worker.id}:`,
-      error: error
-    });
-      await this.failEphemeralTask(worker, error instanceof Error ? error : { message: String(error) });
-    }
-  }
-
-  /**
-   * Generate task execution command for container
-   * Generates a proper Claude CLI command with the task prompt
    */
   private generateTaskExecutionCommand(task: Task, _agent: AgentPersonality): string {
     // Escape the prompt for shell execution
@@ -2088,52 +1668,6 @@ export class DevBotsManager extends EventEmitter {
 
   /**
    * Initialize worker-specific log file
-   */
-  private async initializeWorkerLogFile(workerId: string): Promise<void> {
-    try {
-      const fs = await import('fs');
-      const path = await import('path');
-      
-      // Ensure logs directory exists (use root logs directory)
-      const logsDir = this.getHostLogsDir();
-      if (!fs.existsSync(logsDir)) {
-        fs.mkdirSync(logsDir, { recursive: true });
-        logger.info({
-      category: 'process',
-      action: 'created_logs_directory_logsdir',
-      message: `Created logs directory: ${logsDir}`
-    });
-      }
-      
-      // Initialize worker log file with header
-      const sanitizedId = workerId.replace(/[^a-zA-Z0-9-_]/g, '_');
-      const logFile = path.join(logsDir, `${sanitizedId}.log`);
-      const timestamp = new Date().toISOString();
-      const header = `=== ${workerId.toUpperCase()} WORKER LOG ===\n` +
-                    `Initialized: ${timestamp}\n` +
-                    `Worker ID: ${workerId}\n` +
-                    `=====================================\n\n`;
-      
-      // Append header to log file (don't overwrite existing content)
-      fs.appendFileSync(logFile, header);
-      logger.info({
-      category: 'process',
-      action: 'initialized_worker_log_file_logfile',
-      message: `Initialized worker log file: ${logFile}`
-    });
-      
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_initialize_worker_log_file_for_workertyp',
-      message: `Failed to initialize worker log file for ${workerId}:`,
-      error: error
-    });
-    }
-  }
-
-  /**
-   * Extract and record token usage from task output
    */
   private extractAndRecordTokenUsage(task: Task, output: string): void {
     try {
@@ -2340,7 +1874,7 @@ export class DevBotsManager extends EventEmitter {
     // Task status already updated in SQLite (no in-memory storage needed)
     this.taskPersistence.saveCompletedTasks([task]);
 
-    await this.destroyEphemeralWorker(worker.id);
+    await this.ephemeralWorkerService.destroyWorker(worker.id);
 
     if (finalStatus === 'completed') {
       logger.info({
@@ -2357,7 +1891,7 @@ export class DevBotsManager extends EventEmitter {
       });
     }
 
-    const activeWorkers = Array.from(this.ephemeralWorkers.values()).filter(
+    const activeWorkers = Array.from(this.ephemeralWorkerService.getAllWorkers().values()).filter(
       workerInfo => workerInfo.status !== 'destroyed'
     );
     logger.info({
@@ -2394,9 +1928,9 @@ export class DevBotsManager extends EventEmitter {
 
     // Save to persistence
     this.taskPersistence.saveCompletedTasks([worker.task]);
-    
+
     // Destroy container
-    await this.destroyEphemeralWorker(worker.id);
+    await this.ephemeralWorkerService.destroyWorker(worker.id);
     
     logger.error({
       category: 'process',
@@ -2406,7 +1940,7 @@ export class DevBotsManager extends EventEmitter {
     });
     
     // Log current worker status for debugging
-    const activeWorkers = Array.from(this.ephemeralWorkers.values()).filter(
+    const activeWorkers = Array.from(this.ephemeralWorkerService.getAllWorkers().values()).filter(
       worker => worker.status !== 'destroyed'
     );
     logger.info({
@@ -2422,87 +1956,6 @@ export class DevBotsManager extends EventEmitter {
   /**
    * Destroy ephemeral worker container
    */
-  private async destroyEphemeralWorker(workerId: string): Promise<void> {
-    const worker = this.ephemeralWorkers.get(workerId);
-    if (!worker) return;
-
-    try {
-      const container = this.docker.getContainer(worker.containerId);
-
-      // Get container logs before destruction for debugging
-      try {
-        const logs = await this.dockerManager.getContainerLogs(worker.containerId, 50);
-        if (logs) {
-          logger.info({
-      category: 'process',
-      action: 'container_worker_containerid_logs_last_50_lines_n_',
-      message: `Container ${worker.containerId} logs (last 50 lines):\n${logs}`
-    });
-        }
-      } catch (logError) {
-        logger.warn({
-      category: 'process',
-      action: 'could_not_retrieve_logs_for_container_worker_conta',
-      message: `Could not retrieve logs for container ${worker.containerId}:`,
-      details: { logError }
-    });
-      }
-
-      // Stop container if running
-      try {
-        await container.stop({ t: 10 }); // 10 second grace period
-      } catch (error) {
-        // Container might already be stopped
-        logger.warn({
-      category: 'process',
-      action: 'container_worker_containerid_already_stopped_or_er',
-      message: `Container ${worker.containerId} already stopped or error stopping:`,
-      details: { error }
-    });
-      }
-
-      // Remove container (includes volumes with AutoRemove: true)
-      await container.remove({ v: true, force: true });
-
-      worker.status = 'destroyed';
-      worker.destroyedAt = new Date().toISOString();
-
-      // Remove from ephemeral workers map
-      this.ephemeralWorkers.delete(workerId);
-
-      logger.info({
-      category: 'process',
-      action: 'destroyed_ephemeral_worker_workerid_and_cleaned_up',
-      message: `Destroyed ephemeral worker ${workerId} and cleaned up resources`
-    });
-
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_destroy_ephemeral_worker_workerid',
-      message: `Failed to destroy ephemeral worker ${workerId}:`,
-      error: error
-    });
-      // Emit error event for frontend
-      this.emit('workerError', {
-        workerId,
-        type: 'cleanup_failed',
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-
-    try {
-      this.workspaceOrchestrator.cleanupWorkspace(worker.workspace);
-    } catch (cleanupError) {
-      logger.warn({
-        category: 'process',
-        action: 'workspace_cleanup_after_destroy_failed',
-        message: `Workspace cleanup failed for worker ${workerId}`,
-        error: cleanupError
-      });
-    }
-  }
-
   public startSystem(): void {
     if (this.isCoordinatorHealthy) {
       logger.info({
@@ -2516,7 +1969,7 @@ export class DevBotsManager extends EventEmitter {
     this.isCoordinatorHealthy = true;
     
     // Clear any existing ephemeral workers
-    this.ephemeralWorkers.clear();
+    this.ephemeralWorkerService.clearAllWorkers();
     
     this.emit('systemStatusChange', 'running');
     logger.info({
@@ -2529,7 +1982,7 @@ export class DevBotsManager extends EventEmitter {
     this.assignNextTask();
   }
 
-  public stopSystem(): void {
+  public async stopSystem(): Promise<void> {
     if (!this.isCoordinatorHealthy) {
       logger.info({
       category: 'process',
@@ -2540,9 +1993,9 @@ export class DevBotsManager extends EventEmitter {
     }
 
     this.isCoordinatorHealthy = false;
-    
+
     // Stop all active ephemeral workers
-    for (const worker of this.ephemeralWorkers.values()) {
+    for (const worker of this.ephemeralWorkerService.getAllWorkers().values()) {
       if (worker.status !== 'destroyed') {
         // Mark task as failed and destroy container
         worker.task.status = 'failed';
@@ -2551,13 +2004,13 @@ export class DevBotsManager extends EventEmitter {
         worker.task.can_retry = true;
         // Task status already updated in SQLite (no in-memory storage needed)
         this.taskPersistence.saveCompletedTasks([worker.task]);
-        
+
         // Destroy container
-        this.destroyEphemeralWorker(worker.id);
+        await this.ephemeralWorkerService.destroyWorker(worker.id);
       }
     }
     
-    this.ephemeralWorkers.clear();
+    this.ephemeralWorkerService.clearAllWorkers();
     // activeTasks removed - SQLite is source of truth
     
     this.emit('systemStatusChange', 'stopped');
@@ -2744,10 +2197,10 @@ export class DevBotsManager extends EventEmitter {
   async getSystemStatus(): Promise<DevBotsStatus> {
     // Convert ephemeral workers to worker status format for compatibility
     const workersRecord: Record<string, WorkerStatus> = {};
-    const activeEphemeralWorkers = Array.from(this.ephemeralWorkers.values()).filter(
+    const activeEphemeralWorkers = Array.from(this.ephemeralWorkerService.getAllWorkers().values()).filter(
       worker => worker.status !== 'destroyed'
     );
-    for (const [workerId, ephemeralWorker] of this.ephemeralWorkers.entries()) {
+    for (const [workerId, ephemeralWorker] of this.ephemeralWorkerService.getAllWorkers().entries()) {
       workersRecord[workerId] = {
         id: workerId,
         status: ephemeralWorker.status === 'starting' ? 'busy' :
@@ -2766,11 +2219,11 @@ export class DevBotsManager extends EventEmitter {
       queueSize: this.taskQueue.getTasksByStatus('pending').length,
       activeTasks: this.taskQueue.getTasksByStatus('running').length,
       uptime: Date.now() - this.startTime,
-      workerCount: this.ephemeralWorkers.size,
-      maxWorkers: this.MAX_CONCURRENT_WORKERS,
+      workerCount: this.ephemeralWorkerService.getActiveWorkers().length,
+      maxWorkers: 2,
       activeWorkerTypes: activeEphemeralWorkers.map(w => w.id),
       availableWorkerTypes: Array.from(
-        { length: Math.max(this.MAX_CONCURRENT_WORKERS - activeEphemeralWorkers.length, 0) },
+        { length: Math.max(2 - activeEphemeralWorkers.length, 0) },
         (_value, index) => `slot-${index + 1}`
       ),
       tasks: {
