@@ -681,7 +681,7 @@ fi
 # Extract short UUID from task ID (last 8 chars of UUID)
 TASK_ID="{{task.id}}"
 SHORT_ID="${'$'}{TASK_ID${'##'}*-}"  # Gets last segment after final dash
-BRANCH_NAME="task-{{task.type}}-$${SHORT_ID}"
+BRANCH_NAME="task-{{task.type}}-${'$'}{SHORT_ID}"
 
 echo "Creating feature branch: $$BRANCH_NAME"
 git checkout -b "$$BRANCH_NAME"
