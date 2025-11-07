@@ -18,7 +18,7 @@ import { TaskPersistence, TaskStorageConfig } from './taskPersistence.js';
 import { WorkspaceOrchestrator } from './workspaceOrchestrator.js';
 import { ScopeControlService } from './scopeControl.service.js';
 import { EphemeralWorkerService } from './ephemeralWorker.service.js';
-import { resolveArtifactsDir } from '../utils/repoPaths.js';
+import { resolveArtifactsDir } from '../utils/repoPaths.ts';
 import { TaskExecutionService } from './taskExecution.service.js';
 import { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';

@@ -10,6 +10,7 @@
     "paths": {
       "@app-monitor/api-contracts": ["../packages/api-contracts/dist/index.d.ts"]
     },
+    "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "allowJs": true,
     "sourceMap": true,

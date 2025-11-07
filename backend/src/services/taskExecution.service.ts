@@ -24,6 +24,7 @@ import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskPersistence } from './taskPersistence.js';
 import { isTaskStuck, detectFailurePattern } from './taskFailureGuards.js';
 import type { SimpleFailureRecovery } from './failureRecovery.js';
+import { resolveArtifactsDir } from '../utils/repoPaths.ts';
 
 // ============================================================================
 // Types & Interfaces
@@ -77,7 +78,7 @@ export class TaskExecutionService {
       maxConcurrentWorkers: config.maxConcurrentWorkers ?? 2,
       stuckCheckInterval: config.stuckCheckInterval ?? 60000,
       absoluteMaxDuration: config.absoluteMaxDuration ?? 60 * 60 * 1000,
-      artifactsDir: config.artifactsDir ?? path.join(process.cwd(), 'dev-bots', 'artifacts'),
+      artifactsDir: config.artifactsDir ?? resolveArtifactsDir(),
       recovery: {
         enabled: config.recovery?.enabled ?? true,
         dryRun: config.recovery?.dryRun ?? false
