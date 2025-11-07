@@ -203,7 +203,7 @@ export class SimpleFailureRecovery {
         'Failure recovery two-stage pattern (cleanup then followup)'
       ],
       estimatedEffort: {
-        hours: 0.25,  // 15 minutes - simple error fix
+        hours: 0.25,  // Estimated: simple error fix typically takes ~15 minutes
         complexity: 'simple',
         confidence: 'high'
       },

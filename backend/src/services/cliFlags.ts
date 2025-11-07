@@ -111,7 +111,7 @@ export interface CLIFlags {
  * 5. OUTPUT MODE:
  *    - Claude: --print (non-interactive)
  *    - Codex: Uses `codex exec` subcommand for non-interactive
- *    - IMPORTANT: codex exec has different flag support than codex interactive mode!
+ *    - IMPORTANT: Codex exec has different flag support than Codex interactive mode!
  */
 
 /**

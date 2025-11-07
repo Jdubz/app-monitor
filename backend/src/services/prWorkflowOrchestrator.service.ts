@@ -104,7 +104,7 @@ export class PRWorkflowOrchestrator {
       });
 
       // 2. Update task with PR metadata
-      this.taskQueue.updateTask(task.id, {
+      await this.taskQueue.updateTask(task.id, {
         pr_number: prInfo.number,
         pr_url: prInfo.url,
         pr_branch: prInfo.branch,
