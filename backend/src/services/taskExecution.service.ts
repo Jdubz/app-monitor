@@ -448,11 +448,21 @@ export class TaskExecutionService {
     let dockerArgs: string[];
     let cliCommand: string;
 
+    // Prepare git environment variables
+    const gitEnvVars = [];
+    const envKeys = ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL', 'GITHUB_TOKEN'];
+    for (const key of envKeys) {
+      if (process.env[key]) {
+        gitEnvVars.push('-e', `${key}=${process.env[key]}`);
+      }
+    }
+
     if (chosenAgentType === 'codex') {
       // Codex execution
       dockerArgs = [
         'run',
         '--rm',  // Auto-remove container after exit
+        ...gitEnvVars,  // Pass git environment variables
         '-v', `${repoRoot}:/workspace:rw`,  // Mount workspace directly
         '-v', `${hostLogsDir}:/logs:rw`,  // Mount logs
         '--tmpfs', '/home/node/.codex:uid=1000,gid=1000',  // Writable temp for Codex CLI
@@ -482,6 +492,7 @@ export class TaskExecutionService {
       dockerArgs = [
         'run',
         '--rm',  // Auto-remove container after exit
+        ...gitEnvVars,  // Pass git environment variables
         '-v', `${repoRoot}:/workspace:rw`,  // Mount workspace directly
         '-v', `${hostLogsDir}:/logs:rw`,  // Mount logs
         '--tmpfs', '/home/node/.claude:uid=1000,gid=1000',  // Writable temp for Claude CLI
