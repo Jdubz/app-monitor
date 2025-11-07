@@ -127,7 +127,11 @@ export async function createDevBotsManagerDependencies(
       maxConcurrentWorkers: 2,
       stuckCheckInterval: 60000,
       absoluteMaxDuration: 60 * 60 * 1000,
-      artifactsDir: './dev-bots/artifacts'
+      artifactsDir: './dev-bots/artifacts',
+      recovery: {
+        enabled: config.recovery?.enabled ?? true,
+        dryRun: config.recovery?.dryRun ?? false
+      }
     }
   );
 

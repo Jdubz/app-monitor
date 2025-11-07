@@ -38,6 +38,18 @@ export class SimpleFailureRecovery {
   async attemptRecovery(context: FailureContext): Promise<{ recovered: boolean; cleanupTaskId?: string }> {
     const { task, failurePattern } = context;
 
+    logger.info({
+      category: 'recovery',
+      action: 'recovery_attempt_started',
+      message: `Starting recovery attempt for task ${task.id}`,
+      details: {
+        taskId: task.id,
+        taskTitle: task.title,
+        failurePattern: failurePattern.name,
+        failureCategory: failurePattern.category
+      }
+    });
+
     // CIRCULAR RECOVERY PREVENTION: Never attempt recovery on repair bots themselves
     if ((task as any).metadata?.isRepairBot) {
       logger.warn({
@@ -47,7 +59,8 @@ export class SimpleFailureRecovery {
         details: {
           taskId: task.id,
           repairStage: (task as any).metadata.repairStage,
-          originalTaskId: (task as any).metadata.originalTaskId
+          originalTaskId: (task as any).metadata.originalTaskId,
+          reason: 'Cannot create recovery task for a repair bot itself'
         }
       });
       return { recovered: false };
@@ -59,7 +72,10 @@ export class SimpleFailureRecovery {
         category: 'recovery',
         action: 'repair_already_running',
         message: `Task ${task.id} already has an active repair`,
-        details: { taskId: task.id }
+        details: {
+          taskId: task.id,
+          reason: 'Another cleanup or followup task is already running for this task'
+        }
       });
       return { recovered: false };
     }
@@ -70,7 +86,13 @@ export class SimpleFailureRecovery {
         category: 'recovery',
         action: 'failure_not_recoverable',
         message: `Failure type ${failurePattern.category} is not auto-recoverable`,
-        details: { taskId: task.id, category: failurePattern.category }
+        details: {
+          taskId: task.id,
+          category: failurePattern.category,
+          failurePattern: failurePattern.name,
+          reason: 'This failure category requires manual intervention',
+          recoverableCategories: ['cli_incompatibility', 'missing_resource', 'syntax_error', 'import_error', 'config_error']
+        }
       });
       return { recovered: false };
     }
@@ -99,17 +121,44 @@ export class SimpleFailureRecovery {
   async createFollowupTask(cleanupTask: DevBotsTask): Promise<{ task: DevBotsTask } | null> {
     const metadata = (cleanupTask as any).metadata;
     if (!metadata?.isRepairBot || metadata?.repairStage !== 'cleanup') {
+      logger.debug({
+        category: 'recovery',
+        action: 'not_cleanup_task',
+        message: `Task ${cleanupTask.id} is not a cleanup task, skipping followup creation`,
+        details: {
+          taskId: cleanupTask.id,
+          isRepairBot: metadata?.isRepairBot,
+          repairStage: metadata?.repairStage
+        }
+      });
       return null;
     }
 
     const originalTaskId = metadata.originalTaskId as string;
+
+    logger.info({
+      category: 'recovery',
+      action: 'followup_task_creation_started',
+      message: `Cleanup task ${cleanupTask.id} completed, creating followup task for ${originalTaskId}`,
+      details: {
+        cleanupTaskId: cleanupTask.id,
+        originalTaskId,
+        cleanupStatus: cleanupTask.status
+      }
+    });
+
     const originalTask = this.devBotsManager.getTaskQueue().getTask(originalTaskId);
 
     if (!originalTask) {
       logger.error({
         category: 'recovery',
         action: 'original_task_not_found',
-        message: `Cannot create followup: original task ${originalTaskId} not found`
+        message: `Cannot create followup: original task ${originalTaskId} not found`,
+        details: {
+          cleanupTaskId: cleanupTask.id,
+          originalTaskId,
+          reason: 'Original task may have been deleted from database'
+        }
       });
       return null;
     }
@@ -120,7 +169,12 @@ export class SimpleFailureRecovery {
         category: 'recovery',
         action: 'cleanup_failed_skipping_followup',
         message: `Cleanup task failed, skipping followup for ${originalTaskId}`,
-        details: { cleanupTaskId: cleanupTask.id, cleanupStatus: cleanupTask.status }
+        details: {
+          cleanupTaskId: cleanupTask.id,
+          cleanupStatus: cleanupTask.status,
+          originalTaskId,
+          reason: 'Cleanup must complete successfully before attempting followup'
+        }
       });
       return null;
     }

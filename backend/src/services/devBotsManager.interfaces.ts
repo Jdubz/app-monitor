@@ -93,4 +93,10 @@ export interface DevBotsManagerConfig {
   enablePRAutoMerge?: boolean;
   prCheckTimeoutMs?: number;
   prMonitorPollIntervalMs?: number;
+
+  // Recovery configuration
+  recovery?: {
+    enabled?: boolean;
+    dryRun?: boolean;
+  };
 }

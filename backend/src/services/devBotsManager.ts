@@ -340,17 +340,74 @@ export class DevBotsManager extends EventEmitter {
   }
 
   /**
-   * Initialize async components (SQLite migration)
-   * Dependencies are now injected, so this only runs migrations
+   * Initialize async components (SQLite migration and orphaned task recovery)
+   * Dependencies are now injected, so this only runs migrations and startup recovery
    */
   private async initializeAsync(): Promise<void> {
     // Run migration from JSON to SQLite
     this.migrateToSQLite();
 
+    // Recover orphaned tasks from previous server crash/restart
+    const orphanedTaskIds = this.taskQueue.recoverOrphanedTasks();
+
+    if (orphanedTaskIds.length > 0) {
+      logger.warn({
+        category: 'recovery',
+        action: 'orphaned_tasks_recovered_on_startup',
+        message: `Recovered ${orphanedTaskIds.length} orphaned tasks on startup`,
+        details: {
+          taskIds: orphanedTaskIds,
+          willAttemptRecovery: true
+        }
+      });
+
+      // Attempt recovery for each orphaned task
+      for (const taskId of orphanedTaskIds) {
+        const task = this.taskQueue.getTask(taskId);
+        if (task && task.status === 'failed' && this.recovery) {
+          try {
+            const recoveryResult = await this.recovery.attemptRecovery({
+              task: task as any,
+              failurePattern: {
+                name: 'server_restart',
+                description: 'Task was orphaned when server restarted or crashed',
+                patterns: [],
+                immediateFailure: false,
+                category: 'system_error',
+                suggestedFix: 'Task was orphaned due to server restart. Cleanup and retry.'
+              },
+              stderr: task.error || 'Task orphaned due to server restart',
+              stdout: '',
+              exitCode: -1
+            });
+
+            if (recoveryResult.recovered) {
+              logger.info({
+                category: 'recovery',
+                action: 'orphaned_task_recovery_initiated',
+                message: `Initiated recovery for orphaned task ${taskId}`,
+                details: {
+                  taskId,
+                  cleanupTaskId: recoveryResult.cleanupTaskId
+                }
+              });
+            }
+          } catch (error) {
+            logger.error({
+              category: 'recovery',
+              action: 'orphaned_task_recovery_failed',
+              message: `Failed to attempt recovery for orphaned task ${taskId}`,
+              error: error instanceof Error ? error.message : String(error)
+            });
+          }
+        }
+      }
+    }
+
     logger.info({
       category: 'process',
       action: 'async_initialization_complete',
-      message: 'Async initialization complete: SQLite migration finished'
+      message: 'Async initialization complete: SQLite migration and orphaned task recovery finished'
     });
   }
 

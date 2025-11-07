@@ -141,6 +141,7 @@ export function createMockTaskQueue(): TaskQueueService {
     getRepairBotsForTask: vi.fn(() => []),
     detectStalledWorkers: vi.fn(() => []),
     runRecoveryMigration: vi.fn().mockResolvedValue(undefined),
+    recoverOrphanedTasks: vi.fn(() => []),
     checkDuplicateTask: vi.fn().mockResolvedValue(null),
   } as any;
 }

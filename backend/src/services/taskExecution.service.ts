@@ -24,7 +24,6 @@ import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskPersistence } from './taskPersistence.js';
 import { isTaskStuck, detectFailurePattern } from './taskFailureGuards.js';
 import type { SimpleFailureRecovery } from './failureRecovery.js';
-import { config } from '../config.js';
 
 // ============================================================================
 // Types & Interfaces
@@ -35,6 +34,10 @@ export interface TaskExecutionServiceConfig {
   stuckCheckInterval: number;  // ms
   absoluteMaxDuration: number; // ms
   artifactsDir: string;
+  recovery: {
+    enabled: boolean;
+    dryRun: boolean;
+  };
 }
 
 // ============================================================================
@@ -74,7 +77,11 @@ export class TaskExecutionService {
       maxConcurrentWorkers: config.maxConcurrentWorkers ?? 2,
       stuckCheckInterval: config.stuckCheckInterval ?? 60000,
       absoluteMaxDuration: config.absoluteMaxDuration ?? 60 * 60 * 1000,
-      artifactsDir: config.artifactsDir ?? path.join(process.cwd(), 'dev-bots', 'artifacts')
+      artifactsDir: config.artifactsDir ?? path.join(process.cwd(), 'dev-bots', 'artifacts'),
+      recovery: {
+        enabled: config.recovery?.enabled ?? true,
+        dryRun: config.recovery?.dryRun ?? false
+      }
     };
   }
 
@@ -92,6 +99,90 @@ export class TaskExecutionService {
   // ==========================================================================
   // Helper Methods
   // ==========================================================================
+
+  /**
+   * Fail task and trigger recovery if appropriate
+   * This ensures all task failures go through the recovery process
+   */
+  private async failTaskWithRecovery(
+    task: Task,
+    error: string,
+    context?: {
+      stderr?: string;
+      stdout?: string;
+      exitCode?: number;
+      failurePattern?: any;
+    }
+  ): Promise<void> {
+    // Mark task as failed in database
+    this.taskQueue.failTask(task.id, error);
+
+    // Attempt recovery if enabled and recovery service is available
+    if (this.config.recovery.enabled && this.recovery && context) {
+      const failurePattern = context.failurePattern || {
+        name: 'unknown_error',
+        category: 'unknown',
+        suggestedFix: 'Review error logs for details'
+      };
+
+      try {
+        if (this.config.recovery.dryRun) {
+          logger.info({
+            category: 'recovery',
+            action: 'dry_run_would_attempt_recovery',
+            message: `[DRY RUN] Would attempt automatic recovery for task ${task.id}`,
+            details: {
+              taskId: task.id,
+              taskTitle: task.title,
+              failurePattern: failurePattern.name,
+              error
+            }
+          });
+        } else {
+          const recoveryResult = await this.recovery.attemptRecovery({
+            task: task as any,
+            failurePattern,
+            stderr: context.stderr || error,
+            stdout: context.stdout || '',
+            exitCode: context.exitCode || 1
+          });
+
+          if (recoveryResult.recovered) {
+            logger.info({
+              category: 'recovery',
+              action: 'recovery_initiated',
+              message: `Initiated automatic recovery for task ${task.id}`,
+              details: {
+                taskId: task.id,
+                cleanupTaskId: recoveryResult.cleanupTaskId,
+                failurePattern: failurePattern.name
+              }
+            });
+          } else {
+            logger.info({
+              category: 'recovery',
+              action: 'recovery_not_attempted',
+              message: `Recovery was not attempted for task ${task.id}`,
+              details: {
+                taskId: task.id,
+                reason: 'Failure not recoverable or already has active repair'
+              }
+            });
+          }
+        }
+      } catch (recoveryError) {
+        logger.error({
+          category: 'recovery',
+          action: 'recovery_attempt_failed',
+          message: `Failed to attempt recovery for task ${task.id}: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`,
+          details: {
+            taskId: task.id,
+            error: recoveryError instanceof Error ? recoveryError.message : String(recoveryError)
+          }
+        });
+      }
+    }
+  }
 
   private chooseAgentType(): 'claude' | 'codex' {
     switch (this.AGENT_ROTATION_STRATEGY) {
@@ -230,10 +321,14 @@ export class TaskExecutionService {
         error
       });
 
-      // Fail task in SQLite
-      this.taskQueue.failTask(
-        nextTask.id,
-        `Workspace initialization failed: ${error instanceof Error ? error.message : String(error)}`
+      // Fail task and trigger recovery
+      await this.failTaskWithRecovery(
+        nextTask,
+        `Workspace initialization failed: ${error instanceof Error ? error.message : String(error)}`,
+        {
+          stderr: error instanceof Error ? error.message : String(error),
+          exitCode: 1
+        }
       );
 
       return;
@@ -248,10 +343,14 @@ export class TaskExecutionService {
         message: `No agent found for ${nextTask.assigned_agent}`
       });
 
-      // Fail task in SQLite
-      this.taskQueue.failTask(
-        nextTask.id,
-        `Agent not found: ${nextTask.assigned_agent}. Please check agent name is correct.`
+      // Fail task and trigger recovery
+      await this.failTaskWithRecovery(
+        nextTask,
+        `Agent not found: ${nextTask.assigned_agent}. Please check agent name is correct.`,
+        {
+          stderr: `Agent not found: ${nextTask.assigned_agent}`,
+          exitCode: 1
+        }
       );
 
       // Try next task
@@ -296,10 +395,14 @@ export class TaskExecutionService {
         error: error
       });
 
-      // Fail task in SQLite
-      this.taskQueue.failTask(
-        nextTask.id,
-        error instanceof Error ? error.message : String(error)
+      // Fail task and trigger recovery
+      await this.failTaskWithRecovery(
+        nextTask,
+        error instanceof Error ? error.message : String(error),
+        {
+          stderr: error instanceof Error ? error.message : String(error),
+          exitCode: 1
+        }
       );
 
       // Try next task
@@ -575,74 +678,15 @@ export class TaskExecutionService {
             immediateFailure: failurePattern.immediateFailure
           }
         });
-
-        // Attempt recovery if system is enabled
-        if (config.recovery.enabled && this.recovery) {
-          if (config.recovery.dryRun) {
-            logger.info({
-              category: 'recovery',
-              action: 'dry_run_would_attempt_recovery',
-              message: `[DRY RUN] Would attempt automatic recovery for task ${task.id}`,
-              details: {
-                taskId: task.id,
-                taskTitle: task.title,
-                failurePattern: failurePattern.name,
-                category: failurePattern.category,
-                suggestedFix: failurePattern.suggestedFix,
-                wouldCreateCleanupBot: true,
-                wouldCreateFollowupBot: true
-              }
-            });
-          } else {
-            // Actually attempt recovery
-            try {
-              const recoveryResult = await this.recovery.attemptRecovery({
-                task,
-                failurePattern,
-                stderr,
-                stdout,
-                exitCode
-              });
-
-              if (recoveryResult.recovered) {
-                logger.info({
-                  category: 'recovery',
-                  action: 'recovery_initiated',
-                  message: `Initiated automatic recovery for task ${task.id}`,
-                  details: {
-                    taskId: task.id,
-                    cleanupTaskId: recoveryResult.cleanupTaskId,
-                    failurePattern: failurePattern.name
-                  }
-                });
-              }
-            } catch (recoveryError) {
-              logger.error({
-                category: 'recovery',
-                action: 'recovery_attempt_failed',
-                message: `Failed to attempt recovery for task ${task.id}: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`,
-                details: {
-                  taskId: task.id,
-                  error: recoveryError instanceof Error ? recoveryError.message : String(recoveryError)
-                }
-              });
-            }
-          }
-        } else if (!config.recovery.enabled) {
-          logger.info({
-            category: 'recovery',
-            action: 'recovery_disabled',
-            message: `Automatic recovery is disabled. Set ENABLE_AUTO_RECOVERY=true to enable.`,
-            details: {
-              taskId: task.id,
-              detectedPattern: failurePattern.name
-            }
-          });
-        }
       }
 
-      // Always mark task as failed in queue
-      this.taskQueue.failTask(task.id, errorMsg);
+      // Fail task and trigger recovery (unified handler)
+      await this.failTaskWithRecovery(task, errorMsg, {
+        stderr,
+        stdout,
+        exitCode,
+        failurePattern
+      });
 
       logger.error({
         category: 'process',
@@ -661,18 +705,22 @@ export class TaskExecutionService {
     }
 
     } catch (error) {
-      // Execution error
-      this.taskQueue.failTask(
-        task.id,
-        error instanceof Error ? error.message : String(error)
-      );
-
+      // Execution error - fail task and trigger recovery
       logger.error({
         category: 'process',
         action: 'task_execution_error',
         message: `Task execution error for ${task.id}:`,
         error: error
       });
+
+      await this.failTaskWithRecovery(
+        task,
+        error instanceof Error ? error.message : String(error),
+        {
+          stderr: error instanceof Error ? error.message : String(error),
+          exitCode: 1
+        }
+      );
     }
   }
 }

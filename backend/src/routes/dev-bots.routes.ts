@@ -1076,7 +1076,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
       }
 
       const prs = orchestrator.getMonitoredPRs();
-      const pr = prs.find(p => p.pr_number === prNumber);
+      const pr = prs.find(p => p.prNumber === prNumber);
 
       if (!pr) {
         res.status(404).json({
