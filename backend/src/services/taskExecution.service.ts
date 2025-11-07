@@ -96,7 +96,7 @@ export class TaskExecutionService {
   }
 
   private getAgentDockerImage(_agent: AgentPersonality): string {
-    return 'claude-worker:latest';
+    return 'dev-bot:latest';
   }
 
   private async execGitCommand(args: string[], cwd: string): Promise<string> {
@@ -346,9 +346,9 @@ export class TaskExecutionService {
         '-v', `${homeDir}/.config/gh:/home/node/.config/gh:ro`,  // GitHub CLI auth
         this.getAgentDockerImage(agent),
         'sh', '-c',
-        // Copy credentials and run Codex with JSON output
+        // Copy credentials and run Codex
         `cp -r /tmp/host-codex/* /home/node/.codex/ 2>/dev/null || true && ` +
-        `codex --output-format json '${promptText}'`
+        `codex '${promptText}'`
       ];
       cliCommand = 'codex';
     } else {

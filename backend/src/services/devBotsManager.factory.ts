@@ -99,7 +99,7 @@ export async function createDevBotsManagerDependencies(
     workspaceOrchestrator,
     {
       maxConcurrentWorkers: 2,
-      dockerImage: 'claude-worker:latest',
+      dockerImage: 'dev-bot:latest',
       logsDirectory: './data/logs',
       envPassthroughKeys: [
         'ANTHROPIC_API_KEY',
