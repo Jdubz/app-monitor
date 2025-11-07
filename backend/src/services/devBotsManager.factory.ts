@@ -18,6 +18,7 @@ import { TaskPersistence, TaskStorageConfig } from './taskPersistence.js';
 import { WorkspaceOrchestrator } from './workspaceOrchestrator.js';
 import { ScopeControlService } from './scopeControl.service.js';
 import { EphemeralWorkerService } from './ephemeralWorker.service.js';
+import { TaskExecutionService } from './taskExecution.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
 
 /**
@@ -113,6 +114,22 @@ export async function createDevBotsManagerDependencies(
     }
   );
 
+  // Initialize task execution service
+  const taskExecutionService = new TaskExecutionService(
+    taskQueue,
+    agentManager,
+    templateManager,
+    workspaceOrchestrator,
+    ephemeralWorkerService,
+    taskPersistence,
+    {
+      maxConcurrentWorkers: 2,
+      stuckCheckInterval: 60000,
+      absoluteMaxDuration: 60 * 60 * 1000,
+      artifactsDir: './dev-bots/artifacts'
+    }
+  );
+
   // Note: SimpleFailureRecovery requires DevBotsManager instance
   // It will be created after DevBotsManager is instantiated
   // For now, create a placeholder that will be replaced
@@ -133,5 +150,6 @@ export async function createDevBotsManagerDependencies(
     taskPersistence,
     scopeControl,
     ephemeralWorkerService,
+    taskExecutionService,
   };
 }

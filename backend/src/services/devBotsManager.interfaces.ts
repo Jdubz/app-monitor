@@ -20,6 +20,7 @@ import type { WorkspaceOrchestrator } from './workspaceOrchestrator.js';
 import type { SimpleFailureRecovery } from './failureRecovery.js';
 import type { ScopeControlService } from './scopeControl.service.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
+import type { TaskExecutionService } from './taskExecution.service.js';
 
 /**
  * All dependencies required by DevBotsManager
@@ -48,6 +49,9 @@ export interface DevBotsManagerDependencies {
 
   // Ephemeral worker management
   ephemeralWorkerService: EphemeralWorkerService;
+
+  // Task execution coordination
+  taskExecutionService: TaskExecutionService;
 }
 
 /**

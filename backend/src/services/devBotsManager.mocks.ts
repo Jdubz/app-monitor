@@ -20,6 +20,7 @@ import type { WorkspaceOrchestrator, WorkspaceContext } from './workspaceOrchest
 import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
 import type { ScopeControlService } from './scopeControl.service.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
+import type { TaskExecutionService } from './taskExecution.service.js';
 import { EventEmitter } from 'events';
 
 /**
@@ -346,6 +347,15 @@ export function createMockEphemeralWorkerService(): EphemeralWorkerService {
 }
 
 /**
+ * Create mock TaskExecutionService
+ */
+export function createMockTaskExecutionService(): TaskExecutionService {
+  return {
+    assignNextTask: vi.fn().mockResolvedValue(undefined),
+  } as any;
+}
+
+/**
  * Create complete mock dependencies for DevBotsManager
  */
 export function createMockDevBotsManagerDependencies(): DevBotsManagerDependencies {
@@ -362,6 +372,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
   const taskPersistence = createMockTaskPersistence();
   const scopeControl = createMockScopeControl();
   const ephemeralWorkerService = createMockEphemeralWorkerService();
+  const taskExecutionService = createMockTaskExecutionService();
 
   return {
     processManager,
@@ -377,6 +388,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     taskPersistence,
     scopeControl,
     ephemeralWorkerService,
+    taskExecutionService,
     recovery: null as any, // Will be created by DevBotsManager
   };
 }
