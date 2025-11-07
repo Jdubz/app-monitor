@@ -22,7 +22,7 @@ import type { ScopeControlService } from './scopeControl.service.js';
 import type { EphemeralWorkerService, EphemeralWorker as EphemeralWorkerType } from './ephemeralWorker.service.js';
 import type { TaskExecutionService } from './taskExecution.service.js';
 import { TaskCompletionService } from './taskCompletion.service.js';
-import { PRMonitorService } from './prMonitor.service.js';
+import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 
 export interface RetryAttempt {
   attemptNumber: number;
@@ -123,7 +123,7 @@ export class DevBotsManager extends EventEmitter {
   private ephemeralWorkerService!: EphemeralWorkerService;
   private taskExecutionService!: TaskExecutionService;
   private taskCompletionService!: TaskCompletionService;
-  private prMonitorService!: PRMonitorService;
+  private prWorkflowOrchestrator!: PRWorkflowOrchestrator;
 
   // System state
   private startTime = Date.now();
@@ -146,16 +146,12 @@ export class DevBotsManager extends EventEmitter {
     this.scopeControl = dependencies.scopeControl;
     this.ephemeralWorkerService = dependencies.ephemeralWorkerService;
     this.taskExecutionService = dependencies.taskExecutionService;
+    this.prWorkflowOrchestrator = dependencies.prWorkflowOrchestrator;
 
-    // Initialize SimpleFailureRecovery and PRMonitorService
+    // Initialize SimpleFailureRecovery
     this.recovery = new SimpleFailureRecovery(this);
-    this.prMonitorService = new PRMonitorService(this.taskQueue, {
-      pollIntervalMs: 60000,  // Poll every minute
-      maxPollAttempts: 60,    // Timeout after 1 hour
-      enableAutoMerge: true   // Enable auto-merge by default
-    });
 
-    // Initialize TaskCompletionService with PR registration callback
+    // Initialize TaskCompletionService with PR workflow orchestrator callback
     this.taskCompletionService = new TaskCompletionService(
       this.workspaceOrchestrator,
       this.ephemeralWorkerService,
@@ -165,8 +161,15 @@ export class DevBotsManager extends EventEmitter {
       {
         enableQualityGates: true,
         onPRCreated: (task: Task) => {
-          // Register PR for monitoring when it's created
-          this.prMonitorService.registerPR(task);
+          // Handle PR workflow after task completion
+          this.prWorkflowOrchestrator.handleTaskCompletion(task, task.output || '').catch(error => {
+            logger.error({
+              category: 'pr-workflow',
+              action: 'handle_task_completion_error',
+              message: `Error handling PR workflow for task ${task.id}`,
+              error
+            });
+          });
         }
       }
     );

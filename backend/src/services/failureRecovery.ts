@@ -186,11 +186,27 @@ export class SimpleFailureRecovery {
     const { task, failurePattern, stderr, exitCode } = context;
 
     return await this.devBotsManager.addTask({
-      type: 'bugfix',
+      type: 'implementation',  // Use implementation type (bugfix is a type of implementation)
       title: `[CLEANUP] Fix ${failurePattern.name} for: ${task.title}`,
       description: this.buildCleanupPrompt(task, failurePattern, stderr, exitCode),
       assignedAgent: task.assigned_agent,
       priority: 100, // Jump to front of queue
+      // Add validation fields required by TaskCreationGuidelines
+      acceptanceCriteria: [
+        `Error "${failurePattern.name}" is resolved`,
+        `Task exits with code 0 (success)`,
+        `Changes are minimal (< 5 files, < 100 lines)`,
+        `Original task goal is NOT attempted (cleanup only)`
+      ],
+      architectureReferences: [
+        'docs/plans/DEV_BOT_SAFETY_AND_PROMPT_IMPROVEMENTS.md',
+        'Failure recovery two-stage pattern (cleanup then followup)'
+      ],
+      estimatedEffort: {
+        hours: 0.25,  // Estimated: simple error fix typically takes ~15 minutes
+        complexity: 'simple',
+        confidence: 'high'
+      },
       metadata: {
         isRepairBot: true,
         repairStage: 'cleanup',

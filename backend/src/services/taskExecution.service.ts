@@ -361,8 +361,10 @@ export class TaskExecutionService {
         this.getAgentDockerImage(agent),
         'sh', '-c',
         // Copy credentials and run Codex with full access for git operations
+        // Use 'exec' subcommand for non-interactive execution
+        // Note: codex exec uses --dangerously-bypass-approvals-and-sandbox instead of --ask-for-approval
         `cp -r /tmp/host-codex/* /home/node/.codex/ 2>/dev/null || true && ` +
-        `codex --sandbox-policy danger-full-access --ask-for-approval never '${promptText}'`
+        `codex exec --dangerously-bypass-approvals-and-sandbox '${promptText}'`
       ];
       cliCommand = 'codex';
     } else {

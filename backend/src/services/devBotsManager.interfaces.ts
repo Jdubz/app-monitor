@@ -22,6 +22,7 @@ import type { ScopeControlService } from './scopeControl.service.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskExecutionService } from './taskExecution.service.js';
 import type { TaskCompletionService } from './taskCompletion.service.js';
+import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 
 /**
  * All dependencies required by DevBotsManager
@@ -56,6 +57,9 @@ export interface DevBotsManagerDependencies {
 
   // Task completion handling
   taskCompletionService: TaskCompletionService;
+
+  // PR workflow orchestration
+  prWorkflowOrchestrator: PRWorkflowOrchestrator;
 }
 
 /**
@@ -84,4 +88,9 @@ export interface DevBotsManagerConfig {
   maxRetries?: number;
   retryDelay?: number;
   backoffMultiplier?: number;
+
+  // PR workflow configuration
+  enablePRAutoMerge?: boolean;
+  prCheckTimeoutMs?: number;
+  prMonitorPollIntervalMs?: number;
 }

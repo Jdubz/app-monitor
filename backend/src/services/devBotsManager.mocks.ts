@@ -413,5 +413,6 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     taskExecutionService,
     taskCompletionService,
     recovery: null as any, // Will be created by DevBotsManager
+    prWorkflowOrchestrator: null as any, // Will be created by DevBotsManager
   };
 }
