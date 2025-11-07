@@ -336,7 +336,7 @@ describe('TaskPromptTemplateManager', () => {
       expect(prompt).toContain('❌ NEVER skip linting or tests');
       expect(prompt).toContain('✅ ALWAYS fix all linter errors');
       expect(prompt).toContain('✅ ALWAYS ensure all tests pass');
-      expect(prompt).toContain('Never skip `git pull origin staging`');
+      expect(prompt).toContain('Never skip `git pull origin main`');
     });
 
     it('should include quality checklist items', () => {
@@ -357,7 +357,7 @@ describe('TaskPromptTemplateManager', () => {
         'All linters pass (no `--no-verify` used)',
         'All tests pass',
         'No merge conflicts remaining',
-        'Changes pushed to staging successfully',
+        'Feature branch pushed to origin and PR opened (gh pr create)',
         'Existing documentation updated',
         'No new security vulnerabilities introduced',
         'Performance impact is acceptable',
@@ -476,8 +476,8 @@ describe('TaskPromptTemplateManager', () => {
       // Should contain bash code blocks
       expect(prompt).toContain('```bash');
       expect(prompt).toContain('cd job-finder-BE');
-      expect(prompt).toContain('git checkout staging');
-      expect(prompt).toContain('git pull origin staging');
+      expect(prompt).toContain('git checkout main');
+      expect(prompt).toContain('git pull origin main');
     });
 
     it('should maintain consistent formatting', () => {

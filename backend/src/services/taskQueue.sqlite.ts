@@ -687,9 +687,12 @@ export class TaskQueueService {
 
       const now = Date.now();
 
-      // Determine if task can be retried
-      const canRetry = task.can_retry && task.retry_count < task.max_retries;
-      const newStatus = canRetry ? 'pending' : 'failed';
+      // IMPORTANT: Do NOT automatically retry tasks
+      // Tasks should enter SimpleFailureRecovery two-stage process:
+      // 1. Cleanup task fixes the error
+      // 2. Followup task completes the original goal
+      // The old automatic retry behavior caused tasks to fail 3 times before recovery
+      const newStatus = 'failed';
 
       // Update task
       const updateStmt = this.db.prepare(`
@@ -742,8 +745,14 @@ export class TaskQueueService {
 
       logger.info({
         category: 'process',
-        action: canRetry ? 'task_failed_retrying' : 'task_failed',
-        message: `Task ${taskId} failed: ${error}${canRetry ? ' (will retry)' : ''}`
+        action: 'task_failed',
+        message: `Task ${taskId} failed: ${error}`,
+        details: {
+          taskId,
+          error,
+          retryCount: task.retry_count + 1,
+          willEnterRecovery: true
+        }
       });
     });
   }
@@ -1260,6 +1269,119 @@ export class TaskQueueService {
     `).get(taskId) as { count: number };
 
     return result.count > 0;
+  }
+
+  /**
+   * Recover orphaned tasks on server startup
+   * Finds tasks that were marked as 'running' but have no active container
+   *
+   * This handles the case where:
+   * - Server crashed/restarted while tasks were running
+   * - Docker containers were killed externally
+   * - Worker processes died unexpectedly
+   *
+   * Returns array of orphaned task IDs that were marked as failed
+   */
+  recoverOrphanedTasks(): string[] {
+    return this.transaction(() => {
+      // Find all tasks marked as 'running'
+      const runningTasks = this.db.prepare(`
+        SELECT id, title, assigned_worker, started_at
+        FROM tasks
+        WHERE status = 'running'
+      `).all() as Array<{ id: string; title: string; assigned_worker: string | null; started_at: number }>;
+
+      if (runningTasks.length === 0) {
+        return [];
+      }
+
+      logger.warn({
+        category: 'recovery',
+        action: 'orphaned_tasks_detected',
+        message: `Found ${runningTasks.length} orphaned running tasks on startup`,
+        details: {
+          count: runningTasks.length,
+          tasks: runningTasks.map(t => ({ id: t.id, title: t.title }))
+        }
+      });
+
+      const orphanedTaskIds: string[] = [];
+
+      for (const task of runningTasks) {
+        const now = Date.now();
+        const durationMs = now - task.started_at;
+        const durationMinutes = Math.round(durationMs / 60000);
+
+        // Mark task as failed
+        const updateStmt = this.db.prepare(`
+          UPDATE tasks
+          SET status = 'failed',
+              error = ?,
+              completed_at = ?,
+              retry_count = retry_count + 1,
+              assigned_worker = NULL
+          WHERE id = ?
+        `);
+
+        updateStmt.run(
+          `Task was orphaned (server restart or crash). Was running for ${durationMinutes} minutes before server stopped.`,
+          now,
+          task.id
+        );
+
+        // Update execution record if one exists
+        const executionStmt = this.db.prepare(`
+          SELECT id, started_at
+          FROM task_executions
+          WHERE task_id = ? AND ended_at IS NULL
+          ORDER BY started_at DESC
+          LIMIT 1
+        `);
+
+        const execution = executionStmt.get(task.id) as { id: number; started_at: number } | undefined;
+
+        if (execution) {
+          const updateExecutionStmt = this.db.prepare(`
+            UPDATE task_executions
+            SET ended_at = ?,
+                duration_ms = ?,
+                exit_code = -1,
+                error = 'Task orphaned due to server restart'
+            WHERE id = ?
+          `);
+
+          updateExecutionStmt.run(now, now - execution.started_at, execution.id);
+        }
+
+        // Clean up worker reference
+        if (task.assigned_worker) {
+          const workerStmt = this.db.prepare(`
+            UPDATE workers
+            SET status = 'stopped',
+                current_task_id = NULL
+            WHERE id = ?
+          `);
+
+          workerStmt.run(task.assigned_worker);
+        }
+
+        orphanedTaskIds.push(task.id);
+
+        logger.info({
+          category: 'recovery',
+          action: 'orphaned_task_recovered',
+          message: `Marked orphaned task ${task.id} as failed`,
+          details: {
+            taskId: task.id,
+            title: task.title,
+            wasRunningFor: `${durationMinutes} minutes`,
+            worker: task.assigned_worker
+          }
+        });
+      }
+
+      return orphanedTaskIds;
+    });
   }
 
   // Note: The following methods (getRecoveryAttempt, createRecoveryAttempt, updateRecoveryAttempt, createSafetyCheck)

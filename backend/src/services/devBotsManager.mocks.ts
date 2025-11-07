@@ -141,6 +141,7 @@ export function createMockTaskQueue(): TaskQueueService {
     getRepairBotsForTask: vi.fn(() => []),
     detectStalledWorkers: vi.fn(() => []),
     runRecoveryMigration: vi.fn().mockResolvedValue(undefined),
+    recoverOrphanedTasks: vi.fn(() => []),
     checkDuplicateTask: vi.fn().mockResolvedValue(null),
   } as any;
 }
@@ -413,6 +414,14 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     taskExecutionService,
     taskCompletionService,
     recovery: null as any, // Will be created by DevBotsManager
-    prWorkflowOrchestrator: null as any, // Will be created by DevBotsManager
+    prWorkflowOrchestrator: {
+      handleTaskCompletion: vi.fn().mockResolvedValue(undefined),
+      getMonitoredPRs: vi.fn().mockReturnValue([]),
+      getStatus: vi.fn().mockReturnValue({
+        monitoredPRs: 0,
+        config: { enableAutoMerge: true }
+      }),
+      stop: vi.fn()
+    } as any,
   };
 }

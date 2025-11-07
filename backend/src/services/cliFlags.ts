@@ -202,7 +202,9 @@ export function buildCLIArgs(tool: CLITool, flags: CLIFlags): string[] {
     }
 
     // Approval Policy
-    if (flags.approvalPolicy) {
+    // IMPORTANT: Codex exec mode does NOT support --ask-for-approval flag
+    // Only add this flag if NOT using exec mode (printMode indicates exec mode)
+    if (flags.approvalPolicy && !flags.printMode) {
       args.push('--ask-for-approval', flags.approvalPolicy);
     }
 
@@ -243,7 +245,8 @@ export function getDevBotFlags(tool: CLITool): CLIFlags {
     // For dev-bots, we want full access for git operations but in a sandboxed way
     sandbox: tool === 'codex' ? 'danger-full-access' : undefined,
     permissionMode: tool === 'claude' ? 'bypassPermissions' : undefined,
-    approvalPolicy: tool === 'codex' ? 'never' : undefined,
+    // NOTE: approvalPolicy removed for codex - codex exec doesn't support --ask-for-approval flag
+    // Use bypassPermissions: true if you need to skip approvals in codex exec mode
 
     // Allow git operations
     allowedTools: tool === 'claude' ? ['Bash(git:*)'] : undefined,
