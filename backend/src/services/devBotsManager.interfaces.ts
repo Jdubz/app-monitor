@@ -21,6 +21,7 @@ import type { SimpleFailureRecovery } from './failureRecovery.js';
 import type { ScopeControlService } from './scopeControl.service.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskExecutionService } from './taskExecution.service.js';
+import type { TaskCompletionService } from './taskCompletion.service.js';
 
 /**
  * All dependencies required by DevBotsManager
@@ -52,6 +53,9 @@ export interface DevBotsManagerDependencies {
 
   // Task execution coordination
   taskExecutionService: TaskExecutionService;
+
+  // Task completion handling
+  taskCompletionService: TaskCompletionService;
 }
 
 /**

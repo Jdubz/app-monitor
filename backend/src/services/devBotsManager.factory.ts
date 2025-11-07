@@ -19,6 +19,7 @@ import { WorkspaceOrchestrator } from './workspaceOrchestrator.js';
 import { ScopeControlService } from './scopeControl.service.js';
 import { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import { TaskExecutionService } from './taskExecution.service.js';
+import { TaskCompletionService } from './taskCompletion.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
 
 /**
@@ -130,10 +131,11 @@ export async function createDevBotsManagerDependencies(
     }
   );
 
-  // Note: SimpleFailureRecovery requires DevBotsManager instance
-  // It will be created after DevBotsManager is instantiated
-  // For now, create a placeholder that will be replaced
+  // Note: SimpleFailureRecovery and TaskCompletionService require DevBotsManager instance
+  // They will be created after DevBotsManager is instantiated
+  // For now, create placeholders that will be replaced
   const recovery = null as any; // Will be set by DevBotsManager
+  const taskCompletionService = null as any; // Will be set by DevBotsManager
 
   return {
     processManager,
@@ -151,5 +153,6 @@ export async function createDevBotsManagerDependencies(
     scopeControl,
     ephemeralWorkerService,
     taskExecutionService,
+    taskCompletionService,
   };
 }

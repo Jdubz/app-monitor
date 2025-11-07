@@ -31,6 +31,7 @@ import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js'
 import type { ScopeControlService } from './scopeControl.service.js';
 import type { EphemeralWorkerService, EphemeralWorker as EphemeralWorkerType } from './ephemeralWorker.service.js';
 import type { TaskExecutionService } from './taskExecution.service.js';
+import { TaskCompletionService } from './taskCompletion.service.js';
 
 export interface RetryAttempt {
   attemptNumber: number;
@@ -130,6 +131,7 @@ export class DevBotsManager extends EventEmitter {
   private scopeControl!: ScopeControlService;
   private ephemeralWorkerService!: EphemeralWorkerService;
   private taskExecutionService!: TaskExecutionService;
+  private taskCompletionService!: TaskCompletionService;
 
   // System state
   private startTime = Date.now();
@@ -153,8 +155,16 @@ export class DevBotsManager extends EventEmitter {
     this.ephemeralWorkerService = dependencies.ephemeralWorkerService;
     this.taskExecutionService = dependencies.taskExecutionService;
 
-    // Initialize SimpleFailureRecovery with this instance
+    // Initialize SimpleFailureRecovery and TaskCompletionService with this instance
     this.recovery = new SimpleFailureRecovery(this);
+    this.taskCompletionService = new TaskCompletionService(
+      this.workspaceOrchestrator,
+      this.ephemeralWorkerService,
+      this.taskPersistence,
+      this.pushCoordinator,
+      this.emit.bind(this),
+      { enableQualityGates: true }
+    );
 
     // Validate Docker environment and initialize
     this.initializeDockerEnvironment();
@@ -1144,244 +1154,10 @@ export class DevBotsManager extends EventEmitter {
    * Run quality gate validation on a completed task
    * This is async and runs in the background - it doesn't block task completion
    */
-  private async runQualityGateValidation(task: Task, workspacePath: string): Promise<QualityValidationResult> {
-    try {
-      const qualityGates = getQualityGateValidator();
-
-      // Determine project name from task
-      const project = (task as any).project || 'unknown';
-
-      logger.info({
-        category: 'quality-gates',
-        action: 'validation_started',
-        message: `Starting quality gate validation for task ${task.id}`,
-        details: { project, workspacePath }
-      });
-
-      // Run validation (this is async and takes time)
-      const validationResult: QualityValidationResult = await qualityGates.validateTask(
-        task.id,
-        workspacePath,
-        project
-      );
-
-      // Store validation results in task
-      // task.qualityValidation removed from interface = validationResult;
-
-      logger.info({
-        category: 'quality-gates',
-        action: 'validation_completed',
-        message: `Quality gate validation completed for task ${task.id}`,
-        details: {
-          passed: validationResult.passed,
-          overallScore: validationResult.overallScore,
-          gatesPassed: validationResult.gates.filter(g => g.passed).length,
-          gatesTotal: validationResult.gates.length
-        }
-      });
-
-      // Emit event for UI updates
-      this.emit('quality_validation_completed', {
-        taskId: task.id,
-        result: validationResult
-      });
-
-      // If quality gates failed, optionally create a healing task
-      if (!validationResult.passed) {
-        logger.warn({
-          category: 'quality-gates',
-          action: 'validation_failed',
-          message: `Quality gates failed for task ${task.id}`,
-          details: {
-            failedGates: validationResult.gates.filter(g => !g.passed).map(g => g.gate)
-          }
-        });
-
-        // TODO: Create auto-healing task
-        // this.createHealingTask(task, validationResult);
-      }
-
-      return validationResult;
-    } catch (error) {
-      logger.error({
-        category: 'quality-gates',
-        action: 'validation_error',
-        message: `Error running quality gate validation for task ${task.id}`,
-        error
-      });
-      
-      // Return a failed validation result instead of throwing
-      // to maintain consistent return type behavior
-      const failedResult: QualityValidationResult = {
-        taskId: task.id,
-        passed: false,
-        overallScore: 0,
-        gates: [],
-        duration: 0,
-        timestamp: new Date().toISOString()
-      };
-      
-      // Store the failed result in the task
-      // task.qualityValidation removed from interface = failedResult;
-      
-      return failedResult;
-    }
-  }
 
   /**
    * Complete task in ephemeral worker
    */
-  private async completeEphemeralTask(
-    worker: EphemeralWorker,
-    output: string,
-    errorOutput: string,
-    exitCode: number
-  ): Promise<void> {
-    worker.status = 'completing';
-
-    const task = worker.task;
-    task.output = output;
-    task.error = errorOutput;
-    // TODO: exitCode removed from Task interface (tracked in TaskExecution instead)
-
-    this.extractAndRecordTokenUsage(task, output);
-
-    const workspacePath = worker.workspace.hostPath;
-    let qualityValidation: QualityValidationResult | undefined;
-    let shouldPush = exitCode === 0;
-
-    if (shouldPush) {
-      qualityValidation = await this.runQualityGateValidation(task, workspacePath);
-      shouldPush = qualityValidation.passed;
-    }
-
-    let finalStatus: 'completed' | 'failed' = exitCode === 0 ? 'completed' : 'failed';
-    let failureReason: string | undefined;
-
-    if (shouldPush) {
-      const sealResult = await this.workspaceOrchestrator.sealWorkspace(worker.workspace, {
-        taskId: task.id,
-        taskTitle: task.title,
-        pushCoordinator: this.pushCoordinator
-      });
-
-      if (sealResult.status === 'success' || sealResult.status === 'noop') {
-        finalStatus = 'completed';
-        if (sealResult.commitSha) {
-          const commitNote = `Pushed commit ${sealResult.commitSha} to staging from workspace ${worker.workspace.id}`;
-          task.notes = task.notes ? `${task.notes}\n${commitNote}` : commitNote;
-        }
-      } else {
-        finalStatus = 'failed';
-        failureReason = sealResult.message || `Failed to push changes (${sealResult.status})`;
-        if (sealResult.patchPath) {
-          failureReason = `${failureReason}. Patch saved at ${sealResult.patchPath}`;
-        }
-      }
-    } else {
-      finalStatus = 'failed';
-      failureReason =
-        exitCode !== 0
-          ? `Task exited with code ${exitCode}`
-          : qualityValidation && !qualityValidation.passed
-          ? 'Quality gates failed'
-          : 'Task did not meet push requirements';
-
-      const patchPath = this.workspaceOrchestrator.createPatchArtifact(worker.workspace);
-      if (patchPath) {
-        failureReason = `${failureReason}. Workspace patch saved at ${patchPath}`;
-      }
-    }
-
-    task.status = finalStatus;
-    task.completed_at = Date.now();
-
-    if (failureReason) {
-      task.error = [task.error, failureReason].filter(Boolean).join('\n');
-      task.can_retry = true;
-    }
-
-    // Task status already updated in SQLite (no in-memory storage needed)
-    this.taskPersistence.saveCompletedTasks([task]);
-
-    await this.ephemeralWorkerService.destroyWorker(worker.id);
-
-    if (finalStatus === 'completed') {
-      logger.info({
-        category: 'process',
-        action: 'task_completed_worker_task_id',
-        message: `Task completed: ${task.id}`
-      });
-    } else {
-      logger.warn({
-        category: 'process',
-        action: 'task_failed_to_push',
-        message: `Task ${task.id} finished with status ${finalStatus}`,
-        details: { failureReason }
-      });
-    }
-
-    const activeWorkers = Array.from(this.ephemeralWorkerService.getAllWorkers().values()).filter(
-      workerInfo => workerInfo.status !== 'destroyed'
-    );
-    logger.info({
-      category: 'process',
-      action: 'active_workers_after_completion',
-      message: `Active workers after completion: ${activeWorkers.length} (${activeWorkers
-        .map(w => w.id)
-        .join(', ')})`
-    });
-
-    await this.assignNextTask();
-  }
-
-  /**
-   * Fail task in ephemeral worker
-   */
-  private async failEphemeralTask(worker: EphemeralWorker, error: Error | { message: string }): Promise<void> {
-    worker.status = 'completing';
-    
-    // Update task
-    worker.task.status = 'failed';
-    worker.task.completed_at = Date.now();
-    const baseError = error instanceof Error ? error.message : String(error);
-    let failureMessage = baseError;
-    const patchPath = this.workspaceOrchestrator.createPatchArtifact(worker.workspace);
-    if (patchPath) {
-      failureMessage = `${baseError}\nWorkspace patch saved at ${patchPath}`;
-    }
-    worker.task.error = failureMessage;
-    // TODO: exitCode removed from Task interface
-    worker.task.can_retry = true;
-    
-    // Task status already updated in SQLite (no in-memory storage needed)
-
-    // Save to persistence
-    this.taskPersistence.saveCompletedTasks([worker.task]);
-
-    // Destroy container
-    await this.ephemeralWorkerService.destroyWorker(worker.id);
-    
-    logger.error({
-      category: 'process',
-      action: 'task_failed_worker_task_id',
-      message: `Task failed: ${worker.task.id}`,
-      error: error
-    });
-    
-    // Log current worker status for debugging
-    const activeWorkers = Array.from(this.ephemeralWorkerService.getAllWorkers().values()).filter(
-      worker => worker.status !== 'destroyed'
-    );
-    logger.info({
-      category: 'process',
-      action: 'active_workers_after_failure',
-      message: `Active workers after failure: ${activeWorkers.length} (${activeWorkers.map(w => w.id).join(', ')})`
-    });
-    
-    // Try to assign next task (now that we have a free worker slot)
-    await this.assignNextTask();
-  }
 
   /**
    * Destroy ephemeral worker container
