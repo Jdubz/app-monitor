@@ -146,8 +146,8 @@ export function createTaskRoutes(taskQueueManager: TaskQueueManager) {
       const query = {
         status: req.query.status as 'pending' | 'assigned' | 'active' | 'completed' | 'failed' | 'retrying' | undefined,
         type: req.query.type as string | undefined,
-        assignedAgent: req.query.assignedAgent as string | undefined,
-        assignedWorker: req.query.assignedWorker as string | undefined,
+        assignedAgent: req.query.assigned_agent as string | undefined,
+        assignedWorker: req.query.assigned_worker as string | undefined,
         project: req.query.project as string | undefined,
         limit: req.query.limit ? parseInt(req.query.limit as string) : undefined,
         offset: req.query.offset ? parseInt(req.query.offset as string) : undefined,

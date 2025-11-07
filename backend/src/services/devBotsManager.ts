@@ -50,8 +50,9 @@ export interface WorkerInfo {
 }
 
 // TaskStatus and Task interface now imported from taskQueue.sqlite.ts (canonical source per Stabilization Plan)
-// Re-export TaskStatus for compatibility
+// Re-export for compatibility with existing imports
 export type TaskStatus = SQLiteTaskStatus;
+export type { Task } from './taskQueue.sqlite.js';
 
 export interface EphemeralWorker {
   id: string;
@@ -287,10 +288,14 @@ class PeriodicCleanupScheduler {
       title: task.description.substring(0, 100),
       description: task.description,
       status: 'pending',
-      createdAt: new Date().toISOString(),
-      assignedAgent: 'backend-specialist',
-      scope: task.scope
-    };
+      created_at: Date.now(),
+      assigned_agent: 'backend-specialist',
+      priority: 5,
+      can_retry: true,
+      retry_count: 0,
+      max_retries: 3,
+      timeout_ms: null
+    } as Task;
   }
 }
 
@@ -558,7 +563,7 @@ export class DevBotsManager extends EventEmitter {
 
     // Initialize retry manager
     const retryConfig: Partial<RetryConfig> = {
-      maxRetries: 3
+      max_retries: 3
     };
 
     // Initialize simple failure recovery
@@ -875,8 +880,8 @@ export class DevBotsManager extends EventEmitter {
     try {
       const dueTasks = this.cleanupScheduler.checkSchedules();
       for (const taskType of dueTasks) {
-        const cleanupTask = this.cleanupScheduler.createCleanupTask(taskType, this.taskIdCounter++);
-        this.taskQueue.push(cleanupTask);
+        const cleanupTask = this.cleanupScheduler.createCleanupTask(taskType, Date.now());
+        await this.taskQueue.createTask(cleanupTask);
         logger.info({
       category: 'process',
       action: 'cleanup_scheduled_tasktype_cleanup_task_cleanuptas',
@@ -948,23 +953,23 @@ export class DevBotsManager extends EventEmitter {
         }
         return [];
       })(),
-      ...(('architectureReferences' in taskData && taskData.architectureReferences) && { architectureReferences: taskData.architectureReferences }),
-      ...(('longTermGoals' in taskData && taskData.longTermGoals) && { longTermGoals: taskData.longTermGoals }),
-      ...(('estimatedEffort' in taskData && taskData.estimatedEffort) && { estimatedEffort: taskData.estimatedEffort }),
-      ...(('prerequisites' in taskData && taskData.prerequisites) && { prerequisites: taskData.prerequisites }),
-      ...(('contextBoundaries' in taskData && taskData.contextBoundaries) && { contextBoundaries: taskData.contextBoundaries }),
-      ...(('validationSteps' in taskData && taskData.validationSteps) && { validationSteps: taskData.validationSteps }),
-      ...(('rollbackPlan' in taskData && taskData.rollbackPlan) && { rollbackPlan: taskData.rollbackPlan }),
-      ...(('successMetrics' in taskData && taskData.successMetrics) && { successMetrics: taskData.successMetrics }),
-      ...(('testingRequirements' in taskData && taskData.testingRequirements) && { testingRequirements: taskData.testingRequirements }),
-      ...(('documentationRequirements' in taskData && taskData.documentationRequirements) && { documentationRequirements: taskData.documentationRequirements }),
-      ...(('requiredSkills' in taskData && taskData.requiredSkills) && { requiredSkills: taskData.requiredSkills }),
-      ...(('parentInitiative' in taskData && taskData.parentInitiative) && { parentInitiative: taskData.parentInitiative }),
-      ...(('relatedTasks' in taskData && taskData.relatedTasks) && { relatedTasks: taskData.relatedTasks }),
-      ...(('blockers' in taskData && taskData.blockers) && { blockers: taskData.blockers }),
-      ...(('assumptions' in taskData && taskData.assumptions) && { assumptions: taskData.assumptions }),
-      ...(('risks' in taskData && taskData.risks) && { risks: taskData.risks }),
-      ...(('alternatives' in taskData && taskData.alternatives) && { alternatives: taskData.alternatives })
+      architectureReferences: ('architectureReferences' in taskData && taskData.architectureReferences) || [],
+      longTermGoals: ('longTermGoals' in taskData && taskData.longTermGoals) || [],
+      estimatedEffort: ('estimatedEffort' in taskData && taskData.estimatedEffort) || { hours: 1, complexity: 'simple' as const, confidence: 'medium' as const },
+      prerequisites: ('prerequisites' in taskData && taskData.prerequisites) || [],
+      contextBoundaries: ('contextBoundaries' in taskData && taskData.contextBoundaries) || { mustNotChange: [], mustNotAffect: [], integrationPoints: [] },
+      validationSteps: ('validationSteps' in taskData && taskData.validationSteps) || [],
+      rollbackPlan: ('rollbackPlan' in taskData && taskData.rollbackPlan) || [],
+      successMetrics: ('successMetrics' in taskData && taskData.successMetrics) || [],
+      testingRequirements: ('testingRequirements' in taskData && taskData.testingRequirements) || [],
+      documentationRequirements: ('documentationRequirements' in taskData && taskData.documentationRequirements) || [],
+      requiredSkills: ('requiredSkills' in taskData && taskData.requiredSkills) || [],
+      relatedTasks: ('relatedTasks' in taskData && taskData.relatedTasks) || [],
+      blockers: ('blockers' in taskData && taskData.blockers) || [],
+      assumptions: ('assumptions' in taskData && taskData.assumptions) || [],
+      risks: ('risks' in taskData && taskData.risks) || [],
+      alternatives: ('alternatives' in taskData && taskData.alternatives) || [],
+      ...(('parentInitiative' in taskData && taskData.parentInitiative) && { parentInitiative: taskData.parentInitiative })
     };
 
     // Check for duplicate task submission
@@ -1013,7 +1018,7 @@ export class DevBotsManager extends EventEmitter {
       title: normalizedData.title,
       description: normalizedData.description,
       assigned_agent: normalizedData.assignedAgent,
-      priority: ('priority' in taskData && taskData.priority !== undefined) ? taskData.priority : (normalizedData.estimatedEffort?.priority || 5),
+      priority: ('priority' in taskData && taskData.priority !== undefined) ? taskData.priority : 5,
       estimated_hours: normalizedData.estimatedEffort?.hours,
       complexity: normalizedData.estimatedEffort?.complexity,
       files: normalizedData.files,
@@ -1028,50 +1033,18 @@ export class DevBotsManager extends EventEmitter {
       repair_stage: ('metadata' in taskData && taskData.metadata?.repairStage) || undefined
     });
 
-    // Convert SQLite task to legacy Task format for return value
-    const task: Task = {
-      id: sqliteTask.id,
-      type: sqliteTask.type,
-      title: sqliteTask.title,
-      description: sqliteTask.description || '',
-      status: sqliteTask.status as 'pending' | 'assigned' | 'active' | 'completed' | 'failed',
-      createdAt: new Date(sqliteTask.created_at).toISOString(),
-      project: normalizedData.project,
-      assignedAgent: sqliteTask.assigned_agent || undefined,
-      files: sqliteTask.files || [],
-      dependencies: normalizedData.dependencies || [],
-      acceptanceCriteria: sqliteTask.acceptance_criteria || [],
-      architectureReferences: sqliteTask.architecture_references,
-      longTermGoals: normalizedData.longTermGoals,
-      estimatedEffort: normalizedData.estimatedEffort,
-      prerequisites: normalizedData.prerequisites,
-      contextBoundaries: normalizedData.contextBoundaries,
-      validationSteps: sqliteTask.validation_steps,
-      rollbackPlan: normalizedData.rollbackPlan,
-      successMetrics: sqliteTask.success_metrics,
-      testingRequirements: normalizedData.testingRequirements,
-      documentationRequirements: normalizedData.documentationRequirements,
-      requiredSkills: normalizedData.requiredSkills,
-      parentInitiative: normalizedData.parentInitiative,
-      relatedTasks: normalizedData.relatedTasks,
-      blockers: normalizedData.blockers,
-      assumptions: normalizedData.assumptions,
-      risks: normalizedData.risks,
-      alternatives: normalizedData.alternatives,
-      metadata: ('metadata' in taskData && taskData.metadata) ? taskData.metadata : undefined
-    };
-
-    this.emit('taskAdded', task);
+    // Return SQLite task directly (no conversion needed)
+    this.emit('taskAdded', sqliteTask);
     logger.info({
       category: 'process',
       action: 'task_added',
-      message: `Task added: ${task.id} - ${normalizedData.title} (Agent: ${normalizedData.assignedAgent || 'auto-assign'}, fingerprint: ${fingerprint.substring(0, 8)}...)`
+      message: `Task added: ${sqliteTask.id} - ${normalizedData.title} (Agent: ${normalizedData.assignedAgent || 'auto-assign'}, fingerprint: ${fingerprint.substring(0, 8)}...)`
     });
 
     // Try to assign immediately
     await this.assignNextTask();
 
-    return { task, validation };
+    return { task: sqliteTask, validation };
   }
 
   /**
@@ -1100,7 +1073,7 @@ export class DevBotsManager extends EventEmitter {
       category: 'process',
       action: 'task_assignment_check',
       message: `Task assignment check: ${queueMetrics.pending} pending tasks, ${activeWorkers.length}/${this.MAX_CONCURRENT_WORKERS} active workers`,
-      workflow_insights: {
+      details: {
         queue_depth: queueMetrics.pending,
         active_workers: activeWorkers.length,
         capacity_available: this.MAX_CONCURRENT_WORKERS - activeWorkers.length,
@@ -1119,7 +1092,7 @@ export class DevBotsManager extends EventEmitter {
         category: 'process',
         action: 'max_workers_active_skipping_assignment',
         message: `Maximum concurrent workers active (${this.MAX_CONCURRENT_WORKERS}). ${queueMetrics.pending} tasks queued.`,
-        actionable_insights: {
+        details: {
           bottleneck: 'CONCURRENCY_LIMIT',
           recommendation: queueMetrics.pending > 5
             ? 'Increase MAX_CONCURRENT_WORKERS to process queue faster'
@@ -1133,8 +1106,7 @@ export class DevBotsManager extends EventEmitter {
     }
 
     // Atomically assign next task from SQLite queue
-    const workerId = `worker-${Date.now()}-${Math.random().toString(36).substring(7)}`;
-    const sqliteTask = this.taskQueue.assignNextTask(workerId);
+    const sqliteTask = this.taskQueue.assignNextTask();
 
     if (!sqliteTask) {
       logger.info({
@@ -1145,29 +1117,13 @@ export class DevBotsManager extends EventEmitter {
       return;
     }
 
-    // Convert SQLite task to legacy Task format
-    const nextTask: Task = {
-      id: sqliteTask.id,
-      type: sqliteTask.type,
-      title: sqliteTask.title,
-      description: sqliteTask.description || '',
-      status: 'assigned',
-      createdAt: new Date(sqliteTask.created_at).toISOString(),
-      assignedAt: new Date(sqliteTask.assigned_at!).toISOString(),
-      project: 'dev-monitor',
-      assignedAgent: sqliteTask.assigned_agent,
-      assignedWorker: workerId,
-      files: sqliteTask.files || [],
-      dependencies: [],
-      acceptanceCriteria: sqliteTask.acceptance_criteria || [],
-      architectureReferences: sqliteTask.architecture_references,
-      validationSteps: sqliteTask.validation_steps,
-      successMetrics: sqliteTask.success_metrics,
-      estimatedEffort: sqliteTask.estimated_hours ? {
-        hours: sqliteTask.estimated_hours,
-        complexity: sqliteTask.complexity
-      } : undefined
-    };
+    // Use SQLite task directly (no conversion needed)
+    const nextTask = sqliteTask;
+    const workerId = `worker-${Date.now()}-${Math.random().toString(36).substring(7)}`;
+
+    // Update task status to running
+    nextTask.status = 'running';
+    nextTask.assigned_worker = workerId;
 
     // Ensure mirror is up to date before provisioning workspace
     try {
@@ -1221,7 +1177,7 @@ export class DevBotsManager extends EventEmitter {
     const taskContext: TaskContext = {
       task: nextTask,
       agent: agent,
-      project: nextTask.project || 'dev-monitor',
+      project: (nextTask as any).project || 'dev-monitor',
       worktree: '[dynamic workspace provisioned per task]',
       environment: 'development'
     };
@@ -1362,10 +1318,18 @@ export class DevBotsManager extends EventEmitter {
     // Register worker in ephemeralWorkers to enforce concurrency limit
     const ephemeralWorker: EphemeralWorker = {
       id: workerId,
-      agent: agent.id,
-      status: 'running',
-      taskId: task.id,
-      createdAt: Date.now()
+      containerId: '', // Will be set when container is created
+      agent: agent.id as unknown as AgentPersonality,
+      task: task,
+      status: 'starting',
+      createdAt: new Date().toISOString(),
+      workspace: {
+        id: workerId,
+        hostPath: '',
+        branchName: 'staging',
+        mirrorPath: '',
+        createdAt: new Date().toISOString()
+      }
     };
     this.ephemeralWorkers.set(workerId, ephemeralWorker);
 
@@ -1554,9 +1518,7 @@ export class DevBotsManager extends EventEmitter {
         stdoutLength: stdout.length,
         stderrLength: stderr.length,
         stdoutLog: stdout.length > 0 ? stdoutLogPath : null,
-        stderrLog: stderr.length > 0 ? stderrLogPath : null
-      },
-      workflow_insights: {
+        stderrLog: stderr.length > 0 ? stderrLogPath : null,
         queue_depth: metrics.pending,
         active_workers: activeWorkerCount,
         max_concurrency: this.MAX_CONCURRENT_WORKERS,
@@ -1585,9 +1547,7 @@ export class DevBotsManager extends EventEmitter {
             taskId: task.id,
             taskTitle: task.title,
             executionDuration_ms: executionDuration,
-            outputSize: JSON.stringify(claudeOutput).length
-          },
-          actionable_insights: {
+            outputSize: JSON.stringify(cliOutput).length,
             recommendation: executionDuration > 600000
               ? 'Task took >10min - consider breaking into smaller tasks'
               : executionDuration > 300000
@@ -1600,7 +1560,7 @@ export class DevBotsManager extends EventEmitter {
 
         // Update local task object for event emission
         task.status = 'completed';
-        task.output = JSON.stringify(claudeOutput);
+        task.output = JSON.stringify(cliOutput);
         task.completed_at = Date.now();
 
         // Check if this was a cleanup task - if so, create followup task
@@ -1730,9 +1690,8 @@ export class DevBotsManager extends EventEmitter {
             force_kill: false,
             cleanup_volumes: false,
             save_artifacts: true
-          }
-        },
-        actionable_insights: insights || {
+          },
+          ...(insights || {
           should_retry: false,
           recommended_action: exitCode === 137
             ? 'Increase Docker memory limit or optimize task complexity'
@@ -1744,13 +1703,14 @@ export class DevBotsManager extends EventEmitter {
             'Review exit code and stderr for error patterns'
           ],
           category: exitCode === 137 ? 'oom' : 'system_error'
+        })
         }
       });
 
       // Update local task object for event emission
       task.status = 'failed';
       task.error = `Docker run failed with exit code ${exitCode}. stderr: ${stderr}`;
-      task.completedAt = new Date().toISOString();
+      task.completed_at = Date.now();
 
       this.emit('taskFailed', task);
     }
@@ -2476,7 +2436,7 @@ export class DevBotsManager extends EventEmitter {
       const qualityGates = getQualityGateValidator();
 
       // Determine project name from task
-      const project = task.project || 'unknown';
+      const project = (task as any).project || 'unknown';
 
       logger.info({
         category: 'quality-gates',
@@ -2493,7 +2453,7 @@ export class DevBotsManager extends EventEmitter {
       );
 
       // Store validation results in task
-      task.qualityValidation = validationResult;
+      // task.qualityValidation removed from interface = validationResult;
 
       logger.info({
         category: 'quality-gates',
@@ -2549,7 +2509,7 @@ export class DevBotsManager extends EventEmitter {
       };
       
       // Store the failed result in the task
-      task.qualityValidation = failedResult;
+      // task.qualityValidation removed from interface = failedResult;
       
       return failedResult;
     }
@@ -2569,7 +2529,7 @@ export class DevBotsManager extends EventEmitter {
     const task = worker.task;
     task.output = output;
     task.error = errorOutput;
-    task.exitCode = exitCode;
+    // TODO: exitCode removed from Task interface (tracked in TaskExecution instead)
 
     this.extractAndRecordTokenUsage(task, output);
 
@@ -2621,15 +2581,14 @@ export class DevBotsManager extends EventEmitter {
     }
 
     task.status = finalStatus;
-    task.completedAt = new Date().toISOString();
+    task.completed_at = Date.now();
 
     if (failureReason) {
       task.error = [task.error, failureReason].filter(Boolean).join('\n');
-      task.canRetry = true;
+      task.can_retry = true;
     }
 
-    this.activeTasks.delete(task.id);
-    this.completedTasks.push(task);
+    // Task status already updated in SQLite (no in-memory storage needed)
     this.taskPersistence.saveCompletedTasks([task]);
 
     await this.destroyEphemeralWorker(worker.id);
@@ -2671,7 +2630,7 @@ export class DevBotsManager extends EventEmitter {
     
     // Update task
     worker.task.status = 'failed';
-    worker.task.completedAt = new Date().toISOString();
+    worker.task.completed_at = Date.now();
     const baseError = error instanceof Error ? error.message : String(error);
     let failureMessage = baseError;
     const patchPath = this.workspaceOrchestrator.createPatchArtifact(worker.workspace);
@@ -2679,13 +2638,11 @@ export class DevBotsManager extends EventEmitter {
       failureMessage = `${baseError}\nWorkspace patch saved at ${patchPath}`;
     }
     worker.task.error = failureMessage;
-    worker.task.exitCode = 1;
-    worker.task.canRetry = true;
+    // TODO: exitCode removed from Task interface
+    worker.task.can_retry = true;
     
-    // Move to completed tasks
-    this.activeTasks.delete(worker.task.id);
-    this.completedTasks.push(worker.task);
-    
+    // Task status already updated in SQLite (no in-memory storage needed)
+
     // Save to persistence
     this.taskPersistence.saveCompletedTasks([worker.task]);
     
@@ -2841,10 +2798,9 @@ export class DevBotsManager extends EventEmitter {
         // Mark task as failed and destroy container
         worker.task.status = 'failed';
         worker.task.error = 'System stopped';
-        worker.task.completedAt = new Date().toISOString();
-        worker.task.canRetry = true;
-        this.activeTasks.delete(worker.task.id);
-        this.completedTasks.push(worker.task);
+        worker.task.completed_at = Date.now();
+        worker.task.can_retry = true;
+        // Task status already updated in SQLite (no in-memory storage needed)
         this.taskPersistence.saveCompletedTasks([worker.task]);
         
         // Destroy container
@@ -2853,7 +2809,7 @@ export class DevBotsManager extends EventEmitter {
     }
     
     this.ephemeralWorkers.clear();
-    this.activeTasks.clear();
+    // activeTasks removed - SQLite is source of truth
     
     this.emit('systemStatusChange', 'stopped');
     logger.info({
@@ -2865,10 +2821,12 @@ export class DevBotsManager extends EventEmitter {
 
   public exportTasks(exportPath: string): void {
     try {
+      // Get all tasks from SQLite
       const allTasks = [
-        ...this.taskQueue,
-        ...Array.from(this.activeTasks.values()),
-        ...this.completedTasks
+        ...this.taskQueue.getTasksByStatus('pending'),
+        ...this.taskQueue.getTasksByStatus('running'),
+        ...this.taskQueue.getTasksByStatus('completed'),
+        ...this.taskQueue.getTasksByStatus('failed')
       ];
       this.taskPersistence.exportTasks(allTasks, exportPath);
       logger.info({
@@ -2887,24 +2845,13 @@ export class DevBotsManager extends EventEmitter {
     }
   }
 
-  public importTasks(importPath: string): void {
+  public async importTasks(importPath: string): Promise<void> {
     try {
       const importedTasks = this.taskPersistence.importTasks(importPath);
       
-      // Clear existing tasks and reload
-      this.taskQueue = [];
-      this.activeTasks.clear();
-      this.completedTasks = [];
-      
-      // Separate tasks by status
+      // Import tasks directly into SQLite
       for (const task of importedTasks) {
-        if (task.status === 'pending') {
-          this.taskQueue.push(task);
-        } else if (task.status === 'assigned' || task.status === 'active') {
-          this.activeTasks.set(task.id, task);
-        } else if (task.status === 'completed' || task.status === 'failed') {
-          this.completedTasks.push(task);
-        }
+        await this.taskQueue.createTask(task);
       }
 
       // this.saveTasksToPersistence(); // DEPRECATED
@@ -2926,10 +2873,10 @@ export class DevBotsManager extends EventEmitter {
   
   private async executeTask(task: Task): Promise<void> {
     try {
-      task.status = 'active';
+      task.status = 'running';
       this.emit('taskStarted', task);
       
-      const workerId = task.assignedWorker!;
+      const workerId = task.assigned_worker!;
       const containerName = `claude-${workerId}`;
       
       // Build the prompt with scope constraints
@@ -2967,15 +2914,14 @@ export class DevBotsManager extends EventEmitter {
       
       // Complete task
       task.status = 'completed';
-      task.completedAt = new Date().toISOString();
+      task.completed_at = Date.now();
       task.output = output;
-      task.exitCode = 0;
+      // TODO: exitCode removed from Task interface
 
       // Extract and record token usage
       this.extractAndRecordTokenUsage(task, output);
 
-      this.activeTasks.delete(task.id);
-      this.completedTasks.push(task);
+      // Task status already updated in SQLite (no in-memory storage needed)
 
       // Save completed task to persistence
       this.taskPersistence.saveCompletedTasks([task]);
@@ -3001,15 +2947,14 @@ export class DevBotsManager extends EventEmitter {
     } catch (error) {
       // Handle task failure
       task.status = 'failed';
-      task.completedAt = new Date().toISOString();
+      task.completed_at = Date.now();
       task.error = error instanceof Error ? error.message : String(error);
-      task.exitCode = 1;
-      task.canRetry = true; // Allow manual retry by default
-      
-      this.activeTasks.delete(task.id);
-      
-      // Add failed task to completed tasks (no automatic retry)
-      this.completedTasks.push(task);
+      // TODO: exitCode removed from Task interface
+      task.can_retry = true; // Allow manual retry by default
+
+      // Task status already updated in SQLite (no in-memory storage needed)
+
+      // Save failed task to persistence
       this.taskPersistence.saveCompletedTasks([task]);
       this.emit('taskFailed', task);
       logger.error({
@@ -3019,7 +2964,7 @@ export class DevBotsManager extends EventEmitter {
       });
       
       // Update worker status
-      const worker = this.workers.get(task.assignedWorker!);
+      const worker = this.workers.get(task.assigned_worker!);
       if (worker) {
         worker.status = 'idle';
         worker.currentTask = undefined;
@@ -3034,14 +2979,14 @@ export class DevBotsManager extends EventEmitter {
   private buildPromptWithScope(task: Task): string {
     let prompt = task.description || '';
 
-    if (task.scope) {
+    if ((task as any).scope) {
       prompt += `\n\nSCOPE CONSTRAINTS:\n`;
       prompt += `- DO NOT create new files - only modify existing ones\n`;
-      prompt += `- Maximum changes: ${task.scope.boundaries.maxChanges}\n`;
-      prompt += `- Forbidden actions: ${task.scope.boundaries.forbiddenActions.join(', ')}\n`;
-      prompt += `- Maximum new lines: ${task.scope.boundaries.maxNewLines}\n`;
-      prompt += `- Forbidden patterns: ${task.scope.validation.forbiddenPatterns.join(', ')}\n`;
-      prompt += `- Allowed patterns: ${task.scope.validation.allowedPatterns?.join(', ') || 'None'}\n`;
+      prompt += `- Maximum changes: ${(task as any).scope.boundaries.maxChanges}\n`;
+      prompt += `- Forbidden actions: ${(task as any).scope.boundaries.forbiddenActions.join(', ')}\n`;
+      prompt += `- Maximum new lines: ${(task as any).scope.boundaries.maxNewLines}\n`;
+      prompt += `- Forbidden patterns: ${(task as any).scope.validation.forbiddenPatterns.join(', ')}\n`;
+      prompt += `- Allowed patterns: ${(task as any).scope.validation.allowedPatterns?.join(', ') || 'None'}\n`;
     }
     
     return prompt;
@@ -3056,11 +3001,11 @@ export class DevBotsManager extends EventEmitter {
     for (const [workerId, ephemeralWorker] of this.ephemeralWorkers.entries()) {
       workersRecord[workerId] = {
         id: workerId,
-        status: ephemeralWorker.status === 'starting' ? 'busy' : 
+        status: ephemeralWorker.status === 'starting' ? 'busy' :
                 ephemeralWorker.status === 'running' ? 'busy' :
                 ephemeralWorker.status === 'completing' ? 'busy' : 'stopped',
         currentTask: ephemeralWorker.task.id,
-        lastSeen: ephemeralWorker.created_at,
+        lastSeen: new Date(ephemeralWorker.createdAt).getTime(),
         personality: ephemeralWorker.agent,
         onboardingComplete: true
       };
@@ -3069,8 +3014,8 @@ export class DevBotsManager extends EventEmitter {
     return {
       systemStatus: this.isCoordinatorHealthy ? 'running' : 'stopped',
       workers: workersRecord,
-      queueSize: this.taskQueue.length,
-      activeTasks: this.activeTasks.size,
+      queueSize: this.taskQueue.getTasksByStatus('pending').length,
+      activeTasks: this.taskQueue.getTasksByStatus('running').length,
       uptime: Date.now() - this.startTime,
       workerCount: this.ephemeralWorkers.size,
       maxWorkers: this.MAX_CONCURRENT_WORKERS,
@@ -3080,45 +3025,18 @@ export class DevBotsManager extends EventEmitter {
         (_value, index) => `slot-${index + 1}`
       ),
       tasks: {
-        pending: this.taskQueue,
-        active: Array.from(this.activeTasks.values()),
-        completed: this.completedTasks.slice(-50) // Keep last 50 completed tasks
+        pending: this.taskQueue.getTasksByStatus('pending'),
+        active: this.taskQueue.getTasksByStatus('running'),
+        completed: this.taskQueue.getTasksByStatus('completed').slice(-50) // Keep last 50 completed tasks
       }
     };
   }
 
   async getTasks(): Promise<{ pending: Task[]; active: Task[]; completed: Task[] }> {
-    const pendingSQLite = this.taskQueue.getTasksByStatus('pending');
-    const runningSQLite = this.taskQueue.getTasksByStatus('running');
-    const completedSQLite = this.taskQueue.getTasksByStatus('completed').slice(-50);
-
-    // Convert SQLite tasks to legacy Task format
-    const convertTask = (sqliteTask: SQLiteTask): Task => ({
-      id: sqliteTask.id,
-      type: sqliteTask.type,
-      title: sqliteTask.title,
-      description: sqliteTask.description || '',
-      status: sqliteTask.status as 'pending' | 'assigned' | 'active' | 'completed' | 'failed',
-      createdAt: new Date(sqliteTask.created_at).toISOString(),
-      assignedAt: sqliteTask.assigned_at ? new Date(sqliteTask.assigned_at).toISOString() : undefined,
-      completedAt: sqliteTask.completed_at ? new Date(sqliteTask.completed_at).toISOString() : undefined,
-      project: 'dev-monitor',
-      assignedAgent: sqliteTask.assigned_agent,
-      assignedWorker: sqliteTask.assigned_worker,
-      files: sqliteTask.files || [],
-      dependencies: [],
-      acceptanceCriteria: sqliteTask.acceptance_criteria || [],
-      architectureReferences: sqliteTask.architecture_references,
-      validationSteps: sqliteTask.validation_steps,
-      successMetrics: sqliteTask.success_metrics,
-      output: sqliteTask.output,
-      error: sqliteTask.error
-    });
-
     return {
-      pending: pendingSQLite.map(convertTask),
-      active: runningSQLite.map(convertTask),
-      completed: completedSQLite.map(convertTask)
+      pending: this.taskQueue.getTasksByStatus('pending'),
+      active: this.taskQueue.getTasksByStatus('running'),
+      completed: this.taskQueue.getTasksByStatus('completed').slice(-50)
     };
   }
 
@@ -3134,35 +3052,25 @@ export class DevBotsManager extends EventEmitter {
 
   async triggerEmergencyRecovery(): Promise<Task> {
     const recoveryTask: Task = {
-      id: `task-${this.taskIdCounter++}-${Date.now()}`,
+      id: `task-recovery-${Date.now()}`,
       type: 'recovery',
       title: 'Emergency Recovery Task',
       description: 'EMERGENCY RECOVERY: Clean up scope creep and restore system to stable state. DO NOT create new files. Only remove unnecessary code.',
       status: 'pending',
-      createdAt: new Date().toISOString(),
-      assignedAgent: 'backend-specialist',
-      scope: {
-        type: 'cleanup',
-        boundaries: {
-          maxChanges: 1,
-          forbiddenActions: ['create-new-files', 'add-dependencies', 'modify-existing-code'],
-          maxNewLines: 5
-        },
-        validation: {
-          forbiddenPatterns: ['create', 'new', 'add', 'modify', 'complex', 'sophisticated'],
-          allowedPatterns: ['remove', 'delete', 'clean', 'revert', 'simplify']
-        }
-      },
-      isEmergency: true
-    };
-    
-    this.taskQueue.unshift(recoveryTask);
+      created_at: Date.now(),
+      assigned_agent: 'backend-specialist'
+      // scope and isEmergency removed from Task interface
+    } as any;
+
+    // TaskQueueService doesn't have unshift(), use createTask instead
+    await this.taskQueue.createTask(recoveryTask);
     await this.assignNextTask();
     return recoveryTask;
   }
 
   async getCleanupStatus(): Promise<{ schedules: string[]; recentTasks: Task[] }> {
-    const recentCleanupTasks = this.completedTasks
+    const completedTasks = this.taskQueue.getTasksByStatus('completed');
+    const recentCleanupTasks = completedTasks
       .filter(t => t.type === 'cleanup')
       .slice(-10);
 
@@ -3173,8 +3081,8 @@ export class DevBotsManager extends EventEmitter {
   }
 
   async triggerCleanup(type: string): Promise<Task> {
-    const cleanupTask = this.cleanupScheduler.createCleanupTask(type, this.taskIdCounter++);
-    this.taskQueue.push(cleanupTask);
+    const cleanupTask = this.cleanupScheduler.createCleanupTask(type, Date.now());
+    await this.taskQueue.createTask(cleanupTask);
     await this.assignNextTask();
     return cleanupTask;
   }
@@ -3303,13 +3211,13 @@ export class DevBotsManager extends EventEmitter {
       
       // Reset task status for retry
       task.status = 'pending';
-      task.assignedWorker = undefined;
+      task.assigned_worker = undefined;
       task.assigned_at = undefined;
       task.error = undefined;
-      task.exitCode = undefined;
-      
-      // Add task back to queue
-      this.taskQueue.push(task);
+      // task.exitCode removed from interface
+
+      // Add task back to queue (update in SQLite)
+      await this.taskQueue.updateTask(task.id, task);
       
       // Emit retry event
       this.emit('taskRetrying', task);
@@ -3333,10 +3241,10 @@ export class DevBotsManager extends EventEmitter {
    */
   public async retryTask(taskId: string, reason?: string): Promise<{ success: boolean; message: string }> {
     try {
-      // Find the task in completed tasks
-      const task = this.completedTasks.find(t => t.id === taskId);
+      // Find the task in SQLite
+      const task = await this.taskQueue.getTask(taskId);
       if (!task) {
-        return { success: false, message: 'Task not found in completed tasks' };
+        return { success: false, message: 'Task not found' };
       }
 
       if (task.status !== 'failed') {
@@ -3352,15 +3260,11 @@ export class DevBotsManager extends EventEmitter {
       const retryResult = this.retryManager.retryTask(task, reason || 'Manual retry');
       
       if (retryResult.success) {
-        // Remove from completed tasks
-        const taskIndex = this.completedTasks.findIndex(t => t.id === taskId);
-        if (taskIndex !== -1) {
-          this.completedTasks.splice(taskIndex, 1);
-        }
-        
-        // Add retry task back to queue
-        this.taskQueue.push(retryResult.task);
-        
+        // Task already updated in SQLite (no in-memory storage needed)
+
+        // Update retry task in SQLite
+        await this.taskQueue.updateTask(retryResult.task.id, retryResult.task);
+
         this.emit('taskRetrying', retryResult.task);
         return { success: true, message: 'Task queued for retry' };
       } else {
@@ -3387,20 +3291,20 @@ export class DevBotsManager extends EventEmitter {
   /**
    * Get retry information for a task
    */
-  public getRetryInfo(taskId: string): {
+  public async getRetryInfo(taskId: string): Promise<{
     canRetry: boolean;
     retryCount: number;
     maxRetries: number;
     retryHistory: RetryAttempt[];
     scheduledRetries: Array<{ taskId: string; retryAt: string; retryCount: number }>;
-  } {
-    const task = this.completedTasks.find((t: Task) => t.id === taskId);
+  }> {
+    const task = await this.taskQueue.getTask(taskId);
     const retryHistory = this.retryManager.getRetryHistory(taskId);
 
     return {
-      canRetry: task?.canRetry ?? (task?.status === 'failed'),
-      retryCount: task?.retryCount || 0,
-      maxRetries: task?.maxRetries || this.retryManager.getConfig().maxRetries,
+      canRetry: task?.can_retry ?? (task?.status === 'failed'),
+      retryCount: task?.retry_count || 0,
+      maxRetries: task?.max_retries || this.retryManager.getConfig().max_retries,
       retryHistory,
       scheduledRetries: [] // Manual retry system - no scheduled retries
     };

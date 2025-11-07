@@ -80,7 +80,7 @@ export async function createApp() {
   // Initialize TaskQueueManager
   taskQueueManager = new TaskQueueManager({
     maxConcurrent: 3,
-    maxRetries: 3,
+    max_retries: 3,
     retryDelay: 5000,
     taskTimeout: 300000,
   });

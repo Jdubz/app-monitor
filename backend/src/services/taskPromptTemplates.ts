@@ -130,13 +130,13 @@ export class TaskPromptTemplateManager {
       template: this.getUniversalTemplateString(),
       variables: [
         'agent.name', 'agent.role', 'task.id', 'task.title', 'task.type',
-        'task.description', 'task.documentation', 'task.acceptanceCriteriaList',
-        'task.files', 'task.dependencies', 'task.notes', 'task.architectureReferences',
-        'task.contextBoundaries', 'task.prerequisites', 'task.validationSteps',
+        'task.description', 'task.documentation', 'task.acceptance_criteriaList',
+        'task.files', 'task.dependencies', 'task.notes', 'task.architecture_references',
+        'task.contextBoundaries', 'task.prerequisites', 'task.validation_steps',
         'task.testingRequirements', 'task.documentationRequirements',
         'task.rollbackPlan', 'task.blockers', 'task.risks', 'task.typeGuidelines',
         // Enhanced fields (all UI form fields now included)
-        'task.longTermGoals', 'task.estimatedEffort', 'task.successMetrics',
+        'task.longTermGoals', 'task.estimatedEffort', 'task.success_metrics',
         'task.requiredSkills', 'task.parentInitiative', 'task.relatedTasks',
         'task.assumptions', 'task.alternatives',
         'repository', 'environment'
@@ -314,7 +314,7 @@ For each piece of code you plan to write, document:
 {{task.documentation}}
 
 **Essential Project Documentation:**
-{{task.architectureReferences}}
+{{task.architecture_references}}
 
 **Work Target Guide for {{repository}}:**
 {{workTarget.documentation}}
@@ -327,12 +327,12 @@ For each piece of code you plan to write, document:
 ## ✅ Acceptance Criteria (Qualitative)
 The task is considered complete when ALL of the following are true:
 
-{{task.acceptanceCriteriaList}}
+{{task.acceptance_criteriaList}}
 
 ## 📊 Success Metrics (Quantitative - MUST ACHIEVE ALL)
 These are MEASURABLE outcomes that define task success:
 
-{{task.successMetrics}}
+{{task.success_metrics}}
 
 **Validation:** Before marking task complete, verify EVERY metric above is achieved. If any metric cannot be met, STOP and report why.
 
@@ -633,7 +633,7 @@ git commit -m "{{task.type}}: {{task.title}}
 {{task.description}}
 
 Acceptance criteria:
-{{task.acceptanceCriteriaList}}
+{{task.acceptance_criteriaList}}
 
 Files modified: {{task.files}}
 
@@ -785,7 +785,7 @@ Only create new documentation files when:
 ## ✓ Validation Steps
 Before marking task complete, verify:
 
-{{task.validationSteps}}
+{{task.validation_steps}}
 
 ## 🔄 Rollback Plan (If Issues Arise)
 {{task.rollbackPlan}}
@@ -820,7 +820,7 @@ Before marking this task as complete, verify ALL of the following:
 - [ ] All acceptance criteria met
 
 ### Success Metrics (Quantitative) - VERIFY EACH ONE
-{{task.successMetrics}}
+{{task.success_metrics}}
 
 ### Quality Standards
 - [ ] Code follows project patterns and conventions
@@ -880,12 +880,12 @@ Use your specialized knowledge to ensure this implementation follows best practi
     this.variableProcessors.set('task.title', (context) => context.task.title || 'Untitled Task');
     this.variableProcessors.set('task.description', (context) => context.task.description || 'No detailed description provided');
     this.variableProcessors.set('task.documentation', (context) => context.task.documentation || 'See project README and architecture docs');
-    this.variableProcessors.set('task.acceptanceCriteria', (context) => {
-      if (!context.task.acceptanceCriteria) return 'Task completed as described';
-      if (Array.isArray(context.task.acceptanceCriteria)) {
-        return context.task.acceptanceCriteria.join(', ');
+    this.variableProcessors.set('task.acceptance_criteria', (context) => {
+      if (!context.task.acceptance_criteria) return 'Task completed as described';
+      if (Array.isArray(context.task.acceptance_criteria)) {
+        return context.task.acceptance_criteria.join(', ');
       }
-      return String(context.task.acceptanceCriteria);
+      return String(context.task.acceptance_criteria);
     });
     this.variableProcessors.set('task.notes', (context) => context.task.notes || 'No additional notes');
 
@@ -900,11 +900,11 @@ Use your specialized knowledge to ensure this implementation follows best practi
         : 'None specified');
 
     // Enhanced task fields
-    this.variableProcessors.set('task.acceptanceCriteriaList', (context) =>
-      context.task.acceptanceCriteria && Array.isArray(context.task.acceptanceCriteria) && context.task.acceptanceCriteria.length > 0
-        ? context.task.acceptanceCriteria.map((c: string) => `- [ ] ${c}`).join('\n')
+    this.variableProcessors.set('task.acceptance_criteriaList', (context) =>
+      context.task.acceptance_criteria && Array.isArray(context.task.acceptance_criteria) && context.task.acceptance_criteria.length > 0
+        ? context.task.acceptance_criteria.map((c: string) => `- [ ] ${c}`).join('\n')
         : '- [ ] Task completed as described');
-    this.variableProcessors.set('task.architectureReferences', (context) => {
+    this.variableProcessors.set('task.architecture_references', (context) => {
       // Get system-specific architecture documentation links
       const systemArchDocs = this.getSystemArchitectureDocs(context.project);
 
@@ -912,8 +912,8 @@ Use your specialized knowledge to ensure this implementation follows best practi
       const intelligentDocs = this.discoverRelevantDocumentation(context);
 
       // Combine custom architecture references with system-specific docs
-      const customRefs = context.task.architectureReferences && context.task.architectureReferences.length > 0
-        ? context.task.architectureReferences.map((r: string) => `- ${r}`)
+      const customRefs = context.task.architecture_references && context.task.architecture_references.length > 0
+        ? context.task.architecture_references.map((r: string) => `- ${r}`)
         : [];
 
       // Build final documentation list
@@ -931,55 +931,68 @@ Use your specialized knowledge to ensure this implementation follows best practi
 
       return uniqueDocs.join('\n');
     });
-    this.variableProcessors.set('task.prerequisites', (context) =>
-      context.task.prerequisites && context.task.prerequisites.length > 0
-        ? context.task.prerequisites.map((p: string) => `- [ ] ${p}`).join('\n')
-        : '- [ ] None specified');
+    this.variableProcessors.set('task.prerequisites', (context) => {
+      const task = context.task as any;
+      return task.prerequisites && task.prerequisites.length > 0
+        ? task.prerequisites.map((p: string) => `- [ ] ${p}`).join('\n')
+        : '- [ ] None specified';
+    });
     this.variableProcessors.set('task.contextBoundaries', (context) => {
-      if (!context.task.contextBoundaries) return '- No specific boundaries defined';
-      const { mustNotChange = [], mustNotAffect = [], integrationPoints = [] } = context.task.contextBoundaries;
+      const task = context.task as any;
+      if (!task.contextBoundaries) return '- No specific boundaries defined';
+      const { mustNotChange = [], mustNotAffect = [], integrationPoints = [] } = task.contextBoundaries;
       return `**Must NOT Change:**\n${mustNotChange.map((i: string) => `- ${i}`).join('\n') || '- None specified'}\n\n**Must NOT Affect:**\n${mustNotAffect.map((i: string) => `- ${i}`).join('\n') || '- None specified'}\n\n**Integration Points:**\n${integrationPoints.map((i: string) => `- ${i}`).join('\n') || '- None specified'}`;
     });
-    this.variableProcessors.set('task.validationSteps', (context) =>
-      context.task.validationSteps && context.task.validationSteps.length > 0
-        ? context.task.validationSteps.map((v: string) => `- [ ] ${v}`).join('\n')
+    this.variableProcessors.set('task.validation_steps', (context) =>
+      context.task.validation_steps && context.task.validation_steps.length > 0
+        ? context.task.validation_steps.map((v: string) => `- [ ] ${v}`).join('\n')
         : '- [ ] Run all tests\n- [ ] Run linters\n- [ ] Manual verification');
-    this.variableProcessors.set('task.testingRequirements', (context) =>
-      context.task.testingRequirements && context.task.testingRequirements.length > 0
-        ? context.task.testingRequirements.map((t: string) => `- [ ] ${t}`).join('\n')
-        : '- [ ] Unit tests pass\n- [ ] Integration tests pass');
-    this.variableProcessors.set('task.documentationRequirements', (context) =>
-      context.task.documentationRequirements && context.task.documentationRequirements.length > 0
-        ? context.task.documentationRequirements.map((d: string) => `- [ ] ${d}`).join('\n')
-        : '- [ ] Code comments added\n- [ ] README updated if needed');
-    this.variableProcessors.set('task.rollbackPlan', (context) =>
-      context.task.rollbackPlan && context.task.rollbackPlan.length > 0
-        ? context.task.rollbackPlan.map((r: string) => `- ${r}`).join('\n')
-        : '- Revert commit if issues found\n- Run git reset --hard if needed\n- Notify team of rollback');
-    this.variableProcessors.set('task.blockers', (context) =>
-      context.task.blockers && context.task.blockers.length > 0
-        ? context.task.blockers.map((b: string) => `- ⚠️ ${b}`).join('\n')
-        : '- No known blockers');
-    this.variableProcessors.set('task.risks', (context) =>
-      context.task.risks && context.task.risks.length > 0
-        ? context.task.risks.map((r: string) => `- ⚠️ ${r}`).join('\n')
-        : '- No identified risks');
+    this.variableProcessors.set('task.testingRequirements', (context) => {
+      const task = context.task as any;
+      return task.testingRequirements && task.testingRequirements.length > 0
+        ? task.testingRequirements.map((t: string) => `- [ ] ${t}`).join('\n')
+        : '- [ ] Unit tests pass\n- [ ] Integration tests pass';
+    });
+    this.variableProcessors.set('task.documentationRequirements', (context) => {
+      const task = context.task as any;
+      return task.documentationRequirements && task.documentationRequirements.length > 0
+        ? task.documentationRequirements.map((d: string) => `- [ ] ${d}`).join('\n')
+        : '- [ ] Code comments added\n- [ ] README updated if needed';
+    });
+    this.variableProcessors.set('task.rollbackPlan', (context) => {
+      const task = context.task as any;
+      return task.rollbackPlan && task.rollbackPlan.length > 0
+        ? task.rollbackPlan.map((r: string) => `- ${r}`).join('\n')
+        : '- Revert commit if issues found\n- Run git reset --hard if needed\n- Notify team of rollback';
+    });
+    this.variableProcessors.set('task.blockers', (context) => {
+      const task = context.task as any;
+      return task.blockers && task.blockers.length > 0
+        ? task.blockers.map((b: string) => `- ⚠️ ${b}`).join('\n')
+        : '- No known blockers';
+    });
+    this.variableProcessors.set('task.risks', (context) => {
+      const task = context.task as any;
+      return task.risks && task.risks.length > 0
+        ? task.risks.map((r: string) => `- ⚠️ ${r}`).join('\n')
+        : '- No identified risks';
+    });
 
     // NEW: Enhanced field processors (all UI form fields now included)
 
     // 1. Long-term goals - strategic context
     this.variableProcessors.set('task.longTermGoals', (context) =>
-      context.task.longTermGoals && context.task.longTermGoals.length > 0
-        ? context.task.longTermGoals.map((g: string) => `- ${g}`).join('\n')
+      (context.task as any).longTermGoals && (context.task as any).longTermGoals.length > 0
+        ? (context.task as any).longTermGoals.map((g: string) => `- ${g}`).join('\n')
         : '- None specified - this is a standalone task with no long-term strategic goals');
 
     // 2. Estimated effort - time and complexity guidance
     this.variableProcessors.set('task.estimatedEffort', (context) => {
-      if (!context.task.estimatedEffort) {
+      if (!(context.task as any).estimatedEffort) {
         return '**Time Estimate:** Not estimated\n**Complexity:** Unknown\n**Confidence:** N/A\n\n**Note:** No time estimate provided. Use your best judgment for scope.';
       }
 
-      const { hours, complexity, confidence } = context.task.estimatedEffort;
+      const { hours, complexity, confidence } = (context.task as any).estimatedEffort;
       const scopeAlert = Math.ceil(hours * 1.5);
 
       return `**Time Estimate:** ${hours} hours
@@ -993,28 +1006,28 @@ Use your specialized knowledge to ensure this implementation follows best practi
     });
 
     // 3. Success metrics - measurable outcomes
-    this.variableProcessors.set('task.successMetrics', (context) =>
-      context.task.successMetrics && context.task.successMetrics.length > 0
-        ? context.task.successMetrics.map((m: string) => `- [ ] ${m}`).join('\n')
+    this.variableProcessors.set('task.success_metrics', (context) =>
+      context.task.success_metrics && context.task.success_metrics.length > 0
+        ? context.task.success_metrics.map((m: string) => `- [ ] ${m}`).join('\n')
         : '- [ ] All acceptance criteria met\n- [ ] All tests pass\n- [ ] Code review approved');
 
     // 4. Required skills - expertise validation
     this.variableProcessors.set('task.requiredSkills', (context) =>
-      context.task.requiredSkills && context.task.requiredSkills.length > 0
-        ? context.task.requiredSkills.map((s: string) => `- ${s}`).join('\n')
+      (context.task as any).requiredSkills && (context.task as any).requiredSkills.length > 0
+        ? (context.task as any).requiredSkills.map((s: string) => `- ${s}`).join('\n')
         : '- General development skills\n- Ability to read documentation\n- Problem-solving skills');
 
     // 5. Parent initiative - strategic alignment
     this.variableProcessors.set('task.parentInitiative', (context) =>
-      context.task.parentInitiative || 'No parent initiative specified - this is an independent task');
+      (context.task as any).parentInitiative || 'No parent initiative specified - this is an independent task');
 
     // 6. Related tasks - coordination context
     this.variableProcessors.set('task.relatedTasks', (context) => {
-      if (!context.task.relatedTasks || context.task.relatedTasks.length === 0) {
+      if (!(context.task as any).relatedTasks || (context.task as any).relatedTasks.length === 0) {
         return '- None - this task is independent and has no direct dependencies or dependents';
       }
 
-      return context.task.relatedTasks.map((t: string) => {
+      return (context.task as any).relatedTasks.map((t: string) => {
         // Add helpful markers if task describes relationship
         if (t.toLowerCase().includes('depend')) return `- 🔗 ${t}`;
         if (t.toLowerCase().includes('block')) return `- 🚫 ${t}`;
@@ -1025,17 +1038,17 @@ Use your specialized knowledge to ensure this implementation follows best practi
 
     // 7. Assumptions - verification checklist
     this.variableProcessors.set('task.assumptions', (context) =>
-      context.task.assumptions && context.task.assumptions.length > 0
-        ? context.task.assumptions.map((a: string) => `- [ ] ${a}`).join('\n')
+      (context.task as any).assumptions && (context.task as any).assumptions.length > 0
+        ? (context.task as any).assumptions.map((a: string) => `- [ ] ${a}`).join('\n')
         : '- [ ] No assumptions documented - proceed with standard approach');
 
     // 8. Alternatives - decision context
     this.variableProcessors.set('task.alternatives', (context) => {
-      if (!context.task.alternatives || context.task.alternatives.length === 0) {
+      if (!(context.task as any).alternatives || (context.task as any).alternatives.length === 0) {
         return '- No alternatives were formally considered\n- If you identify better approaches during implementation, document them for future reference';
       }
 
-      return context.task.alternatives.map((a: string) => `- ❌ ${a}`).join('\n');
+      return (context.task as any).alternatives.map((a: string) => `- ❌ ${a}`).join('\n');
     });
 
     // Task-type-specific guidelines

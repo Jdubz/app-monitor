@@ -39,15 +39,15 @@ export class SimpleFailureRecovery {
     const { task, failurePattern } = context;
 
     // CIRCULAR RECOVERY PREVENTION: Never attempt recovery on repair bots themselves
-    if (task.metadata?.isRepairBot) {
+    if ((task as any).metadata?.isRepairBot) {
       logger.warn({
         category: 'recovery',
         action: 'circular_recovery_prevented',
         message: `Preventing circular recovery: task ${task.id} is already a repair bot`,
         details: {
           taskId: task.id,
-          repairStage: task.metadata.repairStage,
-          originalTaskId: task.metadata.originalTaskId
+          repairStage: (task as any).metadata.repairStage,
+          originalTaskId: (task as any).metadata.originalTaskId
         }
       });
       return { recovered: false };
@@ -97,11 +97,12 @@ export class SimpleFailureRecovery {
    * Called by task completion handler when cleanup task finishes
    */
   async createFollowupTask(cleanupTask: DevBotsTask): Promise<{ task: DevBotsTask } | null> {
-    if (!cleanupTask.metadata?.isRepairBot || cleanupTask.metadata?.repairStage !== 'cleanup') {
+    const metadata = (cleanupTask as any).metadata;
+    if (!metadata?.isRepairBot || metadata?.repairStage !== 'cleanup') {
       return null;
     }
 
-    const originalTaskId = cleanupTask.metadata.originalTaskId as string;
+    const originalTaskId = metadata.originalTaskId as string;
     const originalTask = this.devBotsManager.getTaskQueue().getTask(originalTaskId);
 
     if (!originalTask) {
@@ -188,7 +189,7 @@ export class SimpleFailureRecovery {
       type: 'bugfix',
       title: `[CLEANUP] Fix ${failurePattern.name} for: ${task.title}`,
       description: this.buildCleanupPrompt(task, failurePattern, stderr, exitCode),
-      assignedAgent: task.assignedAgent,
+      assignedAgent: task.assigned_agent,
       priority: 100, // Jump to front of queue
       metadata: {
         isRepairBot: true,

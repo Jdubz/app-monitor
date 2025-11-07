@@ -714,6 +714,59 @@ export class TaskQueueService {
   }
 
   /**
+   * Update task fields (for retry and other operations)
+   */
+  updateTask(taskId: string, updates: Partial<Task>): Task | undefined {
+    return this.transaction(() => {
+      const task = this.getTask(taskId);
+      if (!task) {
+        throw new Error(`Task ${taskId} not found`);
+      }
+
+      // Build UPDATE statement dynamically based on provided fields
+      const fields: string[] = [];
+      const values: any[] = [];
+
+      if (updates.status !== undefined) {
+        fields.push('status = ?');
+        values.push(updates.status);
+      }
+      if (updates.error !== undefined) {
+        fields.push('error = ?');
+        values.push(updates.error);
+      }
+      if (updates.assigned_worker !== undefined) {
+        fields.push('assigned_worker = ?');
+        values.push(updates.assigned_worker);
+      }
+      if (updates.assigned_at !== undefined) {
+        fields.push('assigned_at = ?');
+        values.push(updates.assigned_at);
+      }
+      if (updates.retry_count !== undefined) {
+        fields.push('retry_count = ?');
+        values.push(updates.retry_count);
+      }
+
+      if (fields.length === 0) {
+        return task; // No updates needed
+      }
+
+      values.push(taskId); // Add taskId for WHERE clause
+
+      const stmt = this.db.prepare(`
+        UPDATE tasks
+        SET ${fields.join(', ')}
+        WHERE id = ?
+      `);
+
+      stmt.run(...values);
+
+      return this.getTask(taskId);
+    });
+  }
+
+  /**
    * Update worker heartbeat
    */
   updateWorkerHeartbeat(workerId: string): void {

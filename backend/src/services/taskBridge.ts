@@ -97,10 +97,9 @@ export class TaskBridge extends EventEmitter {
         description: task.description || '',
         files: task.files,
         dependencies: task.dependencies,
-        project: task.project,
-        assignedAgent: task.assignedAgent,
+        assignedAgent: task.assigned_agent,
         notes: task.notes,
-        acceptanceCriteria: task.acceptanceCriteria
+        acceptanceCriteria: task.acceptance_criteria
       });
 
       // Store mapping
@@ -171,16 +170,16 @@ export class TaskBridge extends EventEmitter {
 
     // Update queue task
     this.taskQueueManager.updateTask(queueTaskId, {
-      status: 'assigned',
-      assignedWorker: task.assignedWorker,
-      assignedAgent: task.assignedAgent,
-      assignedAt: task.assignedAt,
+      status: 'running',
+      assigned_worker: task.assigned_worker,
+      assigned_agent: task.assigned_agent,
+      assigned_at: task.assigned_at,
     });
 
     logger.info({
       category: 'process',
       action: 'task_assigned',
-      message: `Task ${task.id} assigned to ${task.assignedWorker}`,
+      message: `Task ${task.id} assigned to ${task.assigned_worker}`,
       details: { queueTaskId, claudeTaskId: task.id }
     });
   }
@@ -198,9 +197,9 @@ export class TaskBridge extends EventEmitter {
     // Update queue task
     this.taskQueueManager.updateTask(queueTaskId, {
       status: 'completed',
-      completedAt: task.completedAt,
-      output: task.output,
-      exitCode: task.exitCode,
+      completed_at: task.completed_at,
+      output: task.output
+      // exitCode removed from interface
     });
 
     logger.info({
@@ -224,9 +223,9 @@ export class TaskBridge extends EventEmitter {
     // Update queue task
     this.taskQueueManager.updateTask(queueTaskId, {
       status: 'failed',
-      completedAt: task.completedAt,
-      error: task.error,
-      exitCode: task.exitCode,
+      completed_at: task.completed_at,
+      error: task.error
+      // exitCode removed from interface
     });
 
     logger.info({
@@ -308,11 +307,11 @@ export class TaskBridge extends EventEmitter {
         if (this.shouldSyncStatus(queueTask, claudeTask)) {
           this.taskQueueManager.updateTask(queueTaskId, {
             status: this.mapClaudeStatus(claudeTask.status),
-            assignedWorker: claudeTask.assignedWorker,
-            completedAt: claudeTask.completedAt,
+            assigned_worker: claudeTask.assigned_worker,
+            completed_at: claudeTask.completed_at,
             output: claudeTask.output,
-            error: claudeTask.error,
-            exitCode: claudeTask.exitCode,
+            error: claudeTask.error
+            // exitCode removed from Task interface
           });
 
           logger.debug({
@@ -348,12 +347,12 @@ export class TaskBridge extends EventEmitter {
   ): QueueTask['status'] {
     const mapping: Record<ClaudeTask['status'], QueueTask['status']> = {
       'pending': 'pending',
-      'assigned': 'assigned',
-      'active': 'active',
+      'assigned': 'running',
+      'active': 'running',
       'completed': 'completed',
       'failed': 'failed',
-      'retrying': 'retrying',
-    };
+      'retrying': 'pending',
+    } as any;
     return mapping[claudeStatus] || 'pending';
   }
 

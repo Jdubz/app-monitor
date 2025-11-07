@@ -54,7 +54,7 @@ export class TaskQueueMigration {
           result.tasksImported++;
 
           // Create execution history if task was started
-          if (legacyTask.assignedAt) {
+          if (legacyTask.assigned_at) {
             this.createExecutionHistory(legacyTask);
             result.executionsCreated++;
           }
@@ -86,7 +86,7 @@ export class TaskQueueMigration {
             this.importTask(completedTask);
             result.tasksImported++;
 
-            if (completedTask.assignedAt) {
+            if (completedTask.assigned_at) {
               this.createExecutionHistory(completedTask);
               result.executionsCreated++;
             }
@@ -186,15 +186,16 @@ export class TaskQueueMigration {
     // Map legacy status to new status
     let status: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timeout' = 'pending';
 
-    if (legacyTask.status === 'pending') {
+    const legacyStatus = legacyTask.status as string;
+    if (legacyStatus === 'pending') {
       status = 'pending';
-    } else if (legacyTask.status === 'assigned' || legacyTask.status === 'active') {
+    } else if (legacyStatus === 'assigned' || legacyStatus === 'active') {
       status = 'running';
-    } else if (legacyTask.status === 'completed') {
+    } else if (legacyStatus === 'completed') {
       status = 'completed';
-    } else if (legacyTask.status === 'failed') {
+    } else if (legacyStatus === 'failed') {
       status = 'failed';
-    } else if (legacyTask.status === 'retrying') {
+    } else if (legacyStatus === 'retrying') {
       status = 'pending'; // Retrying tasks become pending
     }
 
@@ -215,35 +216,35 @@ export class TaskQueueMigration {
       description: legacyTask.description,
       documentation: legacyTask.documentation,
       notes: legacyTask.notes,
-      assigned_agent: legacyTask.assignedAgent,
+      assigned_agent: legacyTask.assigned_agent,
       prompt: legacyTask.prompt,
       priority: (legacyTask as any).priority || 5,
       can_retry: (legacyTask as any).canRetry !== undefined ? (legacyTask as any).canRetry : true,
-      retry_count: legacyTask.retryCount || 0,
-      max_retries: (legacyTask as any).maxRetries || 3,
+      retry_count: legacyTask.retry_count || 0,
+      max_retries: (legacyTask as any).max_retries || 3,
       timeout_ms: (legacyTask as any).timeout_ms || null, // Conservative: no automatic timeout
       fingerprint,
-      estimated_hours: legacyTask.estimatedEffort?.hours,
-      complexity: legacyTask.estimatedEffort?.complexity,
+      estimated_hours: (legacyTask as any).estimatedEffort?.hours,
+      complexity: (legacyTask as any).estimatedEffort?.complexity,
       files: legacyTask.files,
-      acceptance_criteria: legacyTask.acceptanceCriteria,
-      architecture_references: legacyTask.architectureReferences,
-      validation_steps: legacyTask.validationSteps,
-      success_metrics: legacyTask.successMetrics
+      acceptance_criteria: legacyTask.acceptance_criteria,
+      architecture_references: legacyTask.architecture_references,
+      validation_steps: legacyTask.validation_steps,
+      success_metrics: legacyTask.success_metrics
     };
 
     // Parse timestamps
-    if (legacyTask.createdAt) {
-      sqliteTask.created_at = new Date(legacyTask.createdAt).getTime();
+    if (legacyTask.created_at) {
+      sqliteTask.created_at = new Date(legacyTask.created_at).getTime();
     }
-    if (legacyTask.assignedAt) {
-      sqliteTask.assigned_at = new Date(legacyTask.assignedAt).getTime();
+    if (legacyTask.assigned_at) {
+      sqliteTask.assigned_at = new Date(legacyTask.assigned_at).getTime();
     }
     if ((legacyTask as any).startedAt) {
       sqliteTask.started_at = new Date((legacyTask as any).startedAt).getTime();
     }
-    if (legacyTask.completedAt) {
-      sqliteTask.completed_at = new Date(legacyTask.completedAt).getTime();
+    if (legacyTask.completed_at) {
+      sqliteTask.completed_at = new Date(legacyTask.completed_at).getTime();
     }
 
     // Set output/error based on status
@@ -255,8 +256,8 @@ export class TaskQueueMigration {
     }
 
     // Set assigned worker if task is running
-    if (status === 'running' && legacyTask.assignedWorker) {
-      sqliteTask.assigned_worker = legacyTask.assignedWorker;
+    if (status === 'running' && legacyTask.assigned_worker) {
+      sqliteTask.assigned_worker = legacyTask.assigned_worker;
     }
 
     this.queueService.createTask(sqliteTask);
@@ -270,14 +271,14 @@ export class TaskQueueMigration {
     // This will be handled when tasks are first processed by the new system
     // For now, we just log that execution history exists for this task
 
-    if (!legacyTask.assignedWorker || !legacyTask.assignedAt) {
+    if (!legacyTask.assigned_worker || !legacyTask.assigned_at) {
       return;
     }
 
     logger.debug({
       category: 'process',
       action: 'execution_history_noted',
-      message: `Task ${legacyTask.id} has execution history (worker: ${legacyTask.assignedWorker})`
+      message: `Task ${legacyTask.id} has execution history (worker: ${legacyTask.assigned_worker})`
     });
   }
 
