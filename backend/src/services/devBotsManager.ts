@@ -6,7 +6,7 @@ import os from 'os';
 import { logger } from '../utils/logger.js';
 import { ProcessManager, ProcessInfo } from './processManager.js';
 import Docker from 'dockerode';
-import { TaskPersistence, TaskStorageConfig } from './taskPersistence.js';
+import { TaskPersistence } from './taskPersistence.js';
 import { TaskQueueService, Task, TaskStatus as SQLiteTaskStatus } from './taskQueue.sqlite.js';
 import { TaskQueueMigration } from './taskQueue.migration.js';
 import { AgentPersonalityManager, AgentPersonality } from './agentPersonalities.js';
@@ -27,6 +27,7 @@ import {
 } from './taskFailureGuards.js';
 import { SimpleFailureRecovery } from './failureRecovery.js';
 import { config } from '../config.js';
+import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
 
 export interface RetryAttempt {
   attemptNumber: number;
@@ -346,29 +347,39 @@ export class DevBotsManager extends EventEmitter {
   // System state
   private startTime = Date.now();
 
-  constructor(processManager: ProcessManager) {
+  constructor(dependencies: DevBotsManagerDependencies) {
     super();
-    this.processManager = processManager;
 
-    // Initialize Docker Manager with validation
-    this.dockerManager = new DockerManager('/var/run/docker.sock');
-    this.docker = this.dockerManager.getDocker();
+    // Inject all dependencies
+    this.processManager = dependencies.processManager;
+    this.dockerManager = dependencies.dockerManager;
+    this.docker = dependencies.docker;
+    this.taskQueue = dependencies.taskQueue;
+    this.agentManager = dependencies.agentManager;
+    this.templateManager = dependencies.templateManager;
+    this.guidelinesManager = dependencies.guidelinesManager;
+    this.workspaceSyncManager = dependencies.workspaceSyncManager;
+    this.retryManager = dependencies.retryManager;
+    this.workspaceOrchestrator = dependencies.workspaceOrchestrator;
+    this.taskPersistence = dependencies.taskPersistence;
+
+    // Initialize SimpleFailureRecovery with this instance
+    this.recovery = new SimpleFailureRecovery(this);
 
     // Validate Docker environment and initialize
     this.initializeDockerEnvironment();
 
-    // Initialize enhanced services (async, runs in background)
-    void this.initializeEnhancedServices();
+    // Run async initialization (SQLite migration)
+    void this.initializeAsync();
 
-    // Ephemeral workers are created on-demand, no initialization needed
+    // Listen for retry events
+    this.retryManager.on('taskReadyForRetry', (task: Task) => {
+      this.handleTaskRetry(task);
+    });
 
-    // Load persisted tasks - DEPRECATED (now using SQLite migration)
-    // this.loadPersistedTasks();
-
-    // NOTE: Cleanup tasks should be created manually via the task API
-    // Linting, testing, documentation are part of the development process
-    // via git hooks, CI/CD, and manual code review
-    // this.startCleanupScheduler(); // REMOVED - cleanup is not automatic
+    // Start monitoring loops
+    this.startHeartbeatMonitor();
+    this.startLongRunningTaskMonitor();
 
     // Listen for process status changes
     this.processManager.on('statusChange', (serviceName: string, status: ProcessInfo) => {
@@ -517,72 +528,18 @@ export class DevBotsManager extends EventEmitter {
     }
   }
 
-  private async initializeEnhancedServices(): Promise<void> {
-    // Initialize SQLite task queue
-    const dbPath = './data/tasks/queue.db';
-    this.taskQueue = new TaskQueueService(dbPath);
-
-    // Run recovery system migration
-    await this.taskQueue.runRecoveryMigration();
-
-    // Initialize legacy task persistence (for migration only)
-    const storageConfig: TaskStorageConfig = {
-      storagePath: './data/tasks',
-      backupPath: './data/backups',
-      maxBackups: 10,
-      autoSave: true,
-      saveInterval: 30000 // 30 seconds
-    };
-    this.taskPersistence = new TaskPersistence(storageConfig);
-
+  /**
+   * Initialize async components (SQLite migration)
+   * Dependencies are now injected, so this only runs migrations
+   */
+  private async initializeAsync(): Promise<void> {
     // Run migration from JSON to SQLite
     this.migrateToSQLite();
 
-    // Initialize agent personality manager
-    this.agentManager = new AgentPersonalityManager();
-
-    // Initialize template manager
-    this.templateManager = new TaskPromptTemplateManager();
-
-    // Initialize guidelines manager
-    this.guidelinesManager = new TaskCreationGuidelinesManager();
-
-    // Initialize workspace orchestrator for dynamic workspaces
-    this.workspaceOrchestrator = new WorkspaceOrchestrator();
-    if (typeof this.workspaceOrchestrator.initialize === 'function') {
-      this.workspaceOrchestrator.initialize();
-    }
-
-    // Initialize workspace sync manager
-    this.workspaceSyncManager = new WorkspaceSyncManager({
-      baseDir: path.resolve(path.join(process.cwd(), '../../')),
-      repositories: ['job-finder-BE', 'job-finder-FE', 'job-finder-shared-types', 'job-finder-worker'],
-      workers: [],
-      conflictStrategy: 'auto-merge'
-    });
-
-    // Initialize retry manager
-    const retryConfig: Partial<RetryConfig> = {
-      max_retries: 3
-    };
-
-    // Initialize simple failure recovery
-    this.recovery = new SimpleFailureRecovery(this);
-    this.retryManager = new RetryManager(retryConfig);
-
-    // Listen for retry events
-    this.retryManager.on('taskReadyForRetry', (task: Task) => {
-      this.handleTaskRetry(task);
-    });
-
-    // Start monitoring loops
-    this.startHeartbeatMonitor();
-    this.startLongRunningTaskMonitor();
-
     logger.info({
       category: 'process',
-      action: 'enhanced_services_initialized',
-      message: 'Enhanced services initialized: task persistence, agent personalities, prompt templates, creation guidelines, workspace sync, retry management, and monitoring loops'
+      action: 'async_initialization_complete',
+      message: 'Async initialization complete: SQLite migration finished'
     });
   }
 

@@ -7,6 +7,7 @@ import { createApiRouter } from './routes/index.js';
 import { ProcessManager } from './services/processManager.js';
 import { CloudLogging } from './services/cloudLogging.js';
 import { DevBotsManager } from './services/devBotsManager.js';
+import { createDevBotsManagerDependencies } from './services/devBotsManager.factory.js';
 import { LogStreamer } from './services/logStreamer.js';
 import { LogRotation } from './services/logRotation.js';
 import { ConnectionManager } from './services/connectionManager.js';
@@ -35,7 +36,10 @@ export async function createApp() {
   // Initialize core services
   processManager = new ProcessManager();
   cloudLogging = new CloudLogging();
-  devBotsManager = new DevBotsManager(processManager);
+
+  // Create DevBotsManager with dependency injection
+  const devBotsDeps = await createDevBotsManagerDependencies(processManager);
+  devBotsManager = new DevBotsManager(devBotsDeps);
 
   // Initialize LogSourceManager and load configuration
   logSourceManager = new LogSourceManager();
