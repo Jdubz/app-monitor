@@ -5,6 +5,8 @@
  * Task-type-specific guidelines are loaded from taskTypeGuidelines.ts
  */
 
+/* eslint-disable no-useless-escape */
+
 import { logger } from '../utils/logger.js';
 import { Task } from './devBotsManager.js';
 import { AgentPersonality } from './agentPersonalities.js';
@@ -155,7 +157,8 @@ export class TaskPromptTemplateManager {
   }
 
   private getUniversalTemplateString(): string {
-    return `# 🎯 Task Assignment
+    // Using String.raw to handle bash script syntax (## parameter expansion)
+    return String.raw`# 🎯 Task Assignment
 
 ## ⚠️ CRITICAL: Read This Entire Prompt BEFORE Starting
 **DO NOT start coding until you have read and understood ALL sections of this prompt.**
@@ -630,26 +633,26 @@ echo "Syncing with latest main to avoid duplicate work..."
 git fetch origin main
 
 # Check how far behind main we are
-BEHIND_COUNT=$(git rev-list --count HEAD..origin/main 2>/dev/null || echo "0")
+BEHIND_COUNT=$$(git rev-list --count HEAD..origin/main 2>/dev/null || echo "0")
 
-if [ "$BEHIND_COUNT" -gt 0 ]; then
-  echo "⚠️  WARNING: main is $BEHIND_COUNT commits ahead since you started"
+if [ "$$BEHIND_COUNT" -gt 0 ]; then
+  echo "⚠️  WARNING: main is $$BEHIND_COUNT commits ahead since you started"
   echo "This means other PRs may have been merged while you were working"
 
   # Check for potential duplicate work
-  CHANGED_FILES=$(git diff --name-only HEAD)
+  CHANGED_FILES=$$(git diff --name-only HEAD)
   DUPLICATE_WORK_DETECTED=false
 
-  for file in $CHANGED_FILES; do
-    if git diff HEAD..origin/main --quiet -- "$file" 2>/dev/null; then
+  for file in $$CHANGED_FILES; do
+    if git diff HEAD..origin/main --quiet -- "$$file" 2>/dev/null; then
       :  # File not modified in main, OK
     else
-      echo "⚠️  File $file was also modified in main - potential duplicate work"
+      echo "⚠️  File $$file was also modified in main - potential duplicate work"
       DUPLICATE_WORK_DETECTED=true
     fi
   done
 
-  if [ "$DUPLICATE_WORK_DETECTED" = "true" ]; then
+  if [ "$$DUPLICATE_WORK_DETECTED" = "true" ]; then
     echo ""
     echo "⚠️  DUPLICATE WORK WARNING"
     echo "Some files you modified were also changed in main."
@@ -677,11 +680,11 @@ fi
 # Step 4.1: Create Feature Branch
 # Extract short UUID from task ID (last 8 chars of UUID)
 TASK_ID="{{task.id}}"
-SHORT_ID="${TASK_ID##*-}"  # Gets last segment after final dash
-BRANCH_NAME="task-{{task.type}}-${SHORT_ID}"
+SHORT_ID="${'$'}{TASK_ID${'##'}*-}"  # Gets last segment after final dash
+BRANCH_NAME="task-{{task.type}}-$${SHORT_ID}"
 
-echo "Creating feature branch: $BRANCH_NAME"
-git checkout -b "$BRANCH_NAME"
+echo "Creating feature branch: $$BRANCH_NAME"
+git checkout -b "$$BRANCH_NAME"
 
 # Step 4.2: Stage and Commit Changes
 git add .
@@ -705,7 +708,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 "
 
 # Step 4.3: Push Feature Branch
-git push -u origin "$BRANCH_NAME"
+git push -u origin "$$BRANCH_NAME"
 
 # Verify push succeeded
 git log --oneline -1
@@ -715,8 +718,8 @@ git status
 
 # Build PR description with warnings if needed
 PR_WARNINGS=""
-if [ "$REBASE_FAILED" = "true" ]; then
-  PR_WARNINGS="${PR_WARNINGS}
+if [ "$$REBASE_FAILED" = "true" ]; then
+  PR_WARNINGS="$${PR_WARNINGS}
 
 ⚠️ **REBASE CONFLICT DETECTED**
 - Branch could not be rebased onto latest main
@@ -725,8 +728,8 @@ if [ "$REBASE_FAILED" = "true" ]; then
 "
 fi
 
-if [ "$DUPLICATE_WORK_DETECTED" = "true" ]; then
-  PR_WARNINGS="${PR_WARNINGS}
+if [ "$$DUPLICATE_WORK_DETECTED" = "true" ]; then
+  PR_WARNINGS="$${PR_WARNINGS}
 
 ⚠️ **DUPLICATE WORK WARNING**
 - Some files were modified both in this branch AND in main since work started
@@ -737,16 +740,16 @@ fi
 
 gh pr create \\
   --base main \\
-  --head "$BRANCH_NAME" \\
+  --head "$$BRANCH_NAME" \\
   --title "{{task.type}}: {{task.title}}" \\
-  --body "$(cat <<EOF
+  --body "$$(cat <<EOF
 ## 🎯 Task Overview
 **Task ID:** {{task.id}}
 **Type:** {{task.type}}
 
 ## 📋 Description
 {{task.description}}
-${PR_WARNINGS}
+$${PR_WARNINGS}
 
 ## ✅ Acceptance Criteria
 The following requirements must be satisfied for this PR to be approved:
