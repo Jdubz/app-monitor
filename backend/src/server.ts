@@ -10,8 +10,6 @@ import { DevBotsManager } from './services/devBotsManager.js';
 import { LogStreamer } from './services/logStreamer.js';
 import { LogRotation } from './services/logRotation.js';
 import { ConnectionManager } from './services/connectionManager.js';
-import { TaskQueueManager } from './services/taskQueueManager.js';
-import { TaskBridge } from './services/taskBridge.js';
 import { LogSourceManager } from './services/logSourceManager.js';
 import { logger } from './utils/logger.js';
 import type {
@@ -28,8 +26,6 @@ export let devBotsManager: DevBotsManager;
 export let logRotation: LogRotation;
 export let logStreamer: LogStreamer;
 export let connectionManager: ConnectionManager;
-export let taskQueueManager: TaskQueueManager;
-export let taskBridge: TaskBridge;
 export let logSourceManager: LogSourceManager;
 
 export async function createApp() {
@@ -76,46 +72,6 @@ export async function createApp() {
 
   // Initialize ConnectionManager
   connectionManager = new ConnectionManager();
-
-  // Initialize TaskQueueManager
-  taskQueueManager = new TaskQueueManager({
-    maxConcurrent: 3,
-    max_retries: 3,
-    retryDelay: 5000,
-    taskTimeout: 300000,
-  });
-
-  // Setup task queue event handlers
-  taskQueueManager.on('taskCreated', (task) => {
-    io.emit('task:created', task);
-  });
-
-  taskQueueManager.on('taskUpdated', (task) => {
-    io.emit('task:updated', task);
-  });
-
-  taskQueueManager.on('taskDeleted', (taskId) => {
-    io.emit('task:deleted', { taskId });
-  });
-
-  // Initialize TaskBridge to sync TaskQueueManager with DevBotsManager
-  taskBridge = new TaskBridge(taskQueueManager, devBotsManager, {
-    autoSync: true,
-    syncInterval: 5000,
-  });
-
-  // Setup task bridge event handlers
-  taskBridge.on('taskSynced', ({ queueTask, claudeTask }) => {
-    logger.info({
-      category: 'process',
-      action: 'task_synced',
-      message: 'Queue task synced with Claude task',
-      details: {
-        queueTaskId: queueTask.id,
-        claudeTaskId: claudeTask.id,
-      },
-    });
-  });
 
   // Initialize and start log rotation
   logRotation = new LogRotation();
@@ -274,8 +230,6 @@ export async function createApp() {
     cloudLogging,
     devBotsManager,
     connectionManager,
-    taskQueueManager,
-    taskBridge,
     logRotation,
     logStreamer,
     services,

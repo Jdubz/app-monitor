@@ -13,15 +13,13 @@ import { ProcessManager } from '../services/processManager.js';
 import { CloudLogging } from '../services/cloudLogging.js';
 import { DevBotsManager } from '../services/devBotsManager.js';
 import type { ConnectionManager } from '../services/connectionManager.js';
-import type { TaskQueueManager } from '../services/taskQueueManager.js';
-import type { TaskBridge } from '../services/taskBridge.js';
 import type { LogRotation } from '../services/logRotation.js';
 import type { LogStreamer } from '../services/logStreamer.js';
 import type { ServiceConfig } from '../config.js';
 import type { HealthCheckResponse } from '@app-monitor/api-contracts';
 
 import { createServicesRouter } from './services.routes.js';
-import { createSocketRoutes, createTaskRoutes } from './socket-task.routes.js';
+import { createSocketRoutes } from './socket-task.routes.js';
 import { createDockerRouter } from './docker.routes.js';
 import { createClaudeWorkersRouter } from './dev-bots.routes.js';
 import { createLogsRoutes } from './logs.routes.js';
@@ -45,8 +43,6 @@ export function createApiRouter(deps: {
   cloudLogging: CloudLogging;
   devBotsManager?: DevBotsManager;
   connectionManager?: ConnectionManager;
-  taskQueueManager?: TaskQueueManager;
-  taskBridge?: TaskBridge;
   logRotation?: LogRotation;
   logStreamer?: LogStreamer;
   services?: Record<string, ServiceConfig>;
@@ -66,10 +62,6 @@ export function createApiRouter(deps: {
 
   if (deps.connectionManager) {
     router.use('/socket', createSocketRoutes(deps.connectionManager));
-  }
-
-  if (deps.taskQueueManager) {
-    router.use('/tasks', createTaskRoutes(deps.taskQueueManager));
   }
 
   router.use('/docker', createDockerRouter());
