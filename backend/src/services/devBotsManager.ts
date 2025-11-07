@@ -1190,18 +1190,18 @@ export class DevBotsManager extends EventEmitter {
     }
 
     // Get agent personality
-    const requestedAgent = this.agentManager.getPersonality(nextTask.assignedAgent);
+    const requestedAgent = this.agentManager.getPersonality(nextTask.assigned_agent);
     if (!requestedAgent) {
       logger.error({
         category: 'process',
         action: 'agent_not_found',
-        message: `No agent found for ${nextTask.assignedAgent}`
+        message: `No agent found for ${nextTask.assigned_agent}`
       });
 
       // Fail task in SQLite
       this.taskQueue.failTask(
         nextTask.id,
-        `Agent not found: ${nextTask.assignedAgent}. Please check agent name is correct.`
+        `Agent not found: ${nextTask.assigned_agent}. Please check agent name is correct.`
       );
 
       // Try next task
@@ -1476,7 +1476,7 @@ export class DevBotsManager extends EventEmitter {
     });
 
     // Track task start time for stuck detection
-    const taskStartTime = new Date(task.assignedAt || task.createdAt);
+    const taskStartTime = new Date(task.assigned_at || task.created_at);
     const STUCK_CHECK_INTERVAL = 60000; // Check every 60 seconds
     const ABSOLUTE_MAX_DURATION = 60 * 60 * 1000; // 60 minutes
 
@@ -1535,7 +1535,7 @@ export class DevBotsManager extends EventEmitter {
     }
 
     // Calculate task execution metrics
-    const executionDuration = Date.now() - Date.parse(task.assignedAt || task.createdAt);
+    const executionDuration = Date.now() - (task.assigned_at || task.created_at);
     const metrics = this.getQueueMetrics();
     const activeWorkerCount = Array.from(this.ephemeralWorkers.values()).filter(
       w => w.status !== 'destroyed'
@@ -1601,10 +1601,10 @@ export class DevBotsManager extends EventEmitter {
         // Update local task object for event emission
         task.status = 'completed';
         task.output = JSON.stringify(claudeOutput);
-        task.completedAt = new Date().toISOString();
+        task.completed_at = Date.now();
 
         // Check if this was a cleanup task - if so, create followup task
-        if (task.metadata?.isRepairBot && task.metadata?.repairStage === 'cleanup') {
+        if (task.is_repair_bot && task.repair_stage === 'cleanup') {
           await this.recovery.createFollowupTask(task);
         }
 
@@ -1628,7 +1628,7 @@ export class DevBotsManager extends EventEmitter {
         // Update local task object for event emission
         task.status = 'failed';
         task.error = `Failed to parse Claude output: ${parseError instanceof Error ? parseError.message : String(parseError)}`;
-        task.completedAt = new Date().toISOString();
+        task.completed_at = Date.now();
 
         this.emit('taskFailed', task);
       }
@@ -1817,13 +1817,14 @@ export class DevBotsManager extends EventEmitter {
             }
           });
 
-          // Update task metadata with warning
-          task.metadata = {
-            ...task.metadata,
-            uncommittedChangesWarning: true,
-            patchFile,
-            statusFile
-          };
+          // TODO: Store uncommitted changes warning (SQLite Task doesn't have metadata field)
+          // For now, log the warning - can be added to Task.error or separate tracking table if needed
+          logger.warn({
+            category: 'process',
+            action: 'uncommitted_changes_detected',
+            message: 'Task completed with uncommitted changes',
+            details: { taskId: task.id, patchFile, statusFile }
+          });
         } else {
           logger.info({
             category: 'process',
@@ -1854,12 +1855,12 @@ export class DevBotsManager extends EventEmitter {
    */
   private async verifyBotCommitted(task: Task, repoRoot: string): Promise<boolean> {
     try {
-      // Get commits since task started (using task startedAt timestamp)
-      if (!task.startedAt) {
+      // Get commits since task started (using task started_at timestamp)
+      if (!task.started_at) {
         return false;
       }
 
-      const taskStartDate = new Date(task.startedAt);
+      const taskStartDate = new Date(task.started_at);
       const gitLogSince = taskStartDate.toISOString();
 
       // Check for commits made after task started
@@ -2325,10 +2326,8 @@ export class DevBotsManager extends EventEmitter {
       command.push('--files', task.files.join(','));
     }
 
-    // Add project context
-    if (task.project) {
-      command.push('--context', `project:${task.project}`);
-    }
+    // TODO: Add project context (removed - not in SQLite Task interface)
+    // Could be added back if needed by extending Task interface
 
     const fullCommand = command.join(' ');
     logger.info({
@@ -2441,11 +2440,11 @@ export class DevBotsManager extends EventEmitter {
         const outputTokens = parseInt(outputMatch[1], 10);
 
         // Determine provider from task or default to 'claude'
-        const provider = task.assignedAgent?.includes('codex') ? 'codex' : 'claude';
+        const provider = task.assigned_agent?.includes('codex') ? 'codex' : 'claude';
 
         tokenTracking.recordUsage({
           provider,
-          model: task.assignedAgent || 'unknown',
+          model: task.assigned_agent || 'unknown',
           taskId: task.id,
           inputTokens,
           outputTokens
@@ -3061,7 +3060,7 @@ export class DevBotsManager extends EventEmitter {
                 ephemeralWorker.status === 'running' ? 'busy' :
                 ephemeralWorker.status === 'completing' ? 'busy' : 'stopped',
         currentTask: ephemeralWorker.task.id,
-        lastSeen: new Date(ephemeralWorker.createdAt).getTime(),
+        lastSeen: ephemeralWorker.created_at,
         personality: ephemeralWorker.agent,
         onboardingComplete: true
       };
@@ -3305,7 +3304,7 @@ export class DevBotsManager extends EventEmitter {
       // Reset task status for retry
       task.status = 'pending';
       task.assignedWorker = undefined;
-      task.assignedAt = undefined;
+      task.assigned_at = undefined;
       task.error = undefined;
       task.exitCode = undefined;
       
