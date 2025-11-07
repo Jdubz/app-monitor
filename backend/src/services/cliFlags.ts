@@ -106,10 +106,12 @@ export interface CLIFlags {
  * 4. APPROVAL POLICY:
  *    - Claude: --allowedTools to control which tools require approval
  *    - Codex: --ask-for-approval <policy> (untrusted, on-failure, on-request, never)
+ *    - Codex exec: Does NOT support --ask-for-approval (use --dangerously-bypass-approvals-and-sandbox instead)
  *
  * 5. OUTPUT MODE:
  *    - Claude: --print (non-interactive)
  *    - Codex: Uses `codex exec` subcommand for non-interactive
+ *    - IMPORTANT: codex exec has different flag support than codex interactive mode!
  */
 
 /**
