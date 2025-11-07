@@ -1,6 +1,5 @@
 # Dependencies
 node_modules/
-package-lock.json
 
 # Build output
 dist/
@@ -11,8 +10,11 @@ build/
 backend/data/
 backend/logs/
 dev-bots/logs/
+dev-bots/mirror/
+dev-bots/artifacts/
 frontend/logs/
 logs/
+backend/dev-bots/
 
 # Database files
 *.db
@@ -38,6 +40,9 @@ Thumbs.db
 # Test coverage
 coverage/
 .nyc_output/
+
+# TypeScript build info
+*.tsbuildinfo
 
 # Temporary files
 *.tmp

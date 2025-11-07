@@ -2,6 +2,17 @@
 
 echo "🔍 Running app-monitor pre-push lint checks..."
 
+# Ensure legacy mirror directories are not present in the repo
+if [ -d "dev-bots/mirror" ]; then
+    echo "❌ Refusing to push with dev-bots/mirror present. Run 'rm -rf dev-bots/mirror' and retry."
+    exit 1
+fi
+
+if find . -path "*/dev-bots/mirror/*" -print -quit | grep -q .; then
+    echo "❌ Refusing to push: nested dev-bots/mirror paths detected."
+    exit 1
+fi
+
 # Run linting for backend and frontend workspaces
 npm run lint -w backend || {
     echo "❌ Backend linting failed! Please fix errors before pushing."

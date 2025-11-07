@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RetryManager } from './retryManager.js';
-import { Task } from './devBotsManager.js';
+import { Task } from './taskQueue.sqlite.js';
 
 // Mock the logger
 vi.mock('../utils/logger.js', () => ({
@@ -27,13 +27,14 @@ describe('RetryManager', () => {
       title: 'Test task',
       description: 'Test task',
       status: 'failed',
-      createdAt: new Date().toISOString(),
-      assignedAgent: 'test-agent',
+      created_at: Date.now(),
+      assigned_agent: 'test-agent',
       error: 'Test error',
-      exitCode: 1,
-      retryCount: 0,
-      maxRetries: 3,
-      canRetry: true
+      retry_count: 0,
+      max_retries: 3,
+      can_retry: true,
+      priority: 5,
+      timeout_ms: null
     };
   });
 
@@ -48,12 +49,12 @@ describe('RetryManager', () => {
     });
 
     it('should return false when max retries exceeded', () => {
-      mockTask.retryCount = 3;
+      mockTask.retry_count = 3;
       expect(retryManager.canRetryTask(mockTask)).toBe(false);
     });
 
     it('should return false when canRetry is false', () => {
-      mockTask.canRetry = false;
+      mockTask.can_retry = false;
       expect(retryManager.canRetryTask(mockTask)).toBe(false);
     });
   });
@@ -61,40 +62,39 @@ describe('RetryManager', () => {
   describe('retryTask', () => {
     it('should retry a task successfully', () => {
       const result = retryManager.retryTask(mockTask, 'Manual retry');
-      
+
       expect(result.success).toBe(true);
       expect(result.task.status).toBe('pending');
-      expect(result.task.retryCount).toBe(1);
+      expect(result.task.retry_count).toBe(1);
       expect(result.retryAttempt).toBeDefined();
       expect(result.retryAttempt?.attemptNumber).toBe(1);
       expect(result.retryAttempt?.reason).toBe('Manual retry');
     });
 
     it('should not retry a non-retryable task', () => {
-      mockTask.canRetry = false;
+      mockTask.can_retry = false;
       const result = retryManager.retryTask(mockTask, 'Manual retry');
-      
+
       expect(result.success).toBe(false);
       expect(result.reason).toBe('Task cannot be retried');
     });
 
     it('should not retry when max retries exceeded', () => {
-      mockTask.retryCount = 3;
+      mockTask.retry_count = 3;
       const result = retryManager.retryTask(mockTask, 'Manual retry');
-      
+
       expect(result.success).toBe(false);
       expect(result.reason).toBe('Task cannot be retried');
     });
 
     it('should reset task state for retry', () => {
       const result = retryManager.retryTask(mockTask, 'Manual retry');
-      
+
       expect(result.success).toBe(true);
       expect(result.task.status).toBe('pending');
-      expect(result.task.assignedWorker).toBeUndefined();
-      expect(result.task.assignedAt).toBeUndefined();
+      expect(result.task.assigned_worker).toBeUndefined();
+      expect(result.task.assigned_at).toBeUndefined();
       expect(result.task.error).toBeUndefined();
-      expect(result.task.exitCode).toBeUndefined();
     });
   });
 
@@ -133,11 +133,11 @@ describe('RetryManager', () => {
 
   describe('updateConfig', () => {
     it('should update retry configuration', () => {
-      const newConfig = { maxRetries: 5 };
+      const newConfig = { max_retries: 5 };
       retryManager.updateConfig(newConfig);
-      
+
       const config = retryManager.getConfig();
-      expect(config.maxRetries).toBe(5);
+      expect(config.max_retries).toBe(5);
     });
   });
 
@@ -164,8 +164,8 @@ describe('RetryManager', () => {
   describe('getConfig', () => {
     it('should return current configuration', () => {
       const config = retryManager.getConfig();
-      
-      expect(config.maxRetries).toBe(3);
+
+      expect(config.max_retries).toBe(3);
     });
   });
 });

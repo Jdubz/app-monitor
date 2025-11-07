@@ -1,5 +1,5 @@
 // Test fixtures for frontend tests
-import type { Service, PortStatus, Script, ScriptExecution, ScriptExecutionSummary, HealthCheckResponse } from '../types/shared.types';
+import type { Service, PortStatus, HealthCheckResponse } from '../types/shared.types';
 
 export const mockHealthCheckResponse: HealthCheckResponse = {
   status: 'healthy',
@@ -86,64 +86,6 @@ export const mockPortStatuses: PortStatus[] = [
     startTime: '2025-01-27T13:30:00.000Z'
   }
 ];
-
-export const mockScript: Script = {
-  id: 'script-1',
-  name: 'test-script',
-  description: 'A test script for demonstration',
-  command: 'echo "Hello World"',
-  workingDirectory: '/app',
-  environment: {
-    NODE_ENV: 'test',
-    DEBUG: 'true'
-  },
-  timeout: 30000,
-  retries: 3,
-  tags: ['test', 'demo'],
-  createdAt: '2025-01-27T14:00:00.000Z',
-  updatedAt: '2025-01-27T14:00:00.000Z',
-  createdBy: 'test-user',
-  isActive: true
-};
-
-export const mockScriptExecution: ScriptExecution = {
-  id: 'exec-1',
-  scriptId: 'script-1',
-  status: 'completed',
-  startTime: '2025-01-27T14:13:00.000Z',
-  endTime: '2025-01-27T14:13:05.000Z',
-  duration: 5000,
-  exitCode: 0,
-  output: 'Hello World\n',
-  error: null,
-  environment: {
-    NODE_ENV: 'test',
-    DEBUG: 'true'
-  },
-  workingDirectory: '/app',
-  command: 'echo "Hello World"',
-  pid: 12345,
-  retryCount: 0,
-  maxRetries: 3,
-  timeout: 30000,
-  tags: ['test', 'demo'],
-  createdAt: '2025-01-27T14:13:00.000Z',
-  updatedAt: '2025-01-27T14:13:05.000Z'
-};
-
-export const mockScriptExecutionSummary: ScriptExecutionSummary = {
-  id: 'exec-1',
-  scriptId: 'script-1',
-  scriptName: 'test-script',
-  status: 'completed',
-  startTime: '2025-01-27T14:13:00.000Z',
-  endTime: '2025-01-27T14:13:05.000Z',
-  duration: 5000,
-  exitCode: 0,
-  retryCount: 0,
-  tags: ['test', 'demo'],
-  createdAt: '2025-01-27T14:13:00.000Z'
-};
 
 // Mock data for component tests
 export const mockLogEntry = {

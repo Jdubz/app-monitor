@@ -9,7 +9,7 @@ import { logger } from '../utils/logger.js';
 import { Task, RetryAttempt } from './devBotsManager.js';
 
 export interface RetryConfig {
-  maxRetries: number;
+  max_retries: number;
 }
 
 export interface RetryResult {
@@ -26,7 +26,7 @@ export class RetryManager extends EventEmitter {
   constructor(config: Partial<RetryConfig> = {}) {
     super();
     this.config = {
-      maxRetries: 3,
+      max_retries: 3,
       ...config,
     };
     logger.info({
@@ -46,8 +46,8 @@ export class RetryManager extends EventEmitter {
     }
 
     // Check if max retries exceeded
-    const retryCount = task.retryCount || 0;
-    const maxRetries = task.maxRetries || this.config.maxRetries;
+    const retryCount = task.retry_count || 0;
+    const maxRetries = task.max_retries || this.config.max_retries;
     if (retryCount >= maxRetries) {
       logger.info({
       category: 'process',
@@ -58,7 +58,7 @@ export class RetryManager extends EventEmitter {
     }
 
     // Check if task explicitly cannot be retried
-    if (task.canRetry === false) {
+    if (task.can_retry === false) {
       logger.info({
       category: 'process',
       action: 'task_task_id_has_canretry_set_to_false',
@@ -83,37 +83,39 @@ export class RetryManager extends EventEmitter {
       };
     }
 
-    const retryCount = (task.retryCount || 0) + 1;
+    const retryCount = (task.retry_count || 0) + 1;
     
     const retryAttempt: RetryAttempt = {
       attemptNumber: retryCount,
       timestamp: new Date().toISOString(),
       reason,
       error: task.error,
-      exitCode: task.exitCode,
-      workerId: task.assignedWorker,
-      agentId: task.assignedAgent
+      exitCode: (task as any).exitCode,
+      workerId: task.assigned_worker,
+      agentId: task.assigned_agent
     };
 
     const retryTask: Task = {
       ...task,
       status: 'pending', // Reset to pending for retry
-      retryCount,
-      retryReason: reason,
-      retryHistory: [...(task.retryHistory || []), retryAttempt],
-      assignedWorker: undefined,
-      assignedAt: undefined,
-      error: undefined,
-      exitCode: undefined
+      retry_count: retryCount,
+      assigned_worker: undefined,
+      assigned_at: undefined,
+      error: undefined
     };
 
+    // Store extended retry info in any-cast
+    (retryTask as any).retryReason = reason;
+    (retryTask as any).retryHistory = [...((task as any).retryHistory || []), retryAttempt];
+    (retryTask as any).exitCode = undefined;
+
     // Store retry history
-    this.retryHistory.set(task.id, retryTask.retryHistory || []);
+    this.retryHistory.set(task.id, (retryTask as any).retryHistory || []);
 
     logger.info({
       category: 'process',
       action: 'task_task_id_manually_retried_attempt_retrycount_r',
-      message: `Task ${task.id} manually retried (attempt ${retryCount}/${retryTask.maxRetries || this.config.maxRetries})`
+      message: `Task ${task.id} manually retried (attempt ${retryCount}/${retryTask.max_retries || this.config.max_retries})`
     });
     
     return {

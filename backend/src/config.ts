@@ -1,6 +1,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import type { CloudService, EnvironmentDefinition } from '@app-monitor/api-contracts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -17,6 +18,22 @@ export const config = {
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5174',
   gcpKeyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS || path.join(ROOT_DIR, '.firebase/serviceAccountKey.json'),
   logSourcesConfig: path.join(__dirname, '../config/log-sources.json'),
+
+  // Automatic Failure Recovery Feature Flags
+  recovery: {
+    // Enable automatic recovery system (default: disabled for safety)
+    enabled: process.env.ENABLE_AUTO_RECOVERY === 'true',
+
+    // Dry run mode - logs recovery actions without executing repair bots (default: true for testing)
+    dryRun: process.env.RECOVERY_DRY_RUN !== 'false',  // Defaults to true unless explicitly disabled
+
+    // Maximum concurrent repair bots (cleanup + followup) to prevent resource exhaustion
+    maxConcurrentRepairBots: parseInt(process.env.MAX_CONCURRENT_REPAIR_BOTS || '1', 10),
+
+    // Timeout for cleanup and followup bots (in milliseconds)
+    cleanupTimeoutMs: parseInt(process.env.RECOVERY_CLEANUP_TIMEOUT_MS || '600000', 10),  // 10 minutes
+    followupTimeoutMs: parseInt(process.env.RECOVERY_FOLLOWUP_TIMEOUT_MS || '900000', 10), // 15 minutes
+  },
 };
 
 export interface ServiceConfig {
@@ -73,20 +90,11 @@ export const services: Record<string, ServiceConfig> = {
 };
 
 // Cloud environment configurations
-export interface EnvironmentConfig {
-  name: string;
-  displayName: string;
-  projectId: string;
-  services: CloudServiceConfig[];
+export interface EnvironmentConfig extends EnvironmentDefinition {
   readOnly: boolean;
 }
 
-export interface CloudServiceConfig {
-  name: string;
-  displayName: string;
-  description: string;
-  logFilter?: string; // Cloud Logging filter
-}
+export interface CloudServiceConfig extends CloudService {}
 
 export const environments: Record<string, EnvironmentConfig> = {
   local: {

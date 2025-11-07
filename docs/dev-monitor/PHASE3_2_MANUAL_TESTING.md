@@ -65,7 +65,7 @@ export const api = {
 - `routes/docker.routes.ts`
 - `routes/claude-workers.routes.ts`
 - `routes/script-history.routes.ts`
-- `routes/scripts.routes.ts`
+- ~~`routes/scripts.routes.ts`~~ (removed Nov 2025)
 
 **Fix:** Changed all from `import logger from` to `import { logger } from`  
 **Commit:** `a3d13a3`

@@ -27,7 +27,7 @@ Phase 3 focused on simplifying and modernizing the dev-monitor stack while maint
 | services.routes.ts | 150 | 6 | Service management |
 | socket-task.routes.ts | 447 | 15 | Socket task operations |
 | docker.routes.ts | 225 | 4 | Docker container mgmt |
-| scripts.routes.ts | 232 | 6 | Script execution |
+| ~~scripts.routes.ts~~ | 232 | 6 | _Removed Nov 2025 (script execution deprecated)_ |
 | script-history.routes.ts | 187 | 5 | Script history |
 | claude-workers.routes.ts | 756 | 30 | Claude Workers mgmt |
 | logs.routes.ts | 200 | 6 | Log management |

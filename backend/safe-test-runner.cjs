@@ -108,12 +108,23 @@ class SafeTestRunner {
     return new Promise((resolve) => {
       console.log('\n🧪 Running tests...')
       
-      const testProcess = spawn('npx', ['vitest', 'run', '--no-coverage', '--reporter=verbose'], {
+      const vitestArgs = [
+        'vitest',
+        'run',
+        '--no-coverage',
+        '--reporter=verbose'
+      ]
+
+      const testProcess = spawn('npx', vitestArgs, {
         stdio: 'inherit',
         shell: process.platform === 'win32',
-        env: { 
-          ...process.env, 
-          NODE_OPTIONS: '--max-old-space-size=2048' 
+        env: {
+          ...process.env,
+          NODE_OPTIONS: '--max-old-space-size=2048',
+          VITEST_POOL: 'threads',
+          VITEST_MAX_THREADS: '1',
+          VITEST_MIN_THREADS: '1',
+          SKIP_HEAVY_DEV_BOT_TESTS: process.env.SKIP_HEAVY_DEV_BOT_TESTS || '1'
         }
       })
 

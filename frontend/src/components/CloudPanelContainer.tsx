@@ -1,18 +1,29 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Socket } from 'socket.io-client';
-import { useCloudLogs } from '../hooks/useCloudLogs';
-import { useLogFilter } from '../hooks/useLogFilter';
+import {
+  Eye,
+  EyeOff,
+  Loader2,
+  RefreshCw,
+  Trash2,
+} from 'lucide-react';
+
+import { cn } from '@/lib/utils';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import type { LayoutType, LogSource, Panel, DevMonitorLogLevel } from '../types/panel.types';
+import type { CloudService, Environment, ParsedCloudLog } from '../types/log.types';
 import { getEnvironmentServices } from '../services/api';
-import { CloudService } from '../types/log.types';
-import { Panel, LayoutType, LogSource } from '../types/panel.types';
 import { PanelStorage } from '../services/panelStorage';
 import PanelToolbar from './panels/PanelToolbar';
 import CloudLogsViewer from './CloudLogsViewer';
-import '../styles/panel-layouts.css';
+import { useCloudLogs } from '../hooks/useCloudLogs';
+import { useLogFilter } from '../hooks/useLogFilter';
 
 interface CloudPanelContainerProps {
   socket: Socket | null;
-  environments: Record<string, import('../types/log.types').Environment>;
+  environments: Record<string, Environment>;
 }
 
 interface CloudPanel extends Panel {
@@ -21,100 +32,108 @@ interface CloudPanel extends Panel {
   severity?: string;
 }
 
-const CloudPanelContainer: React.FC<CloudPanelContainerProps> = ({
-  socket,
-  environments
-}) => {
-  // Filter out local environment - only show deployed environments
-  const deployedEnvironments = useMemo(() => {
-    return Object.keys(environments)
-      .filter(key => key !== 'local')
-      .reduce((acc, key) => {
-        acc[key] = environments[key];
-        return acc;
-      }, {} as Record<string, import('../types/log.types').Environment>);
-  }, [environments]);
+type CloudServiceWithEnvironment = CloudService & { environment: string };
 
-  // Default to staging or first available deployed environment
+const createId = () =>
+  typeof crypto !== 'undefined' && 'randomUUID' in crypto
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2, 12);
+
+const DEFAULT_LEVELS: DevMonitorLogLevel[] = ['INFO', 'WARN', 'ERROR', 'DEBUG'];
+
+const createBasePanelState = (): Omit<CloudPanel, 'id' | 'source' | 'environment' | 'service'> => ({
+  paused: false,
+  showMetadata: true,
+  searchText: '',
+  selectedServices: [],
+  selectedLevels: [...DEFAULT_LEVELS],
+});
+
+const getGridClasses = (layoutType: LayoutType): string => {
+  switch (layoutType) {
+    case 'horizontal':
+      return 'grid-cols-1 md:grid-cols-2';
+    case 'vertical':
+      return 'grid-cols-1 md:grid-cols-1 md:grid-rows-2';
+    case 'main-sidebar':
+      return 'grid-cols-1 md:[grid-template-columns:minmax(0,2fr)_minmax(0,1fr)] md:[grid-template-rows:repeat(2,minmax(0,1fr))]';
+    case 'quad':
+      return 'grid-cols-1 md:grid-cols-2 md:grid-rows-2';
+    case 'single':
+    default:
+      return 'grid-cols-1';
+  }
+};
+
+const getPanelItemClasses = (layoutType: LayoutType, index: number): string =>
+  layoutType === 'main-sidebar' && index === 0 ? 'md:[grid-row:span_2]' : '';
+
+const CloudPanelContainer: React.FC<CloudPanelContainerProps> = ({ socket, environments }) => {
+  const deployedEnvironments = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(environments).filter(([key]) => key !== 'local'),
+      ),
+    [environments],
+  );
+
   const defaultEnvironment = useMemo(() => {
-    return deployedEnvironments.staging ? 'staging' : Object.keys(deployedEnvironments)[0] || 'staging';
+    if (deployedEnvironments.staging) return 'staging';
+    const [firstEnv] = Object.keys(deployedEnvironments);
+    return firstEnv ?? 'staging';
   }, [deployedEnvironments]);
 
-  const [panels, setPanels] = useState<CloudPanel[]>([
+  const [panels, setPanels] = useState<CloudPanel[]>(() => [
     {
-      id: '1',
-      source: `${defaultEnvironment}-all` as LogSource,
+      id: createId(),
+      source: `${defaultEnvironment}-all`,
       environment: defaultEnvironment,
       service: 'all-functions',
-      paused: false,
-      showMetadata: true,
-      searchText: '',
-      selectedServices: [],
-      selectedLevels: ['INFO', 'WARN', 'ERROR', 'DEBUG'],
+      ...createBasePanelState(),
     },
   ]);
-
   const [layoutType, setLayoutType] = useState<LayoutType>('single');
-  const [services, setServices] = useState<CloudService[]>([]);
+  const [services, setServices] = useState<CloudServiceWithEnvironment[]>([]);
   const [isLoadingServices, setIsLoadingServices] = useState(true);
+
   const maxPanels = 4;
 
-  // Load saved layout on mount
   useEffect(() => {
     const savedLayout = PanelStorage.loadCurrentLayout();
-    if (savedLayout && savedLayout.panels.length > 0) {
-      // Convert saved panels to cloud panels, preserving environment from source
-      const cloudPanels = savedLayout.panels.map(panel => {
-        // Extract environment from source (e.g., "staging-all" -> "staging")
-        const envFromSource = (panel.source as string).split('-')[0];
-        return {
-          ...panel,
-          environment: envFromSource,
-          service: 'all-functions',
-        };
-      });
-      setPanels(cloudPanels);
-      setLayoutType(savedLayout.layoutType);
-    }
-  }, []);
+    if (!savedLayout || savedLayout.panels.length === 0) return;
 
-  // Save layout whenever it changes
+    const restoredPanels = savedLayout.panels.map((panelConfig) => {
+      const persistedPanel = panelConfig as Partial<CloudPanel>;
+      const fallbackSource = persistedPanel.source ?? `${defaultEnvironment}-all`;
+      const fallbackEnvironment = fallbackSource.split('-')[0] || defaultEnvironment;
+
+      return {
+        ...createBasePanelState(),
+        ...persistedPanel,
+        id: persistedPanel.id ?? createId(),
+        source: fallbackSource,
+        environment: fallbackEnvironment,
+        service: persistedPanel.service ?? 'all-functions',
+        severity: persistedPanel.severity,
+        selectedLevels:
+          persistedPanel.selectedLevels && persistedPanel.selectedLevels.length > 0
+            ? persistedPanel.selectedLevels
+            : [...DEFAULT_LEVELS],
+      };
+    });
+
+    setPanels(restoredPanels);
+    setLayoutType(savedLayout.layoutType || 'single');
+  }, [defaultEnvironment]);
+
   useEffect(() => {
-    if (panels.length > 0) {
-      // Convert cloud panels back to regular panels for storage
-      const regularPanels = panels.map(({ environment: _environment, service: _service, ...panel }) => panel);
-      PanelStorage.saveCurrentLayout(regularPanels, layoutType);
-    }
+    if (panels.length === 0) return;
+    const persistedPanels = panels.map(({ environment: _env, service: _svc, ...panel }) => panel);
+    PanelStorage.saveCurrentLayout(persistedPanels, layoutType);
   }, [panels, layoutType]);
 
-  // Fetch services for all deployed environments
-  useEffect(() => {
-    const fetchAllServices = async () => {
-      try {
-        // Fetch services from all deployed environments (excluding local)
-        const allServicesPromises = Object.keys(deployedEnvironments).map(async (env) => {
-          const envServices = await getEnvironmentServices(env);
-          return envServices.map(svc => ({ ...svc, environment: env }));
-        });
-        const allServicesArrays = await Promise.all(allServicesPromises);
-        const allServices = allServicesArrays.flat();
-        setServices(allServices);
-      } catch (error) {
-        console.error('Failed to fetch services:', error);
-      } finally {
-        setIsLoadingServices(false);
-      }
-    };
-
-    if (Object.keys(deployedEnvironments).length > 0) {
-      fetchAllServices();
-    }
-  }, [deployedEnvironments]);
-
-  // Auto-adjust layout when adding panels
   useEffect(() => {
     const count = panels.length;
-
     if (count === 2 && layoutType === 'single') {
       setLayoutType('horizontal');
     } else if (count === 3 && layoutType === 'horizontal') {
@@ -126,51 +145,62 @@ const CloudPanelContainer: React.FC<CloudPanelContainerProps> = ({
     }
   }, [panels.length, layoutType]);
 
-  // Add a new panel
-  const addPanel = () => {
-    if (panels.length >= maxPanels) return;
-
-    const newPanel: CloudPanel = {
-      id: Date.now().toString(),
-      source: `${defaultEnvironment}-all` as LogSource,
-      environment: defaultEnvironment,
-      service: 'all-functions',
-      paused: false,
-      showMetadata: true,
-      searchText: '',
-      selectedServices: [],
-      selectedLevels: ['INFO', 'WARN', 'ERROR', 'DEBUG'],
+  useEffect(() => {
+    const fetchAllServices = async () => {
+      try {
+        const serviceArrays = await Promise.all(
+          Object.keys(deployedEnvironments).map(async (environment) => {
+            const envServices = await getEnvironmentServices(environment);
+            return envServices.map((svc) => ({ ...svc, environment }));
+          }),
+        );
+        setServices(serviceArrays.flat());
+      } catch (error) {
+        console.error('Failed to fetch services:', error);
+      } finally {
+        setIsLoadingServices(false);
+      }
     };
 
-    setPanels([...panels, newPanel]);
+    if (Object.keys(deployedEnvironments).length > 0) {
+      fetchAllServices();
+    } else {
+      setIsLoadingServices(false);
+    }
+  }, [deployedEnvironments]);
+
+  const addPanel = () => {
+    if (panels.length >= maxPanels) return;
+    setPanels((previous) => [
+      ...previous,
+      {
+        id: createId(),
+        source: `${defaultEnvironment}-all`,
+        environment: defaultEnvironment,
+        service: 'all-functions',
+        ...createBasePanelState(),
+      },
+    ]);
   };
 
-  // Remove a panel
   const removePanel = (id: string) => {
     if (panels.length <= 1) return;
-    setPanels(panels.filter((p) => p.id !== id));
+    setPanels((previous) => previous.filter((panel) => panel.id !== id));
   };
 
-  // Update panel state
   const updatePanel = (id: string, updates: Partial<CloudPanel>) => {
-    setPanels(panels.map((p) => (p.id === id ? { ...p, ...updates } : p)));
+    setPanels((previous) =>
+      previous.map((panel) => (panel.id === id ? { ...panel, ...updates } : panel)),
+    );
   };
 
-  // Handle source change - extract environment from source and update both
-  const handleSourceChange = (id: string, source: LogSource) => {
-    // Extract environment from source (e.g., "staging-all" -> "staging")
-    const environment = (source as string).split('-')[0];
-    updatePanel(id, { source, environment });
-  };
-
-  const containerStyle: React.CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100%',
-  };
+  const gridClasses = useMemo(
+    () => cn('grid flex-1 gap-4 overflow-hidden px-4 pb-4 pt-2', getGridClasses(layoutType)),
+    [layoutType],
+  );
 
   return (
-    <div style={containerStyle} className="panel-container">
+    <div className="flex h-full flex-col">
       <PanelToolbar
         onAddPanel={addPanel}
         onLayoutChange={setLayoutType}
@@ -179,61 +209,48 @@ const CloudPanelContainer: React.FC<CloudPanelContainerProps> = ({
         maxPanels={maxPanels}
       />
 
-      <div className={`panel-grid layout-${layoutType}`}>
-        {panels.map((panel) => {
-          return (
-            <CloudPanelWrapper
-              key={panel.id}
-              panel={panel}
-              socket={socket}
-              environments={deployedEnvironments}
-              services={services}
-              isLoadingServices={isLoadingServices}
-              onRemove={() => removePanel(panel.id)}
-              onSourceChange={(source: LogSource) => handleSourceChange(panel.id, source)}
-              onMetadataToggle={() => updatePanel(panel.id, { showMetadata: !panel.showMetadata })}
-              onServiceChange={(service) => updatePanel(panel.id, { service })}
-              onSeverityChange={(severity) => updatePanel(panel.id, { severity })}
-              canRemove={panels.length > 1}
-            />
-          );
-        })}
+      <div className={gridClasses}>
+        {panels.map((panel, index) => (
+          <CloudPanelCard
+            key={panel.id}
+            className={getPanelItemClasses(layoutType, index)}
+            panel={panel}
+            socket={socket}
+            environments={deployedEnvironments}
+            services={services}
+            isLoadingServices={isLoadingServices}
+            onRemove={() => removePanel(panel.id)}
+            onPanelUpdate={(updates) => updatePanel(panel.id, updates)}
+          />
+        ))}
       </div>
     </div>
   );
 };
 
-interface CloudPanelWrapperProps {
+interface CloudPanelCardProps {
   panel: CloudPanel;
   socket: Socket | null;
-  environments: Record<string, import('../types/log.types').Environment>;
-  services: CloudService[];
+  environments: Record<string, Environment>;
+  services: CloudServiceWithEnvironment[];
   isLoadingServices: boolean;
   onRemove: () => void;
-  onSourceChange: (source: LogSource) => void;
-  onMetadataToggle: () => void;
-  onServiceChange: (service: string) => void;
-  onSeverityChange: (severity: string) => void;
-  canRemove: boolean;
+  onPanelUpdate: (updates: Partial<CloudPanel>) => void;
+  className?: string;
 }
 
-const CloudPanelWrapper: React.FC<CloudPanelWrapperProps> = ({
+const CloudPanelCard: React.FC<CloudPanelCardProps> = ({
   panel,
   socket,
   environments,
   services,
   isLoadingServices,
   onRemove,
-  onSourceChange,
-  onMetadataToggle,
-  onServiceChange,
-  onSeverityChange,
-  canRemove,
+  onPanelUpdate,
+  className,
 }) => {
-  // Filter services for current panel's environment
-  const panelServices = services.filter(svc =>
-    (svc as any).environment === panel.environment
-  );
+  const panelServices = services.filter((svc) => svc.environment === panel.environment);
+
   const { logs, isLoading, error, cloudLoggingStatus, refreshLogs, clearLogs } = useCloudLogs({
     socket,
     environment: panel.environment,
@@ -250,165 +267,161 @@ const CloudPanelWrapper: React.FC<CloudPanelWrapperProps> = ({
     selectAllLevels,
     clearAllLevels,
     clearSearch,
-  } = useLogFilter(logs);
+  } = useLogFilter<ParsedCloudLog>(logs);
 
-  const wrapperStyle: React.CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    height: '100%',
-    backgroundColor: '#1a1a1a',
-    border: '1px solid #444',
-    borderRadius: '8px',
-    overflow: 'hidden',
-  };
-
-  const headerStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '8px',
-    padding: '8px 12px',
-    backgroundColor: '#2a2a2a',
-    borderBottom: '1px solid #444',
-    flexWrap: 'wrap',
-  };
-
-  const selectStyle: React.CSSProperties = {
-    padding: '4px 6px',
-    backgroundColor: '#1a1a1a',
-    color: '#e0e0e0',
-    border: '1px solid #444',
-    borderRadius: '4px',
-    fontSize: '12px',
-    cursor: 'pointer',
-    minWidth: '120px',
-  };
-
-  const buttonStyle: React.CSSProperties = {
-    padding: '4px 8px',
-    backgroundColor: '#4dabf7',
-    color: '#fff',
-    border: 'none',
-    borderRadius: '4px',
-    fontSize: '12px',
-    cursor: 'pointer',
-    fontWeight: 600,
-  };
-
-  const removeButtonStyle: React.CSSProperties = {
-    ...buttonStyle,
-    backgroundColor: canRemove ? '#dc3545' : '#555',
-    cursor: canRemove ? 'pointer' : 'not-allowed',
-    opacity: canRemove ? 1 : 0.5,
-  };
-
-  const contentStyle: React.CSSProperties = {
-    flex: 1,
-    overflow: 'hidden',
+  const handleSourceChange = (value: LogSource) => {
+    const environment = value.split('-')[0] || panel.environment;
+    onPanelUpdate({
+      source: value,
+      environment,
+      service: 'all-functions',
+      severity: undefined,
+    });
   };
 
   return (
-    <div style={wrapperStyle}>
-      <div style={headerStyle}>
-        <select
-          value={panel.source}
-          onChange={(e) => onSourceChange(e.target.value as LogSource)}
-          style={selectStyle}
-          title="Select environment"
-        >
-          {Object.keys(environments).map(env => (
-            <option key={env} value={`${env}-all`}>
-              {env.charAt(0).toUpperCase() + env.slice(1)} - All
-            </option>
-          ))}
-        </select>
+    <Card
+      className={cn(
+        'flex h-full flex-col border border-border/60 bg-card/70 text-foreground shadow-md transition hover:border-border',
+        className,
+      )}
+    >
+      <CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-card/80 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={panel.source}
+            onChange={(event) => handleSourceChange(event.target.value as LogSource)}
+            className="h-9 rounded-md border border-border/60 bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title="Select environment"
+          >
+            {Object.keys(environments).map((env) => (
+              <option key={env} value={`${env}-all`}>
+                {environments[env].displayName ?? env}
+              </option>
+            ))}
+          </select>
 
-        <select
-          value={panel.service}
-          onChange={(e) => onServiceChange(e.target.value)}
-          style={selectStyle}
-          title="Select service"
-          disabled={isLoadingServices}
-        >
-          <option value="all-functions">All Functions</option>
-          {panelServices.map(svc => (
-            <option key={svc.name} value={svc.name}>
-              {svc.displayName}
-            </option>
-          ))}
-        </select>
+          <select
+            value={panel.service}
+            onChange={(event) => onPanelUpdate({ service: event.target.value })}
+            disabled={isLoadingServices}
+            className="h-9 rounded-md border border-border/60 bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+            title="Select service"
+          >
+            <option value="all-functions">All Functions</option>
+            {panelServices.map((svc) => (
+              <option key={svc.name} value={svc.name}>
+                {svc.displayName}
+              </option>
+            ))}
+          </select>
 
-        <select
-          value={panel.severity || ''}
-          onChange={(e) => onSeverityChange(e.target.value)}
-          style={selectStyle}
-          title="Select severity"
-        >
-          <option value="">All Severities</option>
-          <option value="DEBUG">DEBUG</option>
-          <option value="INFO">INFO</option>
-          <option value="WARNING">WARNING</option>
-          <option value="ERROR">ERROR</option>
-        </select>
+          <select
+            value={panel.severity ?? ''}
+            onChange={(event) => onPanelUpdate({ severity: event.target.value || undefined })}
+            className="h-9 rounded-md border border-border/60 bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            title="Select severity"
+          >
+            <option value="">All Severities</option>
+            <option value="DEBUG">DEBUG</option>
+            <option value="INFO">INFO</option>
+            <option value="WARNING">WARNING</option>
+            <option value="ERROR">ERROR</option>
+          </select>
+        </div>
 
-        <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
-          <button
+        <div className="flex flex-wrap items-center gap-2">
+          {cloudLoggingStatus && (
+            <Badge
+              variant={cloudLoggingStatus.available ? 'success' : 'destructive'}
+              className="text-[10px] uppercase tracking-[0.2em]"
+            >
+              {cloudLoggingStatus.available ? 'Connected' : 'Unavailable'}
+            </Badge>
+          )}
+
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
             onClick={() => refreshLogs()}
             disabled={isLoading}
-            style={buttonStyle}
-            title="Refresh logs"
+            className="gap-2"
           >
-            {isLoading ? '...' : '↻'}
-          </button>
+            <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
+            Refresh
+          </Button>
 
-          <button
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
             onClick={() => clearLogs()}
-            style={{ ...buttonStyle, backgroundColor: '#868e96' }}
-            title="Clear logs"
+            className="gap-2"
           >
-            🗑
-          </button>
+            <Trash2 className="h-4 w-4" />
+            Clear
+          </Button>
 
-          <button
-            onClick={onMetadataToggle}
-            style={{
-              ...buttonStyle,
-              backgroundColor: panel.showMetadata ? '#4dabf7' : '#555',
-            }}
-            title="Toggle metadata"
+          <Button
+            type="button"
+            variant={panel.showMetadata ? 'secondary' : 'outline'}
+            size="sm"
+            onClick={() => onPanelUpdate({ showMetadata: !panel.showMetadata })}
+            className="gap-2"
           >
-            📊
-          </button>
+            {panel.showMetadata ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+            Metadata
+          </Button>
 
-          <button
+          <Button
+            type="button"
+            variant="destructive"
+            size="sm"
             onClick={onRemove}
-            disabled={!canRemove}
-            style={removeButtonStyle}
-            title={canRemove ? 'Remove panel' : 'Cannot remove last panel'}
+            className="gap-2"
+            title="Remove panel"
           >
-            ✕
-          </button>
+            <Trash2 className="h-4 w-4" />
+            Remove
+          </Button>
         </div>
-      </div>
+      </CardHeader>
 
-      <div style={contentStyle}>
-        <CloudLogsViewer
-          logs={filteredLogs}
-          isLoading={isLoading}
-          error={error}
-          cloudLoggingStatus={cloudLoggingStatus}
-          searchText={searchText}
-          selectedLevels={selectedLevels}
-          showMetadata={panel.showMetadata}
-          onSearchChange={setSearchText}
-          onToggleLevel={toggleLevel}
-          onSelectAllLevels={selectAllLevels}
-          onClearAllLevels={clearAllLevels}
-          onClearSearch={clearSearch}
-          onRefresh={refreshLogs}
-          onClear={clearLogs}
-        />
-      </div>
-    </div>
+      <CardContent className="flex min-h-0 flex-1 flex-col overflow-hidden p-0">
+        {isLoading && (
+          <div className="flex items-center justify-center gap-2 border-b border-border/60 bg-muted/10 px-3 py-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading cloud logs…
+          </div>
+        )}
+
+        {error && (
+          <div className="border-b border-destructive/40 bg-destructive/15 px-3 py-2 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
+        <div className="flex-1 overflow-hidden">
+          <CloudLogsViewer
+            logs={filteredLogs}
+            isLoading={isLoading}
+            error={error}
+            cloudLoggingStatus={cloudLoggingStatus}
+            searchText={searchText}
+            selectedLevels={selectedLevels}
+            showMetadata={panel.showMetadata}
+            onSearchChange={setSearchText}
+            onToggleLevel={toggleLevel}
+            onSelectAllLevels={selectAllLevels}
+            onClearAllLevels={clearAllLevels}
+            onClearSearch={clearSearch}
+            onRefresh={() => refreshLogs()}
+            onClear={() => clearLogs()}
+          />
+        </div>
+      </CardContent>
+    </Card>
   );
 };
 

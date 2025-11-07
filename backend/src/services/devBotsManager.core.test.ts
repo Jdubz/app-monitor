@@ -65,13 +65,9 @@ vi.mock('./taskCreationGuidelines.js', async () => {
 vi.mock('./promptTemplateService.js');
 vi.mock('../utils/logger.js');
 
-// TODO: These tests expect a different architecture than DevBotsManager provides
-// The implementation creates its own dependencies internally (DockerManager, TaskPersistence, etc.)
-// rather than accepting them through dependency injection, which makes mocking difficult.
-// These tests need to be rewritten to either:
-// 1. Test the actual public API without mocking internal dependencies, OR
-// 2. Refactor DevBotsManager to accept dependencies through constructor
-describe.skip('DevBotsManager Core Functionality', () => {
+import { createMockDevBotsManagerDependencies } from './devBotsManager.mocks.js';
+
+describe('DevBotsManager Core Functionality', () => {
   let devBotsManager: DevBotsManager;
   let managerInternals: any;
   let mockProcessManager: any;
@@ -82,48 +78,22 @@ describe.skip('DevBotsManager Core Functionality', () => {
   beforeEach(() => {
     vi.clearAllMocks();
 
-    // Setup mock ProcessManager
-    mockProcessManager = {
-      on: vi.fn(),
-      emit: vi.fn(),
-      getStatus: vi.fn().mockResolvedValue({ status: 'running' }),
-      getAllStatuses: vi.fn().mockResolvedValue({}),
-      startService: vi.fn().mockResolvedValue({ success: true }),
-      stopService: vi.fn().mockResolvedValue({ success: true })
-    };
-
-    // Setup mock TaskPersistence
-    mockTaskPersistence = {
-      loadTasks: vi.fn().mockReturnValue([]),
-      saveCompletedTasks: vi.fn().mockResolvedValue(undefined),
-      saveTask: vi.fn().mockResolvedValue(undefined),
-      loadTask: vi.fn().mockReturnValue(null)
-    };
-
-    // Setup mock WorkspaceSyncManager
-    mockWorkspaceSyncManager = {
-      syncWorkspace: vi.fn().mockResolvedValue({ success: true }),
-      getSyncStatus: vi.fn().mockReturnValue({ status: 'synced' })
-    };
-
-    // Setup mock DockerManager
-    mockDockerManager = {
-      isDockerAvailable: vi.fn().mockResolvedValue(true),
-      createContainer: vi.fn().mockResolvedValue({ id: 'test-container' }),
-      startContainer: vi.fn().mockResolvedValue({ success: true }),
-      stopContainer: vi.fn().mockResolvedValue({ success: true }),
-      removeContainer: vi.fn().mockResolvedValue({ success: true })
-    };
-
     // Mock logger methods
     vi.mocked(logger.info).mockImplementation(() => {});
     vi.mocked(logger.warn).mockImplementation(() => {});
     vi.mocked(logger.error).mockImplementation(() => {});
     vi.mocked(logger.debug).mockImplementation(() => {});
 
-    // Create DevBotsManager instance
-    devBotsManager = new DevBotsManager(mockProcessManager);
+    // Create DevBotsManager instance with mock dependencies
+    const mockDeps = createMockDevBotsManagerDependencies();
+    devBotsManager = new DevBotsManager(mockDeps);
     managerInternals = devBotsManager as any;
+
+    // Store references for test assertions
+    mockProcessManager = mockDeps.processManager;
+    mockTaskPersistence = mockDeps.taskPersistence;
+    mockWorkspaceSyncManager = mockDeps.workspaceSyncManager;
+    mockDockerManager = mockDeps.dockerManager;
 
     // Mock private methods to avoid filesystem operations
     managerInternals.initializeWorkerLogFile = vi.fn().mockResolvedValue(undefined);

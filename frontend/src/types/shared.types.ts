@@ -1,6 +1,11 @@
 // Local type definitions (formerly from @jsdubzw/job-finder-shared-types)
 // This file replaces the external dependency with local definitions
 
+import type {
+  HealthCheckResponse as ContractHealthCheckResponse,
+  PortInfo as ContractPortInfo,
+} from '@app-monitor/api-contracts';
+
 // Log Types
 export type DevMonitorLogLevel = 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
 
@@ -18,17 +23,8 @@ export interface LogHistory {
   logs: DevMonitorLogLine[];
 }
 
-// Service Types
-export type LocalService =
-  | 'app-monitor-backend'
-  | 'dev-monitor-backend' // legacy name
-  | 'app-monitor-frontend'
-  | 'frontend-dev'
-  | 'firebase-emulators'
-  | 'python-worker'
-  | 'dev-bot-a'
-  | 'dev-bot-b'
-  | 'all';
+// Service & Panel Types
+export type LocalService = string;
 
 export interface Service {
   name: string;
@@ -39,67 +35,34 @@ export interface Service {
   uptime?: number;
 }
 
-export interface PortStatus {
-  port: number;
-  inUse: boolean;
-  pid?: number;
-  processName?: string;
-}
-
-// Script Types
-export interface Script {
-  id: string;
-  name: string;
-  description?: string;
-  command: string;
-  args?: string[];
-  cwd?: string;
-}
-
-export interface ScriptExecution {
-  id: string;
-  scriptId: string;
-  startedAt: number;
-  completedAt?: number;
-  exitCode?: number;
-  status: 'running' | 'completed' | 'failed' | 'killed';
-  output?: string;
-  error?: string;
-}
-
-export interface ScriptExecutionSummary {
-  id: string;
-  scriptId: string;
-  scriptName: string;
-  startedAt: number;
-  completedAt?: number;
-  exitCode?: number;
-  status: 'running' | 'completed' | 'failed' | 'killed';
-  duration?: number;
-}
+export type PortStatus = ContractPortInfo & {
+  processName?: string | null;
+  command?: string | null;
+  startTime?: string | null;
+};
 
 // Health Check Types
-export interface HealthCheckResponse {
-  status: 'healthy' | 'unhealthy';
-  timestamp: number;
-  checks: {
-    [key: string]: {
-      status: 'pass' | 'fail';
-      message?: string;
-    };
-  };
-}
+export type HealthCheckResponse = ContractHealthCheckResponse;
 
 // Panel Types
-export type PanelLayoutType = '1-panel' | '2-panel-vertical' | '2-panel-horizontal' | '3-panel' | '4-panel';
+export type PanelLayoutType =
+  | 'single'
+  | 'horizontal'
+  | 'vertical'
+  | 'main-sidebar'
+  | 'quad'
+  | string;
 
-export type LogSource =
-  | { type: 'local'; service: LocalService }
-  | { type: 'cloud'; environment: string; service: string };
+export type LogSource = string;
 
 export interface PanelConfig {
   id: string;
   source: LogSource;
+  paused: boolean;
+  showMetadata: boolean;
+  searchText: string;
+  selectedServices: LocalService[];
+  selectedLevels: DevMonitorLogLevel[];
   filters?: {
     levels?: DevMonitorLogLevel[];
     searchText?: string;

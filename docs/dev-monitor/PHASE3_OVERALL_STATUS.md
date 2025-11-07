@@ -29,7 +29,7 @@ Phase 3 successfully modernized the dev-monitor stack by simplifying the backend
 - `backend/src/routes/services.routes.ts` (150 lines, 6 endpoints)
 - `backend/src/routes/socket-task.routes.ts` (447 lines, 15 endpoints)
 - `backend/src/routes/docker.routes.ts` (225 lines, 4 endpoints)
-- `backend/src/routes/scripts.routes.ts` (232 lines, 6 endpoints)
+- ~~`backend/src/routes/scripts.routes.ts` (232 lines, 6 endpoints)~~ — removed Nov 2025
 - `backend/src/routes/script-history.routes.ts` (187 lines, 5 endpoints)
 - `backend/src/routes/claude-workers.routes.ts` (756 lines, 30 endpoints)
 - `backend/src/routes/logs.routes.ts` (200 lines, 6 endpoints)

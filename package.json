@@ -7,7 +7,8 @@
   "workspaces": [
     "backend",
     "frontend",
-    "dev-bots"
+    "dev-bots",
+    "packages/api-contracts"
   ],
   "scripts": {
     "install:all": "npm install && npm install --workspaces",
@@ -30,6 +31,9 @@
     "concurrently": "^9.2.1",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.6"
+  },
+  "overrides": {
+    "typescript": "5.3.3"
   },
   "engines": {
     "node": ">=18.0.0",

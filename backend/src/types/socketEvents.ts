@@ -24,7 +24,7 @@ export interface ClientToServerEvents {
   
   'docker:stopStream': (data: { containerId: string }) => void;
   
-  'docker:monitorContainer': (data: { containerId: string }) => void;
+  'docker:startMonitor': (data: { containerId: string }) => void;
   
   'docker:stopMonitor': (data: { containerId: string }) => void;
   

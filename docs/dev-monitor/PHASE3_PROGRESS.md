@@ -44,7 +44,7 @@ Phase 3 focuses on simplifying and modernizing the stack while maintaining funct
 - ✅ Created socket-task.routes.ts (447 lines) - 15 endpoints
 - ✅ Created routes/index.ts (131 lines) - Factory pattern with DI
 - ✅ Created docker.routes.ts (225 lines) - 4 endpoints
-- ✅ Created scripts.routes.ts (232 lines) - 6 endpoints
+- ❌ Removed scripts.routes.ts (232 lines) - script runner decommissioned Nov 2025
 - ✅ Created script-history.routes.ts (187 lines) - 5 endpoints
 - ✅ Created claude-workers.routes.ts (756 lines) - 30 endpoints
 - ✅ Created logs.routes.ts (200 lines) - 6 endpoints
@@ -60,7 +60,7 @@ Phase 3 focuses on simplifying and modernizing the stack while maintaining funct
 | services.routes.ts | 150 | 6 | ✅ |
 | socket-task.routes.ts | 447 | 15 | ✅ |
 | docker.routes.ts | 225 | 4 | ✅ |
-| scripts.routes.ts | 232 | 6 | ✅ |
+| ~~scripts.routes.ts~~ | 232 | 6 | _Removed Nov 2025_ |
 | script-history.routes.ts | 187 | 5 | ✅ |
 | claude-workers.routes.ts | 756 | 30 | ✅ |
 | logs.routes.ts | 200 | 6 | ✅ |

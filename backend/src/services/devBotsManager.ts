@@ -1,20 +1,27 @@
 import { EventEmitter } from 'events';
 import * as fs from 'fs';
-import * as path from 'path';
-import os from 'os';
+import * as crypto from 'crypto';
 import { logger } from '../utils/logger.js';
 import { ProcessManager, ProcessInfo } from './processManager.js';
 import Docker from 'dockerode';
-import { TaskPersistence, TaskStorageConfig } from './taskPersistence.js';
+import { TaskPersistence } from './taskPersistence.js';
+import { TaskQueueService, Task, TaskStatus as SQLiteTaskStatus } from './taskQueue.sqlite.js';
+import { TaskQueueMigration } from './taskQueue.migration.js';
 import { AgentPersonalityManager, AgentPersonality } from './agentPersonalities.js';
-import { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplates.js';
+import { TaskPromptTemplateManager } from './taskPromptTemplates.js';
 import { TaskCreationGuidelinesManager, EnhancedTaskData } from './taskCreationGuidelines.js';
 import { WorkspaceSyncManager, SyncOptions, SyncResult } from './workspaceSyncManager.js';
 import { DockerManager, DockerValidationResult } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
 import { getTokenTrackingService } from './tokenTracking.js';
-import { getQualityGateValidator, QualityValidationResult } from './qualityGates.js';
-import { WorkspaceOrchestrator, WorkspaceContext, PushCoordinator } from './workspaceOrchestrator.js';
+import { WorkspaceOrchestrator, PushCoordinator } from './workspaceOrchestrator.js';
+import { TIME_BASED_GUARDS } from './taskFailureGuards.js';
+import { SimpleFailureRecovery } from './failureRecovery.js';
+import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
+import type { ScopeControlService } from './scopeControl.service.js';
+import type { EphemeralWorkerService, EphemeralWorker as EphemeralWorkerType } from './ephemeralWorker.service.js';
+import type { TaskExecutionService } from './taskExecution.service.js';
+import { TaskCompletionService } from './taskCompletion.service.js';
 
 export interface RetryAttempt {
   attemptNumber: number;
@@ -37,91 +44,14 @@ export interface WorkerInfo {
   currentTask?: string;
 }
 
-export interface Task {
-  id: string;
-  type: string;
-  title: string; // Specific task title
-  description?: string; // Task description
-  documentation?: string; // What the worker should read before starting
-  notes?: string; // Optional: additional notes or context
-  status: 'pending' | 'assigned' | 'active' | 'completed' | 'failed' | 'retrying';
-  createdAt: string;
-  assignedWorker?: string;
-  assignedAgent: string; // Assigned agent personality (required)
-  assignedAt?: string;
-  completedAt?: string;
-  output?: string;
-  error?: string;
-  exitCode?: number;
-  prompt?: string; // Generated prompt for the task
-  files?: string[]; // Files to be modified
-  dependencies?: string[]; // Task dependencies
-  project?: string; // Target project
-  qualityValidation?: QualityValidationResult; // Quality gate validation results
+// TaskStatus and Task interface now imported from taskQueue.sqlite.ts (canonical source per Stabilization Plan)
+// Re-export for compatibility with existing imports
+export type TaskStatus = SQLiteTaskStatus;
+export type { Task } from './taskQueue.sqlite.js';
 
-  // Retry system fields
-  retryCount?: number; // Number of retry attempts made
-  maxRetries?: number; // Maximum number of retries allowed
-  retryDelay?: number; // Delay in milliseconds before retry
-  retryReason?: string; // Reason for the retry
-  retryHistory?: RetryAttempt[]; // History of retry attempts
-  canRetry?: boolean; // Whether this task can be retried
-  retryStrategy?: 'immediate' | 'exponential' | 'linear' | 'manual'; // Retry strategy
-
-  // Enhanced task specification
-  acceptanceCriteria?: string[]; // Explicit acceptance criteria (array of criteria)
-  architectureReferences?: string[]; // New: architecture documentation references
-  longTermGoals?: string[]; // New: connection to larger initiatives
-  estimatedEffort?: { // New: effort estimation
-    hours: number;
-    complexity: 'simple' | 'medium' | 'complex' | 'expert';
-    confidence: 'low' | 'medium' | 'high';
-  };
-  prerequisites?: string[]; // New: required knowledge/setup
-  contextBoundaries?: { // New: what not to change
-    mustNotChange: string[];
-    mustNotAffect: string[];
-    integrationPoints: string[];
-  };
-  validationSteps?: string[]; // New: how to verify completion
-  rollbackPlan?: string[]; // New: what to do if things go wrong
-  successMetrics?: string[]; // New: measurable outcomes
-  testingRequirements?: string[]; // New: testing requirements
-  documentationRequirements?: string[]; // New: documentation requirements
-  requiredSkills?: string[]; // New: required agent skills
-  parentInitiative?: string; // New: parent initiative or project
-  relatedTasks?: string[]; // New: related task IDs
-  blockers?: string[]; // New: blocking issues
-  assumptions?: string[]; // New: documented assumptions
-  risks?: string[]; // New: identified risks
-  alternatives?: string[]; // New: alternative approaches
-  
-  scope?: {
-    type: string;
-    boundaries: {
-      maxChanges: number;
-      forbiddenActions: string[];
-      maxNewLines: number;
-    };
-    validation: {
-      forbiddenPatterns: string[];
-      allowedPatterns: string[];
-    };
-  };
-  isEmergency?: boolean;
-  chainId?: string;
-}
-
-export interface EphemeralWorker {
-  id: string;
-  containerId: string;
-  agent: AgentPersonality;
-  task: Task;
-  status: 'starting' | 'running' | 'completing' | 'destroyed';
-  createdAt: string;
-  workspace: WorkspaceContext;
-  destroyedAt?: string;
-}
+// EphemeralWorker now managed by EphemeralWorkerService
+// Re-export for backward compatibility
+export type EphemeralWorker = EphemeralWorkerType;
 
 export interface WorkerStatus {
   id: string;
@@ -150,208 +80,7 @@ export interface DevBotsStatus {
   };
 }
 
-// Scope Control System Classes
-class ScopeCreepDetector {
-  detectCreepPatterns(task: Task, output: string): Array<{ type: string; severity: string }> {
-    const patterns = {
-      fileCreation: /(?:created|new file|mkdir|touch|writeFile|fs\.write)/gi,
-      overEngineering: /(?:complex|sophisticated|advanced|enterprise|scalable)/gi,
-      scopeExpansion: /(?:also|additionally|furthermore|moreover|while we're at it)/gi,
-      unnecessaryComplexity: /(?:design pattern|architecture|framework|library|dependency)/gi,
-      featureCreep: /(?:feature|enhancement|improvement|optimization|refactoring)/gi
-    };
-    
-    const violations: Array<{ type: string; severity: string }> = [];
-    Object.entries(patterns).forEach(([type, regex]) => {
-      if (regex.test(output)) {
-        violations.push({ type, severity: this.getSeverity(type, output) });
-      }
-    });
-    
-    return violations;
-  }
-  
-  private getSeverity(type: string, _output: string): string {
-    const severityMap: Record<string, string> = {
-      'fileCreation': 'HIGH',
-      'overEngineering': 'MEDIUM', 
-      'scopeExpansion': 'HIGH',
-      'unnecessaryComplexity': 'MEDIUM',
-      'featureCreep': 'LOW'
-    };
-    return severityMap[type] || 'LOW';
-  }
-}
-
-interface CleanContext {
-  allowedFiles: string[];
-  maxComplexity: string;
-  forbiddenPatterns: string[];
-  scope: string;
-}
-
-class ContextIsolation {
-  private cleanContexts = new Map<string, CleanContext>();
-  private contaminatedContexts = new Set<string>();
-
-  isolateContaminatedContext(taskId: string, _violations: Array<{ type: string; severity: string }>): void {
-    this.contaminatedContexts.add(taskId);
-    const cleanContext = this.createCleanContext(taskId);
-    this.cleanContexts.set(taskId, cleanContext);
-    logger.info({
-      category: 'process',
-      action: 'context_isolation_isolated_contaminated_context_fo',
-      message: `[CONTEXT_ISOLATION] Isolated contaminated context for task ${taskId}`
-    });
-  }
-
-  private createCleanContext(_taskId: string): CleanContext {
-    return {
-      allowedFiles: ['existing-files-only'],
-      maxComplexity: 'simple',
-      forbiddenPatterns: ['create', 'new', 'complex', 'sophisticated'],
-      scope: 'minimal'
-    };
-  }
-
-  getBaselineContext(): CleanContext {
-    return {
-      allowedFiles: ['existing-files-only'],
-      maxComplexity: 'simple',
-      forbiddenPatterns: ['create', 'new', 'complex', 'sophisticated'],
-      scope: 'minimal'
-    };
-  }
-}
-
-interface ViolationChainEntry {
-  taskId: string;
-  violations: Array<{ type: string; severity: string }>;
-  timestamp: number;
-}
-
-class SnowballPrevention {
-  private violationChain = new Map<string, ViolationChainEntry[]>();
-
-  detectViolationChain(taskId: string, violations: Array<{ type: string; severity: string }>): void {
-    const chain = this.violationChain.get(taskId) || [];
-    chain.push({
-      taskId,
-      violations,
-      timestamp: Date.now()
-    });
-
-    this.violationChain.set(taskId, chain);
-
-    if (chain.length >= 3) {
-      this.triggerChainBreaker(taskId, chain);
-    }
-  }
-
-  private triggerChainBreaker(taskId: string, chain: ViolationChainEntry[]): void {
-    logger.warn({
-      category: 'process',
-      action: 'chain_breaker_detected_violation_chain_of_chain_le',
-      message: `[CHAIN_BREAKER] Detected violation chain of ${chain.length} tasks - triggering emergency recovery`
-    });
-    // Emergency recovery will be handled by the main manager
-  }
-}
-
-class PeriodicCleanupScheduler {
-  private schedules = {
-    linting: { interval: 6 * 60 * 60 * 1000, lastRun: Date.now() },
-    deduplication: { interval: 12 * 60 * 60 * 1000, lastRun: Date.now() },
-    documentation: { interval: 24 * 60 * 60 * 1000, lastRun: Date.now() },
-    testing: { interval: 48 * 60 * 60 * 1000, lastRun: Date.now() },
-    deepCleanup: { interval: 7 * 24 * 60 * 60 * 1000, lastRun: Date.now() }
-  };
-  
-  checkSchedules(): string[] {
-    const now = Date.now();
-    const dueTasks: string[] = [];
-    
-    Object.entries(this.schedules).forEach(([type, schedule]) => {
-      if (now - schedule.lastRun >= schedule.interval) {
-        dueTasks.push(type);
-        schedule.lastRun = now;
-      }
-    });
-    
-    return dueTasks;
-  }
-  
-  createCleanupTask(type: string, taskIdCounter: number): Task {
-    const cleanupTasks: Record<string, {
-      description: string;
-      scope: {
-        type: string;
-        boundaries: {
-          maxChanges: number;
-          forbiddenActions: string[];
-          maxNewLines: number;
-        };
-        validation: {
-          forbiddenPatterns: string[];
-          allowedPatterns: string[];
-        };
-      };
-    }> = {
-      linting: {
-        description: 'PERIODIC CLEANUP: Run linting and fix code style issues. Focus on existing files only.',
-        scope: {
-          type: 'cleanup',
-          boundaries: { maxChanges: 5, forbiddenActions: ['create-new-files'], maxNewLines: 20 },
-          validation: { forbiddenPatterns: ['create', 'new'], allowedPatterns: ['fix', 'format', 'style'] }
-        }
-      },
-      deduplication: {
-        description: 'PERIODIC CLEANUP: Remove duplicate code and consolidate similar functions.',
-        scope: {
-          type: 'cleanup',
-          boundaries: { maxChanges: 3, forbiddenActions: ['create-new-files'], maxNewLines: 15 },
-          validation: { forbiddenPatterns: ['create', 'new'], allowedPatterns: ['remove', 'consolidate', 'merge'] }
-        }
-      },
-      documentation: {
-        description: 'PERIODIC CLEANUP: Update and standardize documentation. Fix outdated comments.',
-        scope: {
-          type: 'cleanup',
-          boundaries: { maxChanges: 8, forbiddenActions: ['create-new-files'], maxNewLines: 30 },
-          validation: { forbiddenPatterns: ['create', 'new'], allowedPatterns: ['update', 'fix', 'standardize'] }
-        }
-      },
-      testing: {
-        description: 'PERIODIC CLEANUP: Run tests and fix failing tests. Improve test coverage.',
-        scope: {
-          type: 'cleanup',
-          boundaries: { maxChanges: 10, forbiddenActions: ['create-new-files'], maxNewLines: 50 },
-          validation: { forbiddenPatterns: ['create', 'new'], allowedPatterns: ['fix', 'improve', 'test'] }
-        }
-      },
-      deepCleanup: {
-        description: 'PERIODIC CLEANUP: Deep codebase cleanup. Remove unused code, optimize imports.',
-        scope: {
-          type: 'cleanup',
-          boundaries: { maxChanges: 15, forbiddenActions: ['create-new-files'], maxNewLines: 100 },
-          validation: { forbiddenPatterns: ['create', 'new'], allowedPatterns: ['remove', 'optimize', 'clean'] }
-        }
-      }
-    };
-    
-    const task = cleanupTasks[type];
-    return {
-      id: `task-${taskIdCounter}-${Date.now()}`,
-      type: 'cleanup',
-      title: task.description.substring(0, 100),
-      description: task.description,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      assignedAgent: 'backend-specialist',
-      scope: task.scope
-    };
-  }
-}
+// Scope control classes moved to scopeControl.service.ts
 
 export class DevBotsManager extends EventEmitter {
   private processManager: ProcessManager;
@@ -362,19 +91,25 @@ export class DevBotsManager extends EventEmitter {
   private healthCheckInterval?: NodeJS.Timeout;
   private cleanupInterval?: NodeJS.Timeout;
 
-  // Task management
-  private taskQueue: Task[] = [];
-  private activeTasks = new Map<string, Task>();
-  private completedTasks: Task[] = [];
-  private taskIdCounter = 1;
+  // Task management - DEPRECATED (now using SQLite)
+  // private taskQueue: Task[] = [];
+  // private activeTasks = new Map<string, Task>();
+  // private completedTasks: Task[] = [];
+  // private taskIdCounter = 1;
+  // private taskFingerprints = new Map<string, string>();
+  // private fileModificationLocks = new Map<string, string>();
 
   // Worker management
   private workers = new Map<string, WorkerInfo>();
-  private ephemeralWorkers = new Map<string, EphemeralWorker>();
-  private readonly MAX_CONCURRENT_WORKERS = 2; // Maximum 2 workers as per architecture
+  // ephemeralWorkers now managed by ephemeralWorkerService
+
+  // Agent type rotation configuration
+  private readonly AGENT_ROTATION_STRATEGY: 'alternate' | 'random' | 'claude-only' | 'codex-only' = 'alternate';
+  private lastAgentType: 'claude' | 'codex' = 'claude';
 
   // Enhanced services
-  private taskPersistence!: TaskPersistence;
+  private taskPersistence!: TaskPersistence; // Deprecated - keeping for migration only
+  private taskQueue!: TaskQueueService; // SQLite-based queue (replaces in-memory arrays)
   private agentManager!: AgentPersonalityManager;
   private templateManager!: TaskPromptTemplateManager;
   private guidelinesManager!: TaskCreationGuidelinesManager;
@@ -382,39 +117,59 @@ export class DevBotsManager extends EventEmitter {
   private retryManager!: RetryManager;
   private workspaceOrchestrator!: WorkspaceOrchestrator;
   private pushCoordinator: PushCoordinator = new PushCoordinator();
-
-  // Scope control systems
-  private scopeCreepDetector = new ScopeCreepDetector();
-  private contextIsolation = new ContextIsolation();
-  private snowballPrevention = new SnowballPrevention();
-  private cleanupScheduler = new PeriodicCleanupScheduler();
+  private recovery!: SimpleFailureRecovery;
+  private scopeControl!: ScopeControlService;
+  private ephemeralWorkerService!: EphemeralWorkerService;
+  private taskExecutionService!: TaskExecutionService;
+  private taskCompletionService!: TaskCompletionService;
 
   // System state
   private startTime = Date.now();
 
-  constructor(processManager: ProcessManager) {
+  constructor(dependencies: DevBotsManagerDependencies) {
     super();
-    this.processManager = processManager;
 
-    // Initialize Docker Manager with validation
-    this.dockerManager = new DockerManager('/var/run/docker.sock');
-    this.docker = this.dockerManager.getDocker();
+    // Inject all dependencies
+    this.processManager = dependencies.processManager;
+    this.dockerManager = dependencies.dockerManager;
+    this.docker = dependencies.docker;
+    this.taskQueue = dependencies.taskQueue;
+    this.agentManager = dependencies.agentManager;
+    this.templateManager = dependencies.templateManager;
+    this.guidelinesManager = dependencies.guidelinesManager;
+    this.workspaceSyncManager = dependencies.workspaceSyncManager;
+    this.retryManager = dependencies.retryManager;
+    this.workspaceOrchestrator = dependencies.workspaceOrchestrator;
+    this.taskPersistence = dependencies.taskPersistence;
+    this.scopeControl = dependencies.scopeControl;
+    this.ephemeralWorkerService = dependencies.ephemeralWorkerService;
+    this.taskExecutionService = dependencies.taskExecutionService;
+
+    // Initialize SimpleFailureRecovery and TaskCompletionService with this instance
+    this.recovery = new SimpleFailureRecovery(this);
+    this.taskCompletionService = new TaskCompletionService(
+      this.workspaceOrchestrator,
+      this.ephemeralWorkerService,
+      this.taskPersistence,
+      this.pushCoordinator,
+      this.emit.bind(this),
+      { enableQualityGates: true }
+    );
 
     // Validate Docker environment and initialize
     this.initializeDockerEnvironment();
 
-    // Initialize enhanced services
-    this.initializeEnhancedServices();
+    // Run async initialization (SQLite migration)
+    void this.initializeAsync();
 
-    // Ephemeral workers are created on-demand, no initialization needed
+    // Listen for retry events
+    this.retryManager.on('taskReadyForRetry', (task: Task) => {
+      this.handleTaskRetry(task);
+    });
 
-    // Load persisted tasks
-    this.loadPersistedTasks();
-
-    // NOTE: Cleanup tasks should be created manually via the task API
-    // Linting, testing, documentation are part of the development process
-    // via git hooks, CI/CD, and manual code review
-    // this.startCleanupScheduler(); // REMOVED - cleanup is not automatic
+    // Start monitoring loops
+    this.startHeartbeatMonitor();
+    this.startLongRunningTaskMonitor();
 
     // Listen for process status changes
     this.processManager.on('statusChange', (serviceName: string, status: ProcessInfo) => {
@@ -423,6 +178,60 @@ export class DevBotsManager extends EventEmitter {
         this.updateWorkerHealth();
       }
     });
+  }
+
+  /**
+   * Migrate existing JSON tasks to SQLite
+   */
+  private migrateToSQLite(): void {
+    try {
+      // Check if migration marker exists
+      const migrationMarker = './data/tasks/.migrated-to-sqlite';
+      if (fs.existsSync(migrationMarker)) {
+        logger.info({
+          category: 'process',
+          action: 'migration_already_completed',
+          message: 'SQLite migration already completed, skipping'
+        });
+        return;
+      }
+
+      // Backup legacy files
+      TaskQueueMigration.backupLegacyFiles('./data/tasks', './data/backups');
+
+      // Run migration
+      const migration = new TaskQueueMigration(this.taskQueue, './data/tasks');
+      const result = migration.migrate();
+
+      if (result.success) {
+        logger.info({
+          category: 'process',
+          action: 'migration_successful',
+          message: `Successfully migrated ${result.tasksImported} tasks and ${result.executionsCreated} executions to SQLite`
+        });
+
+        // Create migration marker to prevent re-running
+        fs.writeFileSync(migrationMarker, JSON.stringify({
+          migratedAt: new Date().toISOString(),
+          tasksImported: result.tasksImported,
+          executionsCreated: result.executionsCreated
+        }));
+      } else {
+        logger.error({
+          category: 'process',
+          action: 'migration_failed',
+          message: `Migration completed with ${result.errors.length} errors`,
+          details: { errors: result.errors }
+        });
+      }
+    } catch (error) {
+      logger.error({
+        category: 'process',
+        action: 'migration_exception',
+        message: 'Migration failed with exception',
+        error
+      });
+    }
   }
 
   /**
@@ -509,103 +318,187 @@ export class DevBotsManager extends EventEmitter {
     }
   }
 
-  private initializeEnhancedServices(): void {
-    // Initialize task persistence
-    const storageConfig: TaskStorageConfig = {
-      storagePath: './data/tasks',
-      backupPath: './data/backups',
-      maxBackups: 10,
-      autoSave: true,
-      saveInterval: 30000 // 30 seconds
-    };
-    this.taskPersistence = new TaskPersistence(storageConfig);
-
-    // Initialize agent personality manager
-    this.agentManager = new AgentPersonalityManager();
-
-    // Initialize template manager
-    this.templateManager = new TaskPromptTemplateManager();
-
-    // Initialize guidelines manager
-    this.guidelinesManager = new TaskCreationGuidelinesManager();
-
-    // Initialize workspace orchestrator for dynamic workspaces
-    this.workspaceOrchestrator = new WorkspaceOrchestrator();
-    if (typeof this.workspaceOrchestrator.initialize === 'function') {
-      this.workspaceOrchestrator.initialize();
-    }
-
-    // Initialize workspace sync manager
-    this.workspaceSyncManager = new WorkspaceSyncManager({
-      baseDir: path.resolve(path.join(process.cwd(), '../../')),
-      repositories: ['job-finder-BE', 'job-finder-FE', 'job-finder-shared-types', 'job-finder-worker'],
-      workers: [],
-      conflictStrategy: 'auto-merge'
-    });
-
-    // Initialize retry manager
-    const retryConfig: Partial<RetryConfig> = {
-      maxRetries: 3
-    };
-    this.retryManager = new RetryManager(retryConfig);
-
-    // Listen for retry events
-    this.retryManager.on('taskReadyForRetry', (task: Task) => {
-      this.handleTaskRetry(task);
-    });
+  /**
+   * Initialize async components (SQLite migration)
+   * Dependencies are now injected, so this only runs migrations
+   */
+  private async initializeAsync(): Promise<void> {
+    // Run migration from JSON to SQLite
+    this.migrateToSQLite();
 
     logger.info({
       category: 'process',
-      action: 'enhanced_services_initialized_task_persistence_age',
-      message: 'Enhanced services initialized: task persistence, agent personalities, prompt templates, creation guidelines, workspace sync, and retry management'
+      action: 'async_initialization_complete',
+      message: 'Async initialization complete: SQLite migration finished'
     });
   }
 
-  private loadPersistedTasks(): void {
-    try {
-      const persistedTasks = this.taskPersistence.loadTasks();
-      
-      // Separate tasks by status
-      for (const task of persistedTasks) {
-        if (task.status === 'pending') {
-          this.taskQueue.push(task);
-        } else if (task.status === 'assigned' || task.status === 'active') {
-          // Reset assigned/active tasks to pending since workers are no longer running
-          const oldStatus = task.status;
-          task.status = 'pending';
-          task.assignedWorker = undefined;
-          task.assignedAt = undefined;
-          this.taskQueue.push(task);
-          logger.info({
+  /**
+   * Start heartbeat monitoring to detect stalled workers
+   *
+   * NOTE: Disabled for ephemeral containers (docker run --rm)
+   * Ephemeral containers are monitored via Docker process exit codes instead.
+   * This avoids false positives from containers that don't send heartbeats.
+   *
+   * If persistent workers are added in the future, re-enable this monitor.
+   */
+  private startHeartbeatMonitor(): void {
+    // DISABLED: Ephemeral containers don't send heartbeats
+    // They auto-cleanup on exit (--rm flag) and are monitored via process.on('close')
+
+    logger.info({
       category: 'process',
-      action: 'reset_task_task_id_from_oldstatus_to_pending_worke',
-      message: `Reset task ${task.id} from ${oldStatus} to pending (worker no longer running)`
+      action: 'heartbeat_monitor_disabled',
+      message: 'Worker heartbeat monitor disabled (using Docker process monitoring for ephemeral containers)'
     });
-        } else if (task.status === 'completed' || task.status === 'failed') {
-          this.completedTasks.push(task);
+
+    // Uncomment below to enable heartbeat monitoring for persistent workers:
+    /*
+    setInterval(() => {
+      const stalledWorkers = this.taskQueue.detectStalledWorkers();
+      if (stalledWorkers.length > 0) {
+        logger.warn({
+          category: 'process',
+          action: 'stalled_workers_detected',
+          message: `Detected ${stalledWorkers.length} stalled workers (heartbeat timeout)`,
+          details: stalledWorkers
+        });
+
+        for (let i = 0; i < stalledWorkers.length; i++) {
+          this.assignNextTask();
         }
       }
-      
-      // Save updated tasks back to persistence if any were reset
-      if (this.taskQueue.length > 0 || this.completedTasks.length > 0) {
-        this.saveTasksToPersistence();
-      }
-      
-      logger.info({
-      category: 'process',
-      action: 'loaded_persistedtasks_length_persisted_tasks_this_',
-      message: `Loaded ${persistedTasks.length} persisted tasks: ${this.taskQueue.length} pending, ${this.activeTasks.size} active, ${this.completedTasks.length} completed`
-    });
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_load_persisted_tasks',
-      message: 'Failed to load persisted tasks:',
-      error: error
-    });
-    }
+    }, 60000);
+    */
   }
-  
+
+  /**
+   * Start long-running task monitoring with automatic cleanup for stuck tasks
+   */
+  private startLongRunningTaskMonitor(): void {
+    setInterval(async () => {
+      // Soft timeout warning (30 minutes)
+      const longRunning = this.taskQueue.detectLongRunningTasks(TIME_BASED_GUARDS.SOFT_TIMEOUT_MS);
+      if (longRunning.length > 0) {
+        logger.warn({
+          category: 'process',
+          action: 'long_running_tasks_detected',
+          message: `Found ${longRunning.length} tasks running longer than ${TIME_BASED_GUARDS.SOFT_TIMEOUT_MS / 60000} minutes`,
+          details: longRunning.map(task => ({
+            id: task.id,
+            title: task.title,
+            duration: task.duration_ms,
+            durationMinutes: Math.round(task.duration_ms / 60000)
+          })) as unknown as Record<string, unknown>
+        });
+      }
+
+      // Hard timeout - force cleanup (1 hour)
+      const stuck = this.taskQueue.detectLongRunningTasks(TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS);
+      if (stuck.length > 0) {
+        logger.error({
+          category: 'process',
+          action: 'stuck_tasks_detected_auto_cleanup',
+          message: `Found ${stuck.length} tasks stuck for >${TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS / 60000} minutes. Auto-failing and cleaning up.`,
+          details: stuck.map(task => ({
+            id: task.id,
+            title: task.title,
+            duration: task.duration_ms,
+            durationHours: Math.round(task.duration_ms / 3600000)
+          })) as unknown as Record<string, unknown>
+        });
+
+        // Cleanup each stuck task
+        for (const task of stuck) {
+          try {
+            // Force kill any Docker containers for this task
+            await this.ephemeralWorkerService.cleanupStuckTaskContainers(task.id);
+
+            // Mark task as failed in database
+            this.taskQueue.failTask(
+              task.id,
+              `Task stuck for ${Math.round(task.duration_ms / 60000)} minutes (exceeded ${TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS / 60000}min timeout). Auto-failed by failure guard.`
+            );
+
+            logger.info({
+              category: 'process',
+              action: 'stuck_task_cleaned_up',
+              message: `Successfully cleaned up stuck task ${task.id}`,
+              details: {
+                taskId: task.id,
+                duration_minutes: Math.round(task.duration_ms / 60000),
+                cleanup_reason: 'ABSOLUTE_MAX_DURATION_EXCEEDED'
+              }
+            });
+          } catch (error) {
+            logger.error({
+              category: 'process',
+              action: 'stuck_task_cleanup_failed',
+              message: `Failed to cleanup stuck task ${task.id}: ${error instanceof Error ? error.message : String(error)}`,
+              details: {
+                taskId: task.id,
+                error: error instanceof Error ? error.message : String(error)
+              }
+            });
+          }
+        }
+      }
+    }, 300000); // Check every 5 minutes
+
+    logger.info({
+      category: 'process',
+      action: 'long_running_task_monitor_started',
+      message: `Task monitor started - Soft warn: ${TIME_BASED_GUARDS.SOFT_TIMEOUT_MS / 60000}min, Hard fail: ${TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS / 60000}min`,
+      details: {
+        checkInterval_ms: 300000,
+        softTimeout_minutes: TIME_BASED_GUARDS.SOFT_TIMEOUT_MS / 60000,
+        hardTimeout_minutes: TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS / 60000
+      }
+    });
+  }
+
+  // cleanupStuckTaskContainers moved to EphemeralWorkerService
+
+  /**
+   * Get queue metrics for monitoring
+   */
+  public getQueueMetrics() {
+    return this.taskQueue.getQueueMetrics();
+  }
+
+  /**
+   * Get the task queue (for recovery orchestrator)
+   */
+  public getTaskQueue(): TaskQueueService {
+    return this.taskQueue;
+  }
+
+  /**
+   * Get task duration statistics
+   */
+  public getTaskDurationStats(daysBack: number = 30) {
+    return this.taskQueue.getTaskDurationStats(daysBack);
+  }
+
+  /**
+   * Get agent comparison metrics (Claude vs Codex)
+   */
+  public getAgentComparisonMetrics() {
+    return this.taskQueue.getAgentComparisonMetrics();
+  }
+
+  /**
+   * Manually timeout a task after verification
+   */
+  public manuallyTimeoutTask(taskId: string, reason: string) {
+    this.taskQueue.manuallyTimeoutTask(taskId, reason);
+    logger.info({
+      category: 'process',
+      action: 'task_manually_timed_out',
+      message: `Task ${taskId} manually timed out`,
+      details: { reason }
+    });
+  }
 
   private startHealthCheck(): void {
     this.healthCheckInterval = setInterval(async () => {
@@ -682,10 +575,10 @@ export class DevBotsManager extends EventEmitter {
   
   private async checkCleanupSchedules(): Promise<void> {
     try {
-      const dueTasks = this.cleanupScheduler.checkSchedules();
+      const dueTasks = this.scopeControl.checkCleanupSchedules();
       for (const taskType of dueTasks) {
-        const cleanupTask = this.cleanupScheduler.createCleanupTask(taskType, this.taskIdCounter++);
-        this.taskQueue.push(cleanupTask);
+        const cleanupTask = this.scopeControl.createCleanupTask(taskType, Date.now());
+        await this.taskQueue.createTask(cleanupTask);
         logger.info({
       category: 'process',
       action: 'cleanup_scheduled_tasktype_cleanup_task_cleanuptas',
@@ -703,54 +596,32 @@ export class DevBotsManager extends EventEmitter {
   }
 
   // Task Management Methods
-  async addTask(
-    type: string, 
-    title: string,
-    documentation: string,
-    acceptanceCriteria: string,
-    options?: {
-      files?: string[];
-      dependencies?: string[];
-      repository?: string;
-      assignedAgent?: string;
-      notes?: string;
-    }
-  ): Promise<Task> {
-    const task: Task = {
-      id: `task-${this.taskIdCounter++}-${Date.now()}`,
-      type,
-      title,
-      documentation,
-      acceptanceCriteria: [acceptanceCriteria],
-      notes: options?.notes,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      files: options?.files || [],
-      dependencies: options?.dependencies || [],
-      project: options?.repository || 'dev-monitor',
-      assignedAgent: options?.assignedAgent || 'backend-specialist'
+  /**
+   * Add a new task to the queue (unified method with SQLite)
+   * Supports both simple and comprehensive task data
+   */
+  async addTask(taskData: EnhancedTaskData | {
+    type: string;
+    title: string;
+    description?: string;
+    documentation?: string;
+    acceptanceCriteria?: string | string[];
+    files?: string[];
+    dependencies?: string[];
+    project?: string;
+    assignedAgent?: string;
+    notes?: string;
+    priority?: number;
+    metadata?: {
+      isRepairBot?: boolean;
+      repairStage?: 'cleanup' | 'followup';
+      originalTaskId?: string;
+      cleanupTaskId?: string;
+      originalFailurePattern?: string;
+      countsTowardsConcurrencyLimit?: boolean;
+      [key: string]: unknown;
     };
-    
-    this.taskQueue.push(task);
-    
-    // Save to persistence
-    this.saveTasksToPersistence();
-    
-    this.emit('taskAdded', task);
-    logger.info({
-      category: 'process',
-      action: 'enhanced_task_added_agent',
-      message: `Enhanced task added: ${task.id} - ${type} (Agent: ${task.assignedAgent || 'auto-assign'})`
-    });
-    
-    // Try to assign immediately
-    await this.assignNextTask();
-    
-    return task;
-  }
-
-  // Enhanced task creation with comprehensive guidelines
-  async addEnhancedTask(taskData: EnhancedTaskData): Promise<{
+  }): Promise<{
     task: Task;
     validation: {
       isValid: boolean;
@@ -759,236 +630,140 @@ export class DevBotsManager extends EventEmitter {
       suggestions: string[];
     };
   }> {
+    // Normalize task data to EnhancedTaskData format
+    const normalizedData: EnhancedTaskData = {
+      type: taskData.type,
+      title: taskData.title,
+      description: ('description' in taskData && taskData.description) || '',
+      project: ('project' in taskData && taskData.project) || 'dev-monitor',
+      assignedAgent: ('assignedAgent' in taskData && taskData.assignedAgent) || 'backend-specialist',
+      files: ('files' in taskData && taskData.files) || [],
+      dependencies: ('dependencies' in taskData && taskData.dependencies) || [],
+      acceptanceCriteria: (() => {
+        if ('acceptanceCriteria' in taskData) {
+          if (Array.isArray(taskData.acceptanceCriteria)) {
+            return taskData.acceptanceCriteria;
+          }
+          if (typeof taskData.acceptanceCriteria === 'string') {
+            return [taskData.acceptanceCriteria];
+          }
+        }
+        return [];
+      })(),
+      architectureReferences: ('architectureReferences' in taskData && taskData.architectureReferences) || [],
+      longTermGoals: ('longTermGoals' in taskData && taskData.longTermGoals) || [],
+      estimatedEffort: ('estimatedEffort' in taskData && taskData.estimatedEffort) || { hours: 1, complexity: 'simple' as const, confidence: 'medium' as const },
+      prerequisites: ('prerequisites' in taskData && taskData.prerequisites) || [],
+      contextBoundaries: ('contextBoundaries' in taskData && taskData.contextBoundaries) || { mustNotChange: [], mustNotAffect: [], integrationPoints: [] },
+      validationSteps: ('validationSteps' in taskData && taskData.validationSteps) || [],
+      rollbackPlan: ('rollbackPlan' in taskData && taskData.rollbackPlan) || [],
+      successMetrics: ('successMetrics' in taskData && taskData.successMetrics) || [],
+      testingRequirements: ('testingRequirements' in taskData && taskData.testingRequirements) || [],
+      documentationRequirements: ('documentationRequirements' in taskData && taskData.documentationRequirements) || [],
+      requiredSkills: ('requiredSkills' in taskData && taskData.requiredSkills) || [],
+      relatedTasks: ('relatedTasks' in taskData && taskData.relatedTasks) || [],
+      blockers: ('blockers' in taskData && taskData.blockers) || [],
+      assumptions: ('assumptions' in taskData && taskData.assumptions) || [],
+      risks: ('risks' in taskData && taskData.risks) || [],
+      alternatives: ('alternatives' in taskData && taskData.alternatives) || [],
+      ...(('parentInitiative' in taskData && taskData.parentInitiative) && { parentInitiative: taskData.parentInitiative })
+    };
+
+    // Check for duplicate task submission
+    const fingerprint = this.calculateTaskFingerprint(normalizedData);
+    const duplicateTask = await this.taskQueue.checkDuplicateTask(fingerprint);
+    if (duplicateTask) {
+      logger.warn({
+        category: 'process',
+        action: 'duplicate_task_detected',
+        message: `Duplicate task detected: "${normalizedData.title}" matches existing task ${duplicateTask.id} (${duplicateTask.status})`
+      });
+      throw new Error(`Duplicate task detected. Task "${duplicateTask.title}" (${duplicateTask.id}) is already ${duplicateTask.status}. Wait for it to complete or modify your task to be unique.`);
+    }
+
     // Validate task data against guidelines
-    const validation = this.guidelinesManager.validateTaskData(taskData, taskData.type);
-    
+    const validation = this.guidelinesManager.validateTaskData(normalizedData, normalizedData.type);
+
     if (!validation.isValid) {
       logger.warn({
-      category: 'process',
-      action: 'task_validation_failed',
-      message: `Task validation failed: ${validation.errors.join(', ')}`
-    });
+        category: 'process',
+        action: 'task_validation_failed',
+        message: `Task validation failed: ${validation.errors.join(', ')}`
+      });
       throw new Error(`Task validation failed: ${validation.errors.join(', ')}`);
     }
 
     // Log warnings and suggestions
     if (validation.warnings.length > 0) {
       logger.warn({
-      category: 'process',
-      action: 'task_validation_warnings',
-      message: `Task validation warnings: ${validation.warnings.join(', ')}`
-    });
+        category: 'process',
+        action: 'task_validation_warnings',
+        message: `Task validation warnings: ${validation.warnings.join(', ')}`
+      });
     }
     if (validation.suggestions.length > 0) {
       logger.info({
-      category: 'process',
-      action: 'task_validation_suggestions',
-      message: `Task validation suggestions: ${validation.suggestions.join(', ')}`
-    });
+        category: 'process',
+        action: 'task_validation_suggestions',
+        message: `Task validation suggestions: ${validation.suggestions.join(', ')}`
+      });
     }
 
-    const task: Task = {
-      id: `task-${this.taskIdCounter++}-${Date.now()}`,
-      type: taskData.type,
-      title: taskData.title,
-      description: taskData.description,
-      status: 'pending',
-      createdAt: new Date().toISOString(),
-      project: taskData.project,
-      assignedAgent: taskData.assignedAgent,
-      
-      // Enhanced fields
-      files: taskData.files,
-      dependencies: taskData.dependencies,
-      acceptanceCriteria: taskData.acceptanceCriteria,
-      architectureReferences: taskData.architectureReferences,
-      longTermGoals: taskData.longTermGoals,
-      estimatedEffort: taskData.estimatedEffort,
-      prerequisites: taskData.prerequisites,
-      contextBoundaries: taskData.contextBoundaries,
-      validationSteps: taskData.validationSteps,
-      rollbackPlan: taskData.rollbackPlan,
-      successMetrics: taskData.successMetrics,
-      testingRequirements: taskData.testingRequirements,
-      documentationRequirements: taskData.documentationRequirements,
-      requiredSkills: taskData.requiredSkills,
-      parentInitiative: taskData.parentInitiative,
-      relatedTasks: taskData.relatedTasks,
-      blockers: taskData.blockers,
-      assumptions: taskData.assumptions,
-      risks: taskData.risks,
-      alternatives: taskData.alternatives
-    };
-    
-    this.taskQueue.push(task);
-    
-    // Save to persistence
-    this.saveTasksToPersistence();
-    
-    this.emit('taskAdded', task);
+    // Create task in SQLite queue
+    const sqliteTask = this.taskQueue.createTask({
+      type: normalizedData.type,
+      title: normalizedData.title,
+      description: normalizedData.description,
+      assigned_agent: normalizedData.assignedAgent,
+      priority: ('priority' in taskData && taskData.priority !== undefined) ? taskData.priority : 5,
+      estimated_hours: normalizedData.estimatedEffort?.hours,
+      complexity: normalizedData.estimatedEffort?.complexity,
+      files: normalizedData.files,
+      acceptance_criteria: normalizedData.acceptanceCriteria,
+      architecture_references: normalizedData.architectureReferences,
+      validation_steps: normalizedData.validationSteps,
+      success_metrics: normalizedData.successMetrics,
+      fingerprint,
+      // Recovery metadata fields
+      is_repair_bot: ('metadata' in taskData && taskData.metadata?.isRepairBot) || false,
+      original_task_id: ('metadata' in taskData && taskData.metadata?.originalTaskId) || undefined,
+      repair_stage: ('metadata' in taskData && taskData.metadata?.repairStage) || undefined
+    });
+
+    // Return SQLite task directly (no conversion needed)
+    this.emit('taskAdded', sqliteTask);
     logger.info({
       category: 'process',
-      action: 'enhanced_task_added_with_guidelines_agent',
-      message: `Enhanced task added with guidelines: ${task.id} - ${taskData.title} (Agent: ${taskData.assignedAgent || 'auto-assign'})`
+      action: 'task_added',
+      message: `Task added: ${sqliteTask.id} - ${normalizedData.title} (Agent: ${normalizedData.assignedAgent || 'auto-assign'}, fingerprint: ${fingerprint.substring(0, 8)}...)`
     });
-    
+
     // Try to assign immediately
     await this.assignNextTask();
-    
-    return { task, validation };
+
+    return { task: sqliteTask, validation };
   }
-  
-  async assignNextTask(): Promise<void> {
-    if (this.taskQueue.length === 0) {
-      logger.info({
-      category: 'process',
-      action: 'no_pending_tasks_in_queue',
-      message: 'No pending tasks in queue'
-    });
-      return;
-    }
-    
-    // Check active worker count against concurrency limit
-    const activeWorkers = Array.from(this.ephemeralWorkers.values()).filter(
-      worker => worker.status !== 'destroyed'
-    );
 
-    logger.info({
-      category: 'process',
-      action: 'task_assignment_check_this_taskqueue_length_pendin',
-      message: `Task assignment check: ${this.taskQueue.length} pending tasks, ${activeWorkers.length}/${this.MAX_CONCURRENT_WORKERS} active workers`
-    });
-
-    if (activeWorkers.length >= this.MAX_CONCURRENT_WORKERS) {
-      logger.info({
-      category: 'process',
-      action: 'max_workers_active_skipping_assignment',
-      message: 'Maximum concurrent workers are active, skipping task assignment'
-    });
-      return;
-    }
-    
-    // Get next task (FIFO queue)
-    const nextTask = this.taskQueue[0];
-
-    // Ensure mirror is up to date before provisioning workspace
-    try {
-      this.workspaceOrchestrator.initialize();
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'workspace_orchestrator_init_failed',
-      message: `Workspace orchestrator failed before assigning task ${nextTask.id}`,
-      error
-    });
-      nextTask.status = 'failed';
-      nextTask.error = `Workspace initialization failed: ${error instanceof Error ? error.message : String(error)}`;
-      nextTask.completedAt = new Date().toISOString();
-      nextTask.canRetry = true;
-      this.taskQueue.splice(0, 1);
-      this.completedTasks.push(nextTask);
-      this.taskPersistence.saveCompletedTasks([nextTask]);
-      return;
-    }
- 
-    // Get agent personality, but check if it's compatible with available worker type
-    const requestedAgent = this.agentManager.getPersonality(nextTask.assignedAgent);
-    if (!requestedAgent) {
-      logger.error({
-        category: 'process',
-        action: 'agent_not_found',
-        message: `No agent found for ${nextTask.assignedAgent}`
-      });
-      return;
-    }
-
-    // Workers are generic instances - assign any available worker to any task
-    // The worker will get the personality based on the task's assigned agent
-    logger.info({
-      category: 'process',
-      action: 'assigning_task_nexttask_id_to_available_worker_wit',
-      message: `Assigning task ${nextTask.id} to available worker with agent ${requestedAgent.id}`
-    });
-    
-    const agent = requestedAgent;
-    
-    // Remove from queue
-    const taskIndex = this.taskQueue.indexOf(nextTask);
-    this.taskQueue.splice(taskIndex, 1);
-    
-    // Generate task prompt (worktree will be determined in createEphemeralWorker)
-    const taskContext: TaskContext = {
-      task: nextTask,
-      agent: agent,
-      project: nextTask.project || 'dev-monitor',
-      worktree: '[dynamic workspace provisioned per task]',
-      environment: 'development'
+  /**
+   * Calculate task fingerprint for deduplication
+   * Uses title, files, and acceptance criteria to detect duplicate tasks
+   */
+  private calculateTaskFingerprint(taskData: EnhancedTaskData): string {
+    const fingerprintData = {
+      title: taskData.title.toLowerCase().trim(),
+      files: taskData.files?.sort() || [],
+      acceptanceCriteria: taskData.acceptanceCriteria?.slice(0, 3) || [] // First 3 criteria
     };
-    
-    nextTask.prompt = this.templateManager.generatePrompt(taskContext);
-    nextTask.assignedAgent = agent.id;
-    nextTask.status = 'assigned';
-    nextTask.assignedAt = new Date().toISOString();
-    
-    this.activeTasks.set(nextTask.id, nextTask);
-    
-    try {
-      // Create ephemeral worker and execute task
-      const ephemeralWorker = await this.createEphemeralWorker(nextTask, agent);
-      nextTask.assignedWorker = ephemeralWorker.id;
-      
-      // Execute task in container
-      this.executeTaskInEphemeralWorker(ephemeralWorker);
-      
-      logger.info({
-      category: 'process',
-      action: 'task_assigned_to_ephemeral_worker_nexttask_id_ephe',
-      message: `Task assigned to ephemeral worker: ${nextTask.id} -> ${ephemeralWorker.id}`
-    });
-      
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_create_ephemeral_worker_for_task_nexttas',
-      message: `Failed to create ephemeral worker for task ${nextTask.id}:`,
-      error: error
-    });
-      
-      // Mark task as failed
-      nextTask.status = 'failed';
-      nextTask.error = error instanceof Error ? error.message : String(error);
-      nextTask.completedAt = new Date().toISOString();
-      nextTask.canRetry = true;
-      this.activeTasks.delete(nextTask.id);
-      this.completedTasks.push(nextTask);
-      this.taskPersistence.saveCompletedTasks([nextTask]);
-      
-      // Try next task
-      this.assignNextTask();
-    }
-    
-    // Save to persistence
-    this.saveTasksToPersistence();
-    
-    this.emit('taskAssigned', nextTask);
+    const fingerprintString = JSON.stringify(fingerprintData);
+    return crypto.createHash('md5').update(fingerprintString).digest('hex');
   }
 
-  private saveTasksToPersistence(): void {
-    try {
-      const allTasks = [
-        ...this.taskQueue,
-        ...Array.from(this.activeTasks.values()),
-        ...this.completedTasks
-      ];
-      this.taskPersistence.saveTasks(allTasks);
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_save_tasks_to_persistence',
-      message: 'Failed to save tasks to persistence:',
-      error: error
-    });
-    }
+  /**
+   * Assign next task from queue to available worker
+   * Delegated to TaskExecutionService
+   */
+  async assignNextTask(): Promise<void> {
+    await this.taskExecutionService.assignNextTask(() => this.assignNextTask());
   }
 
   public completeWorkerOnboarding(workerId: string): void {
@@ -1045,370 +820,22 @@ export class DevBotsManager extends EventEmitter {
   }
 
   public getWorkerCount(): number {
-    return this.ephemeralWorkers.size;
+    return this.ephemeralWorkerService.getActiveWorkers().length;
   }
 
   public getMaxWorkers(): number {
-    return this.MAX_CONCURRENT_WORKERS;
+    return 2;
   }
-
 
 
 
   /**
-   * Create a new ephemeral Docker container for a task
+   * Choose which agent type (CLI tool) to use for the next task
+   * Implements rotation strategy for agent comparison
    */
-  private async createEphemeralWorker(task: Task, agent: AgentPersonality): Promise<EphemeralWorker> {
-    const activeWorkers = Array.from(this.ephemeralWorkers.values()).filter(
-      worker => worker.status !== 'destroyed'
-    );
-
-    if (activeWorkers.length >= this.MAX_CONCURRENT_WORKERS) {
-      throw new Error('Maximum concurrent dev-bots are already active');
-    }
-
-    const workspace = this.workspaceOrchestrator.createWorkspace(task.id, agent.id);
-    const workerId = `bot-${agent.id}-${Date.now()}`;
-    const containerName = `dev-bot-${workerId}`;
-    
-    try {
-      const hostLogsDir = this.getHostLogsDir();
-      if (!fs.existsSync(hostLogsDir)) {
-        fs.mkdirSync(hostLogsDir, { recursive: true });
-      }
-
-      const binds = [
-        `${process.cwd()}:/app:ro`,
-        `${workspace.hostPath}:/workspace:rw`,
-        `${hostLogsDir}:/app/logs:rw`
-      ];
-
-      const homeDir = os.homedir();
-      const claudeDir = path.join(homeDir, '.claude');
-      if (fs.existsSync(claudeDir)) {
-        binds.push(`${claudeDir}:/app/claude-context:ro`);
-      }
-
-      const gitCredentials = path.join(homeDir, '.git-credentials');
-      if (fs.existsSync(gitCredentials)) {
-        binds.push(`${gitCredentials}:/home/worker/.git-credentials:ro`);
-      }
-
-      const sshDir = path.join(homeDir, '.ssh');
-      if (fs.existsSync(sshDir)) {
-        binds.push(`${sshDir}:/home/worker/.ssh:ro`);
-      }
-
-      const envVars = [
-        `AGENT_ID=${agent.id}`,
-        `AGENT_NAME=${agent.name}`,
-        `TASK_ID=${task.id}`,
-        `WORKER_ID=${workerId}`,
-        `WORKSPACE_BRANCH=${workspace.branchName}`,
-        `WORKSPACE_ID=${workspace.id}`
-      ];
-
-      for (const key of this.getEnvPassthroughKeys()) {
-        const value = process.env[key];
-        if (value && value.length > 0) {
-          envVars.push(`${key}=${value}`);
-        }
-      }
-
-      const container = await this.docker.createContainer({
-        Image: this.getAgentDockerImage(agent),
-        name: containerName,
-        Cmd: ['/bin/bash', '-c', 'tail -f /dev/null'],
-        Env: envVars,
-        WorkingDir: `/workspace`,
-        HostConfig: {
-          Memory: 512 * 1024 * 1024,
-          CpuQuota: 50000,
-          AutoRemove: true,
-          Binds: binds
-        },
-        Labels: {
-          'claude.worker.id': workerId,
-          'claude.agent.id': agent.id,
-          'claude.task.id': task.id,
-          'claude.workspace.id': workspace.id
-        }
-      });
-
-      await container.start();
-      await this.initializeWorkerLogFile(workerId);
-
-      const ephemeralWorker: EphemeralWorker = {
-        id: workerId,
-        containerId: container.id,
-        agent,
-        task,
-        status: 'starting',
-        createdAt: new Date().toISOString(),
-        workspace
-      };
-
-      this.ephemeralWorkers.set(workerId, ephemeralWorker);
-      
-      logger.info({
-      category: 'process',
-      action: 'created_ephemeral_worker_workerid_with_container_c',
-      message: `Created ephemeral worker ${workerId} with container ${container.id}`
-    });
-      return ephemeralWorker;
-      
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_create_ephemeral_worker_workerid',
-      message: `Failed to create ephemeral worker ${workerId}:`,
-      error: error
-    });
-      this.workspaceOrchestrator.cleanupWorkspace(workspace);
-      throw error;
-    }
-  }
-
-  /**
-   * Get Docker image for agent personality
-   * All agents now use the same custom dev-bot image with Claude CLI pre-installed
-   */
-  private getAgentDockerImage(_agent: AgentPersonality): string {
-    // Use the custom dev-bot image for all agents
-    // This image has Claude CLI and all required tools pre-installed
-    return DockerManager.getDevBotImage();
-  }
-
-  /**
-   * Resolve the host directory used for worker log files
-   */
-  private getHostLogsDir(): string {
-    return path.resolve(process.cwd(), '../../logs');
-  }
-
-  private getEnvPassthroughKeys(): string[] {
-    const defaults: string[] = [];
-    const extra =
-      process.env.DEV_BOT_PASSTHROUGH_ENVS?.split(',').map(entry => entry.trim()).filter(Boolean) ??
-      [];
-    return Array.from(new Set([...defaults, ...extra]));
-  }
-
-  /**
-   * Execute task in ephemeral worker container
-   */
-  private async executeTaskInEphemeralWorker(worker: EphemeralWorker): Promise<void> {
-    try {
-      worker.status = 'running';
-      
-      const container = this.docker.getContainer(worker.containerId);
-      
-      // Determine log file path per worker
-      const sanitizedId = worker.id.replace(/[^a-zA-Z0-9-_]/g, '_');
-      const logFile = `/app/logs/${sanitizedId}.log`;
-      
-      // Generate task execution command with logging
-      const executionCommand = this.generateTaskExecutionCommandWithLogging(worker.task, worker.agent, logFile);
-      
-      // Execute task in container
-      const exec = await container.exec({
-        Cmd: ['/bin/bash', '-c', executionCommand],
-        AttachStdout: true,
-        AttachStderr: true
-      });
-
-      const stream = await exec.start({
-        Detach: false,
-        Tty: false
-      });
-
-      let output = '';
-      let errorOutput = '';
-
-      stream.on('data', (data: Buffer) => {
-        const chunk = data.toString();
-        if (chunk.startsWith('1:')) {
-          output += chunk.substring(2);
-        } else if (chunk.startsWith('2:')) {
-          errorOutput += chunk.substring(2);
-        }
-      });
-
-      // Wait for execution to complete
-      await new Promise((resolve, reject) => {
-        stream.on('end', resolve);
-        stream.on('error', reject);
-      });
-
-      // Get exit code
-      const inspect = await exec.inspect();
-      const exitCode = inspect.ExitCode || 0;
-
-      // Complete the task
-      await this.completeEphemeralTask(worker, output, errorOutput, exitCode);
-      
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'task_execution_failed_for_worker_worker_id',
-      message: `Task execution failed for worker ${worker.id}:`,
-      error: error
-    });
-      await this.failEphemeralTask(worker, error instanceof Error ? error : { message: String(error) });
-    }
-  }
-
-  /**
-   * Generate task execution command for container
-   * Generates a proper Claude CLI command with the task prompt
-   */
-  private generateTaskExecutionCommand(task: Task, _agent: AgentPersonality): string {
-    // Escape the prompt for shell execution
-    const escapedPrompt = (task.prompt || task.description || task.title)
-      .replace(/\\/g, '\\\\')
-      .replace(/"/g, '\\"')
-      .replace(/\$/g, '\\$')
-      .replace(/`/g, '\\`');
-
-    // Build Claude CLI command
-    const command = [
-      'claude',
-      '-p', `"${escapedPrompt}"`,
-      '--allowedTools', 'Bash,Read,Write,Edit,Grep,Glob,WebSearch,WebFetch',
-      '--workingDirectory', '/workspace',
-      '--print'
-    ];
-
-    // Add any task-specific files
-    if (task.files && task.files.length > 0) {
-      command.push('--files', task.files.join(','));
-    }
-
-    // Add project context
-    if (task.project) {
-      command.push('--context', `project:${task.project}`);
-    }
-
-    const fullCommand = command.join(' ');
-    logger.info({
-      category: 'process',
-      action: 'generated_task_execution_command_fullcommand_subst',
-      message: `Generated task execution command: ${fullCommand.substring(0, 100)}...`
-    });
-
-    return fullCommand;
-  }
-
-  /**
-   * Generate task execution command with worker-specific logging
-   * Generates a proper Claude CLI command with the task prompt and logs to worker-specific file
-   */
-  private generateTaskExecutionCommandWithLogging(task: Task, agent: AgentPersonality, logFile: string): string {
-    // Escape the prompt for shell execution
-    const escapedPrompt = (task.prompt || task.description || task.title)
-      .replace(/\\/g, '\\\\')
-      .replace(/"/g, '\\"')
-      .replace(/\$/g, '\\$')
-      .replace(/`/g, '\\`');
-
-    // Build Claude CLI command with logging
-    const command = [
-      'claude',
-      '-p', `"${escapedPrompt}"`,
-      '--allowedTools', 'Bash,Read,Write,Edit,Grep,Glob,WebSearch,WebFetch',
-      '--workingDirectory', '/workspace',
-      '--print'
-    ];
-
-    // Add any task-specific files
-    if (task.files && task.files.length > 0) {
-      command.push('--files', task.files.join(','));
-    }
-
-    // Add project context
-    if (task.project) {
-      command.push('--context', `project:${task.project}`);
-    }
-
-    const claudeCommand = command.join(' ');
-
-    const prepClaudeContext = [
-      'rm -rf ~/.claude',
-      'mkdir -p ~/.claude',
-      'if [ -d /app/claude-context ]; then cp -a /app/claude-context/. ~/.claude/; fi'
-    ];
-
-    // Create a wrapper command that logs to the worker-specific file
-    const wrapperCommand = [
-      'echo "=== Worker Task Execution Started ===" >> ' + logFile,
-      'echo "Timestamp: $(date)" >> ' + logFile,
-      'echo "Worker: ' + agent.name + '" >> ' + logFile,
-      'echo "Task: ' + task.title + '" >> ' + logFile,
-      'echo "=====================================" >> ' + logFile,
-      ...prepClaudeContext,
-      claudeCommand + ' 2>&1 | tee -a ' + logFile,
-      'echo "=== Worker Task Execution Completed ===" >> ' + logFile,
-      'echo "Exit Code: $?" >> ' + logFile,
-      'echo "=======================================" >> ' + logFile
-    ].join(' && ');
-
-    logger.info({
-      category: 'process',
-      action: 'generated_task_execution_command_with_logging_wrap',
-      message: `Generated task execution command with logging: ${wrapperCommand.substring(0, 100)}...`
-    });
-
-    return wrapperCommand;
-  }
 
   /**
    * Initialize worker-specific log file
-   */
-  private async initializeWorkerLogFile(workerId: string): Promise<void> {
-    try {
-      const fs = await import('fs');
-      const path = await import('path');
-      
-      // Ensure logs directory exists (use root logs directory)
-      const logsDir = this.getHostLogsDir();
-      if (!fs.existsSync(logsDir)) {
-        fs.mkdirSync(logsDir, { recursive: true });
-        logger.info({
-      category: 'process',
-      action: 'created_logs_directory_logsdir',
-      message: `Created logs directory: ${logsDir}`
-    });
-      }
-      
-      // Initialize worker log file with header
-      const sanitizedId = workerId.replace(/[^a-zA-Z0-9-_]/g, '_');
-      const logFile = path.join(logsDir, `${sanitizedId}.log`);
-      const timestamp = new Date().toISOString();
-      const header = `=== ${workerId.toUpperCase()} WORKER LOG ===\n` +
-                    `Initialized: ${timestamp}\n` +
-                    `Worker ID: ${workerId}\n` +
-                    `=====================================\n\n`;
-      
-      // Append header to log file (don't overwrite existing content)
-      fs.appendFileSync(logFile, header);
-      logger.info({
-      category: 'process',
-      action: 'initialized_worker_log_file_logfile',
-      message: `Initialized worker log file: ${logFile}`
-    });
-      
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_initialize_worker_log_file_for_workertyp',
-      message: `Failed to initialize worker log file for ${workerId}:`,
-      error: error
-    });
-    }
-  }
-
-  /**
-   * Extract and record token usage from task output
    */
   private extractAndRecordTokenUsage(task: Task, output: string): void {
     try {
@@ -1424,11 +851,11 @@ export class DevBotsManager extends EventEmitter {
         const outputTokens = parseInt(outputMatch[1], 10);
 
         // Determine provider from task or default to 'claude'
-        const provider = task.assignedAgent?.includes('codex') ? 'codex' : 'claude';
+        const provider = task.assigned_agent?.includes('codex') ? 'codex' : 'claude';
 
         tokenTracking.recordUsage({
           provider,
-          model: task.assignedAgent || 'unknown',
+          model: task.assigned_agent || 'unknown',
           taskId: task.id,
           inputTokens,
           outputTokens
@@ -1455,332 +882,14 @@ export class DevBotsManager extends EventEmitter {
    * Run quality gate validation on a completed task
    * This is async and runs in the background - it doesn't block task completion
    */
-  private async runQualityGateValidation(task: Task, workspacePath: string): Promise<QualityValidationResult> {
-    try {
-      const qualityGates = getQualityGateValidator();
-
-      // Determine project name from task
-      const project = task.project || 'unknown';
-
-      logger.info({
-        category: 'quality-gates',
-        action: 'validation_started',
-        message: `Starting quality gate validation for task ${task.id}`,
-        details: { project, workspacePath }
-      });
-
-      // Run validation (this is async and takes time)
-      const validationResult: QualityValidationResult = await qualityGates.validateTask(
-        task.id,
-        workspacePath,
-        project
-      );
-
-      // Store validation results in task
-      task.qualityValidation = validationResult;
-
-      logger.info({
-        category: 'quality-gates',
-        action: 'validation_completed',
-        message: `Quality gate validation completed for task ${task.id}`,
-        details: {
-          passed: validationResult.passed,
-          overallScore: validationResult.overallScore,
-          gatesPassed: validationResult.gates.filter(g => g.passed).length,
-          gatesTotal: validationResult.gates.length
-        }
-      });
-
-      // Emit event for UI updates
-      this.emit('quality_validation_completed', {
-        taskId: task.id,
-        result: validationResult
-      });
-
-      // If quality gates failed, optionally create a healing task
-      if (!validationResult.passed) {
-        logger.warn({
-          category: 'quality-gates',
-          action: 'validation_failed',
-          message: `Quality gates failed for task ${task.id}`,
-          details: {
-            failedGates: validationResult.gates.filter(g => !g.passed).map(g => g.gate)
-          }
-        });
-
-        // TODO: Create auto-healing task
-        // this.createHealingTask(task, validationResult);
-      }
-
-      return validationResult;
-    } catch (error) {
-      logger.error({
-        category: 'quality-gates',
-        action: 'validation_error',
-        message: `Error running quality gate validation for task ${task.id}`,
-        error
-      });
-      
-      // Return a failed validation result instead of throwing
-      // to maintain consistent return type behavior
-      const failedResult: QualityValidationResult = {
-        taskId: task.id,
-        passed: false,
-        overallScore: 0,
-        gates: [],
-        duration: 0,
-        timestamp: new Date().toISOString()
-      };
-      
-      // Store the failed result in the task
-      task.qualityValidation = failedResult;
-      
-      return failedResult;
-    }
-  }
 
   /**
    * Complete task in ephemeral worker
    */
-  private async completeEphemeralTask(
-    worker: EphemeralWorker,
-    output: string,
-    errorOutput: string,
-    exitCode: number
-  ): Promise<void> {
-    worker.status = 'completing';
-
-    const task = worker.task;
-    task.output = output;
-    task.error = errorOutput;
-    task.exitCode = exitCode;
-
-    this.extractAndRecordTokenUsage(task, output);
-
-    const workspacePath = worker.workspace.hostPath;
-    let qualityValidation: QualityValidationResult | undefined;
-    let shouldPush = exitCode === 0;
-
-    if (shouldPush) {
-      qualityValidation = await this.runQualityGateValidation(task, workspacePath);
-      shouldPush = qualityValidation.passed;
-    }
-
-    let finalStatus: 'completed' | 'failed' = exitCode === 0 ? 'completed' : 'failed';
-    let failureReason: string | undefined;
-
-    if (shouldPush) {
-      const sealResult = await this.workspaceOrchestrator.sealWorkspace(worker.workspace, {
-        taskId: task.id,
-        taskTitle: task.title,
-        pushCoordinator: this.pushCoordinator
-      });
-
-      if (sealResult.status === 'success' || sealResult.status === 'noop') {
-        finalStatus = 'completed';
-        if (sealResult.commitSha) {
-          const commitNote = `Pushed commit ${sealResult.commitSha} to staging from workspace ${worker.workspace.id}`;
-          task.notes = task.notes ? `${task.notes}\n${commitNote}` : commitNote;
-        }
-      } else {
-        finalStatus = 'failed';
-        failureReason = sealResult.message || `Failed to push changes (${sealResult.status})`;
-        if (sealResult.patchPath) {
-          failureReason = `${failureReason}. Patch saved at ${sealResult.patchPath}`;
-        }
-      }
-    } else {
-      finalStatus = 'failed';
-      failureReason =
-        exitCode !== 0
-          ? `Task exited with code ${exitCode}`
-          : qualityValidation && !qualityValidation.passed
-          ? 'Quality gates failed'
-          : 'Task did not meet push requirements';
-
-      const patchPath = this.workspaceOrchestrator.createPatchArtifact(worker.workspace);
-      if (patchPath) {
-        failureReason = `${failureReason}. Workspace patch saved at ${patchPath}`;
-      }
-    }
-
-    task.status = finalStatus;
-    task.completedAt = new Date().toISOString();
-
-    if (failureReason) {
-      task.error = [task.error, failureReason].filter(Boolean).join('\n');
-      task.canRetry = true;
-    }
-
-    this.activeTasks.delete(task.id);
-    this.completedTasks.push(task);
-    this.taskPersistence.saveCompletedTasks([task]);
-
-    await this.destroyEphemeralWorker(worker.id);
-
-    if (finalStatus === 'completed') {
-      logger.info({
-        category: 'process',
-        action: 'task_completed_worker_task_id',
-        message: `Task completed: ${task.id}`
-      });
-    } else {
-      logger.warn({
-        category: 'process',
-        action: 'task_failed_to_push',
-        message: `Task ${task.id} finished with status ${finalStatus}`,
-        details: { failureReason }
-      });
-    }
-
-    const activeWorkers = Array.from(this.ephemeralWorkers.values()).filter(
-      workerInfo => workerInfo.status !== 'destroyed'
-    );
-    logger.info({
-      category: 'process',
-      action: 'active_workers_after_completion',
-      message: `Active workers after completion: ${activeWorkers.length} (${activeWorkers
-        .map(w => w.id)
-        .join(', ')})`
-    });
-
-    await this.assignNextTask();
-  }
-
-  /**
-   * Fail task in ephemeral worker
-   */
-  private async failEphemeralTask(worker: EphemeralWorker, error: Error | { message: string }): Promise<void> {
-    worker.status = 'completing';
-    
-    // Update task
-    worker.task.status = 'failed';
-    worker.task.completedAt = new Date().toISOString();
-    const baseError = error instanceof Error ? error.message : String(error);
-    let failureMessage = baseError;
-    const patchPath = this.workspaceOrchestrator.createPatchArtifact(worker.workspace);
-    if (patchPath) {
-      failureMessage = `${baseError}\nWorkspace patch saved at ${patchPath}`;
-    }
-    worker.task.error = failureMessage;
-    worker.task.exitCode = 1;
-    worker.task.canRetry = true;
-    
-    // Move to completed tasks
-    this.activeTasks.delete(worker.task.id);
-    this.completedTasks.push(worker.task);
-    
-    // Save to persistence
-    this.taskPersistence.saveCompletedTasks([worker.task]);
-    
-    // Destroy container
-    await this.destroyEphemeralWorker(worker.id);
-    
-    logger.error({
-      category: 'process',
-      action: 'task_failed_worker_task_id',
-      message: `Task failed: ${worker.task.id}`,
-      error: error
-    });
-    
-    // Log current worker status for debugging
-    const activeWorkers = Array.from(this.ephemeralWorkers.values()).filter(
-      worker => worker.status !== 'destroyed'
-    );
-    logger.info({
-      category: 'process',
-      action: 'active_workers_after_failure',
-      message: `Active workers after failure: ${activeWorkers.length} (${activeWorkers.map(w => w.id).join(', ')})`
-    });
-    
-    // Try to assign next task (now that we have a free worker slot)
-    await this.assignNextTask();
-  }
 
   /**
    * Destroy ephemeral worker container
    */
-  private async destroyEphemeralWorker(workerId: string): Promise<void> {
-    const worker = this.ephemeralWorkers.get(workerId);
-    if (!worker) return;
-
-    try {
-      const container = this.docker.getContainer(worker.containerId);
-
-      // Get container logs before destruction for debugging
-      try {
-        const logs = await this.dockerManager.getContainerLogs(worker.containerId, 50);
-        if (logs) {
-          logger.info({
-      category: 'process',
-      action: 'container_worker_containerid_logs_last_50_lines_n_',
-      message: `Container ${worker.containerId} logs (last 50 lines):\n${logs}`
-    });
-        }
-      } catch (logError) {
-        logger.warn({
-      category: 'process',
-      action: 'could_not_retrieve_logs_for_container_worker_conta',
-      message: `Could not retrieve logs for container ${worker.containerId}:`,
-      details: { logError }
-    });
-      }
-
-      // Stop container if running
-      try {
-        await container.stop({ t: 10 }); // 10 second grace period
-      } catch (error) {
-        // Container might already be stopped
-        logger.warn({
-      category: 'process',
-      action: 'container_worker_containerid_already_stopped_or_er',
-      message: `Container ${worker.containerId} already stopped or error stopping:`,
-      details: { error }
-    });
-      }
-
-      // Remove container (includes volumes with AutoRemove: true)
-      await container.remove({ v: true, force: true });
-
-      worker.status = 'destroyed';
-      worker.destroyedAt = new Date().toISOString();
-
-      // Remove from ephemeral workers map
-      this.ephemeralWorkers.delete(workerId);
-
-      logger.info({
-      category: 'process',
-      action: 'destroyed_ephemeral_worker_workerid_and_cleaned_up',
-      message: `Destroyed ephemeral worker ${workerId} and cleaned up resources`
-    });
-
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_destroy_ephemeral_worker_workerid',
-      message: `Failed to destroy ephemeral worker ${workerId}:`,
-      error: error
-    });
-      // Emit error event for frontend
-      this.emit('workerError', {
-        workerId,
-        type: 'cleanup_failed',
-        error: error instanceof Error ? error.message : String(error)
-      });
-    }
-
-    try {
-      this.workspaceOrchestrator.cleanupWorkspace(worker.workspace);
-    } catch (cleanupError) {
-      logger.warn({
-        category: 'process',
-        action: 'workspace_cleanup_after_destroy_failed',
-        message: `Workspace cleanup failed for worker ${workerId}`,
-        error: cleanupError
-      });
-    }
-  }
-
   public startSystem(): void {
     if (this.isCoordinatorHealthy) {
       logger.info({
@@ -1794,7 +903,7 @@ export class DevBotsManager extends EventEmitter {
     this.isCoordinatorHealthy = true;
     
     // Clear any existing ephemeral workers
-    this.ephemeralWorkers.clear();
+    this.ephemeralWorkerService.clearAllWorkers();
     
     this.emit('systemStatusChange', 'running');
     logger.info({
@@ -1807,7 +916,7 @@ export class DevBotsManager extends EventEmitter {
     this.assignNextTask();
   }
 
-  public stopSystem(): void {
+  public async stopSystem(): Promise<void> {
     if (!this.isCoordinatorHealthy) {
       logger.info({
       category: 'process',
@@ -1818,26 +927,25 @@ export class DevBotsManager extends EventEmitter {
     }
 
     this.isCoordinatorHealthy = false;
-    
+
     // Stop all active ephemeral workers
-    for (const worker of this.ephemeralWorkers.values()) {
+    for (const worker of this.ephemeralWorkerService.getAllWorkers().values()) {
       if (worker.status !== 'destroyed') {
         // Mark task as failed and destroy container
         worker.task.status = 'failed';
         worker.task.error = 'System stopped';
-        worker.task.completedAt = new Date().toISOString();
-        worker.task.canRetry = true;
-        this.activeTasks.delete(worker.task.id);
-        this.completedTasks.push(worker.task);
+        worker.task.completed_at = Date.now();
+        worker.task.can_retry = true;
+        // Task status already updated in SQLite (no in-memory storage needed)
         this.taskPersistence.saveCompletedTasks([worker.task]);
-        
+
         // Destroy container
-        this.destroyEphemeralWorker(worker.id);
+        await this.ephemeralWorkerService.destroyWorker(worker.id);
       }
     }
     
-    this.ephemeralWorkers.clear();
-    this.activeTasks.clear();
+    this.ephemeralWorkerService.clearAllWorkers();
+    // activeTasks removed - SQLite is source of truth
     
     this.emit('systemStatusChange', 'stopped');
     logger.info({
@@ -1849,10 +957,12 @@ export class DevBotsManager extends EventEmitter {
 
   public exportTasks(exportPath: string): void {
     try {
+      // Get all tasks from SQLite
       const allTasks = [
-        ...this.taskQueue,
-        ...Array.from(this.activeTasks.values()),
-        ...this.completedTasks
+        ...this.taskQueue.getTasksByStatus('pending'),
+        ...this.taskQueue.getTasksByStatus('running'),
+        ...this.taskQueue.getTasksByStatus('completed'),
+        ...this.taskQueue.getTasksByStatus('failed')
       ];
       this.taskPersistence.exportTasks(allTasks, exportPath);
       logger.info({
@@ -1871,27 +981,16 @@ export class DevBotsManager extends EventEmitter {
     }
   }
 
-  public importTasks(importPath: string): void {
+  public async importTasks(importPath: string): Promise<void> {
     try {
       const importedTasks = this.taskPersistence.importTasks(importPath);
       
-      // Clear existing tasks and reload
-      this.taskQueue = [];
-      this.activeTasks.clear();
-      this.completedTasks = [];
-      
-      // Separate tasks by status
+      // Import tasks directly into SQLite
       for (const task of importedTasks) {
-        if (task.status === 'pending') {
-          this.taskQueue.push(task);
-        } else if (task.status === 'assigned' || task.status === 'active') {
-          this.activeTasks.set(task.id, task);
-        } else if (task.status === 'completed' || task.status === 'failed') {
-          this.completedTasks.push(task);
-        }
+        await this.taskQueue.createTask(task);
       }
-      
-      this.saveTasksToPersistence();
+
+      // this.saveTasksToPersistence(); // DEPRECATED
       logger.info({
       category: 'process',
       action: 'imported_importedtasks_length_tasks_from_importpat',
@@ -1908,139 +1007,17 @@ export class DevBotsManager extends EventEmitter {
     }
   }
   
-  private async executeTask(task: Task): Promise<void> {
-    try {
-      task.status = 'active';
-      this.emit('taskStarted', task);
-      
-      const workerId = task.assignedWorker!;
-      const containerName = `claude-${workerId}`;
-      
-      // Build the prompt with scope constraints
-      const prompt = this.buildPromptWithScope(task);
-      
-      // Execute in Docker container
-      const container = this.docker.getContainer(containerName);
-      await container.exec({
-        Cmd: [
-          'su-exec', 'worker', 'claude', '-p', prompt,
-          '--allowedTools', 'Bash,Read,Write,Edit,Search,Git',
-          '--dangerously-skip-permissions',
-          '--print'
-        ],
-        AttachStdout: true,
-        AttachStderr: true,
-        Tty: false
-      });
-
-      // For now, simulate task execution
-      const output = `Task ${task.id} executed successfully`;
-      
-      // Check for scope violations
-      const violations = this.scopeCreepDetector.detectCreepPatterns(task, output);
-      if (violations.length > 0) {
-        logger.warn({
-      category: 'process',
-      action: 'scope_violation_task_task_id_has_violations',
-      message: `[SCOPE_VIOLATION] Task ${task.id} has violations:`,
-      details: { violations }
-    });
-        this.contextIsolation.isolateContaminatedContext(task.id, violations);
-        this.snowballPrevention.detectViolationChain(task.id, violations);
-      }
-      
-      // Complete task
-      task.status = 'completed';
-      task.completedAt = new Date().toISOString();
-      task.output = output;
-      task.exitCode = 0;
-
-      // Extract and record token usage
-      this.extractAndRecordTokenUsage(task, output);
-
-      this.activeTasks.delete(task.id);
-      this.completedTasks.push(task);
-
-      // Save completed task to persistence
-      this.taskPersistence.saveCompletedTasks([task]);
-      
-      // Update worker status
-      const worker = this.workers.get(workerId);
-      if (worker) {
-        worker.status = 'idle';
-        worker.currentTask = undefined;
-        worker.lastSeen = Date.now();
-      }
-      
-      this.emit('taskCompleted', task);
-      logger.info({
-      category: 'process',
-      action: 'task_completed_task_id',
-      message: `Task completed: ${task.id}`
-    });
-      
-      // Try to assign next task
-      await this.assignNextTask();
-      
-    } catch (error) {
-      // Handle task failure
-      task.status = 'failed';
-      task.completedAt = new Date().toISOString();
-      task.error = error instanceof Error ? error.message : String(error);
-      task.exitCode = 1;
-      task.canRetry = true; // Allow manual retry by default
-      
-      this.activeTasks.delete(task.id);
-      
-      // Add failed task to completed tasks (no automatic retry)
-      this.completedTasks.push(task);
-      this.taskPersistence.saveCompletedTasks([task]);
-      this.emit('taskFailed', task);
-      logger.error({
-        category: 'process',
-        action: 'task_failed',
-        message: `Task ${task.id} failed`
-      });
-      
-      // Update worker status
-      const worker = this.workers.get(task.assignedWorker!);
-      if (worker) {
-        worker.status = 'idle';
-        worker.currentTask = undefined;
-        worker.lastSeen = Date.now();
-      }
-      
-      // Try to assign next task
-      await this.assignNextTask();
-    }
-  }
-  
-  private buildPromptWithScope(task: Task): string {
-    let prompt = task.description || '';
-
-    if (task.scope) {
-      prompt += `\n\nSCOPE CONSTRAINTS:\n`;
-      prompt += `- DO NOT create new files - only modify existing ones\n`;
-      prompt += `- Maximum changes: ${task.scope.boundaries.maxChanges}\n`;
-      prompt += `- Forbidden actions: ${task.scope.boundaries.forbiddenActions.join(', ')}\n`;
-      prompt += `- Maximum new lines: ${task.scope.boundaries.maxNewLines}\n`;
-      prompt += `- Forbidden patterns: ${task.scope.validation.forbiddenPatterns.join(', ')}\n`;
-      prompt += `- Allowed patterns: ${task.scope.validation.allowedPatterns?.join(', ') || 'None'}\n`;
-    }
-    
-    return prompt;
-  }
 
   async getSystemStatus(): Promise<DevBotsStatus> {
     // Convert ephemeral workers to worker status format for compatibility
     const workersRecord: Record<string, WorkerStatus> = {};
-    const activeEphemeralWorkers = Array.from(this.ephemeralWorkers.values()).filter(
+    const activeEphemeralWorkers = Array.from(this.ephemeralWorkerService.getAllWorkers().values()).filter(
       worker => worker.status !== 'destroyed'
     );
-    for (const [workerId, ephemeralWorker] of this.ephemeralWorkers.entries()) {
+    for (const [workerId, ephemeralWorker] of this.ephemeralWorkerService.getAllWorkers().entries()) {
       workersRecord[workerId] = {
         id: workerId,
-        status: ephemeralWorker.status === 'starting' ? 'busy' : 
+        status: ephemeralWorker.status === 'starting' ? 'busy' :
                 ephemeralWorker.status === 'running' ? 'busy' :
                 ephemeralWorker.status === 'completing' ? 'busy' : 'stopped',
         currentTask: ephemeralWorker.task.id,
@@ -2053,29 +1030,29 @@ export class DevBotsManager extends EventEmitter {
     return {
       systemStatus: this.isCoordinatorHealthy ? 'running' : 'stopped',
       workers: workersRecord,
-      queueSize: this.taskQueue.length,
-      activeTasks: this.activeTasks.size,
+      queueSize: this.taskQueue.getTasksByStatus('pending').length,
+      activeTasks: this.taskQueue.getTasksByStatus('running').length,
       uptime: Date.now() - this.startTime,
-      workerCount: this.ephemeralWorkers.size,
-      maxWorkers: this.MAX_CONCURRENT_WORKERS,
+      workerCount: this.ephemeralWorkerService.getActiveWorkers().length,
+      maxWorkers: 2,
       activeWorkerTypes: activeEphemeralWorkers.map(w => w.id),
       availableWorkerTypes: Array.from(
-        { length: Math.max(this.MAX_CONCURRENT_WORKERS - activeEphemeralWorkers.length, 0) },
+        { length: Math.max(2 - activeEphemeralWorkers.length, 0) },
         (_value, index) => `slot-${index + 1}`
       ),
       tasks: {
-        pending: this.taskQueue,
-        active: Array.from(this.activeTasks.values()),
-        completed: this.completedTasks.slice(-50) // Keep last 50 completed tasks
+        pending: this.taskQueue.getTasksByStatus('pending'),
+        active: this.taskQueue.getTasksByStatus('running'),
+        completed: this.taskQueue.getTasksByStatus('completed').slice(-50) // Keep last 50 completed tasks
       }
     };
   }
 
   async getTasks(): Promise<{ pending: Task[]; active: Task[]; completed: Task[] }> {
     return {
-      pending: this.taskQueue,
-      active: Array.from(this.activeTasks.values()),
-      completed: this.completedTasks.slice(-50)
+      pending: this.taskQueue.getTasksByStatus('pending'),
+      active: this.taskQueue.getTasksByStatus('running'),
+      completed: this.taskQueue.getTasksByStatus('completed').slice(-50)
     };
   }
 
@@ -2091,47 +1068,37 @@ export class DevBotsManager extends EventEmitter {
 
   async triggerEmergencyRecovery(): Promise<Task> {
     const recoveryTask: Task = {
-      id: `task-${this.taskIdCounter++}-${Date.now()}`,
+      id: `task-recovery-${Date.now()}`,
       type: 'recovery',
       title: 'Emergency Recovery Task',
       description: 'EMERGENCY RECOVERY: Clean up scope creep and restore system to stable state. DO NOT create new files. Only remove unnecessary code.',
       status: 'pending',
-      createdAt: new Date().toISOString(),
-      assignedAgent: 'backend-specialist',
-      scope: {
-        type: 'cleanup',
-        boundaries: {
-          maxChanges: 1,
-          forbiddenActions: ['create-new-files', 'add-dependencies', 'modify-existing-code'],
-          maxNewLines: 5
-        },
-        validation: {
-          forbiddenPatterns: ['create', 'new', 'add', 'modify', 'complex', 'sophisticated'],
-          allowedPatterns: ['remove', 'delete', 'clean', 'revert', 'simplify']
-        }
-      },
-      isEmergency: true
-    };
-    
-    this.taskQueue.unshift(recoveryTask);
+      created_at: Date.now(),
+      assigned_agent: 'backend-specialist'
+      // scope and isEmergency removed from Task interface
+    } as any;
+
+    // TaskQueueService doesn't have unshift(), use createTask instead
+    await this.taskQueue.createTask(recoveryTask);
     await this.assignNextTask();
     return recoveryTask;
   }
 
   async getCleanupStatus(): Promise<{ schedules: string[]; recentTasks: Task[] }> {
-    const recentCleanupTasks = this.completedTasks
+    const completedTasks = this.taskQueue.getTasksByStatus('completed');
+    const recentCleanupTasks = completedTasks
       .filter(t => t.type === 'cleanup')
       .slice(-10);
 
     return {
-      schedules: this.cleanupScheduler.checkSchedules(),
+      schedules: this.scopeControl.checkCleanupSchedules(),
       recentTasks: recentCleanupTasks
     };
   }
 
   async triggerCleanup(type: string): Promise<Task> {
-    const cleanupTask = this.cleanupScheduler.createCleanupTask(type, this.taskIdCounter++);
-    this.taskQueue.push(cleanupTask);
+    const cleanupTask = this.scopeControl.createCleanupTask(type, Date.now());
+    await this.taskQueue.createTask(cleanupTask);
     await this.assignNextTask();
     return cleanupTask;
   }
@@ -2260,13 +1227,13 @@ export class DevBotsManager extends EventEmitter {
       
       // Reset task status for retry
       task.status = 'pending';
-      task.assignedWorker = undefined;
-      task.assignedAt = undefined;
+      task.assigned_worker = undefined;
+      task.assigned_at = undefined;
       task.error = undefined;
-      task.exitCode = undefined;
-      
-      // Add task back to queue
-      this.taskQueue.push(task);
+      // task.exitCode removed from interface
+
+      // Add task back to queue (update in SQLite)
+      await this.taskQueue.updateTask(task.id, task);
       
       // Emit retry event
       this.emit('taskRetrying', task);
@@ -2290,10 +1257,10 @@ export class DevBotsManager extends EventEmitter {
    */
   public async retryTask(taskId: string, reason?: string): Promise<{ success: boolean; message: string }> {
     try {
-      // Find the task in completed tasks
-      const task = this.completedTasks.find(t => t.id === taskId);
+      // Find the task in SQLite
+      const task = await this.taskQueue.getTask(taskId);
       if (!task) {
-        return { success: false, message: 'Task not found in completed tasks' };
+        return { success: false, message: 'Task not found' };
       }
 
       if (task.status !== 'failed') {
@@ -2309,15 +1276,11 @@ export class DevBotsManager extends EventEmitter {
       const retryResult = this.retryManager.retryTask(task, reason || 'Manual retry');
       
       if (retryResult.success) {
-        // Remove from completed tasks
-        const taskIndex = this.completedTasks.findIndex(t => t.id === taskId);
-        if (taskIndex !== -1) {
-          this.completedTasks.splice(taskIndex, 1);
-        }
-        
-        // Add retry task back to queue
-        this.taskQueue.push(retryResult.task);
-        
+        // Task already updated in SQLite (no in-memory storage needed)
+
+        // Update retry task in SQLite
+        await this.taskQueue.updateTask(retryResult.task.id, retryResult.task);
+
         this.emit('taskRetrying', retryResult.task);
         return { success: true, message: 'Task queued for retry' };
       } else {
@@ -2344,20 +1307,20 @@ export class DevBotsManager extends EventEmitter {
   /**
    * Get retry information for a task
    */
-  public getRetryInfo(taskId: string): {
+  public async getRetryInfo(taskId: string): Promise<{
     canRetry: boolean;
     retryCount: number;
     maxRetries: number;
     retryHistory: RetryAttempt[];
     scheduledRetries: Array<{ taskId: string; retryAt: string; retryCount: number }>;
-  } {
-    const task = this.completedTasks.find(t => t.id === taskId);
+  }> {
+    const task = await this.taskQueue.getTask(taskId);
     const retryHistory = this.retryManager.getRetryHistory(taskId);
 
     return {
-      canRetry: task?.canRetry ?? (task?.status === 'failed'),
-      retryCount: task?.retryCount || 0,
-      maxRetries: task?.maxRetries || this.retryManager.getConfig().maxRetries,
+      canRetry: task?.can_retry ?? (task?.status === 'failed'),
+      retryCount: task?.retry_count || 0,
+      maxRetries: task?.max_retries || this.retryManager.getConfig().max_retries,
       retryHistory,
       scheduledRetries: [] // Manual retry system - no scheduled retries
     };

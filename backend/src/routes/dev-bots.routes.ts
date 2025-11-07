@@ -16,6 +16,12 @@
 import { Router, Request, Response } from 'express';
 import type { DevBotsManager } from '../services/devBotsManager.js';
 import { logger } from '../utils/logger.js';
+import type { LogEntry } from '../utils/logger.js';
+import { validateTaskTemplate, formatValidationErrors, isV3Template } from '../services/taskTemplateValidator.js';
+
+const TECHNICAL_TASK_TYPES = new Set(['refactor', 'implementation', 'bug', 'feature']);
+const MIN_DOCUMENTATION_LENGTH = 50;
+const MIN_ACCEPTANCE_CRITERION_LENGTH = 30;
 
 /**
  * Create Dev-Bots router
@@ -153,22 +159,154 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
    */
   router.post('/tasks', async (req: Request, res: Response) => {
     try {
-      const { type, title, documentation, acceptanceCriteria, files, dependencies, repository, assignedAgent, notes } = req.body;
-      
-      if (!type || !title || !documentation || !acceptanceCriteria) {
-        return res.status(400).json({
-          error: 'Type, title, documentation, and acceptanceCriteria are required'
-        });
-      }
-
-      const task = await devBotsManager.addTask(type, title, documentation, acceptanceCriteria, {
+      const {
+        type,
+        title,
+        documentation,
+        description,
+        acceptanceCriteria,
         files,
         dependencies,
         repository,
+        project,
         assignedAgent,
-        notes
+        notes,
+        architectureReferences,
+        validationSteps,
+        successMetrics,
+        estimatedEffort,
+      } = req.body;
+
+      // Accept either 'documentation' or 'description' field
+      const taskDescription = documentation || description;
+
+      if (!type || !title || !taskDescription || !acceptanceCriteria) {
+        return res.status(400).json({
+          error: 'Type, title, description, and acceptanceCriteria are required'
+        });
+      }
+
+      // Validate assignedAgent if provided
+      if (assignedAgent) {
+        const validAgents = devBotsManager.getValidAgents();
+        if (!validAgents.includes(assignedAgent)) {
+          return res.status(400).json({
+            error: `Invalid agent: ${assignedAgent}. Valid agents: ${validAgents.join(', ')}`
+          });
+        }
+      }
+
+      // V3 Template Validation (PE-API-VALIDATION-001)
+      // If the request body matches v3 template structure, enforce validation
+      if (isV3Template(req.body)) {
+        const validationResult = validateTaskTemplate(req.body);
+
+        // Log validation warnings even if template passes
+        if (validationResult.warnings.length > 0) {
+          logger.warn({
+            category: 'api',
+            action: 'v3_template_warnings',
+            message: 'V3 template validation warnings',
+            details: {
+              taskTitle: title,
+              warnings: validationResult.warnings
+            }
+          });
+        }
+
+        // Return error if template is invalid
+        if (!validationResult.isValid) {
+          logger.error({
+            category: 'api',
+            action: 'v3_template_validation_failed',
+            message: 'V3 template validation failed',
+            details: {
+              taskTitle: title,
+              errors: validationResult.errors,
+              warnings: validationResult.warnings
+            }
+          });
+
+          return res.status(400).json({
+            error: 'Task template validation failed',
+            details: formatValidationErrors(validationResult),
+            errors: validationResult.errors,
+            warnings: validationResult.warnings
+          });
+        }
+
+        logger.info({
+          category: 'api',
+          action: 'v3_template_validated',
+          message: 'V3 template passed validation',
+          details: { taskTitle: title }
+        });
+      }
+
+      if (TECHNICAL_TASK_TYPES.has(type)) {
+        const warnings: Array<Pick<LogEntry, 'category' | 'action' | 'message' | 'details'>> = [];
+
+        if (!Array.isArray(files) || files.length === 0) {
+          warnings.push({
+            category: 'api',
+            action: 'task_missing_files_array',
+            message: `Technical task type '${type}' created without files array`,
+            details: { taskId: title },
+          });
+        }
+
+        const documentationLength = typeof taskDescription === 'string' ? taskDescription.trim().length : 0;
+        if (documentationLength < MIN_DOCUMENTATION_LENGTH) {
+          warnings.push({
+            category: 'api',
+            action: 'task_missing_description',
+            message: `Technical task type '${type}' created without detailed description`,
+            details: { taskId: title },
+          });
+        }
+
+        const criteriaArray = Array.isArray(acceptanceCriteria)
+          ? acceptanceCriteria
+          : typeof acceptanceCriteria === 'string'
+          ? [acceptanceCriteria]
+          : [];
+
+        if (criteriaArray.length === 1) {
+          const rawCriterion = criteriaArray[0];
+          const criterionText = typeof rawCriterion === 'string' ? rawCriterion : '';
+          if (criterionText.trim().length > 0 && criterionText.trim().length < MIN_ACCEPTANCE_CRITERION_LENGTH) {
+            warnings.push({
+              category: 'api',
+              action: 'vague_acceptance_criteria',
+              message: `Task has vague acceptance criteria: "${criterionText}"`,
+              details: { taskId: title },
+            });
+          }
+        }
+
+        warnings.forEach((warning) => logger.warn(warning));
+      }
+
+      const result = await devBotsManager.addTask({
+        type,
+        title,
+        description: taskDescription,
+        acceptanceCriteria: Array.isArray(acceptanceCriteria) ? acceptanceCriteria : [acceptanceCriteria],
+        files,
+        dependencies,
+        project: project || repository, // Accept either 'project' or 'repository'
+        assignedAgent,
+        notes,
+        architectureReferences,
+        validationSteps,
+        successMetrics,
+        estimatedEffort
       });
-      res.json({ task, message: 'Task added successfully' });
+      res.json({
+        task: result.task,
+        validation: result.validation,
+        message: 'Task added successfully'
+      });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -183,28 +321,8 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
     }
   });
 
-  /**
-   * POST /dev-bots/tasks/enhanced
-   * Create enhanced task with additional metadata
-   */
-  router.post('/tasks/enhanced', async (req: Request, res: Response) => {
-    try {
-      const taskData = req.body;
-      const task = await devBotsManager.addEnhancedTask(taskData);
-      res.json({ task, message: 'Enhanced task added successfully' });
-    } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'error_adding_enhanced_task_error',
-        message: `Error adding enhanced task: ${error}`,
-        error
-      });
-      res.status(500).json({
-        error: 'Failed to add enhanced task',
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
-  });
+  // REMOVED: POST /tasks/enhanced endpoint (deprecated)
+  // All clients now use POST /dev-bots/tasks
 
   /**
    * GET /dev-bots/tasks/completed
@@ -229,6 +347,86 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
   });
 
   /**
+   * GET /dev-bots/metrics
+   * Get queue metrics and task duration statistics
+   */
+  router.get('/metrics', (_req: Request, res: Response) => {
+    try {
+      const metrics = devBotsManager.getQueueMetrics();
+      const stats = devBotsManager.getTaskDurationStats();
+      res.json({ metrics, stats });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_metrics',
+        message: `Error getting metrics: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to get metrics',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  /**
+   * GET /dev-bots/agent-comparison
+   * Get performance comparison metrics between Claude and Codex agents
+   */
+  router.get('/agent-comparison', (_req: Request, res: Response) => {
+    try {
+      const comparison = devBotsManager.getAgentComparisonMetrics();
+      res.json({ comparison });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_agent_comparison',
+        message: `Error getting agent comparison metrics: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to get agent comparison metrics',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  /**
+   * POST /dev-bots/tasks/:taskId/timeout
+   * Manually timeout a task after verification
+   */
+  router.post('/tasks/:taskId/timeout', (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+      const { reason } = req.body;
+
+      if (!reason) {
+        return res.status(400).json({
+          error: 'Reason is required for manual timeout'
+        });
+      }
+
+      devBotsManager.manuallyTimeoutTask(taskId, reason);
+      res.json({
+        success: true,
+        message: `Task ${taskId} manually timed out`,
+        reason
+      });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_timing_out_task',
+        message: `Error timing out task: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to timeout task',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  /**
    * POST /dev-bots/validate
    * Validate task data
    */
@@ -246,6 +444,33 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
       });
       res.status(500).json({
         error: 'Failed to validate task',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  /**
+   * POST /dev-bots/assign
+   * Manually trigger task assignment
+   */
+  router.post('/assign', async (_req: Request, res: Response) => {
+    try {
+      await devBotsManager.assignNextTask();
+      const metrics = devBotsManager.getQueueMetrics();
+      res.json({
+        success: true,
+        message: 'Task assignment triggered',
+        metrics
+      });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_assigning_task',
+        message: `Error assigning task: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to assign task',
         message: error instanceof Error ? error.message : String(error),
       });
     }

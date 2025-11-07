@@ -83,14 +83,21 @@ describeNativeDb('DevBotsDatabase', () => {
     });
 
     it('should not reapply migrations on second initialization', () => {
+      const initialCountResult = (db as any).db
+        .prepare('SELECT COUNT(*) as count FROM migrations')
+        .get();
+      const initialMigrationCount = initialCountResult.count;
+
       db.close();
 
       // Create new database instance with same file
       const db2 = new DevBotsDatabaseCtor(TEST_DB_PATH);
 
-      // Check migrations table has only one entry
-      const migrations = (db2 as any).db.prepare('SELECT * FROM migrations').all();
-      expect(migrations.length).toBe(1);
+      // Check migrations are not duplicated
+      const migrations = (db2 as any).db
+        .prepare('SELECT COUNT(*) as count FROM migrations')
+        .get();
+      expect(migrations.count).toBe(initialMigrationCount);
 
       db2.close();
     });
@@ -237,8 +244,8 @@ describeNativeDb('DevBotsDatabase', () => {
     it('should return zero stats for provider with no usage', () => {
       const stats = db.getDailyTokenUsage('openai');
 
-      expect(stats.total_input).toBeNull();
-      expect(stats.total_output).toBeNull();
+      expect(stats.total_input).toBe(0);
+      expect(stats.total_output).toBe(0);
       expect(stats.request_count).toBe(0);
     });
 

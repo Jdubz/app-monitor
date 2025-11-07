@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplates.js';
 import { AgentPersonality } from './agentPersonalities.js';
-import { Task } from './devBotsManager.js';
+import { Task } from './taskQueue.sqlite.js';
 
 describe('TaskPromptTemplateManager', () => {
   let templateManager: TaskPromptTemplateManager;
@@ -50,14 +50,18 @@ describe('TaskPromptTemplateManager', () => {
       title: 'Test Task',
       description: 'Test task description',
       documentation: 'Read the documentation',
-      acceptanceCriteria: ['Task completed successfully'],
+      acceptance_criteria: ['Task completed successfully'],
       status: 'pending',
-      createdAt: new Date().toISOString(),
-      assignedAgent: 'backend-specialist',
+      created_at: Date.now(),
+      assigned_agent: 'backend-specialist',
       files: ['src/test.ts'],
       dependencies: [],
-      project: 'job-finder-BE'
-    };
+      priority: 5,
+      can_retry: true,
+      retry_count: 0,
+      max_retries: 3,
+      timeout_ms: null
+    } as Task;
   });
 
   describe('Template Generation', () => {
@@ -121,7 +125,7 @@ describe('TaskPromptTemplateManager', () => {
   describe('Architecture Documentation Links', () => {
     it('should include backend-specific architecture docs for job-finder-BE', () => {
       const context: TaskContext = {
-        task: { ...mockTask, project: 'job-finder-BE' },
+        task: { ...mockTask },
         agent: mockAgent,
         project: 'job-finder-BE',
         worktree: '[dynamic workspace provisioned per task]',
@@ -138,7 +142,7 @@ describe('TaskPromptTemplateManager', () => {
 
     it('should include frontend-specific architecture docs for job-finder-FE', () => {
       const context: TaskContext = {
-        task: { ...mockTask, project: 'job-finder-FE' },
+        task: { ...mockTask },
         agent: mockAgent,
         project: 'job-finder-FE',
         worktree: '[dynamic workspace provisioned per task]',
@@ -154,7 +158,7 @@ describe('TaskPromptTemplateManager', () => {
 
     it('should include worker-specific architecture docs for job-finder-worker', () => {
       const context: TaskContext = {
-        task: { ...mockTask, project: 'job-finder-worker' },
+        task: { ...mockTask },
         agent: mockAgent,
         project: 'job-finder-worker',
         worktree: '[dynamic workspace provisioned per task]',
@@ -170,7 +174,7 @@ describe('TaskPromptTemplateManager', () => {
 
     it('should include dev-monitor-specific architecture docs for dev-monitor', () => {
       const context: TaskContext = {
-        task: { ...mockTask, project: 'dev-monitor' },
+        task: { ...mockTask },
         agent: mockAgent,
         project: 'dev-monitor',
         worktree: '[dynamic workspace provisioned per task]',
@@ -187,7 +191,7 @@ describe('TaskPromptTemplateManager', () => {
 
     it('should include shared-types-specific architecture docs for job-finder-shared-types', () => {
       const context: TaskContext = {
-        task: { ...mockTask, project: 'job-finder-shared-types' },
+        task: { ...mockTask },
         agent: mockAgent,
         project: 'job-finder-shared-types',
         worktree: '[dynamic workspace provisioned per task]',
@@ -202,7 +206,7 @@ describe('TaskPromptTemplateManager', () => {
 
     it('should include generic architecture docs for unknown projects', () => {
       const context: TaskContext = {
-        task: { ...mockTask, project: 'unknown-project' },
+        task: { ...mockTask },
         agent: mockAgent,
         project: 'unknown-project',
         worktree: '[dynamic workspace provisioned per task]',
@@ -242,11 +246,11 @@ describe('TaskPromptTemplateManager', () => {
         'BACKEND'
       ];
 
-      testCases.forEach(project => {
+      testCases.forEach(_project => {
         const context: TaskContext = {
-          task: { ...mockTask, project },
+          task: { ...mockTask },
           agent: mockAgent,
-          project,
+          project: 'job-finder-BE',
           worktree: '[dynamic workspace provisioned per task]',
           environment: 'development'
         };
@@ -387,11 +391,10 @@ describe('TaskPromptTemplateManager', () => {
         title: 'Minimal Task',
         description: 'Minimal description',
         documentation: 'Minimal docs',
-        acceptanceCriteria: ['Minimal criteria'],
+        acceptance_criteria: ['Minimal criteria'],
         status: 'pending',
-        createdAt: new Date().toISOString(),
-        assignedAgent: 'backend-specialist',
-        project: 'job-finder-BE'
+        created_at: Date.now(),
+        assigned_agent: 'backend-specialist',
       };
 
       const context: TaskContext = {
@@ -415,7 +418,7 @@ describe('TaskPromptTemplateManager', () => {
         ...mockTask,
         files: ['src/file1.ts', 'src/file2.ts'],
         dependencies: ['task-1', 'task-2'],
-        acceptanceCriteria: ['Criteria 1', 'Criteria 2', 'Criteria 3']
+        acceptance_criteria: ['Criteria 1', 'Criteria 2', 'Criteria 3']
       };
 
       const context: TaskContext = {
@@ -501,7 +504,7 @@ describe('TaskPromptTemplateManager', () => {
         ...mockTask,
         files: [],
         dependencies: [],
-        acceptanceCriteria: []
+        acceptance_criteria: []
       };
 
       const context: TaskContext = {
@@ -569,7 +572,7 @@ describe('TaskPromptTemplateManager', () => {
       it('should display parent initiative when provided', () => {
         const taskWithParent: Task = {
           ...mockTask,
-          parentInitiative: 'Q4 2024 Performance Optimization Initiative'
+          parent_initiative: 'Q4 2024 Performance Optimization Initiative'
         };
 
         const context: TaskContext = {
@@ -604,7 +607,7 @@ describe('TaskPromptTemplateManager', () => {
       it('should display related tasks with emoji markers', () => {
         const taskWithRelated: Task = {
           ...mockTask,
-          relatedTasks: [
+          related_tasks: [
             'depends on task-123',
             'blocks task-456',
             'similar to task-789',
@@ -645,7 +648,7 @@ describe('TaskPromptTemplateManager', () => {
       it('should handle empty related tasks array', () => {
         const taskWithEmptyRelated: Task = {
           ...mockTask,
-          relatedTasks: []
+          related_tasks: []
         };
 
         const context: TaskContext = {
@@ -666,7 +669,7 @@ describe('TaskPromptTemplateManager', () => {
       it('should display complete effort estimate with all fields', () => {
         const taskWithEffort: Task = {
           ...mockTask,
-          estimatedEffort: {
+          estimated_effort: {
             hours: 4,
             complexity: 'medium',
             confidence: 'high'
@@ -699,7 +702,7 @@ describe('TaskPromptTemplateManager', () => {
         testCases.forEach(({ hours, expectedThreshold }) => {
           const taskWithEffort: Task = {
             ...mockTask,
-            estimatedEffort: {
+            estimated_effort: {
               hours,
               complexity: 'medium',
               confidence: 'high'
@@ -741,7 +744,7 @@ describe('TaskPromptTemplateManager', () => {
       it('should display success metrics as checkboxes', () => {
         const taskWithMetrics: Task = {
           ...mockTask,
-          successMetrics: [
+          success_metrics: [
             'Response time < 200ms',
             'Test coverage > 80%',
             'Zero linting errors'
@@ -782,7 +785,7 @@ describe('TaskPromptTemplateManager', () => {
       it('should handle empty success metrics array', () => {
         const taskWithEmptyMetrics: Task = {
           ...mockTask,
-          successMetrics: []
+          success_metrics: []
         };
 
         const context: TaskContext = {
@@ -805,7 +808,7 @@ describe('TaskPromptTemplateManager', () => {
       it('should display required skills as bullet list', () => {
         const taskWithSkills: Task = {
           ...mockTask,
-          requiredSkills: ['TypeScript', 'React', 'Node.js', 'Docker']
+          required_skills: ['TypeScript', 'React', 'Node.js', 'Docker']
         };
 
         const context: TaskContext = {
@@ -843,7 +846,7 @@ describe('TaskPromptTemplateManager', () => {
       it('should handle empty required skills array', () => {
         const taskWithEmptySkills: Task = {
           ...mockTask,
-          requiredSkills: []
+          required_skills: []
         };
 
         const context: TaskContext = {
@@ -988,7 +991,7 @@ describe('TaskPromptTemplateManager', () => {
       it('should display all context boundary sections when provided', () => {
         const taskWithBoundaries: Task = {
           ...mockTask,
-          contextBoundaries: {
+          context_boundaries: {
             mustNotChange: ['Database schema', 'API contracts'],
             mustNotAffect: ['Authentication system', 'User data'],
             integrationPoints: ['Payment gateway', 'Email service']
@@ -1019,7 +1022,7 @@ describe('TaskPromptTemplateManager', () => {
       it('should handle partial context boundaries', () => {
         const taskWithPartialBoundaries: Task = {
           ...mockTask,
-          contextBoundaries: {
+          context_boundaries: {
             mustNotChange: ['Database schema'],
             mustNotAffect: [],
             integrationPoints: []
@@ -1059,7 +1062,7 @@ describe('TaskPromptTemplateManager', () => {
       it('should display validation steps as checklist', () => {
         const taskWithValidation: Task = {
           ...mockTask,
-          validationSteps: [
+          validation_steps: [
             'Run npm test and verify all tests pass',
             'Check code coverage is above 80%',
             'Run linter and fix all warnings',
@@ -1102,7 +1105,7 @@ describe('TaskPromptTemplateManager', () => {
       it('should handle empty validation steps array', () => {
         const taskWithEmptyValidation: Task = {
           ...mockTask,
-          validationSteps: []
+          validation_steps: []
         };
 
         const context: TaskContext = {
@@ -1237,7 +1240,7 @@ describe('TaskPromptTemplateManager', () => {
       complexityLevels.forEach(complexity => {
         const taskWithComplexity: Task = {
           ...mockTask,
-          estimatedEffort: {
+          estimated_effort: {
             hours: 4,
             complexity,
             confidence: 'high'
@@ -1275,7 +1278,7 @@ describe('TaskPromptTemplateManager', () => {
       confidenceLevels.forEach(confidence => {
         const taskWithConfidence: Task = {
           ...mockTask,
-          estimatedEffort: {
+          estimated_effort: {
             hours: 4,
             complexity: 'medium',
             confidence
@@ -1302,27 +1305,27 @@ describe('TaskPromptTemplateManager', () => {
     it('should generate complete prompt with all enhanced fields', () => {
       const fullyEnhancedTask: Task = {
         ...mockTask,
-        parentInitiative: 'Q4 2024 Performance Optimization',
-        longTermGoals: [
+        parent_initiative: 'Q4 2024 Performance Optimization',
+        long_term_goals: [
           'Improve system performance by 50%',
           'Reduce database query times',
           'Enhance user experience'
         ],
-        relatedTasks: [
+        related_tasks: [
           'depends on database-migration-123',
           'blocks frontend-update-456'
         ],
-        estimatedEffort: {
+        estimated_effort: {
           hours: 6,
           complexity: 'complex',
           confidence: 'medium'
         },
-        successMetrics: [
+        success_metrics: [
           'Response time < 200ms',
           'Test coverage > 85%',
           'Zero P0/P1 bugs'
         ],
-        requiredSkills: ['TypeScript', 'PostgreSQL', 'Performance Tuning'],
+        required_skills: ['TypeScript', 'PostgreSQL', 'Performance Tuning'],
         assumptions: [
           'Database indexes are properly configured',
           'Test environment mirrors production'
@@ -1331,17 +1334,17 @@ describe('TaskPromptTemplateManager', () => {
           'Use caching layer instead of query optimization',
           'Implement database read replicas'
         ],
-        contextBoundaries: {
+        context_boundaries: {
           mustNotChange: ['API contracts', 'Database schema'],
           mustNotAffect: ['Authentication flow', 'Payment processing'],
           integrationPoints: ['Logging service', 'Metrics collector']
         },
-        validationSteps: [
+        validation_steps: [
           'Run performance benchmarks',
           'Verify test coverage',
           'Check for regression in critical paths'
         ],
-        architectureReferences: [
+        architecture_references: [
           'docs/architecture/backend.md',
           'docs/performance/optimization-guide.md'
         ]
@@ -1390,32 +1393,31 @@ describe('TaskPromptTemplateManager', () => {
         documentation: 'Read all the docs',
         notes: 'Additional notes',
         status: 'pending',
-        createdAt: new Date().toISOString(),
-        assignedAgent: 'backend-specialist',
-        assignedWorker: 'worker-a',
-        project: 'job-finder-BE',
+        created_at: Date.now(),
+        assigned_agent: 'backend-specialist',
+        assigned_worker: 'worker-a',
         files: ['src/file.ts'],
         dependencies: ['dep-1'],
-        acceptanceCriteria: ['Criteria 1'],
-        architectureReferences: ['docs/arch.md'],
-        longTermGoals: ['Goal 1'],
-        estimatedEffort: { hours: 4, complexity: 'medium', confidence: 'high' },
-        successMetrics: ['Metric 1'],
-        requiredSkills: ['Skill 1'],
-        parentInitiative: 'Initiative 1',
-        relatedTasks: ['Task 1'],
+        acceptance_criteria: ['Criteria 1'],
+        architecture_references: ['docs/arch.md'],
+        long_term_goals: ['Goal 1'],
+        estimated_effort: { hours: 4, complexity: 'medium', confidence: 'high' },
+        success_metrics: ['Metric 1'],
+        required_skills: ['Skill 1'],
+        parent_initiative: 'Initiative 1',
+        related_tasks: ['Task 1'],
         assumptions: ['Assumption 1'],
         alternatives: ['Alternative 1'],
-        contextBoundaries: {
+        context_boundaries: {
           mustNotChange: ['Item 1'],
           mustNotAffect: ['Item 2'],
           integrationPoints: ['Point 1']
         },
-        validationSteps: ['Step 1'],
+        validation_steps: ['Step 1'],
         prerequisites: ['Prereq 1'],
-        testingRequirements: ['Testing req'],
-        documentationRequirements: ['Doc req'],
-        rollbackPlan: ['Rollback plan'],
+        testing_requirements: ['Testing req'],
+        documentation_requirements: ['Doc req'],
+        rollback_plan: ['Rollback plan'],
         blockers: ['Blocker 1'],
         risks: ['Risk 1']
       };

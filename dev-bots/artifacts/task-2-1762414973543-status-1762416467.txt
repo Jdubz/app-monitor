@@ -1,0 +1,46 @@
+ M backend/docs/plans/BOT_EXECUTION_IMPROVEMENTS.md
+ M backend/src/config.test.ts
+ M backend/src/config.ts
+ M backend/src/routes/dev-bots.routes.test.ts
+ D backend/src/routes/script-history.routes.ts
+ D backend/src/routes/scripts.routes.ts
+ D backend/src/services/scriptExecutionHistory.ts
+ D backend/src/services/scriptManager.simple.test.ts
+ D backend/src/services/scriptManager.test.ts
+ D backend/src/services/scriptManager.ts
+ M backend/src/services/taskCreationGuidelines.ts
+ M backend/src/types/socketEvents.ts
+ M backend/src/utils/logger.ts
+ M frontend/src/App.tsx
+ M frontend/src/components/DevBotsPanel.tsx
+ M frontend/src/components/EnhancedTaskCreationForm.tsx
+ D frontend/src/components/ScriptCard.tsx
+ D frontend/src/components/ScriptOutputModal.tsx
+ D frontend/src/components/ScriptsPanel.tsx
+ M frontend/src/components/layout/TabNav.tsx
+ D frontend/src/components/tabs/ScriptsTab.tsx
+ M frontend/src/components/tabs/index.ts
+ D frontend/src/hooks/useScripts.ts
+ M frontend/src/services/api.integration.test.ts
+ M frontend/src/services/api.test.ts
+ M frontend/src/services/api.ts
+ M frontend/src/test/fixtures.ts
+ D frontend/src/types/script.types.ts
+ M frontend/src/types/shared.types.ts
+?? dev-bots/artifacts/backend-specialist-task-4-1762409994651-1762410983206-1762410983784.patch
+?? dev-bots/artifacts/backend-specialist-task-5-1762409995427-1762410994230-1762410994865.patch
+?? dev-bots/artifacts/backend-specialist-task-5-1762409995427-1762411788442-1762411789101.patch
+?? dev-bots/artifacts/backend-specialist-task-6-1762409996218-1762411304032-1762411304692.patch
+?? dev-bots/artifacts/backend-specialist-task-7-1762410423669-1762411315184-1762411315777.patch
+?? dev-bots/artifacts/backend-specialist-task-8-1762410424498-1762411352049-1762411352676.patch
+?? dev-bots/artifacts/backend-specialist-task-9-1762410425283-1762411363171-1762411363751.patch
+?? dev-bots/artifacts/backend-specialist-task-9-1762410425283-1762411799542-1762411800147.patch
+?? dev-bots/artifacts/backend-specialist-task-9-1762410425283-1762411892607-1762411893273.patch
+?? dev-bots/artifacts/backend-specialist-task-9-1762410425283-1762411983164-1762411983741.patch
+?? dev-bots/artifacts/backend-specialist-task-9-1762410425283-1762412069619-1762412070199.patch
+?? dev-bots/artifacts/backend-specialist-task-9-1762410425283-1762412272623-1762412273209.patch
+?? dev-bots/artifacts/backend-specialist-task-9-1762410425283-1762412447275-1762412448963.patch
+?? dev-bots/artifacts/task-2-1762414973543-status-1762416467.txt
+?? dev-bots/artifacts/task-2-1762414973543-uncommitted-1762416467.patch
+?? dev-bots/mirror/
+?? docs/plans/DEV_BOT_SAFETY_AND_PROMPT_IMPROVEMENTS.md

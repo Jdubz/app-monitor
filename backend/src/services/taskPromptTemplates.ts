@@ -9,6 +9,7 @@ import { logger } from '../utils/logger.js';
 import { Task } from './devBotsManager.js';
 import { AgentPersonality } from './agentPersonalities.js';
 import { getGuidelinesForTaskType, formatGuidelinesAsMarkdown } from './taskTypeGuidelines.js';
+import { formatDocumentationForPrompt } from './workTargetDocumentation.js';
 
 export interface TaskPromptTemplate {
   id: string;
@@ -25,6 +26,91 @@ export interface TaskContext {
   project: string;
   worktree: string;
   environment: 'development' | 'staging' | 'production';
+}
+
+type DocSuggestionRule = {
+  pattern: RegExp;
+  docs: readonly string[] | ((context: TaskContext) => string[]);
+};
+
+const BACKEND_PROJECTS = new Set(['backend', 'job-finder-be']);
+const WORKER_PROJECTS = new Set(['worker', 'job-finder-worker']);
+
+const DOC_SUGGESTION_RULES: DocSuggestionRule[] = [
+  {
+    pattern: /\b(test|testing|unit test|integration test|e2e|coverage)\b/i,
+    docs: [
+      '- [Testing Strategy](../docs/dev-bots/TESTING_STRATEGY.md)',
+      '- [Testing and Task Summary](../docs/dev-bots/TESTING_AND_TASK_SUMMARY.md)'
+    ]
+  },
+  {
+    pattern: /\b(database|sqlite|sql|query|schema|migration)\b/i,
+    docs: (context) => {
+      const docs = [
+        '- [Database Schema](../docs/architecture/database-schema.md)',
+        '- [SQLite Integration Plan](../docs/dev-bots/SQLITE_INTEGRATION_PLAN.md)'
+      ];
+      if (BACKEND_PROJECTS.has(normalizeProject(context.project))) {
+        docs.push('- [Firestore Setup](../docs/deployment/FIRESTORE_COMPLETE_SETUP.md)');
+      }
+      return docs;
+    }
+  },
+  {
+    pattern: /\b(docker|container|deployment|deploy|build)\b/i,
+    docs: (context) => {
+      const docs = ['- [Deployment Checklist](../docs/dev-bots/DEPLOYMENT_CHECKLIST.md)'];
+      if (WORKER_PROJECTS.has(normalizeProject(context.project))) {
+        docs.push('- [Worker Docker Development](../docs/development/WORKER_DOCKER_DEV.md)');
+      }
+      return docs;
+    }
+  },
+  {
+    pattern: /\b(api|endpoint|route|controller|rest|graphql)\b/i,
+    docs: ['- [Backend Architecture](../docs/architecture/backend.md)']
+  },
+  {
+    pattern: /\b(auth|authentication|login|security|jwt|token)\b/i,
+    docs: ['- [Firebase Functions Guide](../docs/deployment/FIREBASE_FUNCTIONS_V2_PERMISSIONS_GUIDE.md)']
+  },
+  {
+    pattern: /\b(ui|frontend|component|react|vue|angular)\b/i,
+    docs: [
+      '- [Frontend Architecture](../docs/architecture/frontend.md)',
+      '- [Development Stack](../docs/development/DEVELOPMENT_STACK.md)'
+    ]
+  },
+  {
+    pattern: /\b(queue|task|bot|agent|worker|coordinator)\b/i,
+    docs: [
+      '- [Task Queue Architecture](../docs/dev-bots/task-queue.md)',
+      '- [Coordinator Integration Analysis](../docs/dev-bots/COORDINATOR_INTEGRATION_ANALYSIS.md)'
+    ]
+  },
+  {
+    pattern: /\b(scope|complex|refactor|architecture)\b/i,
+    docs: [
+      '- [Scope Control System](../docs/dev-bots/SCOPE_CONTROL_SYSTEM.md)',
+      '- [Mode Decision Tree](../docs/dev-bots/MODE_DECISION_TREE.md)'
+    ]
+  },
+  {
+    pattern: /\b(log|logging|logger|monitoring)\b/i,
+    docs: [
+      '- [Logging Architecture](../docs/operations/logging-architecture.md)',
+      '- [Structured Logging Migration](../docs/operations/STRUCTURED_LOGGING_MIGRATION.md)'
+    ]
+  },
+  {
+    pattern: /\b(agent|claude|codex|comparison|metrics|performance)\b/i,
+    docs: ['- [Bot Test Execution Findings](../docs/dev-bots/BOT_TEST_EXECUTION_FINDINGS_2025-11-06.md)']
+  }
+];
+
+function normalizeProject(project?: string): string {
+  return (project ?? '').toLowerCase();
 }
 
 export class TaskPromptTemplateManager {
@@ -44,13 +130,13 @@ export class TaskPromptTemplateManager {
       template: this.getUniversalTemplateString(),
       variables: [
         'agent.name', 'agent.role', 'task.id', 'task.title', 'task.type',
-        'task.description', 'task.documentation', 'task.acceptanceCriteriaList',
-        'task.files', 'task.dependencies', 'task.notes', 'task.architectureReferences',
-        'task.contextBoundaries', 'task.prerequisites', 'task.validationSteps',
+        'task.description', 'task.documentation', 'task.acceptance_criteriaList',
+        'task.files', 'task.dependencies', 'task.notes', 'task.architecture_references',
+        'task.contextBoundaries', 'task.prerequisites', 'task.validation_steps',
         'task.testingRequirements', 'task.documentationRequirements',
         'task.rollbackPlan', 'task.blockers', 'task.risks', 'task.typeGuidelines',
         // Enhanced fields (all UI form fields now included)
-        'task.longTermGoals', 'task.estimatedEffort', 'task.successMetrics',
+        'task.longTermGoals', 'task.estimatedEffort', 'task.success_metrics',
         'task.requiredSkills', 'task.parentInitiative', 'task.relatedTasks',
         'task.assumptions', 'task.alternatives',
         'repository', 'environment'
@@ -71,6 +157,9 @@ export class TaskPromptTemplateManager {
   private getUniversalTemplateString(): string {
     return `# 🎯 Task Assignment
 
+## ⚠️ CRITICAL: Read This Entire Prompt BEFORE Starting
+**DO NOT start coding until you have read and understood ALL sections of this prompt.**
+
 ## Task Overview
 **Agent**: {{agent.name}} ({{agent.role}})
 **Task ID**: {{task.id}}
@@ -78,6 +167,49 @@ export class TaskPromptTemplateManager {
 **Type**: {{task.type}}
 **Repository**: {{repository}}
 **Environment**: {{environment}}
+
+## 🚨 Common Failure Modes to AVOID (Learn from Past Mistakes)
+
+### ❌ FAILURE MODE 1: Inventing Features Not Requested
+**Problem**: Adding "nice to have" features or extra functionality beyond requirements
+**Example**: Asked for 6 tables, created 8 tables (adding unrequested extras)
+**Prevention**:
+- Read acceptance criteria word-for-word
+- If criteria says "EXACTLY 6 tables", create EXACTLY 6, no more
+- When in doubt, do LESS not MORE
+
+### ❌ FAILURE MODE 2: Skipping Investigation Phase
+**Problem**: Writing code without first checking if similar functionality exists
+**Example**: Creating new validation function when one already exists in utils/
+**Prevention**:
+- ALWAYS run grep/find commands to search for existing patterns
+- READ existing similar files before writing new code
+- Document what you found and why you can/cannot reuse it
+
+### ❌ FAILURE MODE 3: Git Workflow Failure
+**Problem**: Not committing code or not pushing to remote
+**Example**: Task completes but changes remain uncommitted
+**Prevention**:
+- Git commit is NOT optional - it's MANDATORY for all code tasks
+- Run \`git add .\` before \`git commit\`
+- Run \`git push origin staging\` after commit
+- Verify push succeeded with \`git status\`
+
+### ❌ FAILURE MODE 4: Completing with Questions Instead of Implementation
+**Problem**: Asking user for more information instead of implementing based on prompt
+**Example**: "Should I add feature X?" when prompt already specifies requirements
+**Prevention**:
+- This prompt contains ALL information you need
+- If acceptance criteria are clear, implement them
+- Only ask questions if there's a true blocker or ambiguity
+
+### ❌ FAILURE MODE 5: Over-Engineering Simple Tasks
+**Problem**: Building entire systems when asked for simple changes
+**Example**: Asked to add a button, created entire component library
+**Prevention**:
+- Implement ONLY what's in acceptance criteria
+- Simple tasks need simple solutions
+- Respect scope boundaries - do not expand
 
 ## 🎯 Strategic Context & Purpose
 **Parent Initiative:** {{task.parentInitiative}}
@@ -89,6 +221,59 @@ export class TaskPromptTemplateManager {
 {{task.relatedTasks}}
 
 **Why This Matters:** Understanding the strategic context helps you make better technical decisions and identify opportunities to establish patterns for future work.
+
+## 🔌 Available MCP Capabilities
+
+Your container is pre-configured with Model Context Protocol servers that provide enhanced capabilities:
+
+### 📁 Filesystem MCP
+- **Read files** efficiently without cat/grep commands
+- **Write files** with atomic operations
+- **Search across files** for patterns
+- **List directories** and file trees
+- Scoped to \`/workspace\` directory
+
+### 🔀 Git MCP
+- **Check status** without running git commands
+- **View diffs** and commit history
+- **Manage branches** and track changes
+- **Inspect repository** state and metadata
+- Automatic integration with workspace
+
+### 🗄️ SQLite MCP
+- **Query databases** directly (task queue, metrics)
+- **Inspect schema** and table structure
+- **Execute SQL** for analysis
+- **Manage databases** in workspace
+
+### 🌐 Fetch MCP
+- **Fetch web content** (documentation, APIs)
+- **Make HTTP requests** (GET/POST)
+- **Access external resources** for context
+- **Validate URLs** and endpoints
+
+**💡 Tip:** These MCP servers are faster and more reliable than shell commands. Use them when available!
+
+## 📋 PRE-TASK SELF-ASSESSMENT (Complete BEFORE Starting)
+
+Before you begin implementation, answer these questions to verify you understand the task:
+
+1. **Scope Check**: Can you state in one sentence what this task accomplishes?
+   - If NO: Re-read the task description and acceptance criteria
+
+2. **Investigation Check**: Do you know what existing code to review before implementing?
+   - If NO: Review the investigation section below
+
+3. **Boundaries Check**: Do you know what you MUST NOT change or create?
+   - If NO: Review the context boundaries and constraints sections
+
+4. **Git Workflow Check**: Do you know you MUST commit and push your changes?
+   - If NO: Review Step 4 of the development workflow
+
+5. **Success Metrics Check**: Can you list the measurable outcomes that define success?
+   - If NO: Review the Success Metrics section
+
+**If you answered NO to any question above, STOP and re-read those sections before proceeding.**
 
 ## 🔍 CRITICAL: Code Reuse Analysis (MANDATORY FIRST STEP)
 
@@ -129,7 +314,10 @@ For each piece of code you plan to write, document:
 {{task.documentation}}
 
 **Essential Project Documentation:**
-{{task.architectureReferences}}
+{{task.architecture_references}}
+
+**Work Target Guide for {{repository}}:**
+{{workTarget.documentation}}
 
 **Additional Context:**
 - Review the complete [Documentation Index](../docs/README.md) for comprehensive guides
@@ -139,12 +327,12 @@ For each piece of code you plan to write, document:
 ## ✅ Acceptance Criteria (Qualitative)
 The task is considered complete when ALL of the following are true:
 
-{{task.acceptanceCriteriaList}}
+{{task.acceptance_criteriaList}}
 
 ## 📊 Success Metrics (Quantitative - MUST ACHIEVE ALL)
 These are MEASURABLE outcomes that define task success:
 
-{{task.successMetrics}}
+{{task.success_metrics}}
 
 **Validation:** Before marking task complete, verify EVERY metric above is achieved. If any metric cannot be met, STOP and report why.
 
@@ -430,10 +618,14 @@ npm run build
 - ✅ ALWAYS meet minimum 80% test coverage
 - ✅ ALWAYS resolve merge conflicts before committing
 
-### Step 4: Commit and Push
+### Step 4: Commit and Push (MANDATORY - DO NOT SKIP)
 \`\`\`bash
 # Stage your changes
 git add .
+
+# Verify what will be committed
+git status
+git diff --cached --stat
 
 # Commit with descriptive message (semantic commit format)
 git commit -m "{{task.type}}: {{task.title}}
@@ -441,14 +633,30 @@ git commit -m "{{task.type}}: {{task.title}}
 {{task.description}}
 
 Acceptance criteria:
-{{task.acceptanceCriteriaList}}
+{{task.acceptance_criteriaList}}
 
 Files modified: {{task.files}}
+
+🤖 Generated with Claude Code
+Co-Authored-By: Claude <noreply@anthropic.com>
 "
 
 # Push directly to staging
 git push origin staging
+
+# Verify push succeeded
+git log --oneline -1
+git status
 \`\`\`
+
+**CRITICAL GIT WORKFLOW VERIFICATION:**
+After running the above commands, you MUST verify:
+1. ✅ \`git commit\` succeeded (no error message)
+2. ✅ \`git push origin staging\` succeeded (no error message)
+3. ✅ \`git status\` shows "Your branch is up to date with 'origin/staging'"
+4. ✅ \`git log\` shows your new commit as the most recent
+
+**If ANY of the above fail, the task is NOT complete. Debug and fix the git workflow before proceeding.**
 
 **Commit Message Guidelines:**
 - Use semantic commit format: \`feat:\`, \`fix:\`, \`refactor:\`, \`docs:\`, \`test:\`, \`chore:\`
@@ -577,7 +785,7 @@ Only create new documentation files when:
 ## ✓ Validation Steps
 Before marking task complete, verify:
 
-{{task.validationSteps}}
+{{task.validation_steps}}
 
 ## 🔄 Rollback Plan (If Issues Arise)
 {{task.rollbackPlan}}
@@ -585,11 +793,34 @@ Before marking task complete, verify:
 ## ✅ Final Success Checklist
 Before marking this task as complete, verify ALL of the following:
 
+## 🔍 PRE-COMPLETION VALIDATION (Answer These Questions)
+
+**STOP: Before checking boxes below, honestly answer these critical questions:**
+
+1. **Did you READ existing code before writing new code?**
+   - If NO: You may have duplicated existing functionality - go back and check
+
+2. **Did you create EXACTLY what was requested (no more, no less)?**
+   - If NO: Remove extra features or add missing requirements
+
+3. **Did you COMMIT and PUSH your changes to staging?**
+   - Run: \`git log --oneline -1\` - Do you see your commit?
+   - Run: \`git status\` - Does it say "up to date with origin/staging"?
+   - If NO to either: Complete the git workflow before proceeding
+
+4. **Did you write and run TESTS for your changes?**
+   - If NO: Write tests now before marking complete
+
+5. **Did all tests and linters PASS without using --no-verify?**
+   - If NO: Fix failures before marking complete
+
+**If you answered NO to ANY question above, the task is NOT complete. Go back and address the issues.**
+
 ### Acceptance Criteria (Qualitative)
 - [ ] All acceptance criteria met
 
 ### Success Metrics (Quantitative) - VERIFY EACH ONE
-{{task.successMetrics}}
+{{task.success_metrics}}
 
 ### Quality Standards
 - [ ] Code follows project patterns and conventions
@@ -649,12 +880,12 @@ Use your specialized knowledge to ensure this implementation follows best practi
     this.variableProcessors.set('task.title', (context) => context.task.title || 'Untitled Task');
     this.variableProcessors.set('task.description', (context) => context.task.description || 'No detailed description provided');
     this.variableProcessors.set('task.documentation', (context) => context.task.documentation || 'See project README and architecture docs');
-    this.variableProcessors.set('task.acceptanceCriteria', (context) => {
-      if (!context.task.acceptanceCriteria) return 'Task completed as described';
-      if (Array.isArray(context.task.acceptanceCriteria)) {
-        return context.task.acceptanceCriteria.join(', ');
+    this.variableProcessors.set('task.acceptance_criteria', (context) => {
+      if (!context.task.acceptance_criteria) return 'Task completed as described';
+      if (Array.isArray(context.task.acceptance_criteria)) {
+        return context.task.acceptance_criteria.join(', ');
       }
-      return String(context.task.acceptanceCriteria);
+      return String(context.task.acceptance_criteria);
     });
     this.variableProcessors.set('task.notes', (context) => context.task.notes || 'No additional notes');
 
@@ -669,51 +900,61 @@ Use your specialized knowledge to ensure this implementation follows best practi
         : 'None specified');
 
     // Enhanced task fields
-    this.variableProcessors.set('task.acceptanceCriteriaList', (context) =>
-      context.task.acceptanceCriteria && Array.isArray(context.task.acceptanceCriteria) && context.task.acceptanceCriteria.length > 0
-        ? context.task.acceptanceCriteria.map((c: string) => `- [ ] ${c}`).join('\n')
+    this.variableProcessors.set('task.acceptance_criteriaList', (context) =>
+      context.task.acceptance_criteria && Array.isArray(context.task.acceptance_criteria) && context.task.acceptance_criteria.length > 0
+        ? context.task.acceptance_criteria.map((c: string) => `- [ ] ${c}`).join('\n')
         : '- [ ] Task completed as described');
-    this.variableProcessors.set('task.architectureReferences', (context) => {
+    this.variableProcessors.set('task.architecture_references', (context) => {
       // Get system-specific architecture documentation links
       const systemArchDocs = this.getSystemArchitectureDocs(context.project);
-      
+
+      // Get intelligent documentation suggestions based on task content
+      const intelligentDocs = this.discoverRelevantDocumentation(context);
+
       // Combine custom architecture references with system-specific docs
-      const customRefs = context.task.architectureReferences && context.task.architectureReferences.length > 0
-        ? context.task.architectureReferences.map((r: string) => `- ${r}`)
+      const customRefs = context.task.architecture_references && context.task.architecture_references.length > 0
+        ? context.task.architecture_references.map((r: string) => `- ${r}`)
         : [];
-      
-      return [
+
+      // Build final documentation list
+      const allDocs = [
         ...customRefs,
         ...systemArchDocs,
+        ...intelligentDocs,
         '- [Complete Documentation Index](../docs/README.md)',
         '- [System Architecture Overview](../docs/architecture/system-overview.md)',
         '- [Development Workflow](../docs/development/workflow.md)'
-      ].join('\n');
+      ];
+
+      // Remove duplicates
+      const uniqueDocs = [...new Set(allDocs)];
+
+      return uniqueDocs.join('\n');
     });
     this.variableProcessors.set('task.prerequisites', (context) =>
       context.task.prerequisites && context.task.prerequisites.length > 0
         ? context.task.prerequisites.map((p: string) => `- [ ] ${p}`).join('\n')
         : '- [ ] None specified');
     this.variableProcessors.set('task.contextBoundaries', (context) => {
-      if (!context.task.contextBoundaries) return '- No specific boundaries defined';
-      const { mustNotChange = [], mustNotAffect = [], integrationPoints = [] } = context.task.contextBoundaries;
+      if (!context.task.context_boundaries) return '- No specific boundaries defined';
+      const { mustNotChange = [], mustNotAffect = [], integrationPoints = [] } = context.task.context_boundaries;
       return `**Must NOT Change:**\n${mustNotChange.map((i: string) => `- ${i}`).join('\n') || '- None specified'}\n\n**Must NOT Affect:**\n${mustNotAffect.map((i: string) => `- ${i}`).join('\n') || '- None specified'}\n\n**Integration Points:**\n${integrationPoints.map((i: string) => `- ${i}`).join('\n') || '- None specified'}`;
     });
-    this.variableProcessors.set('task.validationSteps', (context) =>
-      context.task.validationSteps && context.task.validationSteps.length > 0
-        ? context.task.validationSteps.map((v: string) => `- [ ] ${v}`).join('\n')
+    this.variableProcessors.set('task.validation_steps', (context) =>
+      context.task.validation_steps && context.task.validation_steps.length > 0
+        ? context.task.validation_steps.map((v: string) => `- [ ] ${v}`).join('\n')
         : '- [ ] Run all tests\n- [ ] Run linters\n- [ ] Manual verification');
     this.variableProcessors.set('task.testingRequirements', (context) =>
-      context.task.testingRequirements && context.task.testingRequirements.length > 0
-        ? context.task.testingRequirements.map((t: string) => `- [ ] ${t}`).join('\n')
+      context.task.testing_requirements && context.task.testing_requirements.length > 0
+        ? context.task.testing_requirements.map((t: string) => `- [ ] ${t}`).join('\n')
         : '- [ ] Unit tests pass\n- [ ] Integration tests pass');
     this.variableProcessors.set('task.documentationRequirements', (context) =>
-      context.task.documentationRequirements && context.task.documentationRequirements.length > 0
-        ? context.task.documentationRequirements.map((d: string) => `- [ ] ${d}`).join('\n')
+      context.task.documentation_requirements && context.task.documentation_requirements.length > 0
+        ? context.task.documentation_requirements.map((d: string) => `- [ ] ${d}`).join('\n')
         : '- [ ] Code comments added\n- [ ] README updated if needed');
     this.variableProcessors.set('task.rollbackPlan', (context) =>
-      context.task.rollbackPlan && context.task.rollbackPlan.length > 0
-        ? context.task.rollbackPlan.map((r: string) => `- ${r}`).join('\n')
+      context.task.rollback_plan && context.task.rollback_plan.length > 0
+        ? context.task.rollback_plan.map((r: string) => `- ${r}`).join('\n')
         : '- Revert commit if issues found\n- Run git reset --hard if needed\n- Notify team of rollback');
     this.variableProcessors.set('task.blockers', (context) =>
       context.task.blockers && context.task.blockers.length > 0
@@ -728,17 +969,17 @@ Use your specialized knowledge to ensure this implementation follows best practi
 
     // 1. Long-term goals - strategic context
     this.variableProcessors.set('task.longTermGoals', (context) =>
-      context.task.longTermGoals && context.task.longTermGoals.length > 0
-        ? context.task.longTermGoals.map((g: string) => `- ${g}`).join('\n')
+      context.task.long_term_goals && context.task.long_term_goals.length > 0
+        ? context.task.long_term_goals.map((g: string) => `- ${g}`).join('\n')
         : '- None specified - this is a standalone task with no long-term strategic goals');
 
     // 2. Estimated effort - time and complexity guidance
     this.variableProcessors.set('task.estimatedEffort', (context) => {
-      if (!context.task.estimatedEffort) {
+      if (!context.task.estimated_effort) {
         return '**Time Estimate:** Not estimated\n**Complexity:** Unknown\n**Confidence:** N/A\n\n**Note:** No time estimate provided. Use your best judgment for scope.';
       }
 
-      const { hours, complexity, confidence } = context.task.estimatedEffort;
+      const { hours, complexity, confidence } = context.task.estimated_effort;
       const scopeAlert = Math.ceil(hours * 1.5);
 
       return `**Time Estimate:** ${hours} hours
@@ -752,28 +993,28 @@ Use your specialized knowledge to ensure this implementation follows best practi
     });
 
     // 3. Success metrics - measurable outcomes
-    this.variableProcessors.set('task.successMetrics', (context) =>
-      context.task.successMetrics && context.task.successMetrics.length > 0
-        ? context.task.successMetrics.map((m: string) => `- [ ] ${m}`).join('\n')
+    this.variableProcessors.set('task.success_metrics', (context) =>
+      context.task.success_metrics && context.task.success_metrics.length > 0
+        ? context.task.success_metrics.map((m: string) => `- [ ] ${m}`).join('\n')
         : '- [ ] All acceptance criteria met\n- [ ] All tests pass\n- [ ] Code review approved');
 
     // 4. Required skills - expertise validation
     this.variableProcessors.set('task.requiredSkills', (context) =>
-      context.task.requiredSkills && context.task.requiredSkills.length > 0
-        ? context.task.requiredSkills.map((s: string) => `- ${s}`).join('\n')
+      context.task.required_skills && context.task.required_skills.length > 0
+        ? context.task.required_skills.map((s: string) => `- ${s}`).join('\n')
         : '- General development skills\n- Ability to read documentation\n- Problem-solving skills');
 
     // 5. Parent initiative - strategic alignment
     this.variableProcessors.set('task.parentInitiative', (context) =>
-      context.task.parentInitiative || 'No parent initiative specified - this is an independent task');
+      context.task.parent_initiative || 'No parent initiative specified - this is an independent task');
 
     // 6. Related tasks - coordination context
     this.variableProcessors.set('task.relatedTasks', (context) => {
-      if (!context.task.relatedTasks || context.task.relatedTasks.length === 0) {
+      if (!context.task.related_tasks || context.task.related_tasks.length === 0) {
         return '- None - this task is independent and has no direct dependencies or dependents';
       }
 
-      return context.task.relatedTasks.map((t: string) => {
+      return context.task.related_tasks.map((t: string) => {
         // Add helpful markers if task describes relationship
         if (t.toLowerCase().includes('depend')) return `- 🔗 ${t}`;
         if (t.toLowerCase().includes('block')) return `- 🚫 ${t}`;
@@ -817,6 +1058,11 @@ Use your specialized knowledge to ensure this implementation follows best practi
     this.variableProcessors.set('repository', (context) => context.project);
     this.variableProcessors.set('worktree', (context) => context.worktree);
     this.variableProcessors.set('environment', (context) => context.environment);
+
+    // Work target documentation from configuration
+    this.variableProcessors.set('workTarget.documentation', (context) => {
+      return formatDocumentationForPrompt(context.project);
+    });
   }
 
   /**
@@ -840,7 +1086,8 @@ Use your specialized knowledge to ensure this implementation follows best practi
   /**
    * Get guidance text for confidence level
    */
-  private getConfidenceGuidance(confidence: string): string {
+  private getConfidenceGuidance(confidence: string | undefined): string {
+    if (!confidence) return '';
     switch (confidence.toLowerCase()) {
       case 'low':
         return '(significant unknowns, estimate may be off by 2-3x)';
@@ -927,6 +1174,20 @@ Use your specialized knowledge to ensure this implementation follows best practi
           '- [Structured Logging Migration](../docs/operations/STRUCTURED_LOGGING_MIGRATION.md)'
         );
         break;
+
+      case 'dev-bots':
+        archDocs.push(
+          '- [Dev-Bots README](../docs/dev-bots/README.md)',
+          '- [System Architecture Overview](../docs/dev-bots/architecture/system-overview.md)',
+          '- [Context Isolation](../docs/dev-bots/architecture/context-isolation.md)',
+          '- [Implementation Guide](../docs/dev-bots/implementation/implementation-guide.md)',
+          '- [Task Queue Architecture](../docs/dev-bots/task-queue.md)',
+          '- [SQLite Integration Plan](../docs/dev-bots/SQLITE_INTEGRATION_PLAN.md)',
+          '- [Scope Control System](../docs/dev-bots/SCOPE_CONTROL_SYSTEM.md)',
+          '- [Testing Strategy](../docs/dev-bots/TESTING_STRATEGY.md)',
+          '- [Timeout Handling Strategy](../docs/dev-bots/TIMEOUT_HANDLING_STRATEGY.md)'
+        );
+        break;
         
       case 'job-finder-shared-types':
       case 'shared-types':
@@ -945,5 +1206,21 @@ Use your specialized knowledge to ensure this implementation follows best practi
     }
     
     return archDocs;
+  }
+
+  /**
+   * Intelligently discover relevant documentation based on task content
+   * Analyzes task title, description, and type to suggest helpful docs
+   */
+  private discoverRelevantDocumentation(context: TaskContext): string[] {
+    const searchText = `${context.task.title} ${context.task.description || ''} ${context.task.type || ''}`.toLowerCase();
+
+    return DOC_SUGGESTION_RULES.reduce<string[]>((docs, rule) => {
+      if (rule.pattern.test(searchText)) {
+        const entries = typeof rule.docs === 'function' ? rule.docs(context) : rule.docs;
+        docs.push(...entries);
+      }
+      return docs;
+    }, []);
   }
 }

@@ -5,9 +5,11 @@ import {
   Bot,
   ClipboardPlus,
   FileText,
+  ListChecks,
   Loader2,
   PauseCircle,
   Play,
+  Plus,
   RefreshCw,
   ShieldAlert,
   Sparkles,
@@ -946,7 +948,6 @@ export const DevBotsPanel: React.FC<DevBotsPanelProps> = ({
                         <option value="job-finder-shared-types">job-finder-shared-types</option>
                         <option value="job-finder-worker">job-finder-worker</option>
                         <option value="docs">docs</option>
-                        <option value="scripts">scripts</option>
                         <option value="infrastructure">infrastructure</option>
                       </select>
                     </label>

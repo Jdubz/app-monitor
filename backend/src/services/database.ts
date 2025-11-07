@@ -15,6 +15,53 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
+type TaskExecutionRow = {
+  id: string;
+  task_id: string;
+  agent_id: string;
+  model_provider: string | null;
+  model_name: string | null;
+  started_at: string;
+  completed_at: string | null;
+  status: string;
+  token_input: number | null;
+  token_output: number | null;
+  complexity_estimated: number | null;
+  complexity_actual: number | null;
+  quality_score_completion: number;
+  quality_score_code_quality: number;
+  quality_score_test_coverage: number;
+  quality_score_process: number;
+  quality_score_efficiency: number;
+  quality_score_overall: number;
+  git_commit: string | null;
+  output: string | null;
+};
+
+type BatchApprovalRow = {
+  id: number;
+  approved_count: number;
+  executed_count: number;
+  started_at: string;
+  status: string;
+  paused_reason: string | null;
+};
+
+type FailurePatternRow = {
+  id: number;
+  task_id: string;
+  category: string;
+  pattern: string;
+  timestamp: string;
+  resolved: 0 | 1;
+};
+
+type TokenUsageStatsRow = {
+  total_input: number | null;
+  total_output: number | null;
+  request_count: number | null;
+};
+
 export class DevBotsDatabase {
   private db: Database.Database;
 
@@ -187,10 +234,10 @@ export class DevBotsDatabase {
 
     if (!result) return undefined;
 
-    return this.mapToTaskExecution(result as any);
+    return this.mapToTaskExecution(result as TaskExecutionRow);
   }
 
-  private mapToTaskExecution(row: any): TaskExecution {
+  private mapToTaskExecution(row: TaskExecutionRow): TaskExecution {
     return {
       id: row.id,
       taskId: row.task_id,
@@ -240,7 +287,12 @@ export class DevBotsDatabase {
       WHERE provider = ? AND DATE(timestamp) = ?
     `).get(provider, today);
 
-    return result as TokenUsageStats;
+    const stats = result as TokenUsageStatsRow | undefined;
+    return {
+      total_input: stats?.total_input ?? 0,
+      total_output: stats?.total_output ?? 0,
+      request_count: stats?.request_count ?? 0
+    };
   }
 
   // Batch Approvals
@@ -260,7 +312,7 @@ export class DevBotsDatabase {
 
     if (!result) return undefined;
 
-    return this.mapToBatchApproval(result as any);
+    return this.mapToBatchApproval(result as BatchApprovalRow);
   }
 
   getCurrentBatch(): BatchApproval | undefined {
@@ -270,10 +322,10 @@ export class DevBotsDatabase {
 
     if (!result) return undefined;
 
-    return this.mapToBatchApproval(result as any);
+    return this.mapToBatchApproval(result as BatchApprovalRow);
   }
 
-  private mapToBatchApproval(row: any): BatchApproval {
+  private mapToBatchApproval(row: BatchApprovalRow): BatchApproval {
     return {
       id: row.id,
       approved_count: row.approved_count,
@@ -307,9 +359,9 @@ export class DevBotsDatabase {
   getFailurePatterns(taskId: string): FailurePattern[] {
     const results = this.db.prepare(
       'SELECT * FROM failure_patterns WHERE task_id = ?'
-    ).all(taskId);
+    ).all(taskId) as FailurePatternRow[];
 
-    return results.map((row: any) => ({
+    return results.map((row) => ({
       id: row.id,
       taskId: row.task_id,
       category: row.category,

@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplates.js';
 import { AgentPersonality } from './agentPersonalities.js';
-import { Task } from './devBotsManager.js';
+import { Task } from './taskQueue.sqlite.js';
 
 describe('Template Integration Tests', () => {
   let templateManager: TaskPromptTemplateManager;
@@ -35,19 +35,18 @@ describe('Template Integration Tests', () => {
         title: 'Add user authentication endpoint',
         description: 'Implement OAuth2 authentication endpoint with JWT tokens',
         documentation: 'Review authentication architecture and security requirements',
-        acceptanceCriteria: [
+        acceptance_criteria: [
           'OAuth2 endpoint implemented',
           'JWT token generation working',
           'Security tests passing',
           'API documentation updated'
         ],
         status: 'pending',
-        createdAt: new Date().toISOString(),
-        assignedAgent: 'backend-specialist',
+        created_at: Date.now(),
+        assigned_agent: 'backend-specialist',
         files: ['src/auth/', 'src/middleware/', 'src/routes/auth.ts'],
         dependencies: ['task-456', 'task-789'],
-        project: 'job-finder-BE',
-        architectureReferences: [
+        architecture_references: [
           'Authentication flow diagram',
           'Security requirements document'
         ],
@@ -56,28 +55,28 @@ describe('Template Integration Tests', () => {
           'Set up test environment',
           'Configure OAuth2 provider'
         ],
-        contextBoundaries: {
+        context_boundaries: {
           mustNotChange: ['User model', 'Database schema'],
           mustNotAffect: ['Frontend components', 'Worker processes'],
           integrationPoints: ['User service', 'Token validation']
         },
-        testingRequirements: [
+        testing_requirements: [
           'Unit tests for auth logic',
           'Integration tests for endpoints',
           'Security penetration testing'
         ],
-        documentationRequirements: [
+        documentation_requirements: [
           'API documentation update',
           'Authentication guide',
           'Security considerations'
         ],
-        validationSteps: [
+        validation_steps: [
           'Test authentication flow',
           'Verify token generation',
           'Check security headers',
           'Validate error handling'
         ],
-        rollbackPlan: [
+        rollback_plan: [
           'Revert auth endpoint changes',
           'Restore previous middleware',
           'Update API documentation'
@@ -155,19 +154,18 @@ describe('Template Integration Tests', () => {
         title: 'Implement user dashboard',
         description: 'Create responsive user dashboard with job search history and preferences',
         documentation: 'Review UI/UX guidelines and component library',
-        acceptanceCriteria: [
+        acceptance_criteria: [
           'Dashboard layout implemented',
           'Job search history displayed',
           'User preferences editable',
           'Mobile responsive design'
         ],
         status: 'pending',
-        createdAt: new Date().toISOString(),
-        assignedAgent: 'frontend-specialist',
+        created_at: Date.now(),
+        assigned_agent: 'frontend-specialist',
         files: ['src/components/Dashboard/', 'src/pages/UserDashboard.tsx'],
         dependencies: ['task-123'],
-        project: 'job-finder-FE',
-        architectureReferences: [
+        architecture_references: [
           'UI/UX design system',
           'Component library documentation'
         ],
@@ -176,28 +174,28 @@ describe('Template Integration Tests', () => {
           'Set up component library',
           'Configure routing'
         ],
-        contextBoundaries: {
+        context_boundaries: {
           mustNotChange: ['Authentication flow', 'API endpoints'],
           mustNotAffect: ['Backend services', 'Database'],
           integrationPoints: ['User service', 'Job search API']
         },
-        testingRequirements: [
+        testing_requirements: [
           'Component unit tests',
           'Visual regression tests',
           'Accessibility testing'
         ],
-        documentationRequirements: [
+        documentation_requirements: [
           'Component documentation',
           'User guide update',
           'Design system documentation'
         ],
-        validationSteps: [
+        validation_steps: [
           'Test dashboard functionality',
           'Verify responsive design',
           'Check accessibility compliance',
           'Validate user interactions'
         ],
-        rollbackPlan: [
+        rollback_plan: [
           'Revert dashboard components',
           'Restore previous routing',
           'Update user guide'
@@ -214,8 +212,8 @@ describe('Template Integration Tests', () => {
 
       const context: TaskContext = {
         task: frontendTask,
-        agent: frontendAgent as unknown as AgentPersonality,
         project: 'job-finder-FE',
+        agent: frontendAgent as unknown as AgentPersonality,
         worktree: '[dynamic workspace provisioned per task]',
         environment: 'development'
       };
@@ -258,19 +256,18 @@ describe('Template Integration Tests', () => {
         title: 'Optimize job scraping performance',
         description: 'Improve job scraping efficiency and add parallel processing',
         documentation: 'Review current scraping architecture and performance metrics',
-        acceptanceCriteria: [
+        acceptance_criteria: [
           'Parallel processing implemented',
           'Performance improved by 50%',
           'Error handling enhanced',
           'Monitoring added'
         ],
         status: 'pending',
-        createdAt: new Date().toISOString(),
-        assignedAgent: 'devops-specialist',
+        created_at: Date.now(),
+        assigned_agent: 'devops-specialist',
         files: ['src/scrapers/', 'src/workers/', 'docker-compose.yml'],
         dependencies: ['task-123', 'task-456'],
-        project: 'job-finder-worker',
-        architectureReferences: [
+        architecture_references: [
           'Scraping architecture diagram',
           'Performance benchmarks'
         ],
@@ -279,28 +276,28 @@ describe('Template Integration Tests', () => {
           'Set up monitoring tools',
           'Configure parallel processing'
         ],
-        contextBoundaries: {
+        context_boundaries: {
           mustNotChange: ['Database schema', 'API contracts'],
           mustNotAffect: ['Frontend application', 'User experience'],
           integrationPoints: ['Job database', 'Queue system']
         },
-        testingRequirements: [
+        testing_requirements: [
           'Performance tests',
           'Load testing',
           'Error handling tests'
         ],
-        documentationRequirements: [
+        documentation_requirements: [
           'Performance documentation',
           'Deployment guide update',
           'Monitoring setup guide'
         ],
-        validationSteps: [
+        validation_steps: [
           'Run performance benchmarks',
           'Test parallel processing',
           'Verify error handling',
           'Check monitoring metrics'
         ],
-        rollbackPlan: [
+        rollback_plan: [
           'Revert to previous scraping logic',
           'Restore original performance',
           'Update monitoring configuration'
@@ -317,8 +314,8 @@ describe('Template Integration Tests', () => {
 
       const context: TaskContext = {
         task: workerTask,
-        agent: workerAgent as unknown as AgentPersonality,
         project: 'job-finder-worker',
+        agent: workerAgent as unknown as AgentPersonality,
         worktree: '[dynamic workspace provisioned per task]',
         environment: 'development'
       };
@@ -351,11 +348,10 @@ describe('Template Integration Tests', () => {
         title: 'Minimal Task',
         description: 'Minimal description',
         documentation: 'Minimal docs',
-        acceptanceCriteria: ['Minimal criteria'],
+        acceptance_criteria: ['Minimal criteria'],
         status: 'pending',
-        createdAt: new Date().toISOString(),
-        assignedAgent: 'backend-specialist',
-        project: 'job-finder-BE'
+        created_at: Date.now(),
+        assigned_agent: 'backend-specialist',
       };
 
       const minimalAgent: any = {
@@ -373,8 +369,8 @@ describe('Template Integration Tests', () => {
 
       const context: TaskContext = {
         task: minimalTask,
-        agent: minimalAgent as unknown as AgentPersonality,
         project: 'job-finder-BE',
+        agent: minimalAgent as unknown as AgentPersonality,
         worktree: '[dynamic workspace provisioned per task]',
         environment: 'development'
       };
@@ -408,11 +404,10 @@ describe('Template Integration Tests', () => {
           title: `Test ${taskType} task`,
           description: `Test ${taskType} description`,
           documentation: `Test ${taskType} docs`,
-          acceptanceCriteria: [`Test ${taskType} criteria`],
+          acceptance_criteria: [`Test ${taskType} criteria`],
           status: 'pending',
-          createdAt: new Date().toISOString(),
-          assignedAgent: 'backend-specialist',
-          project: 'job-finder-BE'
+          created_at: Date.now(),
+          assigned_agent: 'backend-specialist',
         };
 
         const agent: AgentPersonality = {
@@ -454,11 +449,10 @@ describe('Template Integration Tests', () => {
         title: 'Incomplete Task',
         description: 'Incomplete description',
         documentation: 'Incomplete docs',
-        acceptanceCriteria: ['Incomplete criteria'],
+        acceptance_criteria: ['Incomplete criteria'],
         status: 'pending',
-        createdAt: new Date().toISOString(),
-        assignedAgent: 'backend-specialist',
-        project: 'job-finder-BE'
+        created_at: Date.now(),
+        assigned_agent: 'backend-specialist',
         // Missing optional fields
       };
 
@@ -477,8 +471,8 @@ describe('Template Integration Tests', () => {
       const context: TaskContext = {
         task: incompleteTask,
         agent,
-        project: 'job-finder-BE',
         worktree: '[dynamic workspace provisioned per task]',
+        project: 'job-finder-BE',
         environment: 'development'
       };
 
@@ -502,13 +496,12 @@ describe('Template Integration Tests', () => {
         title: 'Empty Arrays Task',
         description: 'Task with empty arrays',
         documentation: 'Task docs',
-        acceptanceCriteria: [],
+        acceptance_criteria: [],
         status: 'pending',
-        createdAt: new Date().toISOString(),
-        assignedAgent: 'backend-specialist',
+        created_at: Date.now(),
+        assigned_agent: 'backend-specialist',
         files: [],
         dependencies: [],
-        project: 'job-finder-BE'
       };
 
       const agent: AgentPersonality = {
@@ -526,9 +519,9 @@ describe('Template Integration Tests', () => {
       const context: TaskContext = {
         task: taskWithEmptyArrays,
         agent,
-        project: 'job-finder-BE',
         worktree: '[dynamic workspace provisioned per task]',
-        environment: 'development'
+        environment: 'development',
+        project: 'job-finder-BE',
       };
 
       const prompt = templateManager.generatePrompt(context);

@@ -32,7 +32,7 @@ if (!fs.existsSync(LOGS_DIR)) {
 
 type LogLevel = 'debug' | 'info' | 'warning' | 'error';
 type LogSeverity = 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR';
-type LogCategory =
+export type LogCategory =
   | 'api'
   | 'build'
   | 'cloud'
@@ -45,6 +45,7 @@ type LogCategory =
   | 'process'
   | 'quality'
   | 'quality-gates'
+  | 'recovery'
   | 'scripts'
   | 'socket'
   | 'system'
@@ -54,7 +55,7 @@ type LogCategory =
   | 'utility'
   | 'workspace';
 
-interface LogEntry {
+export interface LogEntry {
   category: LogCategory;
   action: string;
   message: string;

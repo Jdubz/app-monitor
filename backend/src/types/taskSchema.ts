@@ -1,18 +1,24 @@
 /**
  * Task Schema Validation
- * 
- * Zod schemas for type-safe task validation
+ *
+ * Zod schemas for API validation only.
+ * Task type itself comes from SQLite (canonical source of truth).
  */
 
 import { z } from 'zod';
 
-// Task status enum
+// Re-export canonical Task type from SQLite (source of truth per Stabilization Plan Objective 2)
+export type { Task, TaskStatus as SQLiteTaskStatus, Worker } from '../services/taskQueue.sqlite.js';
+
+// Task status enum for Zod validation (matches SQLite values)
 export const TaskStatus = z.enum([
   'pending',
   'assigned',
   'active',
   'completed',
   'failed',
+  'cancelled',
+  'timeout',
   'retrying'
 ]);
 
@@ -33,7 +39,8 @@ export const TaskType = z.enum([
 
 export type TaskTypeType = z.infer<typeof TaskType>;
 
-// Task schema
+// Task schema for API validation (snake_case to match SQLite)
+// NOTE: This is for validation only, not for creating a separate Task type
 export const TaskSchema = z.object({
   id: z.string().uuid(),
   type: z.string(),
@@ -42,69 +49,83 @@ export const TaskSchema = z.object({
   documentation: z.string().optional(),
   notes: z.string().optional(),
   status: TaskStatus,
-  createdAt: z.string().datetime(),
-  assignedWorker: z.string().optional(),
-  assignedAgent: z.string(),
-  assignedAt: z.string().datetime().optional(),
-  completedAt: z.string().datetime().optional(),
+  created_at: z.number(), // Unix timestamp in ms
+  assigned_worker: z.string().optional(),
+  assigned_agent: z.string(),
+  assigned_at: z.number().optional(), // Unix timestamp in ms
+  completed_at: z.number().optional(), // Unix timestamp in ms
+  started_at: z.number().optional(), // Unix timestamp in ms
   output: z.string().optional(),
   error: z.string().optional(),
-  exitCode: z.number().optional(),
   prompt: z.string().optional(),
   files: z.array(z.string()).optional(),
   dependencies: z.array(z.string()).optional(),
-  project: z.string().optional(),
+  acceptance_criteria: z.array(z.string()).optional(),
+  architecture_references: z.array(z.string()).optional(),
+  validation_steps: z.array(z.string()).optional(),
+  success_metrics: z.array(z.string()).optional(),
+  estimated_hours: z.number().optional(),
+  complexity: z.string().optional(),
   priority: z.number().min(0).max(10).default(5),
-  retryCount: z.number().min(0).default(0),
-  maxRetries: z.number().min(0).default(3),
-  timeout: z.number().positive().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
+  can_retry: z.boolean().optional(),
+  retry_count: z.number().min(0).default(0),
+  max_retries: z.number().min(0).default(3),
+  timeout_ms: z.number().positive().nullable().optional(),
+  fingerprint: z.string().optional(),
+  agent_type: z.string().optional(),
+  is_repair_bot: z.boolean().optional(),
+  original_task_id: z.string().optional(),
+  repair_stage: z.enum(['cleanup', 'followup']).optional(),
 });
-
-export type Task = z.infer<typeof TaskSchema>;
 
 // Partial task for updates
 export const TaskUpdateSchema = TaskSchema.partial().required({ id: true });
 export type TaskUpdate = z.infer<typeof TaskUpdateSchema>;
 
-// Task creation schema (without generated fields)
+// Task creation schema (without generated fields, snake_case)
 export const TaskCreateSchema = z.object({
   type: z.string(),
   title: z.string().min(1).max(200),
   description: z.string().optional(),
   documentation: z.string().optional(),
   notes: z.string().optional(),
-  assignedAgent: z.string().optional(),
+  assigned_agent: z.string().optional(),
   prompt: z.string().optional(),
   files: z.array(z.string()).optional(),
   dependencies: z.array(z.string()).optional(),
-  project: z.string().optional(),
+  acceptance_criteria: z.array(z.string()).optional(),
+  architecture_references: z.array(z.string()).optional(),
+  validation_steps: z.array(z.string()).optional(),
+  success_metrics: z.array(z.string()).optional(),
+  estimated_hours: z.number().optional(),
+  complexity: z.string().optional(),
   priority: z.number().min(0).max(10).optional(),
-  retryCount: z.number().min(0).optional(),
-  maxRetries: z.number().min(0).optional(),
-  timeout: z.number().positive().optional(),
-  metadata: z.record(z.string(), z.unknown()).optional(),
+  retry_count: z.number().min(0).optional(),
+  max_retries: z.number().min(0).optional(),
+  timeout_ms: z.number().positive().optional(),
+  is_repair_bot: z.boolean().optional(),
+  original_task_id: z.string().optional(),
+  repair_stage: z.enum(['cleanup', 'followup']).optional(),
 });
 
 export type TaskCreate = z.infer<typeof TaskCreateSchema>;
 
-// Task query filters
+// Task query filters (snake_case)
 export const TaskQuerySchema = z.object({
   status: TaskStatus.optional(),
   type: z.string().optional(),
-  assignedAgent: z.string().optional(),
-  assignedWorker: z.string().optional(),
-  project: z.string().optional(),
+  assigned_agent: z.string().optional(),
+  assigned_worker: z.string().optional(),
   priority: z.object({
     min: z.number().optional(),
     max: z.number().optional(),
   }).optional(),
-  createdAfter: z.string().datetime().optional(),
-  createdBefore: z.string().datetime().optional(),
+  created_after: z.number().optional(), // Unix timestamp
+  created_before: z.number().optional(), // Unix timestamp
   limit: z.number().positive().default(100),
   offset: z.number().min(0).default(0),
-  sortBy: z.enum(['createdAt', 'priority', 'status']).default('createdAt'),
-  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  sort_by: z.enum(['created_at', 'priority', 'status']).default('created_at'),
+  sort_order: z.enum(['asc', 'desc']).default('desc'),
 });
 
 export type TaskQuery = z.infer<typeof TaskQuerySchema>;
@@ -117,9 +138,11 @@ export const TaskStatsSchema = z.object({
   active: z.number(),
   completed: z.number(),
   failed: z.number(),
+  cancelled: z.number(),
+  timeout: z.number(),
   retrying: z.number(),
-  averageCompletionTime: z.number().optional(),
-  successRate: z.number().optional(),
+  average_completion_time: z.number().optional(),
+  success_rate: z.number().optional(),
 });
 
 export type TaskStats = z.infer<typeof TaskStatsSchema>;

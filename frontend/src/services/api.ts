@@ -6,15 +6,20 @@
  */
 
 import type { ApiClient } from './ApiClient';
-import { ProcessInfo } from '../types/service.types';
-import { Environment, CloudService, ParsedCloudLog, CloudLoggingStatus } from '../types/log.types';
-import { Script, ScriptExecution, ScriptExecutionSummary } from '../types/script.types';
+import type {
+  HealthCheckResponse,
+  ProcessInfo,
+  LogSource as ContractLogSource,
+  PortStatusMap,
+  ServiceLogsResponse,
+  PortKillResponse,
+  EnvironmentsResponse,
+  CloudService,
+} from '@app-monitor/api-contracts';
+import { CloudService, ParsedCloudLog, CloudLoggingStatus } from '../types/log.types';
 
-export interface HealthCheckResponse {
-  status: string;
-  timestamp: string;
-  uptime: number;
-}
+type LogSource = ContractLogSource;
+export type PortStatuses = PortStatusMap;
 
 // Health check endpoint
 const API_CLIENT_SYMBOL = '__APP_MONITOR_API_CLIENT__';
@@ -75,18 +80,18 @@ export const killService = async (serviceName: string): Promise<ProcessInfo> => 
   return client.post<ProcessInfo>(`/services/${serviceName}/kill`);
 };
 
-export const getServiceLogs = async (serviceName: string, lines: number = 100): Promise<{ serviceName: string; logs: string[] }> => {
+export const getServiceLogs = async (serviceName: string, lines: number = 100): Promise<ServiceLogsResponse> => {
   const client = await getApiClient();
-  return client.get<{ serviceName: string; logs: string[] }>(
-    `/services/${serviceName}/logs`,
+  return client.get<ServiceLogsResponse>(
+    `/logs/services/${serviceName}/logs`,
     { params: { lines } }
   );
 };
 
 // Cloud logs endpoints
-export const getEnvironments = async (): Promise<Record<string, Environment>> => {
+export const getEnvironments = async (): Promise<EnvironmentsResponse> => {
   const client = await getApiClient();
-  return client.get<Record<string, Environment>>('/environments');
+  return client.get<EnvironmentsResponse>('/environments');
 };
 
 export const getEnvironmentServices = async (environment: string): Promise<CloudService[]> => {
@@ -117,82 +122,23 @@ export const checkCloudLoggingStatus = async (): Promise<CloudLoggingStatus> => 
   return client.get<CloudLoggingStatus>('/logs/cloud/status');
 };
 
-// Log sources endpoint (dynamically discovered log files)
-export interface LogSource {
-  id: string;
-  name: string;
-  format: string;
-  parser: string;
-  color: string;
-  displayOrder: number;
-  path: string;
-}
-
 export const getLogSources = async (): Promise<LogSource[]> => {
   const client = await getApiClient();
   const response = await client.get<{ success: boolean; data: LogSource[] }>('/logs/sources');
   return response.data;
 };
 
-// Script management endpoints
-export const getScripts = async (): Promise<Script[]> => {
-  const client = await getApiClient();
-  const response = await client.get<{ count: number; scripts: Script[] }>('/scripts');
-  return response.scripts;
-};
-
-export const executeScript = async (scriptId: string): Promise<{ success: boolean; execution: { id: string; scriptId: string; status: string; startTime: Date } }> => {
-  const client = await getApiClient();
-  return client.post<{ success: boolean; execution: { id: string; scriptId: string; status: string; startTime: Date } }>(
-    `/scripts/${scriptId}/execute`
-  );
-};
-
-export const getExecutions = async (): Promise<ScriptExecutionSummary[]> => {
-  const client = await getApiClient();
-  const response = await client.get<{ count: number; executions: ScriptExecutionSummary[] }>('/scripts/executions');
-  return response.executions;
-};
-
-export const getExecution = async (executionId: string): Promise<ScriptExecution> => {
-  const client = await getApiClient();
-  return client.get<ScriptExecution>(`/scripts/executions/${executionId}`);
-};
-
-export const killScript = async (executionId: string): Promise<{ success: boolean; message: string }> => {
-  const client = await getApiClient();
-  return client.post<{ success: boolean; message: string }>(`/scripts/executions/${executionId}/kill`);
-};
-
-export const clearScriptHistory = async (): Promise<{ success: boolean; message: string }> => {
-  const client = await getApiClient();
-  return client.delete<{ success: boolean; message: string }>('/scripts/executions');
-};
-
 // Port management endpoints
-export interface PortInfo {
-  port: number;
-  pid: number | null;
-  inUse: boolean;
-}
-
-export interface PortStatuses {
-  [serviceName: string]: PortInfo[];
-}
-
 export const getPortStatuses = async (): Promise<PortStatuses> => {
   const client = await getApiClient();
   return client.get<PortStatuses>('/ports/status');
 };
 
-export const killPortProcess = async (port: number): Promise<{ success: boolean; message: string; port: number; pid?: number; wasInUse: boolean }> => {
+export const killPortProcess = async (port: number): Promise<PortKillResponse> => {
   const client = await getApiClient();
-  return client.post<{ success: boolean; message: string; port: number; pid?: number; wasInUse: boolean }>(
-    `/ports/${port}/kill`
-  );
+  return client.post<PortKillResponse>('/ports/' + port + '/kill');
 };
 
-// Error handling utility
 export const handleApiError = (error: unknown): string => {
   if (error instanceof Error) {
     return error.message;
@@ -218,12 +164,6 @@ export const api = {
   getCloudLogs,
   checkCloudLoggingStatus,
   getLogSources,
-  getScripts,
-  executeScript,
-  getExecutions,
-  getExecution,
-  killScript,
-  clearScriptHistory,
   getPortStatuses,
   killPortProcess,
   handleApiError,

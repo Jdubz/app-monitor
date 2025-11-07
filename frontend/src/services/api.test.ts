@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import axios from 'axios';
 import type { AxiosInstance } from 'axios';
 import * as apiModule from './api';
-import { mockServices, mockHealthCheckResponse, mockPortStatuses, mockScript, mockScriptExecution, mockScriptExecutionSummary } from '../test/fixtures';
+import { mockServices, mockHealthCheckResponse, mockPortStatuses } from '../test/fixtures';
 
 // Mock axios.create to return our mock instance
 vi.mock('axios', () => {
@@ -128,7 +128,7 @@ describe('API Service', () => {
 
       const result = await apiModule.getServiceLogs('test-service');
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/services/test-service/logs', {
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/logs/services/test-service/logs', {
         params: { lines: 100 },
       });
       expect(result).toEqual(logs);
@@ -140,7 +140,7 @@ describe('API Service', () => {
 
       const result = await apiModule.getServiceLogs('test-service', 50);
 
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/services/test-service/logs', {
+      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/logs/services/test-service/logs', {
         params: { lines: 50 },
       });
       expect(result).toEqual(logs);
@@ -170,75 +170,6 @@ describe('API Service', () => {
       const result = await apiModule.killPortProcess(3000);
 
       expect(mockAxiosInstance.post).toHaveBeenCalledWith('/ports/3000/kill', undefined, undefined);
-      expect(result).toEqual(response);
-    });
-  });
-
-  describe('Script Management', () => {
-    it('should fetch all scripts', async () => {
-      const response = { count: 1, scripts: [mockScript] };
-      vi.mocked(mockAxiosInstance.get).mockResolvedValue({ data: response } as any);
-
-      const result = await apiModule.getScripts();
-
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/scripts', undefined);
-      expect(result).toEqual([mockScript]);
-    });
-
-    it('should execute a script', async () => {
-      const response = {
-        success: true,
-        execution: {
-          id: 'exec-1',
-          scriptId: 'script-1',
-          status: 'running',
-          startTime: new Date(),
-        },
-      };
-      vi.mocked(mockAxiosInstance.post).mockResolvedValue({ data: response } as any);
-
-      const result = await apiModule.executeScript('script-1');
-
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/scripts/script-1/execute', undefined, undefined);
-      expect(result).toEqual(response);
-    });
-
-    it('should fetch all executions', async () => {
-      const response = { count: 1, executions: [mockScriptExecutionSummary] };
-      vi.mocked(mockAxiosInstance.get).mockResolvedValue({ data: response } as any);
-
-      const result = await apiModule.getExecutions();
-
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/scripts/executions', undefined);
-      expect(result).toEqual([mockScriptExecutionSummary]);
-    });
-
-    it('should fetch a specific execution', async () => {
-      vi.mocked(mockAxiosInstance.get).mockResolvedValue({ data: mockScriptExecution } as any);
-
-      const result = await apiModule.getExecution('exec-1');
-
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/scripts/executions/exec-1', undefined);
-      expect(result).toEqual(mockScriptExecution);
-    });
-
-    it('should kill a script execution', async () => {
-      const response = { success: true, message: 'Script killed' };
-      vi.mocked(mockAxiosInstance.post).mockResolvedValue({ data: response } as any);
-
-      const result = await apiModule.killScript('exec-1');
-
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/scripts/executions/exec-1/kill', undefined, undefined);
-      expect(result).toEqual(response);
-    });
-
-    it('should clear script history', async () => {
-      const response = { success: true, message: 'History cleared' };
-      vi.mocked(mockAxiosInstance.delete).mockResolvedValue({ data: response } as any);
-
-      const result = await apiModule.clearScriptHistory();
-
-      expect(mockAxiosInstance.delete).toHaveBeenCalledWith('/scripts/executions', undefined);
       expect(result).toEqual(response);
     });
   });

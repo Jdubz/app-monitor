@@ -392,8 +392,8 @@ export class TaskPersistence {
     const cutoffDate = new Date(Date.now() - (olderThanDays * 24 * 60 * 60 * 1000));
     
     const filteredTasks = tasks.filter(task => {
-      if (task.status === 'completed' && task.completedAt) {
-        const completedDate = new Date(task.completedAt);
+      if (task.status === 'completed' && task.completed_at) {
+        const completedDate = new Date(task.completed_at);
         return completedDate >= cutoffDate;
       }
       return true; // Keep non-completed tasks

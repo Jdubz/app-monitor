@@ -8,7 +8,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
-export type TabType = 'local' | 'scripts' | 'deployed' | 'dev-bots';
+export type TabType = 'local' | 'deployed' | 'dev-bots';
 
 interface Tab {
   id: TabType;
@@ -28,13 +28,6 @@ const tabs: Tab[] = [
     path: '/local',
     description: 'Workstation services, process manager, and live ports',
     statusBadge: { label: '5 running', variant: 'success' },
-  },
-  {
-    id: 'scripts',
-    label: 'Scripts',
-    path: '/scripts',
-    description: 'Execute maintenance scripts and review recent runs',
-    statusBadge: { label: 'queued', variant: 'warning' },
   },
   {
     id: 'deployed',

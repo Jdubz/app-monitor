@@ -7,7 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { createSocketService, SocketService, ConnectionState, HealthMetrics } from '../services/socketService';
 
-const SOCKET_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5174';
+const SOCKET_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
 
 export function useEnhancedSocket() {
   const [socketService, setSocketService] = useState<SocketService | null>(null);

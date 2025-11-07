@@ -56,6 +56,60 @@ POST   /api/claude-workers/emergency-recovery # Emergency healing
 GET    /api/claude-workers/metrics          # System metrics
 GET    /api/claude-workers/logs             # System logs
 GET    /api/claude-workers/performance      # Performance metrics
+GET    /api/claude-workers/agent-comparison # Claude vs Codex comparison metrics
+```
+
+### Agent Comparison (NEW)
+```http
+GET    /api/dev-bots/agent-comparison       # Performance comparison between Claude and Codex agents
+```
+
+**Purpose**: Compare performance metrics between Claude and Codex AI agents for data-driven insights into which agent performs better for different task types.
+
+**Response Example**:
+```json
+{
+  "comparison": {
+    "claude": {
+      "total": 45,
+      "completed": 42,
+      "failed": 3,
+      "avg_duration_ms": 125430,
+      "success_rate": 93.33
+    },
+    "codex": {
+      "total": 43,
+      "completed": 38,
+      "failed": 5,
+      "avg_duration_ms": 118250,
+      "success_rate": 88.37
+    }
+  }
+}
+```
+
+**Metrics Explained**:
+- `total`: Total number of tasks executed by this agent
+- `completed`: Number of successfully completed tasks
+- `failed`: Number of failed tasks
+- `avg_duration_ms`: Average task completion time in milliseconds
+- `success_rate`: Percentage of tasks completed successfully (0-100)
+
+**Usage**:
+```bash
+# Get comparison metrics
+curl http://localhost:5000/api/dev-bots/agent-comparison
+
+# Compare success rates
+curl http://localhost:5000/api/dev-bots/agent-comparison | \
+  jq '.comparison | {claude: .claude.success_rate, codex: .codex.success_rate}'
+
+# Compare average durations (in minutes)
+curl http://localhost:5000/api/dev-bots/agent-comparison | \
+  jq '.comparison | {
+    claude_min: (.claude.avg_duration_ms/60000),
+    codex_min: (.codex.avg_duration_ms/60000)
+  }'
 ```
 
 ## 📊 Export/Import
