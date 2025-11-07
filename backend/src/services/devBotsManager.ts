@@ -25,6 +25,7 @@ import {
   isTaskStuck,
   TIME_BASED_GUARDS
 } from './taskFailureGuards.js';
+import { FailureRecoveryOrchestrator } from './failureRecovery.js';
 
 // Temporary reference until the stuck-task guards are wired into the active code paths.
 void isTaskStuck;
@@ -599,6 +600,7 @@ export class DevBotsManager extends EventEmitter {
   private retryManager!: RetryManager;
   private workspaceOrchestrator!: WorkspaceOrchestrator;
   private pushCoordinator: PushCoordinator = new PushCoordinator();
+  private recoveryOrchestrator!: FailureRecoveryOrchestrator;
 
   // Scope control systems
   private scopeCreepDetector = new ScopeCreepDetector();
@@ -620,8 +622,8 @@ export class DevBotsManager extends EventEmitter {
     // Validate Docker environment and initialize
     this.initializeDockerEnvironment();
 
-    // Initialize enhanced services
-    this.initializeEnhancedServices();
+    // Initialize enhanced services (async, runs in background)
+    void this.initializeEnhancedServices();
 
     // Ephemeral workers are created on-demand, no initialization needed
 
@@ -780,10 +782,13 @@ export class DevBotsManager extends EventEmitter {
     }
   }
 
-  private initializeEnhancedServices(): void {
+  private async initializeEnhancedServices(): Promise<void> {
     // Initialize SQLite task queue
     const dbPath = './data/tasks/queue.db';
     this.taskQueue = new TaskQueueService(dbPath);
+
+    // Run recovery system migration
+    await this.taskQueue.runRecoveryMigration();
 
     // Initialize legacy task persistence (for migration only)
     const storageConfig: TaskStorageConfig = {
@@ -825,6 +830,9 @@ export class DevBotsManager extends EventEmitter {
     const retryConfig: Partial<RetryConfig> = {
       maxRetries: 3
     };
+
+    // Initialize failure recovery orchestrator
+    this.recoveryOrchestrator = new FailureRecoveryOrchestrator(this);
     this.retryManager = new RetryManager(retryConfig);
 
     // Listen for retry events
@@ -1024,6 +1032,13 @@ export class DevBotsManager extends EventEmitter {
    */
   public getQueueMetrics() {
     return this.taskQueue.getQueueMetrics();
+  }
+
+  /**
+   * Get the task queue (for recovery orchestrator)
+   */
+  public getTaskQueue(): TaskQueueService {
+    return this.taskQueue;
   }
 
   /**
@@ -1941,7 +1956,51 @@ export class DevBotsManager extends EventEmitter {
         }
       });
 
-      // Fail task in SQLite
+      // Attempt automatic recovery if failure pattern detected
+      if (failurePattern) {
+        try {
+          // Get uncommitted changes for recovery context
+          const repoRoot = path.resolve(process.cwd(), '..');
+          const { stdout: uncommittedChanges } = await this.execGitCommand(['diff'], repoRoot);
+
+          const recoveryResult = await this.recoveryOrchestrator.attemptRecovery({
+            task,
+            failurePattern,
+            stderr,
+            stdout,
+            exitCode,
+            uncommittedChanges,
+            artifacts: {
+              logs: [stdoutLogPath, stderrLogPath].filter(p => p && fs.existsSync(p)),
+              patches: []
+            }
+          });
+
+          if (recoveryResult.status === 'recovered') {
+            logger.info({
+              category: 'recovery',
+              action: 'task_auto_recovered',
+              message: `Task ${task.id} automatically recovered`,
+              details: recoveryResult
+            });
+
+            // Recovery successful - task was handled by cleanup + followup bots
+            // Skip normal failure handling
+            this.ephemeralWorkers.delete(workerId);
+            return;
+          }
+        } catch (recoveryError) {
+          logger.error({
+            category: 'recovery',
+            action: 'recovery_attempt_error',
+            message: `Recovery attempt failed with error`,
+            error: recoveryError
+          });
+          // Continue with normal failure handling
+        }
+      }
+
+      // Fail task in SQLite (only if recovery didn't succeed)
       const errorMessage = failurePattern
         ? `${failurePattern.name}: ${failurePattern.description}. ${failurePattern.suggestedFix || ''}`
         : `Docker run failed with exit code ${exitCode}. stderr: ${stderr}`;

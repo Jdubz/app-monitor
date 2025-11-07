@@ -9,7 +9,7 @@
 
 import { logger } from '../utils/logger.js';
 import { Task } from '../types/task.js';
-import { FailurePattern } from './taskFailureGuards.js';
+import { FailurePattern, detectFailurePattern } from './taskFailureGuards.js';
 import { DevBotsManager } from './devBotsManager.js';
 
 // ============================================================================
@@ -818,13 +818,66 @@ Complete the work and commit with message:
     const pollInterval = 5000; // Poll every 5 seconds
 
     while (Date.now() - startTime < timeoutMs) {
-      // TODO: Query task status from database
-      // For now, return placeholder
-      await new Promise(resolve => setTimeout(resolve, pollInterval));
+      // Query task status from database
+      const task = this.devBotsManager.getTaskQueue().getTask(taskId);
 
-      // This is a placeholder - actual implementation would query the task queue
-      // and check task status, then return the result when complete
+      if (!task) {
+        logger.error({
+          category: 'recovery',
+          action: 'task_not_found',
+          message: `Task ${taskId} not found in queue`,
+          details: { taskId }
+        });
+        return {
+          status: 'failed',
+          taskId
+        };
+      }
+
+      if (task.status === 'completed') {
+        logger.info({
+          category: 'recovery',
+          action: 'repair_bot_completed',
+          message: `Repair bot task ${taskId} completed successfully`,
+          details: { taskId, repairStage: task.repair_stage }
+        });
+
+        return {
+          status: 'success',
+          patch: task.output || '',
+          taskId
+        };
+      }
+
+      if (task.status === 'failed') {
+        logger.warn({
+          category: 'recovery',
+          action: 'repair_bot_failed',
+          message: `Repair bot task ${taskId} failed`,
+          details: { taskId, error: task.error, repairStage: task.repair_stage }
+        });
+
+        // Try to detect failure pattern from error
+        const failurePattern = task.error ? detectFailurePattern(task.error, '', 1) : undefined;
+
+        return {
+          status: 'failed',
+          taskId,
+          failurePattern
+        };
+      }
+
+      // Task still running or pending, wait and poll again
+      await new Promise(resolve => setTimeout(resolve, pollInterval));
     }
+
+    // Timeout reached
+    logger.error({
+      category: 'recovery',
+      action: 'repair_bot_timeout',
+      message: `Repair bot task ${taskId} timed out after ${timeoutMs}ms`,
+      details: { taskId, timeoutMs }
+    });
 
     return {
       status: 'failed',

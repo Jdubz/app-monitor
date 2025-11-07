@@ -94,7 +94,7 @@ export class RecoveryMigration {
   private addRepairBotFields(result: RecoveryMigrationResult): void {
     try {
       // Check if fields already exist
-      const tableInfo = this.db.prepare("PRAGMA table_info(tasks)").all() as any[];
+      const tableInfo = this.db.prepare("PRAGMA table_info(tasks)").all() as { name: string }[];
       const existingFields = new Set(tableInfo.map(col => col.name));
 
       const fieldsToAdd = [

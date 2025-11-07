@@ -1087,4 +1087,241 @@ export class TaskQueueService {
       message: `Database backed up to ${backupPath}`
     });
   }
+
+  // ============================================================================
+  // Recovery System Methods
+  // ============================================================================
+
+  /**
+   * Run recovery system database migration
+   */
+  async runRecoveryMigration(): Promise<void> {
+    try {
+      // Import dynamically to avoid circular dependencies
+      const { RecoveryMigration } = await import('./taskQueue.recovery.migration.js');
+      const migration = new RecoveryMigration(this.db);
+      const result = migration.migrate();
+
+      if (result.success) {
+        logger.info({
+          category: 'process',
+          action: 'recovery_migration_success',
+          message: 'Recovery system migration completed successfully',
+          details: {
+            tablesCreated: result.tablesCreated,
+            fieldsAdded: result.fieldsAdded
+          }
+        });
+      } else {
+        logger.error({
+          category: 'process',
+          action: 'recovery_migration_failed',
+          message: 'Recovery system migration failed',
+          details: {
+            errors: result.errors
+          }
+        });
+      }
+    } catch (error) {
+      logger.error({
+        category: 'process',
+        action: 'recovery_migration_error',
+        message: 'Error running recovery migration',
+        error
+      });
+    }
+  }
+
+  /**
+   * Count running repair bots (cleanup and follow-up bots)
+   */
+  countRunningRepairBots(): number {
+    const result = this.db.prepare(`
+      SELECT COUNT(*) as count
+      FROM tasks
+      WHERE status = 'running'
+        AND is_repair_bot = 1
+    `).get() as { count: number };
+
+    return result.count;
+  }
+
+  /**
+   * Get all repair bots for a specific task
+   */
+  getRepairBotsForTask(originalTaskId: string): Task[] {
+    const rows = this.db.prepare(`
+      SELECT * FROM tasks
+      WHERE original_task_id = ?
+        AND is_repair_bot = 1
+      ORDER BY created_at ASC
+    `).all(originalTaskId) as Task[];
+
+    return rows.map(row => this.hydrateTask(row));
+  }
+
+  /**
+   * Check if a task already has a recovery attempt
+   */
+  hasRecoveryAttempt(taskId: string): boolean {
+    const result = this.db.prepare(`
+      SELECT COUNT(*) as count
+      FROM tasks
+      WHERE original_task_id = ?
+        AND is_repair_bot = 1
+    `).get(taskId) as { count: number };
+
+    return result.count > 0;
+  }
+
+  /**
+   * Get recovery attempt by ID
+   */
+  getRecoveryAttempt(attemptId: string): {
+    id: string;
+    task_id: string;
+    original_failure_pattern: string;
+    cleanup_bot_task_id?: string;
+    followup_bot_task_id?: string;
+    status: string;
+    stage: string;
+    started_at: number;
+    completed_at?: number;
+    total_duration_ms?: number;
+    recovery_summary?: string;
+  } | undefined {
+    return this.db.prepare(`
+      SELECT * FROM recovery_attempts
+      WHERE id = ?
+    `).get(attemptId) as {
+      id: string;
+      task_id: string;
+      original_failure_pattern: string;
+      cleanup_bot_task_id?: string;
+      followup_bot_task_id?: string;
+      status: string;
+      stage: string;
+      started_at: number;
+      completed_at?: number;
+      total_duration_ms?: number;
+      recovery_summary?: string;
+    } | undefined;
+  }
+
+  /**
+   * Create a recovery attempt record
+   */
+  createRecoveryAttempt(attempt: {
+    id: string;
+    task_id: string;
+    original_failure_pattern: string;
+    status: string;
+    stage: string;
+    started_at: number;
+  }): void {
+    this.db.prepare(`
+      INSERT INTO recovery_attempts (
+        id, task_id, original_failure_pattern, status, stage, started_at
+      ) VALUES (?, ?, ?, ?, ?, ?)
+    `).run(
+      attempt.id,
+      attempt.task_id,
+      attempt.original_failure_pattern,
+      attempt.status,
+      attempt.stage,
+      attempt.started_at
+    );
+  }
+
+  /**
+   * Update recovery attempt
+   */
+  updateRecoveryAttempt(attemptId: string, updates: {
+    cleanup_bot_task_id?: string;
+    followup_bot_task_id?: string;
+    status?: string;
+    stage?: string;
+    completed_at?: number;
+    total_duration_ms?: number;
+    recovery_summary?: string;
+  }): void {
+    const fields: string[] = [];
+    const values: (string | number | null)[] = [];
+
+    if (updates.cleanup_bot_task_id !== undefined) {
+      fields.push('cleanup_bot_task_id = ?');
+      values.push(updates.cleanup_bot_task_id);
+    }
+    if (updates.followup_bot_task_id !== undefined) {
+      fields.push('followup_bot_task_id = ?');
+      values.push(updates.followup_bot_task_id);
+    }
+    if (updates.status !== undefined) {
+      fields.push('status = ?');
+      values.push(updates.status);
+    }
+    if (updates.stage !== undefined) {
+      fields.push('stage = ?');
+      values.push(updates.stage);
+    }
+    if (updates.completed_at !== undefined) {
+      fields.push('completed_at = ?');
+      values.push(updates.completed_at);
+    }
+    if (updates.total_duration_ms !== undefined) {
+      fields.push('total_duration_ms = ?');
+      values.push(updates.total_duration_ms);
+    }
+    if (updates.recovery_summary !== undefined) {
+      fields.push('recovery_summary = ?');
+      values.push(updates.recovery_summary);
+    }
+
+    if (fields.length > 0) {
+      values.push(attemptId);
+      this.db.prepare(`
+        UPDATE recovery_attempts
+        SET ${fields.join(', ')}
+        WHERE id = ?
+      `).run(...values);
+    }
+  }
+
+  /**
+   * Create a safety check record
+   */
+  createSafetyCheck(check: {
+    id: string;
+    recovery_attempt_id: string;
+    check_type: string;
+    files_modified: number;
+    lines_changed: number;
+    critical_paths_touched: string;
+    destructive_ops_detected: boolean;
+    external_deps_added: boolean;
+    is_safe: boolean;
+    violations: string;
+    analysis_details: string;
+  }): void {
+    this.db.prepare(`
+      INSERT INTO recovery_safety_checks (
+        id, recovery_attempt_id, check_type, files_modified, lines_changed,
+        critical_paths_touched, destructive_ops_detected, external_deps_added,
+        is_safe, violations, analysis_details, checked_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      check.id,
+      check.recovery_attempt_id,
+      check.check_type,
+      check.files_modified,
+      check.lines_changed,
+      check.critical_paths_touched,
+      check.destructive_ops_detected ? 1 : 0,
+      check.external_deps_added ? 1 : 0,
+      check.is_safe ? 1 : 0,
+      check.violations,
+      check.analysis_details,
+      Date.now()
+    );
+  }
 }
