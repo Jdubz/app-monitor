@@ -362,7 +362,7 @@ export class TaskExecutionService {
         'sh', '-c',
         // Copy credentials and run Codex with full access for git operations
         `cp -r /tmp/host-codex/* /home/node/.codex/ 2>/dev/null || true && ` +
-        `codex --sandbox-policy danger-full-access --ask-for-approval never '${promptText}'`
+        `codex --sandbox danger-full-access --ask-for-approval never '${promptText}'`
       ];
       cliCommand = 'codex';
     } else {
