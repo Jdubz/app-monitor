@@ -448,11 +448,21 @@ export class TaskExecutionService {
     let dockerArgs: string[];
     let cliCommand: string;
 
+    // Prepare git environment variables
+    const gitEnvVars = [];
+    const envKeys = ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL', 'GITHUB_TOKEN'];
+    for (const key of envKeys) {
+      if (process.env[key]) {
+        gitEnvVars.push('-e', `${key}=${process.env[key]}`);
+      }
+    }
+
     if (chosenAgentType === 'codex') {
       // Codex execution
       dockerArgs = [
         'run',
         '--rm',  // Auto-remove container after exit
+        ...gitEnvVars,  // Pass git environment variables
         '-v', `${repoRoot}:/workspace:rw`,  // Mount workspace directly
         '-v', `${hostLogsDir}:/logs:rw`,  // Mount logs
         '--tmpfs', '/home/node/.codex:uid=1000,gid=1000',  // Writable temp for Codex CLI
@@ -464,10 +474,9 @@ export class TaskExecutionService {
         this.getAgentDockerImage(agent),
         'sh', '-c',
         // Copy credentials and run Codex with full access for git operations
-        // Use 'exec' subcommand for non-interactive execution
-        // Note: codex exec uses --dangerously-bypass-approvals-and-sandbox instead of --ask-for-approval
+        // Use 'exec' subcommand for non-interactive execution with sandbox bypass
         `cp -r /tmp/host-codex/* /home/node/.codex/ 2>/dev/null || true && ` +
-        `codex exec --dangerously-bypass-approvals-and-sandbox '${promptText}'`
+        `codex exec --sandbox bypass-all '${promptText}'`
       ];
       cliCommand = 'codex';
     } else {
@@ -483,6 +492,7 @@ export class TaskExecutionService {
       dockerArgs = [
         'run',
         '--rm',  // Auto-remove container after exit
+        ...gitEnvVars,  // Pass git environment variables
         '-v', `${repoRoot}:/workspace:rw`,  // Mount workspace directly
         '-v', `${hostLogsDir}:/logs:rw`,  // Mount logs
         '--tmpfs', '/home/node/.claude:uid=1000,gid=1000',  // Writable temp for Claude CLI
@@ -493,12 +503,24 @@ export class TaskExecutionService {
         '-v', `${homeDir}/.config/gh:/home/node/.config/gh:ro`,  // GitHub CLI auth
         this.getAgentDockerImage(agent),
         'sh', '-c',
-        // Copy credentials and run Claude (bypass permissions for git access)
+        // Copy credentials and run Claude in non-interactive mode
         `cp /tmp/host-creds.json /home/node/.claude/.credentials.json && ` +
-        `claude --print --dangerously-skip-permissions --permission-mode bypassPermissions --allowedTools 'Bash(git:*)' '${promptText}'`
+        `claude --no-color --non-interactive '${promptText}'`
       ];
       cliCommand = 'claude';
     }
+
+    // Log the full docker command for debugging
+    const fullCommand = ['docker', ...dockerArgs].join(' ');
+    logger.info({
+      category: 'process',
+      action: 'docker_command_debug',
+      message: `Full Docker command: ${fullCommand.substring(0, 500)}...`,
+      details: {
+        dockerCommandLength: fullCommand.length,
+        dockerArgs: dockerArgs.slice(0, 10) // Log first 10 args for debugging
+      }
+    });
 
     logger.info({
       category: 'process',
@@ -626,6 +648,9 @@ export class TaskExecutionService {
         // Parse JSON output from Claude/Codex
         const cliOutput = JSON.parse(stdout);
 
+        // Add a small delay to ensure git operations are fully flushed to disk
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
         // Complete task in SQLite with agent type for comparison tracking
         this.taskQueue.completeTask(task.id, JSON.stringify(cliOutput), chosenAgentType);
 
@@ -654,6 +679,9 @@ export class TaskExecutionService {
           action: 'failed_to_parse_claude_output_marking_complete_anywa',
           message: `Failed to parse Claude output, marking complete anyway: ${parseError instanceof Error ? parseError.message : String(parseError)}`
         });
+
+        // Add a small delay to ensure git operations are fully flushed to disk
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
         // Still complete task even if output parsing fails
         this.taskQueue.completeTask(task.id, stdout, chosenAgentType);
