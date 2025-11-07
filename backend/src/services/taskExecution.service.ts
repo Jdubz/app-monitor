@@ -24,6 +24,7 @@ import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskPersistence } from './taskPersistence.js';
 import { isTaskStuck, detectFailurePattern } from './taskFailureGuards.js';
 import type { SimpleFailureRecovery } from './failureRecovery.js';
+import { resolveArtifactsDir } from '../utils/repoPaths.js';
 
 // ============================================================================
 // Types & Interfaces
@@ -77,7 +78,7 @@ export class TaskExecutionService {
       maxConcurrentWorkers: config.maxConcurrentWorkers ?? 2,
       stuckCheckInterval: config.stuckCheckInterval ?? 60000,
       absoluteMaxDuration: config.absoluteMaxDuration ?? 60 * 60 * 1000,
-      artifactsDir: config.artifactsDir ?? path.join(process.cwd(), 'dev-bots', 'artifacts'),
+      artifactsDir: config.artifactsDir ?? resolveArtifactsDir(),
       recovery: {
         enabled: config.recovery?.enabled ?? true,
         dryRun: config.recovery?.dryRun ?? false
@@ -476,7 +477,7 @@ export class TaskExecutionService {
         // Copy credentials and run Codex with full access for git operations
         // Use 'exec' subcommand for non-interactive execution with sandbox bypass
         `cp -r /tmp/host-codex/* /home/node/.codex/ 2>/dev/null || true && ` +
-        `codex exec --sandbox bypass-all '${promptText}'`
+        `codex exec --dangerously-bypass-approvals-and-sandbox '${promptText}'`
       ];
       cliCommand = 'codex';
     } else {
@@ -505,7 +506,7 @@ export class TaskExecutionService {
         'sh', '-c',
         // Copy credentials and run Claude in non-interactive mode
         `cp /tmp/host-creds.json /home/node/.claude/.credentials.json && ` +
-        `claude --no-color --non-interactive '${promptText}'`
+        `claude --dangerously-skip-permissions --permission-mode bypassPermissions --allowedTools 'Bash(git:*)' '${promptText}'`
       ];
       cliCommand = 'claude';
     }
@@ -648,8 +649,11 @@ export class TaskExecutionService {
         // Parse JSON output from Claude/Codex
         const cliOutput = JSON.parse(stdout);
 
-        // Add a small delay to ensure git operations are fully flushed to disk
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Ensure git operations are synced to disk if git was used
+        // Only add delay if the task involves git operations to avoid unnecessary performance impact
+        if (stdout.includes('git commit') || stdout.includes('git push') || stdout.includes('Created PR')) {
+          await new Promise(resolve => setTimeout(resolve, 500)); // Reduced delay, only for git operations
+        }
 
         // Complete task in SQLite with agent type for comparison tracking
         this.taskQueue.completeTask(task.id, JSON.stringify(cliOutput), chosenAgentType);
@@ -680,8 +684,11 @@ export class TaskExecutionService {
           message: `Failed to parse Claude output, marking complete anyway: ${parseError instanceof Error ? parseError.message : String(parseError)}`
         });
 
-        // Add a small delay to ensure git operations are fully flushed to disk
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        // Ensure git operations are synced to disk if git was used
+        // Only add delay if the task involves git operations to avoid unnecessary performance impact
+        if (stdout.includes('git commit') || stdout.includes('git push') || stdout.includes('Created PR')) {
+          await new Promise(resolve => setTimeout(resolve, 500)); // Reduced delay, only for git operations
+        }
 
         // Still complete task even if output parsing fails
         this.taskQueue.completeTask(task.id, stdout, chosenAgentType);

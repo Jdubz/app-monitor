@@ -32,7 +32,7 @@ When a task fails with a recoverable error pattern, the system creates two seque
 
 ### Core Components
 
-**File**: `backend/src/services/failureRecovery.ts` (257 lines)
+**File**: `backend/src/services/failureRecovery.ts` (343 lines)
 
 ```typescript
 class SimpleFailureRecovery {
@@ -165,7 +165,7 @@ logger.info({
 
 ## Code Statistics
 
-- **Total Implementation**: 257 lines (73% reduction from previous 950-line system)
+- **Total Implementation**: 343 lines (64% reduction from previous 950-line system)
 - **Methods**: 7 (vs 30+ in complex orchestrator)
 - **Dependencies**: Only DevBotsManager and logger
 - **No Polling**: Event-driven architecture

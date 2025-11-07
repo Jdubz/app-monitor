@@ -18,8 +18,11 @@ import { TaskPersistence, TaskStorageConfig } from './taskPersistence.js';
 import { WorkspaceOrchestrator } from './workspaceOrchestrator.js';
 import { ScopeControlService } from './scopeControl.service.js';
 import { EphemeralWorkerService } from './ephemeralWorker.service.js';
+import { resolveArtifactsDir } from '../utils/repoPaths.js';
 import { TaskExecutionService } from './taskExecution.service.js';
 import { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
+import { SimpleFailureRecovery } from './failureRecovery.js';
+import { TaskCompletionService } from './taskCompletion.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
 
 /**
@@ -127,7 +130,7 @@ export async function createDevBotsManagerDependencies(
       maxConcurrentWorkers: 2,
       stuckCheckInterval: 60000,
       absoluteMaxDuration: 60 * 60 * 1000,
-      artifactsDir: './dev-bots/artifacts',
+      artifactsDir: resolveArtifactsDir(),
       recovery: {
         enabled: config.recovery?.enabled ?? true,
         dryRun: config.recovery?.dryRun ?? false
@@ -142,11 +145,14 @@ export async function createDevBotsManagerDependencies(
     monitorPollIntervalMs: config.prMonitorPollIntervalMs ?? 60000
   });
 
+  // Initialize PR monitoring for existing unmerged PRs
+  await prWorkflowOrchestrator.initialize();
+
   // Note: SimpleFailureRecovery and TaskCompletionService require DevBotsManager instance
   // They will be created after DevBotsManager is instantiated
   // For now, create placeholders that will be replaced
-  const recovery = null as any; // Will be set by DevBotsManager
-  const taskCompletionService = null as any; // Will be set by DevBotsManager
+  const recovery = null as unknown as SimpleFailureRecovery; // Will be set by DevBotsManager
+  const taskCompletionService = null as unknown as TaskCompletionService; // Will be set by DevBotsManager
 
   return {
     processManager,

@@ -116,6 +116,12 @@ make monitor-stop     # Stop app-monitor
 - `docs/` - Comprehensive documentation
 - `scripts/` - Utility scripts
 
+### Shared API Contracts
+
+- `shared/api-contracts/index.ts` contains the only source of truth for every REST/Socket DTO that the backend emits and the frontend consumes.
+- All JSON responses must use the shared `ApiSuccess<T>` and `ApiError` envelopes so clients can rely on `success`/`data`/`error` fields; the backend routes import these helpers and the frontend services unwrap them before returning data.
+- If you add a new endpoint, extend the shared contract file first, update the backend route to return the contract, and then consume it in `frontend/src/services/api.ts` so both sides stay in sync.
+
 ## Configuration
 
 ### Log Sources

@@ -59,6 +59,77 @@ export class PRWorkflowOrchestrator {
   }
 
   // ==========================================================================
+  // Initialization
+  // ==========================================================================
+
+  /**
+   * Initialize PR monitoring by scanning for existing unmerged PRs
+   * Should be called on startup to resume monitoring PRs that were created
+   * before the last shutdown
+   */
+  async initialize(): Promise<void> {
+    logger.info({
+      category: 'pr-workflow',
+      action: 'initialize_start',
+      message: 'Initializing PR workflow orchestrator, scanning for existing PRs'
+    });
+
+    try {
+      // Get all tasks with PR information that are not yet merged
+      const tasksWithPRs = await this.taskQueue.getTasksWithUnmergedPRs();
+
+      if (tasksWithPRs.length === 0) {
+        logger.info({
+          category: 'pr-workflow',
+          action: 'initialize_no_prs',
+          message: 'No unmerged PRs found during initialization'
+        });
+        return;
+      }
+
+      logger.info({
+        category: 'pr-workflow',
+        action: 'initialize_found_prs',
+        message: `Found ${tasksWithPRs.length} tasks with unmerged PRs`,
+        details: {
+          prCount: tasksWithPRs.length,
+          prNumbers: tasksWithPRs.map(t => t.pr_number)
+        }
+      });
+
+      // Register each PR for monitoring
+      for (const task of tasksWithPRs) {
+        if (task.pr_number && task.pr_url && task.pr_branch) {
+          this.prMonitor.registerPR(task);
+          logger.info({
+            category: 'pr-workflow',
+            action: 'pr_registered_on_startup',
+            message: `Registered PR #${task.pr_number} for monitoring on startup`,
+            details: {
+              taskId: task.id,
+              prNumber: task.pr_number,
+              prStatus: task.pr_status
+            }
+          });
+        }
+      }
+
+      logger.info({
+        category: 'pr-workflow',
+        action: 'initialize_complete',
+        message: `PR workflow orchestrator initialized, monitoring ${tasksWithPRs.length} PRs`
+      });
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'initialize_error',
+        message: 'Failed to initialize PR workflow orchestrator',
+        error
+      });
+    }
+  }
+
+  // ==========================================================================
   // Main Entry Point
   // ==========================================================================
 

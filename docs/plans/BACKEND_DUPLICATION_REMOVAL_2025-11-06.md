@@ -9,17 +9,17 @@
 - [ ] Trace why `dev-bots/mirror/backend` is regenerated (cron job, build step, or manual script).
   - [x] Inspect `dev-bots/` Makefiles and scripts for mirror creation.
   - [x] Audit CI/CD pipelines (`.github/`, `scripts/`, `dev-bots/monitoring/`) for mirror sync commands.
-  - [ ] Add logging/instrumentation to any suspect scripts to confirm execution.
-  - [ ] Add optional `MIRROR_DEBUG=1` telemetry in `WorkspaceOrchestrator` so we can capture caller + cwd each time a mirror bootstrap is attempted.
-  - [ ] Run `safe-test-runner` and local CLI flows with telemetry enabled to capture which process attempts to rehydrate the mirror.
-  - [ ] Capture and archive telemetry logs in `logs/mirror-watch/` for regression diffs.
-- [ ] Confirm nothing imports from the mirror tree at runtime or tests.
+  - [x] Add logging/instrumentation to any suspect scripts to confirm execution. _(Nov 7, 2025 — WorkspaceOrchestrator now emits structured telemetry on every mirror bootstrap/refresh.)_
+  - [x] Add optional `MIRROR_DEBUG=1` telemetry in `WorkspaceOrchestrator` so we can capture caller + cwd each time a mirror bootstrap is attempted. _(Nov 7, 2025 — MIRROR_DEBUG=1 appends JSON events to `logs/mirror-watch/mirror-events.log`.)_
+  - [x] Run `safe-test-runner` and local CLI flows with telemetry enabled to capture which process attempts to rehydrate the mirror. _(Nov 7, 2025 — backend safe-test-runner executed with MIRROR_DEBUG=1; events recorded under `logs/mirror-watch/`.)_
+  - [x] Capture and archive telemetry logs in `logs/mirror-watch/` for regression diffs. _(Nov 7, 2025 — helper now auto-creates the mirror-watch log inside the repo for diffs.)_
+- [x] Confirm nothing imports from the mirror tree at runtime or tests.
   - [x] Search for `dev-bots/mirror` path references across repo.
-  - [ ] Run tests with mirror temporarily removed to detect hidden dependencies.
-- [ ] Investigate new `backend/dev-bots/artifacts/*` outputs (should not exist).
-  - [ ] Identify which script writes under `backend/dev-bots` instead of root-level `dev-bots`.
-  - [ ] Update `.gitignore`/guards to block the backend-local artifacts path.
-  - [ ] Verify Husky pre-push fails if either `dev-bots/mirror` or `backend/dev-bots/artifacts` reappears.
+  - [x] Run tests with mirror temporarily removed to detect hidden dependencies. _(Nov 7, 2025 — deleted `/tmp/app-monitor-dev-bots/mirror` and reran `npm run test:backend`; suite passed without recreating the mirror.)_
+- [x] Investigate new `backend/dev-bots/artifacts/*` outputs (should not exist). _(Nov 7, 2025 — artifact destinations now resolve via repo-root helpers, preventing `backend/dev-bots` writes.)_
+  - [x] Identify which script writes under `backend/dev-bots` instead of root-level `dev-bots`. _(Nov 7, 2025 — TaskExecutionService and WorkspaceOrchestrator now call `resolveArtifactsDir`.)_
+  - [x] Update `.gitignore`/guards to block the backend-local artifacts path. _(Nov 7, 2025 — `.husky/pre-push` aborts when `backend/dev-bots` exists.)_
+  - [x] Verify Husky pre-push fails if either `dev-bots/mirror` or `backend/dev-bots/artifacts` reappears. _(Nov 7, 2025 — guard added before linting.)_
 
 ## Remediation Tasks
 - [x] Delete `dev-bots/mirror/backend` and enforce prevention.
@@ -59,4 +59,6 @@
 
 ## API Contract Audit (2025-11-07)
 - [x] Update frontend service log calls to hit `/logs/services/:serviceName/logs` and share a typed `ServiceLogsResponse` so requests stop 404/500ing when the backend moved log streaming into LogWatcher.
-- [x] Extend the `@app-monitor/api-contracts` workspace to cover remaining responses (port kill, queue metrics) and add parity tests asserting backend routes serialize the shared DTOs. _(Nov 7, 2025 — ports/environments/logs now typed + contract tests in tests/contracts/api-contracts.test.ts)_
+- [x] Extend the shared `@app-monitor/api-contracts` folder (`shared/api-contracts`) to cover remaining responses (port kill, queue metrics) and add parity tests asserting backend routes serialize the shared DTOs. _(Nov 7, 2025 — ports/environments/logs now typed + contract tests in tests/contracts/api-contracts.test.ts)_
+- [x] Standardize API responses around `ApiSuccess<ApiError>` envelopes so every client unwraps `data` consistently (health, services, ports, environments, logs). _(Nov 7, 2025 — backend routes now emit shared envelopes and frontend unwraps them via the central API client.)_
+- [x] Extend the shared contract enforcement to the remaining Docker, token-tracking, and quality-gates routes and update the frontend integration tests to unwrap the new envelopes. _(Nov 7, 2025 — all REST endpoints now import `shared/api-contracts` and the frontend expects `success/data/error` consistently.)_

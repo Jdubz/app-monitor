@@ -1,15 +1,30 @@
 import { Router, Request, Response } from 'express';
 import { ProcessManager } from '../services/processManager.js';
 import { logger } from '../utils/logger.js';
+import type {
+  ServicesStatusResponse,
+  ServiceStatusResponse,
+  ServiceActionResponse,
+  ApiError,
+} from '@app-monitor/api-contracts';
 
 export function createServicesRouter(processManager: ProcessManager) {
   const router = Router();
+  const respondError = (res: Response, status: number, errorLabel: string, error: unknown) => {
+    const payload: ApiError = {
+      success: false,
+      error: errorLabel,
+      message: error instanceof Error ? error.message : String(error),
+    };
+    return res.status(status).json(payload);
+  };
 
   // Get status of all services
   router.get('/status', async (_req: Request, res: Response) => {
     try {
       const statuses = await processManager.getAllStatuses();
-      res.json(statuses);
+      const payload: ServicesStatusResponse = { success: true, data: statuses };
+      res.json(payload);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -17,10 +32,7 @@ export function createServicesRouter(processManager: ProcessManager) {
         message: 'Failed to get all service statuses',
         error
       });
-      res.status(500).json({
-        error: 'Failed to get service statuses',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      respondError(res, 500, 'Failed to get service statuses', error);
     }
   });
 
@@ -29,7 +41,8 @@ export function createServicesRouter(processManager: ProcessManager) {
     try {
       const { serviceName } = req.params;
       const status = await processManager.getServiceStatus(serviceName);
-      res.json(status);
+      const payload: ServiceStatusResponse = { success: true, data: status };
+      res.json(payload);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -37,10 +50,7 @@ export function createServicesRouter(processManager: ProcessManager) {
         message: `Error getting status for ${req.params.serviceName}: ${error}`,
         error
       });
-      res.status(404).json({
-        error: 'Service not found',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      respondError(res, 404, 'Service not found', error);
     }
   });
 
@@ -54,7 +64,8 @@ export function createServicesRouter(processManager: ProcessManager) {
         message: `API: Starting service ${serviceName}`
       });
       const status = await processManager.startService(serviceName);
-      res.json(status);
+      const payload: ServiceActionResponse = { success: true, data: status };
+      res.json(payload);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -62,10 +73,7 @@ export function createServicesRouter(processManager: ProcessManager) {
         message: `Error starting service ${req.params.serviceName}: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to start service',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      respondError(res, 500, 'Failed to start service', error);
     }
   });
 
@@ -80,7 +88,8 @@ export function createServicesRouter(processManager: ProcessManager) {
         message: `API: Stopping service ${serviceName} (graceful: ${graceful})`
       });
       const status = await processManager.stopService(serviceName, graceful);
-      res.json(status);
+      const payload: ServiceActionResponse = { success: true, data: status };
+      res.json(payload);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -88,10 +97,7 @@ export function createServicesRouter(processManager: ProcessManager) {
         message: `Error stopping service ${req.params.serviceName}: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to stop service',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      respondError(res, 500, 'Failed to stop service', error);
     }
   });
 
@@ -105,7 +111,8 @@ export function createServicesRouter(processManager: ProcessManager) {
         message: `API: Killing service ${serviceName}`
       });
       const status = await processManager.killService(serviceName);
-      res.json(status);
+      const payload: ServiceActionResponse = { success: true, data: status };
+      res.json(payload);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -113,10 +120,7 @@ export function createServicesRouter(processManager: ProcessManager) {
         message: `Error killing service ${req.params.serviceName}: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to kill service',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      respondError(res, 500, 'Failed to kill service', error);
     }
   });
 
@@ -131,7 +135,8 @@ export function createServicesRouter(processManager: ProcessManager) {
         message: `API: Restarting service ${serviceName} (graceful: ${graceful})`
       });
       const status = await processManager.restartService(serviceName, graceful);
-      res.json(status);
+      const payload: ServiceActionResponse = { success: true, data: status };
+      res.json(payload);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -139,10 +144,7 @@ export function createServicesRouter(processManager: ProcessManager) {
         message: `Error restarting service ${req.params.serviceName}: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to restart service',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      respondError(res, 500, 'Failed to restart service', error);
     }
   });
 

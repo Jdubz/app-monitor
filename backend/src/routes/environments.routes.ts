@@ -4,6 +4,9 @@ import { logger } from '../utils/logger.js';
 import type {
   EnvironmentsResponse,
   EnvironmentServicesResponse,
+  EnvironmentsApiResponse,
+  EnvironmentServicesApiResponse,
+  ApiError,
 } from '@app-monitor/api-contracts';
 
 export interface EnvironmentsRoutesDependencies {
@@ -13,12 +16,21 @@ export interface EnvironmentsRoutesDependencies {
 export function createEnvironmentsRoutes(deps: EnvironmentsRoutesDependencies): Router {
   const router = Router();
   const { cloudLogging } = deps;
+  const respondError = (res: Response, status: number, errorLabel: string, error: unknown) => {
+    const payload: ApiError = {
+      success: false,
+      error: errorLabel,
+      message: error instanceof Error ? error.message : String(error),
+    };
+    return res.status(status).json(payload);
+  };
 
   // Get available environments
   router.get('/', (_req: Request, res: Response) => {
     try {
       const environments: EnvironmentsResponse = cloudLogging.getEnvironments();
-      res.json(environments);
+      const payload: EnvironmentsApiResponse = { success: true, data: environments };
+      res.json(payload);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -26,10 +38,7 @@ export function createEnvironmentsRoutes(deps: EnvironmentsRoutesDependencies): 
         message: `Error getting environments: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get environments',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      respondError(res, 500, 'Failed to get environments', error);
     }
   });
 
@@ -38,7 +47,8 @@ export function createEnvironmentsRoutes(deps: EnvironmentsRoutesDependencies): 
     try {
       const { environment } = req.params;
       const services: EnvironmentServicesResponse = cloudLogging.getServicesForEnvironment(environment);
-      res.json(services);
+      const payload: EnvironmentServicesApiResponse = { success: true, data: services };
+      res.json(payload);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -46,10 +56,7 @@ export function createEnvironmentsRoutes(deps: EnvironmentsRoutesDependencies): 
         message: `Error getting services for ${req.params.environment}: ${error}`,
         error
       });
-      res.status(404).json({
-        error: 'Environment not found',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      respondError(res, 404, 'Environment not found', error);
     }
   });
 

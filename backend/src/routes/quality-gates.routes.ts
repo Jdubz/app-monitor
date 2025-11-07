@@ -1,9 +1,34 @@
 import express, { Request, Response } from 'express';
+import {
+  ApiError,
+  QualityGateConfigResponse,
+  QualityGateConfigsResponse,
+  QualityGateResetResponse,
+  QualityGateStatusResponse,
+  QualityGateUpdateResponse,
+  QualityGateValidationResponse,
+} from '@app-monitor/api-contracts';
 import { getQualityGateValidator, resetQualityGateValidator, QualityGateConfig } from '../services/qualityGates.js';
 import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 const qualityGates = getQualityGateValidator();
+
+const respondSuccess = <T>(res: Response, data: T, status = 200) => {
+  return res.status(status).json({
+    success: true,
+    data,
+  });
+};
+
+const respondError = (res: Response, status: number, error: string, message?: string) => {
+  const payload: ApiError = {
+    success: false,
+    error,
+    ...(message ? { message } : {}),
+  };
+  return res.status(status).json(payload);
+};
 
 /**
  * GET /quality-gates/config
@@ -13,7 +38,7 @@ router.get('/config', (req: Request, res: Response) => {
   try {
     const configs = qualityGates.getAllGateConfigs();
     const configObject = Object.fromEntries(configs);
-    res.json({ configs: configObject });
+    respondSuccess(res, { configs: configObject } satisfies QualityGateConfigsResponse['data']);
   } catch (error) {
     logger.error({
       category: 'api',
@@ -21,7 +46,7 @@ router.get('/config', (req: Request, res: Response) => {
       message: 'Failed to load quality gate configurations',
       error,
     });
-    res.status(500).json({ error: 'Failed to get quality gate configurations' });
+    respondError(res, 500, 'FAILED_TO_GET_QUALITY_CONFIGS', 'Failed to get quality gate configurations');
   }
 });
 
@@ -35,10 +60,10 @@ router.get('/config/:gate', (req: Request, res: Response) => {
     const config = qualityGates.getGateConfig(gate);
 
     if (!config) {
-      return res.status(404).json({ error: `Gate not found: ${gate}` });
+      return respondError(res, 404, 'QUALITY_GATE_NOT_FOUND', `Gate not found: ${gate}`);
     }
 
-    res.json(config);
+    respondSuccess<QualityGateConfigResponse['data']>(res, config);
   } catch (error) {
     logger.error({
       category: 'api',
@@ -46,7 +71,7 @@ router.get('/config/:gate', (req: Request, res: Response) => {
       message: `Failed to load config for gate ${req.params.gate}`,
       error,
     });
-    res.status(500).json({ error: 'Failed to get gate configuration' });
+    respondError(res, 500, 'FAILED_TO_GET_GATE_CONFIG', 'Failed to get gate configuration');
   }
 });
 
@@ -62,27 +87,27 @@ router.put('/config/:gate', (req: Request, res: Response) => {
     // Validate gate exists
     const existingConfig = qualityGates.getGateConfig(gate);
     if (!existingConfig) {
-      return res.status(404).json({ error: `Gate not found: ${gate}` });
+      return respondError(res, 404, 'QUALITY_GATE_NOT_FOUND', `Gate not found: ${gate}`);
     }
 
     // Validate update fields
     if (updates.enabled !== undefined && typeof updates.enabled !== 'boolean') {
-      return res.status(400).json({ error: 'enabled must be a boolean' });
+      return respondError(res, 400, 'INVALID_GATE_CONFIG', 'enabled must be a boolean');
     }
     if (updates.required !== undefined && typeof updates.required !== 'boolean') {
-      return res.status(400).json({ error: 'required must be a boolean' });
+      return respondError(res, 400, 'INVALID_GATE_CONFIG', 'required must be a boolean');
     }
     if (updates.weight !== undefined && (typeof updates.weight !== 'number' || updates.weight < 1 || updates.weight > 10)) {
-      return res.status(400).json({ error: 'weight must be a number between 1 and 10' });
+      return respondError(res, 400, 'INVALID_GATE_CONFIG', 'weight must be a number between 1 and 10');
     }
     if (updates.timeout !== undefined && (typeof updates.timeout !== 'number' || updates.timeout <= 0)) {
-      return res.status(400).json({ error: 'timeout must be a positive number' });
+      return respondError(res, 400, 'INVALID_GATE_CONFIG', 'timeout must be a positive number');
     }
 
     qualityGates.setGateConfig(gate, updates);
 
     const updatedConfig = qualityGates.getGateConfig(gate);
-    res.json({
+    respondSuccess<QualityGateUpdateResponse['data']>(res, {
       message: `Configuration updated for gate: ${gate}`,
       config: updatedConfig
     });
@@ -94,7 +119,7 @@ router.put('/config/:gate', (req: Request, res: Response) => {
       error,
       details: { gate: req.params.gate },
     });
-    res.status(500).json({ error: 'Failed to update gate configuration' });
+    respondError(res, 500, 'FAILED_TO_UPDATE_GATE_CONFIG', 'Failed to update gate configuration');
   }
 });
 
@@ -108,13 +133,13 @@ router.post('/validate', async (req: Request, res: Response) => {
 
     // Validate required fields
     if (!taskId) {
-      return res.status(400).json({ error: 'taskId is required' });
+      return respondError(res, 400, 'INVALID_VALIDATION_REQUEST', 'taskId is required');
     }
     if (!workspacePath) {
-      return res.status(400).json({ error: 'workspacePath is required' });
+      return respondError(res, 400, 'INVALID_VALIDATION_REQUEST', 'workspacePath is required');
     }
     if (!project) {
-      return res.status(400).json({ error: 'project is required' });
+      return respondError(res, 400, 'INVALID_VALIDATION_REQUEST', 'project is required');
     }
 
     logger.info({
@@ -126,7 +151,7 @@ router.post('/validate', async (req: Request, res: Response) => {
 
     const result = await qualityGates.validateTask(taskId, workspacePath, project);
 
-    res.json(result);
+    respondSuccess<QualityGateValidationResponse['data']>(res, result);
   } catch (error) {
     logger.error({
       category: 'api',
@@ -138,7 +163,7 @@ router.post('/validate', async (req: Request, res: Response) => {
         project: req.body?.project,
       },
     });
-    res.status(500).json({ error: 'Failed to validate task' });
+    respondError(res, 500, 'FAILED_TO_VALIDATE_TASK', 'Failed to validate task');
   }
 });
 
@@ -152,7 +177,7 @@ router.post('/config/reset', (req: Request, res: Response) => {
     resetQualityGateValidator();
     const newValidator = getQualityGateValidator();
 
-    res.json({
+    respondSuccess<QualityGateResetResponse['data']>(res, {
       message: 'Quality gate configurations reset to defaults',
       configs: Object.fromEntries(newValidator.getAllGateConfigs())
     });
@@ -163,7 +188,7 @@ router.post('/config/reset', (req: Request, res: Response) => {
       message: 'Failed to reset quality gate configurations',
       error,
     });
-    res.status(500).json({ error: 'Failed to reset configurations' });
+    respondError(res, 500, 'FAILED_TO_RESET_QUALITY_CONFIGS', 'Failed to reset configurations');
   }
 });
 
@@ -183,7 +208,7 @@ router.get('/status', (req: Request, res: Response) => {
       if (config.required) requiredCount++;
     }
 
-    res.json({
+    respondSuccess<QualityGateStatusResponse['data']>(res, {
       status: 'operational',
       totalGates: configs.size,
       enabledGates: enabledCount,
@@ -197,7 +222,7 @@ router.get('/status', (req: Request, res: Response) => {
       message: 'Failed to get quality gate status',
       error,
     });
-    res.status(500).json({ error: 'Failed to get status' });
+    respondError(res, 500, 'FAILED_TO_GET_QUALITY_STATUS', 'Failed to get status');
   }
 });
 

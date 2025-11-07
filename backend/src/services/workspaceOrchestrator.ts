@@ -4,20 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { logger } from '../utils/logger.js';
-
-function findNearestGitRoot(startDir: string): string {
-  let current = path.resolve(startDir);
-
-  while (!fs.existsSync(path.join(current, '.git'))) {
-    const parent = path.dirname(current);
-    if (parent === current) {
-      throw new Error(`Unable to locate git repository root from ${startDir}`);
-    }
-    current = parent;
-  }
-
-  return current;
-}
+import { findRepoRoot } from '../utils/repoPaths.js';
 
 export interface WorkspaceOrchestratorConfig {
   repoRoot?: string;
@@ -71,14 +58,14 @@ export class WorkspaceOrchestrator extends EventEmitter {
   private readonly artifactsRoot: string;
   private readonly gitUserName: string;
   private readonly gitUserEmail: string;
+  private readonly mirrorTelemetryEnabled: boolean;
+  private readonly mirrorTelemetryLogPath: string;
   private remoteUrl?: string;
 
   constructor(config: WorkspaceOrchestratorConfig = {}) {
     super();
 
-    this.repoRoot = config.repoRoot
-      ? path.resolve(config.repoRoot)
-      : findNearestGitRoot(process.cwd());
+    this.repoRoot = config.repoRoot ? path.resolve(config.repoRoot) : findRepoRoot(process.cwd());
     this.branch = config.branch || 'staging';
     this.devBotsRoot = config.devBotsRoot || path.resolve(process.cwd(), '../dev-bots');
     const tempMirrorRoot = path.join(os.tmpdir(), 'app-monitor-dev-bots', 'mirror');
@@ -87,6 +74,8 @@ export class WorkspaceOrchestrator extends EventEmitter {
     this.artifactsRoot = config.artifactsRoot || path.join(this.devBotsRoot, 'artifacts');
     this.gitUserName = config.gitUserName || 'DevBot';
     this.gitUserEmail = config.gitUserEmail || 'devbot@local';
+    this.mirrorTelemetryEnabled = process.env.MIRROR_DEBUG === '1';
+    this.mirrorTelemetryLogPath = path.join(this.repoRoot, 'logs', 'mirror-watch', 'mirror-events.log');
   }
 
   initialize(): void {
@@ -269,40 +258,59 @@ export class WorkspaceOrchestrator extends EventEmitter {
   }
 
   private ensureMirror(): void {
-    if (!fs.existsSync(this.mirrorPath)) {
+    const mirrorExists = fs.existsSync(this.mirrorPath);
+    this.logMirrorTelemetry('ensure_mirror_invoked', { mirrorExists });
+
+    if (!mirrorExists) {
       this.ensureDirectory(path.dirname(this.mirrorPath));
       const cloneArgs = ['clone', '--quiet', '--branch', this.branch, this.repoRoot, this.mirrorPath];
+      const cloneStartedAt = Date.now();
 
       try {
         execFileSync('git', cloneArgs, { stdio: 'inherit' });
+        this.logMirrorTelemetry('mirror_clone_success', {
+          strategy: 'local',
+          durationMs: Date.now() - cloneStartedAt,
+        });
       } catch (error) {
         if (fs.existsSync(this.mirrorPath)) {
           logger.warn({
             category: 'workspace',
             action: 'mirror_clone_race',
             message: 'Mirror clone race detected; using existing mirror',
-            error
+            error,
+          });
+          this.logMirrorTelemetry('mirror_clone_race', {
+            message: error instanceof Error ? error.message : String(error),
           });
         } else {
           logger.warn({
             category: 'workspace',
             action: 'mirror_clone_retry_remote',
             message: 'Local mirror clone failed; falling back to remote clone',
-            error
+            error,
+          });
+          this.logMirrorTelemetry('mirror_clone_retry_remote', {
+            message: error instanceof Error ? error.message : String(error),
           });
           execFileSync(
             'git',
             ['clone', '--quiet', '--branch', this.branch, this.getRemoteUrl(), this.mirrorPath],
-            { stdio: 'inherit' }
+            { stdio: 'inherit' },
           );
+          this.logMirrorTelemetry('mirror_clone_fallback_success', {
+            strategy: 'remote',
+            durationMs: Date.now() - cloneStartedAt,
+          });
         }
       }
 
       this.configureRepository(this.mirrorPath);
+      this.logMirrorTelemetry('mirror_configured', { mirrorPath: this.mirrorPath });
       logger.info({
         category: 'workspace',
         action: 'mirror_created',
-        message: `Mirror created at ${this.mirrorPath}`
+        message: `Mirror created at ${this.mirrorPath}`,
       });
       return;
     }
@@ -311,8 +319,9 @@ export class WorkspaceOrchestrator extends EventEmitter {
     execFileSync('git', ['checkout', this.branch], { cwd: this.mirrorPath, stdio: 'inherit' });
     execFileSync('git', ['reset', '--hard', `origin/${this.branch}`], {
       cwd: this.mirrorPath,
-      stdio: 'inherit'
+      stdio: 'inherit',
     });
+    this.logMirrorTelemetry('mirror_refreshed', { branch: this.branch });
   }
 
   private configureRepository(repoPath: string): void {
@@ -338,6 +347,37 @@ export class WorkspaceOrchestrator extends EventEmitter {
     }
   }
 
+  private logMirrorTelemetry(event: string, details: Record<string, unknown> = {}): void {
+    if (!this.mirrorTelemetryEnabled) {
+      return;
+    }
+
+    const logDir = path.dirname(this.mirrorTelemetryLogPath);
+    this.ensureDirectory(logDir);
+
+    const entry: Record<string, unknown> = {
+      event,
+      timestamp: new Date().toISOString(),
+      pid: process.pid,
+      cwd: process.cwd(),
+      argv: [...process.argv],
+      mirrorPath: this.mirrorPath,
+      repoRoot: this.repoRoot,
+      branch: this.branch,
+      ...details,
+    };
+
+    if (!('stack' in details)) {
+      entry.stack = new Error().stack;
+    }
+
+    fs.appendFileSync(this.mirrorTelemetryLogPath, JSON.stringify(entry) + '\n');
+    logger.info({
+      category: 'mirror_debug',
+      ...entry,
+    });
+  }
+
   private cleanupLegacyMirror(): void {
     const legacyMirror = path.join(this.devBotsRoot, 'mirror');
     if (legacyMirror === this.mirrorPath || !fs.existsSync(legacyMirror)) {
@@ -351,12 +391,17 @@ export class WorkspaceOrchestrator extends EventEmitter {
         action: 'legacy_mirror_removed',
         message: `Removed legacy mirror at ${legacyMirror}`
       });
+      this.logMirrorTelemetry('legacy_mirror_removed', { legacyMirror });
     } catch (error) {
       logger.warn({
         category: 'workspace',
         action: 'legacy_mirror_cleanup_failed',
         message: `Failed to remove legacy mirror at ${legacyMirror}`,
         error
+      });
+      this.logMirrorTelemetry('legacy_mirror_cleanup_failed', {
+        legacyMirror,
+        message: error instanceof Error ? error.message : String(error),
       });
     }
   }

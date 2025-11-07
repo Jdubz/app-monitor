@@ -15,14 +15,55 @@ import type {
   PortKillResponse,
   EnvironmentsResponse,
   CloudService,
+  HealthCheckApiResponse,
+  ServicesStatusResponse,
+  ServiceStatusResponse,
+  ServiceActionResponse,
+  ServiceLogsApiResponse,
+  LogSourcesResponse,
+  PortStatusesResponse,
+  PortKillApiResponse,
+  EnvironmentsApiResponse,
+  EnvironmentServicesApiResponse,
+  CloudLogsRequest,
+  CloudLogsResponse,
+  CloudLogsApiResponse,
+  CloudLoggingStatusApiResponse,
+  ApiSuccess,
+  ApiError,
 } from '@app-monitor/api-contracts';
-import { CloudService, ParsedCloudLog, CloudLoggingStatus } from '../types/log.types';
+import { CloudService, CloudLoggingStatus } from '../types/log.types';
 
 type LogSource = ContractLogSource;
 export type PortStatuses = PortStatusMap;
 
 // Health check endpoint
 const API_CLIENT_SYMBOL = '__APP_MONITOR_API_CLIENT__';
+
+const ensureApiSuccess = <T>(
+  response: ApiSuccess<T> | ApiError | null | undefined,
+  context: string,
+): T => {
+  if (!response || typeof response !== 'object' || !('success' in response)) {
+    throw new Error(`Malformed API response while ${context}`);
+  }
+
+  if (response.success === true) {
+    return response.data;
+  }
+
+  throw new Error(response.message || response.error || `Request failed while ${context}`);
+};
+
+const isApiErrorPayload = (payload: unknown): payload is ApiError => {
+  return Boolean(
+    payload &&
+      typeof payload === 'object' &&
+      'success' in (payload as Record<string, unknown>) &&
+      (payload as ApiError).success === false &&
+      typeof (payload as ApiError).error === 'string',
+  );
+};
 
 const getApiClient = async (): Promise<ApiClient> => {
   const globalClient = (globalThis as Record<string, unknown>)[API_CLIENT_SYMBOL];
@@ -38,110 +79,121 @@ const getApiClient = async (): Promise<ApiClient> => {
 
 export const healthCheck = async (): Promise<HealthCheckResponse> => {
   const client = await getApiClient();
-  return client.get<HealthCheckResponse>('/health');
+  const response = await client.get<HealthCheckApiResponse>('/health');
+  return ensureApiSuccess(response, 'performing health check');
 };
 
 // Service control endpoints
 export const getAllStatuses = async (): Promise<ProcessInfo[]> => {
   const client = await getApiClient();
-  return client.get<ProcessInfo[]>('/services/status');
+  const response = await client.get<ServicesStatusResponse>('/services/status');
+  return ensureApiSuccess(response, 'fetching all service statuses');
 };
 
 export const getServiceStatus = async (serviceName: string): Promise<ProcessInfo> => {
   const client = await getApiClient();
-  return client.get<ProcessInfo>(`/services/${serviceName}/status`);
+  const response = await client.get<ServiceStatusResponse>(`/services/${serviceName}/status`);
+  return ensureApiSuccess(response, `fetching status for ${serviceName}`);
 };
 
 export const startService = async (serviceName: string): Promise<ProcessInfo> => {
   const client = await getApiClient();
-  return client.post<ProcessInfo>(`/services/${serviceName}/start`);
+  const response = await client.post<ServiceActionResponse>(`/services/${serviceName}/start`);
+  return ensureApiSuccess(response, `starting service ${serviceName}`);
 };
 
 export const stopService = async (serviceName: string, graceful: boolean = true): Promise<ProcessInfo> => {
   const client = await getApiClient();
-  return client.post<ProcessInfo>(
+  const response = await client.post<ServiceActionResponse>(
     `/services/${serviceName}/stop`,
     {},
     { params: { graceful } }
   );
+  return ensureApiSuccess(response, `stopping service ${serviceName}`);
 };
 
 export const restartService = async (serviceName: string, graceful: boolean = true): Promise<ProcessInfo> => {
   const client = await getApiClient();
-  return client.post<ProcessInfo>(
+  const response = await client.post<ServiceActionResponse>(
     `/services/${serviceName}/restart`,
     {},
     { params: { graceful } }
   );
+  return ensureApiSuccess(response, `restarting service ${serviceName}`);
 };
 
 export const killService = async (serviceName: string): Promise<ProcessInfo> => {
   const client = await getApiClient();
-  return client.post<ProcessInfo>(`/services/${serviceName}/kill`);
+  const response = await client.post<ServiceActionResponse>(`/services/${serviceName}/kill`);
+  return ensureApiSuccess(response, `killing service ${serviceName}`);
 };
 
 export const getServiceLogs = async (serviceName: string, lines: number = 100): Promise<ServiceLogsResponse> => {
   const client = await getApiClient();
-  return client.get<ServiceLogsResponse>(
+  const response = await client.get<ServiceLogsApiResponse>(
     `/logs/services/${serviceName}/logs`,
     { params: { lines } }
   );
+  return ensureApiSuccess(response, `fetching logs for ${serviceName}`);
 };
 
 // Cloud logs endpoints
 export const getEnvironments = async (): Promise<EnvironmentsResponse> => {
   const client = await getApiClient();
-  return client.get<EnvironmentsResponse>('/environments');
+  const response = await client.get<EnvironmentsApiResponse>('/environments');
+  return ensureApiSuccess(response, 'fetching environments');
 };
 
 export const getEnvironmentServices = async (environment: string): Promise<CloudService[]> => {
   const client = await getApiClient();
-  return client.get<CloudService[]>(`/environments/${environment}/services`);
+  const response = await client.get<EnvironmentServicesApiResponse>(`/environments/${environment}/services`);
+  return ensureApiSuccess(response, `fetching services for ${environment}`);
 };
 
-export interface GetCloudLogsParams {
-  environment: string;
-  service: string;
-  severity?: string;
-  limit?: number;
-  startTime?: string;
-  endTime?: string;
-}
-
-export const getCloudLogs = async (params: GetCloudLogsParams): Promise<{ environment: string; service: string; count: number; logs: ParsedCloudLog[] }> => {
+export const getCloudLogs = async (params: CloudLogsRequest): Promise<CloudLogsResponse> => {
   const { environment, service, ...queryParams } = params;
   const client = await getApiClient();
-  return client.get<{ environment: string; service: string; count: number; logs: ParsedCloudLog[] }>(
+  const response = await client.get<CloudLogsApiResponse>(
     `/logs/cloud/${environment}/${service}`,
     { params: queryParams }
   );
+  return ensureApiSuccess(response, 'fetching cloud logs');
 };
 
 export const checkCloudLoggingStatus = async (): Promise<CloudLoggingStatus> => {
   const client = await getApiClient();
-  return client.get<CloudLoggingStatus>('/logs/cloud/status');
+  const response = await client.get<CloudLoggingStatusApiResponse>('/logs/cloud/status');
+  return ensureApiSuccess(response, 'checking cloud logging status');
 };
 
 export const getLogSources = async (): Promise<LogSource[]> => {
   const client = await getApiClient();
-  const response = await client.get<{ success: boolean; data: LogSource[] }>('/logs/sources');
-  return response.data;
+  const response = await client.get<LogSourcesResponse>('/logs/sources');
+  return ensureApiSuccess(response, 'fetching log sources');
 };
 
 // Port management endpoints
 export const getPortStatuses = async (): Promise<PortStatuses> => {
   const client = await getApiClient();
-  return client.get<PortStatuses>('/ports/status');
+  const response = await client.get<PortStatusesResponse>('/ports/status');
+  return ensureApiSuccess(response, 'fetching port statuses');
 };
 
 export const killPortProcess = async (port: number): Promise<PortKillResponse> => {
   const client = await getApiClient();
-  return client.post<PortKillResponse>('/ports/' + port + '/kill');
+  const response = await client.post<PortKillApiResponse>(`/ports/${port}/kill`);
+  return ensureApiSuccess(response, `killing port ${port}`);
 };
 
 export const handleApiError = (error: unknown): string => {
+  if (isApiErrorPayload(error)) {
+    return error.message || error.error;
+  }
   if (error instanceof Error) {
     return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
   }
   return 'An unknown error occurred';
 };

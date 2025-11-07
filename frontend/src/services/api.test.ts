@@ -3,6 +3,9 @@ import axios from 'axios';
 import type { AxiosInstance } from 'axios';
 import * as apiModule from './api';
 import { mockServices, mockHealthCheckResponse, mockPortStatuses } from '../test/fixtures';
+import type { ApiError } from '@app-monitor/api-contracts';
+
+const success = <T>(data: T) => ({ data: { success: true, data } } as any);
 
 // Mock axios.create to return our mock instance
 vi.mock('axios', () => {
@@ -41,7 +44,7 @@ describe('API Service', () => {
 
   describe('Health Check', () => {
     it('should fetch health status', async () => {
-      vi.mocked(mockAxiosInstance.get).mockResolvedValue({ data: mockHealthCheckResponse } as any);
+      vi.mocked(mockAxiosInstance.get).mockResolvedValue(success(mockHealthCheckResponse));
 
       const result = await apiModule.healthCheck();
 
@@ -52,7 +55,7 @@ describe('API Service', () => {
 
   describe('Service Management', () => {
     it('should fetch all service statuses', async () => {
-      vi.mocked(mockAxiosInstance.get).mockResolvedValue({ data: mockServices } as any);
+      vi.mocked(mockAxiosInstance.get).mockResolvedValue(success(mockServices));
 
       const result = await apiModule.getAllStatuses();
 
@@ -62,7 +65,7 @@ describe('API Service', () => {
 
     it('should start a service', async () => {
       const service = mockServices[0];
-      vi.mocked(mockAxiosInstance.post).mockResolvedValue({ data: service } as any);
+      vi.mocked(mockAxiosInstance.post).mockResolvedValue(success(service));
 
       const result = await apiModule.startService('test-service');
 
@@ -72,7 +75,7 @@ describe('API Service', () => {
 
     it('should stop a service with graceful shutdown', async () => {
       const service = mockServices[1];
-      vi.mocked(mockAxiosInstance.post).mockResolvedValue({ data: service } as any);
+      vi.mocked(mockAxiosInstance.post).mockResolvedValue(success(service));
 
       const result = await apiModule.stopService('test-service', true);
 
@@ -86,7 +89,7 @@ describe('API Service', () => {
 
     it('should stop a service with force kill', async () => {
       const service = mockServices[1];
-      vi.mocked(mockAxiosInstance.post).mockResolvedValue({ data: service } as any);
+      vi.mocked(mockAxiosInstance.post).mockResolvedValue(success(service));
 
       const result = await apiModule.stopService('test-service', false);
 
@@ -100,7 +103,7 @@ describe('API Service', () => {
 
     it('should restart a service gracefully', async () => {
       const service = mockServices[0];
-      vi.mocked(mockAxiosInstance.post).mockResolvedValue({ data: service } as any);
+      vi.mocked(mockAxiosInstance.post).mockResolvedValue(success(service));
 
       const result = await apiModule.restartService('test-service', true);
 
@@ -114,7 +117,7 @@ describe('API Service', () => {
 
     it('should kill a service', async () => {
       const service = mockServices[1];
-      vi.mocked(mockAxiosInstance.post).mockResolvedValue({ data: service } as any);
+      vi.mocked(mockAxiosInstance.post).mockResolvedValue(success(service));
 
       const result = await apiModule.killService('test-service');
 
@@ -124,7 +127,7 @@ describe('API Service', () => {
 
     it('should fetch service logs with default lines', async () => {
       const logs = { serviceName: 'test-service', logs: ['log1', 'log2'] };
-      vi.mocked(mockAxiosInstance.get).mockResolvedValue({ data: logs } as any);
+      vi.mocked(mockAxiosInstance.get).mockResolvedValue(success(logs));
 
       const result = await apiModule.getServiceLogs('test-service');
 
@@ -136,7 +139,7 @@ describe('API Service', () => {
 
     it('should fetch service logs with custom lines', async () => {
       const logs = { serviceName: 'test-service', logs: ['log1'] };
-      vi.mocked(mockAxiosInstance.get).mockResolvedValue({ data: logs } as any);
+      vi.mocked(mockAxiosInstance.get).mockResolvedValue(success(logs));
 
       const result = await apiModule.getServiceLogs('test-service', 50);
 
@@ -149,7 +152,7 @@ describe('API Service', () => {
 
   describe('Port Management', () => {
     it('should fetch port statuses', async () => {
-      vi.mocked(mockAxiosInstance.get).mockResolvedValue({ data: mockPortStatuses } as any);
+      vi.mocked(mockAxiosInstance.get).mockResolvedValue(success(mockPortStatuses));
 
       const result = await apiModule.getPortStatuses();
 
@@ -165,7 +168,7 @@ describe('API Service', () => {
         pid: 12345,
         wasInUse: true,
       };
-      vi.mocked(mockAxiosInstance.post).mockResolvedValue({ data: response } as any);
+      vi.mocked(mockAxiosInstance.post).mockResolvedValue(success(response));
 
       const result = await apiModule.killPortProcess(3000);
 
@@ -175,51 +178,23 @@ describe('API Service', () => {
   });
 
   describe('Error Handling', () => {
-    it('should handle axios error with response data message', () => {
-      const error = {
-        isAxiosError: true,
-        response: {
-          data: {
-            message: 'Service not found',
-          },
-        },
-      };
-      vi.mocked(axios.isAxiosError).mockReturnValue(true);
+    it('returns ApiError.error when no message is provided', () => {
+      const error: ApiError = { success: false, error: 'Service not found' };
 
       const result = apiModule.handleApiError(error);
 
-      expect(result).toBe('An unknown error occurred');
+      expect(result).toBe('Service not found');
     });
 
-    it('should handle axios error with response data error', () => {
-      const error = {
-        isAxiosError: true,
-        response: {
-          data: {
-            error: 'Connection failed',
-          },
-        },
-      };
-      vi.mocked(axios.isAxiosError).mockReturnValue(true);
+    it('prefers ApiError.message over error code', () => {
+      const error: ApiError = { success: false, error: 'SERVER_ERROR', message: 'Internal Server Error' };
 
       const result = apiModule.handleApiError(error);
 
-      expect(result).toBe('An unknown error occurred');
+      expect(result).toBe('Internal Server Error');
     });
 
-    it('should handle axios error with error message', () => {
-      const error = {
-        isAxiosError: true,
-        message: 'Network error',
-      };
-      vi.mocked(axios.isAxiosError).mockReturnValue(true);
-
-      const result = apiModule.handleApiError(error);
-
-      expect(result).toBe('An unknown error occurred');
-    });
-
-    it('should handle Error instance', () => {
+    it('returns message for Error instances', () => {
       const error = new Error('Something went wrong');
 
       const result = apiModule.handleApiError(error);
@@ -227,10 +202,14 @@ describe('API Service', () => {
       expect(result).toBe('Something went wrong');
     });
 
-    it('should handle unknown error', () => {
-      const error = 'string error';
+    it('returns string values when provided', () => {
+      const result = apiModule.handleApiError('string error');
 
-      const result = apiModule.handleApiError(error);
+      expect(result).toBe('string error');
+    });
+
+    it('falls back to default message', () => {
+      const result = apiModule.handleApiError({ random: true });
 
       expect(result).toBe('An unknown error occurred');
     });

@@ -1,15 +1,45 @@
 import { Router, Request, Response } from 'express';
 import path from 'path';
 import fs from 'fs';
+import { z } from 'zod';
 import { LogRotation } from '../services/logRotation.js';
 import { CloudLogging } from '../services/cloudLogging.js';
 import type { LogStreamer } from '../services/logStreamer.js';
 import { ProcessManager } from '../services/processManager.js';
 import { logSourceManager } from '../server.js';
 import { logger } from '../utils/logger.js';
-import type { ServiceLogsResponse } from '@app-monitor/api-contracts';
+import type {
+  ServiceLogsApiResponse,
+  LogSourcesResponse,
+  CloudLogsApiResponse,
+  CloudLoggingStatusApiResponse,
+  LogConfigResponse,
+  LogReloadResponse,
+  ApiError,
+  CloudLogsQuery,
+} from '@app-monitor/api-contracts';
 
 const LOGS_DIR = path.join(process.cwd(), 'logs');
+
+const cloudLogsRequestSchema = z.object({
+  environment: z.string().min(1),
+  service: z.string().min(1),
+  severity: z.string().min(1).optional(),
+  limit: z
+    .string()
+    .transform((value) => parseInt(value, 10))
+    .pipe(z.number().int().positive().max(1000))
+    .optional(),
+  startTime: z.string().datetime().optional(),
+  endTime: z.string().datetime().optional(),
+  customFilter: z.string().min(1).optional(),
+}).refine(
+  data => (data.startTime && data.endTime) || (!data.startTime && !data.endTime),
+  {
+    message: 'startTime and endTime must both be provided',
+    path: ['startTime'],
+  }
+);
 
 export interface LogsRoutesDependencies {
   logRotation: LogRotation;
@@ -21,6 +51,14 @@ export interface LogsRoutesDependencies {
 export function createLogsRoutes(deps: LogsRoutesDependencies): Router {
   const router = Router();
   const { logRotation, cloudLogging, processManager } = deps;
+  const respondError = (res: Response, status: number, errorLabel: string, error: unknown) => {
+    const payload: ApiError = {
+      success: false,
+      error: errorLabel,
+      message: error instanceof Error ? error.message : String(error),
+    };
+    return res.status(status).json(payload);
+  };
 
   /**
    * GET /api/logs/sources
@@ -30,7 +68,7 @@ export function createLogsRoutes(deps: LogsRoutesDependencies): Router {
     try {
       const sources = logSourceManager.getEnabledSources();
       
-      res.json({
+      const payload: LogSourcesResponse = {
         success: true,
         data: sources.map(source => ({
           id: source.id,
@@ -41,7 +79,8 @@ export function createLogsRoutes(deps: LogsRoutesDependencies): Router {
           displayOrder: source.displayOrder,
           path: logSourceManager.resolveLogPath(source),
         })),
-      });
+      };
+      res.json(payload);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -49,10 +88,7 @@ export function createLogsRoutes(deps: LogsRoutesDependencies): Router {
         message: 'Failed to get log sources',
         error,
       });
-      res.status(500).json({
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
+      respondError(res, 500, 'Failed to get log sources', error);
     }
   });
 
@@ -64,10 +100,11 @@ export function createLogsRoutes(deps: LogsRoutesDependencies): Router {
     try {
       const configJSON = logSourceManager.getConfigJSON();
       
-      res.json({
+      const payload: LogConfigResponse = {
         success: true,
         data: configJSON,
-      });
+      };
+      res.json(payload);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -75,10 +112,7 @@ export function createLogsRoutes(deps: LogsRoutesDependencies): Router {
         message: 'Failed to get log configuration',
         error,
       });
-      res.status(500).json({
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
+      respondError(res, 500, 'Failed to get log configuration', error);
     }
   });
 
@@ -90,10 +124,11 @@ export function createLogsRoutes(deps: LogsRoutesDependencies): Router {
     try {
       await logSourceManager.reloadConfig();
       
-      res.json({
+      const payload: LogReloadResponse = {
         success: true,
-        message: 'Log sources configuration reloaded',
-      });
+        data: { message: 'Log sources configuration reloaded' },
+      };
+      res.json(payload);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -101,10 +136,7 @@ export function createLogsRoutes(deps: LogsRoutesDependencies): Router {
         message: 'Failed to reload log configuration',
         error,
       });
-      res.status(500).json({
-        success: false,
-        error: error instanceof Error ? error.message : 'Unknown error',
-      });
+      respondError(res, 500, 'Failed to reload log configuration', error);
     }
   });
 
@@ -127,7 +159,10 @@ export function createLogsRoutes(deps: LogsRoutesDependencies): Router {
         }
         return JSON.stringify(entry);
       });
-      const payload: ServiceLogsResponse = { serviceName, logs: logLines };
+      const payload: ServiceLogsApiResponse = {
+        success: true,
+        data: { serviceName, logs: logLines },
+      };
       res.json(payload);
     } catch (error) {
       logger.error({
@@ -136,10 +171,7 @@ export function createLogsRoutes(deps: LogsRoutesDependencies): Router {
         message: `Error getting logs for ${req.params.serviceName}: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get logs',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      respondError(res, 500, 'Failed to get logs', error);
     }
   });
 
@@ -147,26 +179,48 @@ export function createLogsRoutes(deps: LogsRoutesDependencies): Router {
   router.get('/cloud/:environment/:service', async (req: Request, res: Response) => {
     try {
       const { environment, service } = req.params;
-      const { severity, limit, startTime, endTime } = req.query;
-
-      const query = {
+      const parseResult = cloudLogsRequestSchema.safeParse({
         environment,
         service,
-        severity: severity as string,
-        limit: limit ? parseInt(limit as string) : 100,
-        timeRange: startTime && endTime ? {
-          start: new Date(startTime as string),
-          end: new Date(endTime as string),
-        } : undefined,
+        severity: typeof req.query.severity === 'string' ? req.query.severity : undefined,
+        limit: typeof req.query.limit === 'string' ? req.query.limit : undefined,
+        startTime: typeof req.query.startTime === 'string' ? req.query.startTime : undefined,
+        endTime: typeof req.query.endTime === 'string' ? req.query.endTime : undefined,
+        customFilter: typeof req.query.customFilter === 'string' ? req.query.customFilter : undefined,
+      });
+
+      if (!parseResult.success) {
+        const message = parseResult.error.errors.map(err => err.message).join('; ');
+        return respondError(res, 400, 'Invalid query parameters', new Error(message));
+      }
+
+      const {
+        startTime: startISO,
+        endTime: endISO,
+        limit,
+        ...rest
+      } = parseResult.data;
+
+      const query: CloudLogsQuery = {
+        environment: rest.environment,
+        service: rest.service,
+        severity: rest.severity,
+        limit: limit ?? 100,
+        timeRange: startISO && endISO ? { start: new Date(startISO), end: new Date(endISO) } : undefined,
+        customFilter: rest.customFilter,
       };
 
       const logs = await cloudLogging.getLogs(query);
-      res.json({
-        environment,
-        service,
-        count: logs.length,
-        logs,
-      });
+      const payload: CloudLogsApiResponse = {
+        success: true,
+        data: {
+          environment,
+          service,
+          count: logs.length,
+          logs,
+        },
+      };
+      res.json(payload);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -174,22 +228,23 @@ export function createLogsRoutes(deps: LogsRoutesDependencies): Router {
         message: `Error getting cloud logs: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get cloud logs',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      respondError(res, 500, 'Failed to get cloud logs', error);
     }
   });
 
   // Check if cloud logging is available
   router.get('/cloud/status', (_req: Request, res: Response) => {
     const available = cloudLogging.isAvailable();
-    res.json({
-      available,
-      message: available
-        ? 'Cloud Logging is available'
-        : 'Cloud Logging is not available. Check credentials configuration.',
-    });
+    const payload: CloudLoggingStatusApiResponse = {
+      success: true,
+      data: {
+        available,
+        message: available
+          ? 'Cloud Logging is available'
+          : 'Cloud Logging is not available. Check credentials configuration.',
+      },
+    };
+    res.json(payload);
   });
 
   // REMOVED: GET /sources/legacy endpoint (no longer used by any clients)
