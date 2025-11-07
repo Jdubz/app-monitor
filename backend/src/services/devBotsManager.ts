@@ -1,8 +1,6 @@
 import { EventEmitter } from 'events';
 import * as fs from 'fs';
-import * as path from 'path';
 import * as crypto from 'crypto';
-import os from 'os';
 import { logger } from '../utils/logger.js';
 import { ProcessManager, ProcessInfo } from './processManager.js';
 import Docker from 'dockerode';
@@ -10,23 +8,15 @@ import { TaskPersistence } from './taskPersistence.js';
 import { TaskQueueService, Task, TaskStatus as SQLiteTaskStatus } from './taskQueue.sqlite.js';
 import { TaskQueueMigration } from './taskQueue.migration.js';
 import { AgentPersonalityManager, AgentPersonality } from './agentPersonalities.js';
-import { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplates.js';
+import { TaskPromptTemplateManager } from './taskPromptTemplates.js';
 import { TaskCreationGuidelinesManager, EnhancedTaskData } from './taskCreationGuidelines.js';
 import { WorkspaceSyncManager, SyncOptions, SyncResult } from './workspaceSyncManager.js';
 import { DockerManager, DockerValidationResult } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
 import { getTokenTrackingService } from './tokenTracking.js';
-import { getQualityGateValidator, QualityValidationResult } from './qualityGates.js';
-import { WorkspaceOrchestrator, WorkspaceContext, PushCoordinator } from './workspaceOrchestrator.js';
-import {
-  detectFailurePattern,
-  generateFailureInsights,
-  getCleanupStrategy,
-  isTaskStuck,
-  TIME_BASED_GUARDS
-} from './taskFailureGuards.js';
+import { WorkspaceOrchestrator, PushCoordinator } from './workspaceOrchestrator.js';
+import { TIME_BASED_GUARDS } from './taskFailureGuards.js';
 import { SimpleFailureRecovery } from './failureRecovery.js';
-import { config } from '../config.js';
 import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
 import type { ScopeControlService } from './scopeControl.service.js';
 import type { EphemeralWorkerService, EphemeralWorker as EphemeralWorkerType } from './ephemeralWorker.service.js';

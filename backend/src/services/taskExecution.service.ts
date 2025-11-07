@@ -20,7 +20,7 @@ import type { TaskQueueService } from './taskQueue.sqlite.js';
 import type { AgentPersonality, AgentPersonalityManager } from './agentPersonalities.js';
 import type { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplates.js';
 import type { WorkspaceOrchestrator } from './workspaceOrchestrator.js';
-import type { EphemeralWorkerService, EphemeralWorker } from './ephemeralWorker.service.js';
+import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskPersistence } from './taskPersistence.js';
 import { isTaskStuck } from './taskFailureGuards.js';
 
@@ -95,7 +95,7 @@ export class TaskExecutionService {
     }
   }
 
-  private getAgentDockerImage(agent: AgentPersonality): string {
+  private getAgentDockerImage(_agent: AgentPersonality): string {
     return 'claude-worker:latest';
   }
 
@@ -307,23 +307,6 @@ export class TaskExecutionService {
     // Choose agent type if not specified
     const chosenAgentType = agentType || this.chooseAgentType();
     const workerId = `bot-${chosenAgentType}-${agent.id}-${Date.now()}`;
-
-    // Register worker in ephemeralWorkers to enforce concurrency limit
-    const ephemeralWorker: EphemeralWorker = {
-      id: workerId,
-      containerId: '', // Will be set when container is created
-      agent: agent.id as unknown as AgentPersonality,
-      task: task,
-      status: 'starting',
-      createdAt: new Date().toISOString(),
-      workspace: {
-        id: workerId,
-        hostPath: '',
-        branchName: 'staging',
-        mirrorPath: '',
-        createdAt: new Date().toISOString()
-      }
-    };
 
     try {
     // Ensure we're on staging branch

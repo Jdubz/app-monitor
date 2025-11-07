@@ -19,7 +19,6 @@ import { WorkspaceOrchestrator } from './workspaceOrchestrator.js';
 import { ScopeControlService } from './scopeControl.service.js';
 import { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import { TaskExecutionService } from './taskExecution.service.js';
-import { TaskCompletionService } from './taskCompletion.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
 
 /**
