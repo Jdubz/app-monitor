@@ -32,7 +32,7 @@ import type {
   ApiSuccess,
   ApiError,
 } from '@app-monitor/api-contracts';
-import { CloudService, ParsedCloudLog, CloudLoggingStatus } from '../types/log.types';
+import { CloudService, CloudLoggingStatus } from '../types/log.types';
 
 type LogSource = ContractLogSource;
 export type PortStatuses = PortStatusMap;

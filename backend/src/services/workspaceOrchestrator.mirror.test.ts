@@ -2,32 +2,11 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import * as childProcess from 'child_process';
 import { WorkspaceOrchestrator } from './workspaceOrchestrator.js';
 
 let currentMirrorPath: string | null = null;
-
-const execFileSyncMock = vi.fn((command: string, args: string[], _options: Record<string, unknown>) => {
-  if (command === 'git' && Array.isArray(args)) {
-    if (args[0] === 'clone' && currentMirrorPath) {
-      fs.mkdirSync(currentMirrorPath, { recursive: true });
-      return Buffer.from('');
-    }
-
-    if (args[0] === 'remote' && args[1] === 'get-url') {
-      return Buffer.from('git@github.com:example/app-monitor.git');
-    }
-  }
-
-  return Buffer.from('');
-});
-
-vi.mock('child_process', async () => {
-  const actual = await vi.importActual<typeof import('child_process')>('child_process');
-  return {
-    ...actual,
-    execFileSync: execFileSyncMock,
-  };
-});
+const execFileSyncMock = vi.spyOn(childProcess, 'execFileSync');
 
 describe('WorkspaceOrchestrator mirror handling', () => {
   let tempDir: string;
@@ -39,13 +18,27 @@ describe('WorkspaceOrchestrator mirror handling', () => {
     repoRoot = path.join(tempDir, 'repo');
     mirrorPath = path.join(tempDir, 'mirror');
     currentMirrorPath = mirrorPath;
-    execFileSyncMock.mockClear();
+    execFileSyncMock.mockImplementation((command: string, args?: string[]) => {
+      if (command === 'git' && Array.isArray(args)) {
+        if (args[0] === 'clone' && currentMirrorPath) {
+          fs.mkdirSync(currentMirrorPath, { recursive: true });
+          return Buffer.from('');
+        }
+
+        if (args[0] === 'remote' && args[1] === 'get-url') {
+          return Buffer.from('git@github.com:example/app-monitor.git');
+        }
+      }
+
+      return Buffer.from('');
+    });
 
     fs.mkdirSync(path.join(repoRoot, '.git'), { recursive: true });
     process.env.MIRROR_DEBUG = '0';
   });
 
   afterEach(() => {
+    execFileSyncMock.mockReset();
     currentMirrorPath = null;
     fs.rmSync(tempDir, { recursive: true, force: true });
   });
