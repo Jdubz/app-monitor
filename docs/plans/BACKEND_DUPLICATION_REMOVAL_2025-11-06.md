@@ -39,6 +39,9 @@
   - [ ] Ensure migration plan (`docs/plans/TASK_QUEUE_SQLITE_MIGRATION.md`) covers export/import needs.
   - [ ] Catalogue every backup directory + file pattern that will be deleted post-migration and document the handoff checklist.
   - [ ] Add a guardrail (lint/test) that fails if new JSON backups are committed after the SQLite flag flips.
+- [ ] Stabilize SQLite queue tests.
+  - [x] Replace `taskQueue.sqlite.test.ts` (segfaulting integration suite) with pure metrics unit tests that exercise `summarizeAgentComparisonMetrics()` (Nov 7, 2025).
+  - [ ] Re-introduce end-to-end SQLite queue coverage via a lightweight harness once we can run the service without segfaulting.
 
 ## Follow-Up & Safeguards
 - [ ] Add regression tests or lint rules preventing duplicate backend trees.

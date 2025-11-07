@@ -4,25 +4,37 @@
  * Tests the main API router endpoints including the health check endpoint.
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import express, { Application } from 'express';
 import request from 'supertest';
 import { createApiRouter } from './index.js';
-import { ProcessManager } from '../services/processManager.js';
-import { CloudLogging } from '../services/cloudLogging.js';
-import { DevBotsManager } from '../services/devBotsManager.js';
+import type { ProcessManager } from '../services/processManager.js';
+import type { CloudLogging } from '../services/cloudLogging.js';
 
 describe('API Routes Index', () => {
   let app: Application;
   let processManager: ProcessManager;
   let cloudLogging: CloudLogging;
-  let devBotsManager: DevBotsManager;
+
+  const createProcessManagerStub = (): ProcessManager =>
+    ({
+      getAllStatuses: vi.fn().mockResolvedValue([]),
+      getServiceStatus: vi.fn().mockResolvedValue({ status: 'stopped' }),
+      startService: vi.fn().mockResolvedValue({ status: 'running' }),
+      stopService: vi.fn().mockResolvedValue({ status: 'stopped' }),
+      killService: vi.fn().mockResolvedValue({ status: 'killed' }),
+      restartService: vi.fn().mockResolvedValue({ status: 'running' }),
+    } as unknown as ProcessManager);
+
+  const createCloudLoggingStub = (): CloudLogging =>
+    ({
+      getEnvironments: vi.fn().mockReturnValue(['development', 'staging', 'production']),
+      getServicesForEnvironment: vi.fn().mockReturnValue([]),
+    } as unknown as CloudLogging);
 
   beforeEach(() => {
-    // Initialize dependencies
-    processManager = new ProcessManager();
-    cloudLogging = new CloudLogging();
-    devBotsManager = new DevBotsManager(processManager);
+    processManager = createProcessManagerStub();
+    cloudLogging = createCloudLoggingStub();
 
     // Create Express app with API router
     app = express();
@@ -31,7 +43,8 @@ describe('API Routes Index', () => {
     const apiRouter = createApiRouter({
       processManager,
       cloudLogging,
-      devBotsManager,
+      // Dev-Bots routes are heavy and not required for health endpoint tests
+      devBotsManager: undefined,
     });
 
     app.use('/api', apiRouter);

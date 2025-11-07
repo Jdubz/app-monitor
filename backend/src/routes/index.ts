@@ -42,7 +42,7 @@ import qualityGatesRoutes from './quality-gates.routes.js';
 export function createApiRouter(deps: {
   processManager: ProcessManager;
   cloudLogging: CloudLogging;
-  devBotsManager: DevBotsManager;
+  devBotsManager?: DevBotsManager;
   connectionManager?: ConnectionManager;
   taskQueueManager?: TaskQueueManager;
   taskBridge?: TaskBridge;
@@ -72,7 +72,9 @@ export function createApiRouter(deps: {
 
   router.use('/docker', createDockerRouter());
 
-  router.use('/dev-bots', createClaudeWorkersRouter(deps.devBotsManager));
+  if (deps.devBotsManager) {
+    router.use('/dev-bots', createClaudeWorkersRouter(deps.devBotsManager));
+  }
 
   if (deps.logRotation && deps.logStreamer) {
     router.use('/logs', createLogsRoutes({

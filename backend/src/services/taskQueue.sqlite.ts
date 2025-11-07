@@ -30,7 +30,56 @@
 import Database from 'better-sqlite3';
 import * as path from 'path';
 import * as fs from 'fs';
+import { randomUUID } from 'node:crypto';
 import { logger } from '../utils/logger.js';
+
+type AgentStatsRow = {
+  agent_type: 'claude' | 'codex';
+  total: number;
+  completed: number;
+  failed: number;
+  avg_duration_ms: number | null;
+};
+
+export type AgentMetrics = {
+  total: number;
+  completed: number;
+  failed: number;
+  avg_duration_ms?: number;
+  success_rate: number;
+};
+
+export type AgentComparisonMetrics = {
+  claude: AgentMetrics;
+  codex: AgentMetrics;
+};
+
+export function summarizeAgentComparisonMetrics(agentStats: AgentStatsRow[]): AgentComparisonMetrics {
+  const buildMetrics = (stats?: AgentStatsRow): AgentMetrics => {
+    const completed = stats?.completed ?? 0;
+    const failed = stats?.failed ?? 0;
+    const total = stats?.total ?? 0;
+    const avgDuration = stats?.avg_duration_ms ?? undefined;
+    const attempts = completed + failed;
+    const successRate = attempts > 0 ? (completed / attempts) * 100 : 0;
+
+    return {
+      total,
+      completed,
+      failed,
+      avg_duration_ms: avgDuration,
+      success_rate: successRate,
+    };
+  };
+
+  const claudeStats = agentStats.find((s) => s.agent_type === 'claude');
+  const codexStats = agentStats.find((s) => s.agent_type === 'codex');
+
+  return {
+    claude: buildMetrics(claudeStats),
+    codex: buildMetrics(codexStats),
+  };
+}
 
 // Task status enum
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timeout';
@@ -315,8 +364,9 @@ export class TaskQueueService {
    */
   createTask(taskData: Partial<Task>): Task {
     const now = Date.now();
+    const generatedId = `task-${taskData.type || 'implementation'}-${randomUUID()}`;
     const task: Task = {
-      id: taskData.id || `task-${taskData.type}-${now}`,
+      id: taskData.id || generatedId,
       type: taskData.type || 'implementation',
       title: taskData.title || 'Untitled Task',
       description: taskData.description,
@@ -990,22 +1040,7 @@ export class TaskQueueService {
    * Get agent comparison metrics
    * Compare performance between Claude and Codex agents
    */
-  getAgentComparisonMetrics(): {
-    claude: {
-      total: number;
-      completed: number;
-      failed: number;
-      avg_duration_ms?: number;
-      success_rate: number;
-    };
-    codex: {
-      total: number;
-      completed: number;
-      failed: number;
-      avg_duration_ms?: number;
-      success_rate: number;
-    };
-  } {
+  getAgentComparisonMetrics(): AgentComparisonMetrics {
     const agentStats = this.db.prepare(`
       SELECT
         agent_type,
@@ -1020,37 +1055,9 @@ export class TaskQueueService {
       FROM tasks
       WHERE agent_type IS NOT NULL AND agent_type IN ('claude', 'codex')
       GROUP BY agent_type
-    `).all() as Array<{
-      agent_type: 'claude' | 'codex';
-      total: number;
-      completed: number;
-      failed: number;
-      avg_duration_ms: number | null;
-    }>;
+    `).all() as AgentStatsRow[];
 
-    const claudeStats = agentStats.find(s => s.agent_type === 'claude');
-    const codexStats = agentStats.find(s => s.agent_type === 'codex');
-
-    return {
-      claude: {
-        total: claudeStats?.total || 0,
-        completed: claudeStats?.completed || 0,
-        failed: claudeStats?.failed || 0,
-        avg_duration_ms: claudeStats?.avg_duration_ms || undefined,
-        success_rate: claudeStats
-          ? (claudeStats.completed / (claudeStats.completed + claudeStats.failed)) * 100
-          : 0
-      },
-      codex: {
-        total: codexStats?.total || 0,
-        completed: codexStats?.completed || 0,
-        failed: codexStats?.failed || 0,
-        avg_duration_ms: codexStats?.avg_duration_ms || undefined,
-        success_rate: codexStats
-          ? (codexStats.completed / (codexStats.completed + codexStats.failed)) * 100
-          : 0
-      }
-    };
+    return summarizeAgentComparisonMetrics(agentStats);
   }
 
   /**
