@@ -18,6 +18,16 @@ import { RetryManager, RetryConfig } from './retryManager.js';
 import { getTokenTrackingService } from './tokenTracking.js';
 import { getQualityGateValidator, QualityValidationResult } from './qualityGates.js';
 import { WorkspaceOrchestrator, WorkspaceContext, PushCoordinator } from './workspaceOrchestrator.js';
+import {
+  detectFailurePattern,
+  generateFailureInsights,
+  getCleanupStrategy,
+  isTaskStuck,
+  TIME_BASED_GUARDS
+} from './taskFailureGuards.js';
+
+// Temporary reference until the stuck-task guards are wired into the active code paths.
+void isTaskStuck;
 
 export interface RetryAttempt {
   attemptNumber: number;
@@ -873,16 +883,17 @@ export class DevBotsManager extends EventEmitter {
   }
 
   /**
-   * Start long-running task monitoring (warning only, no auto-fail)
+   * Start long-running task monitoring with automatic cleanup for stuck tasks
    */
   private startLongRunningTaskMonitor(): void {
-    setInterval(() => {
-      const longRunning = this.taskQueue.detectLongRunningTasks(1800000); // 30 minutes
+    setInterval(async () => {
+      // Soft timeout warning (30 minutes)
+      const longRunning = this.taskQueue.detectLongRunningTasks(TIME_BASED_GUARDS.SOFT_TIMEOUT_MS);
       if (longRunning.length > 0) {
         logger.warn({
           category: 'process',
           action: 'long_running_tasks_detected',
-          message: `${longRunning.length} tasks running longer than 30 minutes (WARNING ONLY - manual investigation recommended)`,
+          message: `Found ${longRunning.length} tasks running longer than ${TIME_BASED_GUARDS.SOFT_TIMEOUT_MS / 60000} minutes`,
           details: longRunning.map(task => ({
             id: task.id,
             title: task.title,
@@ -891,13 +902,121 @@ export class DevBotsManager extends EventEmitter {
           }))
         });
       }
+
+      // Hard timeout - force cleanup (1 hour)
+      const stuck = this.taskQueue.detectLongRunningTasks(TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS);
+      if (stuck.length > 0) {
+        logger.error({
+          category: 'process',
+          action: 'stuck_tasks_detected_auto_cleanup',
+          message: `Found ${stuck.length} tasks stuck for >${TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS / 60000} minutes. Auto-failing and cleaning up.`,
+          details: stuck.map(task => ({
+            id: task.id,
+            title: task.title,
+            duration: task.duration_ms,
+            durationHours: Math.round(task.duration_ms / 3600000)
+          }))
+        });
+
+        // Cleanup each stuck task
+        for (const task of stuck) {
+          try {
+            // Force kill any Docker containers for this task
+            await this.cleanupStuckTaskContainers(task.id);
+
+            // Mark task as failed in database
+            this.taskQueue.failTask(
+              task.id,
+              `Task stuck for ${Math.round(task.duration_ms / 60000)} minutes (exceeded ${TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS / 60000}min timeout). Auto-failed by failure guard.`
+            );
+
+            logger.info({
+              category: 'process',
+              action: 'stuck_task_cleaned_up',
+              message: `Successfully cleaned up stuck task ${task.id}`,
+              details: {
+                taskId: task.id,
+                duration_minutes: Math.round(task.duration_ms / 60000),
+                cleanup_reason: 'ABSOLUTE_MAX_DURATION_EXCEEDED'
+              }
+            });
+          } catch (error) {
+            logger.error({
+              category: 'process',
+              action: 'stuck_task_cleanup_failed',
+              message: `Failed to cleanup stuck task ${task.id}: ${error instanceof Error ? error.message : String(error)}`,
+              details: {
+                taskId: task.id,
+                error: error instanceof Error ? error.message : String(error)
+              }
+            });
+          }
+        }
+      }
     }, 300000); // Check every 5 minutes
 
     logger.info({
       category: 'process',
       action: 'long_running_task_monitor_started',
-      message: 'Long-running task monitor started (check interval: 5min, warning threshold: 30min)'
+      message: `Task monitor started - Soft warn: ${TIME_BASED_GUARDS.SOFT_TIMEOUT_MS / 60000}min, Hard fail: ${TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS / 60000}min`,
+      details: {
+        checkInterval_ms: 300000,
+        softTimeout_minutes: TIME_BASED_GUARDS.SOFT_TIMEOUT_MS / 60000,
+        hardTimeout_minutes: TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS / 60000
+      }
     });
+  }
+
+  /**
+   * Cleanup Docker containers for stuck task
+   */
+  private async cleanupStuckTaskContainers(taskId: string): Promise<void> {
+    const docker = new Docker();
+
+    try {
+      // List all containers (including stopped) with this task ID in name
+      const containers = await docker.listContainers({ all: true });
+      const taskContainers = containers.filter(c =>
+        c.Names.some(name => name.includes(taskId))
+      );
+
+      for (const containerInfo of taskContainers) {
+        try {
+          const container = docker.getContainer(containerInfo.Id);
+
+          // Force kill if running
+          if (containerInfo.State === 'running') {
+            logger.info({
+              category: 'process',
+              action: 'force_killing_stuck_container',
+              message: `Force killing container ${containerInfo.Id.substring(0, 12)} for stuck task ${taskId}`
+            });
+            await container.kill();
+          }
+
+          // Remove container
+          await container.remove({ force: true });
+
+          logger.info({
+            category: 'process',
+            action: 'stuck_container_removed',
+            message: `Removed container ${containerInfo.Id.substring(0, 12)} for task ${taskId}`
+          });
+        } catch (error) {
+          logger.warn({
+            category: 'process',
+            action: 'container_cleanup_error',
+            message: `Error cleaning up container ${containerInfo.Id.substring(0, 12)}: ${error instanceof Error ? error.message : String(error)}`
+          });
+        }
+      }
+    } catch (error) {
+      logger.error({
+        category: 'process',
+        action: 'container_list_error',
+        message: `Failed to list containers for cleanup: ${error instanceof Error ? error.message : String(error)}`
+      });
+    }
   }
 
   /**
@@ -1798,7 +1917,11 @@ export class DevBotsManager extends EventEmitter {
         this.emit('taskFailed', task);
       }
     } else {
-      // Non-zero exit code
+      // Non-zero exit code - check against failure guard patterns
+      const failurePattern = detectFailurePattern(stderr, stdout, exitCode);
+      const insights = failurePattern ? generateFailureInsights(failurePattern, task.id) : null;
+      const cleanupStrategy = failurePattern ? getCleanupStrategy(failurePattern) : null;
+
       logger.error({
         category: 'process',
         action: 'docker_run_failed',
@@ -1809,15 +1932,21 @@ export class DevBotsManager extends EventEmitter {
           executionDuration_ms: executionDuration,
           exitCode,
           stdout,
-          stderr
+          stderr,
+          failureGuard: failurePattern ? {
+            name: failurePattern.name,
+            category: failurePattern.category,
+            immediateFailure: failurePattern.immediateFailure
+          } : null
         }
       });
 
       // Fail task in SQLite
-      this.taskQueue.failTask(
-        task.id,
-        `Docker run failed with exit code ${exitCode}. stderr: ${stderr}`
-      );
+      const errorMessage = failurePattern
+        ? `${failurePattern.name}: ${failurePattern.description}. ${failurePattern.suggestedFix || ''}`
+        : `Docker run failed with exit code ${exitCode}. stderr: ${stderr}`;
+
+      this.taskQueue.failTask(task.id, errorMessage);
 
       logger.error({
         category: 'process',
@@ -1828,17 +1957,26 @@ export class DevBotsManager extends EventEmitter {
           taskTitle: task.title,
           exitCode,
           executionDuration_ms: executionDuration,
-          stderrPreview: stderr.substring(0, 500)
+          stderrPreview: stderr.substring(0, 500),
+          failureCategory: failurePattern?.category || 'UNKNOWN',
+          cleanupStrategy: cleanupStrategy || {
+            force_kill: false,
+            cleanup_volumes: false,
+            save_artifacts: true
+          }
         },
-        actionable_insights: {
-          failure_pattern: exitCode === 137 ? 'OOM_KILLED' : exitCode === 1 ? 'GENERAL_ERROR' : 'UNKNOWN',
-          recommendation: exitCode === 137
+        actionable_insights: insights || {
+          should_retry: false,
+          recommended_action: exitCode === 137
             ? 'Increase Docker memory limit or optimize task complexity'
             : exitCode === 1
-            ? 'Review stderr for Claude CLI errors or task configuration issues'
+            ? 'Review stderr for CLI errors or task configuration issues'
             : 'Review Docker logs and task prompt for issues',
-          retry_suggested: exitCode === 137 || exitCode === 143,
-          queue_health: metrics.pending > 10 ? 'HIGH_LOAD' : metrics.pending > 5 ? 'MODERATE' : 'HEALTHY'
+          investigation_hints: [
+            `Check task logs: dev-bots/artifacts/${task.id}-stderr-*.log`,
+            'Review exit code and stderr for error patterns'
+          ],
+          category: exitCode === 137 ? 'oom' : 'system_error'
         }
       });
 

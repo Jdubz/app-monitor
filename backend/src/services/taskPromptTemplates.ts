@@ -9,6 +9,7 @@ import { logger } from '../utils/logger.js';
 import { Task } from './devBotsManager.js';
 import { AgentPersonality } from './agentPersonalities.js';
 import { getGuidelinesForTaskType, formatGuidelinesAsMarkdown } from './taskTypeGuidelines.js';
+import { formatDocumentationForPrompt } from './workTargetDocumentation.js';
 
 export interface TaskPromptTemplate {
   id: string;
@@ -221,6 +222,38 @@ export class TaskPromptTemplateManager {
 
 **Why This Matters:** Understanding the strategic context helps you make better technical decisions and identify opportunities to establish patterns for future work.
 
+## 🔌 Available MCP Capabilities
+
+Your container is pre-configured with Model Context Protocol servers that provide enhanced capabilities:
+
+### 📁 Filesystem MCP
+- **Read files** efficiently without cat/grep commands
+- **Write files** with atomic operations
+- **Search across files** for patterns
+- **List directories** and file trees
+- Scoped to \`/workspace\` directory
+
+### 🔀 Git MCP
+- **Check status** without running git commands
+- **View diffs** and commit history
+- **Manage branches** and track changes
+- **Inspect repository** state and metadata
+- Automatic integration with workspace
+
+### 🗄️ SQLite MCP
+- **Query databases** directly (task queue, metrics)
+- **Inspect schema** and table structure
+- **Execute SQL** for analysis
+- **Manage databases** in workspace
+
+### 🌐 Fetch MCP
+- **Fetch web content** (documentation, APIs)
+- **Make HTTP requests** (GET/POST)
+- **Access external resources** for context
+- **Validate URLs** and endpoints
+
+**💡 Tip:** These MCP servers are faster and more reliable than shell commands. Use them when available!
+
 ## 📋 PRE-TASK SELF-ASSESSMENT (Complete BEFORE Starting)
 
 Before you begin implementation, answer these questions to verify you understand the task:
@@ -282,6 +315,9 @@ For each piece of code you plan to write, document:
 
 **Essential Project Documentation:**
 {{task.architectureReferences}}
+
+**Work Target Guide for {{repository}}:**
+{{workTarget.documentation}}
 
 **Additional Context:**
 - Review the complete [Documentation Index](../docs/README.md) for comprehensive guides
@@ -871,19 +907,29 @@ Use your specialized knowledge to ensure this implementation follows best practi
     this.variableProcessors.set('task.architectureReferences', (context) => {
       // Get system-specific architecture documentation links
       const systemArchDocs = this.getSystemArchitectureDocs(context.project);
-      
+
+      // Get intelligent documentation suggestions based on task content
+      const intelligentDocs = this.discoverRelevantDocumentation(context);
+
       // Combine custom architecture references with system-specific docs
       const customRefs = context.task.architectureReferences && context.task.architectureReferences.length > 0
         ? context.task.architectureReferences.map((r: string) => `- ${r}`)
         : [];
-      
-      return [
+
+      // Build final documentation list
+      const allDocs = [
         ...customRefs,
         ...systemArchDocs,
+        ...intelligentDocs,
         '- [Complete Documentation Index](../docs/README.md)',
         '- [System Architecture Overview](../docs/architecture/system-overview.md)',
         '- [Development Workflow](../docs/development/workflow.md)'
-      ].join('\n');
+      ];
+
+      // Remove duplicates
+      const uniqueDocs = [...new Set(allDocs)];
+
+      return uniqueDocs.join('\n');
     });
     this.variableProcessors.set('task.prerequisites', (context) =>
       context.task.prerequisites && context.task.prerequisites.length > 0
@@ -1012,6 +1058,11 @@ Use your specialized knowledge to ensure this implementation follows best practi
     this.variableProcessors.set('repository', (context) => context.project);
     this.variableProcessors.set('worktree', (context) => context.worktree);
     this.variableProcessors.set('environment', (context) => context.environment);
+
+    // Work target documentation from configuration
+    this.variableProcessors.set('workTarget.documentation', (context) => {
+      return formatDocumentationForPrompt(context.project);
+    });
   }
 
   /**
@@ -1121,6 +1172,20 @@ Use your specialized knowledge to ensure this implementation follows best practi
           '- [Dev Monitor UI Proposal](../docs/development/DEV_MANAGEMENT_UI_PROPOSAL.md)',
           '- [Logging Architecture](../docs/operations/logging-architecture.md)',
           '- [Structured Logging Migration](../docs/operations/STRUCTURED_LOGGING_MIGRATION.md)'
+        );
+        break;
+
+      case 'dev-bots':
+        archDocs.push(
+          '- [Dev-Bots README](../docs/dev-bots/README.md)',
+          '- [System Architecture Overview](../docs/dev-bots/architecture/system-overview.md)',
+          '- [Context Isolation](../docs/dev-bots/architecture/context-isolation.md)',
+          '- [Implementation Guide](../docs/dev-bots/implementation/implementation-guide.md)',
+          '- [Task Queue Architecture](../docs/dev-bots/task-queue.md)',
+          '- [SQLite Integration Plan](../docs/dev-bots/SQLITE_INTEGRATION_PLAN.md)',
+          '- [Scope Control System](../docs/dev-bots/SCOPE_CONTROL_SYSTEM.md)',
+          '- [Testing Strategy](../docs/dev-bots/TESTING_STRATEGY.md)',
+          '- [Timeout Handling Strategy](../docs/dev-bots/TIMEOUT_HANDLING_STRATEGY.md)'
         );
         break;
         
