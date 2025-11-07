@@ -13,6 +13,7 @@ import { checkPortsAvailable, getPortInfo } from '../utils/portCheck.js';
 import { isPortInUse, stopDockerContainer, getDockerContainerInfo } from '../utils/portManager.js';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
+import { EventEmitter } from 'events';
 
 // Mock all dependencies
 vi.mock('../utils/logger.js');
@@ -25,22 +26,60 @@ describe('ProcessManager Core Functionality', () => {
   let processManager: ProcessManager;
   let mockSpawn: any;
   let mockFs: any;
+  let processKillSpy: ReturnType<typeof vi.spyOn>;
+  let processOnSpy: ReturnType<typeof vi.spyOn>;
+  let mockProcesses: Map<number, EventEmitter>;
+  let nextPid: number;
+
+  const createMockChildProcess = () => {
+    const emitter = new EventEmitter();
+    const stdout = new EventEmitter();
+    const stderr = new EventEmitter();
+
+    const processObject: any = {
+      pid: nextPid++,
+      stdout,
+      stderr,
+      kill: vi.fn((signal?: NodeJS.Signals) => {
+        setImmediate(() => emitter.emit('exit', 0, signal ?? 'SIGTERM'));
+        return true;
+      }),
+      on: emitter.on.bind(emitter),
+      once: emitter.once.bind(emitter),
+      removeListener: emitter.removeListener.bind(emitter),
+    };
+
+    mockProcesses.set(processObject.pid, emitter);
+
+    // Emit a log line shortly after start so ProcessManager transitions to running
+    setImmediate(() => {
+      stdout.emit('data', Buffer.from('service booted'));
+    });
+
+    return processObject;
+  };
 
   beforeEach(() => {
     vi.clearAllMocks();
+    mockProcesses = new Map();
+    nextPid = 1000;
+
+    processOnSpy = vi.spyOn(process, 'on').mockImplementation(() => process);
+    processKillSpy = vi
+      .spyOn(process, 'kill')
+      .mockImplementation((pid: number | string, signal?: NodeJS.Signals) => {
+        const numericPid =
+          typeof pid === 'number' ? Math.abs(pid) : Math.abs(parseInt(pid, 10));
+        const emitter = mockProcesses.get(numericPid);
+        if (emitter) {
+          setImmediate(() => emitter.emit('exit', 0, signal ?? 'SIGTERM'));
+        }
+        return true;
+      });
 
     // Mock spawn
     mockSpawn = vi.mocked(spawn);
-    mockSpawn.mockReturnValue({
-      pid: 12345,
-      stdout: { on: vi.fn() },
-      stderr: { on: vi.fn() },
-      on: vi.fn(),
-      once: vi.fn(),
-      removeListener: vi.fn(),
-      kill: vi.fn(),
-      exitCode: null
-    } as any);
+    mockSpawn.mockImplementation(() => createMockChildProcess());
 
     // Mock fs
     mockFs = vi.mocked(fs);
@@ -64,13 +103,12 @@ describe('ProcessManager Core Functionality', () => {
     vi.mocked(logger.error).mockImplementation(() => {});
     vi.mocked(logger.debug).mockImplementation(() => {});
 
-    // Mock process.exit to prevent tests from exiting
-    vi.spyOn(process, 'exit').mockImplementation((() => {}) as any);
-
     processManager = new ProcessManager();
   });
 
   afterEach(() => {
+    processKillSpy.mockRestore();
+    processOnSpy.mockRestore();
     vi.restoreAllMocks();
   });
 
@@ -103,51 +141,33 @@ describe('ProcessManager Core Functionality', () => {
     it('should stop service with graceful shutdown', async () => {
       // Given: Service is running
       const serviceName = 'job-finder-backend';
-      const mockProcess = {
-        pid: 12345,
-        stdout: { on: vi.fn() },
-        stderr: { on: vi.fn() },
-        on: vi.fn(),
-        once: vi.fn(),
-        removeListener: vi.fn(),
-        kill: vi.fn(),
-        exitCode: null
-      } as any;
-
+      const mockProcess = createMockChildProcess();
       mockSpawn.mockReturnValue(mockProcess);
       await processManager.startService(serviceName);
 
-      // When: Service is stopped
-      const result = await processManager.stopService(serviceName);
+      const resultPromise = processManager.stopService(serviceName);
 
-      // Then: SIGTERM is sent
-      expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
+      // Simulate the exit event that gracefulStop waits for
+      mockProcesses.get(mockProcess.pid)?.emit('exit', 0, 'SIGTERM');
+      const result = await resultPromise;
+
+      expect(processKillSpy).toHaveBeenCalledWith(-mockProcess.pid, 'SIGTERM');
       expect(result.status).toBe('stopped');
     });
 
     it('should restart service (stop then start)', async () => {
       // Given: Service is running
       const serviceName = 'job-finder-backend';
-      const mockProcess = {
-        pid: 12345,
-        stdout: { on: vi.fn() },
-        stderr: { on: vi.fn() },
-        on: vi.fn(),
-        once: vi.fn(),
-        removeListener: vi.fn(),
-        kill: vi.fn(),
-        exitCode: null
-      } as any;
-
+      const mockProcess = createMockChildProcess();
       mockSpawn.mockReturnValue(mockProcess);
       await processManager.startService(serviceName);
 
-      // When: Service is restarted
-      const result = await processManager.restartService(serviceName);
+      const restartPromise = processManager.restartService(serviceName);
+      mockProcesses.get(mockProcess.pid)?.emit('exit', 0, 'SIGTERM');
+      const result = await restartPromise;
 
-      // Then: Service is stopped and started
-      expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
-      expect(mockSpawn).toHaveBeenCalledTimes(2); // Once for start, once for restart
+      expect(processKillSpy).toHaveBeenCalledWith(-mockProcess.pid, 'SIGTERM');
+      expect(mockSpawn).toHaveBeenCalledTimes(2);
       expect(result.status).toBe('running');
     });
 

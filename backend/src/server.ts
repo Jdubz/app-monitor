@@ -180,11 +180,9 @@ export async function createApp() {
       details: { socketId: socket.id },
     });
 
-    connectionManager.addClient(socket.id);
+    connectionManager.register(socket);
 
-    socket.on('disconnect', () => {
-      connectionManager.removeClient(socket.id);
-    });
+    // Disconnect is handled internally by connectionManager.register()
 
     socket.on('docker:startMonitor', async ({ containerId }) => {
       try {

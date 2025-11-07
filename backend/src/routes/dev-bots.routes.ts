@@ -161,17 +161,26 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
         type,
         title,
         documentation,
+        description,
         acceptanceCriteria,
         files,
         dependencies,
         repository,
+        project,
         assignedAgent,
         notes,
+        architectureReferences,
+        validationSteps,
+        successMetrics,
+        estimatedEffort,
       } = req.body;
 
-      if (!type || !title || !documentation || !acceptanceCriteria) {
+      // Accept either 'documentation' or 'description' field
+      const taskDescription = documentation || description;
+
+      if (!type || !title || !taskDescription || !acceptanceCriteria) {
         return res.status(400).json({
-          error: 'Type, title, documentation, and acceptanceCriteria are required'
+          error: 'Type, title, description, and acceptanceCriteria are required'
         });
       }
 
@@ -202,7 +211,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
           });
         }
 
-        const documentationLength = typeof documentation === 'string' ? documentation.trim().length : 0;
+        const documentationLength = typeof taskDescription === 'string' ? taskDescription.trim().length : 0;
         if (documentationLength < MIN_DOCUMENTATION_LENGTH) {
           warnings.push({
             category: 'api',
@@ -237,13 +246,17 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
       const result = await devBotsManager.addTask({
         type,
         title,
-        description: documentation, // Map documentation to description
+        description: taskDescription,
         acceptanceCriteria: Array.isArray(acceptanceCriteria) ? acceptanceCriteria : [acceptanceCriteria],
         files,
         dependencies,
-        project: repository,
+        project: project || repository, // Accept either 'project' or 'repository'
         assignedAgent,
-        notes
+        notes,
+        architectureReferences,
+        validationSteps,
+        successMetrics,
+        estimatedEffort
       });
       res.json({
         task: result.task,
