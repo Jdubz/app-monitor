@@ -16,6 +16,7 @@ import { DockerManager } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
 import { TaskPersistence, TaskStorageConfig } from './taskPersistence.js';
 import { WorkspaceOrchestrator } from './workspaceOrchestrator.js';
+import { ScopeControlService } from './scopeControl.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
 
 /**
@@ -86,6 +87,9 @@ export async function createDevBotsManagerDependencies(
   };
   const retryManager = new RetryManager(retryConfig);
 
+  // Initialize scope control service
+  const scopeControl = new ScopeControlService();
+
   // Note: SimpleFailureRecovery requires DevBotsManager instance
   // It will be created after DevBotsManager is instantiated
   // For now, create a placeholder that will be replaced
@@ -104,5 +108,6 @@ export async function createDevBotsManagerDependencies(
     workspaceOrchestrator,
     recovery,
     taskPersistence,
+    scopeControl,
   };
 }

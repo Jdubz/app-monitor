@@ -18,6 +18,7 @@ import type { RetryManager } from './retryManager.js';
 import type { TaskPersistence } from './taskPersistence.js';
 import type { WorkspaceOrchestrator, WorkspaceContext } from './workspaceOrchestrator.js';
 import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
+import type { ScopeControlService } from './scopeControl.service.js';
 import { EventEmitter } from 'events';
 
 /**
@@ -148,16 +149,29 @@ export function createMockAgentManager(): AgentPersonalityManager {
   const testAgent: AgentPersonality = {
     id: 'test-agent',
     name: 'Test Agent',
-    type: 'general-purpose' as any,
+    role: 'Backend Engineer',
     description: 'Test agent for testing',
-    traits: ['analytical', 'efficient'],
-    strengths: ['Testing'],
-    weaknesses: ['None'],
-    communicationStyle: 'Clear and concise',
-    workStyle: 'Methodical',
-    tools: ['vitest', 'typescript'],
-    preferences: { detail_level: 'high' },
-    frameworks: [],
+    specialties: ['Testing', 'TypeScript'],
+    expertise: {
+      primary: ['Testing'],
+      secondary: ['TypeScript'],
+      tools: ['vitest', 'typescript']
+    },
+    personality: {
+      communicationStyle: 'technical',
+      approach: 'methodical',
+      focus: 'quality'
+    },
+    onboarding: {
+      requiredReading: [],
+      setupSteps: [],
+      validationChecks: []
+    },
+    taskPreferences: {
+      preferredTypes: ['testing', 'implementation'],
+      avoidedTypes: ['deployment'],
+      complexityRange: 'any'
+    }
   };
 
   return {
@@ -254,6 +268,38 @@ export function createMockWorkspaceOrchestrator(): WorkspaceOrchestrator {
 }
 
 /**
+ * Create mock ScopeControlService
+ */
+export function createMockScopeControl(): ScopeControlService {
+  return {
+    checkScopeViolations: vi.fn().mockReturnValue([]),
+    isolateContext: vi.fn(),
+    getBaselineContext: vi.fn().mockReturnValue({
+      allowedFiles: ['existing-files-only'],
+      maxComplexity: 'simple',
+      forbiddenPatterns: ['create', 'new'],
+      scope: 'minimal'
+    }),
+    trackViolationChain: vi.fn(),
+    checkCleanupSchedules: vi.fn().mockReturnValue([]),
+    createCleanupTask: vi.fn().mockReturnValue({
+      id: 'cleanup-task-1',
+      type: 'cleanup',
+      title: 'Test Cleanup Task',
+      description: 'Test cleanup',
+      status: 'pending',
+      created_at: Date.now(),
+      assigned_agent: 'backend-specialist',
+      priority: 5,
+      can_retry: true,
+      retry_count: 0,
+      max_retries: 3,
+      timeout_ms: null
+    }),
+  } as any;
+}
+
+/**
  * Create complete mock dependencies for DevBotsManager
  */
 export function createMockDevBotsManagerDependencies(): DevBotsManagerDependencies {
@@ -268,6 +314,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
   const retryManager = createMockRetryManager();
   const workspaceOrchestrator = createMockWorkspaceOrchestrator();
   const taskPersistence = createMockTaskPersistence();
+  const scopeControl = createMockScopeControl();
 
   return {
     processManager,
@@ -281,6 +328,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     retryManager,
     workspaceOrchestrator,
     taskPersistence,
+    scopeControl,
     recovery: null as any, // Will be created by DevBotsManager
   };
 }

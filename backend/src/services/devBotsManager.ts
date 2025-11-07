@@ -28,6 +28,7 @@ import {
 import { SimpleFailureRecovery } from './failureRecovery.js';
 import { config } from '../config.js';
 import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
+import type { ScopeControlService } from './scopeControl.service.js';
 
 export interface RetryAttempt {
   attemptNumber: number;
@@ -93,212 +94,7 @@ export interface DevBotsStatus {
   };
 }
 
-// Scope Control System Classes
-class ScopeCreepDetector {
-  detectCreepPatterns(task: Task, output: string): Array<{ type: string; severity: string }> {
-    const patterns = {
-      fileCreation: /(?:created|new file|mkdir|touch|writeFile|fs\.write)/gi,
-      overEngineering: /(?:complex|sophisticated|advanced|enterprise|scalable)/gi,
-      scopeExpansion: /(?:also|additionally|furthermore|moreover|while we're at it)/gi,
-      unnecessaryComplexity: /(?:design pattern|architecture|framework|library|dependency)/gi,
-      featureCreep: /(?:feature|enhancement|improvement|optimization|refactoring)/gi
-    };
-    
-    const violations: Array<{ type: string; severity: string }> = [];
-    Object.entries(patterns).forEach(([type, regex]) => {
-      if (regex.test(output)) {
-        violations.push({ type, severity: this.getSeverity(type, output) });
-      }
-    });
-    
-    return violations;
-  }
-  
-  private getSeverity(type: string, _output: string): string {
-    const severityMap: Record<string, string> = {
-      'fileCreation': 'HIGH',
-      'overEngineering': 'MEDIUM', 
-      'scopeExpansion': 'HIGH',
-      'unnecessaryComplexity': 'MEDIUM',
-      'featureCreep': 'LOW'
-    };
-    return severityMap[type] || 'LOW';
-  }
-}
-
-interface CleanContext {
-  allowedFiles: string[];
-  maxComplexity: string;
-  forbiddenPatterns: string[];
-  scope: string;
-}
-
-class ContextIsolation {
-  private cleanContexts = new Map<string, CleanContext>();
-  private contaminatedContexts = new Set<string>();
-
-  isolateContaminatedContext(taskId: string, _violations: Array<{ type: string; severity: string }>): void {
-    this.contaminatedContexts.add(taskId);
-    const cleanContext = this.createCleanContext(taskId);
-    this.cleanContexts.set(taskId, cleanContext);
-    logger.info({
-      category: 'process',
-      action: 'context_isolation_isolated_contaminated_context_fo',
-      message: `[CONTEXT_ISOLATION] Isolated contaminated context for task ${taskId}`
-    });
-  }
-
-  private createCleanContext(_taskId: string): CleanContext {
-    return {
-      allowedFiles: ['existing-files-only'],
-      maxComplexity: 'simple',
-      forbiddenPatterns: ['create', 'new', 'complex', 'sophisticated'],
-      scope: 'minimal'
-    };
-  }
-
-  getBaselineContext(): CleanContext {
-    return {
-      allowedFiles: ['existing-files-only'],
-      maxComplexity: 'simple',
-      forbiddenPatterns: ['create', 'new', 'complex', 'sophisticated'],
-      scope: 'minimal'
-    };
-  }
-}
-
-interface ViolationChainEntry {
-  taskId: string;
-  violations: Array<{ type: string; severity: string }>;
-  timestamp: number;
-}
-
-class SnowballPrevention {
-  private violationChain = new Map<string, ViolationChainEntry[]>();
-
-  detectViolationChain(taskId: string, violations: Array<{ type: string; severity: string }>): void {
-    const chain = this.violationChain.get(taskId) || [];
-    chain.push({
-      taskId,
-      violations,
-      timestamp: Date.now()
-    });
-
-    this.violationChain.set(taskId, chain);
-
-    if (chain.length >= 3) {
-      this.triggerChainBreaker(taskId, chain);
-    }
-  }
-
-  private triggerChainBreaker(taskId: string, chain: ViolationChainEntry[]): void {
-    logger.warn({
-      category: 'process',
-      action: 'chain_breaker_detected_violation_chain_of_chain_le',
-      message: `[CHAIN_BREAKER] Detected violation chain of ${chain.length} tasks - triggering emergency recovery`
-    });
-    // Emergency recovery will be handled by the main manager
-  }
-}
-
-class PeriodicCleanupScheduler {
-  private schedules = {
-    linting: { interval: 6 * 60 * 60 * 1000, lastRun: Date.now() },
-    deduplication: { interval: 12 * 60 * 60 * 1000, lastRun: Date.now() },
-    documentation: { interval: 24 * 60 * 60 * 1000, lastRun: Date.now() },
-    testing: { interval: 48 * 60 * 60 * 1000, lastRun: Date.now() },
-    deepCleanup: { interval: 7 * 24 * 60 * 60 * 1000, lastRun: Date.now() }
-  };
-  
-  checkSchedules(): string[] {
-    const now = Date.now();
-    const dueTasks: string[] = [];
-    
-    Object.entries(this.schedules).forEach(([type, schedule]) => {
-      if (now - schedule.lastRun >= schedule.interval) {
-        dueTasks.push(type);
-        schedule.lastRun = now;
-      }
-    });
-    
-    return dueTasks;
-  }
-  
-  createCleanupTask(type: string, taskIdCounter: number): Task {
-    const cleanupTasks: Record<string, {
-      description: string;
-      scope: {
-        type: string;
-        boundaries: {
-          maxChanges: number;
-          forbiddenActions: string[];
-          maxNewLines: number;
-        };
-        validation: {
-          forbiddenPatterns: string[];
-          allowedPatterns: string[];
-        };
-      };
-    }> = {
-      linting: {
-        description: 'PERIODIC CLEANUP: Run linting and fix code style issues. Focus on existing files only.',
-        scope: {
-          type: 'cleanup',
-          boundaries: { maxChanges: 5, forbiddenActions: ['create-new-files'], maxNewLines: 20 },
-          validation: { forbiddenPatterns: ['create', 'new'], allowedPatterns: ['fix', 'format', 'style'] }
-        }
-      },
-      deduplication: {
-        description: 'PERIODIC CLEANUP: Remove duplicate code and consolidate similar functions.',
-        scope: {
-          type: 'cleanup',
-          boundaries: { maxChanges: 3, forbiddenActions: ['create-new-files'], maxNewLines: 15 },
-          validation: { forbiddenPatterns: ['create', 'new'], allowedPatterns: ['remove', 'consolidate', 'merge'] }
-        }
-      },
-      documentation: {
-        description: 'PERIODIC CLEANUP: Update and standardize documentation. Fix outdated comments.',
-        scope: {
-          type: 'cleanup',
-          boundaries: { maxChanges: 8, forbiddenActions: ['create-new-files'], maxNewLines: 30 },
-          validation: { forbiddenPatterns: ['create', 'new'], allowedPatterns: ['update', 'fix', 'standardize'] }
-        }
-      },
-      testing: {
-        description: 'PERIODIC CLEANUP: Run tests and fix failing tests. Improve test coverage.',
-        scope: {
-          type: 'cleanup',
-          boundaries: { maxChanges: 10, forbiddenActions: ['create-new-files'], maxNewLines: 50 },
-          validation: { forbiddenPatterns: ['create', 'new'], allowedPatterns: ['fix', 'improve', 'test'] }
-        }
-      },
-      deepCleanup: {
-        description: 'PERIODIC CLEANUP: Deep codebase cleanup. Remove unused code, optimize imports.',
-        scope: {
-          type: 'cleanup',
-          boundaries: { maxChanges: 15, forbiddenActions: ['create-new-files'], maxNewLines: 100 },
-          validation: { forbiddenPatterns: ['create', 'new'], allowedPatterns: ['remove', 'optimize', 'clean'] }
-        }
-      }
-    };
-    
-    const task = cleanupTasks[type];
-    return {
-      id: `task-${taskIdCounter}-${Date.now()}`,
-      type: 'cleanup',
-      title: task.description.substring(0, 100),
-      description: task.description,
-      status: 'pending',
-      created_at: Date.now(),
-      assigned_agent: 'backend-specialist',
-      priority: 5,
-      can_retry: true,
-      retry_count: 0,
-      max_retries: 3,
-      timeout_ms: null
-    } as Task;
-  }
-}
+// Scope control classes moved to scopeControl.service.ts
 
 export class DevBotsManager extends EventEmitter {
   private processManager: ProcessManager;
@@ -337,12 +133,7 @@ export class DevBotsManager extends EventEmitter {
   private workspaceOrchestrator!: WorkspaceOrchestrator;
   private pushCoordinator: PushCoordinator = new PushCoordinator();
   private recovery!: SimpleFailureRecovery;
-
-  // Scope control systems
-  private scopeCreepDetector = new ScopeCreepDetector();
-  private contextIsolation = new ContextIsolation();
-  private snowballPrevention = new SnowballPrevention();
-  private cleanupScheduler = new PeriodicCleanupScheduler();
+  private scopeControl!: ScopeControlService;
 
   // System state
   private startTime = Date.now();
@@ -362,6 +153,7 @@ export class DevBotsManager extends EventEmitter {
     this.retryManager = dependencies.retryManager;
     this.workspaceOrchestrator = dependencies.workspaceOrchestrator;
     this.taskPersistence = dependencies.taskPersistence;
+    this.scopeControl = dependencies.scopeControl;
 
     // Initialize SimpleFailureRecovery with this instance
     this.recovery = new SimpleFailureRecovery(this);
@@ -835,9 +627,9 @@ export class DevBotsManager extends EventEmitter {
   
   private async checkCleanupSchedules(): Promise<void> {
     try {
-      const dueTasks = this.cleanupScheduler.checkSchedules();
+      const dueTasks = this.scopeControl.checkCleanupSchedules();
       for (const taskType of dueTasks) {
-        const cleanupTask = this.cleanupScheduler.createCleanupTask(taskType, Date.now());
+        const cleanupTask = this.scopeControl.createCleanupTask(taskType, Date.now());
         await this.taskQueue.createTask(cleanupTask);
         logger.info({
       category: 'process',
@@ -2857,7 +2649,7 @@ export class DevBotsManager extends EventEmitter {
       const output = `Task ${task.id} executed successfully`;
       
       // Check for scope violations
-      const violations = this.scopeCreepDetector.detectCreepPatterns(task, output);
+      const violations = this.scopeControl.checkScopeViolations(task, output);
       if (violations.length > 0) {
         logger.warn({
       category: 'process',
@@ -2865,8 +2657,8 @@ export class DevBotsManager extends EventEmitter {
       message: `[SCOPE_VIOLATION] Task ${task.id} has violations:`,
       details: { violations }
     });
-        this.contextIsolation.isolateContaminatedContext(task.id, violations);
-        this.snowballPrevention.detectViolationChain(task.id, violations);
+        this.scopeControl.isolateContext(task.id, violations);
+        this.scopeControl.trackViolationChain(task.id, violations);
       }
       
       // Complete task
@@ -3032,13 +2824,13 @@ export class DevBotsManager extends EventEmitter {
       .slice(-10);
 
     return {
-      schedules: this.cleanupScheduler.checkSchedules(),
+      schedules: this.scopeControl.checkCleanupSchedules(),
       recentTasks: recentCleanupTasks
     };
   }
 
   async triggerCleanup(type: string): Promise<Task> {
-    const cleanupTask = this.cleanupScheduler.createCleanupTask(type, Date.now());
+    const cleanupTask = this.scopeControl.createCleanupTask(type, Date.now());
     await this.taskQueue.createTask(cleanupTask);
     await this.assignNextTask();
     return cleanupTask;

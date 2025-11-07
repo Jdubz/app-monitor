@@ -18,6 +18,7 @@ import type { RetryManager } from './retryManager.js';
 import type { TaskPersistence } from './taskPersistence.js';
 import type { WorkspaceOrchestrator } from './workspaceOrchestrator.js';
 import type { SimpleFailureRecovery } from './failureRecovery.js';
+import type { ScopeControlService } from './scopeControl.service.js';
 
 /**
  * All dependencies required by DevBotsManager
@@ -40,6 +41,9 @@ export interface DevBotsManagerDependencies {
 
   // Legacy/migration support
   taskPersistence: TaskPersistence;
+
+  // Scope control
+  scopeControl: ScopeControlService;
 }
 
 /**
