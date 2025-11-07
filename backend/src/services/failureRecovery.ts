@@ -186,7 +186,7 @@ export class SimpleFailureRecovery {
     const { task, failurePattern, stderr, exitCode } = context;
 
     return await this.devBotsManager.addTask({
-      type: 'bugfix',
+      type: 'implementation',  // Use implementation type (bugfix is a type of implementation)
       title: `[CLEANUP] Fix ${failurePattern.name} for: ${task.title}`,
       description: this.buildCleanupPrompt(task, failurePattern, stderr, exitCode),
       assignedAgent: task.assigned_agent,
