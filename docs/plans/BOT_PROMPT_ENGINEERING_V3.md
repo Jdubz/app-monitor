@@ -491,6 +491,342 @@ Every bot task MUST have:
 
 ---
 
+## Usage Examples
+
+This section provides real-world examples of how to write v3 prompts for common development tasks.
+
+### Example 1: Adding API Endpoint with Validation
+
+**Task Context**: Need to add a new POST endpoint to retrieve task metrics
+
+**❌ BAD v2 Prompt:**
+```json
+{
+  "title": "Add metrics endpoint",
+  "description": "Create an endpoint to get task metrics",
+  "acceptanceCriteria": [
+    "Endpoint returns task statistics",
+    "Proper error handling included",
+    "Tests added"
+  ]
+}
+```
+
+**Problem**: Bot might create duplicate validation logic, invent extra statistics, or create unnecessary middleware.
+
+**✅ GOOD v3 Prompt:**
+```json
+{
+  "type": "implementation",
+  "title": "Add POST /api/tasks/metrics endpoint with existing validation",
+
+  "investigation": {
+    "required": true,
+    "steps": [
+      "READ backend/src/routes/taskRoutes.ts to understand routing pattern",
+      "READ backend/src/middleware/validation.ts to find existing validators",
+      "GREP for 'validateRequest' in backend/src to see usage pattern",
+      "READ backend/src/services/taskExecution.service.ts to find task status query logic",
+      "CHECK backend/src/types/taskSchema.ts for TaskMetrics interface"
+    ],
+    "mustFind": [
+      "Existing request validation middleware",
+      "Current task status query functions",
+      "Metrics response format if any exists"
+    ],
+    "mustNotDuplicate": [
+      "Request validation logic",
+      "Database query helpers",
+      "Error response formatting"
+    ]
+  },
+
+  "description": "Add POST /api/tasks/metrics endpoint that returns task statistics using EXISTING validation middleware and query functions. Reuse patterns from GET /api/tasks endpoint.",
+
+  "acceptanceCriteria": [
+    "EXACTLY ONE endpoint added: POST /api/tasks/metrics",
+    "MUST use existing validateRequest middleware from validation.ts",
+    "MUST use existing getTasksByStatus() from taskExecution.service.ts",
+    "Response returns EXACTLY these 3 fields: total, completed, failed",
+    "DO NOT add extra fields like 'pending', 'averageTime', or 'successRate'",
+    "DO NOT create new validation middleware",
+    "DO NOT create new database query functions",
+    "Follow exact error handling pattern from GET /api/tasks endpoint at line 45"
+  ],
+
+  "files": [
+    "backend/src/routes/taskRoutes.ts",
+    "backend/src/middleware/validation.ts",
+    "backend/src/services/taskExecution.service.ts",
+    "backend/src/types/taskSchema.ts"
+  ],
+
+  "modifyOnly": [
+    "backend/src/routes/taskRoutes.ts"
+  ],
+
+  "doNotModify": [
+    "backend/src/middleware/validation.ts",
+    "backend/src/services/taskExecution.service.ts"
+  ],
+
+  "doNotCreate": [
+    "backend/src/middleware/metricsValidation.ts (use existing validation.ts)",
+    "backend/src/services/metricsService.ts (use existing taskExecution.service.ts)",
+    "backend/src/utils/metricsHelpers.ts (use existing query functions)"
+  ],
+
+  "constraints": [
+    "MUST follow routing pattern from line 40-60 in taskRoutes.ts",
+    "MUST NOT add middleware beyond existing validateRequest",
+    "MUST NOT query database directly (use service functions)",
+    "MUST return exactly 3 metrics, no more",
+    "MUST use existing error handling pattern"
+  ]
+}
+```
+
+**Key Learning**: Specify exact count of fields, prohibit common extras, require use of existing validation.
+
+---
+
+### Example 2: Refactoring Code for Reusability
+
+**Task Context**: Multiple services have duplicate database connection code that needs to be centralized
+
+**❌ BAD v2 Prompt:**
+```json
+{
+  "title": "Refactor database connections",
+  "description": "Consolidate database connection logic",
+  "acceptanceCriteria": [
+    "Connection logic centralized",
+    "All services updated",
+    "Better error handling"
+  ]
+}
+```
+
+**Problem**: Bot might refactor unrelated code, add connection pooling features not requested, or change error handling patterns across the codebase.
+
+**✅ GOOD v3 Prompt:**
+```json
+{
+  "type": "refactoring",
+  "title": "Extract duplicate DB connection code from 3 services to database.ts",
+
+  "investigation": {
+    "required": true,
+    "steps": [
+      "READ backend/src/services/database.ts to understand existing connection pattern",
+      "READ backend/src/services/taskPersistence.ts lines 15-30 for connection code",
+      "READ backend/src/services/ephemeralWorker.service.ts lines 25-40 for connection code",
+      "READ backend/src/services/devBotsManager.factory.ts lines 35-50 for connection code",
+      "GREP for 'new Database(' across backend/src to find all instances",
+      "CHECK backend/src/services/database.ts for existing connection functions"
+    ],
+    "mustFind": [
+      "Existing getDatabaseConnection() function if any",
+      "Current connection initialization pattern",
+      "Error handling approach for connection failures"
+    ],
+    "mustNotDuplicate": [
+      "Connection retry logic (if exists)",
+      "Connection pool management (if exists)",
+      "Database initialization code"
+    ]
+  },
+
+  "description": "EXTRACT duplicate 'new Database(taskQueueDbPath)' code from EXACTLY 3 services into a single reusable function in database.ts. DO NOT refactor other database code. DO NOT add connection pooling or retry logic.",
+
+  "acceptanceCriteria": [
+    "CREATE EXACTLY ONE new function: getTaskQueueConnection()",
+    "MOVE duplicate connection code from EXACTLY these 3 files:",
+    "  - taskPersistence.ts (lines 15-30)",
+    "  - ephemeralWorker.service.ts (lines 25-40)",
+    "  - devBotsManager.factory.ts (lines 35-50)",
+    "REPLACE 15 lines of duplicate code with 3 function calls",
+    "DO NOT refactor other services beyond these 3",
+    "DO NOT add connection pooling",
+    "DO NOT add retry logic",
+    "DO NOT change error handling behavior",
+    "MUST preserve exact same functionality (zero behavior changes)"
+  ],
+
+  "files": [
+    "backend/src/services/database.ts",
+    "backend/src/services/taskPersistence.ts",
+    "backend/src/services/ephemeralWorker.service.ts",
+    "backend/src/services/devBotsManager.factory.ts"
+  ],
+
+  "modifyOnly": [
+    "backend/src/services/database.ts",
+    "backend/src/services/taskPersistence.ts",
+    "backend/src/services/ephemeralWorker.service.ts",
+    "backend/src/services/devBotsManager.factory.ts"
+  ],
+
+  "doNotModify": [
+    "backend/src/services/database.test.ts",
+    "backend/src/config/database.config.ts"
+  ],
+
+  "doNotCreate": [
+    "backend/src/utils/connectionPool.ts (not requested)",
+    "backend/src/utils/databaseHelpers.ts (add to existing database.ts)",
+    "backend/src/services/connectionManager.ts (use database.ts)"
+  ],
+
+  "constraints": [
+    "MUST extract to database.ts only (existing file)",
+    "MUST refactor EXACTLY 3 services listed above",
+    "MUST NOT refactor any other services",
+    "MUST NOT add features (pooling, retry, caching)",
+    "MUST preserve exact error handling behavior",
+    "MUST NOT change function signatures of calling code",
+    "MUST keep same number of database connections"
+  ],
+
+  "preImplementationChecklist": [
+    "[ ] Read all 4 files completely",
+    "[ ] Identify exact duplicate code (lines specified above)",
+    "[ ] Verify no existing connection function in database.ts",
+    "[ ] Confirm only 3 services need refactoring",
+    "[ ] Check if any tests depend on current implementation",
+    "[ ] Document current behavior to preserve it exactly"
+  ]
+}
+```
+
+**Key Learning**: For refactoring, specify exact files/lines, prohibit scope expansion, require zero behavior changes.
+
+---
+
+### Example 3: Bug Fix with Investigation
+
+**Task Context**: Users report tasks getting stuck in "in_progress" state indefinitely
+
+**❌ BAD v2 Prompt:**
+```json
+{
+  "title": "Fix stuck tasks bug",
+  "description": "Tasks stuck in progress need timeout",
+  "acceptanceCriteria": [
+    "Tasks timeout after reasonable period",
+    "Status updated properly",
+    "Tests added"
+  ]
+}
+```
+
+**Problem**: Bot might add timeout logic in wrong place, create new monitoring system, or add unrequested features like task retry.
+
+**✅ GOOD v3 Prompt:**
+```json
+{
+  "type": "bug-fix",
+  "title": "Add 30-minute timeout check to existing task status updater",
+
+  "investigation": {
+    "required": true,
+    "steps": [
+      "READ backend/src/services/taskExecution.service.ts to understand task lifecycle",
+      "READ backend/src/services/taskExecution.service.ts updateTaskStatus() function",
+      "GREP for 'in_progress' in backend/src to find all status update locations",
+      "READ backend/src/services/taskExecution.service.ts checkStuckTasks() to see if timeout logic exists",
+      "CHECK task schema in backend/src/types/taskSchema.ts for timestamp fields",
+      "READ logs/backend.log to understand current behavior when tasks get stuck"
+    ],
+    "mustFind": [
+      "Where tasks are marked as 'in_progress'",
+      "Existing task status update logic",
+      "Task timestamp fields (started_at, updated_at)"
+    ],
+    "mustNotDuplicate": [
+      "Task status update logic",
+      "Database query functions",
+      "Logging infrastructure"
+    ]
+  },
+
+  "description": "ADD timeout check to EXISTING updateTaskStatus() function in taskExecution.service.ts. Mark tasks as 'failed' with timeout error if in_progress for >30 minutes. DO NOT create new monitoring service. DO NOT add retry logic.",
+
+  "acceptanceCriteria": [
+    "MODIFY EXACTLY ONE function: updateTaskStatus() in taskExecution.service.ts",
+    "ADD timeout check using existing started_at timestamp field",
+    "Timeout threshold is EXACTLY 30 minutes (1800000ms)",
+    "Mark as 'failed' with error message 'Task timeout: exceeded 30 minute limit'",
+    "DO NOT create new timeout monitoring service",
+    "DO NOT add retry logic (future feature)",
+    "DO NOT modify task scheduler",
+    "DO NOT add new database fields",
+    "MUST use existing logging pattern from line 145",
+    "Test file must verify EXACTLY 30 minute timeout (not 29, not 31)"
+  ],
+
+  "files": [
+    "backend/src/services/taskExecution.service.ts",
+    "backend/src/types/taskSchema.ts"
+  ],
+
+  "modifyOnly": [
+    "backend/src/services/taskExecution.service.ts"
+  ],
+
+  "doNotModify": [
+    "backend/src/services/taskScheduler.ts",
+    "backend/src/services/database.ts",
+    "backend/src/types/taskSchema.ts"
+  ],
+
+  "doNotCreate": [
+    "backend/src/services/taskTimeout.service.ts (add to existing taskExecution.service.ts)",
+    "backend/src/utils/timeoutHelpers.ts (use inline logic)",
+    "backend/src/middleware/timeoutMonitor.ts (not needed)"
+  ],
+
+  "constraints": [
+    "MUST add code to updateTaskStatus() function only",
+    "MUST use existing started_at timestamp (no new fields)",
+    "MUST set timeout to exactly 30 minutes",
+    "MUST mark as 'failed' not 'timeout' status",
+    "MUST NOT create separate timeout monitoring",
+    "MUST NOT add retry mechanism (separate feature)",
+    "MUST follow existing error logging pattern at line 145"
+  ],
+
+  "testingRequirements": {
+    "unitTests": [
+      "Test task fails after exactly 30 minutes",
+      "Test task does not fail at 29 minutes",
+      "Test error message matches specification",
+      "Test status changes from in_progress to failed"
+    ],
+    "doNotTest": [
+      "Retry behavior (not implemented)",
+      "Task recovery (future feature)",
+      "Notification system (separate concern)"
+    ]
+  }
+}
+```
+
+**Key Learning**: For bug fixes, specify exact location to modify, exact timeout value, prohibit related features that seem logical but aren't requested.
+
+---
+
+### Common Patterns Across Examples
+
+1. **Investigation is mandatory** - Always specify exact files and functions to read
+2. **Use exact values** - "30 minutes" not "reasonable timeout", "3 fields" not "basic metrics"
+3. **Prohibit common scope creep** - Every example has explicit "DO NOT" list
+4. **Specify exact modification scope** - One function, three services, exact line numbers
+5. **Require reuse over creation** - Force use of existing validation, logging, queries
+6. **Name files that should NOT be created** - Prevent predictable overengineering
+
+---
+
 **Version**: 3.0
 **Created**: 2025-11-06
 **Status**: Active - All new tasks must use v3
