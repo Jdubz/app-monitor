@@ -19,6 +19,7 @@ import type { TaskPersistence } from './taskPersistence.js';
 import type { WorkspaceOrchestrator, WorkspaceContext } from './workspaceOrchestrator.js';
 import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
 import type { ScopeControlService } from './scopeControl.service.js';
+import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import { EventEmitter } from 'events';
 
 /**
@@ -300,6 +301,51 @@ export function createMockScopeControl(): ScopeControlService {
 }
 
 /**
+ * Create mock EphemeralWorkerService
+ */
+export function createMockEphemeralWorkerService(): EphemeralWorkerService {
+  const mockWorker = {
+    id: 'test-worker-1',
+    containerId: 'container-123',
+    agent: {
+      id: 'test-agent',
+      name: 'Test Agent',
+    },
+    task: {
+      id: 'test-task-1',
+      title: 'Test Task',
+    },
+    status: 'running',
+    createdAt: new Date().toISOString(),
+    workspace: {
+      id: 'workspace-1',
+      hostPath: '/tmp/workspace',
+      branchName: 'staging',
+      mirrorPath: '',
+      createdAt: new Date().toISOString(),
+    }
+  };
+
+  return {
+    getActiveWorkers: vi.fn().mockReturnValue([mockWorker]),
+    getWorker: vi.fn().mockReturnValue(mockWorker),
+    getAllWorkers: vi.fn().mockReturnValue(new Map([['test-worker-1', mockWorker]])),
+    clearAllWorkers: vi.fn(),
+    canCreateWorker: vi.fn().mockReturnValue(true),
+    createWorker: vi.fn().mockResolvedValue(mockWorker),
+    executeTask: vi.fn().mockResolvedValue({
+      success: true,
+      output: 'Test output',
+      errorOutput: '',
+      exitCode: 0,
+    }),
+    destroyWorker: vi.fn().mockResolvedValue(undefined),
+    destroyAllWorkers: vi.fn().mockResolvedValue(undefined),
+    cleanupStuckTaskContainers: vi.fn().mockResolvedValue(undefined),
+  } as any;
+}
+
+/**
  * Create complete mock dependencies for DevBotsManager
  */
 export function createMockDevBotsManagerDependencies(): DevBotsManagerDependencies {
@@ -315,6 +361,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
   const workspaceOrchestrator = createMockWorkspaceOrchestrator();
   const taskPersistence = createMockTaskPersistence();
   const scopeControl = createMockScopeControl();
+  const ephemeralWorkerService = createMockEphemeralWorkerService();
 
   return {
     processManager,
@@ -329,6 +376,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     workspaceOrchestrator,
     taskPersistence,
     scopeControl,
+    ephemeralWorkerService,
     recovery: null as any, // Will be created by DevBotsManager
   };
 }

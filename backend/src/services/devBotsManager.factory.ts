@@ -17,6 +17,7 @@ import { RetryManager, RetryConfig } from './retryManager.js';
 import { TaskPersistence, TaskStorageConfig } from './taskPersistence.js';
 import { WorkspaceOrchestrator } from './workspaceOrchestrator.js';
 import { ScopeControlService } from './scopeControl.service.js';
+import { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
 
 /**
@@ -90,6 +91,28 @@ export async function createDevBotsManagerDependencies(
   // Initialize scope control service
   const scopeControl = new ScopeControlService();
 
+  // Initialize ephemeral worker service
+  const ephemeralWorkerService = new EphemeralWorkerService(
+    docker,
+    dockerManager,
+    workspaceOrchestrator,
+    {
+      maxConcurrentWorkers: 2,
+      dockerImage: 'claude-worker:latest',
+      logsDirectory: './data/logs',
+      envPassthroughKeys: [
+        'ANTHROPIC_API_KEY',
+        'CLAUDE_API_KEY',
+        'OPENAI_API_KEY',
+        'GITHUB_TOKEN',
+        'GIT_AUTHOR_NAME',
+        'GIT_AUTHOR_EMAIL',
+        'GIT_COMMITTER_NAME',
+        'GIT_COMMITTER_EMAIL'
+      ]
+    }
+  );
+
   // Note: SimpleFailureRecovery requires DevBotsManager instance
   // It will be created after DevBotsManager is instantiated
   // For now, create a placeholder that will be replaced
@@ -109,5 +132,6 @@ export async function createDevBotsManagerDependencies(
     recovery,
     taskPersistence,
     scopeControl,
+    ephemeralWorkerService,
   };
 }
