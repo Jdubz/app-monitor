@@ -22,6 +22,7 @@ import type { ScopeControlService } from './scopeControl.service.js';
 import type { EphemeralWorkerService, EphemeralWorker as EphemeralWorkerType } from './ephemeralWorker.service.js';
 import type { TaskExecutionService } from './taskExecution.service.js';
 import { TaskCompletionService } from './taskCompletion.service.js';
+import { PRMonitorService } from './prMonitor.service.js';
 
 export interface RetryAttempt {
   attemptNumber: number;
@@ -122,6 +123,7 @@ export class DevBotsManager extends EventEmitter {
   private ephemeralWorkerService!: EphemeralWorkerService;
   private taskExecutionService!: TaskExecutionService;
   private taskCompletionService!: TaskCompletionService;
+  private prMonitorService!: PRMonitorService;
 
   // System state
   private startTime = Date.now();
@@ -145,15 +147,28 @@ export class DevBotsManager extends EventEmitter {
     this.ephemeralWorkerService = dependencies.ephemeralWorkerService;
     this.taskExecutionService = dependencies.taskExecutionService;
 
-    // Initialize SimpleFailureRecovery and TaskCompletionService with this instance
+    // Initialize SimpleFailureRecovery and PRMonitorService
     this.recovery = new SimpleFailureRecovery(this);
+    this.prMonitorService = new PRMonitorService(this.taskQueue, {
+      pollIntervalMs: 60000,  // Poll every minute
+      maxPollAttempts: 60,    // Timeout after 1 hour
+      enableAutoMerge: true   // Enable auto-merge by default
+    });
+
+    // Initialize TaskCompletionService with PR registration callback
     this.taskCompletionService = new TaskCompletionService(
       this.workspaceOrchestrator,
       this.ephemeralWorkerService,
       this.taskPersistence,
       this.pushCoordinator,
       this.emit.bind(this),
-      { enableQualityGates: true }
+      {
+        enableQualityGates: true,
+        onPRCreated: (task: Task) => {
+          // Register PR for monitoring when it's created
+          this.prMonitorService.registerPR(task);
+        }
+      }
     );
 
     // Wire recovery into task execution service

@@ -183,6 +183,14 @@ export class DevBotsDatabase {
         'utf-8'
       ));
     });
+
+    // Migration 005: PR-Based Workflow Support
+    this.applyMigration('005_pr_workflow', () => {
+      this.db.exec(fs.readFileSync(
+        path.join(__dirname, '..', '..', 'migrations', '005_pr_workflow.sql'),
+        'utf-8'
+      ));
+    });
   }
 
   private applyMigration(name: string, migration: () => void): void {
