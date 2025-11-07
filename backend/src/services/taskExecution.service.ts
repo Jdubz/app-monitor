@@ -356,13 +356,13 @@ export class TaskExecutionService {
         '-v', `${homeDir}/.codex:/tmp/host-codex:ro`,  // Mount Codex credentials
         // Mount git credentials for committing and pushing
         '-v', `${homeDir}/.gitconfig:/home/node/.gitconfig:ro`,  // Git config
-        '-v', `${homeDir}/.ssh:/home/node/.ssh:ro`,  // SSH keys for git push
+        '-v', `${homeDir}/.git-credentials:/home/node/.git-credentials:ro`,  // Git credential store
         '-v', `${homeDir}/.config/gh:/home/node/.config/gh:ro`,  // GitHub CLI auth
         this.getAgentDockerImage(agent),
         'sh', '-c',
-        // Copy credentials and run Codex
+        // Copy credentials and run Codex with full access for git operations
         `cp -r /tmp/host-codex/* /home/node/.codex/ 2>/dev/null || true && ` +
-        `codex '${promptText}'`
+        `codex --sandbox-policy danger-full-access --ask-for-approval never '${promptText}'`
       ];
       cliCommand = 'codex';
     } else {
@@ -384,7 +384,7 @@ export class TaskExecutionService {
         '-v', `${claudeCredentials}:/tmp/host-creds.json:ro`,  // Mount Claude credentials
         // Mount git credentials for committing and pushing
         '-v', `${homeDir}/.gitconfig:/home/node/.gitconfig:ro`,  // Git config
-        '-v', `${homeDir}/.ssh:/home/node/.ssh:ro`,  // SSH keys for git push
+        '-v', `${homeDir}/.git-credentials:/home/node/.git-credentials:ro`,  // Git credential store
         '-v', `${homeDir}/.config/gh:/home/node/.config/gh:ro`,  // GitHub CLI auth
         this.getAgentDockerImage(agent),
         'sh', '-c',
