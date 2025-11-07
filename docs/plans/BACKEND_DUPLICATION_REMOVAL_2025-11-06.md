@@ -41,6 +41,7 @@
   - [ ] Add a guardrail (lint/test) that fails if new JSON backups are committed after the SQLite flag flips.
 - [ ] Stabilize SQLite queue tests.
   - [x] Replace `taskQueue.sqlite.test.ts` (segfaulting integration suite) with pure metrics unit tests that exercise `summarizeAgentComparisonMetrics()` (Nov 7, 2025).
+  - [x] Treat `database.test.ts` + `tokenTracking.test.ts` as heavy suites so CI skips their better-sqlite3 dependency until we can bundle prebuilt binaries (Nov 7, 2025).
   - [ ] Re-introduce end-to-end SQLite queue coverage via a lightweight harness once we can run the service without segfaulting.
 
 ## Follow-Up & Safeguards
