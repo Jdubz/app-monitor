@@ -19,6 +19,7 @@ import { WorkspaceOrchestrator } from './workspaceOrchestrator.js';
 import { ScopeControlService } from './scopeControl.service.js';
 import { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import { TaskExecutionService } from './taskExecution.service.js';
+import { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
 
 /**
@@ -130,6 +131,13 @@ export async function createDevBotsManagerDependencies(
     }
   );
 
+  // Initialize PR workflow orchestrator
+  const prWorkflowOrchestrator = new PRWorkflowOrchestrator(taskQueue, {
+    enableAutoMerge: config.enablePRAutoMerge ?? true,
+    checkTimeoutMs: config.prCheckTimeoutMs ?? 600000,
+    monitorPollIntervalMs: config.prMonitorPollIntervalMs ?? 60000
+  });
+
   // Note: SimpleFailureRecovery and TaskCompletionService require DevBotsManager instance
   // They will be created after DevBotsManager is instantiated
   // For now, create placeholders that will be replaced
@@ -153,5 +161,6 @@ export async function createDevBotsManagerDependencies(
     ephemeralWorkerService,
     taskExecutionService,
     taskCompletionService,
+    prWorkflowOrchestrator,
   };
 }
