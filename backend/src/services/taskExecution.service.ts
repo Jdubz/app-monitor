@@ -648,6 +648,9 @@ export class TaskExecutionService {
         // Parse JSON output from Claude/Codex
         const cliOutput = JSON.parse(stdout);
 
+        // Add a small delay to ensure git operations are fully flushed to disk
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
         // Complete task in SQLite with agent type for comparison tracking
         this.taskQueue.completeTask(task.id, JSON.stringify(cliOutput), chosenAgentType);
 
@@ -676,6 +679,9 @@ export class TaskExecutionService {
           action: 'failed_to_parse_claude_output_marking_complete_anywa',
           message: `Failed to parse Claude output, marking complete anyway: ${parseError instanceof Error ? parseError.message : String(parseError)}`
         });
+
+        // Add a small delay to ensure git operations are fully flushed to disk
+        await new Promise(resolve => setTimeout(resolve, 2000));
 
         // Still complete task even if output parsing fails
         this.taskQueue.completeTask(task.id, stdout, chosenAgentType);
