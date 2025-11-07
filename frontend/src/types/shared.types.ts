@@ -1,6 +1,11 @@
 // Local type definitions (formerly from @jsdubzw/job-finder-shared-types)
 // This file replaces the external dependency with local definitions
 
+import type {
+  HealthCheckResponse as ContractHealthCheckResponse,
+  PortInfo as ContractPortInfo,
+} from '@app-monitor/api-contracts';
+
 // Log Types
 export type DevMonitorLogLevel = 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';
 
@@ -30,56 +35,14 @@ export interface Service {
   uptime?: number;
 }
 
-export interface PortStatus {
-  port: number;
-  inUse: boolean;
-  pid?: number;
-  processName?: string;
-}
-
-// Script Types
-export interface Script {
-  id: string;
-  name: string;
-  description?: string;
-  command: string;
-  args?: string[];
-  cwd?: string;
-}
-
-export interface ScriptExecution {
-  id: string;
-  scriptId: string;
-  startedAt: number;
-  completedAt?: number;
-  exitCode?: number;
-  status: 'running' | 'completed' | 'failed' | 'killed';
-  output?: string;
-  error?: string;
-}
-
-export interface ScriptExecutionSummary {
-  id: string;
-  scriptId: string;
-  scriptName: string;
-  startedAt: number;
-  completedAt?: number;
-  exitCode?: number;
-  status: 'running' | 'completed' | 'failed' | 'killed';
-  duration?: number;
-}
+export type PortStatus = ContractPortInfo & {
+  processName?: string | null;
+  command?: string | null;
+  startTime?: string | null;
+};
 
 // Health Check Types
-export interface HealthCheckResponse {
-  status: 'healthy' | 'unhealthy';
-  timestamp: number;
-  checks: {
-    [key: string]: {
-      status: 'pass' | 'fail';
-      message?: string;
-    };
-  };
-}
+export type HealthCheckResponse = ContractHealthCheckResponse;
 
 // Panel Types
 export type PanelLayoutType =

@@ -1,7 +1,8 @@
 import { Router, Request, Response } from 'express';
-import { getPortInfo, killPortProcess, PortInfo } from '../utils/portManager.js';
+import { getPortInfo, killPortProcess } from '../utils/portManager.js';
 import { ServiceConfig } from '../config.js';
 import { logger } from '../utils/logger.js';
+import type { PortStatusMap, PortKillResponse } from '@app-monitor/api-contracts';
 
 export interface PortsRoutesDependencies {
   services: Record<string, ServiceConfig>;
@@ -14,7 +15,7 @@ export function createPortsRoutes(deps: PortsRoutesDependencies): Router {
   // Get port status for all configured services
   router.get('/status', async (_req: Request, res: Response) => {
     try {
-      const portStatuses: Record<string, PortInfo[]> = {};
+      const portStatuses: PortStatusMap = {};
 
       for (const [serviceName, serviceConfig] of Object.entries(services)) {
         if (serviceConfig.ports && serviceConfig.ports.length > 0) {
@@ -64,26 +65,30 @@ export function createPortsRoutes(deps: PortsRoutesDependencies): Router {
       const info = await getPortInfo(port);
 
       if (!info.inUse) {
-        res.json({
+        const payload: PortKillResponse = {
           success: true,
-          message: `Port ${port} is not in use`,
+          message: 'Port ' + port + ' is not in use',
           port,
+          pid: info.pid ?? null,
           wasInUse: false,
-        });
+        };
+        res.json(payload);
         return;
       }
 
       const killed = await killPortProcess(port);
 
-      res.json({
+      const payload: PortKillResponse = {
         success: killed,
         message: killed
-          ? `Process on port ${port} (PID: ${info.pid}) killed successfully`
-          : `Failed to kill process on port ${port}`,
+          ? 'Process on port ' + port + ' (PID: ' + info.pid + ') killed successfully'
+          : 'Failed to kill process on port ' + port,
         port,
-        pid: info.pid,
+        pid: info.pid ?? null,
         wasInUse: true,
-      });
+      };
+
+      res.json(payload);
     } catch (error) {
       logger.error({
         category: 'api',

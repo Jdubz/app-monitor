@@ -6,6 +6,11 @@ import type {
   LogHistory,
   LocalService,
 } from './shared.types';
+import type {
+  EnvironmentDefinition,
+  CloudService as SharedCloudService,
+  CloudLoggingStatus as SharedCloudLoggingStatus,
+} from '@app-monitor/api-contracts';
 
 // Re-export all types
 export type { DevMonitorLogLine, DevMonitorLogLevel, LogHistory, LocalService };
@@ -48,20 +53,8 @@ export interface CloudLogHistory {
   logs: ParsedCloudLog[];
 }
 
-export interface Environment {
-  name: string;
-  displayName: string;
-  projectId: string;
-  services: CloudService[];
-}
+export type Environment = EnvironmentDefinition;
 
-export interface CloudService {
-  name: string;
-  displayName: string;
-  logFilter?: string;
-}
+export type CloudService = SharedCloudService;
 
-export interface CloudLoggingStatus {
-  available: boolean;
-  message: string;
-}
+export type CloudLoggingStatus = SharedCloudLoggingStatus;

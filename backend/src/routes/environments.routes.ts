@@ -1,6 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { CloudLogging } from '../services/cloudLogging.js';
 import { logger } from '../utils/logger.js';
+import type {
+  EnvironmentsResponse,
+  EnvironmentServicesResponse,
+} from '@app-monitor/api-contracts';
 
 export interface EnvironmentsRoutesDependencies {
   cloudLogging: CloudLogging;
@@ -13,7 +17,7 @@ export function createEnvironmentsRoutes(deps: EnvironmentsRoutesDependencies): 
   // Get available environments
   router.get('/', (_req: Request, res: Response) => {
     try {
-      const environments = cloudLogging.getEnvironments();
+      const environments: EnvironmentsResponse = cloudLogging.getEnvironments();
       res.json(environments);
     } catch (error) {
       logger.error({
@@ -33,7 +37,7 @@ export function createEnvironmentsRoutes(deps: EnvironmentsRoutesDependencies): 
   router.get('/:environment/services', (req: Request, res: Response) => {
     try {
       const { environment } = req.params;
-      const services = cloudLogging.getServicesForEnvironment(environment);
+      const services: EnvironmentServicesResponse = cloudLogging.getServicesForEnvironment(environment);
       res.json(services);
     } catch (error) {
       logger.error({

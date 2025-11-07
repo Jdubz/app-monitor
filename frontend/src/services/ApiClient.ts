@@ -22,7 +22,7 @@ export interface ApiError {
 export class ApiClient {
   private client: AxiosInstance;
 
-  constructor(baseURL: string = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5174') {
+  constructor(baseURL: string = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000') {
     const fullBaseURL = `${baseURL}/api`;
     console.log('[ApiClient] Initializing with base URL:', fullBaseURL);
     console.log('[ApiClient] VITE_API_BASE_URL env var:', import.meta.env.VITE_API_BASE_URL);

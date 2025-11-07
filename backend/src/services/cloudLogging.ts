@@ -1,6 +1,10 @@
 import { Logging, Entry } from '@google-cloud/logging';
 import { logger } from '../utils/logger.js';
-import { config, environments, CloudServiceConfig } from '../config.js';
+import { config, environments } from '../config.js';
+import type {
+  EnvironmentsResponse,
+  EnvironmentServicesResponse,
+} from '@app-monitor/api-contracts';
 import * as fs from 'fs';
 
 export interface ParsedCloudLog {
@@ -368,14 +372,14 @@ export class CloudLogging {
   /**
    * Get available environments
    */
-  getEnvironments(): typeof environments {
+  getEnvironments(): EnvironmentsResponse {
     return environments;
   }
 
   /**
    * Get services for a specific environment
    */
-  getServicesForEnvironment(environmentName: string): CloudServiceConfig[] {
+  getServicesForEnvironment(environmentName: string): EnvironmentServicesResponse {
     const environment = environments[environmentName];
     if (!environment) {
       throw new Error(`Environment "${environmentName}" not found`);

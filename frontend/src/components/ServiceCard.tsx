@@ -13,12 +13,7 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
-
-interface PortInfo {
-  port: number;
-  pid: number | null;
-  inUse: boolean;
-}
+import type { PortInfo } from '@app-monitor/api-contracts';
 
 interface ServiceCardProps {
   service: ProcessInfo;

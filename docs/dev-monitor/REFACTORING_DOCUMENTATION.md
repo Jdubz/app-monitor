@@ -489,6 +489,8 @@ The dev-monitor is a development tool for managing the job-finder-app-manager mo
 - No security considerations (not critical for dev tool)
 - Output handling basic
 
+> **2025-11-07 Update:** The Script Runner UI, routes, and supporting services have been fully removed from both the frontend and backend. This section remains for historical context only. See docs/plans/BACKEND_DUPLICATION_REMOVAL_2025-11-06.md for the decommission checklist.
+
 **Action Items**:
 1. **Script Runner Service**
    ```typescript

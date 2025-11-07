@@ -1,13 +1,10 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import type { PortInfo as ContractPortInfo } from '@app-monitor/api-contracts';
 
 export const execAsync = promisify(exec);
 
-export interface PortInfo {
-  port: number;
-  pid: number | null;
-  inUse: boolean;
-}
+export type PortInfo = ContractPortInfo;
 
 /**
  * Check if a port is in use

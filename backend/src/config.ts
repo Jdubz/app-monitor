@@ -1,6 +1,7 @@
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
+import type { CloudService, EnvironmentDefinition } from '@app-monitor/api-contracts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -89,20 +90,11 @@ export const services: Record<string, ServiceConfig> = {
 };
 
 // Cloud environment configurations
-export interface EnvironmentConfig {
-  name: string;
-  displayName: string;
-  projectId: string;
-  services: CloudServiceConfig[];
+export interface EnvironmentConfig extends EnvironmentDefinition {
   readOnly: boolean;
 }
 
-export interface CloudServiceConfig {
-  name: string;
-  displayName: string;
-  description: string;
-  logFilter?: string; // Cloud Logging filter
-}
+export interface CloudServiceConfig extends CloudService {}
 
 export const environments: Record<string, EnvironmentConfig> = {
   local: {
