@@ -269,9 +269,23 @@ export function buildCLICommand(tool: CLITool, flags: CLIFlags, prompt: string):
 }
 
 /**
- * Validate CLI flags for the specified tool
+ * CLI Flag Compatibility guard.
  *
- * Throws an error if incompatible flags are used
+ * Part of the CLI Flag Compatibility architecture pattern, this helper enforces
+ * the contract between conceptual flags and the actual Claude/Codex CLIs before
+ * we attempt to build argument lists. It prevents dev-bots from mixing sandbox
+ * semantics across tools (for example, Codex uses `--sandbox` while Claude uses
+ * `--permission-mode`) and fails fast when unsupported approval policies are
+ * provided.
+ *
+ * Call this before `buildCLIArgs`/`buildCLICommand` so we surface actionable
+ * errors at configuration time instead of letting the downstream CLI reject the
+ * invocation.
+ *
+ * @param {CLITool} tool Identifier of the CLI tool we are targeting (`claude` or `codex`)
+ * @param {CLIFlags} flags Conceptual flag set that should be validated against the target CLI
+ * @throws {Error} When a flag is not supported by the specified CLI tool
+ * @see docs/plans/CONTEXT_BLOB_PRELOADING.md (CLI Flag Compatibility pattern)
  */
 export function validateCLIFlags(tool: CLITool, flags: CLIFlags): void {
   if (tool === 'codex') {
