@@ -227,9 +227,18 @@ export function createMockRetryManager(): RetryManager {
   const mock = new EventEmitter() as any;
   mock.on = vi.fn().mockReturnThis();
   mock.emit = vi.fn();
-  mock.shouldRetry = vi.fn().mockReturnValue(true);
-  mock.scheduleRetry = vi.fn();
-  mock.cancelRetry = vi.fn();
+  mock.canRetryTask = vi.fn().mockReturnValue(true);
+  mock.retryTask = vi.fn().mockImplementation((task: any) => ({
+    success: true,
+    task: { ...task, status: 'pending' },
+    retryAttempt: { attemptNumber: 1, timestamp: new Date().toISOString(), reason: 'Manual retry' }
+  }));
+  mock.getRetryHistory = vi.fn().mockReturnValue([]);
+  mock.getRetryStats = vi.fn().mockReturnValue({ totalRetries: 0, successfulRetries: 0, failedRetries: 0 });
+  mock.updateConfig = vi.fn();
+  mock.clearRetryHistory = vi.fn();
+  mock.clearAllRetries = vi.fn();
+  mock.getConfig = vi.fn().mockReturnValue({ max_retries: 3 });
   return mock as RetryManager;
 }
 

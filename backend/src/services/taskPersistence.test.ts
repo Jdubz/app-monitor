@@ -440,22 +440,32 @@ describe('TaskPersistence', () => {
           type: 'feature',
           title: 'Old Task',
           documentation: 'Test documentation',
-          acceptanceCriteria: ['Test criteria'],
+          acceptance_criteria: ['Test criteria'],
           status: 'completed',
-          createdAt: oldDate,
-          updatedAt: oldDate,
-          completedAt: oldDate
+          created_at: oldDate,
+          completed_at: oldDate,
+          assigned_agent: 'test-agent',
+          priority: 5,
+          can_retry: true,
+          retry_count: 0,
+          max_retries: 3,
+          timeout_ms: null
         },
         {
           id: 'recent-task',
           type: 'feature',
           title: 'Recent Task',
           documentation: 'Test documentation',
-          acceptanceCriteria: ['Test criteria'],
+          acceptance_criteria: ['Test criteria'],
           status: 'completed',
-          createdAt: recentDate,
-          updatedAt: recentDate,
-          completedAt: recentDate
+          created_at: recentDate,
+          completed_at: recentDate,
+          assigned_agent: 'test-agent',
+          priority: 5,
+          can_retry: true,
+          retry_count: 0,
+          max_retries: 3,
+          timeout_ms: null
         }
       ];
 

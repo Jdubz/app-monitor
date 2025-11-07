@@ -2,81 +2,28 @@
  * Tests for Manual Retry Button Functionality
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DevBotsManager } from './devBotsManager.js';
-import { ProcessManager } from './processManager.js';
-import { Task } from './devBotsManager.js';
-
-// Mock dependencies
-vi.mock('./processManager.js');
-vi.mock('./dockerManager.js');
-vi.mock('./taskPersistence.js');
-vi.mock('./agentPersonalities.js');
-vi.mock('./taskPromptTemplates.js');
-vi.mock('./taskCreationGuidelines.js');
-vi.mock('./workspaceSyncManager.js');
-vi.mock('./retryManager.js', () => ({
-  RetryManager: vi.fn().mockImplementation(() => ({
-    canRetryTask: vi.fn().mockReturnValue(true),
-    retryTask: vi.fn().mockReturnValue({
-      success: true,
-      task: { id: 'test-task-1', status: 'pending' },
-      retryAttempt: { attemptNumber: 1, timestamp: new Date().toISOString(), reason: 'Manual retry' }
-    }),
-    getRetryHistory: vi.fn().mockReturnValue([]),
-    getRetryStats: vi.fn().mockReturnValue({ totalRetries: 0, successfulRetries: 0, failedRetries: 0 }),
-    updateConfig: vi.fn(),
-    getConfig: vi.fn().mockReturnValue({ maxRetries: 3 }),
-    clearRetryHistory: vi.fn(),
-    clearAllRetries: vi.fn(),
-    on: vi.fn(),
-    emit: vi.fn(),
-    removeListener: vi.fn()
-  }))
-}));
-vi.mock('../utils/logger.js', () => ({
-  logger: {
-    info: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn()
-  }
-}));
+import { Task } from './taskQueue.sqlite.js';
+import { createMockDevBotsManagerDependencies } from './devBotsManager.mocks.js';
+import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
 
 describe('Retry Button Functionality', () => {
   let manager: DevBotsManager;
-  let mockProcessManager: ProcessManager;
-  let initializeSpy: ReturnType<typeof vi.spyOn>;
+  let dependencies: DevBotsManagerDependencies;
 
   beforeEach(() => {
-    mockProcessManager = new ProcessManager();
-    initializeSpy = vi
-      .spyOn(DevBotsManager.prototype as any, 'initializeEnhancedServices')
-      .mockImplementation(async function () {
-        (this as any).taskQueue = [];
-        (this as any).completedTasks = [];
-        (this as any).retryManager = {
-          canRetryTask: vi.fn().mockReturnValue(true),
-          retryTask: vi.fn().mockImplementation((task: Task) => ({
-            success: true,
-            task: { ...task, status: 'pending' },
-            retryAttempt: { attemptNumber: 1, timestamp: new Date().toISOString(), reason: 'Manual retry' },
-          })),
-          getRetryHistory: vi.fn().mockReturnValue([]),
-          getRetryStats: vi.fn().mockReturnValue({ totalRetries: 0, successfulRetries: 0, failedRetries: 0 }),
-          updateConfig: vi.fn(),
-          getConfig: vi.fn().mockReturnValue({ maxRetries: 3 }),
-          clearRetryHistory: vi.fn(),
-          clearAllRetries: vi.fn(),
-          on: vi.fn(),
-          emit: vi.fn(),
-          removeListener: vi.fn(),
-        };
-      });
-    manager = new DevBotsManager(mockProcessManager);
-  });
+    dependencies = createMockDevBotsManagerDependencies();
 
-  afterEach(() => {
-    initializeSpy?.mockRestore();
+    // Configure retryManager mock for these tests
+    vi.mocked(dependencies.retryManager.canRetryTask).mockReturnValue(true);
+    vi.mocked(dependencies.retryManager.retryTask).mockImplementation((task: Task) => ({
+      success: true,
+      task: { ...task, status: 'pending' },
+      retryAttempt: { attemptNumber: 1, timestamp: new Date().toISOString(), reason: 'Manual retry' },
+    }));
+
+    manager = new DevBotsManager(dependencies);
   });
 
   describe('Failed Task Retry', () => {
@@ -84,113 +31,119 @@ describe('Retry Button Functionality', () => {
       const task: Task = {
         id: 'test-task-1',
         type: 'test',
-          title: 'Test task',
+        title: 'Test task',
         description: 'Test task',
         status: 'failed',
-        createdAt: new Date().toISOString(),
-        assignedAgent: 'test-agent',
+        created_at: Date.now(),
+        assigned_agent: 'test-agent',
         error: 'Test error',
-        exitCode: 1,
-        completedAt: new Date().toISOString(),
-        canRetry: true // Set canRetry explicitly for the test
+        completed_at: Date.now(),
+        can_retry: true, // Set can_retry explicitly for the test
+        retry_count: 0,
+        max_retries: 3,
+        priority: 5,
+        timeout_ms: null
       };
 
-      // Simulate task failure
-      (manager as any).completedTasks = [task];
-      
-      // Check that canRetry is set to true
-      expect(task.canRetry).toBe(true);
+      // Check that can_retry is set to true
+      expect(task.can_retry).toBe(true);
     });
 
     it('should allow retry of failed tasks', async () => {
       const task: Task = {
         id: 'test-task-1',
         type: 'test',
-          title: 'Test task',
+        title: 'Test task',
         description: 'Test task',
         status: 'failed',
-        createdAt: new Date().toISOString(),
-        assignedAgent: 'test-agent',
+        created_at: Date.now(),
+        assigned_agent: 'test-agent',
         error: 'Test error',
-        exitCode: 1,
-        completedAt: new Date().toISOString(),
-        canRetry: true
+        completed_at: Date.now(),
+        can_retry: true,
+        retry_count: 0,
+        max_retries: 3,
+        priority: 5,
+        timeout_ms: null
       };
 
-      (manager as any).completedTasks = [task];
-      (manager as any).taskQueue = [];
+      // Mock taskQueue to return the failed task
+      vi.mocked(dependencies.taskQueue.getTask).mockReturnValue(task);
 
       const result = await manager.retryTask(task.id, 'Manual retry');
-      
+
       expect(result.success).toBe(true);
       expect(result.message).toBe('Task queued for retry');
-      
-      // Task should be removed from completed tasks
-      expect((manager as any).completedTasks).toHaveLength(0);
-      
-      // Task should be added to queue
-      expect((manager as any).taskQueue).toHaveLength(1);
-      expect((manager as any).taskQueue[0].id).toBe(task.id);
-      expect((manager as any).taskQueue[0].status).toBe('pending');
+
+      // Verify taskQueue.getTask was called
+      expect(dependencies.taskQueue.getTask).toHaveBeenCalledWith(task.id);
+
+      // Verify taskQueue.updateTask was called with the retried task
+      expect(dependencies.taskQueue.updateTask).toHaveBeenCalled();
     });
 
     it('should not allow retry of non-failed tasks', async () => {
       const task: Task = {
         id: 'test-task-1',
         type: 'test',
-          title: 'Test task',
+        title: 'Test task',
         description: 'Test task',
         status: 'completed',
-        createdAt: new Date().toISOString(),
-        assignedAgent: 'test-agent',
-        completedAt: new Date().toISOString()
+        created_at: Date.now(),
+        assigned_agent: 'test-agent',
+        completed_at: Date.now(),
+        can_retry: true,
+        retry_count: 0,
+        max_retries: 3,
+        priority: 5,
+        timeout_ms: null
       };
 
-      (manager as any).completedTasks = [task];
+      // Mock taskQueue to return the completed task
+      vi.mocked(dependencies.taskQueue.getTask).mockReturnValue(task);
 
       const result = await manager.retryTask(task.id, 'Manual retry');
-      
+
       expect(result.success).toBe(false);
       expect(result.message).toBe('Task is not in failed status');
     });
 
     it('should not allow retry of non-existent tasks', async () => {
+      // Mock taskQueue to return undefined (task not found)
+      vi.mocked(dependencies.taskQueue.getTask).mockReturnValue(null);
+
       const result = await manager.retryTask('non-existent-task', 'Manual retry');
-      
+
       expect(result.success).toBe(false);
-      expect(result.message).toBe('Task not found in completed tasks');
+      expect(result.message).toBe('Task not found');
     });
 
     it('should handle retry when max retries exceeded', async () => {
       const task: Task = {
         id: 'test-task-1',
         type: 'test',
-          title: 'Test task',
+        title: 'Test task',
         description: 'Test task',
         status: 'failed',
-        createdAt: new Date().toISOString(),
-        assignedAgent: 'test-agent',
+        created_at: Date.now(),
+        assigned_agent: 'test-agent',
         error: 'Test error',
-        exitCode: 1,
-        completedAt: new Date().toISOString(),
-        canRetry: true,
-        retryCount: 3,
-        maxRetries: 3
+        completed_at: Date.now(),
+        can_retry: true,
+        retry_count: 3,
+        max_retries: 3,
+        priority: 5,
+        timeout_ms: null
       };
 
-      (manager as any).completedTasks = [task];
+      // Mock taskQueue to return the task
+      vi.mocked(dependencies.taskQueue.getTask).mockReturnValue(task);
 
       // Mock the retryManager to return false for this specific case
-      const mockRetryManager = (manager as any).retryManager;
-      mockRetryManager.canRetryTask.mockReturnValueOnce(false);
-      mockRetryManager.retryTask.mockReturnValueOnce({
-        success: false,
-        task,
-        reason: 'Task cannot be retried'
-      });
+      vi.mocked(dependencies.retryManager.canRetryTask).mockReturnValueOnce(false);
 
       const result = await manager.retryTask(task.id, 'Manual retry');
-      
+
       expect(result.success).toBe(false);
       expect(result.message).toBe('Task cannot be retried');
     });
@@ -201,15 +154,18 @@ describe('Retry Button Functionality', () => {
       const task: Task = {
         id: 'test-task-1',
         type: 'test',
-          title: 'Test task',
+        title: 'Test task',
         description: 'Test task',
         status: 'failed',
-        createdAt: new Date().toISOString(),
-        assignedAgent: 'test-agent',
+        created_at: Date.now(),
+        assigned_agent: 'test-agent',
         error: 'Test error',
-        exitCode: 1,
-        completedAt: new Date().toISOString(),
-        canRetry: true
+        completed_at: Date.now(),
+        can_retry: true,
+        retry_count: 0,
+        max_retries: 3,
+        priority: 5,
+        timeout_ms: null
       };
 
       // Frontend logic: show retry button if status === 'failed'
@@ -221,12 +177,17 @@ describe('Retry Button Functionality', () => {
       const task: Task = {
         id: 'test-task-1',
         type: 'test',
-          title: 'Test task',
+        title: 'Test task',
         description: 'Test task',
         status: 'completed',
-        createdAt: new Date().toISOString(),
-        assignedAgent: 'test-agent',
-        completedAt: new Date().toISOString()
+        created_at: Date.now(),
+        assigned_agent: 'test-agent',
+        completed_at: Date.now(),
+        can_retry: true,
+        retry_count: 0,
+        max_retries: 3,
+        priority: 5,
+        timeout_ms: null
       };
 
       // Frontend logic: show retry button if status === 'failed'
@@ -238,12 +199,17 @@ describe('Retry Button Functionality', () => {
       const task: Task = {
         id: 'test-task-1',
         type: 'test',
-          title: 'Test task',
+        title: 'Test task',
         description: 'Test task',
-        status: 'active',
-        createdAt: new Date().toISOString(),
-        assignedAgent: 'test-agent',
-        assignedAt: new Date().toISOString()
+        status: 'running',
+        created_at: Date.now(),
+        assigned_agent: 'test-agent',
+        assigned_at: Date.now(),
+        can_retry: true,
+        retry_count: 0,
+        max_retries: 3,
+        priority: 5,
+        timeout_ms: null
       };
 
       // Frontend logic: show retry button if status === 'failed'
@@ -257,23 +223,26 @@ describe('Retry Button Functionality', () => {
       const task: Task = {
         id: 'test-task-1',
         type: 'test',
-          title: 'Test task',
+        title: 'Test task',
         description: 'Test task',
         status: 'failed',
-        createdAt: new Date().toISOString(),
-        assignedAgent: 'test-agent',
+        created_at: Date.now(),
+        assigned_agent: 'test-agent',
         error: 'Test error',
-        exitCode: 1,
-        completedAt: new Date().toISOString(),
-        canRetry: true
+        completed_at: Date.now(),
+        can_retry: true,
+        retry_count: 0,
+        max_retries: 3,
+        priority: 5,
+        timeout_ms: null
       };
 
-      (manager as any).completedTasks = [task];
-      (manager as any).taskQueue = [];
+      // Mock taskQueue to return the failed task
+      vi.mocked(dependencies.taskQueue.getTask).mockReturnValue(task);
 
       // Simulate API call
       const result = await manager.retryTask(task.id);
-      
+
       expect(result.success).toBe(true);
       expect(result.message).toBe('Task queued for retry');
     });
@@ -282,23 +251,26 @@ describe('Retry Button Functionality', () => {
       const task: Task = {
         id: 'test-task-1',
         type: 'test',
-          title: 'Test task',
+        title: 'Test task',
         description: 'Test task',
         status: 'failed',
-        createdAt: new Date().toISOString(),
-        assignedAgent: 'test-agent',
+        created_at: Date.now(),
+        assigned_agent: 'test-agent',
         error: 'Test error',
-        exitCode: 1,
-        completedAt: new Date().toISOString(),
-        canRetry: true
+        completed_at: Date.now(),
+        can_retry: true,
+        retry_count: 0,
+        max_retries: 3,
+        priority: 5,
+        timeout_ms: null
       };
 
-      (manager as any).completedTasks = [task];
-      (manager as any).taskQueue = [];
+      // Mock taskQueue to return the failed task
+      vi.mocked(dependencies.taskQueue.getTask).mockReturnValue(task);
 
       // Simulate API call with reason
       const result = await manager.retryTask(task.id, 'User requested retry');
-      
+
       expect(result.success).toBe(true);
       expect(result.message).toBe('Task queued for retry');
     });
