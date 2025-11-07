@@ -406,17 +406,20 @@ The following approaches were evaluated and NOT chosen for specific reasons:
 # Navigate to project directory
 cd {{repository}}
 
-# ALWAYS start from staging branch
-git checkout staging
+# ALWAYS start from main branch (for PR-based workflow)
+git checkout main
 
-# ALWAYS pull latest changes
-git pull origin staging
+# ALWAYS pull latest changes to avoid duplicate work
+git pull origin main
 
-# Work directly on staging branch
-# NO feature branches needed for worker tasks
+# Fetch all branches to check for conflicts
+git fetch --all
+
+# You will create a feature branch in Step 4 after making changes
+# This ensures you're always starting from the latest main
 \`\`\`
 
-**CRITICAL:** Never skip \`git pull origin staging\` - you must have the latest code!
+**CRITICAL:** Never skip \`git pull origin main\` - you must have the latest code to avoid duplicate work!
 
 ### Step 2: Implementation
 Work on the task according to the acceptance criteria and technical requirements.
@@ -622,9 +625,62 @@ npm run build
 **CRITICAL: You MUST create a Pull Request to main, NOT push to staging!**
 
 \`\`\`bash
+# Step 4.0: Sync with Latest Main (CRITICAL - Prevents Duplicate Work)
+echo "Syncing with latest main to avoid duplicate work..."
+git fetch origin main
+
+# Check how far behind main we are
+BEHIND_COUNT=$(git rev-list --count HEAD..origin/main 2>/dev/null || echo "0")
+
+if [ "$BEHIND_COUNT" -gt 0 ]; then
+  echo "⚠️  WARNING: main is $BEHIND_COUNT commits ahead since you started"
+  echo "This means other PRs may have been merged while you were working"
+
+  # Check for potential duplicate work
+  CHANGED_FILES=$(git diff --name-only HEAD)
+  DUPLICATE_WORK_DETECTED=false
+
+  for file in $CHANGED_FILES; do
+    if git diff HEAD..origin/main --quiet -- "$file" 2>/dev/null; then
+      :  # File not modified in main, OK
+    else
+      echo "⚠️  File $file was also modified in main - potential duplicate work"
+      DUPLICATE_WORK_DETECTED=true
+    fi
+  done
+
+  if [ "$DUPLICATE_WORK_DETECTED" = "true" ]; then
+    echo ""
+    echo "⚠️  DUPLICATE WORK WARNING"
+    echo "Some files you modified were also changed in main."
+    echo "This will be flagged in the PR description for review."
+    echo ""
+  fi
+
+  # Try to rebase onto latest main to incorporate new changes
+  echo "Attempting to rebase onto latest main..."
+  if git rebase origin/main; then
+    echo "✅ Successfully rebased onto latest main"
+    REBASE_FAILED=false
+  else
+    echo "❌ Rebase failed - conflicts detected"
+    echo "Aborting rebase. Will create PR with conflict markers for review."
+    git rebase --abort
+    REBASE_FAILED=true
+  fi
+else
+  echo "✅ Your branch is up to date with main"
+  REBASE_FAILED=false
+  DUPLICATE_WORK_DETECTED=false
+fi
+
 # Step 4.1: Create Feature Branch
-# Branch naming: task-{type}-{short-id}
-BRANCH_NAME="task-{{task.type}}-{{task.id}}"
+# Extract short UUID from task ID (last 8 chars of UUID)
+TASK_ID="{{task.id}}"
+SHORT_ID="${TASK_ID##*-}"  # Gets last segment after final dash
+BRANCH_NAME="task-{{task.type}}-${SHORT_ID}"
+
+echo "Creating feature branch: $BRANCH_NAME"
 git checkout -b "$BRANCH_NAME"
 
 # Step 4.2: Stage and Commit Changes
@@ -656,17 +712,41 @@ git log --oneline -1
 git status
 
 # Step 4.4: Create Pull Request to main
+
+# Build PR description with warnings if needed
+PR_WARNINGS=""
+if [ "$REBASE_FAILED" = "true" ]; then
+  PR_WARNINGS="${PR_WARNINGS}
+
+⚠️ **REBASE CONFLICT DETECTED**
+- Branch could not be rebased onto latest main
+- Manual conflict resolution may be needed
+- Review carefully for duplicate work or merge conflicts
+"
+fi
+
+if [ "$DUPLICATE_WORK_DETECTED" = "true" ]; then
+  PR_WARNINGS="${PR_WARNINGS}
+
+⚠️ **DUPLICATE WORK WARNING**
+- Some files were modified both in this branch AND in main since work started
+- This may indicate overlapping changes or fixes
+- Carefully review for redundant or conflicting changes
+"
+fi
+
 gh pr create \\
   --base main \\
   --head "$BRANCH_NAME" \\
   --title "{{task.type}}: {{task.title}}" \\
-  --body "$(cat <<'EOF'
+  --body "$(cat <<EOF
 ## 🎯 Task Overview
 **Task ID:** {{task.id}}
 **Type:** {{task.type}}
 
 ## 📋 Description
 {{task.description}}
+${PR_WARNINGS}
 
 ## ✅ Acceptance Criteria
 The following requirements must be satisfied for this PR to be approved:
