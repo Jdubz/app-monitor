@@ -631,7 +631,7 @@ echo "Syncing with latest main to avoid duplicate work..."
 git fetch origin main
 
 # Check how far behind main we are
-BEHIND_COUNT=$$(git rev-list --count HEAD..origin/main 2>/dev/zero || echo "0")
+BEHIND_COUNT=$$(git rev-list --count HEAD..origin/main 2>/dev/null || echo "0")
 
 if [ "${'$'}BEHIND_COUNT" -gt 0 ]; then
   echo "⚠️  WARNING: main is ${'$'}BEHIND_COUNT commits ahead since you started"
@@ -642,10 +642,10 @@ if [ "${'$'}BEHIND_COUNT" -gt 0 ]; then
   DUPLICATE_WORK_DETECTED=false
 
   for file in ${'$'}CHANGED_FILES; do
-  if git diff HEAD..origin/main --quiet -- "$$file" 2>/dev/zero; then
+    if git diff HEAD..origin/main --quiet -- "${'$'}file" 2>/dev/null; then
       :  # File not modified in main, OK
     else
-      echo "⚠️  File $$file was also modified in main - potential duplicate work"
+      echo "⚠️  File ${'$'}file was also modified in main - potential duplicate work"
       DUPLICATE_WORK_DETECTED=true
     fi
   done
@@ -678,7 +678,7 @@ fi
 # Step 4.1: Create Feature Branch
 # Extract short UUID from task ID (last 8 chars of UUID)
 TASK_ID="{{task.id}}"
-SHORT_ID="${'$'}{TASK_ID${'##'}*-}"  # Gets last segment after final dash
+SHORT_ID="${'$'}{TASK_ID##*-}"  # Gets last segment after final dash
 BRANCH_NAME="task-{{task.type}}-${'$'}{SHORT_ID}"
 
 echo "Creating feature branch: ${'$'}BRANCH_NAME"
