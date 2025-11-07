@@ -22,6 +22,7 @@ import type { ScopeControlService } from './scopeControl.service.js';
 import type { EphemeralWorkerService, EphemeralWorker as EphemeralWorkerType } from './ephemeralWorker.service.js';
 import type { TaskExecutionService } from './taskExecution.service.js';
 import { TaskCompletionService } from './taskCompletion.service.js';
+import { PRMonitorService } from './prMonitor.service.js';
 
 export interface RetryAttempt {
   attemptNumber: number;
@@ -122,6 +123,7 @@ export class DevBotsManager extends EventEmitter {
   private ephemeralWorkerService!: EphemeralWorkerService;
   private taskExecutionService!: TaskExecutionService;
   private taskCompletionService!: TaskCompletionService;
+  private prMonitorService!: PRMonitorService;
 
   // System state
   private startTime = Date.now();
@@ -145,16 +147,32 @@ export class DevBotsManager extends EventEmitter {
     this.ephemeralWorkerService = dependencies.ephemeralWorkerService;
     this.taskExecutionService = dependencies.taskExecutionService;
 
-    // Initialize SimpleFailureRecovery and TaskCompletionService with this instance
+    // Initialize SimpleFailureRecovery and PRMonitorService
     this.recovery = new SimpleFailureRecovery(this);
+    this.prMonitorService = new PRMonitorService(this.taskQueue, {
+      pollIntervalMs: 60000,  // Poll every minute
+      maxPollAttempts: 60,    // Timeout after 1 hour
+      enableAutoMerge: true   // Enable auto-merge by default
+    });
+
+    // Initialize TaskCompletionService with PR registration callback
     this.taskCompletionService = new TaskCompletionService(
       this.workspaceOrchestrator,
       this.ephemeralWorkerService,
       this.taskPersistence,
       this.pushCoordinator,
       this.emit.bind(this),
-      { enableQualityGates: true }
+      {
+        enableQualityGates: true,
+        onPRCreated: (task: Task) => {
+          // Register PR for monitoring when it's created
+          this.prMonitorService.registerPR(task);
+        }
+      }
     );
+
+    // Wire recovery into task execution service
+    this.taskExecutionService.setRecovery(this.recovery);
 
     // Validate Docker environment and initialize
     this.initializeDockerEnvironment();
@@ -414,6 +432,90 @@ export class DevBotsManager extends EventEmitter {
             // Force kill any Docker containers for this task
             await this.ephemeralWorkerService.cleanupStuckTaskContainers(task.id);
 
+            // Get full task details to check for error
+            const fullTask = this.taskQueue.getTask(task.id);
+            if (!fullTask) {
+              logger.warn({
+                category: 'process',
+                action: 'stuck_task_not_found',
+                message: `Stuck task ${task.id} not found in database`
+              });
+              continue;
+            }
+
+            // Check if task has an existing error that indicates a failure pattern
+            // This handles cases where task failed but got stuck in "running" state
+            const taskError = fullTask.error || '';
+            const { detectFailurePattern } = await import('./taskFailureGuards.js');
+            const failurePattern = detectFailurePattern(taskError, '', 0);
+
+            if (failurePattern) {
+              logger.info({
+                category: 'recovery',
+                action: 'stuck_task_has_failure_pattern',
+                message: `Stuck task ${task.id} has detectable failure pattern: ${failurePattern.name}`,
+                details: {
+                  taskId: task.id,
+                  pattern: failurePattern.name,
+                  category: failurePattern.category
+                }
+              });
+
+              // Attempt recovery if enabled
+              const { config } = await import('../config.js');
+              if (config.recovery.enabled && this.recovery) {
+                if (config.recovery.dryRun) {
+                  logger.info({
+                    category: 'recovery',
+                    action: 'dry_run_would_attempt_recovery_for_stuck_task',
+                    message: `[DRY RUN] Would attempt automatic recovery for stuck task ${task.id}`,
+                    details: {
+                      taskId: task.id,
+                      taskTitle: task.title,
+                      failurePattern: failurePattern.name,
+                      category: failurePattern.category,
+                      suggestedFix: failurePattern.suggestedFix,
+                      stuckDuration_minutes: Math.round(task.duration_ms / 60000)
+                    }
+                  });
+                } else {
+                  // Actually attempt recovery
+                  try {
+                    const recoveryResult = await this.recovery.attemptRecovery({
+                      task: fullTask as any,
+                      failurePattern,
+                      stderr: taskError,
+                      stdout: '',
+                      exitCode: 0
+                    });
+
+                    if (recoveryResult.recovered) {
+                      logger.info({
+                        category: 'recovery',
+                        action: 'recovery_initiated_for_stuck_task',
+                        message: `Initiated automatic recovery for stuck task ${task.id}`,
+                        details: {
+                          taskId: task.id,
+                          cleanupTaskId: recoveryResult.cleanupTaskId,
+                          failurePattern: failurePattern.name
+                        }
+                      });
+                    }
+                  } catch (recoveryError) {
+                    logger.error({
+                      category: 'recovery',
+                      action: 'recovery_attempt_failed_for_stuck_task',
+                      message: `Failed to attempt recovery for stuck task ${task.id}: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`,
+                      details: {
+                        taskId: task.id,
+                        error: recoveryError instanceof Error ? recoveryError.message : String(recoveryError)
+                      }
+                    });
+                  }
+                }
+              }
+            }
+
             // Mark task as failed in database
             this.taskQueue.failTask(
               task.id,
@@ -427,7 +529,8 @@ export class DevBotsManager extends EventEmitter {
               details: {
                 taskId: task.id,
                 duration_minutes: Math.round(task.duration_ms / 60000),
-                cleanup_reason: 'ABSOLUTE_MAX_DURATION_EXCEEDED'
+                cleanup_reason: 'ABSOLUTE_MAX_DURATION_EXCEEDED',
+                hadFailurePattern: failurePattern?.name || 'none'
               }
             });
           } catch (error) {

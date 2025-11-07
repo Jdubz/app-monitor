@@ -453,8 +453,18 @@ describe('Template Integration Tests', () => {
         status: 'pending',
         created_at: Date.now(),
         assigned_agent: 'backend-specialist',
-        // Missing optional fields
-      };
+        priority: 5,
+        // Provide default values for enhanced fields to avoid template placeholders
+        parent_initiative: undefined,
+        related_tasks: undefined,
+        estimated_effort: undefined,
+        success_metrics: undefined,
+        required_skills: undefined,
+        assumptions: undefined,
+        alternatives: undefined,
+        context_boundaries: undefined,
+        validation_steps: undefined
+      } as Task;
 
       const agent: AgentPersonality = {
         id: 'backend-specialist',

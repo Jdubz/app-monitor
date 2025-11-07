@@ -123,6 +123,18 @@ export interface Task {
   is_repair_bot?: boolean; // True if this is a cleanup or follow-up bot
   original_task_id?: string; // ID of the original failed task (for repair bots)
   repair_stage?: 'cleanup' | 'followup'; // Which stage of recovery this bot represents
+  // PR workflow fields
+  pr_number?: number; // GitHub PR number
+  pr_url?: string; // Full PR URL
+  pr_branch?: string; // Feature branch name
+  pr_status?: 'creating' | 'pending_checks' | 'pending_review' | 'ready_to_merge' | 'merged' | 'closed';
+  pr_checks_status?: 'pending' | 'success' | 'failure';
+  pr_review_status?: 'no_reviews' | 'approved' | 'changes_requested' | 'commented';
+  pr_created_at?: number;
+  pr_merged_at?: number;
+  // Followup task linking
+  followup_for_pr?: number; // If this task fixes issues from a PR
+  followup_tasks?: string[]; // Child tasks created to fix PR issues
   // Enhanced task fields for comprehensive task planning
   parent_initiative?: string;
   long_term_goals?: string[];

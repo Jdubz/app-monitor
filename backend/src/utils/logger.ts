@@ -42,6 +42,7 @@ export type LogCategory =
   | 'log_format'
   | 'logs'
   | 'merge_conflict'
+  | 'pr-workflow'
   | 'process'
   | 'quality'
   | 'quality-gates'

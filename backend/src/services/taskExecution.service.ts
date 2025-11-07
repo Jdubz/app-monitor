@@ -22,7 +22,9 @@ import type { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplat
 import type { WorkspaceOrchestrator } from './workspaceOrchestrator.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskPersistence } from './taskPersistence.js';
-import { isTaskStuck } from './taskFailureGuards.js';
+import { isTaskStuck, detectFailurePattern } from './taskFailureGuards.js';
+import type { SimpleFailureRecovery } from './failureRecovery.js';
+import { config } from '../config.js';
 
 // ============================================================================
 // Types & Interfaces
@@ -47,6 +49,7 @@ export class TaskExecutionService {
   private readonly ephemeralWorkerService: EphemeralWorkerService;
   private readonly taskPersistence: TaskPersistence;
   private readonly config: TaskExecutionServiceConfig;
+  private recovery?: SimpleFailureRecovery; // Optional: set via setRecovery()
 
   private lastAgentType: 'claude' | 'codex' = 'claude';
   private readonly AGENT_ROTATION_STRATEGY: 'alternate' | 'random' | 'claude-only' | 'codex-only' = 'alternate';
@@ -76,6 +79,17 @@ export class TaskExecutionService {
   }
 
   // ==========================================================================
+  // Public Methods
+  // ==========================================================================
+
+  /**
+   * Set the recovery service (called by DevBotsManager after initialization)
+   */
+  public setRecovery(recovery: SimpleFailureRecovery): void {
+    this.recovery = recovery;
+  }
+
+  // ==========================================================================
   // Helper Methods
   // ==========================================================================
 
@@ -96,7 +110,7 @@ export class TaskExecutionService {
   }
 
   private getAgentDockerImage(_agent: AgentPersonality): string {
-    return 'claude-worker:latest';
+    return 'dev-bot:latest';
   }
 
   private async execGitCommand(args: string[], cwd: string): Promise<string> {
@@ -342,13 +356,13 @@ export class TaskExecutionService {
         '-v', `${homeDir}/.codex:/tmp/host-codex:ro`,  // Mount Codex credentials
         // Mount git credentials for committing and pushing
         '-v', `${homeDir}/.gitconfig:/home/node/.gitconfig:ro`,  // Git config
-        '-v', `${homeDir}/.ssh:/home/node/.ssh:ro`,  // SSH keys for git push
+        '-v', `${homeDir}/.git-credentials:/home/node/.git-credentials:ro`,  // Git credential store
         '-v', `${homeDir}/.config/gh:/home/node/.config/gh:ro`,  // GitHub CLI auth
         this.getAgentDockerImage(agent),
         'sh', '-c',
-        // Copy credentials and run Codex with JSON output
+        // Copy credentials and run Codex with full access for git operations
         `cp -r /tmp/host-codex/* /home/node/.codex/ 2>/dev/null || true && ` +
-        `codex --output-format json '${promptText}'`
+        `codex --sandbox-policy danger-full-access --ask-for-approval never '${promptText}'`
       ];
       cliCommand = 'codex';
     } else {
@@ -370,13 +384,13 @@ export class TaskExecutionService {
         '-v', `${claudeCredentials}:/tmp/host-creds.json:ro`,  // Mount Claude credentials
         // Mount git credentials for committing and pushing
         '-v', `${homeDir}/.gitconfig:/home/node/.gitconfig:ro`,  // Git config
-        '-v', `${homeDir}/.ssh:/home/node/.ssh:ro`,  // SSH keys for git push
+        '-v', `${homeDir}/.git-credentials:/home/node/.git-credentials:ro`,  // Git credential store
         '-v', `${homeDir}/.config/gh:/home/node/.config/gh:ro`,  // GitHub CLI auth
         this.getAgentDockerImage(agent),
         'sh', '-c',
-        // Copy credentials and run Claude with JSON output (bypass permissions for git access)
+        // Copy credentials and run Claude (bypass permissions for git access)
         `cp /tmp/host-creds.json /home/node/.claude/.credentials.json && ` +
-        `claude --print --dangerously-skip-permissions --permission-mode bypassPermissions --allowedTools 'Bash(git:*)' --output-format json '${promptText}'`
+        `claude --print --dangerously-skip-permissions --permission-mode bypassPermissions --allowedTools 'Bash(git:*)' '${promptText}'`
       ];
       cliCommand = 'claude';
     }
@@ -541,9 +555,91 @@ export class TaskExecutionService {
       }
 
     } else {
-      // Task failed
+      // Task failed - attempt automatic recovery if enabled
       const errorMsg = stderr || stdout || `Exit code ${exitCode}`;
 
+      // Detect failure pattern
+      const failurePattern = detectFailurePattern(stderr, stdout, exitCode);
+
+      if (failurePattern) {
+        logger.info({
+          category: 'recovery',
+          action: 'failure_pattern_detected',
+          message: `Detected failure pattern: ${failurePattern.name}`,
+          details: {
+            taskId: task.id,
+            pattern: failurePattern.name,
+            category: failurePattern.category,
+            immediateFailure: failurePattern.immediateFailure
+          }
+        });
+
+        // Attempt recovery if system is enabled
+        if (config.recovery.enabled && this.recovery) {
+          if (config.recovery.dryRun) {
+            logger.info({
+              category: 'recovery',
+              action: 'dry_run_would_attempt_recovery',
+              message: `[DRY RUN] Would attempt automatic recovery for task ${task.id}`,
+              details: {
+                taskId: task.id,
+                taskTitle: task.title,
+                failurePattern: failurePattern.name,
+                category: failurePattern.category,
+                suggestedFix: failurePattern.suggestedFix,
+                wouldCreateCleanupBot: true,
+                wouldCreateFollowupBot: true
+              }
+            });
+          } else {
+            // Actually attempt recovery
+            try {
+              const recoveryResult = await this.recovery.attemptRecovery({
+                task,
+                failurePattern,
+                stderr,
+                stdout,
+                exitCode
+              });
+
+              if (recoveryResult.recovered) {
+                logger.info({
+                  category: 'recovery',
+                  action: 'recovery_initiated',
+                  message: `Initiated automatic recovery for task ${task.id}`,
+                  details: {
+                    taskId: task.id,
+                    cleanupTaskId: recoveryResult.cleanupTaskId,
+                    failurePattern: failurePattern.name
+                  }
+                });
+              }
+            } catch (recoveryError) {
+              logger.error({
+                category: 'recovery',
+                action: 'recovery_attempt_failed',
+                message: `Failed to attempt recovery for task ${task.id}: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`,
+                details: {
+                  taskId: task.id,
+                  error: recoveryError instanceof Error ? recoveryError.message : String(recoveryError)
+                }
+              });
+            }
+          }
+        } else if (!config.recovery.enabled) {
+          logger.info({
+            category: 'recovery',
+            action: 'recovery_disabled',
+            message: `Automatic recovery is disabled. Set ENABLE_AUTO_RECOVERY=true to enable.`,
+            details: {
+              taskId: task.id,
+              detectedPattern: failurePattern.name
+            }
+          });
+        }
+      }
+
+      // Always mark task as failed in queue
       this.taskQueue.failTask(task.id, errorMsg);
 
       logger.error({
@@ -556,7 +652,8 @@ export class TaskExecutionService {
           exitCode,
           errorOutput: stderr.substring(0, 500),
           executionDuration_ms: executionDuration,
-          recommendation: 'Review error logs and task configuration'
+          recommendation: 'Review error logs and task configuration',
+          failurePatternDetected: failurePattern?.name || 'none'
         }
       });
     }

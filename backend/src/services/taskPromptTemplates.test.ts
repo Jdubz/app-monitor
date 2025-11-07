@@ -285,8 +285,8 @@ describe('TaskPromptTemplateManager', () => {
         '### Step 1: Workspace Setup',
         '### Step 2: Implementation',
         '### Step 3: Pre-Commit Validation',
-        '### Step 4: Commit and Push',
-        '### Step 5: Post-Commit Verification',
+        '### Step 4: Create PR',
+        '### Step 5: Post-PR Creation Verification',
         '## ✅ Final Success Checklist',
         '## 🎯 Agent Expertise Note'
       ];
@@ -307,14 +307,17 @@ describe('TaskPromptTemplateManager', () => {
 
       const prompt = templateManager.generatePrompt(context);
 
-      // Critical git workflow elements
-      expect(prompt).toContain('git checkout staging');
-      expect(prompt).toContain('git pull origin staging');
+      // Critical PR workflow elements
+      expect(prompt).toContain('git checkout -b');
       expect(prompt).toContain('npm run lint');
       expect(prompt).toContain('npm test');
       expect(prompt).toContain('git add .');
       expect(prompt).toContain('git commit -m');
-      expect(prompt).toContain('git push origin staging');
+      expect(prompt).toContain('git push -u origin');
+      expect(prompt).toContain('gh pr create');
+      expect(prompt).toContain('PR_NUMBER:');
+      expect(prompt).toContain('PR_URL:');
+      expect(prompt).toContain('PR_BRANCH:');
     });
 
     it('should include critical warnings and rules', () => {

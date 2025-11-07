@@ -7,6 +7,8 @@
  * @see docs/plans/BOT_PROMPT_ENGINEERING_V3.md
  */
 
+import { logger } from '../utils/logger.js';
+
 export interface Investigation {
   required: boolean;
   steps: string[];
@@ -78,10 +80,28 @@ export interface ValidationResult {
  * Validate a task template against v3 requirements
  */
 export function validateTaskTemplate(template: Partial<TaskTemplateV3>): ValidationResult {
+  logger.debug({
+    category: 'utility',
+    action: 'validate_template_entry',
+    message: 'Starting task template validation',
+    details: {
+      hasType: !!template.type,
+      hasTitle: !!template.title,
+      hasInvestigation: !!template.investigation,
+      hasGitWorkflow: !!template.gitWorkflow
+    }
+  });
+
   const errors: ValidationError[] = [];
   const warnings: ValidationError[] = [];
 
   // 1. Core fields validation
+  logger.debug({
+    category: 'utility',
+    action: 'validate_core_fields',
+    message: 'Validating core fields (type, title, description)',
+    details: { templateType: template.type }
+  });
   if (!template.type || template.type.trim() === '') {
     errors.push({
       field: 'type',
@@ -107,6 +127,16 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
   }
 
   // 2. Investigation field validation (MANDATORY in v3)
+  logger.debug({
+    category: 'utility',
+    action: 'validate_investigation',
+    message: 'Validating investigation field and requirements',
+    details: {
+      hasInvestigation: !!template.investigation,
+      investigationRequired: template.investigation?.required,
+      stepsCount: template.investigation?.steps?.length || 0
+    }
+  });
   if (!template.investigation) {
     errors.push({
       field: 'investigation',
@@ -168,6 +198,15 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
   }
 
   // 3. Pre-implementation checklist validation
+  logger.debug({
+    category: 'utility',
+    action: 'validate_checklist',
+    message: 'Validating pre-implementation checklist',
+    details: {
+      checklistLength: template.preImplementationChecklist?.length || 0,
+      isArray: Array.isArray(template.preImplementationChecklist)
+    }
+  });
   if (!Array.isArray(template.preImplementationChecklist) || template.preImplementationChecklist.length === 0) {
     errors.push({
       field: 'preImplementationChecklist',
@@ -183,6 +222,15 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
   }
 
   // 4. Acceptance criteria validation (strict scope)
+  logger.debug({
+    category: 'utility',
+    action: 'validate_acceptance_criteria',
+    message: 'Validating acceptance criteria for scope control',
+    details: {
+      criteriaCount: template.acceptanceCriteria?.length || 0,
+      isArray: Array.isArray(template.acceptanceCriteria)
+    }
+  });
   if (!Array.isArray(template.acceptanceCriteria) || template.acceptanceCriteria.length === 0) {
     errors.push({
       field: 'acceptanceCriteria',
@@ -207,6 +255,15 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
   }
 
   // 5. Constraints validation
+  logger.debug({
+    category: 'utility',
+    action: 'validate_constraints',
+    message: 'Validating constraints to prevent overengineering',
+    details: {
+      constraintsCount: template.constraints?.length || 0,
+      isArray: Array.isArray(template.constraints)
+    }
+  });
   if (!Array.isArray(template.constraints) || template.constraints.length === 0) {
     errors.push({
       field: 'constraints',
@@ -225,6 +282,16 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
   }
 
   // 6. File scope validation
+  logger.debug({
+    category: 'utility',
+    action: 'validate_file_scope',
+    message: 'Validating file scope and creation restrictions',
+    details: {
+      filesCount: template.files?.length || 0,
+      doNotCreateCount: template.doNotCreate?.length || 0,
+      hasDoNotCreate: !!template.doNotCreate
+    }
+  });
   if (!Array.isArray(template.files) || template.files.length === 0) {
     errors.push({
       field: 'files',
@@ -252,6 +319,16 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
   }
 
   // 7. Git workflow validation
+  logger.debug({
+    category: 'utility',
+    action: 'validate_git_workflow',
+    message: 'Validating git workflow configuration',
+    details: {
+      hasGitWorkflow: !!template.gitWorkflow,
+      required: template.gitWorkflow?.required,
+      branch: template.gitWorkflow?.branch
+    }
+  });
   if (!template.gitWorkflow) {
     errors.push({
       field: 'gitWorkflow',
@@ -285,6 +362,17 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
   }
 
   // 8. Metadata validation
+  logger.debug({
+    category: 'utility',
+    action: 'validate_metadata',
+    message: 'Validating template metadata and v3 compliance flags',
+    details: {
+      hasMetadata: !!template.metadata,
+      version: template.metadata?.promptEngineeringVersion,
+      strictScopeEnforcement: template.metadata?.strictScopeEnforcement,
+      mandatoryInvestigation: template.metadata?.mandatoryInvestigation
+    }
+  });
   if (template.metadata) {
     if (template.metadata.promptEngineeringVersion !== 'v3') {
       warnings.push({

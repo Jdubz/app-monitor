@@ -77,7 +77,7 @@ export class EphemeralWorkerService {
 
     this.config = {
       maxConcurrentWorkers: config.maxConcurrentWorkers ?? 2,
-      dockerImage: config.dockerImage ?? 'claude-worker:latest',
+      dockerImage: config.dockerImage ?? 'dev-bot:latest',
       logsDirectory: config.logsDirectory ?? './data/logs',
       envPassthroughKeys: config.envPassthroughKeys ?? [
         'ANTHROPIC_API_KEY',

@@ -18,12 +18,17 @@ import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskPersistence } from './taskPersistence.js';
 import { getTokenTrackingService } from './tokenTracking.js';
 import { getQualityGateValidator, type QualityValidationResult } from './qualityGates.js';
+import { extractPRInfo, isValidPRInfo } from '../utils/prExtractor.js';
 
 export interface TaskCompletionServiceConfig {
   /**
    * Whether to run quality gate validation before pushing
    */
   enableQualityGates: boolean;
+  /**
+   * Optional callback for PR registration after task completion
+   */
+  onPRCreated?: (task: Task) => void;
 }
 
 /**
@@ -62,6 +67,7 @@ export class TaskCompletionService {
     task.error = errorOutput;
 
     this.extractAndRecordTokenUsage(task, output);
+    this.extractAndRecordPRInfo(task, output);
 
     const workspacePath = worker.workspace.hostPath;
     let qualityValidation: QualityValidationResult | undefined;
@@ -317,6 +323,54 @@ export class TaskCompletionService {
         duration: 0,
         timestamp: new Date().toISOString()
       };
+    }
+  }
+
+  /**
+   * Extract and record PR information from task output
+   */
+  private extractAndRecordPRInfo(task: Task, output: string): void {
+    try {
+      // Try to extract PR information from output
+      const prInfo = extractPRInfo(output);
+
+      if (isValidPRInfo(prInfo)) {
+        // Update task with PR information
+        task.pr_number = prInfo.number;
+        task.pr_url = prInfo.url;
+        task.pr_branch = prInfo.branch;
+        task.pr_status = 'pending_checks';
+        task.pr_created_at = Date.now();
+
+        logger.info({
+          category: 'pr-workflow',
+          action: 'pr_info_extracted',
+          message: `Extracted PR information for task ${task.id}`,
+          details: {
+            pr_number: prInfo.number,
+            pr_url: prInfo.url,
+            pr_branch: prInfo.branch
+          }
+        });
+
+        // Notify PR monitor if callback is configured
+        if (this.config.onPRCreated) {
+          this.config.onPRCreated(task);
+        }
+      } else {
+        logger.debug({
+          category: 'pr-workflow',
+          action: 'no_pr_info_found',
+          message: `No valid PR information found in output for task ${task.id}`
+        });
+      }
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'failed_to_extract_pr_info',
+        message: 'Failed to extract and record PR information',
+        error
+      });
     }
   }
 }
