@@ -104,4 +104,23 @@ describe('summarizeAgentComparisonMetrics', () => {
     expect(metrics.task_type_breakdown.codex.testing).toEqual(expect.objectContaining(zeroAgentMetrics));
     expect(metrics.task_type_breakdown.codex.implementation).toEqual(expect.objectContaining(zeroAgentMetrics));
   });
+
+  it('should ignore task type stats for unknown agent types', () => {
+    const metrics = summarizeAgentComparisonMetrics(
+      [],
+      [
+        {
+          agent_type: 'backend-specialist',
+          task_type: 'implementation',
+          total: 5,
+          completed: 4,
+          failed: 1,
+          avg_duration_ms: 1800,
+        },
+      ],
+    );
+
+    expect(metrics.task_type_breakdown.claude.implementation).toEqual(expect.objectContaining(zeroAgentMetrics));
+    expect(metrics.task_type_breakdown.codex.implementation).toEqual(expect.objectContaining(zeroAgentMetrics));
+  });
 });

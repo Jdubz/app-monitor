@@ -33,8 +33,11 @@ import * as fs from 'fs';
 import { randomUUID } from 'node:crypto';
 import { logger } from '../utils/logger.js';
 
+const TRACKED_AGENT_TYPES = ['claude', 'codex'] as const;
+type AgentType = typeof TRACKED_AGENT_TYPES[number];
+
 type AgentStatsRow = {
-  agent_type: 'claude' | 'codex';
+  agent_type: string | null;
   total: number;
   completed: number;
   failed: number;
@@ -71,6 +74,10 @@ const isTrackedTaskType = (value: string | null | undefined): value is TaskTypeK
   return Boolean(value) && TRACKED_TASK_TYPES.includes(value as TaskTypeKey);
 };
 
+const isTrackedAgentType = (value: string | null | undefined): value is AgentType => {
+  return Boolean(value) && TRACKED_AGENT_TYPES.includes(value as AgentType);
+};
+
 export function summarizeAgentComparisonMetrics(
   agentStats: AgentStatsRow[],
   taskTypeStats: AgentTaskTypeStatsRow[] = [],
@@ -102,18 +109,17 @@ export function summarizeAgentComparisonMetrics(
     }, {} as AgentTaskTypeBreakdown);
   };
 
-  const breakdown = {
+  const breakdown: Record<AgentType, AgentTaskTypeBreakdown> = {
     claude: createEmptyBreakdown(),
     codex: createEmptyBreakdown(),
   };
 
   for (const stats of taskTypeStats) {
-    if (!isTrackedTaskType(stats.task_type)) {
+    if (!isTrackedTaskType(stats.task_type) || !isTrackedAgentType(stats.agent_type)) {
       continue;
     }
 
-    const agentBucket = stats.agent_type === 'claude' ? breakdown.claude : breakdown.codex;
-    agentBucket[stats.task_type] = buildMetrics(stats);
+    breakdown[stats.agent_type][stats.task_type] = buildMetrics(stats);
   }
 
   return {
