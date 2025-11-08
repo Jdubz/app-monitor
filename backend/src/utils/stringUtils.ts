@@ -1,4 +1,4 @@
-const WORD_START_REGEX = /(^|[^A-Za-z0-9]+)([A-Za-z0-9])/g;
+const WORD_START_REGEX = /(^|[^\p{L}\p{N}]+)([\p{L}\p{N}])/gu;
 
 /**
  * Convert a string to Title Case.
@@ -10,8 +10,10 @@ export function toTitleCase(value: string): string {
   }
 
   return value
-    .toLowerCase()
+    .toLocaleLowerCase()
     .replace(WORD_START_REGEX, (_match, separator: string, char: string) => {
-      return `${separator}${char.toUpperCase()}`;
+      const safeSeparator = separator ?? '';
+      const nextChar = char ? char.toLocaleUpperCase() : '';
+      return `${safeSeparator}${nextChar}`;
     });
 }

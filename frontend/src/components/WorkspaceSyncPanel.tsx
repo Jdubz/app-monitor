@@ -5,7 +5,7 @@ import { api } from "../services/api";
 import type {
   DevBotsWorkspaceSyncResult as SyncResult,
   DevBotsWorkspaceSyncStatus as SyncStatus,
-} from "@app-monitor/api-contracts";
+} from "@/types/dev-bots";
 
 interface WorkspaceSyncPanelProps {
   onStatusChange?: (status: SyncStatus) => void;
@@ -53,6 +53,7 @@ const panelClasses = {
     "rounded-md border border-border/50 bg-background/60 px-3 py-2 text-sm text-muted-foreground",
   errorContainer:
     "space-y-4 rounded-xl border border-destructive/50 bg-destructive/10 p-5 text-sm",
+  label: "text-sm font-medium text-foreground",
 };
 
 const statusAccent: Record<string, string> = {

@@ -10,7 +10,7 @@ import type {
   EnvironmentDefinition,
   CloudService as SharedCloudService,
   CloudLoggingStatus as SharedCloudLoggingStatus,
-} from '@app-monitor/api-contracts';
+} from '@/types/contracts';
 
 // Re-export all types
 export type { DevMonitorLogLine, DevMonitorLogLevel, LogHistory, LocalService };

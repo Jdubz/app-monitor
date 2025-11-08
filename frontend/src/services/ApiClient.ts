@@ -6,7 +6,7 @@
  */
 
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
-import type { ApiError } from '@app-monitor/api-contracts';
+import type { ApiError } from '@/types/contracts';
 
 export class ApiClient {
   private client: AxiosInstance;

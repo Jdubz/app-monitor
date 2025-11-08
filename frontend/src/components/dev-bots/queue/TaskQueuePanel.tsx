@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { AlertCircle, Clock3, RefreshCw } from 'lucide-react';
-import type { DevBotsTask } from '@app-monitor/api-contracts';
+import type { DevBotsTask } from '@/types/dev-bots';
 
 import { useDevBotsStore } from '@/contexts/devBotsStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -170,7 +170,7 @@ export function TaskQueuePanel() {
                       {task.status}
                     </Badge>
                     {Boolean(task.priority) && (
-                      <Badge variant="secondary" className="text-[10px]">
+                      <Badge variant="warning" className="text-[10px]">
                         Priority {task.priority}
                       </Badge>
                     )}

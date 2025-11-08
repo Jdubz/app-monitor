@@ -7,39 +7,38 @@
 
 import type { ApiClient } from './ApiClient';
 import type {
-  HealthCheckResponse,
-  ProcessInfo,
-  LogSource as ContractLogSource,
-  PortStatusMap,
-  ServiceLogsResponse,
-  PortKillResponse,
-  EnvironmentsResponse,
-  CloudService,
-  HealthCheckApiResponse,
-  ServicesStatusResponse,
-  ServiceStatusResponse,
-  ServiceActionResponse,
-  ServiceLogsApiResponse,
-  LogSourcesResponse,
-  PortStatusesResponse,
-  PortKillApiResponse,
-  EnvironmentsApiResponse,
-  EnvironmentServicesApiResponse,
+  ApiError,
+  ApiSuccess,
+  CloudLogsApiResponse,
   CloudLogsRequest,
   CloudLogsResponse,
-  CloudLogsApiResponse,
   CloudLoggingStatusApiResponse,
-  ApiSuccess,
-  ApiError,
-  DevBotsStatus,
-} from '@app-monitor/api-contracts';
+  EnvironmentsApiResponse,
+  EnvironmentsResponse,
+  EnvironmentServicesApiResponse,
+  HealthCheckApiResponse,
+  HealthCheckResponse,
+  LogSource as ContractLogSource,
+  LogSourcesResponse,
+  PortKillApiResponse,
+  PortKillResponse,
+  PortStatusesResponse,
+  PortStatusMap,
+  ProcessInfo,
+  ServiceActionResponse,
+  ServiceLogsApiResponse,
+  ServiceLogsResponse,
+  ServiceStatusResponse,
+  ServicesStatusResponse,
+} from '@/types/contracts';
 import type {
   DevBotsQueueSummary,
   DevBotsTaskDetail,
   DevBotsSettings,
   DevBotsTaskLogsResponse,
+  DevBotsStatus,
 } from '@/types/dev-bots';
-import { CloudService, CloudLoggingStatus } from '../types/log.types';
+import type { CloudLoggingStatus, CloudService } from '../types/log.types';
 
 type LogSource = ContractLogSource;
 export type PortStatuses = PortStatusMap;
@@ -83,16 +82,23 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   return prototype === Object.prototype || prototype === null;
 };
 
+const isApiEnvelope = (payload: unknown): payload is ApiSuccess<unknown> | ApiError => {
+  if (!isPlainObject(payload) || !('success' in payload)) {
+    return false;
+  }
+  return typeof (payload as { success?: unknown }).success === 'boolean';
+};
+
 const unwrapApiResponse = <T>(payload: unknown, context?: string): T => {
-  if (isPlainObject(payload) && 'success' in payload) {
-    const envelope = payload as ApiSuccess<T> | ApiError;
-    if (envelope.success === true && 'data' in envelope) {
-      return envelope.data as T;
+  if (isApiEnvelope(payload)) {
+    if (payload.success === true && 'data' in payload) {
+      return payload.data as T;
     }
 
+    const errorPayload = payload as ApiError;
     const errorMessage =
-      (envelope as ApiError).message ??
-      (envelope as ApiError).error ??
+      errorPayload.message ??
+      errorPayload.error ??
       'Request failed';
     throw new Error(
       `${context ? `${context}: ` : ''}${errorMessage}`,

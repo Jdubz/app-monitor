@@ -195,13 +195,14 @@ export function WorkerConsolePanel() {
                     <span>Priority {selectedTask.priority ?? '—'}</span>
                   </div>
                   <p className="text-foreground">{selectedTask.description}</p>
-                  {selectedTask.acceptanceCriteria?.length ? (
+                  {Array.isArray(selectedTask.acceptanceCriteria) &&
+                  selectedTask.acceptanceCriteria.length > 0 ? (
                     <div className="mt-2">
                       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                         Acceptance Criteria
                       </p>
                       <ul className="mt-1 list-disc space-y-1 pl-5 text-xs text-muted-foreground">
-                        {selectedTask.acceptanceCriteria.map((criterion) => (
+                        {selectedTask.acceptanceCriteria.map((criterion: string) => (
                           <li key={criterion}>{criterion}</li>
                         ))}
                       </ul>

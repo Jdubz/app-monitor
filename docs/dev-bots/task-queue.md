@@ -90,6 +90,23 @@ curl http://localhost:5000/api/dev-bots/metrics | jq '.'
 }
 ```
 
+#### Agent comparison drilldowns
+
+See [SQLite Integration Plan - Agent Comparison Metrics](./SQLITE_INTEGRATION_PLAN.md#agent-comparison-metrics) for the full architecture. The quick commands below are handy when you just need a per-type snapshot:
+
+```bash
+# Task-type scoreboard grouped by agent
+curl -s http://localhost:5000/api/dev-bots/agent-comparison \
+  | jq '.comparison.task_type_breakdown \
+        | to_entries[] \
+        | {agent: .key, implementation: .value.implementation.success_rate, testing: .value.testing.success_rate, documentation: .value.documentation.success_rate}'
+
+# Raw breakdown data if you want to feed Grafana
+curl -s http://localhost:5000/api/dev-bots/agent-comparison \
+  | jq '.comparison.task_type_breakdown'
+```
+
+
 ---
 
 ## Agent Comparison Metrics
@@ -279,6 +296,22 @@ jq -r '.comparison |
   "Codex:  \((.codex.avg_duration_ms/60000) | round) minutes"'
 ```
 
+#### Agent comparison drilldowns
+
+See [SQLite Integration Plan - Agent Comparison Metrics](./SQLITE_INTEGRATION_PLAN.md#agent-comparison-metrics) for the full architecture. The quick commands below are handy when you just need a per-type snapshot:
+
+```bash
+# Task-type scoreboard grouped by agent
+curl -s http://localhost:5000/api/dev-bots/agent-comparison \
+  | jq '.comparison.task_type_breakdown \
+        | to_entries[] \
+        | {agent: .key, implementation: .value.implementation.success_rate, testing: .value.testing.success_rate, documentation: .value.documentation.success_rate}
+
+# Raw breakdown data if you want to feed Grafana
+curl -s http://localhost:5000/api/dev-bots/agent-comparison \
+  | jq '.comparison.task_type_breakdown'
+```
+
 ---
 
 ## Best Practices
@@ -337,12 +370,20 @@ curl -X POST http://localhost:5000/api/dev-bots/tasks/TASK_ID/timeout \
 
 **Issue: Agent comparison metrics show no data**
 ```bash
+# Confirm API is reachable
+curl -s http://localhost:5000/api/dev-bots/agent-comparison | jq '.comparison'
+
 # Verify agent_type column exists
 sqlite3 ./data/tasks/queue.db "PRAGMA table_info(tasks)" | grep agent_type
 
 # Check if tasks have agent_type set
 sqlite3 ./data/tasks/queue.db "SELECT agent_type, COUNT(*) FROM tasks GROUP BY agent_type"
+
+# Inspect per-type breakdown to make sure new runs exist
+curl -s http://localhost:5000/api/dev-bots/agent-comparison \
+  | jq '.comparison.task_type_breakdown'
 ```
+See the [Agent Comparison Metrics](./SQLITE_INTEGRATION_PLAN.md#agent-comparison-metrics) section for a complete operator checklist.
 
 **Issue: Tasks not being assigned**
 ```bash
