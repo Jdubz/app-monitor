@@ -142,6 +142,18 @@ curl http://localhost:5000/api/dev-bots/agent-comparison | jq '.'
       "failed": 5,
       "avg_duration_ms": 118250,
       "success_rate": 88.37
+    },
+    "task_type_breakdown": {
+      "claude": {
+        "implementation": { "total": 26, "completed": 25, "failed": 1, "success_rate": 96.15 },
+        "testing": { "total": 12, "completed": 10, "failed": 2, "success_rate": 83.33 },
+        "documentation": { "total": 7, "completed": 7, "failed": 0, "success_rate": 100 }
+      },
+      "codex": {
+        "implementation": { "total": 22, "completed": 18, "failed": 4, "success_rate": 81.82 },
+        "testing": { "total": 11, "completed": 9, "failed": 2, "success_rate": 81.82 },
+        "documentation": { "total": 10, "completed": 10, "failed": 0, "success_rate": 100 }
+      }
     }
   }
 }
@@ -156,6 +168,7 @@ curl http://localhost:5000/api/dev-bots/agent-comparison | jq '.'
 3. **`failed`**: Number of failed tasks
 4. **`avg_duration_ms`**: Average time to complete tasks (milliseconds)
 5. **`success_rate`**: Percentage of tasks completed successfully (0-100)
+6. **`task_type_breakdown`**: Nested stats for `implementation`, `testing`, and `documentation` showing strengths by work type.
 
 **Performance Analysis:**
 
@@ -174,6 +187,13 @@ curl http://localhost:5000/api/dev-bots/agent-comparison | \
     claude_avg_min: (.comparison.claude.avg_duration_ms / 60000),
     codex_avg_min: (.comparison.codex.avg_duration_ms / 60000),
     claude_faster: (.comparison.claude.avg_duration_ms < .comparison.codex.avg_duration_ms)
+  }'
+
+# Compare documentation success rates
+curl http://localhost:5000/api/dev-bots/agent-comparison | \
+  jq '{
+    claude_doc_success: .comparison.task_type_breakdown.claude.documentation.success_rate,
+    codex_doc_success: .comparison.task_type_breakdown.codex.documentation.success_rate
   }'
 ```
 
