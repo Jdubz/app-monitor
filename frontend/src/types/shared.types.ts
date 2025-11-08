@@ -4,7 +4,7 @@
 import type {
   HealthCheckResponse as ContractHealthCheckResponse,
   PortInfo as ContractPortInfo,
-} from '@app-monitor/api-contracts';
+} from '@/types/contracts';
 
 // Log Types
 export type DevMonitorLogLevel = 'ERROR' | 'WARN' | 'INFO' | 'DEBUG';

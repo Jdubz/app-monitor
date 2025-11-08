@@ -3,7 +3,7 @@ import axios from 'axios';
 import type { AxiosInstance } from 'axios';
 import * as apiModule from './api';
 import { mockServices, mockHealthCheckResponse, mockPortStatuses } from '../test/fixtures';
-import type { ApiError } from '@app-monitor/api-contracts';
+import type { ApiError } from '@/types/contracts';
 
 const success = <T>(data: T) => ({ data: { success: true, data } } as any);
 

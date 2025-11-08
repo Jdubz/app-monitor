@@ -20,14 +20,14 @@ import { Socket } from 'socket.io-client';
 
 import { api } from '../services/api';
 import type {
+  DevBotsAgentPersonality,
+  DevBotsCleanupStatus,
+  DevBotsScopeViolation,
   DevBotsStatus,
   DevBotsTask,
-  DevBotsScopeViolation,
-  DevBotsCleanupStatus,
-  DevBotsAgentPersonality,
   DevBotsTaskTemplate,
   DevBotsWorkerStatus,
-} from '@app-monitor/api-contracts';
+} from '@/types/dev-bots';
 import StatusBadge from './StatusBadge';
 import {
   Card,
@@ -366,7 +366,7 @@ export const DevBotsPanel: React.FC<DevBotsPanelProps> = ({
     };
   }, [socket]);
 
-  const workers = useMemo(
+  const workers = useMemo<DevBotsWorkerStatus[]>(
     () => (status ? Object.values(status.workers ?? {}) : []),
     [status],
   );

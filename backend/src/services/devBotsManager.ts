@@ -9,7 +9,8 @@ import { TaskQueueService, Task, TaskStatus as SQLiteTaskStatus, TaskExecution }
 import { TaskQueueMigration } from './taskQueue.migration.js';
 import { AgentPersonalityManager, AgentPersonality } from './agentPersonalities.js';
 import { TaskPromptTemplateManager } from './taskPromptTemplates.js';
-import { TaskCreationGuidelinesManager, EnhancedTaskData } from './taskCreationGuidelines.js';
+import { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js';
+import { EnhancedTaskData } from './taskMetadataFields.js';
 import { WorkspaceSyncManager, SyncOptions, SyncResult } from './workspaceSyncManager.js';
 import { DockerManager, DockerValidationResult } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
@@ -861,6 +862,8 @@ export class DevBotsManager extends EventEmitter {
       type: taskData.type,
       title: taskData.title,
       description: ('description' in taskData && taskData.description) || '',
+      documentation: ('documentation' in taskData && taskData.documentation) || '',
+      notes: ('notes' in taskData && taskData.notes) || '',
       project: ('project' in taskData && taskData.project) || 'dev-monitor',
       assignedAgent: ('assignedAgent' in taskData && taskData.assignedAgent) || 'backend-specialist',
       files: ('files' in taskData && taskData.files) || [],
@@ -940,6 +943,8 @@ export class DevBotsManager extends EventEmitter {
       type: normalizedData.type,
       title: normalizedData.title,
       description: normalizedData.description,
+      documentation: normalizedData.documentation,
+      notes: normalizedData.notes,
       assigned_agent: normalizedData.assignedAgent,
       priority: ('priority' in taskData && taskData.priority !== undefined) ? taskData.priority : 5,
       estimated_hours: normalizedData.estimatedEffort?.hours,

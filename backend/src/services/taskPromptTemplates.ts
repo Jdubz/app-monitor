@@ -12,6 +12,7 @@ import { Task } from './devBotsManager.js';
 import { AgentPersonality } from './agentPersonalities.js';
 import { getGuidelinesForTaskType, formatGuidelinesAsMarkdown } from './taskTypeGuidelines.js';
 import { formatDocumentationForPrompt } from './workTargetDocumentation.js';
+import { getTaskMetadataTemplateVariables } from './taskMetadataFields.js';
 
 export interface TaskPromptTemplate {
   id: string;
@@ -122,6 +123,7 @@ export class TaskPromptTemplateManager {
   constructor() {
     this.template = this.createUniversalTemplate();
     this.initializeVariableProcessors();
+    this.assertCanonicalVariableCoverage();
   }
 
   private createUniversalTemplate(): TaskPromptTemplate {
@@ -130,19 +132,7 @@ export class TaskPromptTemplateManager {
       name: 'Universal Task Template',
       description: 'A comprehensive template that works for all task types',
       template: this.getUniversalTemplateString(),
-      variables: [
-        'agent.name', 'agent.role', 'task.id', 'task.title', 'task.type',
-        'task.description', 'task.documentation', 'task.acceptance_criteriaList',
-        'task.files', 'task.dependencies', 'task.notes', 'task.architecture_references',
-        'task.contextBoundaries', 'task.prerequisites', 'task.validation_steps',
-        'task.testingRequirements', 'task.documentationRequirements',
-        'task.rollbackPlan', 'task.blockers', 'task.risks', 'task.typeGuidelines',
-        // Enhanced fields (all UI form fields now included)
-        'task.longTermGoals', 'task.estimatedEffort', 'task.success_metrics',
-        'task.requiredSkills', 'task.parentInitiative', 'task.relatedTasks',
-        'task.assumptions', 'task.alternatives',
-        'repository', 'environment'
-      ],
+      variables: this.buildTemplateVariableList(),
       validationRules: [
         'Must include all required variables',
         'Must have proper bash syntax',
@@ -154,6 +144,28 @@ export class TaskPromptTemplateManager {
         'Must include estimated effort guidance'
       ]
     };
+  }
+
+  private buildTemplateVariableList(): string[] {
+    const metadataVariables = getTaskMetadataTemplateVariables();
+    const contextualVariables = [
+      'task.id',
+      'task.typeGuidelines',
+      'environment',
+      'worktree',
+      'workTarget.documentation'
+    ];
+    return Array.from(new Set([...metadataVariables, ...contextualVariables]));
+  }
+
+  private assertCanonicalVariableCoverage(): void {
+    const metadataVariables = getTaskMetadataTemplateVariables();
+    const missingVariables = metadataVariables.filter(
+      (variable) => !this.variableProcessors.has(variable)
+    );
+    if (missingVariables.length > 0) {
+      throw new Error(`Missing variable processors for task metadata fields: ${missingVariables.join(', ')}`);
+    }
   }
 
   private getUniversalTemplateString(): string {

@@ -1,4 +1,4 @@
-import type { ProcessInfo as SharedProcessInfo } from '@app-monitor/api-contracts';
+import type { ProcessInfo as SharedProcessInfo } from '@/types/contracts';
 
 export type ProcessInfo = SharedProcessInfo;
 

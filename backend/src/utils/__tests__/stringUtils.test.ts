@@ -21,6 +21,16 @@ describe('stringUtils', () => {
       expect(toTitleCase('api v2 release')).toBe('Api V2 Release');
     });
 
+    it('supports non-latin letters via Unicode-aware boundaries', () => {
+      expect(toTitleCase('über nächster δelta release')).toBe(
+        'Über Nächster Δelta Release'
+      );
+    });
+
+    it('capitalizes after symbol or emoji separators without removing them', () => {
+      expect(toTitleCase('🔥fire logs')).toBe('🔥Fire Logs');
+    });
+
     it('returns empty string when input is empty', () => {
       expect(toTitleCase('')).toBe('');
     });

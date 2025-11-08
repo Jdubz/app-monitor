@@ -1,7 +1,7 @@
 import { ProcessInfo } from '../types/service.types';
 import PortBadge from './PortBadge';
 import { cn } from '@/lib/utils';
-import type { PortInfo } from '@app-monitor/api-contracts';
+import type { PortInfo } from '@/types/contracts';
 
 interface ServiceInfoProps {
   service: ProcessInfo;
