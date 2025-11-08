@@ -72,17 +72,37 @@ const isApiErrorPayload = (payload: unknown): payload is ApiError => {
   );
 };
 
-const unwrapApiResponse = <T>(payload: unknown): T => {
-  if (
-    payload &&
-    typeof payload === 'object' &&
-    'success' in (payload as Record<string, unknown>) &&
-    (payload as ApiSuccess<unknown>).success === true &&
-    'data' in (payload as Record<string, unknown>)
-  ) {
-    return (payload as ApiSuccess<T>).data;
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  if (!value || typeof value !== 'object') {
+    return false;
   }
-  return payload as T;
+  if (Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+};
+
+const unwrapApiResponse = <T>(payload: unknown, context?: string): T => {
+  if (isPlainObject(payload) && 'success' in payload) {
+    const envelope = payload as ApiSuccess<T> | ApiError;
+    if (envelope.success === true && 'data' in envelope) {
+      return envelope.data as T;
+    }
+
+    const errorMessage =
+      (envelope as ApiError).message ??
+      (envelope as ApiError).error ??
+      'Request failed';
+    throw new Error(
+      `${context ? `${context}: ` : ''}${errorMessage}`,
+    );
+  }
+
+  console.error('[api] Unexpected API envelope', { context, payload });
+  throw new Error(
+    `Malformed API response${context ? ` while ${context}` : ''}`,
+  );
 };
 
 const getApiClient = async (): Promise<ApiClient> => {
@@ -285,24 +305,44 @@ export const api = {
   killPortProcess,
   handleApiError,
   // Add HTTP methods for components that need them
+  /**
+   * Issue a GET request and return the unwrapped data payload from the ApiSuccess envelope.
+   */
   get: async <T>(url: string, config?: Parameters<ApiClient['get']>[1]) => {
     const client = await getApiClient();
     const response = await client.get<unknown>(url, config);
-    return unwrapApiResponse<T>(response);
+    return unwrapApiResponse<T>(response, `GET ${url}`);
   },
-  post: async <T>(url: string, data?: Parameters<ApiClient['post']>[1], config?: Parameters<ApiClient['post']>[2]) => {
+  /**
+   * Issue a POST request and return the unwrapped data payload from the ApiSuccess envelope.
+   */
+  post: async <T>(
+    url: string,
+    data?: Parameters<ApiClient['post']>[1],
+    config?: Parameters<ApiClient['post']>[2],
+  ) => {
     const client = await getApiClient();
     const response = await client.post<unknown>(url, data, config);
-    return unwrapApiResponse<T>(response);
+    return unwrapApiResponse<T>(response, `POST ${url}`);
   },
-  put: async <T>(url: string, data?: Parameters<ApiClient['put']>[1], config?: Parameters<ApiClient['put']>[2]) => {
+  /**
+   * Issue a PUT request and return the unwrapped data payload from the ApiSuccess envelope.
+   */
+  put: async <T>(
+    url: string,
+    data?: Parameters<ApiClient['put']>[1],
+    config?: Parameters<ApiClient['put']>[2],
+  ) => {
     const client = await getApiClient();
     const response = await client.put<unknown>(url, data, config);
-    return unwrapApiResponse<T>(response);
+    return unwrapApiResponse<T>(response, `PUT ${url}`);
   },
+  /**
+   * Issue a DELETE request and return the unwrapped data payload from the ApiSuccess envelope.
+   */
   delete: async <T>(url: string, config?: Parameters<ApiClient['delete']>[1]) => {
     const client = await getApiClient();
     const response = await client.delete<unknown>(url, config);
-    return unwrapApiResponse<T>(response);
+    return unwrapApiResponse<T>(response, `DELETE ${url}`);
   },
 };

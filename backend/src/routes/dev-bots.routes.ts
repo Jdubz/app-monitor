@@ -42,6 +42,17 @@ const DEFAULT_WORK_TARGET = 'dev-bots';
 const LOG_STREAM_TYPES = ['stdout', 'stderr'] as const;
 type LogStreamType = (typeof LOG_STREAM_TYPES)[number];
 
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  if (Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+};
+
 interface TaskLogsResponsePayload {
   taskId: string;
   stdout: TaskLogFileDescriptor | null;
@@ -271,7 +282,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
     const originalJson = res.json.bind(res);
 
     res.json = ((body?: unknown) => {
-      if (body && typeof body === 'object' && body !== null && 'success' in (body as Record<string, unknown>)) {
+      if (isPlainObject(body) && 'success' in body) {
         return originalJson(body);
       }
 
@@ -281,8 +292,8 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
         let code: string | undefined;
         let details: Record<string, unknown> | undefined;
 
-        if (body && typeof body === 'object' && body !== null && !Array.isArray(body)) {
-          const { error, message: bodyMessage, code: bodyCode, details: bodyDetails, ...rest } = body as Record<string, unknown>;
+        if (isPlainObject(body)) {
+          const { error, message: bodyMessage, code: bodyCode, details: bodyDetails, ...rest } = body;
           if (typeof error === 'string') {
             errorLabel = error;
           }

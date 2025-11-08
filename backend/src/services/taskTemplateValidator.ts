@@ -79,13 +79,19 @@ export interface ValidationResult {
 // const MIN_INVESTIGATION_ENTRY_LENGTH = 15; // Reserved for future use
 // const MIN_ACCEPTANCE_CRITERIA_LENGTH = 12; // Reserved for future use
 // const MIN_CONSTRAINT_LENGTH = 12; // Reserved for future use
-const DO_NOT_CREATE_ACTIONABLE_KEYWORDS = ['reuse', 'extend', 'existing', 'use existing', 'leverage existing'];
+const DO_NOT_CREATE_ACTIONABLE_KEYWORDS: ReadonlyArray<string> = Object.freeze([
+  'reuse',
+  'extend',
+  'existing',
+  'use existing',
+  'leverage existing',
+]);
 
-function isPopulatedString(value: unknown): value is string {
+function isNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
 }
 
-function parseDoNotCreateEntry(entry: string): { filePath: string; reason: string } | null {
+function parseDoNotCreateFileEntry(entry: string): { filePath: string; reason: string } | null {
   const normalized = entry.trim();
   const match = normalized.match(/^([^()]+)\(([^()]+)\)$/);
   if (!match) {
@@ -102,7 +108,7 @@ function parseDoNotCreateEntry(entry: string): { filePath: string; reason: strin
   return { filePath, reason };
 }
 
-function hasActionableExplanation(reason: string): boolean {
+function hasActionableDoNotCreateExplanation(reason: string): boolean {
   const normalized = reason.toLowerCase();
   return DO_NOT_CREATE_ACTIONABLE_KEYWORDS.some(keyword => normalized.includes(keyword));
 }
@@ -202,7 +208,7 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
     } else {
       const normalizedSteps = template.investigation.steps.filter((step): step is string => typeof step === 'string');
       template.investigation.steps.forEach((step, index) => {
-        if (!isPopulatedString(step)) {
+        if (!isNonEmptyString(step)) {
           errors.push({
             field: `investigation.steps[${index}]`,
             message: 'Each investigation step must be a non-empty instruction that tells the worker what to inspect',
@@ -249,7 +255,7 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
       });
     } else {
       template.investigation.mustFind.forEach((item, index) => {
-        if (!isPopulatedString(item)) {
+        if (!isNonEmptyString(item)) {
           errors.push({
             field: `investigation.mustFind[${index}]`,
             message: 'Each mustFind entry must describe a concrete artifact to locate (file, function, schema, etc.)',
@@ -267,7 +273,7 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
       });
     } else {
       template.investigation.mustNotDuplicate.forEach((item, index) => {
-        if (!isPopulatedString(item)) {
+        if (!isNonEmptyString(item)) {
           errors.push({
             field: `investigation.mustNotDuplicate[${index}]`,
             message: 'Each mustNotDuplicate entry must describe existing logic that must be re-used rather than recreated',
@@ -323,7 +329,7 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
     let hasGuardrailLanguage = false;
 
     template.acceptanceCriteria.forEach((criterion, index) => {
-      if (!isPopulatedString(criterion)) {
+      if (!isNonEmptyString(criterion)) {
         errors.push({
           field: `acceptanceCriteria[${index}]`,
           message: 'Acceptance criteria entries must be descriptive strings (e.g. "EXACTLY one file updated")',
@@ -378,7 +384,7 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
     let hasMustNot = false;
 
     template.constraints.forEach((constraint, index) => {
-      if (!isPopulatedString(constraint)) {
+      if (!isNonEmptyString(constraint)) {
         errors.push({
           field: `constraints[${index}]`,
           message: 'Constraints entries must be explicit "MUST ..." directives',
@@ -437,7 +443,7 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
     });
   } else {
     template.doNotCreate.forEach((entry, index) => {
-      if (!isPopulatedString(entry)) {
+      if (!isNonEmptyString(entry)) {
         errors.push({
           field: `doNotCreate[${index}]`,
           message: 'Each doNotCreate entry must be a non-empty string with an explanation in parentheses',
@@ -446,7 +452,7 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
         return;
       }
 
-      const parsed = parseDoNotCreateEntry(entry);
+      const parsed = parseDoNotCreateFileEntry(entry);
       if (!parsed) {
         errors.push({
           field: `doNotCreate[${index}]`,
@@ -456,7 +462,7 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
         return;
       }
 
-      if (!hasActionableExplanation(parsed.reason)) {
+      if (!hasActionableDoNotCreateExplanation(parsed.reason)) {
         errors.push({
           field: `doNotCreate[${index}]`,
           message: 'Explanation must mention how to reuse or extend existing code (e.g. "reuse existing helper")',
