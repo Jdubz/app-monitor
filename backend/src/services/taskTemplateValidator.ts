@@ -76,9 +76,9 @@ export interface ValidationResult {
   warnings: ValidationError[];
 }
 
-const MIN_INVESTIGATION_ENTRY_LENGTH = 15;
-const MIN_ACCEPTANCE_CRITERIA_LENGTH = 12;
-const MIN_CONSTRAINT_LENGTH = 12;
+// const MIN_INVESTIGATION_ENTRY_LENGTH = 15; // Reserved for future use
+// const MIN_ACCEPTANCE_CRITERIA_LENGTH = 12; // Reserved for future use
+// const MIN_CONSTRAINT_LENGTH = 12; // Reserved for future use
 const DO_NOT_CREATE_ACTIONABLE_KEYWORDS = ['reuse', 'extend', 'existing', 'use existing', 'leverage existing'];
 
 function isPopulatedString(value: unknown): value is string {
