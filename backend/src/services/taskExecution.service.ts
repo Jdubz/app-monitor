@@ -352,7 +352,7 @@ export class TaskExecutionService {
       // Task is still 'pending' so it can be retried - reset to pending explicitly
       nextTask.status = 'pending';
       nextTask.assigned_worker = undefined;
-      this.taskQueue.updateTask(nextTask);
+      this.taskQueue.updateTask(nextTask.id, { status: 'pending', assigned_worker: undefined });
 
       // Trigger recovery without failing the task (it's still pending)
       logger.warn({
@@ -395,7 +395,7 @@ export class TaskExecutionService {
     // ALL VALIDATION PASSED - Now mark task as running
     nextTask.status = 'running';
     nextTask.assigned_worker = workerId;
-    this.taskQueue.updateTask(nextTask);
+    this.taskQueue.updateTask(nextTask.id, { status: 'running', assigned_worker: workerId });
 
     logger.info({
       category: 'process',

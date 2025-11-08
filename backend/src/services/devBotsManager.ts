@@ -15,6 +15,7 @@ import { DockerManager, DockerValidationResult } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
 import { getTokenTrackingService } from './tokenTracking.js';
 import { WorkspaceOrchestrator, PushCoordinator } from './workspaceOrchestrator.js';
+import { MetricsEmitter } from './metricsEmitter.js';
 import { TIME_BASED_GUARDS } from './taskFailureGuards.js';
 import { SimpleFailureRecovery } from './failureRecovery.js';
 import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
@@ -125,6 +126,7 @@ export class DevBotsManager extends EventEmitter {
   private taskCompletionService!: TaskCompletionService;
   private prWorkflowOrchestrator!: PRWorkflowOrchestrator;
   private taskQueueWorker?: any; // TaskQueueWorker (imported lazily to avoid circular deps)
+  private metricsEmitter?: MetricsEmitter;
 
   // System state
   private startTime = Date.now();
@@ -413,6 +415,9 @@ export class DevBotsManager extends EventEmitter {
 
     // Start background task queue worker
     await this.startTaskQueueWorker();
+
+    // Start metrics emitter
+    this.startMetricsEmitter();
   }
 
   /**
@@ -441,6 +446,29 @@ export class DevBotsManager extends EventEmitter {
         category: 'process',
         action: 'task_queue_worker_start_failed',
         message: 'Failed to start background task queue worker',
+        error
+      });
+    }
+  }
+
+  private startMetricsEmitter(): void {
+    try {
+      this.metricsEmitter = new MetricsEmitter(
+        this.taskQueue,
+        this.ephemeralWorkerService,
+        60000
+      );
+      this.metricsEmitter.start();
+      logger.info({
+        category: 'process',
+        action: 'metrics_emitter_started',
+        message: 'Background metrics emitter started successfully'
+      });
+    } catch (error) {
+      logger.error({
+        category: 'process',
+        action: 'metrics_emitter_start_failed',
+        message: 'Failed to start metrics emitter',
         error
       });
     }
@@ -1147,6 +1175,25 @@ export class DevBotsManager extends EventEmitter {
           category: 'process',
           action: 'task_queue_worker_stop_failed',
           message: 'Failed to stop background task queue worker',
+          error
+        });
+      }
+    }
+
+    // Stop metrics emitter
+    if (this.metricsEmitter) {
+      try {
+        this.metricsEmitter.stop();
+        logger.info({
+          category: 'process',
+          action: 'metrics_emitter_stopped',
+          message: 'Metrics emitter stopped'
+        });
+      } catch (error) {
+        logger.error({
+          category: 'process',
+          action: 'metrics_emitter_stop_failed',
+          message: 'Failed to stop metrics emitter',
           error
         });
       }
