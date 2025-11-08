@@ -34,6 +34,7 @@ import type {
 } from '@app-monitor/api-contracts';
 import type { Task, TaskExecution } from '../services/taskQueue.sqlite.js';
 import { WorkerLogLocator } from '../services/taskLogLocator.js';
+import { LogStreamAccessTracker } from '../services/logStreamAccessTracker.js';
 
 const TECHNICAL_TASK_TYPES = new Set(['refactor', 'implementation', 'bug', 'feature']);
 const MIN_DOCUMENTATION_LENGTH = 50;
@@ -41,6 +42,10 @@ const MIN_ACCEPTANCE_CRITERION_LENGTH = 30;
 const DEFAULT_WORK_TARGET = 'dev-bots';
 const LOG_STREAM_TYPES = ['stdout', 'stderr'] as const;
 type LogStreamType = (typeof LOG_STREAM_TYPES)[number];
+const parsedStreamLimit = Number(process.env.MAX_LOG_STREAM_SUBSCRIBERS ?? '5');
+const MAX_LOG_STREAM_SUBSCRIBERS =
+  Number.isFinite(parsedStreamLimit) && parsedStreamLimit > 0 ? parsedStreamLimit : 5;
+const logStreamAccessTracker = new LogStreamAccessTracker(MAX_LOG_STREAM_SUBSCRIBERS);
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   if (!value || typeof value !== 'object') {
@@ -171,6 +176,20 @@ interface LogStreamOptions {
 }
 
 const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOptions) => {
+  let slotAcquired = false;
+  const streamKey = filePath;
+
+  if (follow) {
+    slotAcquired = logStreamAccessTracker.tryAcquire(streamKey);
+    if (!slotAcquired) {
+      res.status(429).json({
+        error: 'Log stream limit reached',
+        message: `Only ${MAX_LOG_STREAM_SUBSCRIBERS} concurrent followers are allowed per ${stream} stream.`,
+      });
+      return;
+    }
+  }
+
   res.status(200);
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -183,6 +202,7 @@ const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOp
   let remainder = '';
   let closed = false;
   let currentRead: Promise<void> = Promise.resolve();
+  let pendingFollowRead = false;
 
   const heartbeat = setInterval(() => {
     if (!closed) {
@@ -190,11 +210,20 @@ const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOp
     }
   }, 15000);
 
+  const releaseFollowSlot = () => {
+    if (!slotAcquired) {
+      return;
+    }
+    logStreamAccessTracker.release(streamKey);
+    slotAcquired = false;
+  };
+
   const cleanup = () => {
     if (closed) return;
     closed = true;
     clearInterval(heartbeat);
     watcher?.close();
+    releaseFollowSlot();
     res.end();
   };
 
@@ -273,9 +302,16 @@ const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOp
         if (eventType !== 'change') {
           return;
         }
+        if (pendingFollowRead) {
+          return;
+        }
+        pendingFollowRead = true;
         currentRead = currentRead
           .then(() => pump(bytesRead))
-          .catch(handleError);
+          .catch(handleError)
+          .finally(() => {
+            pendingFollowRead = false;
+          });
       });
     } catch (error) {
       handleError(error);
