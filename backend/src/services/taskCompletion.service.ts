@@ -13,8 +13,6 @@
 import { logger } from '../utils/logger.js';
 import type { Task } from './taskQueue.sqlite.js';
 import type { EphemeralWorker } from './ephemeralWorker.service.js';
-// WorkspaceOrchestrator removed - commit/push happens via Docker exec, not host git operations
-import type { WorkspaceContext } from './ephemeralWorker.service.js';
 
 export interface PushCoordinator {
   enqueue<T>(operation: () => Promise<T>): Promise<T>;
