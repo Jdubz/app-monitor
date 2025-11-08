@@ -299,7 +299,7 @@ describe('TaskTemplateValidator', () => {
       );
     });
 
-    it('should warn when acceptanceCriteria lacks EXACTLY language', () => {
+    it('should fail when acceptanceCriteria lacks EXACTLY language', () => {
       const template: Partial<TaskTemplateV3> = {
         type: 'implementation',
         title: 'Test',
@@ -314,11 +314,13 @@ describe('TaskTemplateValidator', () => {
         acceptanceCriteria: ['Feature works'], // No "EXACTLY"!
         constraints: ['MUST NOT test'],
         files: ['test.ts'],
+        doNotCreate: ['helper.ts (reuse existing helper)'],
         gitWorkflow: { required: true, branch: 'main', commitMessage: 'test' }
       };
 
       const result = validateTaskTemplate(template);
-      expect(result.warnings).toContainEqual(
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContainEqual(
         expect.objectContaining({
           field: 'acceptanceCriteria',
           message: expect.stringContaining('EXACTLY')
@@ -409,7 +411,7 @@ describe('TaskTemplateValidator', () => {
       );
     });
 
-    it('should warn when doNotCreate lacks explanations', () => {
+    it('should fail when doNotCreate lacks explanations', () => {
       const template: Partial<TaskTemplateV3> = {
         type: 'implementation',
         title: 'Test',
@@ -429,10 +431,11 @@ describe('TaskTemplateValidator', () => {
       };
 
       const result = validateTaskTemplate(template);
-      expect(result.warnings).toContainEqual(
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContainEqual(
         expect.objectContaining({
-          field: 'doNotCreate',
-          message: expect.stringContaining('explanations in parentheses')
+          field: 'doNotCreate[0]',
+          message: expect.stringContaining('"<path> (reason)" format')
         })
       );
     });
@@ -451,7 +454,8 @@ describe('TaskTemplateValidator', () => {
         preImplementationChecklist: ['test'],
         acceptanceCriteria: ['test'],
         constraints: ['test'],
-        files: ['test.ts']
+        files: ['test.ts'],
+        doNotCreate: ['helper.ts (reuse existing helper)']
         // No gitWorkflow!
       };
 
@@ -544,8 +548,10 @@ describe('isV3Template', () => {
         mustNotDuplicate: ['Existing migrations']
       },
       preImplementationChecklist: ['[ ] Review database schema'],
+      acceptanceCriteria: ['EXACTLY update retry column'],
       constraints: ['MUST NOT break existing tasks'],
       files: ['backend/src/services/database.ts'],
+      doNotCreate: ['backend/src/types/retry.ts (reuse existing file)'],
       gitWorkflow: {
         required: true,
         branch: 'staging',
@@ -619,7 +625,9 @@ describe('isV3Template', () => {
         mustNotDuplicate: ['duplicate']
       },
       preImplementationChecklist: ['[ ] Step'],
-      constraints: ['MUST NOT break prod']
+      acceptanceCriteria: ['EXACTLY follow spec'],
+      constraints: ['MUST NOT break prod'],
+      doNotCreate: ['helper.ts (reuse existing helper)']
     };
 
     expect(isV3Template(template)).toBe(false);
@@ -647,7 +655,9 @@ describe('isV3Template edge cases', () => {
         mustNotDuplicate: []
       },
       preImplementationChecklist: [],
+      acceptanceCriteria: [],
       constraints: [],
+      doNotCreate: ['helper.ts (reuse existing helper)'],
       gitWorkflow: { required: true, branch: 'main', commitMessage: 'test' }
     };
 
@@ -666,7 +676,9 @@ describe('isV3Template edge cases', () => {
         mustNotDuplicate: ['duplicate']
       },
       preImplementationChecklist: ['[ ] Step'],
+      acceptanceCriteria: ['EXACTLY follow spec'],
       constraints: ['Do not break prod'],
+      doNotCreate: ['helper.ts (reuse existing helper)'],
       gitWorkflow: null
     };
 

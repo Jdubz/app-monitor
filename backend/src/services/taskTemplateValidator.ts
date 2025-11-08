@@ -76,6 +76,37 @@ export interface ValidationResult {
   warnings: ValidationError[];
 }
 
+const MIN_INVESTIGATION_ENTRY_LENGTH = 15;
+const MIN_ACCEPTANCE_CRITERIA_LENGTH = 12;
+const MIN_CONSTRAINT_LENGTH = 12;
+const DO_NOT_CREATE_ACTIONABLE_KEYWORDS = ['reuse', 'extend', 'existing', 'use existing', 'leverage existing'];
+
+function isPopulatedString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function parseDoNotCreateEntry(entry: string): { filePath: string; reason: string } | null {
+  const normalized = entry.trim();
+  const match = normalized.match(/^([^()]+)\(([^()]+)\)$/);
+  if (!match) {
+    return null;
+  }
+
+  const filePath = match[1]?.trim() ?? '';
+  const reason = match[2]?.trim() ?? '';
+
+  if (filePath === '' || reason === '') {
+    return null;
+  }
+
+  return { filePath, reason };
+}
+
+function hasActionableExplanation(reason: string): boolean {
+  const normalized = reason.toLowerCase();
+  return DO_NOT_CREATE_ACTIONABLE_KEYWORDS.some(keyword => normalized.includes(keyword));
+}
+
 const INVESTIGATION_ACTION_VERBS = ['READ', 'GREP', 'CHECK', 'VERIFY', 'INSPECT', 'REVIEW', 'TRACE', 'SEARCH'];
 const ACCEPTANCE_SCOPE_KEYWORDS = ['EXACTLY', 'NO MORE', 'NO LESS'];
 const ACCEPTANCE_GUARDRAIL_KEYWORDS = ['DO NOT', 'MUST NOT'];
