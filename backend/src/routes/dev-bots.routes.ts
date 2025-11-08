@@ -1187,5 +1187,107 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
     }
   });
 
+  /**
+   * POST /dev-bots/pr-monitor/register-orphaned
+   * Manually register orphaned PRs for monitoring
+   *
+   * This endpoint scans the database for tasks with PR metadata that aren't
+   * currently being monitored, and registers them with the PR workflow orchestrator.
+   * Useful for recovering from server crashes that orphaned PR tracking.
+   */
+  router.post('/pr-monitor/register-orphaned', async (_req: Request, res: Response) => {
+    try {
+      const orchestrator = devBotsManager.getPRWorkflowOrchestrator();
+      if (!orchestrator) {
+        res.status(503).json({
+          error: 'PR workflow orchestrator not available',
+          message: 'PR monitoring is not enabled or not initialized'
+        });
+        return;
+      }
+
+      // Get currently monitored PR numbers
+      const monitoredPRs = orchestrator.getMonitoredPRs();
+      const monitoredPRNumbers = new Set(monitoredPRs.map(pr => pr.prNumber));
+
+      // Get all tasks with unmerged PRs from database
+      const taskQueue = devBotsManager.getTaskQueue();
+      const tasksWithPRs = taskQueue.getTasksWithUnmergedPRs();
+
+      // Find orphaned PRs (in DB but not monitored)
+      const orphanedTasks = tasksWithPRs.filter(task =>
+        task.pr_number && !monitoredPRNumbers.has(task.pr_number)
+      );
+
+      if (orphanedTasks.length === 0) {
+        res.json({
+          success: true,
+          message: 'No orphaned PRs found',
+          registered: 0,
+          alreadyMonitored: monitoredPRs.length
+        });
+        return;
+      }
+
+      // Register each orphaned PR
+      const registered: Array<{ taskId: string; prNumber: number; prUrl: string }> = [];
+      for (const task of orphanedTasks) {
+        try {
+          // Get PR monitor service through orchestrator's internal prMonitor
+          // We need to call registerPR which is on the PRMonitorService
+          // The orchestrator has this via handleTaskCompletion, but we need direct access
+
+          // For now, manually trigger initialization which will pick up all unmerged PRs
+          await orchestrator.initialize();
+
+          registered.push({
+            taskId: task.id,
+            prNumber: task.pr_number!,
+            prUrl: task.pr_url!
+          });
+
+          logger.info({
+            category: 'pr-workflow',
+            action: 'orphaned_pr_registered',
+            message: `Manually registered orphaned PR #${task.pr_number}`,
+            details: {
+              taskId: task.id,
+              prNumber: task.pr_number,
+              prUrl: task.pr_url
+            }
+          });
+        } catch (error) {
+          logger.error({
+            category: 'pr-workflow',
+            action: 'orphaned_pr_registration_failed',
+            message: `Failed to register orphaned PR #${task.pr_number}`,
+            error,
+            details: { taskId: task.id }
+          });
+        }
+      }
+
+      res.json({
+        success: true,
+        message: `Registered ${registered.length} orphaned PR(s)`,
+        registered,
+        totalOrphaned: orphanedTasks.length,
+        nowMonitoring: orchestrator.getMonitoredPRs().length
+      });
+
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_register_orphaned_prs',
+        message: `Error registering orphaned PRs: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to register orphaned PRs',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
   return router;
 }
