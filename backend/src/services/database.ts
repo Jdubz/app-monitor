@@ -754,6 +754,61 @@ export interface StoredQualityObservation {
   created_at: number;
 }
 
+export type InteractiveSessionStatus =
+  | 'starting'
+  | 'running'
+  | 'disconnecting'
+  | 'terminating'
+  | 'ended'
+  | 'error';
+
+export interface InteractiveSessionRecord {
+  id: string;
+  ownerEmail: string;
+  modelProvider: string;
+  modelName: string;
+  status: InteractiveSessionStatus;
+  containerId?: string;
+  startedAt: string;
+  lastUserActivityAt?: string;
+  lastAgentActivityAt?: string;
+  endedAt?: string;
+  terminationReason?: string;
+  contextSnapshot?: unknown;
+  logPath?: string;
+  metadata?: Record<string, unknown>;
+  updatedAt: string;
+}
+
+export interface NewInteractiveSession {
+  id: string;
+  ownerEmail: string;
+  modelProvider: string;
+  modelName: string;
+  status: InteractiveSessionStatus;
+  containerId?: string;
+  startedAt?: string;
+  lastUserActivityAt?: string;
+  lastAgentActivityAt?: string;
+  endedAt?: string;
+  terminationReason?: string;
+  contextSnapshot?: unknown;
+  logPath?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface InteractiveSessionUpdate {
+  status?: InteractiveSessionStatus;
+  containerId?: string | null;
+  lastUserActivityAt?: string | null;
+  lastAgentActivityAt?: string | null;
+  endedAt?: string | null;
+  terminationReason?: string | null;
+  contextSnapshot?: unknown;
+  logPath?: string | null;
+  metadata?: Record<string, unknown> | null;
+}
+
 // Singleton instance
 let dbInstance: DevBotsDatabase | null = null;
 
