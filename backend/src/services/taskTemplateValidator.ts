@@ -76,9 +76,9 @@ export interface ValidationResult {
   warnings: ValidationError[];
 }
 
-// const MIN_INVESTIGATION_ENTRY_LENGTH = 15; // Reserved for future use
-// const MIN_ACCEPTANCE_CRITERIA_LENGTH = 12; // Reserved for future use
-// const MIN_CONSTRAINT_LENGTH = 12; // Reserved for future use
+// TODO(templates): introduce minimum length constants for investigation steps,
+// acceptance criteria, and constraint text once usage data shows appropriate
+// guardrail values.
 const DO_NOT_CREATE_ACTIONABLE_KEYWORDS: ReadonlyArray<string> = Object.freeze([
   'reuse',
   'extend',
@@ -639,28 +639,13 @@ export function shouldValidateAsV3Template(payload: unknown): payload is Partial
     return true;
   }
 
-  if (candidate.investigation || candidate.preImplementationChecklist || candidate.doNotCreate) {
+  // V3 templates always define an investigation block and do-not-create guardrails.
+  const hasInvestigationBlock = typeof candidate.investigation === 'object' && candidate.investigation !== null;
+  const hasDoNotCreateList = Array.isArray(candidate.doNotCreate) && candidate.doNotCreate.length > 0;
+
+  if (hasInvestigationBlock || hasDoNotCreateList) {
     return true;
   }
 
-  const indicatorFields: Array<keyof TaskTemplateV3> = [
-    'preImplementationChecklist',
-    'acceptanceCriteria',
-    'constraints',
-    'doNotCreate',
-    'gitWorkflow'
-  ];
-
-  const indicatorCount = indicatorFields.reduce((count, field) => {
-    const value = candidate[field];
-    if (Array.isArray(value) && value.length > 0) {
-      return count + 1;
-    }
-    if (value && !Array.isArray(value)) {
-      return count + 1;
-    }
-    return count;
-  }, 0);
-
-  return indicatorCount >= 2;
+  return false;
 }

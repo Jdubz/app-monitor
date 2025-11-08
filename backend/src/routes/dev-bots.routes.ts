@@ -202,13 +202,30 @@ const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOp
     new Promise<void>((resolve, reject) => {
       const readStream = fs.createReadStream(filePath, { encoding: 'utf-8', start });
 
+      const writeLine = (line: string) => {
+        if (closed) {
+          readStream.destroy();
+          return;
+        }
+
+        const canContinue = res.write(`data: ${line}\n\n`);
+        if (!canContinue) {
+          readStream.pause();
+          res.once('drain', () => {
+            if (!closed) {
+              readStream.resume();
+            }
+          });
+        }
+      };
+
       readStream.on('data', (chunk: string) => {
         bytesRead += Buffer.byteLength(chunk);
         const combined = remainder + chunk;
         const lines = combined.split(/\r?\n/);
         remainder = lines.pop() ?? '';
         for (const line of lines) {
-          res.write(`data: ${line}\n\n`);
+          writeLine(line);
         }
       });
 
@@ -1633,14 +1650,17 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
 
       // Register each orphaned PR
       const registered: Array<{ taskId: string; prNumber: number; prUrl: string }> = [];
+      const skipped: Array<{ taskId: string; reason: string }> = [];
       for (const task of orphanedTasks) {
         try {
-          // Get PR monitor service through orchestrator's internal prMonitor
-          // We need to call registerPR which is on the PRMonitorService
-          // The orchestrator has this via handleTaskCompletion, but we need direct access
-
-          // For now, manually trigger initialization which will pick up all unmerged PRs
-          await orchestrator.initialize();
+          const wasRegistered = orchestrator.registerExistingPR(task);
+          if (!wasRegistered) {
+            skipped.push({
+              taskId: task.id,
+              reason: 'Task is missing PR metadata required for monitoring'
+            });
+            continue;
+          }
 
           registered.push({
             taskId: task.id,
@@ -1659,6 +1679,10 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
             }
           });
         } catch (error) {
+          skipped.push({
+            taskId: task.id,
+            reason: 'Unexpected error while registering PR'
+          });
           logger.error({
             category: 'pr-workflow',
             action: 'orphaned_pr_registration_failed',
@@ -1673,6 +1697,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
         success: true,
         message: `Registered ${registered.length} orphaned PR(s)`,
         registered,
+        skipped,
         totalOrphaned: orphanedTasks.length,
         nowMonitoring: orchestrator.getMonitoredPRs().length
       });

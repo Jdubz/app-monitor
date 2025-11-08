@@ -105,8 +105,10 @@ export function TaskLogViewer({ taskId, logs }: TaskLogViewerProps) {
   if (!taskId) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 rounded-lg border border-border/70 bg-muted/10 p-6 text-sm text-muted-foreground">
-        <Terminal className="h-5 w-5" />
-        <p>Select a task to see worker logs.</p>
+        <Terminal className="h-5 w-5" aria-hidden="true" />
+        <div role="status" aria-live="polite">
+          <p>Select a task to see worker logs.</p>
+        </div>
       </div>
     );
   }

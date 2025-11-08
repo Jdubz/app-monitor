@@ -806,6 +806,36 @@ export class TaskExecutionService {
   }
 
   /**
+   * Detect if output contains error indicators, even if exitCode is 0.
+   * Some errors (like missing agents, Claude CLI usage errors) exit with code 0.
+   */
+  private detectErrorInOutput(stdout: string, stderr?: string): boolean {
+    const output = `${stdout}\n${stderr || ''}`.toLowerCase();
+
+    // Common error patterns that indicate task failure
+    const errorPatterns = [
+      /agent not found/i,
+      /task was orphaned/i,
+      /input must be provided/i,
+      /error:/i,
+      /failed to/i,
+      /cannot find/i,
+      /command not found/i,
+      /no such file or directory/i,
+      /permission denied/i,
+      /connection refused/i,
+      /timeout/i,
+      /fatal:/i,
+      /exception:/i,
+      /traceback/i,
+      /\[error\]/i,
+      /\berror\b.*occurred/i
+    ];
+
+    return errorPatterns.some(pattern => pattern.test(output));
+  }
+
+  /**
    * Allow git operations within the container a brief moment to flush to disk.
    * Prevents race conditions where the host immediately reads from the workspace.
    */
