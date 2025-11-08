@@ -84,6 +84,70 @@ export interface EnhancedTaskData {
   alternatives: string[];
 }
 
+type GuidelineType = 'implementation' | 'review' | 'testing';
+
+interface GuidelineFieldSet {
+  required: string[];
+  optional: string[];
+}
+
+const BASE_REQUIRED_FIELDS = ['title', 'description', 'acceptanceCriteria'];
+const IMPLEMENTATION_REQUIRED_FIELDS = [
+  ...BASE_REQUIRED_FIELDS,
+  'architectureReferences',
+  'estimatedEffort',
+  'validationSteps',
+  'successMetrics',
+  'assignedAgent'
+];
+const REVIEW_AND_TESTING_REQUIRED_FIELDS = [
+  ...BASE_REQUIRED_FIELDS,
+  'validationSteps',
+  'successMetrics',
+  'testingRequirements',
+  'assignedAgent'
+];
+
+const IMPLEMENTATION_OPTIONAL_FIELDS = [
+  'files',
+  'dependencies',
+  'prerequisites',
+  'rollbackPlan',
+  'testingRequirements',
+  'documentationRequirements',
+  'parentInitiative',
+  'relatedTasks'
+];
+const REVIEW_OPTIONAL_FIELDS = [
+  'files',
+  'architectureReferences',
+  'rollbackPlan',
+  'documentationRequirements',
+  'relatedTasks'
+];
+const TESTING_OPTIONAL_FIELDS = [
+  'files',
+  'estimatedEffort',
+  'rollbackPlan',
+  'documentationRequirements',
+  'relatedTasks'
+];
+
+const GUIDELINE_FIELD_DEFINITIONS: Record<GuidelineType, GuidelineFieldSet> = {
+  implementation: {
+    required: IMPLEMENTATION_REQUIRED_FIELDS,
+    optional: IMPLEMENTATION_OPTIONAL_FIELDS
+  },
+  review: {
+    required: REVIEW_AND_TESTING_REQUIRED_FIELDS,
+    optional: REVIEW_OPTIONAL_FIELDS
+  },
+  testing: {
+    required: REVIEW_AND_TESTING_REQUIRED_FIELDS,
+    optional: TESTING_OPTIONAL_FIELDS
+  }
+};
+
 export class TaskCreationGuidelinesManager {
   private guidelines: Map<string, TaskCreationGuidelines> = new Map();
   private validationRules: ValidationRule[] = [];
@@ -119,14 +183,8 @@ export class TaskCreationGuidelinesManager {
       id: 'implementation',
       name: 'Implementation Task Guidelines',
       description: 'Guidelines for creating detailed implementation tasks',
-      requiredFields: [
-        'title', 'description', 'acceptanceCriteria', 'architectureReferences',
-        'estimatedEffort', 'validationSteps', 'successMetrics', 'assignedAgent'
-      ],
-      optionalFields: [
-        'files', 'dependencies', 'prerequisites', 'rollbackPlan', 'testingRequirements',
-        'documentationRequirements', 'parentInitiative', 'relatedTasks'
-      ],
+      requiredFields: GUIDELINE_FIELD_DEFINITIONS.implementation.required,
+      optionalFields: GUIDELINE_FIELD_DEFINITIONS.implementation.optional,
       validationRules: [
         {
           field: 'acceptanceCriteria',
@@ -217,14 +275,8 @@ export class TaskCreationGuidelinesManager {
       id: 'review',
       name: 'Code Review Task Guidelines',
       description: 'Guidelines for creating comprehensive code review tasks',
-      requiredFields: [
-        'title', 'description', 'acceptanceCriteria',
-        'validationSteps', 'successMetrics', 'testingRequirements', 'assignedAgent'
-      ],
-      optionalFields: [
-        'files', 'architectureReferences', 'rollbackPlan',
-        'documentationRequirements', 'relatedTasks'
-      ],
+      requiredFields: GUIDELINE_FIELD_DEFINITIONS.review.required,
+      optionalFields: GUIDELINE_FIELD_DEFINITIONS.review.optional,
       validationRules: [
         {
           field: 'acceptanceCriteria',
@@ -299,14 +351,8 @@ export class TaskCreationGuidelinesManager {
       id: 'testing',
       name: 'Testing Task Guidelines',
       description: 'Guidelines for creating comprehensive testing tasks',
-      requiredFields: [
-        'title', 'description', 'acceptanceCriteria',
-        'testingRequirements', 'validationSteps', 'successMetrics', 'assignedAgent'
-      ],
-      optionalFields: [
-        'files', 'estimatedEffort', 'rollbackPlan',
-        'documentationRequirements', 'relatedTasks'
-      ],
+      requiredFields: GUIDELINE_FIELD_DEFINITIONS.testing.required,
+      optionalFields: GUIDELINE_FIELD_DEFINITIONS.testing.optional,
       validationRules: [
         {
           field: 'testingRequirements',
