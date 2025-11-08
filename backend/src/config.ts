@@ -18,6 +18,7 @@ export const config = {
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5174',
   gcpKeyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS || path.join(ROOT_DIR, '.firebase/serviceAccountKey.json'),
   logSourcesConfig: path.join(__dirname, '../config/log-sources.json'),
+  workerLogStreamsConfig: path.join(__dirname, '../config/worker-log-streams.json'),
 
   // Automatic Failure Recovery Feature Flags
   recovery: {

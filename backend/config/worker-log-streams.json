@@ -1,0 +1,17 @@
+{
+  "dev-bots": {
+    "artifactRoot": "dev-bots/artifacts",
+    "streams": {
+      "stdout": {
+        "pattern": "{taskId}-stdout-*.log",
+        "label": "Task stdout",
+        "encoding": "utf-8"
+      },
+      "stderr": {
+        "pattern": "{taskId}-stderr-*.log",
+        "label": "Task stderr",
+        "encoding": "utf-8"
+      }
+    }
+  }
+}
