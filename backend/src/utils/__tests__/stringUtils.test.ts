@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toTitleCase } from '../stringUtils.js';
+import { toTitleCase, escapeRegExp } from '../stringUtils.js';
 
 describe('stringUtils', () => {
   describe('toTitleCase', () => {
@@ -34,5 +34,19 @@ describe('stringUtils', () => {
     it('returns empty string when input is empty', () => {
       expect(toTitleCase('')).toBe('');
     });
+  });
+});
+
+describe('escapeRegExp', () => {
+  it('escapes regex metacharacters', () => {
+    expect(escapeRegExp('file.name+test?')).toBe('file\\.name\\+test\\?');
+  });
+
+  it('returns original string when no special characters present', () => {
+    expect(escapeRegExp('filename')).toBe('filename');
+  });
+
+  it('handles empty strings gracefully', () => {
+    expect(escapeRegExp('')).toBe('');
   });
 });

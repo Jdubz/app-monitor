@@ -80,9 +80,10 @@ export interface ValidationResult {
 // acceptance criteria, and constraint text once usage data shows appropriate
 // guardrail values.
 const DO_NOT_CREATE_ACTIONABLE_KEYWORDS: ReadonlyArray<string> = Object.freeze([
+  // Single-word actions capture directives like "reuse the helper"
   'reuse',
   'extend',
-  'existing',
+  // Explicit phrases retain signal without over-matching every usage of "existing"
   'use existing',
   'leverage existing',
 ]);

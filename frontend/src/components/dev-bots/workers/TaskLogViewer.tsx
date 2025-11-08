@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { PauseCircle, PlayCircle, RefreshCw, Terminal } from 'lucide-react';
 
 import { getApiBasePath } from '@/services/api';
@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { BoundedLogBuffer } from '@/utils/boundedLogBuffer';
 
 type LogStream = 'stdout' | 'stderr';
 
@@ -27,31 +28,44 @@ const formatBytes = (size?: number) => {
 
 export function TaskLogViewer({ taskId, logs }: TaskLogViewerProps) {
   const [activeStream, setActiveStream] = useState<LogStream>('stdout');
-  const [lines, setLines] = useState<string[]>([]);
   const [autoScroll, setAutoScroll] = useState(true);
   const [streamError, setStreamError] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const containerRef = useRef<HTMLDivElement | null>(null);
   const eventSourceRef = useRef<EventSource | null>(null);
+  const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
+  const logBufferRef = useRef(new BoundedLogBuffer<string>(MAX_LINES));
+  const [bufferVersion, setBufferVersion] = useState(0);
+
+  const resetBuffer = useCallback(() => {
+    logBufferRef.current = new BoundedLogBuffer<string>(MAX_LINES);
+    setBufferVersion((version) => version + 1);
+  }, []);
+
+  const appendLine = useCallback((line: string) => {
+    logBufferRef.current.push(line);
+    setBufferVersion((version) => version + 1);
+  }, []);
+
+  const lines = useMemo(() => logBufferRef.current.toArray(), [bufferVersion]);
 
   useEffect(() => {
     setActiveStream('stdout');
-    setLines([]);
+    resetBuffer();
     setStreamError(null);
     setIsStreaming(false);
-  }, [taskId]);
+  }, [taskId, resetBuffer]);
 
   useEffect(() => {
     if (!taskId) {
       eventSourceRef.current?.close();
-      setLines([]);
+      resetBuffer();
       setIsStreaming(false);
       return;
     }
 
     eventSourceRef.current?.close();
-    setLines([]);
+    resetBuffer();
     setStreamError(null);
 
     const baseUrl = getApiBasePath();
@@ -62,13 +76,7 @@ export function TaskLogViewer({ taskId, logs }: TaskLogViewerProps) {
 
     source.onmessage = (event) => {
       if (!event.data) return;
-      setLines((prev) => {
-        const next = [...prev, event.data];
-        if (next.length > MAX_LINES) {
-          next.splice(0, next.length - MAX_LINES);
-        }
-        return next;
-      });
+      appendLine(event.data);
     };
 
     source.addEventListener('stream-error', (event) => {
@@ -92,12 +100,20 @@ export function TaskLogViewer({ taskId, logs }: TaskLogViewerProps) {
     return () => {
       source.close();
     };
-  }, [taskId, activeStream, refreshKey]);
+  }, [taskId, activeStream, refreshKey, appendLine, resetBuffer]);
 
   useEffect(() => {
-    if (!autoScroll) return;
-    if (!containerRef.current) return;
-    containerRef.current.scrollTop = containerRef.current.scrollHeight;
+    if (!autoScroll) {
+      return;
+    }
+    const anchor = scrollAnchorRef.current;
+    if (!anchor) {
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      anchor.scrollIntoView({ block: 'end', behavior: 'auto' });
+    });
+    return () => cancelAnimationFrame(frame);
   }, [lines, autoScroll]);
 
   const activeDescriptor = useMemo(() => logs?.[activeStream] ?? null, [logs, activeStream]);
@@ -196,7 +212,7 @@ export function TaskLogViewer({ taskId, logs }: TaskLogViewerProps) {
       )}
 
       <ScrollArea className="flex-1 rounded-md border border-border/50 bg-background/70">
-        <div ref={containerRef}>
+        <div>
           <pre className="min-h-[320px] whitespace-pre-wrap break-words p-4 text-xs text-foreground">
             {lines.length === 0 ? (
               <span className="text-muted-foreground">Waiting for log events...</span>
@@ -204,6 +220,7 @@ export function TaskLogViewer({ taskId, logs }: TaskLogViewerProps) {
               lines.join('\n')
             )}
           </pre>
+          <div ref={scrollAnchorRef} aria-hidden="true" />
         </div>
       </ScrollArea>
     </div>
