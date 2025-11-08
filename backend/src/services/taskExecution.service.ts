@@ -25,7 +25,7 @@ import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import { isTaskStuck, detectFailurePattern } from './taskFailureGuards.js';
 import type { SimpleFailureRecovery } from './failureRecovery.js';
 import { resolveArtifactsDir } from '../utils/repoPaths.js';
-import { AgentTypeManager, type AgentType } from './agentTypeManager.js';
+import { AgentTypeManager } from './agentTypeManager.js';
 import * as DockerConfig from './dockerConfig.js';
 
 // ============================================================================
@@ -572,8 +572,7 @@ export class TaskExecutionService {
       message: `Prepared docker invocation for ${cliCommand}`,
       details: {
         dockerArgsSample: redactedDockerArgs.slice(0, 12),
-        dockerArgCount: dockerArgs.length,
-        gitEnvKeysForwarded: providedGitEnvKeys
+        dockerArgCount: dockerArgs.length
       }
     });
 

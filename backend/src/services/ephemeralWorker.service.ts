@@ -732,7 +732,5 @@ export class EphemeralWorkerService {
     }
   }
 
-  public async populateWorkspaceFromRepo(containerId: string, repoRoot: string): Promise<void> {
-    await this.copyWorkspaceToContainer(containerId, repoRoot);
-  }
+  // populateWorkspaceFromRepo removed - using cloneFreshRepoInContainer directly
 }

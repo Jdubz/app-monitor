@@ -1,9 +1,11 @@
 // Local storage service for persisting panel configurations
 
 import { Panel, PanelLayout, SavedLayout, LayoutType } from '../types/panel.types';
+import { createLogger } from '@/utils/logger';
 
 const STORAGE_KEY = 'app-monitor-panel-layout';
 const SAVED_LAYOUTS_KEY = 'app-monitor-saved-layouts';
+const log = createLogger('panelStorage');
 
 export class PanelStorage {
   /**
@@ -19,7 +21,7 @@ export class PanelStorage {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(layout));
     } catch (error) {
-      console.error('Failed to save panel layout:', error);
+      log.error('Failed to save panel layout', error);
     }
   }
 
@@ -34,7 +36,7 @@ export class PanelStorage {
       const layout: PanelLayout = JSON.parse(data);
       return layout;
     } catch (error) {
-      console.error('Failed to load panel layout:', error);
+      log.error('Failed to load panel layout', error);
       return null;
     }
   }
@@ -46,7 +48,7 @@ export class PanelStorage {
     try {
       localStorage.removeItem(STORAGE_KEY);
     } catch (error) {
-      console.error('Failed to clear panel layout:', error);
+      log.error('Failed to clear panel layout', error);
     }
   }
 
@@ -66,7 +68,7 @@ export class PanelStorage {
       layouts[name] = savedLayout;
       localStorage.setItem(SAVED_LAYOUTS_KEY, JSON.stringify(layouts));
     } catch (error) {
-      console.error('Failed to save named layout:', error);
+      log.error('Failed to save named layout', error);
     }
   }
 
@@ -78,7 +80,7 @@ export class PanelStorage {
       const layouts = this.getAllSavedLayouts();
       return layouts[name] || null;
     } catch (error) {
-      console.error('Failed to load named layout:', error);
+      log.error('Failed to load named layout', error);
       return null;
     }
   }
@@ -91,7 +93,7 @@ export class PanelStorage {
       const data = localStorage.getItem(SAVED_LAYOUTS_KEY);
       return data ? JSON.parse(data) : {};
     } catch (error) {
-      console.error('Failed to get saved layouts:', error);
+      log.error('Failed to get saved layouts', error);
       return {};
     }
   }
@@ -105,7 +107,7 @@ export class PanelStorage {
       delete layouts[name];
       localStorage.setItem(SAVED_LAYOUTS_KEY, JSON.stringify(layouts));
     } catch (error) {
-      console.error('Failed to delete layout:', error);
+      log.error('Failed to delete layout', error);
     }
   }
 
@@ -130,7 +132,7 @@ export class PanelStorage {
       }
       this.saveNamedLayout(layout.name, layout.panels, layout.layoutType);
     } catch (error) {
-      console.error('Failed to import layout:', error);
+      log.error('Failed to import layout', error);
       throw error;
     }
   }

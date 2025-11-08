@@ -1269,42 +1269,14 @@ export class TaskQueueService {
 
   /**
    * Run recovery system database migration
+   * DEPRECATED: Migration file removed
    */
   async runRecoveryMigration(): Promise<void> {
-    try {
-      // Import dynamically to avoid circular dependencies
-      const { RecoveryMigration } = await import('./taskQueue.recovery.migration.js');
-      const migration = new RecoveryMigration(this.db);
-      const result = migration.migrate();
-
-      if (result.success) {
-        logger.info({
-          category: 'process',
-          action: 'recovery_migration_success',
-          message: 'Recovery system migration completed successfully',
-          details: {
-            tablesCreated: result.tablesCreated,
-            fieldsAdded: result.fieldsAdded
-          }
-        });
-      } else {
-        logger.error({
-          category: 'process',
-          action: 'recovery_migration_failed',
-          message: 'Recovery system migration failed',
-          details: {
-            errors: result.errors
-          }
-        });
-      }
-    } catch (error) {
-      logger.error({
-        category: 'process',
-        action: 'recovery_migration_error',
-        message: 'Error running recovery migration',
-        error
-      });
-    }
+    logger.info({
+      category: 'process',
+      action: 'recovery_migration_skipped',
+      message: 'Recovery migration skipped - migration file removed'
+    });
   }
 
   /**

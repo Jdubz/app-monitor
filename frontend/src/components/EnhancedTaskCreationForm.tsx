@@ -8,6 +8,15 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { api } from "../services/api";
 
@@ -563,67 +572,97 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
 
                 <div className={classes.formRow}>
                   <div className={classes.formGroup}>
-                    <label className={classes.label}>Task Type *</label>
-                    <select
+                    <Label className={classes.label} htmlFor="task-type">
+                      Task Type *
+                    </Label>
+                    <Select
                       value={taskData.type}
-                      onChange={(event) => setTaskData({ ...taskData, type: event.target.value })}
-                      className={classes.select}
-                      title="Select task type"
+                      onValueChange={(value) => setTaskData({ ...taskData, type: value })}
                     >
-                      <option value="implementation">Implementation</option>
-                      <option value="api-development">API Development</option>
-                      <option value="ui-development">UI Development</option>
-                      <option value="review">Review</option>
-                      <option value="testing">Testing</option>
-                      <option value="documentation">Documentation</option>
-                      <option value="deployment">Deployment</option>
-                      <option value="debugging">Debugging</option>
-                      <option value="cleanup">Cleanup</option>
-                    </select>
+                      <SelectTrigger id="task-type" className={classes.select}>
+                        <SelectValue placeholder="Select task type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="implementation">Implementation</SelectItem>
+                        <SelectItem value="api-development">API Development</SelectItem>
+                        <SelectItem value="ui-development">UI Development</SelectItem>
+                        <SelectItem value="review">Review</SelectItem>
+                        <SelectItem value="testing">Testing</SelectItem>
+                        <SelectItem value="documentation">Documentation</SelectItem>
+                        <SelectItem value="deployment">Deployment</SelectItem>
+                        <SelectItem value="debugging">Debugging</SelectItem>
+                        <SelectItem value="cleanup">Cleanup</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className={classes.formGroup}>
-                    <label className={classes.label}>Assigned Agent *</label>
-                    <select
+                    <Label className={classes.label} htmlFor="assigned-agent">
+                      Assigned Agent *
+                    </Label>
+                    <Select
                       value={taskData.assignedAgent}
-                      onChange={(event) => setTaskData({ ...taskData, assignedAgent: event.target.value })}
-                      className={classes.select}
-                      title="Select assigned agent"
-                      required
+                      onValueChange={(value) => setTaskData({ ...taskData, assignedAgent: value })}
                     >
-                      <option value="backend-specialist">Backend Specialist (Alex)</option>
-                      <option value="frontend-specialist">Frontend Specialist (Sam)</option>
-                      <option value="review-specialist">Code Review Specialist (Casey)</option>
-                      <option value="testing-specialist">Testing Specialist (Taylor)</option>
-                      <option value="devops-specialist">DevOps Specialist (Jordan)</option>
-                      <option value="documentation-specialist">Documentation Specialist (Morgan)</option>
-                    </select>
+                      <SelectTrigger id="assigned-agent" className={classes.select}>
+                        <SelectValue placeholder="Select assigned agent" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="backend-specialist">
+                          Backend Specialist (Alex)
+                        </SelectItem>
+                        <SelectItem value="frontend-specialist">
+                          Frontend Specialist (Sam)
+                        </SelectItem>
+                        <SelectItem value="review-specialist">
+                          Code Review Specialist (Casey)
+                        </SelectItem>
+                        <SelectItem value="testing-specialist">
+                          Testing Specialist (Taylor)
+                        </SelectItem>
+                        <SelectItem value="devops-specialist">
+                          DevOps Specialist (Jordan)
+                        </SelectItem>
+                        <SelectItem value="documentation-specialist">
+                          Documentation Specialist (Morgan)
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className={classes.formGroup}>
-                    <label className={classes.label}>Project *</label>
-                    <select
+                    <Label className={classes.label} htmlFor="project-select">
+                      Project *
+                    </Label>
+                    <Select
                       value={taskData.project}
-                      onChange={(event) => setTaskData({ ...taskData, project: event.target.value })}
-                      className={classes.select}
-                      title="Select target project"
-                      required
+                      onValueChange={(value) => setTaskData({ ...taskData, project: value })}
                     >
-                      <option value="app-monitor">app-monitor</option>
-                      <option value="dev-bots">dev-bots</option>
-                      <option value="job-finder-FE">job-finder-FE</option>
-                      <option value="job-finder-BE">job-finder-BE</option>
-                      <option value="job-finder-shared-types">job-finder-shared-types</option>
-                      <option value="job-finder-worker">job-finder-worker</option>
-                      <option value="docs">docs</option>
-                      <option value="infrastructure">infrastructure</option>
-                    </select>
+                      <SelectTrigger id="project-select" className={classes.select}>
+                        <SelectValue placeholder="Select target project" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="app-monitor">app-monitor</SelectItem>
+                        <SelectItem value="dev-bots">dev-bots</SelectItem>
+                        <SelectItem value="job-finder-FE">job-finder-FE</SelectItem>
+                        <SelectItem value="job-finder-BE">job-finder-BE</SelectItem>
+                        <SelectItem value="job-finder-shared-types">
+                          job-finder-shared-types
+                        </SelectItem>
+                        <SelectItem value="job-finder-worker">job-finder-worker</SelectItem>
+                        <SelectItem value="docs">docs</SelectItem>
+                        <SelectItem value="infrastructure">infrastructure</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
                 <div className={classes.formGroup}>
-                  <label className={classes.label}>Title *</label>
+                  <Label className={classes.label} htmlFor="task-title">
+                    Title *
+                  </Label>
                   <Input
+                    id="task-title"
                     value={taskData.title}
                     onChange={(event) => setTaskData({ ...taskData, title: event.target.value })}
                     placeholder="Specific, descriptive task title"
@@ -632,8 +671,11 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
                 </div>
 
                 <div className={classes.formGroup}>
-                  <label className={classes.label}>Description *</label>
-                  <textarea
+                  <Label className={classes.label} htmlFor="task-description">
+                    Description *
+                  </Label>
+                  <Textarea
+                    id="task-description"
                     value={taskData.description}
                     onChange={(event) => setTaskData({ ...taskData, description: event.target.value })}
                     placeholder={
@@ -694,48 +736,58 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
                   </div>
 
                   <div className={classes.formGroup}>
-                    <label className={classes.label}>Complexity *</label>
-                    <select
+                    <Label className={classes.label} htmlFor="task-complexity">
+                      Complexity *
+                    </Label>
+                    <Select
                       value={taskData.estimatedEffort.complexity}
-                      onChange={(event) =>
+                      onValueChange={(value) =>
                         setTaskData({
                           ...taskData,
                           estimatedEffort: {
                             ...taskData.estimatedEffort,
-                            complexity: event.target.value as EnhancedTaskData["estimatedEffort"]["complexity"],
+                            complexity: value as EnhancedTaskData["estimatedEffort"]["complexity"],
                           },
                         })
                       }
-                      className={classes.select}
-                      title="Select complexity level"
                     >
-                      <option value="simple">Simple</option>
-                      <option value="medium">Medium</option>
-                      <option value="complex">Complex</option>
-                      <option value="expert">Expert</option>
-                    </select>
+                      <SelectTrigger id="task-complexity" className={classes.select}>
+                        <SelectValue placeholder="Select complexity level" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="simple">Simple</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="complex">Complex</SelectItem>
+                        <SelectItem value="expert">Expert</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
 
                   <div className={classes.formGroup}>
-                    <label className={classes.label}>Confidence *</label>
-                    <select
+                    <Label className={classes.label} htmlFor="task-confidence">
+                      Confidence *
+                    </Label>
+                    <Select
                       value={taskData.estimatedEffort.confidence}
-                      onChange={(event) =>
+                      onValueChange={(value) =>
                         setTaskData({
                           ...taskData,
                           estimatedEffort: {
                             ...taskData.estimatedEffort,
-                            confidence: event.target.value as EnhancedTaskData["estimatedEffort"]["confidence"],
+                            confidence: value as EnhancedTaskData["estimatedEffort"]["confidence"],
                           },
                         })
                       }
-                      className={classes.select}
-                      title="Select confidence level"
                     >
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                    </select>
+                      <SelectTrigger id="task-confidence" className={classes.select}>
+                        <SelectValue placeholder="Select confidence level" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="low">Low</SelectItem>
+                        <SelectItem value="medium">Medium</SelectItem>
+                        <SelectItem value="high">High</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </section>

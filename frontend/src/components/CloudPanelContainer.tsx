@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { FilterDropdown } from '@/components/common/FilterDropdown';
 import type { LayoutType, LogSource, Panel, DevMonitorLogLevel } from '../types/panel.types';
 import type { CloudService, Environment, ParsedCloudLog } from '../types/log.types';
 import { getEnvironmentServices } from '../services/api';
@@ -287,47 +288,52 @@ const CloudPanelCard: React.FC<CloudPanelCardProps> = ({
       )}
     >
       <CardHeader className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 bg-card/80 py-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <select
+        <div className="flex flex-wrap items-end gap-3">
+          <FilterDropdown
+            label="Environment"
             value={panel.source}
-            onChange={(event) => handleSourceChange(event.target.value as LogSource)}
-            className="h-9 rounded-md border border-border/60 bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onValueChange={(value) => handleSourceChange(value as LogSource)}
+            options={Object.keys(environments).map((env) => ({
+              value: `${env}-all`,
+              label: environments[env].displayName ?? env,
+            }))}
+            placeholder="Select environment"
             title="Select environment"
-          >
-            {Object.keys(environments).map((env) => (
-              <option key={env} value={`${env}-all`}>
-                {environments[env].displayName ?? env}
-              </option>
-            ))}
-          </select>
+            triggerClassName="min-w-[160px]"
+          />
 
-          <select
+          <FilterDropdown
+            label="Service"
             value={panel.service}
-            onChange={(event) => onPanelUpdate({ service: event.target.value })}
-            disabled={isLoadingServices}
-            className="h-9 rounded-md border border-border/60 bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
+            onValueChange={(value) => onPanelUpdate({ service: value })}
+            options={[
+              { value: 'all-functions', label: 'All Functions' },
+              ...panelServices.map((svc) => ({
+                value: svc.name,
+                label: svc.displayName,
+              })),
+            ]}
+            placeholder="Select service"
             title="Select service"
-          >
-            <option value="all-functions">All Functions</option>
-            {panelServices.map((svc) => (
-              <option key={svc.name} value={svc.name}>
-                {svc.displayName}
-              </option>
-            ))}
-          </select>
+            disabled={isLoadingServices}
+            triggerClassName="min-w-[180px]"
+          />
 
-          <select
+          <FilterDropdown
+            label="Severity"
             value={panel.severity ?? ''}
-            onChange={(event) => onPanelUpdate({ severity: event.target.value || undefined })}
-            className="h-9 rounded-md border border-border/60 bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onValueChange={(value) => onPanelUpdate({ severity: value || undefined })}
+            options={[
+              { value: '', label: 'All Severities' },
+              { value: 'DEBUG', label: 'DEBUG' },
+              { value: 'INFO', label: 'INFO' },
+              { value: 'WARNING', label: 'WARNING' },
+              { value: 'ERROR', label: 'ERROR' },
+            ]}
+            placeholder="All severities"
             title="Select severity"
-          >
-            <option value="">All Severities</option>
-            <option value="DEBUG">DEBUG</option>
-            <option value="INFO">INFO</option>
-            <option value="WARNING">WARNING</option>
-            <option value="ERROR">ERROR</option>
-          </select>
+            triggerClassName="min-w-[150px]"
+          />
         </div>
 
         <div className="flex flex-wrap items-center gap-2">

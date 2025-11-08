@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { getPortStatuses, killPortProcess as apiKillPortProcess, PortStatuses } from '../services/api';
+import { createLogger } from '@/utils/logger';
 
 interface UsePortStatusReturn {
   portStatuses: PortStatuses;
@@ -13,6 +14,8 @@ interface UsePortStatusReturn {
  * Hook to poll port statuses and provide port management functionality
  * @param pollInterval - Interval in milliseconds to poll for port statuses (default: 5000)
  */
+const log = createLogger('usePortStatus');
+
 export const usePortStatus = (pollInterval: number = 5000): UsePortStatusReturn => {
   const [portStatuses, setPortStatuses] = useState<PortStatuses>({});
   const [loading, setLoading] = useState(true);
@@ -24,7 +27,7 @@ export const usePortStatus = (pollInterval: number = 5000): UsePortStatusReturn 
       setPortStatuses(statuses);
       setError(null);
     } catch (err) {
-      console.error('Failed to fetch port statuses:', err);
+      log.error('Failed to fetch port statuses', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch port statuses');
     } finally {
       setLoading(false);
@@ -41,7 +44,7 @@ export const usePortStatus = (pollInterval: number = 5000): UsePortStatusReturn 
         throw new Error(result.message);
       }
     } catch (err) {
-      console.error(`Failed to kill process on port ${port}:`, err);
+      log.error(`Failed to kill process on port ${port}`, err);
       throw err;
     }
   }, [fetchPortStatuses]);

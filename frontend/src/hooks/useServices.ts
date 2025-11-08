@@ -2,8 +2,11 @@ import { useState, useEffect, useCallback } from 'react';
 import { ProcessInfo } from '../types/service.types';
 import { getAllStatuses, startService, stopService, restartService, killService, handleApiError } from '../services/api';
 import { io, Socket } from 'socket.io-client';
+import { createLogger } from '@/utils/logger';
 
 const SOCKET_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
+const log = createLogger('useServices');
 
 export const useServices = () => {
   const [services, setServices] = useState<ProcessInfo[]>([]);
@@ -20,7 +23,7 @@ export const useServices = () => {
     } catch (err) {
       const errorMessage = handleApiError(err);
       setError(errorMessage);
-      console.error('Failed to fetch service statuses:', errorMessage);
+      log.error('Failed to fetch service statuses', errorMessage);
     } finally {
       setLoading(false);
     }
@@ -33,11 +36,11 @@ export const useServices = () => {
     });
 
     newSocket.on('connect', () => {
-      console.log('Socket.IO connected');
+      log.info('Socket connected');
     });
 
     newSocket.on('disconnect', () => {
-      console.log('Socket.IO disconnected');
+      log.warn('Socket disconnected');
     });
 
     // Listen for status changes

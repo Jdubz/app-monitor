@@ -190,7 +190,7 @@ export function createLogsRoutes(deps: LogsRoutesDependencies): Router {
       });
 
       if (!parseResult.success) {
-        const message = parseResult.error.errors.map(err => err.message).join('; ');
+        const message = parseResult.error.issues.map((err: any) => err.message).join('; ');
         return respondError(res, 400, 'Invalid query parameters', new Error(message));
       }
 

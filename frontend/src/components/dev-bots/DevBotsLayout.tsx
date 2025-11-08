@@ -1,13 +1,16 @@
 import { RefreshCw } from 'lucide-react';
+import { useState } from 'react';
 import type { Socket } from 'socket.io-client';
 
 import { DevBotsStoreProvider, useDevBotsStore } from '@/contexts/devBotsStore';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { TaskQueuePanel } from './queue/TaskQueuePanel';
 import { WorkerConsolePanel } from './workers/WorkerConsolePanel';
+import { InteractiveSessionTab } from './interactive/InteractiveSessionTab';
 
 interface DevBotsLayoutProps {
   socket: Socket | null;
@@ -23,6 +26,9 @@ export function DevBotsLayout({ socket }: DevBotsLayoutProps) {
 
 function DevBotsLayoutContent() {
   const { status, isLoading, refreshStatus } = useDevBotsStore();
+  const interactiveTabEnabled =
+    (import.meta.env.VITE_FEATURE_DEV_BOTS_INTERACTIVE_TAB ?? 'true').toString().toLowerCase() !== 'false';
+  const [activeTab, setActiveTab] = useState<automation | interactive>(automation);
 
   const summaryItems = [
     {
@@ -85,10 +91,29 @@ function DevBotsLayoutContent() {
         ))}
       </div>
 
-      <div className="grid flex-1 gap-4 lg:grid-cols-[minmax(0,_7fr)_minmax(0,_5fr)]">
-        <TaskQueuePanel />
-        <WorkerConsolePanel />
-      </div>
+      <Tabs
+        value={activeTab}
+        onValueChange={(value) => setActiveTab(value as automation | interactive)}
+        className="flex flex-1 flex-col gap-4"
+      >
+        <TabsList className="w-fit">
+          <TabsTrigger value="automation">Automation Queue</TabsTrigger>
+          {interactiveTabEnabled && (
+            <TabsTrigger value="interactive">Interactive Session (Admins)</TabsTrigger>
+          )}
+        </TabsList>
+        <TabsContent value="automation" className="flex-1">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,_7fr)_minmax(0,_5fr)]">
+            <TaskQueuePanel />
+            <WorkerConsolePanel />
+          </div>
+        </TabsContent>
+        {interactiveTabEnabled && (
+          <TabsContent value="interactive" className="flex-1">
+            <InteractiveSessionTab />
+          </TabsContent>
+        )}
+      </Tabs>
     </div>
   );
 }

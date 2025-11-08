@@ -161,7 +161,7 @@ export class QualityImprovementTaskGenerator {
       // Effort estimation
       estimated_effort: {
         hours: opportunity.estimatedEffort / 60, // Convert minutes to hours
-        complexity: opportunity.complexity,
+        complexity: opportunity.complexity === 'trivial' ? 'simple' : opportunity.complexity === 'moderate' ? 'medium' : opportunity.complexity,
         confidence: 'high'
       },
 

@@ -3,6 +3,7 @@ import { PanelsTopLeft, Plus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { FilterDropdown } from '@/components/common/FilterDropdown';
 import type { LayoutType } from '../../types/panel.types';
 
 interface PanelToolbarProps {
@@ -52,18 +53,19 @@ const PanelToolbar: React.FC<PanelToolbarProps> = ({
         Add Panel
       </Button>
 
-      <select
+      <FilterDropdown
+        label="Layout"
         value={currentLayout}
-        onChange={(event) => onLayoutChange(event.target.value as LayoutType)}
-        className="h-9 rounded-md border border-border/60 bg-background px-3 text-sm text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        onValueChange={(value) => onLayoutChange(value as LayoutType)}
+        options={layoutOptions.map((option) => ({
+          value: option.value,
+          label: option.label,
+        }))}
+        placeholder="Select layout"
         title="Choose panel layout"
-      >
-        {layoutOptions.map((option) => (
-          <option key={option.value} value={option.value}>
-            {option.label}
-          </option>
-        ))}
-      </select>
+        className="min-w-[200px]"
+        triggerClassName="h-9"
+      />
     </div>
   </div>
 );

@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { FilterDropdown } from '@/components/common/FilterDropdown';
 import { cn } from '@/lib/utils';
 
 interface CloudLogsPanelProps {
@@ -90,8 +91,8 @@ const CloudLogsPanel = ({ socket, environment, projectId }: CloudLogsPanelProps)
     return `https://console.cloud.google.com/traces/list?project=${projectId}&tid=${actualTraceId}`;
   };
 
-  const handleTimeRangeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    setTimeRange(e.target.value);
+  const handleTimeRangeChange = (value: string) => {
+    setTimeRange(value);
     // TODO: Implement time range filtering with API
   };
 
@@ -217,58 +218,47 @@ const CloudLogsPanel = ({ socket, environment, projectId }: CloudLogsPanelProps)
 
       <CardContent className="flex flex-1 flex-col gap-4">
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <div className="space-y-1">
-            <label className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
-              Service
-            </label>
-            <select
-              value={selectedService}
-              onChange={(e) => setSelectedService(e.target.value)}
-              className="w-full rounded-md border border-border/60 bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="all-functions">All Functions</option>
-              {services.map((service) => (
-                <option key={service.name} value={service.name}>
-                  {service.displayName}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FilterDropdown
+            label="Service"
+            value={selectedService}
+            onValueChange={setSelectedService}
+            options={[
+              { value: 'all-functions', label: 'All Functions' },
+              ...services.map((service) => ({
+                value: service.name,
+                label: service.displayName,
+              })),
+            ]}
+            placeholder="Select service"
+            title="Select service"
+          />
 
-          <div className="space-y-1">
-            <label className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
-              Severity
-            </label>
-            <select
-              value={selectedSeverity}
-              onChange={(e) => setSelectedSeverity(e.target.value)}
-              className="w-full rounded-md border border-border/60 bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="">All Severities</option>
-              {LOG_LEVEL_ORDER.map((level) => (
-                <option key={level} value={level}>
-                  {level}
-                </option>
-              ))}
-            </select>
-          </div>
+          <FilterDropdown
+            label="Severity"
+            value={selectedSeverity}
+            onValueChange={setSelectedSeverity}
+            options={[
+              { value: '', label: 'All Severities' },
+              ...LOG_LEVEL_ORDER.map((level) => ({ value: level, label: level })),
+            ]}
+            placeholder="All severities"
+            title="Select severity"
+          />
 
-          <div className="space-y-1">
-            <label className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
-              Time Range
-            </label>
-            <select
-              value={timeRange}
-              onChange={handleTimeRangeChange}
-              className="w-full rounded-md border border-border/60 bg-background px-3 py-2 text-sm text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-            >
-              <option value="15m">Last 15 minutes</option>
-              <option value="1h">Last 1 hour</option>
-              <option value="6h">Last 6 hours</option>
-              <option value="24h">Last 24 hours</option>
-              <option value="7d">Last 7 days</option>
-            </select>
-          </div>
+          <FilterDropdown
+            label="Time Range"
+            value={timeRange}
+            onValueChange={handleTimeRangeChange}
+            options={[
+              { value: '15m', label: 'Last 15 minutes' },
+              { value: '1h', label: 'Last 1 hour' },
+              { value: '6h', label: 'Last 6 hours' },
+              { value: '24h', label: 'Last 24 hours' },
+              { value: '7d', label: 'Last 7 days' },
+            ]}
+            placeholder="Select range"
+            title="Select time range"
+          />
 
           <div className="space-y-1">
             <label className="text-xs uppercase tracking-[0.3em] text-muted-foreground">

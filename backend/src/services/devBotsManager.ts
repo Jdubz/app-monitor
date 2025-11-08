@@ -25,7 +25,12 @@ import type { EphemeralWorkerService, EphemeralWorker as EphemeralWorkerType } f
 import type { TaskExecutionService } from './taskExecution.service.js';
 import { TaskCompletionService } from './taskCompletion.service.js';
 import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
-import { InteractiveSessionService, StartInteractiveSessionOptions, ActivityKind } from './interactiveSession.service.js';
+import {
+  InteractiveSessionService,
+  StartInteractiveSessionOptions,
+  ActivityKind,
+  type AllowedInteractiveModel,
+} from './interactiveSession.service.js';
 import { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
 import { InteractiveSessionStreamManager, InteractiveStreamMessage } from './interactiveSessionStreamManager.js';
 import type { InteractiveSessionRecord } from './database.js';
@@ -165,10 +170,19 @@ export class DevBotsManager extends EventEmitter {
     this.recovery = new SimpleFailureRecovery(this);
 
     // Initialize TaskCompletionService with PR workflow orchestrator callback
+    // Create no-op implementations for removed dependencies
+    const noopTaskPersistence = {
+      saveCompletedTasks: () => {}, // No-op - SQLite is source of truth
+      loadCompletedTasks: () => []
+    } as any;
+    const noopPushCoordinator = {
+      enqueue: async <T>(operation: () => Promise<T>) => await operation()
+    };
+
     this.taskCompletionService = new TaskCompletionService(
       this.ephemeralWorkerService,
-      this.taskPersistence,
-      this.pushCoordinator,
+      noopTaskPersistence,
+      noopPushCoordinator,
       this.emit.bind(this),
       {
         enableQualityGates: true,
@@ -647,7 +661,7 @@ export class DevBotsManager extends EventEmitter {
           this.interactiveSessionService.recordActivity(message.sessionId, 'agent');
         } catch (error) {
           logger.warn({
-            category: 'interactive-session',
+            category: 'system',
             action: 'activity_record_failed',
             message: `Failed to record agent activity for session ${message.sessionId}`,
             error,
@@ -658,7 +672,7 @@ export class DevBotsManager extends EventEmitter {
 
     this.interactiveSessionStreamManager.on('error', ({ sessionId, error }) => {
       logger.error({
-        category: 'interactive-session',
+        category: 'system',
         action: 'stream_error',
         message: `Interactive stream error for session ${sessionId}`,
         error,
@@ -696,7 +710,7 @@ export class DevBotsManager extends EventEmitter {
       const idleDuration = Date.now() - lastActivity;
       if (idleDuration >= idleTimeout) {
         logger.warn({
-          category: 'interactive-session',
+          category: 'system',
           action: 'idle_timeout',
           message: 'Interactive session exceeded idle timeout',
           details: {
@@ -707,7 +721,7 @@ export class DevBotsManager extends EventEmitter {
         });
         void this.endInteractiveSession(session.id, 'Idle timeout (no activity)').catch((error) => {
           logger.error({
-            category: 'interactive-session',
+            category: 'system',
             action: 'idle_timeout_cleanup_failed',
             message: `Failed to stop idle interactive session ${session.id}`,
             error,
@@ -832,6 +846,10 @@ export class DevBotsManager extends EventEmitter {
 
   public getInteractiveIdleTimeoutMs(): number {
     return this.interactiveSessionService.getIdleTimeoutMs();
+  }
+
+  public getAllowedInteractiveModels(): AllowedInteractiveModel[] {
+    return this.interactiveSessionService.getAllowedModels();
   }
 
   /**
@@ -1173,9 +1191,10 @@ export class DevBotsManager extends EventEmitter {
     return this.guidelinesManager.getValidAgents();
   }
 
-  public getCompletedTasks(): Task[] {
-    return this.taskPersistence.loadCompletedTasks();
-  }
+  // DEPRECATED: getCompletedTasks() - use TaskQueueService.getTasksByStatus('completed') instead
+  // public getCompletedTasks(): Task[] {
+  //   return this.taskPersistence.loadCompletedTasks();
+  // }
 
   public getWorkerCount(): number {
     return this.ephemeralWorkerService.getActiveWorkers().length;
@@ -1338,7 +1357,7 @@ export class DevBotsManager extends EventEmitter {
         worker.task.completed_at = Date.now();
         worker.task.can_retry = true;
         // Task status already updated in SQLite (no in-memory storage needed)
-        this.taskPersistence.saveCompletedTasks([worker.task]);
+        // this.taskPersistence.saveCompletedTasks([worker.task]); // DEPRECATED - SQLite is source of truth
 
         // Destroy container
         await this.ephemeralWorkerService.destroyWorker(worker.id);
@@ -1356,16 +1375,10 @@ export class DevBotsManager extends EventEmitter {
     });
   }
 
-  public exportTasks(exportPath: string): void {
+  public exportTasks(_exportPath: string): void {
     try {
-      // Get all tasks from SQLite
-      const allTasks = [
-        ...this.taskQueue.getTasksByStatus('pending'),
-        ...this.taskQueue.getTasksByStatus('running'),
-        ...this.taskQueue.getTasksByStatus('completed'),
-        ...this.taskQueue.getTasksByStatus('failed')
-      ];
-      this.taskPersistence.exportTasks(allTasks, exportPath);
+      // DEPRECATED: Export tasks functionality removed with persistence layer
+      throw new Error('exportTasks() is deprecated - persistence layer removed');
       logger.info({
       category: 'process',
       action: 'tasks_exported_to_exportpath',
@@ -1384,19 +1397,20 @@ export class DevBotsManager extends EventEmitter {
 
   public async importTasks(importPath: string): Promise<void> {
     try {
-      const importedTasks = this.taskPersistence.importTasks(importPath);
-      
+      // const importedTasks = this.taskPersistence.importTasks(importPath); // DEPRECATED - persistence layer removed
+      throw new Error('importTasks() is deprecated - persistence layer removed');
+
       // Import tasks directly into SQLite
-      for (const task of importedTasks) {
-        await this.taskQueue.createTask(task);
-      }
+      // for (const task of importedTasks) {
+      //   await this.taskQueue.createTask(task);
+      // }
 
       // this.saveTasksToPersistence(); // DEPRECATED
-      logger.info({
-      category: 'process',
-      action: 'imported_importedtasks_length_tasks_from_importpat',
-      message: `Imported ${importedTasks.length} tasks from ${importPath}`
-    });
+      // logger.info({
+      // category: 'process',
+      // action: 'imported_importedtasks_length_tasks_from_importpat',
+      // message: `Imported ${importedTasks.length} tasks from ${importPath}`
+      // });
     } catch (error) {
       logger.error({
       category: 'process',

@@ -125,8 +125,13 @@ router.get('/stats', async (req, res) => {
     const db = getDatabase();
     const taskQueue = getTaskQueueService();
 
-    // Get all tasks from the last 24 hours
-    const recentTasks = taskQueue.getRecentTasks(24 * 60 * 60 * 1000);
+    // Get all tasks (no time filter available in current API)
+    const recentTasks = [
+      ...taskQueue.getTasksByStatus('pending'),
+      ...taskQueue.getTasksByStatus('running'),
+      ...taskQueue.getTasksByStatus('completed'),
+      ...taskQueue.getTasksByStatus('failed')
+    ];
 
     // Calculate verification stats
     let totalVerified = 0;
@@ -238,8 +243,8 @@ router.get('/recommendations/:taskId', async (req, res) => {
 
     if (verification.acceptanceCriteria && verification.acceptanceCriteria.percentMet < 100) {
       const unmetCriteria = verification.acceptanceCriteria.criteria
-        .filter(c => !c.met)
-        .map(c => c.text);
+        .filter((c: any) => !c.met)
+        .map((c: any) => c.text);
 
       enhancedRecommendations.push(
         `Focus on completing these criteria: ${unmetCriteria.join(', ')}`
@@ -257,7 +262,7 @@ router.get('/recommendations/:taskId', async (req, res) => {
         `Review and revert changes to restricted files: ${
           verification.scopeBoundaries.violations
             .slice(0, 3)
-            .map(v => v.file)
+            .map((v: any) => v.file)
             .join(', ')
         }`
       );

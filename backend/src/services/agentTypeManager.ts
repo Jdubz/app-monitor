@@ -27,7 +27,7 @@ export class AgentTypeManager {
     this.lastAgentType = config.defaultType ?? 'claude';
 
     logger.info({
-      category: 'agent-management',
+      category: 'system',
       action: 'agent_type_manager_initialized',
       message: `Agent type manager initialized with strategy: ${this.strategy}`,
       details: {
@@ -66,7 +66,7 @@ export class AgentTypeManager {
     this.lastAgentType = chosenType;
 
     logger.debug({
-      category: 'agent-management',
+      category: 'system',
       action: 'agent_type_chosen',
       message: `Selected agent type: ${chosenType}`,
       details: {

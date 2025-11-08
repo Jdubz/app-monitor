@@ -55,7 +55,12 @@ export function createDockerRouter(): Router {
   router.get('/container-info', async (_req: Request, res: Response) => {
     try {
       const containerInfo = await getDockerContainerInfo(DOCKER_CONFIG.containerName);
-      respondSuccess<DockerInfoResponse['data']>(res, containerInfo);
+      const dockerInfo: DockerInfoResponse['data'] = {
+        ...containerInfo,
+        name: DOCKER_CONFIG.containerName,
+        status: containerInfo.running ? 'running' : 'stopped'
+      } as DockerInfoResponse['data'];
+      respondSuccess<DockerInfoResponse['data']>(res, dockerInfo);
     } catch (error) {
       logger.error({
         category: 'api',

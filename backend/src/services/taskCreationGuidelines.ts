@@ -16,8 +16,8 @@ export interface TaskCreationGuidelines {
   id: string;
   name: string;
   description: string;
-  requiredFields: TaskMetadataFieldKey[];
-  optionalFields: TaskMetadataFieldKey[];
+  requiredFields: readonly TaskMetadataFieldKey[];
+  optionalFields: readonly TaskMetadataFieldKey[];
   validationRules: ValidationRule[];
   examples: TaskExample[];
   bestPractices: string[];

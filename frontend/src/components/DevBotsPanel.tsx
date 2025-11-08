@@ -38,6 +38,7 @@ import {
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { createLogger } from '@/utils/logger';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
@@ -140,6 +141,8 @@ const mapWorkerStatusToBadge = (status: DevBotsWorkerStatus['status']): {
   }
 };
 
+const log = createLogger('DevBotsPanel');
+
 export const DevBotsPanel: React.FC<DevBotsPanelProps> = ({
   serviceName: _serviceName,
   onStatusChange,
@@ -170,7 +173,7 @@ export const DevBotsPanel: React.FC<DevBotsPanelProps> = ({
   const fetchStatus = async () => {
     try {
       setLoading(true);
-      console.log('[DevBotsPanel] Fetching status from /dev-bots/status');
+      log.debug('Fetching status from /dev-bots/status');
       const [
         statusResponse,
         violationsResponse,
@@ -197,7 +200,7 @@ export const DevBotsPanel: React.FC<DevBotsPanelProps> = ({
           .catch(() => ({ templates: [] as DevBotsTaskTemplate[] })),
       ]);
 
-      console.log('[DevBotsPanel] Status response:', statusResponse);
+      log.debug('Status response', statusResponse);
       setStatus(statusResponse);
       setScopeViolations(violationsResponse.violations ?? []);
       setCleanupStatus(cleanupResponse);
@@ -208,8 +211,8 @@ export const DevBotsPanel: React.FC<DevBotsPanelProps> = ({
         onStatusChange(statusResponse);
       }
     } catch (err: any) {
-      console.error('[DevBotsPanel] Error fetching status:', err);
-      console.error('[DevBotsPanel] Error details:', {
+      log.error('Error fetching status', err);
+      log.error('Error details', {
         message: err.message,
         response: err.response,
         error: err.error,
@@ -313,37 +316,37 @@ export const DevBotsPanel: React.FC<DevBotsPanelProps> = ({
     if (!socket) return;
 
     const handleTaskAdded = (task: DevBotsTask) => {
-      console.log('Task added:', task);
+      log.info('Task added', task);
       fetchStatus();
     };
 
     const handleTaskAssigned = (task: DevBotsTask) => {
-      console.log('Task assigned:', task);
+      log.info('Task assigned', task);
       fetchStatus();
     };
 
     const handleTaskStarted = (task: DevBotsTask) => {
-      console.log('Task started:', task);
+      log.info('Task started', task);
       fetchStatus();
     };
 
     const handleTaskCompleted = (task: DevBotsTask) => {
-      console.log('Task completed:', task);
+      log.info('Task completed', task);
       fetchStatus();
     };
 
     const handleTaskFailed = (task: DevBotsTask) => {
-      console.log('Task failed:', task);
+      log.warn('Task failed', task);
       fetchStatus();
     };
 
     const handleSystemStatusChange = (systemStatus: any) => {
-      console.log('System status changed:', systemStatus);
+      log.info('System status changed', systemStatus);
       fetchStatus();
     };
 
     const handleCoordinatorHealthChange = (isHealthy: boolean) => {
-      console.log('Coordinator health changed:', isHealthy);
+      log.info('Coordinator health changed', isHealthy);
       fetchStatus();
     };
 

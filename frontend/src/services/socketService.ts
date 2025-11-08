@@ -10,6 +10,9 @@
  */
 
 import { io, Socket } from 'socket.io-client';
+import { createLogger } from '@/utils/logger';
+
+const log = createLogger('socketService');
 
 export interface SocketConfig {
   url: string;
@@ -82,11 +85,11 @@ export class SocketService {
    */
   public connect(): void {
     if (this.socket?.connected) {
-      console.log('[Socket] Already connected');
+      log.debug('Already connected');
       return;
     }
 
-    console.log('[Socket] Connecting to', this.config.url);
+    log.info('Connecting', this.config.url);
 
     this.socket = io(this.config.url, {
       reconnection: this.config.reconnection,
@@ -108,7 +111,7 @@ export class SocketService {
 
     // Connection events
     this.socket.on('connect', () => {
-      console.log('[Socket] Connected');
+      log.info('Connected');
       this.connectionState = {
         isConnected: true,
         isReconnecting: false,
@@ -121,7 +124,7 @@ export class SocketService {
     });
 
     this.socket.on('disconnect', (reason) => {
-      console.log('[Socket] Disconnected:', reason);
+      log.warn('Disconnected', reason);
       this.connectionState = {
         ...this.connectionState,
         isConnected: false,
@@ -132,7 +135,7 @@ export class SocketService {
     });
 
     this.socket.on('connect_error', (error) => {
-      console.error('[Socket] Connection error:', error.message);
+      log.error('Connection error', error.message);
       this.connectionState = {
         ...this.connectionState,
         isConnected: false,
@@ -143,7 +146,7 @@ export class SocketService {
     });
 
     this.socket.on('reconnect_attempt', (attemptNumber) => {
-      console.log('[Socket] Reconnection attempt:', attemptNumber);
+      log.info('Reconnection attempt', attemptNumber);
       this.connectionState = {
         ...this.connectionState,
         isReconnecting: true,
@@ -153,7 +156,7 @@ export class SocketService {
     });
 
     this.socket.on('reconnect', (attemptNumber) => {
-      console.log('[Socket] Reconnected after', attemptNumber, 'attempts');
+      log.info('Reconnected', attemptNumber, 'attempts');
       this.connectionState = {
         ...this.connectionState,
         isConnected: true,
@@ -166,12 +169,12 @@ export class SocketService {
     });
 
     this.socket.on('reconnect_error', (error) => {
-      console.error('[Socket] Reconnection error:', error.message);
+      log.error('Reconnection error', error.message);
       this.emit('connection:error', error);
     });
 
     this.socket.on('reconnect_failed', () => {
-      console.error('[Socket] Reconnection failed');
+      log.error('Reconnection failed');
       this.connectionState = {
         ...this.connectionState,
         isConnected: false,
@@ -229,7 +232,7 @@ export class SocketService {
    * Disconnect from server
    */
   public disconnect(): void {
-    console.log('[Socket] Disconnecting');
+    log.debug('Disconnecting');
     this.stopHealthMonitoring();
     this.socket?.disconnect();
     this.connectionState = {
@@ -315,7 +318,7 @@ export class SocketService {
    */
   public send(event: string, data?: any): void {
     if (!this.socket?.connected) {
-      console.warn('[Socket] Cannot send event, not connected:', event);
+      log.warn('Cannot send event, not connected', event);
       return;
     }
     this.socket.emit(event, data);
@@ -325,7 +328,7 @@ export class SocketService {
    * Cleanup
    */
   public destroy(): void {
-    console.log('[Socket] Destroying');
+    log.debug('Destroying');
     this.stopHealthMonitoring();
     this.eventListeners.clear();
     this.socket?.removeAllListeners();

@@ -1,7 +1,15 @@
 import '@testing-library/jest-dom'
 import { vi, beforeEach, afterEach } from 'vitest'
 import { cleanup } from '@testing-library/react'
+import { TextEncoder, TextDecoder } from 'util'
 
+if (!(globalThis as { TextEncoder?: typeof TextEncoder }).TextEncoder) {
+  (globalThis as { TextEncoder: typeof TextEncoder }).TextEncoder = TextEncoder
+}
+
+if (!(globalThis as { TextDecoder?: typeof TextDecoder }).TextDecoder) {
+  (globalThis as { TextDecoder: typeof TextDecoder }).TextDecoder = TextDecoder as unknown as typeof TextDecoder
+}
 // Mock Socket.IO
 vi.mock('socket.io-client', () => ({
   io: vi.fn(() => ({
@@ -142,6 +150,8 @@ global.console = {
 Object.defineProperty(import.meta, 'env', {
   value: {
     VITE_API_BASE_URL: 'http://localhost:5000',
+    VITE_FEATURE_DEV_BOTS_LAYOUT: 'true',
+    VITE_FEATURE_DEV_BOTS_INTERACTIVE_TAB: 'true',
     NODE_ENV: 'test',
   },
   writable: true,
@@ -173,4 +183,3 @@ afterEach(() => {
   vi.clearAllTimers();
   vi.useRealTimers();
 });
-

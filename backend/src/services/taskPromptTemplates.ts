@@ -1284,15 +1284,17 @@ gh pr create --base main --head "\${BRANCH_NAME}" \\
     });
 
     this.variableProcessors.set('task.prOutputContent', (context) => {
-      if (context.task.pr_branch) {
-        return `# Get the PR URL for this branch
-PR_URL=$(gh pr view ${context.task.pr_branch} --json url --jq .url)
-echo "✅ PR updated: $PR_URL"`;
-      } else {
-        return `# Get the PR URL for the newly created PR
-PR_URL=$(gh pr view "\${BRANCH_NAME}" --json url --jq .url)
-echo "✅ PR created: $PR_URL"`;
-      }
+      const viewTarget = context.task.pr_branch ? `"${context.task.pr_branch}"` : '"${BRANCH_NAME}"';
+      const actionVerb = context.task.pr_branch ? 'updated' : 'created';
+
+      return `# Capture PR metadata for reporting
+PR_NUMBER=$(gh pr view ${viewTarget} --json number --jq .number)
+PR_URL=$(gh pr view ${viewTarget} --json url --jq .url)
+PR_BRANCH=$(gh pr view ${viewTarget} --json headRefName --jq .headRefName)
+echo "✅ PR ${actionVerb}: $PR_URL"
+echo "PR_NUMBER: $PR_NUMBER"
+echo "PR_URL: $PR_URL"
+echo "PR_BRANCH: $PR_BRANCH"`;
     });
 
     this.variableProcessors.set('task.prVerificationContent', (context) => {
@@ -1361,13 +1363,25 @@ echo "✅ PR created: $PR_URL"`;
    */
   private processTemplate(template: string, context: TaskContext): string {
     let processedTemplate = template;
+    const maxPasses = 4;
 
-    // Replace all variables in the template
-    this.variableProcessors.forEach((processor, variable) => {
-      const placeholder = `{{${variable}}}`;
-      const value = processor(context);
-      processedTemplate = processedTemplate.replace(new RegExp(placeholder, 'g'), value);
-    });
+    for (let pass = 0; pass < maxPasses; pass += 1) {
+      let updatedTemplate = processedTemplate;
+
+      this.variableProcessors.forEach((processor, variable) => {
+        const placeholder = `{{${variable}}}`;
+        if (!updatedTemplate.includes(placeholder)) {
+          return;
+        }
+        const value = processor(context);
+        updatedTemplate = updatedTemplate.split(placeholder).join(value);
+      });
+
+      processedTemplate = updatedTemplate;
+      if (!processedTemplate.includes('{{')) {
+        break;
+      }
+    }
 
     return processedTemplate;
   }

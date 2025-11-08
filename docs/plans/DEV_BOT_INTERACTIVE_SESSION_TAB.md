@@ -172,6 +172,8 @@ idle → starting → running → (terminating|disconnecting) → ended
 - **Schema**: add `interactive_sessions` table plus migrations to store session state, heartbeat timestamps, container metadata, and serialized context blobs.
 - **DevBotsManager**: new `launchInteractiveWorker` path that skips concurrency limits, applies `interactive=true` labels, and plugs into the idle watchdog + reconnection story.
 - **Lifecycle APIs**: `POST /interactive/session`, `GET /interactive/session`, `DELETE /interactive/session`, `POST /interactive/heartbeat`, `POST /interactive/interrupt`, and WebSocket streaming endpoints with admin gating.
+- **Session State DTO**: `/interactive/session` responses must return the `DevBotsInteractiveSessionState` contract (session snapshot, allowed model catalog, heartbeat + idle timers, and WebSocket descriptor) sourced from `shared/api-contracts` so backend + frontend never diverge on shape.
+- **Input + Streaming**: expose `POST /interactive/session/:id/input` for REST-based keystroke fallbacks while the `InteractiveSessionGateway` WebSocket handles low-latency PTY data and hotkeys against the shared `InteractiveSessionStreamManager`.
 - **Idle Enforcement**: background job to monitor combined user/agent activity, broadcast impending timeout warnings, and gracefully stop containers after 5 minutes.
 - **Persistence & Telemetry**: archive transcripts/log artifacts, emit metrics (`interactive_session_started`, `idle_timeout`, duration histograms), and log every command for auditing.
 
@@ -179,10 +181,34 @@ idle → starting → running → (terminating|disconnecting) → ended
 - **Store/Hook**: manage session state, WebSocket connection, reconnect logic, heartbeat pings, and command dispatch APIs.
 - **UI**: new “Interactive Session (Admins)” tab with model selector (Claude/Codex), session controls, status pill, idle timer, and a collapsible hotkey drawer.
 - **Terminal Layer**: integrate xterm.js + addons, wire standard shortcuts (Esc, Ctrl+C/L/U/W, etc.), and display both terminal output and optional chat/thread summaries.
-- **Access Control**: hide/lock the tab for non-admins, surface “session in use” messaging, and provide reconnect flow when returning after disconnection.
+- **Access Control**: today the tab simply checks the feature flag (local network only) and shows the session state to any operator; once real auth lands we can re-introduce admin-specific gating and messaging.
 
 ### 9.3 Ops & Enablement
 - **Feature Flags/Env**: configuration toggles for enabling the tab, setting admin email(s), and future model additions.
 - **Observability**: dashboards/alerts for long-running sessions, idle timeouts, and container cleanup failures.
 - **Docs & Runbooks**: operational guide for starting/stopping sessions, interpreting logs/artifacts, and responding to stuck containers or idle failures.
 - **Tech Debt Guardrails**: optional follow-up to quiet recurring `no-explicit-any` lint warnings so pre-push hooks stay signal-rich.
+
+---
+
+## 10. Dev-Bots Architecture Alignment (Nov 2025 refresh)
+
+The latest dev-bots rewrite replaced the legacy in-memory queue with a SQLite-backed `TaskQueueService`, a dedicated `EphemeralWorkerService`, and centralized orchestration inside `DevBotsManager`. The interactive plan remains viable, but it now needs to plug into the following concrete touchpoints:
+
+1. **Manager-owned Services** – `DevBotsManager` already wires `ProcessManager`, `TaskQueueService`, `EphemeralWorkerService`, and `TaskExecutionService` via dependency injection (`backend/src/services/devBotsManager.ts:120-166`). Any interactive capability must be injected the same way so health checks, logging, and lifecycle hooks stay centralized.
+2. **Worker Lifecycle Rules** – `EphemeralWorkerService` enforces a `maxConcurrentWorkers` cap and mirrors the repo into containers via `copyWorkspaceToContainer` (`backend/src/services/ephemeralWorker.service.ts:300-350`). The interactive orchestrator should reuse `populateWorkspaceFromRepo` so the container inherits the same workspace snapshot without incrementing the worker count. Mark containers with `dev-bot.interactive=true` labels so cleanup scripts can continue skipping them.
+3. **SQLite Persistence Expectations** – All task/worker metadata now lives in `backend/data/dev-bots.db`. Interactive session records should reuse this DB (new `interactive_sessions` table defined in `backend/migrations/007_interactive_sessions.sql`) to stay aligned with backup/export flows.
+4. **API Middleware & Auth** – Every `/dev-bots/*` route automatically wraps responses in the `{ success, data }` envelope and normalizes errors (`backend/src/routes/dev-bots.routes.ts:120-220`). Interactive endpoints follow the same middleware, but explicit admin gating is deferred until the app has real auth (local network deployments simply use the default owner email for attribution).
+5. **Socket + Log Infrastructure** – Log streaming is rate-limited by `LogStreamAccessTracker` and SSE utilities in the same route module. The interactive terminal should skip SSE entirely and rely on a dedicated WebSocket upgrade (see below) so it does not exhaust log-stream quotas.
+6. **Idle Enforcement** – The dev-bots process already runs periodic health/cleanup intervals (`DevBotsManager.startLongRunningTaskMonitor`). Interactive sessions need a companion watchdog (similar cadence) that terminates the container after 5 minutes of no user+agent activity and emits a structured log event for observability.
+7. **Docker Image & Credentials** – `createDevBotsManagerDependencies` hardcodes the worker image (`dev-bot:latest`) and env passthrough keys (`backend/src/services/devBotsManager.factory.ts`). The interactive orchestrator must use the same image/keys so model credentials (Claude, Codex) remain consistent and secrets stay centralized.
+
+### Plan Adjustments Based on the Refresh
+
+- **Backend**: implement `InteractiveSessionService`, `InteractiveSessionOrchestrator`, and `InteractiveSessionStreamManager` as DI-managed services so they are constructed inside `createDevBotsManagerDependencies` and owned by `DevBotsManager`. This keeps restart/health semantics aligned with the new architecture.
+- **API Surface**: add admin-only REST endpoints (`GET/POST/DELETE /dev-bots/interactive/session`, heartbeat, interrupt) plus a WebSocket gateway mounted off the existing Express server. The gateway should stream PTY output directly from Docker via `docker.exec` and fan out to the frontend tab.
+- **Idle / Metrics**: reuse the manager’s interval infrastructure to poll for idle sessions, log `interactive_session_idle_timeout` events, and end the session via `endInteractiveSession`. Emit Prometheus-friendly counters on start/end for dashboards.
+- **Frontend Contracts**: rely on the new `DevBotsInteractiveSession*` types exported from `shared/api-contracts/index.ts` so the UI receives idle deadlines, container IDs, stream URLs, and context snapshots straight from the backend. The terminal tab can then reuse the same heartbeat cadence as the manager watchdog.
+- **Terminal UX**: the interactive tab should stream PTY output over WebSocket, surface connection/idle state, expose one-click heartbeats, wire standard hotkeys (Esc / Ctrl+C / Ctrl+L / Ctrl+U / Ctrl+W), and let the hotkey drawer double as an action palette. Since the app still runs on a trusted local network there is no dedicated admin gate yet; once auth is ready we can tie the same UI affordances to role checks. Session details now highlight the owner email, session ID, and connection health so operators can see at a glance whether the socket is healthy.
+
+With these adjustments, the plan remains compatible with the refactored dev-bots stack: we leverage the same Docker image, persistence layer, and monitoring hooks instead of bolting on bespoke infrastructure.

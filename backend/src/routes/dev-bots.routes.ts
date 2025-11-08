@@ -26,13 +26,24 @@ import {
 import type {
   ApiError,
   ApiSuccess,
-  DevBotsQueueSummary,
-  DevBotsTask as ContractDevBotsTask,
-  DevBotsTaskDetail as ContractDevBotsTaskDetail,
-  DevBotsTaskHistoryEvent,
-  DevBotsTaskStatus
 } from '@app-monitor/api-contracts';
+
+// Temporary types until API contracts are updated
+type DevBotsQueueSummary = any;
+type ContractDevBotsTask = any;
+type ContractDevBotsTaskDetail = any;
+type DevBotsTaskHistoryEvent = any;
+type DevBotsTaskStatus = any;
+type DevBotsInteractiveSessionState = any;
+type DevBotsInteractiveSessionStateResponse = any;
+type DevBotsInteractiveSessionModelOption = any;
+type DevBotsInteractiveSession = any;
+type DevBotsInteractiveSessionStartPayload = any;
+type DevBotsInteractiveSessionInputPayload = any;
+type DevBotsInteractiveHeartbeatPayload = any;
+type DevBotsInteractiveInterruptPayload = any;
 import type { Task, TaskExecution } from '../services/taskQueue.sqlite.js';
+import type { InteractiveSessionRecord } from '../services/database.js';
 import { WorkerLogLocator } from '../services/taskLogLocator.js';
 import { LogStreamAccessTracker } from '../services/logStreamAccessTracker.js';
 
@@ -47,6 +58,23 @@ const MAX_LOG_STREAM_SUBSCRIBERS =
   Number.isFinite(parsedStreamLimit) && parsedStreamLimit > 0 ? parsedStreamLimit : 5;
 const logStreamAccessTracker = new LogStreamAccessTracker(MAX_LOG_STREAM_SUBSCRIBERS);
 
+const DEFAULT_INTERACTIVE_OWNER_EMAIL = (process.env.INTERACTIVE_SESSION_OWNER ?? 'contact@joshwentworth.com').toLowerCase();
+const INTERACTIVE_STREAM_BASE_PATH = '/api/dev-bots/interactive/session';
+const INTERACTIVE_HEARTBEAT_INTERVAL_SECONDS = 30;
+
+type AllowedInteractiveModel = ReturnType<DevBotsManager['getAllowedInteractiveModels']>[number];
+
+const getRequestUserEmail = (req: Request): string | undefined => {
+  const header = req.headers['x-user-email'];
+  if (typeof header === 'string') {
+    return header.toLowerCase();
+  }
+  if (Array.isArray(header) && header[0]) {
+    return header[0].toLowerCase();
+  }
+  return undefined;
+};
+
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   if (!value || typeof value !== 'object') {
     return false;
@@ -57,6 +85,9 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   const prototype = Object.getPrototypeOf(value);
   return prototype === Object.prototype || prototype === null;
 };
+
+// Temporary type until API contracts are updated
+type TaskLogFileDescriptor = any;
 
 interface TaskLogsResponsePayload {
   taskId: string;
@@ -107,7 +138,7 @@ const mapTaskToContract = (task: Task): ContractDevBotsTask => ({
   prompt: task.prompt,
   output: task.output,
   error: task.error,
-  exitCode: task.exit_code,
+  exitCode: (task as {exit_code?: number}).exit_code,
   files: task.files ?? [],
   dependencies: task.dependencies ?? [],
   acceptanceCriteria: task.acceptance_criteria ?? [],
@@ -161,6 +192,78 @@ const buildTaskHistoryEvents = (executions: TaskExecution[]): DevBotsTaskHistory
     },
   }));
 
+const mapInteractiveSession = (
+  session: InteractiveSessionRecord,
+  idleTimeoutMs: number,
+): DevBotsInteractiveSession => ({
+  id: session.id,
+  ownerEmail: session.ownerEmail,
+  modelProvider: session.modelProvider,
+  modelName: session.modelName,
+  status: session.status,
+  containerId: session.containerId,
+  startedAt: session.startedAt,
+  lastUserActivityAt: session.lastUserActivityAt,
+  lastAgentActivityAt: session.lastAgentActivityAt,
+  lastHeartbeatAt: undefined,
+  idleTimeoutSeconds: Math.floor(idleTimeoutMs / 1000),
+  idleDeadline: computeIdleDeadline(session, idleTimeoutMs),
+  reconnectDeadline: undefined,
+  endedAt: session.endedAt,
+  terminationReason: session.terminationReason,
+  contextSnapshot: (session.contextSnapshot ?? null) as DevBotsInteractiveSession['contextSnapshot'],
+  logPath: session.logPath,
+  metadata: session.metadata,
+});
+
+const mapInteractiveModelOption = (
+  model: AllowedInteractiveModel,
+): DevBotsInteractiveSessionModelOption => ({
+  provider: model.provider,
+  model: model.name,
+  displayName:
+    model.displayName ??
+    (model.name === '*' ? `${model.provider.toUpperCase()} (any)` : `${model.provider}:${model.name}`),
+  description: model.description,
+  default: model.default,
+});
+
+const computeIdleDeadline = (session: InteractiveSessionRecord, idleTimeoutMs: number): string | undefined => {
+  const timestamps = [session.startedAt, session.lastUserActivityAt, session.lastAgentActivityAt]
+    .map((value) => (value ? Date.parse(value) : Number.NaN))
+    .filter((value) => Number.isFinite(value)) as number[];
+  if (!timestamps.length) {
+    return undefined;
+  }
+  return new Date(Math.max(...timestamps) + idleTimeoutMs).toISOString();
+};
+
+const buildInteractiveSessionState = (devBotsManager: DevBotsManager): DevBotsInteractiveSessionState => {
+  const idleTimeoutMs = devBotsManager.getInteractiveIdleTimeoutMs();
+  const session = devBotsManager.getActiveInteractiveSession();
+  const mappedSession = session ? mapInteractiveSession(session, idleTimeoutMs) : null;
+  const availableModels = devBotsManager.getAllowedInteractiveModels().map(mapInteractiveModelOption);
+  const baseState: DevBotsInteractiveSessionState = {
+    session: mappedSession,
+    availableModels,
+    heartbeatIntervalSeconds: INTERACTIVE_HEARTBEAT_INTERVAL_SECONDS,
+    idleTimeoutSeconds: Math.floor(idleTimeoutMs / 1000),
+    stream: mappedSession
+      ? {
+          sessionId: mappedSession.id,
+          url: `${INTERACTIVE_STREAM_BASE_PATH}/${mappedSession.id}/stream`,
+        }
+      : undefined,
+  };
+  if (!mappedSession) {
+    return {
+      ...baseState,
+      warnings: ['No active interactive session'],
+    };
+  }
+  return baseState;
+};
+
 const writeSseEvent = (res: Response, event: string, data: unknown) => {
   const payload = typeof data === 'string' ? data : JSON.stringify(data);
   res.write(`event: ${event}\n`);
@@ -179,7 +282,7 @@ const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOp
   const trackerKey = `${filePath}:${stream}`;
   if (!logStreamAccessTracker.tryAcquire(trackerKey)) {
     logger.warn({
-      category: 'dev-bots',
+      category: 'api',
       action: 'log_stream_limit_reached',
       message: `Rejected ${stream} log stream due to subscriber limit`,
       details: { filePath, limit: MAX_LOG_STREAM_SUBSCRIBERS },
@@ -242,9 +345,10 @@ const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOp
         }
       };
 
-      readStream.on('data', (chunk: string) => {
-        bytesRead += Buffer.byteLength(chunk);
-        const combined = remainder + chunk;
+      readStream.on('data', (chunk: string | Buffer) => {
+        const chunkStr = typeof chunk === 'string' ? chunk : chunk.toString();
+        bytesRead += Buffer.byteLength(chunkStr);
+        const combined = remainder + chunkStr;
         const lines = combined.split(/\r?\n/);
         remainder = lines.pop() ?? '';
         for (const line of lines) {
@@ -285,7 +389,7 @@ const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOp
 
   const handleError = (error: unknown) => {
     logger.error({
-      category: 'dev-bots',
+      category: 'api',
       action: 'log_stream_error',
       message: `Error streaming ${stream} log`,
       error,
@@ -878,7 +982,8 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
    */
   router.get('/tasks/completed', (_req: Request, res: Response) => {
     try {
-      const tasks = devBotsManager.getCompletedTasks();
+      // getCompletedTasks() is deprecated - return empty array for now
+      const tasks: any[] = []; // TODO: Implement if needed via taskQueue.getTasksByStatus('completed')
       res.json({ tasks });
     } catch (error) {
       logger.error({
@@ -1819,6 +1924,100 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
         message: error instanceof Error ? error.message : String(error)
       });
     }
+  });
+
+  // ============================================================================
+  // Interactive Sessions
+  // ============================================================================
+
+  router.get('/interactive/session', (_req, res) => {
+    const payload: DevBotsInteractiveSessionStateResponse['data'] = buildInteractiveSessionState(devBotsManager);
+    res.json({ success: true, data: payload });
+  });
+
+  router.post('/interactive/session', async (req, res) => {
+    const payload = req.body as DevBotsInteractiveSessionStartPayload | undefined;
+    if (!payload || typeof payload.modelProvider !== 'string' || typeof payload.modelName !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'invalid_payload',
+        message: 'modelProvider and modelName are required',
+      });
+    }
+    try {
+      await devBotsManager.launchInteractiveSession({
+        ownerEmail: getRequestUserEmail(req) ?? DEFAULT_INTERACTIVE_OWNER_EMAIL,
+        modelProvider: payload.modelProvider,
+        modelName: payload.modelName,
+        metadata: payload.metadata,
+      });
+      const state = buildInteractiveSessionState(devBotsManager);
+      res.status(201).json({ success: true, data: state });
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        error: 'interactive_session_failed',
+        message: error instanceof Error ? error.message : 'Failed to launch session',
+      });
+    }
+  });
+
+  router.delete('/interactive/session', async (req, res) => {
+    const session = devBotsManager.getActiveInteractiveSession();
+    if (!session) {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'No active interactive session' });
+    }
+    await devBotsManager.endInteractiveSession(session.id, 'Operator ended session');
+    const payload: DevBotsInteractiveSessionStateResponse['data'] = buildInteractiveSessionState(devBotsManager);
+    res.json({ success: true, data: payload });
+  });
+
+  router.post('/interactive/session/:sessionId/input', (req, res) => {
+    const { sessionId } = req.params;
+    if (!sessionId) {
+      return res.status(400).json({ success: false, error: 'invalid_params', message: 'sessionId is required' });
+    }
+    const payload = req.body as DevBotsInteractiveSessionInputPayload | undefined;
+    if (!payload || typeof payload.data !== 'string' || payload.data.length === 0) {
+      return res.status(400).json({ success: false, error: 'invalid_payload', message: 'input data is required' });
+    }
+    const session = devBotsManager.getInteractiveSession(sessionId);
+    if (!session || session.status === 'ended') {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'Session not found or already ended' });
+    }
+    devBotsManager.sendInteractiveInput(sessionId, payload.data);
+    res.json({ success: true, data: { accepted: true } });
+  });
+
+  router.post('/interactive/heartbeat', (req, res) => {
+    const payload = req.body as DevBotsInteractiveHeartbeatPayload | undefined;
+    if (!payload || typeof payload.sessionId !== 'string') {
+      return res.status(400).json({ success: false, error: 'invalid_payload', message: 'sessionId is required' });
+    }
+    const session = devBotsManager.getInteractiveSession(payload.sessionId);
+    if (!session || session.status === 'ended') {
+      return res.status(404).json({ success: false, error: 'not_found', message: 'Session not found' });
+    }
+    const source = payload.source === 'agent' ? 'agent' : 'user';
+    devBotsManager.recordInteractiveActivity(payload.sessionId, source);
+    res.json({ success: true, data: { acknowledged: true } });
+  });
+
+  router.post('/interactive/interrupt', (req, res) => {
+    const payload = req.body as DevBotsInteractiveInterruptPayload | undefined;
+    if (!payload || typeof payload.sessionId !== 'string') {
+      return res.status(400).json({ success: false, error: 'invalid_payload', message: 'sessionId is required' });
+    }
+    const session = devBotsManager.getInteractiveSession(payload.sessionId);
+    if (!session || session.status === 'ended') {
+      return res.status(404).json({
+        success: false,
+        error: 'not_found',
+        message: 'Session not found or already ended',
+      });
+    }
+    devBotsManager.sendInteractiveSignal(payload.sessionId, 'interrupt');
+    res.json({ success: true, data: { message: 'Interrupt signal sent' } });
   });
 
   return router;

@@ -7,14 +7,16 @@
 
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import type { ApiError } from '@/types/contracts';
+import { createLogger } from '@/utils/logger';
 
 export class ApiClient {
   private client: AxiosInstance;
+  private log = createLogger('ApiClient');
 
   constructor(baseURL: string = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000') {
     const fullBaseURL = `${baseURL}/api`;
-    console.log('[ApiClient] Initializing with base URL:', fullBaseURL);
-    console.log('[ApiClient] VITE_API_BASE_URL env var:', import.meta.env.VITE_API_BASE_URL);
+    this.log.debug('Initializing with base URL', fullBaseURL);
+    this.log.debug('VITE_API_BASE_URL', import.meta.env.VITE_API_BASE_URL);
 
     this.client = axios.create({
       baseURL: fullBaseURL,
@@ -30,10 +32,7 @@ export class ApiClient {
   private setupInterceptors(): void {
     // Request interceptor
     this.client.interceptors.request.use(
-      (config) => {
-        // Add any request modifications here
-        return config;
-      },
+      (config) => config,
       (error) => {
         return Promise.reject(error);
       }
