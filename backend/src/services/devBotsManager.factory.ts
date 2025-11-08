@@ -107,7 +107,6 @@ export async function createDevBotsManagerDependencies(
   const ephemeralWorkerService = new EphemeralWorkerService(
     docker,
     dockerManager,
-    workspaceOrchestrator,
     {
       maxConcurrentWorkers: 2,
       dockerImage: 'dev-bot:latest',
@@ -130,7 +129,6 @@ export async function createDevBotsManagerDependencies(
     taskQueue,
     agentManager,
     templateManager,
-    workspaceOrchestrator,
     ephemeralWorkerService,
     taskPersistence,
     {

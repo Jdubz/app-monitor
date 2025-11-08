@@ -31,7 +31,14 @@ import type {
   CloudLoggingStatusApiResponse,
   ApiSuccess,
   ApiError,
+  DevBotsStatus,
 } from '@app-monitor/api-contracts';
+import type {
+  DevBotsQueueSummary,
+  DevBotsTaskDetail,
+  DevBotsSettings,
+  DevBotsTaskLogsResponse,
+} from '@/types/dev-bots';
 import { CloudService, CloudLoggingStatus } from '../types/log.types';
 
 type LogSource = ContractLogSource;
@@ -185,6 +192,40 @@ export const getLogSources = async (): Promise<LogSource[]> => {
   return ensureApiSuccess(response, 'fetching log sources');
 };
 
+export const getDevBotsStatus = async (): Promise<DevBotsStatus> => {
+  const client = await getApiClient();
+  return client.get<DevBotsStatus>('/dev-bots/status');
+};
+
+export const getDevBotsQueue = async (): Promise<DevBotsQueueSummary> => {
+  const client = await getApiClient();
+  return client.get<DevBotsQueueSummary>('/dev-bots/queue');
+};
+
+export const getDevBotsTaskDetail = async (taskId: string): Promise<DevBotsTaskDetail> => {
+  const client = await getApiClient();
+  return client.get<DevBotsTaskDetail>(`/dev-bots/tasks/${taskId}/detail`);
+};
+
+export const getDevBotsTaskLogs = async (
+  taskId: string,
+): Promise<DevBotsTaskLogsResponse> => {
+  const client = await getApiClient();
+  return client.get(`/dev-bots/tasks/${taskId}/logs`);
+};
+
+export const getDevBotsSettings = async (): Promise<DevBotsSettings> => {
+  const client = await getApiClient();
+  return client.get('/dev-bots/settings');
+};
+
+export const updateDevBotsSettings = async (
+  payload: Partial<DevBotsSettings>,
+): Promise<DevBotsSettings> => {
+  const client = await getApiClient();
+  return client.put('/dev-bots/settings', payload);
+};
+
 // Port management endpoints
 export const getPortStatuses = async (): Promise<PortStatuses> => {
   const client = await getApiClient();
@@ -214,6 +255,11 @@ export const handleApiError = (error: unknown): string => {
 // Re-export the apiClient for direct use if needed
 export const getApiClientInstance = getApiClient;
 
+export const getApiBaseUrl = (): string =>
+  (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+
+export const getApiBasePath = (): string => `${getApiBaseUrl()}/api`;
+
 // Export everything as a namespace for components that use `api.method()`
 export const api = {
   healthCheck,
@@ -229,6 +275,12 @@ export const api = {
   getCloudLogs,
   checkCloudLoggingStatus,
   getLogSources,
+  getDevBotsStatus,
+  getDevBotsQueue,
+  getDevBotsTaskDetail,
+  getDevBotsTaskLogs,
+  getDevBotsSettings,
+  updateDevBotsSettings,
   getPortStatuses,
   killPortProcess,
   handleApiError,

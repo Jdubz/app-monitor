@@ -156,7 +156,6 @@ export class DevBotsManager extends EventEmitter {
 
     // Initialize TaskCompletionService with PR workflow orchestrator callback
     this.taskCompletionService = new TaskCompletionService(
-      this.workspaceOrchestrator,
       this.ephemeralWorkerService,
       this.taskPersistence,
       this.pushCoordinator,

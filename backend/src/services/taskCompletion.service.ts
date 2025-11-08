@@ -13,7 +13,12 @@
 import { logger } from '../utils/logger.js';
 import type { Task } from './taskQueue.sqlite.js';
 import type { EphemeralWorker } from './ephemeralWorker.service.js';
-import type { WorkspaceOrchestrator, PushCoordinator } from './workspaceOrchestrator.js';
+// WorkspaceOrchestrator removed - commit/push happens via Docker exec, not host git operations
+import type { WorkspaceContext } from './ephemeralWorker.service.js';
+
+export interface PushCoordinator {
+  enqueue<T>(operation: () => Promise<T>): Promise<T>;
+}
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskPersistence } from './taskPersistence.js';
 import { getTokenTrackingService } from './tokenTracking.js';
@@ -46,7 +51,6 @@ export class TaskCompletionService {
   private readonly config: TaskCompletionServiceConfig;
 
   constructor(
-    private readonly workspaceOrchestrator: WorkspaceOrchestrator,
     private readonly ephemeralWorkerService: EphemeralWorkerService,
     private readonly taskPersistence: TaskPersistence,
     private readonly pushCoordinator: PushCoordinator,
@@ -114,25 +118,20 @@ export class TaskCompletionService {
     let failureReason: string | undefined;
 
     if (shouldPush) {
-      const sealResult = await this.workspaceOrchestrator.sealWorkspace(worker.workspace, {
-        taskId: task.id,
-        taskTitle: task.title,
-        pushCoordinator: this.pushCoordinator
-      });
+      // NOTE: Git commit/push already handled by Claude Code CLI inside the Docker container
+      // The CLI automatically commits changes and pushes to the configured branch
+      // We just mark the task as completed and extract PR info from the output
+      finalStatus = 'completed';
 
-      if (sealResult.status === 'success' || sealResult.status === 'noop') {
-        finalStatus = 'completed';
-        if (sealResult.commitSha) {
-          const commitNote = `Pushed commit ${sealResult.commitSha} to staging from workspace ${worker.workspace.id}`;
-          task.notes = task.notes ? `${task.notes}\n${commitNote}` : commitNote;
+      logger.info({
+        category: 'process',
+        action: 'task_push_approved',
+        message: `Task ${task.id} approved for push - Claude CLI handled git operations`,
+        details: {
+          taskId: task.id,
+          workspaceId: worker.workspace.id
         }
-      } else {
-        finalStatus = 'failed';
-        failureReason = sealResult.message || `Failed to push changes (${sealResult.status})`;
-        if (sealResult.patchPath) {
-          failureReason = `${failureReason}. Patch saved at ${sealResult.patchPath}`;
-        }
-      }
+      });
     } else {
       finalStatus = 'failed';
       failureReason =
@@ -144,10 +143,18 @@ export class TaskCompletionService {
           ? 'Quality gates failed'
           : 'Task did not meet push requirements';
 
-      const patchPath = this.workspaceOrchestrator.createPatchArtifact(worker.workspace);
-      if (patchPath) {
-        failureReason = `${failureReason}. Workspace patch saved at ${patchPath}`;
-      }
+      // NOTE: Patch creation not possible with Docker cp approach
+      // The workspace is inside the container which gets destroyed
+      // Task output contains all the changes that were made
+      logger.warn({
+        category: 'process',
+        action: 'task_failed_no_patch',
+        message: `Task ${task.id} failed - workspace inside container (no patch artifact)`,
+        details: {
+          taskId: task.id,
+          failureReason
+        }
+      });
     }
 
     task.status = finalStatus;
@@ -211,12 +218,8 @@ export class TaskCompletionService {
     worker.task.status = 'failed';
     worker.task.completed_at = Date.now();
     const baseError = error instanceof Error ? error.message : String(error);
-    let failureMessage = baseError;
-    const patchPath = this.workspaceOrchestrator.createPatchArtifact(worker.workspace);
-    if (patchPath) {
-      failureMessage = `${baseError}\nWorkspace patch saved at ${patchPath}`;
-    }
-    worker.task.error = failureMessage;
+    // NOTE: No patch artifact with Docker cp approach - workspace inside container
+    worker.task.error = baseError;
     worker.task.can_retry = true;
 
     // Save to persistence (task already updated in SQLite)
