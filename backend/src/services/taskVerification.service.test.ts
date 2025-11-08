@@ -26,7 +26,7 @@ describe('TaskVerificationService', () => {
     service = new TaskVerificationService();
     mockTask = {
       id: 'test-task-123',
-      type: 'documentation', // Changed to avoid coverage check in tests
+      type: 'implementation',
       title: 'Test Task',
       description: 'Test task description',
       status: 'running',
@@ -303,6 +303,11 @@ describe('TaskVerificationService', () => {
 
     it('should generate appropriate recommendations', async () => {
       const taskOutput = 'Partial implementation';
+      const taskRequiringCoverage = {
+        ...mockTask,
+        files: ['backend/src/auth.ts'],
+        testing_requirements: ['Unit tests must be updated']
+      };
 
       (execSync as any).mockImplementation((cmd: string) => {
         if (cmd.includes('test:coverage')) {
@@ -315,7 +320,7 @@ describe('TaskVerificationService', () => {
         return '';
       });
 
-      const result = await service.verifyTask(mockTask, '/workspace', taskOutput);
+      const result = await service.verifyTask(taskRequiringCoverage, '/workspace', taskOutput);
 
       expect(result.recommendations).toBeDefined();
       expect(result.recommendations!.length).toBeGreaterThan(0);

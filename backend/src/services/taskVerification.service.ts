@@ -305,9 +305,29 @@ export class TaskVerificationService {
 
     // Pattern 5: Build/compile success
     if (lowerCriterion.includes('build') || lowerCriterion.includes('compile')) {
-      if (lowerOutput.includes('build successful') ||
-          lowerOutput.includes('compiled successfully') ||
-          lowerOutput.includes('build: success')) {
+      const buildIndicators = [
+        'build successful',
+        'build succeeded',
+        'build success',
+        'build: success',
+        'build completed successfully',
+        'build completed without errors',
+        'build completed',
+        'build finished successfully',
+        'build finished without errors',
+        'build passed',
+        'build ok',
+        'build status: success',
+        'compiled successfully',
+        'compile success',
+        'compile succeeded'
+      ];
+
+      const hasIndicator = buildIndicators.some(indicator => lowerOutput.includes(indicator));
+      const completedWithoutErrors = lowerOutput.includes('build completed') &&
+        (lowerOutput.includes('without errors') || lowerOutput.includes('no errors'));
+
+      if (hasIndicator || completedWithoutErrors) {
         met = true;
         evidence = 'Build success detected in output';
       }
@@ -600,33 +620,43 @@ export class TaskVerificationService {
    * Check if task should have test coverage verified
    */
   private shouldCheckTestCoverage(task: Task): boolean {
-    // Check if task type suggests testing
-    const testRelatedTypes = ['implementation', 'feature', 'bugfix', 'refactor', 'testing'];
-    const taskType = task.type?.toLowerCase() || '';
-
-    // Check if task involves code changes
     const hasCodeFiles = task.files?.some(f =>
       f.endsWith('.ts') || f.endsWith('.tsx') ||
       f.endsWith('.js') || f.endsWith('.jsx')
     ) || false;
 
-    // Check if testing is mentioned in requirements
-    const hasTestRequirement = task.testing_requirements &&
-                              task.testing_requirements.length > 0;
+    const hasTestRequirement = Array.isArray(task.testing_requirements) &&
+      task.testing_requirements.length > 0;
 
-    return testRelatedTypes.includes(taskType) || hasCodeFiles || hasTestRequirement;
+    const hasCoverageCriterion = Array.isArray(task.acceptance_criteria) &&
+      task.acceptance_criteria.some(criterion =>
+        /coverage/.test(criterion.toLowerCase())
+      );
+
+    return hasCodeFiles || hasTestRequirement || hasCoverageCriterion;
   }
 
   /**
    * Check if task has scope boundaries defined
    */
   private hasScopeBoundaries(task: Task): boolean {
-    return !!(task.context_boundaries && (
-      task.context_boundaries.mustNotChange ||
-      task.context_boundaries.mustNotAffect ||
-      (task as any).doNotCreate ||
-      (task as any).doNotModify
-    ));
+    const boundaries = task.context_boundaries;
+    const hasContextBoundaries = !!(
+      boundaries &&
+      (
+        (Array.isArray(boundaries.mustNotChange) && boundaries.mustNotChange.length > 0) ||
+        (Array.isArray(boundaries.mustNotAffect) && boundaries.mustNotAffect.length > 0) ||
+        (Array.isArray((boundaries as any).integrationPoints) && (boundaries as any).integrationPoints.length > 0)
+      )
+    );
+
+    const taskTemplate = task as any;
+    const hasTemplateRestrictions = !!(
+      (Array.isArray(taskTemplate.doNotCreate) && taskTemplate.doNotCreate.length > 0) ||
+      (Array.isArray(taskTemplate.doNotModify) && taskTemplate.doNotModify.length > 0)
+    );
+
+    return hasContextBoundaries || hasTemplateRestrictions;
   }
 
   /**
