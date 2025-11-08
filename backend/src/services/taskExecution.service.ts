@@ -573,7 +573,7 @@ export class TaskExecutionService {
         'sh', '-c',
         // Copy credentials and run Claude in non-interactive mode
         `cp /tmp/host-creds.json /home/node/.claude/.credentials.json && ` +
-        `claude --dangerously-skip-permissions --permission-mode bypassPermissions --allowedTools 'Bash(git:*)' '${promptText}'`
+        `claude --dangerously-skip-permissions '${promptText}'`
       ];
       cliCommand = 'claude';
     }
