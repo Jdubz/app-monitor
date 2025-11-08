@@ -617,7 +617,9 @@ describe('isV3Template', () => {
         mustNotDuplicate: ['duplicate']
       },
       preImplementationChecklist: ['[ ] Step'],
-      constraints: ['MUST NOT break prod']
+      acceptanceCriteria: ['EXACTLY follow spec'],
+      constraints: ['MUST NOT break prod'],
+      doNotCreate: ['helper.ts (reuse existing helper)']
     };
 
     expect(isV3Template(template)).toBe(false);
@@ -645,7 +647,9 @@ describe('isV3Template edge cases', () => {
         mustNotDuplicate: []
       },
       preImplementationChecklist: [],
+      acceptanceCriteria: [],
       constraints: [],
+      doNotCreate: ['helper.ts (reuse existing helper)'],
       gitWorkflow: { required: true, branch: 'main', commitMessage: 'test' }
     };
 
@@ -664,7 +668,9 @@ describe('isV3Template edge cases', () => {
         mustNotDuplicate: ['duplicate']
       },
       preImplementationChecklist: ['[ ] Step'],
+      acceptanceCriteria: ['EXACTLY follow spec'],
       constraints: ['Do not break prod'],
+      doNotCreate: ['helper.ts (reuse existing helper)'],
       gitWorkflow: null
     };
 
@@ -678,7 +684,9 @@ describe('isV3Template edge cases', () => {
       description: 'Ensure null investigation fails',
       investigation: null,
       preImplementationChecklist: ['[ ] Step'],
+      acceptanceCriteria: ['EXACTLY follow spec'],
       constraints: ['Do not break prod'],
+      doNotCreate: ['helper.ts (reuse existing helper)'],
       gitWorkflow: { required: true, branch: 'main', commitMessage: 'test' }
     };
 

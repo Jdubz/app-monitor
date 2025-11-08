@@ -17,7 +17,11 @@ import { Router, Request, Response, NextFunction } from 'express';
 import type { DevBotsManager } from '../services/devBotsManager.js';
 import { logger } from '../utils/logger.js';
 import type { LogEntry } from '../utils/logger.js';
-import { validateTaskTemplate, formatValidationErrors, isV3Template } from '../services/taskTemplateValidator.js';
+import {
+  validateTaskTemplate,
+  formatValidationErrors,
+  shouldValidateAsV3Template
+} from '../services/taskTemplateValidator.js';
 import type { ApiError, ApiSuccess } from '@app-monitor/api-contracts';
 
 const TECHNICAL_TASK_TYPES = new Set(['refactor', 'implementation', 'bug', 'feature']);
@@ -255,7 +259,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
 
       // V3 Template Validation (PE-API-VALIDATION-001)
       // If the request body matches v3 template structure, enforce validation
-      if (isV3Template(req.body)) {
+      if (shouldValidateAsV3Template(req.body)) {
         const validationResult = validateTaskTemplate(req.body);
 
         // Log validation warnings even if template passes

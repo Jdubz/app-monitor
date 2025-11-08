@@ -38,6 +38,8 @@ Version 3 prompt engineering principles to prevent bots from:
 }
 ```
 
+> **Implementation detail:** The PE-1 validator treats missing `EXACTLY/NO MORE` phrases or `DO NOT/MUST NOT` guardrails as blocking errors. Acceptance criteria must read like an audit checklist that explicitly forbids extra work.
+
 ### 2. Mandatory Codebase Investigation
 
 **Problem**: Bots implement new features that duplicate existing code
@@ -85,6 +87,8 @@ All tasks MUST include an `investigation` field:
 - **INTEGRATE** - Connect existing components (identify both first)
 - **IMPLEMENT** - Code to specification (check for existing implementation first)
 
+> **Validator note:** Constraints must start with an imperative (`MUST`, `MUST NOT`, or `DO NOT`). Soft phrases like "Consider avoiding" are rejected so bots receive hard boundaries.
+
 ### 4. Pre-Implementation Checklist
 
 Every task prompt should include a mandatory checklist:
@@ -125,6 +129,8 @@ Use three fields to control file access:
     "backend/src/utils/taskHelpers.ts (extend existing helpers.ts)"
   ]
 }
+
+> **Validation rule (PE-1):** Every `doNotCreate` entry now requires a plain-language explanation that points the agent back to an existing file or pattern (e.g. `"foo.ts (reuse existing service)"`). The backend validator rejects templates that omit these reasons or use generic phrases, preventing bots from recreating files that already exist.
 ```
 
 ## Task Template v3
