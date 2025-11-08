@@ -83,23 +83,34 @@ jobs:
           echo "Triggered by: ${{ github.actor }}"
           echo ""
 
+      - name: Checkout latest code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
       - name: Run deployment script
         run: |
-          cd /opt/app-monitor
-          ./scripts/production/deploy.sh
+          cd ${{ github.workspace }}
+          sudo /opt/app-monitor/scripts/production/deploy.sh
 
       - name: Verify deployment
         run: |
           echo "🔍 Verifying services..."
-          sudo systemctl is-active app-monitor-backend-prod.service
-          sudo systemctl is-active app-monitor-frontend-prod.service
+          sudo systemctl is-active app-monitor-backend@5001.service
+          sudo systemctl is-active app-monitor-frontend.service
+          sudo systemctl is-active nginx
           echo "✅ All services running"
 
       - name: Health check
         run: |
           echo "🏥 Running health checks..."
-          timeout 30 bash -c 'until curl -f http://localhost:5050/health; do sleep 2; done'
-          timeout 30 bash -c 'until curl -f http://localhost:5173; do sleep 2; done'
+          # Check backend health (using active port from deployment)
+          ACTIVE_PORT=$(cat /opt/app-monitor/shared/config/active-port 2>/dev/null || echo "5001")
+          timeout 30 bash -c "until curl -f http://localhost:\$ACTIVE_PORT/health; do sleep 2; done"
+
+          # Check frontend
+          timeout 30 bash -c 'until curl -f http://localhost:3000; do sleep 2; done'
+
           echo "✅ Health checks passed"
 
   # Post-deployment notification

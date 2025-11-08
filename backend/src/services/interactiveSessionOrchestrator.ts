@@ -48,7 +48,7 @@ export class InteractiveSessionOrchestrator {
     const hostLogsDir = path.join(this.config.logsDirectory, session.id);
     fs.mkdirSync(hostLogsDir, { recursive: true });
 
-    const binds = [`${hostLogsDir}:/app/logs:rw`];
+    const binds = this.buildVolumeBinds(hostLogsDir);
     const envVars = this.buildEnv(session);
 
     const container = await this.docker.createContainer({
@@ -64,6 +64,7 @@ export class InteractiveSessionOrchestrator {
       HostConfig: {
         AutoRemove: false,
         Binds: binds,
+        ExtraHosts: ["host.docker.internal:host-gateway"],
         Memory: 512 * 1024 * 1024,
         CpuQuota: 50000,
         Tmpfs: {
@@ -94,6 +95,33 @@ export class InteractiveSessionOrchestrator {
     });
 
     return container.id;
+  }
+
+  private buildVolumeBinds(hostLogsDir: string): string[] {
+    const binds = [`${hostLogsDir}:/app/logs:rw`];
+    const productionAppPath = this.config.productionAppPath;
+    if (productionAppPath) {
+      if (fs.existsSync(productionAppPath)) {
+        binds.push(`${productionAppPath}:/opt/app-monitor:ro`);
+        const productionLogsPath = path.join(productionAppPath, logs);
+        if (fs.existsSync(productionLogsPath)) {
+          binds.push(`${productionLogsPath}:/app/prod-logs:ro`);
+        } else {
+          logger.warn({
+            category: interactive-session,
+            action: production_logs_missing,
+            message: `Production logs directory not found at ${productionLogsPath}`,
+          });
+        }
+      } else {
+        logger.warn({
+          category: interactive-session,
+          action: production_mount_missing,
+          message: `Production app path ${productionAppPath} not found on host`,
+        });
+      }
+    }
+    return binds;
   }
 
   async stop(containerId: string): Promise<void> {
@@ -140,6 +168,21 @@ export class InteractiveSessionOrchestrator {
     envVars.push('HOME=/home/worker');
     envVars.push('USER=worker');
     envVars.push('SHELL=/bin/bash');
+
+    if (this.config.productionAppPath) {
+      envVars.push(`PRODUCTION_APP_ROOT=${this.config.productionAppPath}`);
+      envVars.push(PRODUCTION_LOGS_PATH=/app/prod-logs);
+    }
+
+    const productionApiBaseUrl = this.config.productionApiBaseUrl;
+    if (productionApiBaseUrl) {
+      envVars.push(`PRODUCTION_API_BASE_URL=${productionApiBaseUrl}`);
+    }
+    const productionApiToken =
+      process.env.INTERACTIVE_PROD_API_TOKEN ?? process.env.PRODUCTION_API_TOKEN ?? process.env.PRODUCTION_API_KEY;
+    if (productionApiToken) {
+      envVars.push(`PRODUCTION_API_TOKEN=${productionApiToken}`);
+    }
 
     const claudeCredentialsNew = path.join(os.homedir(), '.claude', '.credentials.json');
     const claudeCredentialsLegacy = path.join(os.homedir(), '.claude', 'credentials.json');
