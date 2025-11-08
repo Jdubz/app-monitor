@@ -454,12 +454,22 @@ export class TaskExecutionService {
     const workerId = `bot-${chosenAgentType}-${agent.id}-${Date.now()}`;
 
     try {
-    // Ensure we're on staging branch
-    // Get the project root (parent of backend directory)
+    // Container will clone fresh repository internally
+    // Get the project root (parent of backend directory) for reference only
     const repoRoot = path.resolve(process.cwd(), '..');
     const baseBranch = 'staging';
-    await this.execGitCommand(['checkout', baseBranch], repoRoot);
-    await this.execGitCommand(['pull', 'origin', baseBranch], repoRoot);
+
+    // Log that container will handle repository setup
+    logger.info({
+      category: 'process',
+      action: 'container_isolation',
+      message: `Container will clone fresh repo and checkout ${baseBranch} internally`,
+      details: {
+        workerId,
+        baseBranch,
+        note: 'Fixed: No longer switching branches in shared filesystem'
+      }
+    });
 
     // Prepare host-side resources
     const hostLogsDir = this.getHostLogsDir();
@@ -495,12 +505,12 @@ export class TaskExecutionService {
     }
 
     if (chosenAgentType === 'codex') {
-      // Codex execution
+      // Codex execution with isolated repository
       dockerArgs = [
         'run',
         '--rm',  // Auto-remove container after exit
         ...gitEnvVars,  // Pass git environment variables
-        '-v', `${repoRoot}:/workspace:rw`,  // Mount workspace directly
+        // NO direct workspace mount - will clone inside container
         '-v', `${hostLogsDir}:/logs:rw`,  // Mount logs
         '--tmpfs', '/home/node/.codex:uid=1000,gid=1000',  // Writable temp for Codex CLI
         '-v', `${homeDir}/.codex:/tmp/host-codex:ro`,  // Mount Codex credentials
@@ -510,8 +520,15 @@ export class TaskExecutionService {
         '-v', `${homeDir}/.config/gh:/home/node/.config/gh:ro`,  // GitHub CLI auth
         this.getAgentDockerImage(agent),
         'sh', '-c',
-        // Copy credentials and run Codex with full access for git operations
-        // Use 'exec' subcommand for non-interactive execution with sandbox bypass
+        // Clone fresh repository, then copy credentials and run Codex
+        `set -e && ` +
+        `mkdir -p /workspace && cd /workspace && ` +
+        `git clone https://github.com/Jdubz/app-monitor.git . && ` +
+        `git config --global user.name "DevBot" && ` +
+        `git config --global user.email "devbot@local" && ` +
+        `git fetch --all && ` +
+        `git checkout ${baseBranch} && ` +
+        `git pull origin ${baseBranch} || true && ` +
         `cp -r /tmp/host-codex/* /home/node/.codex/ 2>/dev/null || true && ` +
         `codex exec --dangerously-bypass-approvals-and-sandbox '${promptText}'`
       ];
@@ -530,7 +547,7 @@ export class TaskExecutionService {
         'run',
         '--rm',  // Auto-remove container after exit
         ...gitEnvVars,  // Pass git environment variables
-        '-v', `${repoRoot}:/workspace:rw`,  // Mount workspace directly
+        // NO direct workspace mount - will clone inside container
         '-v', `${hostLogsDir}:/logs:rw`,  // Mount logs
         '--tmpfs', '/home/node/.claude:uid=1000,gid=1000',  // Writable temp for Claude CLI
         '-v', `${claudeCredentials}:/tmp/host-creds.json:ro`,  // Mount Claude credentials
@@ -540,7 +557,15 @@ export class TaskExecutionService {
         '-v', `${homeDir}/.config/gh:/home/node/.config/gh:ro`,  // GitHub CLI auth
         this.getAgentDockerImage(agent),
         'sh', '-c',
-        // Copy credentials and run Claude in non-interactive mode
+        // Clone fresh repository, then copy credentials and run Claude
+        `set -e && ` +
+        `mkdir -p /workspace && cd /workspace && ` +
+        `git clone https://github.com/Jdubz/app-monitor.git . && ` +
+        `git config --global user.name "DevBot" && ` +
+        `git config --global user.email "devbot@local" && ` +
+        `git fetch --all && ` +
+        `git checkout ${baseBranch} && ` +
+        `git pull origin ${baseBranch} || true && ` +
         `cp /tmp/host-creds.json /home/node/.claude/.credentials.json && ` +
         `claude --dangerously-skip-permissions '${promptText}'`
       ];

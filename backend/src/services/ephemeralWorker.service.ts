@@ -160,7 +160,6 @@ export class EphemeralWorkerService {
 
     try {
       // Determine branch to work on
-      const repoRoot = process.cwd();
       let baseBranch = 'staging';  // Default to staging
 
       // For improvement tasks (repair bots), use the parent task's branch
@@ -178,9 +177,17 @@ export class EphemeralWorkerService {
         });
       }
 
-      // Checkout and update the target branch
-      await this.execGitCommand(['checkout', baseBranch], repoRoot);
-      await this.execGitCommand(['pull', 'origin', baseBranch], repoRoot);
+      // Container will clone fresh repository internally
+      logger.info({
+        category: 'process',
+        action: 'container_isolation',
+        message: `Container will clone fresh repo and checkout ${baseBranch} internally`,
+        details: {
+          taskId: task.id,
+          baseBranch,
+          note: 'Fixed: No longer switching branches in shared filesystem'
+        }
+      });
 
       // Prepare host-side resources
       const hostLogsDir = this.getHostLogsDir();
@@ -274,8 +281,8 @@ export class EphemeralWorkerService {
       // Wait for container to be fully running before exec commands
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      // Copy workspace INTO container using tar (container must be running for chown)
-      await this.copyWorkspaceToContainer(container.id, repoRoot);
+      // Clone fresh repository inside container for complete isolation
+      await this.cloneFreshRepoInContainer(container.id, baseBranch);
 
       await this.initializeWorkerLogFile(workerId);
 
@@ -496,6 +503,85 @@ export class EphemeralWorkerService {
         reject(error);
       });
     });
+  }
+
+  /**
+   * Clone fresh repository inside container for complete isolation
+   * Each bot gets its own independent copy of the repository
+   */
+  private async cloneFreshRepoInContainer(containerId: string, baseBranch: string): Promise<void> {
+    logger.info({
+      category: 'process',
+      action: 'cloning_fresh_repo_in_container',
+      message: `Cloning fresh repository in container ${containerId} on branch ${baseBranch}`
+    });
+
+    const container = this.docker.getContainer(containerId);
+
+    // Setup script to clone repository and checkout the correct branch
+    const setupScript = `
+      set -e
+      mkdir -p /workspace
+      cd /workspace
+      git clone https://github.com/Jdubz/app-monitor.git .
+      git config --global user.name "DevBot"
+      git config --global user.email "devbot@local"
+      git fetch --all
+
+      # Checkout the appropriate branch
+      if [ "${baseBranch}" != "main" ] && [ "${baseBranch}" != "staging" ]; then
+        # For PR branches, checkout from origin
+        git checkout -b ${baseBranch} origin/${baseBranch} || git checkout ${baseBranch}
+      else
+        git checkout ${baseBranch}
+      fi
+
+      git pull origin ${baseBranch} || true
+      chown -R worker:worker /workspace
+      echo "Repository setup complete on branch ${baseBranch}"
+    `;
+
+    try {
+      const exec = await container.exec({
+        Cmd: ['/bin/bash', '-c', setupScript],
+        AttachStdout: true,
+        AttachStderr: true,
+        WorkingDir: '/'
+      });
+
+      const stream = await exec.start({ Detach: false, Tty: false });
+
+      let output = '';
+      stream.on('data', (chunk: Buffer) => {
+        output += chunk.toString();
+      });
+
+      await new Promise<void>((resolve, reject) => {
+        stream.on('end', () => {
+          logger.info({
+            category: 'process',
+            action: 'repository_cloned',
+            message: 'Repository successfully cloned in container',
+            details: {
+              containerId,
+              baseBranch,
+              output: output.substring(0, 1000) // Log first 1000 chars of output
+            }
+          });
+          resolve();
+        });
+        stream.on('error', reject);
+      });
+
+    } catch (error) {
+      logger.error({
+        category: 'process',
+        action: 'failed_to_clone_repository',
+        message: `Failed to clone repository in container ${containerId}`,
+        error: error
+      });
+      throw error;
+    }
   }
 
   /**
