@@ -19,6 +19,15 @@ import {
 import { Socket } from 'socket.io-client';
 
 import { api } from '../services/api';
+import type {
+  DevBotsStatus,
+  DevBotsTask,
+  DevBotsScopeViolation,
+  DevBotsCleanupStatus,
+  DevBotsAgentPersonality,
+  DevBotsTaskTemplate,
+  DevBotsWorkerStatus,
+} from '@app-monitor/api-contracts';
 import StatusBadge from './StatusBadge';
 import {
   Card,
@@ -43,123 +52,6 @@ const PRIORITY_THRESHOLDS = {
 } as const;
 
 type PriorityVariant = 'destructive' | 'warning' | 'info' | 'outline';
-
-interface Task {
-  id: string;
-  type: string;
-  description: string;
-  status: 'pending' | 'assigned' | 'active' | 'completed' | 'failed';
-  createdAt: string;
-  assignedWorker?: string;
-  assignedAgent: string;
-  assignedAt?: string;
-  completedAt?: string;
-  output?: string;
-  error?: string;
-  exitCode?: number;
-  prompt?: string;
-  files?: string[];
-  dependencies?: string[];
-  project?: string;
-  priority?: number;
-  retryCount?: number;
-  maxRetries?: number;
-  canRetry?: boolean;
-  scope?: {
-    type: string;
-    boundaries: {
-      maxChanges: number;
-      forbiddenActions: string[];
-      maxNewLines: number;
-    };
-    validation: {
-      forbiddenPatterns: string[];
-      allowedPatterns: string[];
-    };
-  };
-  isEmergency?: boolean;
-  chainId?: string;
-  scopeViolations?: Array<{ type: string; severity: string }>;
-  isPeriodicCleanup?: boolean;
-}
-
-interface WorkerStatus {
-  id: string;
-  status: 'idle' | 'busy' | 'stopped';
-  currentTask?: string;
-  lastSeen: number;
-  personality?: {
-    id: string;
-    name: string;
-    role: string;
-    description: string;
-    specialties: string[];
-  };
-  onboardingComplete?: boolean;
-  lastOnboardingCheck?: number;
-}
-
-interface DevBotsStatus {
-  systemStatus: 'running' | 'stopped' | 'error';
-  workers: Record<string, WorkerStatus>;
-  queueSize: number;
-  activeTasks: number;
-  uptime: number;
-  workerCount: number;
-  maxWorkers: number;
-  activeWorkerTypes: string[];
-  availableWorkerTypes: string[];
-  tasks: {
-    pending: Task[];
-    active: Task[];
-    completed: Task[];
-  };
-}
-
-interface ScopeViolation {
-  taskId: string;
-  violations: Array<{ type: string; severity: string }>;
-}
-
-interface CleanupStatus {
-  schedules: string[];
-  recentTasks: Task[];
-  totalCleanupTasks: number;
-}
-
-interface AgentPersonality {
-  id: string;
-  name: string;
-  role: string;
-  description: string;
-  specialties: string[];
-  expertise: {
-    primary: string[];
-    secondary: string[];
-    tools: string[];
-  };
-  personality: {
-    communicationStyle: 'formal' | 'casual' | 'technical' | 'collaborative';
-    approach: 'methodical' | 'creative' | 'analytical' | 'pragmatic';
-    focus: 'quality' | 'speed' | 'innovation' | 'reliability';
-  };
-  taskPreferences: {
-    preferredTypes: string[];
-    avoidedTypes: string[];
-    complexityRange: 'simple' | 'medium' | 'complex' | 'any';
-  };
-}
-
-interface TaskTemplate {
-  id: string;
-  name: string;
-  description: string;
-  taskTypes: string[];
-  agentTypes: string[];
-  template: string;
-  variables: string[];
-  validationRules: string[];
-}
 
 interface DevBotsPanelProps {
   serviceName?: string;
@@ -220,7 +112,7 @@ const getPriorityVariant = (priority: number | undefined): { variant: PriorityVa
   return { variant: 'outline', label: `Priority ${priority}` };
 };
 
-const getTaskStatusVariant = (status: Task['status']): PriorityVariant => {
+const getTaskStatusVariant = (status: DevBotsTask['status']): PriorityVariant => {
   switch (status) {
     case 'failed':
       return 'destructive';
@@ -234,7 +126,7 @@ const getTaskStatusVariant = (status: Task['status']): PriorityVariant => {
   }
 };
 
-const mapWorkerStatusToBadge = (status: WorkerStatus['status']): {
+const mapWorkerStatusToBadge = (status: DevBotsWorkerStatus['status']): {
   badgeStatus: 'running' | 'stopped' | 'busy' | LogLevel;
   label: string;
 } => {
@@ -269,11 +161,11 @@ export const DevBotsPanel: React.FC<DevBotsPanelProps> = ({
   });
   const [addingTask, setAddingTask] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [scopeViolations, setScopeViolations] = useState<ScopeViolation[]>([]);
-  const [cleanupStatus, setCleanupStatus] = useState<CleanupStatus | null>(null);
+  const [scopeViolations, setScopeViolations] = useState<DevBotsScopeViolation[]>([]);
+  const [cleanupStatus, setCleanupStatus] = useState<DevBotsCleanupStatus | null>(null);
   const [activeTab, setActiveTab] = useState<DevBotsTab>('overview');
-  const [agents, setAgents] = useState<AgentPersonality[]>([]);
-  const [templates, setTemplates] = useState<TaskTemplate[]>([]);
+  const [agents, setAgents] = useState<DevBotsAgentPersonality[]>([]);
+  const [templates, setTemplates] = useState<DevBotsTaskTemplate[]>([]);
 
   const fetchStatus = async () => {
     try {
@@ -288,21 +180,21 @@ export const DevBotsPanel: React.FC<DevBotsPanelProps> = ({
       ] = await Promise.all([
         api.get<DevBotsStatus>('/dev-bots/status'),
         api
-          .get<{ violations: ScopeViolation[] }>('/dev-bots/scope-violations')
-          .catch(() => ({ violations: [] as ScopeViolation[] })),
+          .get<{ violations: DevBotsScopeViolation[] }>('/dev-bots/scope-violations')
+          .catch(() => ({ violations: [] as DevBotsScopeViolation[] })),
         api
-          .get<CleanupStatus>('/dev-bots/cleanup-status')
+          .get<DevBotsCleanupStatus>('/dev-bots/cleanup-status')
           .catch(() => ({
             schedules: [],
             recentTasks: [],
             totalCleanupTasks: 0,
           })),
         api
-          .get<{ agents: AgentPersonality[] }>('/dev-bots/agents')
-          .catch(() => ({ agents: [] as AgentPersonality[] })),
+          .get<{ agents: DevBotsAgentPersonality[] }>('/dev-bots/agents')
+          .catch(() => ({ agents: [] as DevBotsAgentPersonality[] })),
         api
-          .get<{ templates: TaskTemplate[] }>('/dev-bots/templates')
-          .catch(() => ({ templates: [] as TaskTemplate[] })),
+          .get<{ templates: DevBotsTaskTemplate[] }>('/dev-bots/templates')
+          .catch(() => ({ templates: [] as DevBotsTaskTemplate[] })),
       ]);
 
       console.log('[DevBotsPanel] Status response:', statusResponse);
@@ -420,27 +312,27 @@ export const DevBotsPanel: React.FC<DevBotsPanelProps> = ({
   useEffect(() => {
     if (!socket) return;
 
-    const handleTaskAdded = (task: Task) => {
+    const handleTaskAdded = (task: DevBotsTask) => {
       console.log('Task added:', task);
       fetchStatus();
     };
 
-    const handleTaskAssigned = (task: Task) => {
+    const handleTaskAssigned = (task: DevBotsTask) => {
       console.log('Task assigned:', task);
       fetchStatus();
     };
 
-    const handleTaskStarted = (task: Task) => {
+    const handleTaskStarted = (task: DevBotsTask) => {
       console.log('Task started:', task);
       fetchStatus();
     };
 
-    const handleTaskCompleted = (task: Task) => {
+    const handleTaskCompleted = (task: DevBotsTask) => {
       console.log('Task completed:', task);
       fetchStatus();
     };
 
-    const handleTaskFailed = (task: Task) => {
+    const handleTaskFailed = (task: DevBotsTask) => {
       console.log('Task failed:', task);
       fetchStatus();
     };

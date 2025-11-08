@@ -13,11 +13,12 @@
  * Total: 30+ endpoints organized into logical groups
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import type { DevBotsManager } from '../services/devBotsManager.js';
 import { logger } from '../utils/logger.js';
 import type { LogEntry } from '../utils/logger.js';
 import { validateTaskTemplate, formatValidationErrors, isV3Template } from '../services/taskTemplateValidator.js';
+import type { ApiError, ApiSuccess } from '@app-monitor/api-contracts';
 
 const TECHNICAL_TASK_TYPES = new Set(['refactor', 'implementation', 'bug', 'feature']);
 const MIN_DOCUMENTATION_LENGTH = 50;
@@ -31,6 +32,62 @@ const MIN_ACCEPTANCE_CRITERION_LENGTH = 30;
  */
 export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Router {
   const router = Router();
+
+  router.use((_req: Request, res: Response, next: NextFunction) => {
+    const originalJson = res.json.bind(res);
+
+    res.json = ((body?: unknown) => {
+      if (body && typeof body === 'object' && body !== null && 'success' in (body as Record<string, unknown>)) {
+        return originalJson(body);
+      }
+
+      if (res.statusCode >= 400) {
+        let errorLabel = 'Request failed';
+        let message: string | undefined;
+        let code: string | undefined;
+        let details: Record<string, unknown> | undefined;
+
+        if (body && typeof body === 'object' && body !== null && !Array.isArray(body)) {
+          const { error, message: bodyMessage, code: bodyCode, details: bodyDetails, ...rest } = body as Record<string, unknown>;
+          if (typeof error === 'string') {
+            errorLabel = error;
+          }
+          if (typeof bodyMessage === 'string') {
+            message = bodyMessage;
+          }
+          if (typeof bodyCode === 'string') {
+            code = bodyCode;
+          }
+          if (bodyDetails && typeof bodyDetails === 'object') {
+            details = bodyDetails as Record<string, unknown>;
+          } else if (Object.keys(rest).length > 0) {
+            details = rest;
+          }
+        } else if (typeof body === 'string') {
+          message = body;
+        }
+
+        const errorPayload: ApiError = {
+          success: false,
+          error: errorLabel,
+          ...(message ? { message } : {}),
+          ...(code ? { code } : {}),
+          ...(details ? { details } : {}),
+        };
+
+        return originalJson(errorPayload);
+      }
+
+      const payload: ApiSuccess<unknown> = {
+        success: true,
+        data: body as unknown,
+      };
+
+      return originalJson(payload);
+    }) as typeof res.json;
+
+    next();
+  });
 
   // ============================================================================
   // System Status & Health

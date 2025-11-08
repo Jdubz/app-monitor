@@ -65,6 +65,19 @@ const isApiErrorPayload = (payload: unknown): payload is ApiError => {
   );
 };
 
+const unwrapApiResponse = <T>(payload: unknown): T => {
+  if (
+    payload &&
+    typeof payload === 'object' &&
+    'success' in (payload as Record<string, unknown>) &&
+    (payload as ApiSuccess<unknown>).success === true &&
+    'data' in (payload as Record<string, unknown>)
+  ) {
+    return (payload as ApiSuccess<T>).data;
+  }
+  return payload as T;
+};
+
 const getApiClient = async (): Promise<ApiClient> => {
   const globalClient = (globalThis as Record<string, unknown>)[API_CLIENT_SYMBOL];
   if (globalClient) {
@@ -220,12 +233,24 @@ export const api = {
   killPortProcess,
   handleApiError,
   // Add HTTP methods for components that need them
-  get: async <T>(url: string, config?: Parameters<ApiClient['get']>[1]) =>
-    (await getApiClient()).get<T>(url, config),
-  post: async <T>(url: string, data?: Parameters<ApiClient['post']>[1], config?: Parameters<ApiClient['post']>[2]) =>
-    (await getApiClient()).post<T>(url, data, config),
-  put: async <T>(url: string, data?: Parameters<ApiClient['put']>[1], config?: Parameters<ApiClient['put']>[2]) =>
-    (await getApiClient()).put<T>(url, data, config),
-  delete: async <T>(url: string, config?: Parameters<ApiClient['delete']>[1]) =>
-    (await getApiClient()).delete<T>(url, config),
+  get: async <T>(url: string, config?: Parameters<ApiClient['get']>[1]) => {
+    const client = await getApiClient();
+    const response = await client.get<unknown>(url, config);
+    return unwrapApiResponse<T>(response);
+  },
+  post: async <T>(url: string, data?: Parameters<ApiClient['post']>[1], config?: Parameters<ApiClient['post']>[2]) => {
+    const client = await getApiClient();
+    const response = await client.post<unknown>(url, data, config);
+    return unwrapApiResponse<T>(response);
+  },
+  put: async <T>(url: string, data?: Parameters<ApiClient['put']>[1], config?: Parameters<ApiClient['put']>[2]) => {
+    const client = await getApiClient();
+    const response = await client.put<unknown>(url, data, config);
+    return unwrapApiResponse<T>(response);
+  },
+  delete: async <T>(url: string, config?: Parameters<ApiClient['delete']>[1]) => {
+    const client = await getApiClient();
+    const response = await client.delete<unknown>(url, config);
+    return unwrapApiResponse<T>(response);
+  },
 };
