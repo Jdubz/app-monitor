@@ -34,6 +34,7 @@ import type {
 } from '@app-monitor/api-contracts';
 import type { Task, TaskExecution } from '../services/taskQueue.sqlite.js';
 import { WorkerLogLocator } from '../services/taskLogLocator.js';
+import { LogStreamAccessTracker } from '../services/logStreamAccessTracker.js';
 
 const TECHNICAL_TASK_TYPES = new Set(['refactor', 'implementation', 'bug', 'feature']);
 const MIN_DOCUMENTATION_LENGTH = 50;
@@ -41,6 +42,10 @@ const MIN_ACCEPTANCE_CRITERION_LENGTH = 30;
 const DEFAULT_WORK_TARGET = 'dev-bots';
 const LOG_STREAM_TYPES = ['stdout', 'stderr'] as const;
 type LogStreamType = (typeof LOG_STREAM_TYPES)[number];
+const parsedStreamLimit = Number(process.env.MAX_LOG_STREAM_SUBSCRIBERS ?? '5');
+const MAX_LOG_STREAM_SUBSCRIBERS =
+  Number.isFinite(parsedStreamLimit) && parsedStreamLimit > 0 ? parsedStreamLimit : 5;
+const logStreamAccessTracker = new LogStreamAccessTracker(MAX_LOG_STREAM_SUBSCRIBERS);
 
 const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   if (!value || typeof value !== 'object') {
@@ -171,6 +176,21 @@ interface LogStreamOptions {
 }
 
 const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOptions) => {
+  const trackerKey = `${filePath}:${stream}`;
+  if (!logStreamAccessTracker.tryAcquire(trackerKey)) {
+    logger.warn({
+      category: 'dev-bots',
+      action: 'log_stream_limit_reached',
+      message: `Rejected ${stream} log stream due to subscriber limit`,
+      details: { filePath, limit: MAX_LOG_STREAM_SUBSCRIBERS },
+    });
+    res.status(429).json({
+      error: 'Too many concurrent log subscribers',
+      message: `Only ${MAX_LOG_STREAM_SUBSCRIBERS} concurrent subscribers allowed per log stream`,
+    });
+    return;
+  }
+
   res.status(200);
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -195,9 +215,12 @@ const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOp
     closed = true;
     clearInterval(heartbeat);
     watcher?.close();
+    logStreamAccessTracker.release(trackerKey);
     res.end();
   };
 
+  let pumpInProgress = false;
+  let pumpQueued = false;
   const pump = (start: number) =>
     new Promise<void>((resolve, reject) => {
       const readStream = fs.createReadStream(filePath, { encoding: 'utf-8', start });
@@ -238,6 +261,28 @@ const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOp
       });
     });
 
+  const schedulePump = () => {
+    if (closed) {
+      return;
+    }
+    if (pumpInProgress) {
+      pumpQueued = true;
+      return;
+    }
+    pumpInProgress = true;
+    const nextRead = currentRead
+      .then(() => pump(bytesRead))
+      .catch(handleError)
+      .finally(() => {
+        pumpInProgress = false;
+        if (pumpQueued) {
+          pumpQueued = false;
+          schedulePump();
+        }
+      });
+    currentRead = nextRead;
+  };
+
   const handleError = (error: unknown) => {
     logger.error({
       category: 'dev-bots',
@@ -273,9 +318,7 @@ const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOp
         if (eventType !== 'change') {
           return;
         }
-        currentRead = currentRead
-          .then(() => pump(bytesRead))
-          .catch(handleError);
+        schedulePump();
       });
     } catch (error) {
       handleError(error);
@@ -1646,6 +1689,19 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
           alreadyMonitored: monitoredPRs.length
         });
         return;
+      }
+
+      if (typeof orchestrator.initialize === 'function') {
+        try {
+          await orchestrator.initialize();
+        } catch (error) {
+          logger.warn({
+            category: 'pr-workflow',
+            action: 'orchestrator_initialize_failed',
+            message: 'PR workflow orchestrator initialize() failed during orphan recovery',
+            error
+          });
+        }
       }
 
       // Register each orphaned PR

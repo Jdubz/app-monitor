@@ -47,7 +47,7 @@ describeNativeDb('DevBotsDatabase', () => {
   });
 
   afterEach(() => {
-    db.close();
+    (db as DevBotsDatabaseInstance | undefined)?.close?.();
     cleanupTestDatabaseFiles();
   });
 
