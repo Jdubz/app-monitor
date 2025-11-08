@@ -1,6 +1,7 @@
 import fs from 'fs';
 import { promises as fsp } from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
@@ -26,6 +27,8 @@ export interface TaskLogFileDescriptor {
   stream: string;
 }
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const REPO_ROOT = path.resolve(__dirname, '../../..');
 
 export class WorkerLogLocator {
