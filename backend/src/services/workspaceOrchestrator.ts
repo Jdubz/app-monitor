@@ -374,12 +374,17 @@ export class WorkspaceOrchestrator extends EventEmitter {
     fs.appendFileSync(this.mirrorTelemetryLogPath, JSON.stringify(entry) + '\n');
     logger.info({
       category: 'mirror_debug',
+      action: 'mirror_telemetry',
+      message: `Mirror telemetry: ${event}`,
       ...entry,
     });
   }
 
   private cleanupLegacyMirror(): void {
-    const legacyMirror = path.join(this.devBotsRoot, 'mirror');
+    // Check for old mirror location at ../dev-bots/mirror
+    const devBotsRoot = path.resolve(process.cwd(), '../dev-bots');
+    const legacyMirror = path.join(devBotsRoot, 'mirror');
+
     if (legacyMirror === this.mirrorPath || !fs.existsSync(legacyMirror)) {
       return;
     }
@@ -403,6 +408,26 @@ export class WorkspaceOrchestrator extends EventEmitter {
         legacyMirror,
         message: error instanceof Error ? error.message : String(error),
       });
+    }
+
+    // Also cleanup old workspace clones if they exist
+    const legacyWorkspaces = path.join(devBotsRoot, 'workspaces');
+    if (fs.existsSync(legacyWorkspaces)) {
+      try {
+        fs.rmSync(legacyWorkspaces, { recursive: true, force: true });
+        logger.info({
+          category: 'workspace',
+          action: 'legacy_workspaces_removed',
+          message: `Removed legacy workspace clones at ${legacyWorkspaces}`
+        });
+      } catch (error) {
+        logger.warn({
+          category: 'workspace',
+          action: 'legacy_workspaces_cleanup_failed',
+          message: `Failed to remove legacy workspaces at ${legacyWorkspaces}`,
+          error
+        });
+      }
     }
   }
 

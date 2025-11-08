@@ -366,6 +366,11 @@ export class PRMonitorService {
       return true;
     }
 
+    // Create followup for merge conflicts
+    if (prStatus.mergeable === 'CONFLICTING') {
+      return true;
+    }
+
     return false;
   }
 

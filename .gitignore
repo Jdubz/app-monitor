@@ -48,6 +48,7 @@ coverage/
 *.tmp
 tmp/
 temp/
+.test-lock
 
 # Docker
 .dockerignore

@@ -102,12 +102,12 @@ export function createMigrationTaskTemplate(params: MigrationTemplateParams): Ta
     acceptanceCriteria: [
       `EXACTLY ${columns.length} column(s) added to ${tableName} table: ${columns.join(', ')}`,
       `Columns added via ALTER TABLE statement in new migration file`,
-      `NO new tables created (extend existing ${tableName} only)`,
-      `NO duplicate columns created`,
+      `MUST NOT create new tables (extend existing ${tableName} only)`,
+      `MUST NOT create duplicate columns`,
       `Migration follows EXACT pattern from ${existingMigrationFile}`,
       typeFile ? `Type interface updated in ${typeFile}` : 'Type interface updated',
       `All existing tests pass`,
-      `NO additional features added beyond specified columns`
+      `DO NOT add features beyond specified columns`
     ],
 
     constraints: [
@@ -195,7 +195,7 @@ export function createExtensionTaskTemplate(params: ExtensionTemplateParams): Ta
         `GREP for similar functionality across codebase`,
         `CHECK for utility functions that can be reused`,
         `VERIFY no duplicate implementations of ${newFunctionality}`,
-        `IDENTIFY existing patterns to follow`,
+        `CHECK existing patterns to follow`,
         `REVIEW related tests to understand current behavior`
       ],
       mustFind: existingFunctions,
@@ -214,12 +214,12 @@ export function createExtensionTaskTemplate(params: ExtensionTemplateParams): Ta
 
     acceptanceCriteria: [
       `EXACTLY the ${newFunctionality} functionality added`,
-      `Functionality added to existing ${baseFile} (NO new files)`,
+      `Functionality added to existing ${baseFile} (MUST NOT create new files)`,
       `Follows existing code patterns in ${baseFile}`,
       `Reuses existing utility functions where possible`,
-      `NO duplicate implementations created`,
+      `MUST NOT create duplicate implementations`,
       `All existing tests pass`,
-      `NO features added beyond ${newFunctionality}`
+      `DO NOT add features beyond ${newFunctionality}`
     ],
 
     constraints: [
@@ -299,7 +299,7 @@ export function createBugfixTaskTemplate(params: BugfixTemplateParams): TaskTemp
         `GREP for error pattern: "${errorMessage}"`,
         `CHECK for similar error handling in codebase`,
         `VERIFY root cause: ${rootCause}`,
-        `IDENTIFY related code that might be affected`,
+        `CHECK related code that might be affected`,
         ...(relatedTests ? relatedTests.map(t => `REVIEW ${t} for reproduction steps`) : [])
       ],
       mustFind: [
@@ -327,12 +327,12 @@ export function createBugfixTaskTemplate(params: BugfixTemplateParams): TaskTemp
     acceptanceCriteria: [
       `Error "${errorMessage}" is fixed`,
       `Root cause "${rootCause}" is addressed`,
-      `EXACTLY the bugfix implemented (NO feature additions)`,
+      `EXACTLY the bugfix implemented (MUST NOT add features)`,
       `Minimal changes made (< 20 lines)`,
       `All existing tests pass`,
-      `NO new bugs introduced`,
+      `MUST NOT introduce new bugs`,
       ...(relatedTests ? [`Tests ${relatedTests.join(', ')} now pass`] : []),
-      `NO refactoring beyond the fix`
+      `DO NOT refactor beyond the fix`
     ],
 
     constraints: [
@@ -413,7 +413,7 @@ export function createRefactorTaskTemplate(params: RefactorTemplateParams): Task
         `CHECK for other occurrences of this pattern`,
         `VERIFY behavior will not change`,
         ...testFiles.map(t => `REVIEW ${t} to understand expected behavior`),
-        `IDENTIFY all affected code paths`
+        `CHECK all affected code paths`
       ],
       mustFind: [
         `All occurrences of pattern: ${pattern}`,
@@ -441,9 +441,9 @@ export function createRefactorTaskTemplate(params: RefactorTemplateParams): Task
       `Pattern "${pattern}" replaced with "${replacement}"`,
       `Behavior EXACTLY the same (no functional changes)`,
       `ALL existing tests pass without modification`,
-      `ONLY specified pattern refactored (NO scope creep)`,
+      `ONLY specified pattern refactored (MUST NOT expand scope)`,
       `Code structure improved`,
-      `NO new functionality added`,
+      `MUST NOT add new functionality`,
       `Documentation updated if needed`
     ],
 
@@ -472,7 +472,7 @@ export function createRefactorTaskTemplate(params: RefactorTemplateParams): Task
     doNotCreate: [
       'New utility functions (use existing)',
       'New test files (use existing tests)',
-      'New helper functions (refactor only)'
+      'New helper functions (refactor existing instead)'
     ],
 
     gitWorkflow: {

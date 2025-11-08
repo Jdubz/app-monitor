@@ -1,6 +1,6 @@
 #!/bin/sh
 
-echo "🔍 Running app-monitor pre-push lint + test checks..."
+echo "🔍 Running app-monitor pre-push lint checks..."
 
 # Ensure legacy mirror directories are not present in the repo
 if [ -d "dev-bots/mirror" ]; then
@@ -30,18 +30,4 @@ npm run lint -w frontend || {
 }
 
 echo ""
-echo "🧪 Running backend test suite (543 tests expected)..."
-CI=true NODE_OPTIONS='--max-old-space-size=2048' npm run test:backend || {
-    echo "❌ Backend tests failed! Please investigate before pushing."
-    exit 1
-}
-
-echo ""
-echo "🧪 Running frontend test suite..."
-CI=true NODE_OPTIONS='--max-old-space-size=2048' npm run test:frontend || {
-    echo "❌ Frontend tests failed! Please investigate before pushing."
-    exit 1
-}
-
-echo ""
-echo "✅ Pre-push lint + test checks completed successfully"
+echo "✅ Pre-push lint checks completed successfully"

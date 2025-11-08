@@ -21,7 +21,15 @@ import { logger } from '../utils/logger.js';
 import type { Task } from './taskQueue.sqlite.js';
 import type { AgentPersonality } from './agentPersonalities.js';
 import type { DockerManager } from './dockerManager.js';
-import type { WorkspaceOrchestrator, WorkspaceContext } from './workspaceOrchestrator.js';
+// WorkspaceOrchestrator removed - we use Docker cp for file systems, not git mirrors
+
+export interface WorkspaceContext {
+  id: string;
+  hostPath: string;  // DEPRECATED: Always empty with Docker cp approach
+  branchName: string;
+  mirrorPath: string;  // DEPRECATED: Always empty with Docker cp approach
+  createdAt: string;
+}
 
 // ============================================================================
 // Types & Interfaces
@@ -63,17 +71,14 @@ export class EphemeralWorkerService {
   private readonly config: EphemeralWorkerServiceConfig;
   private readonly docker: Docker;
   private readonly dockerManager: DockerManager;
-  private readonly workspaceOrchestrator: WorkspaceOrchestrator;
 
   constructor(
     docker: Docker,
     dockerManager: DockerManager,
-    workspaceOrchestrator: WorkspaceOrchestrator,
     config: Partial<EphemeralWorkerServiceConfig> = {}
   ) {
     this.docker = docker;
     this.dockerManager = dockerManager;
-    this.workspaceOrchestrator = workspaceOrchestrator;
 
     this.config = {
       maxConcurrentWorkers: config.maxConcurrentWorkers ?? 2,
@@ -692,17 +697,8 @@ export class EphemeralWorkerService {
       throw error;
     }
 
-    // Cleanup workspace
-    try {
-      await this.workspaceOrchestrator.cleanupWorkspace(worker.workspace);
-    } catch (cleanupError) {
-      logger.warn({
-        category: 'process',
-        action: 'workspace_cleanup_failed',
-        message: `Workspace cleanup failed for worker ${workerId}`,
-        error: cleanupError
-      });
-    }
+    // Note: No workspace cleanup needed - workspace is inside the Docker container
+    // which is automatically removed via AutoRemove: true in container config
   }
 
   /**

@@ -100,6 +100,10 @@ describe('Task Templates', () => {
 
       // Should pass validation
       const result = validateTaskTemplate(template);
+      if (!result.isValid) {
+        console.log('Extension template VALIDATION ERRORS:', JSON.stringify(result.errors, null, 2));
+        console.log('acceptanceCriteria:', JSON.stringify(template.acceptanceCriteria, null, 2));
+      }
       expect(result.isValid).toBe(true);
 
       // Should have correct type
@@ -245,6 +249,10 @@ describe('Task Templates', () => {
 
       // Should pass validation
       const result = validateTaskTemplate(template);
+      if (!result.isValid) {
+        console.log('Refactor template VALIDATION ERRORS:', JSON.stringify(result.errors, null, 2));
+        console.log('investigation.steps:', JSON.stringify(template.investigation.steps, null, 2));
+      }
       expect(result.isValid).toBe(true);
 
       // Should have correct type

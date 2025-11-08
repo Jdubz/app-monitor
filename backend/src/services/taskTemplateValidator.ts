@@ -38,7 +38,7 @@ export interface TaskTemplateV3 {
   files: string[];
   modifyOnly?: string[];
   doNotModify?: string[];
-  doNotCreate?: string[];
+  doNotCreate: string[];
 
   // Git workflow
   gitWorkflow: GitWorkflow;
@@ -74,6 +74,53 @@ export interface ValidationResult {
   isValid: boolean;
   errors: ValidationError[];
   warnings: ValidationError[];
+}
+
+// const MIN_INVESTIGATION_ENTRY_LENGTH = 15; // Reserved for future use
+// const MIN_ACCEPTANCE_CRITERIA_LENGTH = 12; // Reserved for future use
+// const MIN_CONSTRAINT_LENGTH = 12; // Reserved for future use
+const DO_NOT_CREATE_ACTIONABLE_KEYWORDS: ReadonlyArray<string> = Object.freeze([
+  'reuse',
+  'extend',
+  'existing',
+  'use existing',
+  'leverage existing',
+]);
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function parseDoNotCreateFileEntry(entry: string): { filePath: string; reason: string } | null {
+  const normalized = entry.trim();
+  const match = normalized.match(/^([^()]+)\(([^()]+)\)$/);
+  if (!match) {
+    return null;
+  }
+
+  const filePath = match[1]?.trim() ?? '';
+  const reason = match[2]?.trim() ?? '';
+
+  if (filePath === '' || reason === '') {
+    return null;
+  }
+
+  return { filePath, reason };
+}
+
+function hasActionableDoNotCreateExplanation(reason: string): boolean {
+  const normalized = reason.toLowerCase();
+  return DO_NOT_CREATE_ACTIONABLE_KEYWORDS.some(keyword => normalized.includes(keyword));
+}
+
+const INVESTIGATION_ACTION_VERBS = ['READ', 'GREP', 'CHECK', 'VERIFY', 'INSPECT', 'REVIEW', 'TRACE', 'SEARCH'];
+const ACCEPTANCE_SCOPE_KEYWORDS = ['EXACTLY', 'NO MORE', 'NO LESS'];
+const ACCEPTANCE_GUARDRAIL_KEYWORDS = ['DO NOT', 'MUST NOT'];
+const CONSTRAINT_ALLOWED_PREFIXES = ['MUST', 'DO NOT'];
+
+function containsInvestigationActionVerb(step: string): boolean {
+  const normalized = step.trim().toUpperCase();
+  return INVESTIGATION_ACTION_VERBS.some(verb => normalized.startsWith(verb) || normalized.includes(`${verb} `));
 }
 
 /**
@@ -159,9 +206,29 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
         severity: 'error'
       });
     } else {
+      const normalizedSteps = template.investigation.steps.filter((step): step is string => typeof step === 'string');
+      template.investigation.steps.forEach((step, index) => {
+        if (!isNonEmptyString(step)) {
+          errors.push({
+            field: `investigation.steps[${index}]`,
+            message: 'Each investigation step must be a non-empty instruction that tells the worker what to inspect',
+            severity: 'error'
+          });
+          return;
+        }
+
+        if (!containsInvestigationActionVerb(step)) {
+          errors.push({
+            field: `investigation.steps[${index}]`,
+            message: 'Investigation steps must start with an action verb (READ, GREP, CHECK, VERIFY) to enforce investigation before coding',
+            severity: 'error'
+          });
+        }
+      });
+
       // Check for investigation action verbs
-      const hasReadStep = template.investigation.steps.some(s => s.toUpperCase().includes('READ'));
-      const hasGrepStep = template.investigation.steps.some(s => s.toUpperCase().includes('GREP'));
+      const hasReadStep = normalizedSteps.some(step => step.toUpperCase().includes('READ'));
+      const hasGrepStep = normalizedSteps.some(step => step.toUpperCase().includes('GREP'));
 
       if (!hasReadStep) {
         warnings.push({
@@ -186,6 +253,16 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
         message: 'Investigation must specify what the bot MUST find before implementing',
         severity: 'error'
       });
+    } else {
+      template.investigation.mustFind.forEach((item, index) => {
+        if (!isNonEmptyString(item)) {
+          errors.push({
+            field: `investigation.mustFind[${index}]`,
+            message: 'Each mustFind entry must describe a concrete artifact to locate (file, function, schema, etc.)',
+            severity: 'error'
+          });
+        }
+      });
     }
 
     if (!Array.isArray(template.investigation.mustNotDuplicate) || template.investigation.mustNotDuplicate.length === 0) {
@@ -193,6 +270,16 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
         field: 'investigation.mustNotDuplicate',
         message: 'Investigation must specify what the bot MUST NOT duplicate',
         severity: 'error'
+      });
+    } else {
+      template.investigation.mustNotDuplicate.forEach((item, index) => {
+        if (!isNonEmptyString(item)) {
+          errors.push({
+            field: `investigation.mustNotDuplicate[${index}]`,
+            message: 'Each mustNotDuplicate entry must describe existing logic that must be re-used rather than recreated',
+            severity: 'error'
+          });
+        }
       });
     }
   }
@@ -238,18 +325,41 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
       severity: 'error'
     });
   } else {
-    // Check for "EXACTLY" language
-    const hasExactly = template.acceptanceCriteria.some(c =>
-      c.toUpperCase().includes('EXACTLY') ||
-      c.toUpperCase().includes('NO MORE') ||
-      c.toUpperCase().includes('DO NOT ADD')
-    );
+    let hasExactScopeLanguage = false;
+    let hasGuardrailLanguage = false;
 
-    if (!hasExactly) {
-      warnings.push({
+    template.acceptanceCriteria.forEach((criterion, index) => {
+      if (!isNonEmptyString(criterion)) {
+        errors.push({
+          field: `acceptanceCriteria[${index}]`,
+          message: 'Acceptance criteria entries must be descriptive strings (e.g. "EXACTLY one file updated")',
+          severity: 'error'
+        });
+        return;
+      }
+
+      const normalized = criterion.toUpperCase();
+      if (ACCEPTANCE_SCOPE_KEYWORDS.some(keyword => normalized.includes(keyword))) {
+        hasExactScopeLanguage = true;
+      }
+      if (ACCEPTANCE_GUARDRAIL_KEYWORDS.some(keyword => normalized.includes(keyword))) {
+        hasGuardrailLanguage = true;
+      }
+    });
+
+    if (!hasExactScopeLanguage) {
+      errors.push({
         field: 'acceptanceCriteria',
-        message: 'Use "EXACTLY N items" language to prevent scope creep',
-        severity: 'warning'
+        message: 'Acceptance criteria must include "EXACTLY" (or NO MORE/NO LESS) language to lock scope',
+        severity: 'error'
+      });
+    }
+
+    if (!hasGuardrailLanguage) {
+      errors.push({
+        field: 'acceptanceCriteria',
+        message: 'Acceptance criteria must include DO NOT / MUST NOT guardrails to prevent feature creep',
+        severity: 'error'
       });
     }
   }
@@ -271,12 +381,37 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
       severity: 'error'
     });
   } else {
-    const hasMustNot = template.constraints.some(c => c.toUpperCase().includes('MUST NOT'));
+    let hasMustNot = false;
+
+    template.constraints.forEach((constraint, index) => {
+      if (!isNonEmptyString(constraint)) {
+        errors.push({
+          field: `constraints[${index}]`,
+          message: 'Constraints entries must be explicit "MUST ..." directives',
+          severity: 'error'
+        });
+        return;
+      }
+
+      const normalized = constraint.trim().toUpperCase();
+      if (!CONSTRAINT_ALLOWED_PREFIXES.some(prefix => normalized.startsWith(prefix))) {
+        errors.push({
+          field: `constraints[${index}]`,
+          message: 'Constraints must start with "MUST" or "MUST NOT" to prevent ambiguous instructions',
+          severity: 'error'
+        });
+      }
+
+      if (normalized.includes('MUST NOT') || normalized.includes('DO NOT')) {
+        hasMustNot = true;
+      }
+    });
+
     if (!hasMustNot) {
-      warnings.push({
+      errors.push({
         field: 'constraints',
-        message: 'Constraints should include "MUST NOT" statements for clarity',
-        severity: 'warning'
+        message: 'Constraints must include at least one "MUST NOT" guardrail to block over-engineering',
+        severity: 'error'
       });
     }
   }
@@ -300,22 +435,41 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
     });
   }
 
-  if (!Array.isArray(template.doNotCreate)) {
-    warnings.push({
+  if (!Array.isArray(template.doNotCreate) || template.doNotCreate.length === 0) {
+    errors.push({
       field: 'doNotCreate',
-      message: 'Recommended: specify files that MUST NOT be created to prevent duplication',
-      severity: 'warning'
+      message: 'V3 templates MUST declare doNotCreate restrictions like "backend/src/service.ts (reuse existing service)" to block duplicate files',
+      severity: 'error'
     });
-  } else if (template.doNotCreate.length > 0) {
-    // Validate format (should include explanations)
-    const hasExplanations = template.doNotCreate.every(f => f.includes('(') && f.includes(')'));
-    if (!hasExplanations) {
-      warnings.push({
-        field: 'doNotCreate',
-        message: 'doNotCreate entries should include explanations in parentheses',
-        severity: 'warning'
-      });
-    }
+  } else {
+    template.doNotCreate.forEach((entry, index) => {
+      if (!isNonEmptyString(entry)) {
+        errors.push({
+          field: `doNotCreate[${index}]`,
+          message: 'Each doNotCreate entry must be a non-empty string with an explanation in parentheses',
+          severity: 'error'
+        });
+        return;
+      }
+
+      const parsed = parseDoNotCreateFileEntry(entry);
+      if (!parsed) {
+        errors.push({
+          field: `doNotCreate[${index}]`,
+          message: 'Use "<path> (reason)" format so reviewers understand what existing file should be extended instead',
+          severity: 'error'
+        });
+        return;
+      }
+
+      if (!hasActionableDoNotCreateExplanation(parsed.reason)) {
+        errors.push({
+          field: `doNotCreate[${index}]`,
+          message: 'Explanation must mention how to reuse or extend existing code (e.g. "reuse existing helper")',
+          severity: 'error'
+        });
+      }
+    });
   }
 
   // 7. Git workflow validation
@@ -464,8 +618,49 @@ export function isV3Template(template: any): template is TaskTemplateV3 {
     template &&
     typeof template === 'object' &&
     template.investigation &&
+    Array.isArray(template.acceptanceCriteria) &&
     Array.isArray(template.preImplementationChecklist) &&
     Array.isArray(template.constraints) &&
+    Array.isArray(template.doNotCreate) &&
     template.gitWorkflow
   );
+}
+
+export function shouldValidateAsV3Template(payload: unknown): payload is Partial<TaskTemplateV3> {
+  if (!payload || typeof payload !== 'object') {
+    return false;
+  }
+
+  const candidate = payload as Partial<TaskTemplateV3> & {
+    metadata?: { promptEngineeringVersion?: string };
+  };
+
+  if (candidate.metadata?.promptEngineeringVersion === 'v3') {
+    return true;
+  }
+
+  if (candidate.investigation || candidate.preImplementationChecklist || candidate.doNotCreate) {
+    return true;
+  }
+
+  const indicatorFields: Array<keyof TaskTemplateV3> = [
+    'preImplementationChecklist',
+    'acceptanceCriteria',
+    'constraints',
+    'doNotCreate',
+    'gitWorkflow'
+  ];
+
+  const indicatorCount = indicatorFields.reduce((count, field) => {
+    const value = candidate[field];
+    if (Array.isArray(value) && value.length > 0) {
+      return count + 1;
+    }
+    if (value && !Array.isArray(value)) {
+      return count + 1;
+    }
+    return count;
+  }, 0);
+
+  return indicatorCount >= 2;
 }

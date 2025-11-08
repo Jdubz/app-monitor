@@ -71,10 +71,13 @@ export async function createDevBotsManagerDependencies(
   const guidelinesManager = new TaskCreationGuidelinesManager();
 
   // Initialize workspace orchestrator for dynamic workspaces
+  // NOTE: WorkspaceOrchestrator is DEPRECATED - we use Docker cp for file systems
+  // Keeping the instance for backwards compatibility but NOT initializing (no git mirror)
   const workspaceOrchestrator = new WorkspaceOrchestrator();
-  if (typeof workspaceOrchestrator.initialize === 'function') {
-    workspaceOrchestrator.initialize();
-  }
+  // DISABLED: initialize() creates git mirrors which we don't use anymore
+  // if (typeof workspaceOrchestrator.initialize === 'function') {
+  //   workspaceOrchestrator.initialize();
+  // }
 
   // Initialize workspace sync manager
   const workspaceBaseDir = config.workspaceBaseDir ?? path.resolve(path.join(process.cwd(), '../../'));
@@ -104,7 +107,6 @@ export async function createDevBotsManagerDependencies(
   const ephemeralWorkerService = new EphemeralWorkerService(
     docker,
     dockerManager,
-    workspaceOrchestrator,
     {
       maxConcurrentWorkers: 2,
       dockerImage: 'dev-bot:latest',
@@ -127,7 +129,6 @@ export async function createDevBotsManagerDependencies(
     taskQueue,
     agentManager,
     templateManager,
-    workspaceOrchestrator,
     ephemeralWorkerService,
     taskPersistence,
     {

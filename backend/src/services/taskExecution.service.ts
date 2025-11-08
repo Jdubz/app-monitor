@@ -19,7 +19,7 @@ import type { Task } from './taskQueue.sqlite.js';
 import type { TaskQueueService } from './taskQueue.sqlite.js';
 import type { AgentPersonality, AgentPersonalityManager } from './agentPersonalities.js';
 import type { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplates.js';
-import type { WorkspaceOrchestrator } from './workspaceOrchestrator.js';
+// WorkspaceOrchestrator removed - we use Docker cp for file systems, not git mirrors
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskPersistence } from './taskPersistence.js';
 import { isTaskStuck, detectFailurePattern } from './taskFailureGuards.js';
@@ -49,7 +49,6 @@ export class TaskExecutionService {
   private readonly taskQueue: TaskQueueService;
   private readonly agentManager: AgentPersonalityManager;
   private readonly templateManager: TaskPromptTemplateManager;
-  private readonly workspaceOrchestrator: WorkspaceOrchestrator;
   private readonly ephemeralWorkerService: EphemeralWorkerService;
   private readonly taskPersistence: TaskPersistence;
   private readonly config: TaskExecutionServiceConfig;
@@ -63,7 +62,6 @@ export class TaskExecutionService {
     taskQueue: TaskQueueService,
     agentManager: AgentPersonalityManager,
     templateManager: TaskPromptTemplateManager,
-    workspaceOrchestrator: WorkspaceOrchestrator,
     ephemeralWorkerService: EphemeralWorkerService,
     taskPersistence: TaskPersistence,
     config: Partial<TaskExecutionServiceConfig> = {}
@@ -71,7 +69,6 @@ export class TaskExecutionService {
     this.taskQueue = taskQueue;
     this.agentManager = agentManager;
     this.templateManager = templateManager;
-    this.workspaceOrchestrator = workspaceOrchestrator;
     this.ephemeralWorkerService = ephemeralWorkerService;
     this.taskPersistence = taskPersistence;
 
@@ -339,35 +336,7 @@ export class TaskExecutionService {
 
     // DON'T update task status to running yet - validate first to prevent stuck tasks
 
-    // Ensure mirror is up to date before provisioning workspace
-    try {
-      this.workspaceOrchestrator.initialize();
-    } catch (error) {
-      logger.error({
-        category: 'process',
-        action: 'workspace_orchestrator_init_failed',
-        message: `Workspace orchestrator failed before assigning task ${nextTask.id}`,
-        error
-      });
-
-      // Task is still 'pending' so it can be retried - reset to pending explicitly
-      nextTask.status = 'pending';
-      nextTask.assigned_worker = undefined;
-      this.taskQueue.updateTask(nextTask.id, { status: 'pending', assigned_worker: undefined });
-
-      // Trigger recovery without failing the task (it's still pending)
-      logger.warn({
-        category: 'recovery',
-        action: 'workspace_init_failed_task_remains_pending',
-        message: `Task ${nextTask.id} remains pending after workspace init failure - will retry`,
-        details: {
-          taskId: nextTask.id,
-          error: error instanceof Error ? error.message : String(error)
-        }
-      });
-
-      return;
-    }
+    // NOTE: WorkspaceOrchestrator.initialize() removed - Docker cp approach doesn't need git mirrors
 
     // Get agent personality
     const requestedAgent = this.agentManager.getPersonality(nextTask.assigned_agent);
@@ -573,7 +542,7 @@ export class TaskExecutionService {
         'sh', '-c',
         // Copy credentials and run Claude in non-interactive mode
         `cp /tmp/host-creds.json /home/node/.claude/.credentials.json && ` +
-        `claude --dangerously-skip-permissions --permission-mode bypassPermissions --allowedTools 'Bash(git:*)' '${promptText}'`
+        `claude --dangerously-skip-permissions '${promptText}'`
       ];
       cliCommand = 'claude';
     }

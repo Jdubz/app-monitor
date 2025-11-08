@@ -5,7 +5,7 @@ import { logger } from '../utils/logger.js';
 import { ProcessManager, ProcessInfo } from './processManager.js';
 import Docker from 'dockerode';
 import { TaskPersistence } from './taskPersistence.js';
-import { TaskQueueService, Task, TaskStatus as SQLiteTaskStatus } from './taskQueue.sqlite.js';
+import { TaskQueueService, Task, TaskStatus as SQLiteTaskStatus, TaskExecution } from './taskQueue.sqlite.js';
 import { TaskQueueMigration } from './taskQueue.migration.js';
 import { AgentPersonalityManager, AgentPersonality } from './agentPersonalities.js';
 import { TaskPromptTemplateManager } from './taskPromptTemplates.js';
@@ -156,7 +156,6 @@ export class DevBotsManager extends EventEmitter {
 
     // Initialize TaskCompletionService with PR workflow orchestrator callback
     this.taskCompletionService = new TaskCompletionService(
-      this.workspaceOrchestrator,
       this.ephemeralWorkerService,
       this.taskPersistence,
       this.pushCoordinator,
@@ -1326,6 +1325,14 @@ export class DevBotsManager extends EventEmitter {
       active: this.taskQueue.getTasksByStatus('running'),
       completed: this.taskQueue.getTasksByStatus('completed').slice(-50)
     };
+  }
+
+  getTask(taskId: string): Task | undefined {
+    return this.taskQueue.getTask(taskId);
+  }
+
+  getTaskExecutions(taskId: string): TaskExecution[] {
+    return this.taskQueue.getTaskExecutions(taskId);
   }
 
   isHealthy(): boolean {

@@ -13,16 +13,260 @@
  * Total: 30+ endpoints organized into logical groups
  */
 
+import fs from 'fs';
 import { Router, Request, Response, NextFunction } from 'express';
 import type { DevBotsManager } from '../services/devBotsManager.js';
 import { logger } from '../utils/logger.js';
 import type { LogEntry } from '../utils/logger.js';
-import { validateTaskTemplate, formatValidationErrors, isV3Template } from '../services/taskTemplateValidator.js';
-import type { ApiError, ApiSuccess } from '@app-monitor/api-contracts';
+import {
+  validateTaskTemplate,
+  formatValidationErrors,
+  shouldValidateAsV3Template
+} from '../services/taskTemplateValidator.js';
+import type {
+  ApiError,
+  ApiSuccess,
+  DevBotsQueueSummary,
+  DevBotsTask as ContractDevBotsTask,
+  DevBotsTaskDetail as ContractDevBotsTaskDetail,
+  DevBotsTaskHistoryEvent,
+  DevBotsTaskStatus
+} from '@app-monitor/api-contracts';
+import type { Task, TaskExecution } from '../services/taskQueue.sqlite.js';
+import { WorkerLogLocator } from '../services/taskLogLocator.js';
 
 const TECHNICAL_TASK_TYPES = new Set(['refactor', 'implementation', 'bug', 'feature']);
 const MIN_DOCUMENTATION_LENGTH = 50;
 const MIN_ACCEPTANCE_CRITERION_LENGTH = 30;
+const DEFAULT_WORK_TARGET = 'dev-bots';
+const LOG_STREAM_TYPES = ['stdout', 'stderr'] as const;
+type LogStreamType = (typeof LOG_STREAM_TYPES)[number];
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  if (Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+};
+
+interface TaskLogsResponsePayload {
+  taskId: string;
+  stdout: TaskLogFileDescriptor | null;
+  stderr: TaskLogFileDescriptor | null;
+}
+
+const iso = (value?: number | string | null): string | undefined => {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (Number.isNaN(value)) {
+    return undefined;
+  }
+  return new Date(value).toISOString();
+};
+
+const mapTaskStatus = (status: Task['status']): DevBotsTaskStatus => {
+  switch (status) {
+    case 'running':
+      return 'active';
+    case 'completed':
+      return 'completed';
+    case 'failed':
+    case 'timeout':
+    case 'cancelled':
+      return 'failed';
+    case 'pending':
+    default:
+      return 'pending';
+  }
+};
+
+const mapTaskToContract = (task: Task): ContractDevBotsTask => ({
+  id: task.id,
+  type: task.type,
+  description: task.description ?? task.documentation ?? '',
+  documentation: task.documentation,
+  status: mapTaskStatus(task.status),
+  createdAt: iso(task.created_at) ?? new Date().toISOString(),
+  assignedWorker: task.assigned_worker,
+  assignedAgent: task.assigned_agent,
+  assignedAt: iso(task.assigned_at),
+  completedAt: iso(task.completed_at),
+  prompt: task.prompt,
+  output: task.output,
+  error: task.error,
+  exitCode: task.exit_code,
+  files: task.files ?? [],
+  dependencies: task.dependencies ?? [],
+  acceptanceCriteria: task.acceptance_criteria ?? [],
+  priority: task.priority,
+  retryCount: task.retry_count,
+  maxRetries: task.max_retries,
+  canRetry: task.can_retry,
+  architectureReferences: task.architecture_references ?? [],
+  validationSteps: task.validation_steps ?? [],
+  successMetrics: task.success_metrics ?? [],
+  notes: task.notes,
+  isPeriodicCleanup: task.is_repair_bot ?? false,
+});
+
+const mapTasksToContract = (tasks: Task[]): ContractDevBotsTask[] => tasks.map(mapTaskToContract);
+
+const buildQueueSummary = (
+  tasks: { pending: Task[]; active: Task[]; completed: Task[] },
+  metrics: ReturnType<DevBotsManager['getQueueMetrics']>,
+): DevBotsQueueSummary => ({
+  items: [
+    ...tasks.pending.map((task) => ({ bucket: 'pending' as const, task: mapTaskToContract(task) })),
+    ...tasks.active.map((task) => ({ bucket: 'active' as const, task: mapTaskToContract(task) })),
+    ...tasks.completed.map((task) => ({ bucket: 'completed' as const, task: mapTaskToContract(task) })),
+  ],
+  counts: {
+    pending: metrics.pending,
+    active: metrics.running,
+    completed: metrics.completed,
+    failed: metrics.failed,
+  },
+  lastUpdated: new Date().toISOString(),
+});
+
+const buildTaskHistoryEvents = (executions: TaskExecution[]): DevBotsTaskHistoryEvent[] =>
+  executions.map((execution) => ({
+    id: `execution-${execution.id}`,
+    taskId: execution.task_id,
+    type: execution.exit_code === 0 ? 'execution' : 'error',
+    message:
+      execution.exit_code === 0
+        ? `Attempt ${execution.attempt_number} completed`
+        : execution.error || `Attempt ${execution.attempt_number} failed`,
+    timestamp: iso(execution.started_at) ?? new Date().toISOString(),
+    metadata: {
+      attemptNumber: execution.attempt_number,
+      workerId: execution.worker_id,
+      durationMs: execution.duration_ms,
+      exitCode: execution.exit_code,
+      endedAt: iso(execution.ended_at),
+    },
+  }));
+
+const writeSseEvent = (res: Response, event: string, data: unknown) => {
+  const payload = typeof data === 'string' ? data : JSON.stringify(data);
+  res.write(`event: ${event}\n`);
+  res.write(`data: ${payload}\n\n`);
+};
+
+interface LogStreamOptions {
+  req: Request;
+  res: Response;
+  filePath: string;
+  follow: boolean;
+  stream: LogStreamType;
+}
+
+const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOptions) => {
+  res.status(200);
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache, no-transform');
+  res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
+  (res as Response & { flushHeaders?: () => void }).flushHeaders?.();
+  res.write('retry: 3000\n\n');
+
+  let bytesRead = 0;
+  let remainder = '';
+  let closed = false;
+  let currentRead: Promise<void> = Promise.resolve();
+
+  const heartbeat = setInterval(() => {
+    if (!closed) {
+      res.write(': keep-alive\n\n');
+    }
+  }, 15000);
+
+  const cleanup = () => {
+    if (closed) return;
+    closed = true;
+    clearInterval(heartbeat);
+    watcher?.close();
+    res.end();
+  };
+
+  const pump = (start: number) =>
+    new Promise<void>((resolve, reject) => {
+      const readStream = fs.createReadStream(filePath, { encoding: 'utf-8', start });
+
+      readStream.on('data', (chunk: string) => {
+        bytesRead += Buffer.byteLength(chunk);
+        const combined = remainder + chunk;
+        const lines = combined.split(/\r?\n/);
+        remainder = lines.pop() ?? '';
+        for (const line of lines) {
+          res.write(`data: ${line}\n\n`);
+        }
+      });
+
+      readStream.on('end', () => {
+        resolve();
+      });
+
+      readStream.on('error', (error) => {
+        reject(error);
+      });
+    });
+
+  const handleError = (error: unknown) => {
+    logger.error({
+      category: 'dev-bots',
+      action: 'log_stream_error',
+      message: `Error streaming ${stream} log`,
+      error,
+    });
+    writeSseEvent(
+      res,
+      'stream-error',
+      typeof error === 'string' ? error : (error as Error)?.message ?? 'Unknown error',
+    );
+    cleanup();
+  };
+
+  currentRead = pump(0)
+    .then(() => {
+      if (!follow && remainder) {
+        res.write(`data: ${remainder}\n\n`);
+        remainder = '';
+      }
+      if (!follow) {
+        writeSseEvent(res, 'end', 'close');
+        cleanup();
+      }
+    })
+    .catch(handleError);
+
+  let watcher: fs.FSWatcher | null = null;
+  if (follow) {
+    try {
+      watcher = fs.watch(filePath, (eventType) => {
+        if (eventType !== 'change') {
+          return;
+        }
+        currentRead = currentRead
+          .then(() => pump(bytesRead))
+          .catch(handleError);
+      });
+    } catch (error) {
+      handleError(error);
+    }
+  }
+
+  req.on('close', cleanup);
+};
 
 /**
  * Create Dev-Bots router
@@ -32,12 +276,13 @@ const MIN_ACCEPTANCE_CRITERION_LENGTH = 30;
  */
 export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Router {
   const router = Router();
+  const workerLogLocator = new WorkerLogLocator();
 
   router.use((_req: Request, res: Response, next: NextFunction) => {
     const originalJson = res.json.bind(res);
 
     res.json = ((body?: unknown) => {
-      if (body && typeof body === 'object' && body !== null && 'success' in (body as Record<string, unknown>)) {
+      if (isPlainObject(body) && 'success' in body) {
         return originalJson(body);
       }
 
@@ -47,8 +292,8 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
         let code: string | undefined;
         let details: Record<string, unknown> | undefined;
 
-        if (body && typeof body === 'object' && body !== null && !Array.isArray(body)) {
-          const { error, message: bodyMessage, code: bodyCode, details: bodyDetails, ...rest } = body as Record<string, unknown>;
+        if (isPlainObject(body)) {
+          const { error, message: bodyMessage, code: bodyCode, details: bodyDetails, ...rest } = body;
           if (typeof error === 'string') {
             errorLabel = error;
           }
@@ -101,7 +346,15 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
     try {
       const status = await devBotsManager.getSystemStatus();
       if (status) {
-        res.json(status);
+        const normalizedStatus = {
+          ...status,
+          tasks: {
+            pending: mapTasksToContract(status.tasks.pending),
+            active: mapTasksToContract(status.tasks.active),
+            completed: mapTasksToContract(status.tasks.completed),
+          },
+        };
+        res.json(normalizedStatus);
       } else {
         res.status(503).json({
           error: 'Dev-Bots coordinator is not available',
@@ -189,7 +442,11 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
     try {
       const tasks = await devBotsManager.getTasks();
       if (tasks) {
-        res.json(tasks);
+        res.json({
+          pending: mapTasksToContract(tasks.pending),
+          active: mapTasksToContract(tasks.active),
+          completed: mapTasksToContract(tasks.completed),
+        });
       } else {
         res.status(503).json({
           error: 'Dev-Bots coordinator is not available',
@@ -207,6 +464,151 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
         error: 'Failed to get Dev-Bots tasks',
         message: error instanceof Error ? error.message : String(error),
       });
+    }
+  });
+
+  /**
+   * GET /dev-bots/queue
+   * Get queue buckets with counts and metadata
+   */
+  router.get('/queue', async (_req: Request, res: Response) => {
+    try {
+      const [tasks, metrics] = await Promise.all([
+        devBotsManager.getTasks(),
+        devBotsManager.getQueueMetrics(),
+      ]);
+      const summary = buildQueueSummary(tasks, metrics);
+      res.json(summary);
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_queue_summary',
+        message: `Error getting queue summary: ${error}`,
+        error,
+      });
+      res.status(500).json({
+        error: 'Failed to get queue summary',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  /**
+   * GET /dev-bots/tasks/:taskId/detail
+   * Get single task detail with history
+   */
+  router.get('/tasks/:taskId/detail', (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+      const task = devBotsManager.getTask(taskId);
+      if (!task) {
+        res.status(404).json({
+          error: 'Task not found',
+          message: `Task ${taskId} was not found in the queue`,
+        });
+        return;
+      }
+
+      const executions = devBotsManager.getTaskExecutions(taskId);
+      const detail: ContractDevBotsTaskDetail = {
+        task: mapTaskToContract(task),
+        history: buildTaskHistoryEvents(executions),
+      };
+
+      res.json(detail);
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_task_detail',
+        message: `Error getting task detail: ${error}`,
+        error,
+      });
+      res.status(500).json({
+        error: 'Failed to get task detail',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  /**
+   * GET /dev-bots/tasks/:taskId/logs
+   * Get latest stdout/stderr artifacts metadata
+   */
+  router.get('/tasks/:taskId/logs', async (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+      const workTarget = (req.query.workTarget as string) || DEFAULT_WORK_TARGET;
+      const [stdoutDescriptor, stderrDescriptor] = await Promise.all([
+        workerLogLocator.getDescriptor(workTarget, taskId, 'stdout'),
+        workerLogLocator.getDescriptor(workTarget, taskId, 'stderr'),
+      ]);
+      const response: TaskLogsResponsePayload = {
+        taskId,
+        stdout: stdoutDescriptor,
+        stderr: stderrDescriptor,
+      };
+      res.json(response);
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_task_logs_metadata',
+        message: `Error getting task log metadata: ${error}`,
+        error,
+      });
+      res.status(500).json({
+        error: 'Failed to get task logs',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  /**
+   * GET /dev-bots/tasks/:taskId/logs/:stream
+   * Stream log contents via SSE
+   */
+  router.get('/tasks/:taskId/logs/:stream', async (req: Request, res: Response) => {
+    try {
+      const { taskId, stream } = req.params;
+      const normalizedStream = stream as LogStreamType;
+      if (!LOG_STREAM_TYPES.includes(normalizedStream)) {
+        res.status(400).json({
+          error: 'Invalid stream',
+          message: `Stream must be one of: ${LOG_STREAM_TYPES.join(', ')}`,
+        });
+        return;
+      }
+
+      const workTarget = (req.query.workTarget as string) || DEFAULT_WORK_TARGET;
+      const descriptor = await workerLogLocator.getDescriptor(workTarget, taskId, normalizedStream);
+      if (!descriptor) {
+        res.status(404).json({
+          error: 'Log not found',
+          message: `No ${normalizedStream} log found for task ${taskId}`,
+        });
+        return;
+      }
+
+      const follow = req.query.follow !== 'false';
+      await streamLogFile({
+        req,
+        res,
+        filePath: descriptor.path,
+        follow,
+        stream: normalizedStream,
+      });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_streaming_task_logs',
+        message: `Error streaming task logs: ${error}`,
+        error,
+      });
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: 'Failed to stream task logs',
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
   });
 
@@ -255,7 +657,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
 
       // V3 Template Validation (PE-API-VALIDATION-001)
       // If the request body matches v3 template structure, enforce validation
-      if (isV3Template(req.body)) {
+      if (shouldValidateAsV3Template(req.body)) {
         const validationResult = validateTaskTemplate(req.body);
 
         // Log validation warnings even if template passes

@@ -83,4 +83,4 @@ echo -e "${GREEN}🚀 All safety checks passed! Starting dev server...${RESET}"
 echo ""
 
 # Run the actual dev command - NO BYPASS OPTIONS
-exec nodemon --exec "npx tsx" src/index.ts
+exec npx nodemon --exec "npx tsx" src/index.ts

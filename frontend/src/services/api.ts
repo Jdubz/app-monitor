@@ -31,7 +31,14 @@ import type {
   CloudLoggingStatusApiResponse,
   ApiSuccess,
   ApiError,
+  DevBotsStatus,
 } from '@app-monitor/api-contracts';
+import type {
+  DevBotsQueueSummary,
+  DevBotsTaskDetail,
+  DevBotsSettings,
+  DevBotsTaskLogsResponse,
+} from '@/types/dev-bots';
 import { CloudService, CloudLoggingStatus } from '../types/log.types';
 
 type LogSource = ContractLogSource;
@@ -65,17 +72,37 @@ const isApiErrorPayload = (payload: unknown): payload is ApiError => {
   );
 };
 
-const unwrapApiResponse = <T>(payload: unknown): T => {
-  if (
-    payload &&
-    typeof payload === 'object' &&
-    'success' in (payload as Record<string, unknown>) &&
-    (payload as ApiSuccess<unknown>).success === true &&
-    'data' in (payload as Record<string, unknown>)
-  ) {
-    return (payload as ApiSuccess<T>).data;
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  if (!value || typeof value !== 'object') {
+    return false;
   }
-  return payload as T;
+  if (Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+};
+
+const unwrapApiResponse = <T>(payload: unknown, context?: string): T => {
+  if (isPlainObject(payload) && 'success' in payload) {
+    const envelope = payload as ApiSuccess<T> | ApiError;
+    if (envelope.success === true && 'data' in envelope) {
+      return envelope.data as T;
+    }
+
+    const errorMessage =
+      (envelope as ApiError).message ??
+      (envelope as ApiError).error ??
+      'Request failed';
+    throw new Error(
+      `${context ? `${context}: ` : ''}${errorMessage}`,
+    );
+  }
+
+  console.error('[api] Unexpected API envelope', { context, payload });
+  throw new Error(
+    `Malformed API response${context ? ` while ${context}` : ''}`,
+  );
 };
 
 const getApiClient = async (): Promise<ApiClient> => {
@@ -185,6 +212,40 @@ export const getLogSources = async (): Promise<LogSource[]> => {
   return ensureApiSuccess(response, 'fetching log sources');
 };
 
+export const getDevBotsStatus = async (): Promise<DevBotsStatus> => {
+  const client = await getApiClient();
+  return client.get<DevBotsStatus>('/dev-bots/status');
+};
+
+export const getDevBotsQueue = async (): Promise<DevBotsQueueSummary> => {
+  const client = await getApiClient();
+  return client.get<DevBotsQueueSummary>('/dev-bots/queue');
+};
+
+export const getDevBotsTaskDetail = async (taskId: string): Promise<DevBotsTaskDetail> => {
+  const client = await getApiClient();
+  return client.get<DevBotsTaskDetail>(`/dev-bots/tasks/${taskId}/detail`);
+};
+
+export const getDevBotsTaskLogs = async (
+  taskId: string,
+): Promise<DevBotsTaskLogsResponse> => {
+  const client = await getApiClient();
+  return client.get(`/dev-bots/tasks/${taskId}/logs`);
+};
+
+export const getDevBotsSettings = async (): Promise<DevBotsSettings> => {
+  const client = await getApiClient();
+  return client.get('/dev-bots/settings');
+};
+
+export const updateDevBotsSettings = async (
+  payload: Partial<DevBotsSettings>,
+): Promise<DevBotsSettings> => {
+  const client = await getApiClient();
+  return client.put('/dev-bots/settings', payload);
+};
+
 // Port management endpoints
 export const getPortStatuses = async (): Promise<PortStatuses> => {
   const client = await getApiClient();
@@ -214,6 +275,11 @@ export const handleApiError = (error: unknown): string => {
 // Re-export the apiClient for direct use if needed
 export const getApiClientInstance = getApiClient;
 
+export const getApiBaseUrl = (): string =>
+  (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+
+export const getApiBasePath = (): string => `${getApiBaseUrl()}/api`;
+
 // Export everything as a namespace for components that use `api.method()`
 export const api = {
   healthCheck,
@@ -229,28 +295,54 @@ export const api = {
   getCloudLogs,
   checkCloudLoggingStatus,
   getLogSources,
+  getDevBotsStatus,
+  getDevBotsQueue,
+  getDevBotsTaskDetail,
+  getDevBotsTaskLogs,
+  getDevBotsSettings,
+  updateDevBotsSettings,
   getPortStatuses,
   killPortProcess,
   handleApiError,
   // Add HTTP methods for components that need them
+  /**
+   * Issue a GET request and return the unwrapped data payload from the ApiSuccess envelope.
+   */
   get: async <T>(url: string, config?: Parameters<ApiClient['get']>[1]) => {
     const client = await getApiClient();
     const response = await client.get<unknown>(url, config);
-    return unwrapApiResponse<T>(response);
+    return unwrapApiResponse<T>(response, `GET ${url}`);
   },
-  post: async <T>(url: string, data?: Parameters<ApiClient['post']>[1], config?: Parameters<ApiClient['post']>[2]) => {
+  /**
+   * Issue a POST request and return the unwrapped data payload from the ApiSuccess envelope.
+   */
+  post: async <T>(
+    url: string,
+    data?: Parameters<ApiClient['post']>[1],
+    config?: Parameters<ApiClient['post']>[2],
+  ) => {
     const client = await getApiClient();
     const response = await client.post<unknown>(url, data, config);
-    return unwrapApiResponse<T>(response);
+    return unwrapApiResponse<T>(response, `POST ${url}`);
   },
-  put: async <T>(url: string, data?: Parameters<ApiClient['put']>[1], config?: Parameters<ApiClient['put']>[2]) => {
+  /**
+   * Issue a PUT request and return the unwrapped data payload from the ApiSuccess envelope.
+   */
+  put: async <T>(
+    url: string,
+    data?: Parameters<ApiClient['put']>[1],
+    config?: Parameters<ApiClient['put']>[2],
+  ) => {
     const client = await getApiClient();
     const response = await client.put<unknown>(url, data, config);
-    return unwrapApiResponse<T>(response);
+    return unwrapApiResponse<T>(response, `PUT ${url}`);
   },
+  /**
+   * Issue a DELETE request and return the unwrapped data payload from the ApiSuccess envelope.
+   */
   delete: async <T>(url: string, config?: Parameters<ApiClient['delete']>[1]) => {
     const client = await getApiClient();
     const response = await client.delete<unknown>(url, config);
-    return unwrapApiResponse<T>(response);
+    return unwrapApiResponse<T>(response, `DELETE ${url}`);
   },
 };
