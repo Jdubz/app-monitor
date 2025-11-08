@@ -5,7 +5,7 @@ import { api } from "../services/api";
 import type {
   DevBotsWorkspaceSyncResult as SyncResult,
   DevBotsWorkspaceSyncStatus as SyncStatus,
-} from "@app-monitor/api-contracts";
+} from "@/types/dev-bots";
 
 interface WorkspaceSyncPanelProps {
   onStatusChange?: (status: SyncStatus) => void;
@@ -304,7 +304,7 @@ export const WorkspaceSyncPanel: React.FC<WorkspaceSyncPanelProps> = ({
             </label>
 
             <div className="space-y-2">
-              <label className={panelClasses.label}>Conflict Strategy</label>
+              <label className="text-sm font-medium text-foreground">Conflict Strategy</label>
               <select
                 value={syncOptions.conflictStrategy}
                 onChange={(event) =>

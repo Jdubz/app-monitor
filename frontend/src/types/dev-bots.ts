@@ -1,4 +1,24 @@
-import type { DevBotsTask } from '@app-monitor/api-contracts';
+import type {
+  DevBotsAgentPersonality as ContractDevBotsAgentPersonality,
+  DevBotsCleanupStatus as ContractDevBotsCleanupStatus,
+  DevBotsScopeViolation as ContractDevBotsScopeViolation,
+  DevBotsStatus as ContractDevBotsStatus,
+  DevBotsTask as ContractDevBotsTask,
+  DevBotsTaskTemplate as ContractDevBotsTaskTemplate,
+  DevBotsWorkerStatus as ContractDevBotsWorkerStatus,
+  DevBotsWorkspaceSyncResult as ContractDevBotsWorkspaceSyncResult,
+  DevBotsWorkspaceSyncStatus as ContractDevBotsWorkspaceSyncStatus,
+} from '@/types/contracts';
+
+export type DevBotsStatus = ContractDevBotsStatus;
+export type DevBotsTask = ContractDevBotsTask;
+export type DevBotsScopeViolation = ContractDevBotsScopeViolation;
+export type DevBotsCleanupStatus = ContractDevBotsCleanupStatus;
+export type DevBotsAgentPersonality = ContractDevBotsAgentPersonality;
+export type DevBotsTaskTemplate = ContractDevBotsTaskTemplate;
+export type DevBotsWorkerStatus = ContractDevBotsWorkerStatus;
+export type DevBotsWorkspaceSyncResult = ContractDevBotsWorkspaceSyncResult;
+export type DevBotsWorkspaceSyncStatus = ContractDevBotsWorkspaceSyncStatus;
 
 export type DevBotsQueueBucket = 'pending' | 'active' | 'completed';
 

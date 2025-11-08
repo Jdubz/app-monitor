@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
-import type { PortInfo } from '@app-monitor/api-contracts';
+import type { PortInfo } from '@/types/contracts';
 
 interface PortBadgeProps {
   portInfo: PortInfo;

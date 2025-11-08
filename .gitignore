@@ -49,6 +49,7 @@ coverage/
 tmp/
 temp/
 .test-lock
+bin/gh
 
 # Docker
 .dockerignore

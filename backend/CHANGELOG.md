@@ -72,6 +72,10 @@ metadata: {
 
 See `backend/docs/FAILURE_RECOVERY_SYSTEM.md` for complete documentation.
 
+### Added - 2025-11-08
+
+- Added a Unicode-aware `toTitleCase` helper in `src/utils/stringUtils.ts`, plus regression tests that cover accented characters and emoji separators so future string formatting stays consistent.
+
 ---
 
 ## Previous Entries

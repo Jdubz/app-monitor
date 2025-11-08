@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { createMockApiClient } from '../test/test-utils';
 import * as apiModule from './api';
-import type { ApiSuccess, ApiError } from '@app-monitor/api-contracts';
+import type { ApiError, ApiSuccess } from '@/types/contracts';
 
 // Mock the ApiClient
 vi.mock('./ApiClient', () => ({

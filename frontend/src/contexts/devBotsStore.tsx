@@ -9,15 +9,13 @@ import {
 } from 'react';
 import type { Socket } from 'socket.io-client';
 import type {
+  DevBotsQueueSummary,
+  DevBotsSettings,
   DevBotsStatus,
   DevBotsTask,
-  DevBotsWorkerStatus,
-} from '@app-monitor/api-contracts';
-import type {
-  DevBotsQueueSummary,
   DevBotsTaskDetail,
-  DevBotsSettings,
   DevBotsTaskLogsResponse,
+  DevBotsWorkerStatus,
 } from '@/types/dev-bots';
 
 import {

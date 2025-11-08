@@ -6,13 +6,18 @@
  */
 
 // import { logger } from '../utils/logger.js';
+import {
+  EnhancedTaskData,
+  ensureTaskMetadataFieldKeys,
+  type TaskMetadataFieldKey
+} from './taskMetadataFields.js';
 
 export interface TaskCreationGuidelines {
   id: string;
   name: string;
   description: string;
-  requiredFields: string[];
-  optionalFields: string[];
+  requiredFields: TaskMetadataFieldKey[];
+  optionalFields: TaskMetadataFieldKey[];
   validationRules: ValidationRule[];
   examples: TaskExample[];
   bestPractices: string[];
@@ -33,120 +38,65 @@ export interface TaskExample {
   example: Record<string, unknown>;
 }
 
-export interface EnhancedTaskData {
-  // Core fields (required)
-  type: string;
-  title: string;
-  description: string;
-  project: string;
-  
-  // Detailed specification (required)
-  acceptanceCriteria: string[];
-  architectureReferences: string[];
-  longTermGoals: string[];
-  estimatedEffort: {
-    hours: number;
-    complexity: 'simple' | 'medium' | 'complex' | 'expert';
-    confidence: 'low' | 'medium' | 'high';
-  };
-  
-  // Context and boundaries (required)
-  prerequisites: string[];
-  contextBoundaries: {
-    mustNotChange: string[];
-    mustNotAffect: string[];
-    integrationPoints: string[];
-  };
-  
-  // Implementation details (required)
-  files: string[];
-  dependencies: string[];
-  validationSteps: string[];
-  rollbackPlan: string[];
-  
-  // Quality assurance (required)
-  successMetrics: string[];
-  testingRequirements: string[];
-  documentationRequirements: string[];
-  
-  // Agent assignment (required)
-  assignedAgent: string;
-  requiredSkills: string[];
-  
-  // Workflow context (optional)
-  parentInitiative?: string;
-  relatedTasks: string[];
-  blockers: string[];
-  
-  // Additional context (optional)
-  assumptions: string[];
-  risks: string[];
-  alternatives: string[];
-}
-
 type GuidelineType = 'implementation' | 'review' | 'testing';
 
-interface GuidelineFieldSet {
-  required: string[];
-  optional: string[];
-}
+type GuidelineFieldSet = {
+  required: readonly TaskMetadataFieldKey[];
+  optional: readonly TaskMetadataFieldKey[];
+};
 
-const BASE_REQUIRED_FIELDS = ['title', 'description', 'acceptanceCriteria'];
-const IMPLEMENTATION_REQUIRED_FIELDS = [
-  ...BASE_REQUIRED_FIELDS,
-  'architectureReferences',
-  'estimatedEffort',
+const BASE_REQUIRED_FIELDS = ensureTaskMetadataFieldKeys([
+  'title',
+  'description',
+  'acceptanceCriteria',
   'validationSteps',
   'successMetrics',
   'assignedAgent'
-];
-const REVIEW_AND_TESTING_REQUIRED_FIELDS = [
-  ...BASE_REQUIRED_FIELDS,
-  'validationSteps',
-  'successMetrics',
-  'testingRequirements',
-  'assignedAgent'
-];
+] as const);
 
-const IMPLEMENTATION_OPTIONAL_FIELDS = [
+const BASE_OPTIONAL_FIELDS = ensureTaskMetadataFieldKeys([
   'files',
-  'dependencies',
-  'prerequisites',
-  'rollbackPlan',
-  'testingRequirements',
-  'documentationRequirements',
-  'parentInitiative',
-  'relatedTasks'
-];
-const REVIEW_OPTIONAL_FIELDS = [
-  'files',
-  'architectureReferences',
   'rollbackPlan',
   'documentationRequirements',
   'relatedTasks'
-];
-const TESTING_OPTIONAL_FIELDS = [
-  'files',
-  'estimatedEffort',
-  'rollbackPlan',
-  'documentationRequirements',
-  'relatedTasks'
-];
+] as const);
 
-const GUIDELINE_FIELD_DEFINITIONS: Record<GuidelineType, GuidelineFieldSet> = {
+const GUIDELINE_FIELD_DEFINITIONS: Readonly<Record<GuidelineType, GuidelineFieldSet>> = {
   implementation: {
-    required: IMPLEMENTATION_REQUIRED_FIELDS,
-    optional: IMPLEMENTATION_OPTIONAL_FIELDS
+    required: ensureTaskMetadataFieldKeys([
+      ...BASE_REQUIRED_FIELDS,
+      'architectureReferences',
+      'estimatedEffort'
+    ] as const),
+    optional: ensureTaskMetadataFieldKeys([
+      ...BASE_OPTIONAL_FIELDS,
+      'dependencies',
+      'prerequisites',
+      'testingRequirements',
+      'parentInitiative'
+    ] as const)
   },
   review: {
-    required: REVIEW_AND_TESTING_REQUIRED_FIELDS,
-    optional: REVIEW_OPTIONAL_FIELDS
+    required: ensureTaskMetadataFieldKeys([
+      ...BASE_REQUIRED_FIELDS,
+      'testingRequirements'
+    ] as const),
+    optional: ensureTaskMetadataFieldKeys([
+      ...BASE_OPTIONAL_FIELDS,
+      'architectureReferences'
+    ] as const)
   },
   testing: {
-    required: REVIEW_AND_TESTING_REQUIRED_FIELDS,
-    optional: TESTING_OPTIONAL_FIELDS
+    required: ensureTaskMetadataFieldKeys([
+      ...BASE_REQUIRED_FIELDS,
+      'testingRequirements'
+    ] as const),
+    optional: ensureTaskMetadataFieldKeys([
+      ...BASE_OPTIONAL_FIELDS,
+      'estimatedEffort'
+    ] as const)
   }
-};
+} as const;
 
 export class TaskCreationGuidelinesManager {
   private guidelines: Map<string, TaskCreationGuidelines> = new Map();

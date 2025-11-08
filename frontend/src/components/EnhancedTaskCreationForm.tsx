@@ -133,9 +133,11 @@ const validationBlockClass = {
   title: "text-sm font-semibold",
 };
 
-type StringArrayKey = {
-  [K in keyof EnhancedTaskData]: EnhancedTaskData[K] extends string[] ? K : never;
-}[keyof EnhancedTaskData];
+type StringArrayFieldMap = {
+  [K in keyof EnhancedTaskData as EnhancedTaskData[K] extends string[] ? K : never]: EnhancedTaskData[K];
+};
+type StringArrayKey = keyof StringArrayFieldMap;
+type StringArrayFieldValue<K extends StringArrayKey = StringArrayKey> = StringArrayFieldMap[K];
 
 type ContextBoundaryKey = keyof EnhancedTaskData["contextBoundaries"];
 
@@ -222,23 +224,26 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
     }
   };
 
-  const handleArrayFieldChange = (
-    field: StringArrayKey,
+  const handleArrayFieldChange = <K extends StringArrayKey>(
+    field: K,
     index: number,
     value: string,
   ) => {
-    const updated = [...(taskData[field] as string[])];
+    const current = taskData[field] as StringArrayFieldValue<K>;
+    const updated = [...current];
     updated[index] = value;
     setTaskData({ ...taskData, [field]: updated });
   };
 
-  const addArrayField = (field: StringArrayKey) => {
-    const updated = [...(taskData[field] as string[]), ""];
+  const addArrayField = <K extends StringArrayKey>(field: K) => {
+    const current = taskData[field] as StringArrayFieldValue<K>;
+    const updated = [...current, ""];
     setTaskData({ ...taskData, [field]: updated });
   };
 
-  const removeArrayField = (field: StringArrayKey, index: number) => {
-    const updated = (taskData[field] as string[]).filter((_, i) => i !== index);
+  const removeArrayField = <K extends StringArrayKey>(field: K, index: number) => {
+    const current = taskData[field] as StringArrayFieldValue<K>;
+    const updated = current.filter((_, i) => i !== index);
     setTaskData({ ...taskData, [field]: updated.length ? updated : [""] });
   };
 
@@ -342,8 +347,8 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
     { id: "additional", label: "Additional", icon: "📋" },
   ];
 
-  const renderArrayField = (
-    field: StringArrayKey,
+  const renderArrayField = <K extends StringArrayKey>(
+    field: K,
     {
       label,
       placeholder,
@@ -357,7 +362,7 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
         {required && <span className="ml-1 text-destructive">*</span>}
       </label>
       <div className="space-y-2">
-        {(taskData[field] as string[]).map((value, index) => (
+        {(taskData[field] as StringArrayFieldValue<K>).map((value, index) => (
           <div key={`${field}-${index}`} className={classes.arrayField}>
             <Input
               value={value}
