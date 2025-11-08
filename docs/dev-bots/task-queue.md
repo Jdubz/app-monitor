@@ -125,6 +125,18 @@ curl http://localhost:5000/api/dev-bots/agent-comparison | jq '.'
       "failed": 5,
       "avg_duration_ms": 118250,
       "success_rate": 88.37
+    },
+    "task_type_breakdown": {
+      "claude": {
+        "implementation": { "total": 26, "completed": 25, "failed": 1, "success_rate": 96.15 },
+        "testing": { "total": 12, "completed": 10, "failed": 2, "success_rate": 83.33 },
+        "documentation": { "total": 7, "completed": 7, "failed": 0, "success_rate": 100 }
+      },
+      "codex": {
+        "implementation": { "total": 22, "completed": 18, "failed": 4, "success_rate": 81.82 },
+        "testing": { "total": 11, "completed": 9, "failed": 2, "success_rate": 81.82 },
+        "documentation": { "total": 10, "completed": 10, "failed": 0, "success_rate": 100 }
+      }
     }
   }
 }
@@ -139,6 +151,7 @@ curl http://localhost:5000/api/dev-bots/agent-comparison | jq '.'
 3. **`failed`**: Number of failed tasks
 4. **`avg_duration_ms`**: Average time to complete tasks (milliseconds)
 5. **`success_rate`**: Percentage of tasks completed successfully (0-100)
+6. **`task_type_breakdown`**: Nested stats for `implementation`, `testing`, and `documentation` showing strengths by work type.
 
 **Performance Analysis:**
 
@@ -157,6 +170,13 @@ curl http://localhost:5000/api/dev-bots/agent-comparison | \
     claude_avg_min: (.comparison.claude.avg_duration_ms / 60000),
     codex_avg_min: (.comparison.codex.avg_duration_ms / 60000),
     claude_faster: (.comparison.claude.avg_duration_ms < .comparison.codex.avg_duration_ms)
+  }'
+
+# Compare documentation success rates
+curl http://localhost:5000/api/dev-bots/agent-comparison | \
+  jq '{
+    claude_doc_success: .comparison.task_type_breakdown.claude.documentation.success_rate,
+    codex_doc_success: .comparison.task_type_breakdown.codex.documentation.success_rate
   }'
 ```
 
@@ -279,6 +299,22 @@ jq -r '.comparison |
   "Codex:  \((.codex.avg_duration_ms/60000) | round) minutes"'
 ```
 
+#### Agent comparison drilldowns
+
+See [SQLite Integration Plan – Agent Comparison Metrics](./SQLITE_INTEGRATION_PLAN.md#agent-comparison-metrics) for the full architecture. The quick commands below are handy when you just need a per-type snapshot:
+
+```bash
+# Task-type scoreboard grouped by agent
+curl -s http://localhost:5000/api/dev-bots/agent-comparison \
+  | jq '.comparison.task_type_breakdown \
+        | to_entries[] \
+        | {agent: .key, implementation: .value.implementation.success_rate, testing: .value.testing.success_rate, documentation: .value.documentation.success_rate}'
+
+# Raw breakdown data if you want to feed Grafana
+curl -s http://localhost:5000/api/dev-bots/agent-comparison \
+  | jq '.comparison.task_type_breakdown'
+```
+
 ---
 
 ## Best Practices
@@ -337,12 +373,20 @@ curl -X POST http://localhost:5000/api/dev-bots/tasks/TASK_ID/timeout \
 
 **Issue: Agent comparison metrics show no data**
 ```bash
+# Confirm API is reachable
+curl -s http://localhost:5000/api/dev-bots/agent-comparison | jq '.comparison'
+
 # Verify agent_type column exists
 sqlite3 ./data/tasks/queue.db "PRAGMA table_info(tasks)" | grep agent_type
 
 # Check if tasks have agent_type set
 sqlite3 ./data/tasks/queue.db "SELECT agent_type, COUNT(*) FROM tasks GROUP BY agent_type"
+
+# Inspect per-type breakdown to make sure new runs exist
+curl -s http://localhost:5000/api/dev-bots/agent-comparison \
+  | jq '.comparison.task_type_breakdown'
 ```
+See the [Agent Comparison Metrics](./SQLITE_INTEGRATION_PLAN.md#agent-comparison-metrics) section for a complete operator checklist.
 
 **Issue: Tasks not being assigned**
 ```bash

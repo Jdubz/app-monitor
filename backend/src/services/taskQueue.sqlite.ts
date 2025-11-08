@@ -41,6 +41,15 @@ type AgentStatsRow = {
   avg_duration_ms: number | null;
 };
 
+type AgentTaskTypeStatsRow = AgentStatsRow & {
+  task_type: string;
+};
+
+const TRACKED_TASK_TYPES = ['implementation', 'testing', 'documentation'] as const;
+type TaskTypeKey = typeof TRACKED_TASK_TYPES[number];
+
+export type AgentTaskTypeBreakdown = Record<TaskTypeKey, AgentMetrics>;
+
 export type AgentMetrics = {
   total: number;
   completed: number;
@@ -52,9 +61,20 @@ export type AgentMetrics = {
 export type AgentComparisonMetrics = {
   claude: AgentMetrics;
   codex: AgentMetrics;
+  task_type_breakdown: {
+    claude: AgentTaskTypeBreakdown;
+    codex: AgentTaskTypeBreakdown;
+  };
 };
 
-export function summarizeAgentComparisonMetrics(agentStats: AgentStatsRow[]): AgentComparisonMetrics {
+const isTrackedTaskType = (value: string | null | undefined): value is TaskTypeKey => {
+  return Boolean(value) && TRACKED_TASK_TYPES.includes(value as TaskTypeKey);
+};
+
+export function summarizeAgentComparisonMetrics(
+  agentStats: AgentStatsRow[],
+  taskTypeStats: AgentTaskTypeStatsRow[] = [],
+): AgentComparisonMetrics {
   const buildMetrics = (stats?: AgentStatsRow): AgentMetrics => {
     const completed = stats?.completed ?? 0;
     const failed = stats?.failed ?? 0;
@@ -75,9 +95,31 @@ export function summarizeAgentComparisonMetrics(agentStats: AgentStatsRow[]): Ag
   const claudeStats = agentStats.find((s) => s.agent_type === 'claude');
   const codexStats = agentStats.find((s) => s.agent_type === 'codex');
 
+  const createEmptyBreakdown = (): AgentTaskTypeBreakdown => {
+    return TRACKED_TASK_TYPES.reduce((acc, taskType) => {
+      acc[taskType] = buildMetrics();
+      return acc;
+    }, {} as AgentTaskTypeBreakdown);
+  };
+
+  const breakdown = {
+    claude: createEmptyBreakdown(),
+    codex: createEmptyBreakdown(),
+  };
+
+  for (const stats of taskTypeStats) {
+    if (!isTrackedTaskType(stats.task_type)) {
+      continue;
+    }
+
+    const agentBucket = stats.agent_type === 'claude' ? breakdown.claude : breakdown.codex;
+    agentBucket[stats.task_type] = buildMetrics(stats);
+  }
+
   return {
     claude: buildMetrics(claudeStats),
     codex: buildMetrics(codexStats),
+    task_type_breakdown: breakdown,
   };
 }
 
@@ -1174,7 +1216,27 @@ export class TaskQueueService {
       GROUP BY agent_type
     `).all() as AgentStatsRow[];
 
-    return summarizeAgentComparisonMetrics(agentStats);
+    const taskTypeStats = this.db.prepare(`
+      SELECT
+        agent_type,
+        LOWER(type) as task_type,
+        COUNT(*) as total,
+        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
+        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
+        AVG(CASE
+          WHEN status = 'completed' AND completed_at IS NOT NULL AND started_at IS NOT NULL
+          THEN completed_at - started_at
+          ELSE NULL
+        END) as avg_duration_ms
+      FROM tasks
+      WHERE agent_type IS NOT NULL
+        AND agent_type IN ('claude', 'codex')
+        AND type IS NOT NULL
+        AND LOWER(type) IN ('implementation', 'testing', 'documentation')
+      GROUP BY agent_type, LOWER(type)
+    `).all() as AgentTaskTypeStatsRow[];
+
+    return summarizeAgentComparisonMetrics(agentStats, taskTypeStats);
   }
 
   /**
