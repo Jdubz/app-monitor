@@ -35,6 +35,7 @@ type LogSeverity = 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR';
 export type LogCategory =
   | 'api'
   | 'build'
+  | 'circuit-breaker'
   | 'cloud'
   | 'database'
   | 'docker'
@@ -42,6 +43,7 @@ export type LogCategory =
   | 'log_format'
   | 'logs'
   | 'merge_conflict'
+  | 'metrics'
   | 'pr-workflow'
   | 'process'
   | 'quality'
