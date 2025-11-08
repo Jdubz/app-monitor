@@ -1716,5 +1716,54 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
     }
   });
 
+  /**
+   * POST /dev-bots/pr-monitor/recover-from-artifacts
+   * Manually trigger PR recovery from artifact logs
+   *
+   * This endpoint scans artifact logs for tasks that may have created PRs
+   * but lost the PR information due to server crashes or restarts.
+   */
+  router.post('/pr-monitor/recover-from-artifacts', async (_req: Request, res: Response) => {
+    try {
+      const orchestrator = devBotsManager.getPRWorkflowOrchestrator();
+      if (!orchestrator) {
+        res.status(503).json({
+          error: 'Service unavailable',
+          message: 'PR workflow orchestrator not initialized'
+        });
+        return;
+      }
+
+      logger.info({
+        category: 'api',
+        action: 'manual_artifact_recovery_triggered',
+        message: 'Manual artifact recovery triggered via API'
+      });
+
+      // Run recovery
+      const stats = await orchestrator.recoverFromArtifacts();
+
+      res.json({
+        success: true,
+        message: `Artifact recovery completed`,
+        stats,
+        recovered: stats.prInfoRecovered
+      });
+
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'manual_artifact_recovery_failed',
+        message: 'Manual artifact recovery failed',
+        error
+      });
+
+      res.status(500).json({
+        error: 'Recovery failed',
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   return router;
 }
