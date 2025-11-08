@@ -1139,6 +1139,178 @@ Use your specialized knowledge to ensure this implementation follows best practi
     this.variableProcessors.set('workTarget.documentation', (context) => {
       return formatDocumentationForPrompt(context.project);
     });
+
+    // Conditional git workflow variables based on task type (fix vs new implementation)
+    this.variableProcessors.set('task.branchSetupInstructions', (context) => {
+      if (context.task.pr_branch) {
+        return `# CRITICAL: This is a FIX task for an existing PR
+# Checkout the PR branch to make fixes
+git checkout ${context.task.pr_branch}
+# Pull latest changes from the PR branch
+git pull origin ${context.task.pr_branch}`;
+      } else {
+        return `# ALWAYS start from main branch (for PR-based workflow)
+git checkout main
+# ALWAYS pull latest changes to avoid duplicate work
+git pull origin main`;
+      }
+    });
+
+    this.variableProcessors.set('task.branchSetupNote', (context) => {
+      if (context.task.pr_branch) {
+        return `# You will push fixes to the existing PR branch in Step 4
+# This updates the existing PR automatically`;
+      } else {
+        return `# You will create a feature branch in Step 4 after making changes
+# This ensures you're always starting from the latest main`;
+      }
+    });
+
+    this.variableProcessors.set('task.branchSetupCritical', (context) => {
+      if (context.task.pr_branch) {
+        return `You are working on PR #${context.task.followup_for_pr || 'N/A'}. Never create a new branch - work directly on ${context.task.pr_branch}!`;
+      } else {
+        return `Never skip \`git pull origin main\` - you must have the latest code to avoid duplicate work!`;
+      }
+    });
+
+    this.variableProcessors.set('task.prWorkflowTitle', (context) => {
+      if (context.task.pr_branch) {
+        return 'Push Fixes to Existing PR';
+      } else {
+        return 'Create PR (MANDATORY - DO NOT PUSH DIRECTLY TO STAGING)';
+      }
+    });
+
+    this.variableProcessors.set('task.prWorkflowDescription', (context) => {
+      if (context.task.pr_branch) {
+        return `**CRITICAL: Push to ${context.task.pr_branch} to update PR #${context.task.followup_for_pr || 'N/A'}!**`;
+      } else {
+        return '**CRITICAL: You MUST create a Pull Request to main, NOT push to staging!**';
+      }
+    });
+
+    this.variableProcessors.set('task.branchCreationStep', (context) => {
+      if (context.task.pr_branch) {
+        return 'Verify PR Branch';
+      } else {
+        return 'Create Feature Branch';
+      }
+    });
+
+    this.variableProcessors.set('task.branchCreationContent', (context) => {
+      if (context.task.pr_branch) {
+        return `# Verify you're on the correct PR branch
+CURRENT_BRANCH=$(git branch --show-current)
+if [ "$CURRENT_BRANCH" != "${context.task.pr_branch}" ]; then
+  echo "ERROR: Not on correct branch! Expected ${context.task.pr_branch}, got $CURRENT_BRANCH"
+  exit 1
+fi
+echo "✅ Confirmed on PR branch: ${context.task.pr_branch}"
+BRANCH_NAME="${context.task.pr_branch}"`;
+      } else {
+        return `# Extract short UUID from task ID
+TASK_ID="{{task.id}}"
+SHORT_ID="\${TASK_ID##*-}"
+BRANCH_NAME="task-{{task.type}}-\${SHORT_ID}"
+echo "Creating feature branch: \${BRANCH_NAME}"
+git checkout -b "\${BRANCH_NAME}"`;
+      }
+    });
+
+    this.variableProcessors.set('task.pushStep', (context) => {
+      if (context.task.pr_branch) {
+        return 'Push to PR Branch';
+      } else {
+        return 'Push Feature Branch';
+      }
+    });
+
+    this.variableProcessors.set('task.pushContent', (context) => {
+      if (context.task.pr_branch) {
+        return `# Push to the existing PR branch (this will update the PR)
+git push origin ${context.task.pr_branch}`;
+      } else {
+        return `# Push new feature branch
+git push -u origin "\${BRANCH_NAME}"`;
+      }
+    });
+
+    this.variableProcessors.set('task.prCreationStep', (context) => {
+      if (context.task.pr_branch) {
+        return 'Verify PR Updated';
+      } else {
+        return 'Create Pull Request';
+      }
+    });
+
+    this.variableProcessors.set('task.prCreationContent', (context) => {
+      if (context.task.pr_branch) {
+        return `# This is a fix task - outputting existing PR information
+echo "✅ Pushed fixes to existing PR #${context.task.followup_for_pr || 'N/A'}"
+echo "The PR has been updated with your fixes"`;
+      } else {
+        return `# Build PR description with warnings
+PR_BODY="## Summary
+This PR implements {{task.title}}
+
+$(cat <<'ACCEPTANCE'
+## Acceptance Criteria
+{{task.acceptance_criteria}}
+ACCEPTANCE
+)
+
+## Test plan
+- [ ] All existing tests pass
+- [ ] New tests added for new functionality
+- [ ] Manual testing completed
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)
+"
+
+# Create PR with gh CLI
+gh pr create --base main --head "\${BRANCH_NAME}" \\
+  --title "{{task.type}}: {{task.title}}" \\
+  --body "$PR_BODY"`;
+      }
+    });
+
+    this.variableProcessors.set('task.prOutputStep', (context) => {
+      if (context.task.pr_branch) {
+        return 'Output PR Link';
+      } else {
+        return 'Output PR Link';
+      }
+    });
+
+    this.variableProcessors.set('task.prOutputContent', (context) => {
+      if (context.task.pr_branch) {
+        return `# Get the PR URL for this branch
+PR_URL=$(gh pr view ${context.task.pr_branch} --json url --jq .url)
+echo "✅ PR updated: $PR_URL"`;
+      } else {
+        return `# Get the PR URL for the newly created PR
+PR_URL=$(gh pr view "\${BRANCH_NAME}" --json url --jq .url)
+echo "✅ PR created: $PR_URL"`;
+      }
+    });
+
+    this.variableProcessors.set('task.prVerificationContent', (context) => {
+      if (context.task.pr_branch) {
+        return `
+**VERIFICATION CHECKLIST:**
+- [ ] Pushed to ${context.task.pr_branch}
+- [ ] PR #${context.task.followup_for_pr || 'N/A'} shows your new commits
+- [ ] CI checks are running on the PR`;
+      } else {
+        return `
+**VERIFICATION CHECKLIST:**
+- [ ] PR created successfully
+- [ ] PR is targeting \`main\` branch (NOT staging)
+- [ ] PR description includes task details
+- [ ] CI checks are running`;
+      }
+    });
   }
 
   /**
