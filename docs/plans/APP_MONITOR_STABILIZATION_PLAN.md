@@ -54,7 +54,7 @@
 - **BE-2**: ✅ **COMPLETE** - Implemented automatic failure recovery system with dry-run mode enabled.
   - *Deliverable*: Recovery system operational with comprehensive logging. ✅ **VERIFIED 2025-11-06**
   - *Notes*: See backend/.env for configuration. Features: circular recovery prevention, stuck task timeout, cleanup strategies.
-- **BE-3**: Re-enable pre-push hooks to run backend + frontend tests once remaining build errors resolved.
+- **BE-3**: ✅ **COMPLETE** - Re-enabled `.husky/pre-push` (2025-11-08) so pushes run backend/frontend lint plus `npm run test:backend` (543 specs) and `npm run test:frontend` under `NODE_OPTIONS='--max-old-space-size=2048'`.
 
 ### 3. Work-Target Registry Migration
 - **WT-1**: Design SQLite schema extensions to store current JSON config fields (services, log sources, repo paths, env vars).  

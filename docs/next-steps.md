@@ -114,7 +114,7 @@ Tasks:
 ### Backend Health (BE)
 - [x] **BE-1**: Fix TypeScript compilation errors - ✅ COMPLETE (543/543 tests passing)
 - [x] **BE-2**: Implement automatic failure recovery system - ✅ COMPLETE
-- [ ] **BE-3**: Re-enable pre-push hooks once all build errors resolved
+- [x] **BE-3**: Re-enable pre-push hooks (lint + backend/frontend tests) now that builds are green — ✅ VERIFIED 2025-11-08 (`.husky/pre-push` runs lint + `npm run test:backend`/`npm run test:frontend` with memory guards)
 
 **Deliverable**: Backend builds cleanly with all tests passing
 
