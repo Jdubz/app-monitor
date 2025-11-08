@@ -1,5 +1,8 @@
 import type {
   DevBotsAgentPersonality as ContractDevBotsAgentPersonality,
+  DevBotsAgentComparison as ContractDevBotsAgentComparison,
+  DevBotsAgentMetrics as ContractDevBotsAgentMetrics,
+  DevBotsAgentTaskTypeBreakdown as ContractDevBotsAgentTaskTypeBreakdown,
   DevBotsCleanupStatus as ContractDevBotsCleanupStatus,
   DevBotsScopeViolation as ContractDevBotsScopeViolation,
   DevBotsStatus as ContractDevBotsStatus,
@@ -8,6 +11,7 @@ import type {
   DevBotsWorkerStatus as ContractDevBotsWorkerStatus,
   DevBotsWorkspaceSyncResult as ContractDevBotsWorkspaceSyncResult,
   DevBotsWorkspaceSyncStatus as ContractDevBotsWorkspaceSyncStatus,
+  DevBotsTrackedTaskType as ContractDevBotsTrackedTaskType,
 } from '@/types/contracts';
 
 export type DevBotsStatus = ContractDevBotsStatus;
@@ -19,6 +23,10 @@ export type DevBotsTaskTemplate = ContractDevBotsTaskTemplate;
 export type DevBotsWorkerStatus = ContractDevBotsWorkerStatus;
 export type DevBotsWorkspaceSyncResult = ContractDevBotsWorkspaceSyncResult;
 export type DevBotsWorkspaceSyncStatus = ContractDevBotsWorkspaceSyncStatus;
+export type DevBotsAgentComparison = ContractDevBotsAgentComparison;
+export type DevBotsAgentMetrics = ContractDevBotsAgentMetrics;
+export type DevBotsAgentTaskTypeBreakdown = ContractDevBotsAgentTaskTypeBreakdown;
+export type DevBotsTrackedTaskType = ContractDevBotsTrackedTaskType;
 
 export type DevBotsQueueBucket = 'pending' | 'active' | 'completed';
 
