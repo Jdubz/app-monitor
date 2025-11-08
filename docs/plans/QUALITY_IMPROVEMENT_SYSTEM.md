@@ -322,19 +322,172 @@ CREATE TABLE quality_patterns (
 - Suggest preventive measures
 - Improve task templates based on patterns
 
-## Success Metrics
+## Success Metrics (QM-1)
 
-### Primary Metrics
-1. **Quality Score Improvement Rate**: Average improvement per PR
-2. **Time to Quality**: Time from initial task to quality threshold met
-3. **Automation Rate**: % of improvements handled automatically
-4. **PR Merge Rate**: % of PRs that eventually meet quality standards
+The stabilization plan requires **exactly four** execution-quality metrics: scope compliance, duplication prevention, git workflow success, and feature creep containment. These metrics power the quality dashboard, alerting, and follow-up automation tasks mandated by QM-1.
 
-### Secondary Metrics
-1. **Improvement Task Success Rate**: % of improvement tasks that achieve goals
-2. **Average Improvements per PR**: Number of follow-up tasks needed
-3. **Quality Debt Reduction**: Trending quality scores over time
-4. **Developer Satisfaction**: Reduced manual quality fixes
+### Primary Metric Summary
+
+| # | Metric | Definition (rolling 7-day window unless noted) | Target | Yellow | Red | Emergency |
+|---|--------|-----------------------------------------------|--------|--------|-----|-----------|
+| 1 | **Scope Compliance Rate (SCR)** | Completed automation runs with zero scope boundary violations ÷ total completed runs. | 100% | < 98% | < 95% | < 90% |
+| 2 | **Duplication Prevention Rate (DPR)** | Runs with no duplicate code/task detections ÷ total runs. | 100% | < 99% | < 97% | < 95% |
+| 3 | **Git Workflow Success Rate (GWSR)** | Runs that complete `branch → commit → push → PR` with PR metadata captured ÷ total runs. | 100% | < 98% | < 95% | < 90% |
+| 4 | **Feature Creep Containment (FCC)** | Runs that stay within declared change budgets (files & new lines) ÷ total runs. | 100% | < 97% | < 94% | < 90% |
+
+Outputs:
+- Real-time gauges over SSE topic `quality-metrics`.
+- 15-minute aggregations persisted to `quality_metrics` (extend `metric_type` with the four QM-1 keys).
+- Daily Slack digest summarizing 7-day and 30-day averages plus incident links.
+
+### 1. Scope Compliance Rate (SCR)
+
+**Purpose:** Guarantee that every bot task honors explicit scope boundaries so no extra features or files slip in.
+
+**Key Data Sources**
+- `backend/src/services/taskVerification.service.ts` – emits `scopeBoundaries` verdicts for each run.
+- `backend/src/services/scopeControl.service.ts` – logs violation chains/clean-room rebuilds.
+- `backend/migrations/005_quality_observations.sql` – `quality_observations.scope_boundaries_observation` JSON payload.
+- `backend/migrations/004_task_context.sql` – `task_file_operations` captures file/line deltas for validation.
+
+**Collection & Storage**
+1. Completion webhook records the verification payload + `scope_boundaries_observation`.
+2. Aggregator job (every 5 minutes) executes:
+   ```sql
+   WITH completed AS (
+     SELECT t.id,
+            json_extract(q.scope_boundaries_observation, '$.status') AS status
+     FROM tasks t
+     LEFT JOIN quality_observations q ON q.task_id = t.id
+     WHERE t.status = 'completed'
+       AND t.completed_at >= strftime('%s','now','-7 days') * 1000
+   )
+   SELECT
+     1.0 - (
+       CAST(SUM(CASE WHEN status = 'violation' THEN 1 ELSE 0 END) AS REAL) /
+       NULLIF(COUNT(*), 0)
+     ) AS scope_compliance_rate;
+   ```
+3. Persist to `quality_metrics(metric_type='scope_compliance', value_after=<rate>)`.
+
+**Alerting**
+- **Yellow** when SCR < 98% for two consecutive aggregates (alert via `scripts/alert-v3-failures.sh` webhook).
+- **Red** below 95% and **Emergency** below 90% pause new assignments and spawn `scope-cleanup` repair tasks.
+
+### 2. Duplication Prevention Rate (DPR)
+
+**Purpose:** Ensure bots extend existing implementations instead of recreating code or submitting duplicate tasks.
+
+**Key Data Sources**
+- `backend/src/services/devBotsManager.ts` – `checkDuplicateTask()` warns (`action: 'duplicate_task_detected'`) when fingerprints collide.
+- `backend/migrations/004_task_context.sql` – `task_file_operations.diff_path` stores per-file diffs for duplicate hashing.
+- `docs/plans/BOT_PROMPT_ENGINEERING_V3.md` – mandates `mustNotDuplicate` & `doNotCreate` lists in every template.
+- Structured logs `logs/dev-monitor-backend.log` (category `process`).
+
+**Collection & Storage**
+1. Each duplicate-task attempt appends `{ "type": "duplication", "fingerprint": "<hash>" }` to `quality_observations.improvement_opportunities`.
+2. Code-level duplication scan hashes each staged diff (`task_file_operations.diff_path`) and checks for identical hashes introduced elsewhere in the window.
+3. Aggregation:
+   ```sql
+   WITH window AS (
+     SELECT id,
+            json_array_length(
+              json_extract(improvement_opportunities, '$[?(@.type=\"duplication\")]')
+            ) AS dup_hits
+     FROM quality_observations
+     WHERE timestamp >= strftime('%s','now','-7 days') * 1000
+   )
+   SELECT 1.0 - (
+     CAST(SUM(CASE WHEN dup_hits > 0 THEN 1 ELSE 0 END) AS REAL) /
+     NULLIF(COUNT(*), 0)
+   ) AS duplication_prevention_rate;
+   ```
+4. Persist to `quality_metrics(metric_type='duplication_prevention', value_after=<rate>)`.
+
+**Alerting**
+- **Yellow** below 99% (≥1 duplicate per 100 tasks).
+- **Red** below 97% spawns `cleanup-deduplicate` tasks defined in `scopeControl.service.ts`.
+- **Emergency** below 95% blocks new task intake pending manual template review.
+
+### 3. Git Workflow Success Rate (GWSR)
+
+**Purpose:** Confirm every autonomous run follows the PR-based workflow (`docs/plans/PR_BASED_WORKFLOW.md`).
+
+**Key Data Sources**
+- `task_git_operations` table (from `backend/migrations/004_task_context.sql`) – captures git commands per run.
+- `task_automation_runs` – start/finish times + status.
+- `pr_quality_history` (`backend/migrations/005_quality_observations.sql`) – tracks PR readiness.
+
+**Collection & Storage**
+1. A run counts as successful when `task_git_operations` shows `checkout -b`, `git commit`, `git push`, `gh pr create`, and `tasks.pr_number` (or `pr_quality_history`) is populated.
+2. Aggregation:
+   ```sql
+   WITH runs AS (
+     SELECT tar.run_id,
+            MIN(CASE WHEN command LIKE '%checkout -b%' THEN 1 ELSE 0 END) AS has_branch,
+            MIN(CASE WHEN command LIKE '%git commit%' THEN 1 ELSE 0 END) AS has_commit,
+            MIN(CASE WHEN command LIKE '%git push%' THEN 1 ELSE 0 END) AS has_push,
+            MIN(CASE WHEN command LIKE '%gh pr create%' THEN 1 ELSE 0 END) AS has_pr
+     FROM task_git_operations
+     JOIN task_automation_runs tar ON tar.run_id = task_git_operations.run_id
+     WHERE tar.completed_at >= strftime('%s','now','-7 days') * 1000
+     GROUP BY tar.run_id
+   )
+   SELECT
+     CAST(SUM(CASE WHEN has_branch AND has_commit AND has_push AND has_pr THEN 1 ELSE 0 END) AS REAL) /
+     NULLIF(COUNT(*), 0) AS git_workflow_success_rate;
+   ```
+3. Persist to `quality_metrics(metric_type='git_workflow_success', value_after=<rate>)`.
+
+**Alerting**
+- **Yellow** when missing workflow steps exceed 2% of runs.
+- **Red** (>5%) auto-creates a `workflow-recovery` task to inspect the failing commands.
+- **Emergency** (≥10%) pauses automation until GitHub auth/network issues resolve.
+
+### 4. Feature Creep Containment (FCC)
+
+**Purpose:** Prevent tasks from expanding beyond declared change budgets (files touched, new files, diff size).
+
+**Key Data Sources**
+- `docs/dev-bots/SCOPE_CONTROL_SYSTEM.md` – defines boundaries & cleanup tasks.
+- `docs/plans/BOT_PROMPT_ENGINEERING_V3.md` – templates declare `doNotCreate`, `EXACTLY N` requirements, and max budgets.
+- `task_file_operations` + `task_artifacts` (diff previews) from `backend/migrations/004_task_context.sql`.
+- `quality_observations.scope_boundaries_observation` (migrations/005) – records when budgets were exceeded.
+
+**Collection & Storage**
+1. Templates must include numeric budgets (`max_lines`, `max_new_files`) stored alongside each task.
+2. Diff summarizer joins budgets to observed changes:
+   ```sql
+   WITH diffs AS (
+     SELECT tar.task_id,
+            SUM(CASE WHEN tfo.operation IN ('write','edit')
+                     THEN ABS(tfo.lines_after - tfo.lines_before) ELSE 0 END) AS lines_changed,
+            SUM(CASE WHEN tfo.operation = 'write' AND tfo.lines_before IS NULL THEN 1 ELSE 0 END) AS new_files
+     FROM task_file_operations tfo
+     JOIN task_automation_runs tar ON tar.run_id = tfo.run_id
+     WHERE tar.completed_at >= strftime('%s','now','-7 days') * 1000
+     GROUP BY tar.task_id
+   )
+   SELECT
+     CAST(SUM(CASE WHEN lines_changed <= meta.max_lines
+                        AND new_files <= meta.max_new_files THEN 1 ELSE 0 END) AS REAL) /
+     NULLIF(COUNT(*), 0) AS feature_creep_containment
+   FROM diffs
+   JOIN task_metadata meta ON meta.task_id = diffs.task_id;
+   ```
+3. Overflow events append `{ "type": "feature_creep", "budget": { ... } }` to `quality_observations.improvement_opportunities`.
+4. Persist aggregates as `quality_metrics(metric_type='feature_creep', value_after=<rate>)`.
+
+**Alerting**
+- **Yellow** when ≥3% of runs exceed budgets.
+- **Red** when ≥6% – enqueue `cleanup-scope` tasks that revert offending files.
+- **Emergency** when ≥10% – freeze automation until templates are corrected.
+
+### Instrumentation Checklist
+1. Extend `quality_metrics.metric_type` check constraint with the four QM-1 keys and backfill dashboard queries.
+2. Ensure `TaskAutomationManager` writes one `quality_observations` row per run that includes scope, duplication, and feature-creep metadata.
+3. Expose `/api/quality-metrics/latest` so the dashboard and `scripts/monitor-v3-tasks.sh` can poll the live values.
+4. Update `scripts/alert-v3-failures.sh` (Slack webhook) to trigger on the Yellow/Red/Emergency bands defined above.
 
 ## Implementation Priority
 
