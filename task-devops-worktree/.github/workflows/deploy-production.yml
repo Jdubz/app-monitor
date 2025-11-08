@@ -1,0 +1,124 @@
+name: Deploy to PRODUCTION
+
+# ⚠️  PRODUCTION DEPLOYMENT WORKFLOW
+# This workflow deploys ONLY from main branch to production
+# Triggered on push to main branch
+# Uses self-hosted runner for deployment
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "DEPLOY TO PRODUCTION" to confirm'
+        required: true
+        default: ''
+
+jobs:
+  # Pre-deployment checks
+  pre-deployment-checks:
+    name: Pre-deployment Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Verify branch
+        run: |
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "❌ ERROR: Can only deploy from main branch"
+            exit 1
+          fi
+
+      - name: Confirm manual deployment
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "DEPLOY TO PRODUCTION" ]; then
+            echo "❌ ERROR: Deployment not confirmed"
+            echo "   You must type 'DEPLOY TO PRODUCTION' to confirm"
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run backend tests
+        run: npm run test:backend
+
+      - name: Run backend linter
+        run: npm run lint -w backend
+
+      - name: Build backend
+        run: npm run build -w backend
+
+      - name: Build frontend
+        run: npm run build -w frontend
+
+  # Production deployment
+  deploy-production:
+    name: Deploy to Production Server
+    needs: pre-deployment-checks
+    runs-on: self-hosted
+    environment:
+      name: production
+      url: https://app-monitor.yourdomain.com
+
+    steps:
+      - name: Display deployment warning
+        run: |
+          echo "🏭 DEPLOYING TO PRODUCTION"
+          echo "=========================="
+          echo "Branch: ${{ github.ref }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Triggered by: ${{ github.actor }}"
+          echo ""
+
+      - name: Run deployment script
+        run: |
+          cd /opt/app-monitor
+          ./scripts/production/deploy.sh
+
+      - name: Verify deployment
+        run: |
+          echo "🔍 Verifying services..."
+          sudo systemctl is-active app-monitor-backend-prod.service
+          sudo systemctl is-active app-monitor-frontend-prod.service
+          echo "✅ All services running"
+
+      - name: Health check
+        run: |
+          echo "🏥 Running health checks..."
+          timeout 30 bash -c 'until curl -f http://localhost:5050/health; do sleep 2; done'
+          timeout 30 bash -c 'until curl -f http://localhost:5173; do sleep 2; done'
+          echo "✅ Health checks passed"
+
+  # Post-deployment notification
+  notify-deployment:
+    name: Notify Deployment Status
+    needs: deploy-production
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Deployment success
+        if: needs.deploy-production.result == 'success'
+        run: |
+          echo "✅ PRODUCTION deployment successful"
+          echo "Commit: ${{ github.sha }}"
+          echo "Branch: ${{ github.ref }}"
+
+      - name: Deployment failure
+        if: needs.deploy-production.result != 'success'
+        run: |
+          echo "❌ PRODUCTION deployment failed"
+          echo "Check logs for details"
+          exit 1

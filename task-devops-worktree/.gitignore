@@ -1,0 +1,55 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.log
+
+# Data and logs
+backend/data/
+backend/logs/
+dev-bots/logs/
+dev-bots/mirror/
+dev-bots/artifacts/
+frontend/logs/
+logs/
+backend/dev-bots/
+
+# Database files
+*.db
+*.db-shm
+*.db-wal
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# TypeScript build info
+*.tsbuildinfo
+
+# Temporary files
+*.tmp
+tmp/
+temp/
+
+# Docker
+.dockerignore
+
+dev-bots/volumes/

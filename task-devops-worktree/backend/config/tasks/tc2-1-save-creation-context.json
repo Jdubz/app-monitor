@@ -1,0 +1,65 @@
+{
+  "type": "implementation",
+  "title": "TC-2.1: Add saveTaskCreationContext method to database service",
+  "project": "dev-monitor",
+  "description": "Add a single method to DevBotsDatabase service that saves task creation context. This is the first step in TC-2 (context persistence).",
+
+  "acceptanceCriteria": [
+    "saveTaskCreationContext(taskId, context) method added to database.ts",
+    "Method validates context using TaskCreationContextSchema",
+    "Method stores context as JSON in tasks table context_json column",
+    "Unit test verifies method saves and retrieves context correctly"
+  ],
+
+  "estimatedEffort": {
+    "hours": 1,
+    "complexity": "simple",
+    "confidence": "high"
+  },
+
+  "files": [
+    "backend/src/services/database.ts",
+    "backend/src/services/__tests__/database.test.ts"
+  ],
+
+  "dependencies": [
+    "zod (already installed)",
+    "better-sqlite3 (already installed)"
+  ],
+
+  "architectureReferences": [
+    "backend/src/types/taskContext.ts - TaskCreationContextSchema to use for validation",
+    "backend/src/services/database.ts - Existing database service pattern",
+    "backend/migrations/004_task_context.sql - Confirms tasks table has context_json column"
+  ],
+
+  "contextBoundaries": {
+    "mustNotChange": [
+      "Existing database methods",
+      "Migration files",
+      "TaskCreationContextSchema definition"
+    ],
+    "mustNotAffect": [
+      "Task creation flow",
+      "Task queue manager",
+      "Other database operations"
+    ]
+  },
+
+  "validationSteps": [
+    "npm run test:backend passes",
+    "TypeScript compiles without errors",
+    "New test covers: save valid context, reject invalid context, handle missing taskId"
+  ],
+
+  "successMetrics": [
+    "Method implementation < 30 lines",
+    "Test coverage for new method 100%",
+    "All existing tests still pass"
+  ],
+
+  "assignedAgent": "backend-specialist",
+  "priority": 7,
+
+  "notes": "This is an atomic task - single method, single responsibility. Foundation for rest of TC-2 chain."
+}

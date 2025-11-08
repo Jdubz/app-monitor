@@ -1,0 +1,536 @@
+-- Migration 003: Task Persistence Schema Documentation
+-- Comprehensive SQL schema for dev-bot task persistence
+--
+-- PURPOSE: This migration serves as documentation and reference for the complete
+--          task persistence schema. The actual tables are created by migrations
+--          002 (tasks table) and 004 (context tracking).
+--
+-- MIGRATION STATUS: This is a documentation-only migration. No tables are created
+--                   here to avoid conflicts with existing migrations 002 and 004.
+--
+-- USAGE: Reference this file when:
+--        - Understanding the complete task schema
+--        - Planning query patterns
+--        - Designing new features that interact with tasks
+--        - Migrating from JSON to SQLite persistence
+--
+-- Based on:
+-- - src/services/taskPersistence.ts (JSON persistence patterns)
+-- - src/services/database.ts (SQLite database wrapper)
+-- - src/types/taskSchema.ts (TypeScript type definitions)
+-- - migrations/002_tasks_table.sql (Base tasks table)
+-- - migrations/004_task_context.sql (Context tracking)
+
+-- ============================================================================
+-- CORE TASKS TABLE (Created by Migration 002)
+-- ============================================================================
+--
+-- The primary tasks table stores all dev-bot tasks with their lifecycle,
+-- configuration, and execution results. This table is the source of truth
+-- for task state and is queried frequently by the task queue manager.
+--
+-- Table: tasks
+-- Created by: migrations/002_tasks_table.sql
+-- Aligned with: TaskSchema from src/types/taskSchema.ts
+--
+-- Schema:
+--   CREATE TABLE tasks (
+--     id TEXT PRIMARY KEY,
+--     type TEXT NOT NULL,
+--     title TEXT NOT NULL CHECK(length(title) >= 1 AND length(title) <= 200),
+--     description TEXT,
+--     documentation TEXT,
+--     notes TEXT,
+--     status TEXT NOT NULL CHECK(status IN ('pending', 'assigned', 'active', 'completed', 'failed', 'retrying')),
+--     created_at TEXT NOT NULL,
+--     assigned_worker TEXT,
+--     assigned_agent TEXT NOT NULL,
+--     assigned_at TEXT,
+--     completed_at TEXT,
+--     output TEXT,
+--     error TEXT,
+--     exit_code INTEGER,
+--     prompt TEXT,
+--     files TEXT,          -- JSON array
+--     dependencies TEXT,   -- JSON array
+--     project TEXT,
+--     priority INTEGER DEFAULT 5 CHECK(priority >= 0 AND priority <= 10),
+--     retry_count INTEGER DEFAULT 0 CHECK(retry_count >= 0),
+--     max_retries INTEGER DEFAULT 3 CHECK(max_retries >= 0),
+--     timeout INTEGER,
+--     metadata TEXT,       -- JSON object
+--     context_json TEXT    -- JSON object for TC-1 context support
+--   );
+--
+-- Indexes (created by migration 002):
+--   idx_tasks_status               - Fast status filtering
+--   idx_tasks_type                 - Task type grouping
+--   idx_tasks_assigned_worker      - Worker-specific queries
+--   idx_tasks_assigned_agent       - Agent routing
+--   idx_tasks_project              - Project-scoped queries
+--   idx_tasks_priority             - Priority sorting
+--   idx_tasks_created              - Chronological ordering
+--   idx_tasks_status_priority      - Composite: status + priority + created_at
+
+-- ============================================================================
+-- TASK AUTOMATION RUNS (Created by Migration 004)
+-- ============================================================================
+--
+-- Tracks every execution attempt of a task with full telemetry including
+-- timestamps, exit codes, quality metrics, and resource usage.
+--
+-- Table: task_automation_runs
+-- Created by: migrations/004_task_context.sql
+--
+-- Schema:
+--   CREATE TABLE task_automation_runs (
+--     run_id TEXT PRIMARY KEY,
+--     task_id TEXT NOT NULL,
+--     worker_id TEXT,
+--     container_id TEXT,
+--     started_at TEXT NOT NULL,
+--     completed_at TEXT,
+--     duration_ms INTEGER,
+--     exit_code INTEGER,
+--     status TEXT NOT NULL CHECK(status IN ('success', 'failed', 'noop')),
+--     failure_reason TEXT,
+--     commit_sha TEXT,
+--     branch TEXT,
+--     quality_passed BOOLEAN,
+--     quality_validation_json TEXT,
+--     resource_usage_json TEXT,
+--     token_usage_json TEXT,
+--     container_meta_json TEXT,
+--     build_exit_code INTEGER,
+--     test_passed INTEGER,
+--     test_failed INTEGER,
+--     test_skipped INTEGER,
+--     lint_errors INTEGER,
+--     lint_warnings INTEGER,
+--     created_at TEXT NOT NULL DEFAULT (datetime('now')),
+--     FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+--   );
+--
+-- Indexes (created by migration 004):
+--   idx_automation_runs_task       - Task-to-runs lookup
+--   idx_automation_runs_status     - Status filtering
+--   idx_automation_runs_started    - Chronological ordering
+--   idx_automation_runs_worker     - Worker-specific queries
+
+-- ============================================================================
+-- SUPPORTING TABLES (Created by Migration 004)
+-- ============================================================================
+--
+-- These tables provide detailed execution context for each automation run:
+--
+-- 1. task_commands
+--    - Captures all shell commands executed during a run
+--    - Includes stdout/stderr, exit codes, and duration
+--
+-- 2. task_file_operations
+--    - Tracks all file read/write/edit/delete operations
+--    - Records line count changes and diff locations
+--
+-- 3. task_git_operations
+--    - Logs git commands (commit, push, checkout, etc.)
+--    - Records commit SHAs, branches, and files changed
+--
+-- 4. task_artifacts
+--    - References files created during task execution
+--    - Types: patch, log, screenshot, report, session_summary
+--
+-- 5. task_build_outputs
+--    - Denormalized build results for quick access
+--    - Error/warning counts, exit codes, output previews
+--
+-- 6. task_test_results
+--    - Denormalized test results and coverage metrics
+--    - Pass/fail counts, coverage percentages
+
+-- ============================================================================
+-- ANALYTICS VIEWS (Created by Migration 004)
+-- ============================================================================
+--
+-- Pre-computed views for common analytics queries:
+--
+-- 1. v_automation_success_by_type
+--    - Success rates grouped by task type
+--    - Average duration and token usage
+--
+-- 2. v_recent_automation_runs
+--    - Last 100 automation runs with task details
+--    - Artifact and file modification counts
+--
+-- 3. v_task_retry_stats
+--    - Retry statistics for tasks with multiple attempts
+--    - Success/failure counts and timing
+
+-- ============================================================================
+-- QUERY PATTERNS
+-- ============================================================================
+--
+-- Common queries optimized by the index strategy:
+
+-- Get next pending task by priority:
+--   SELECT * FROM tasks
+--   WHERE status = 'pending'
+--   ORDER BY priority DESC, created_at ASC
+--   LIMIT 1;
+--   (Uses: idx_tasks_status_priority)
+
+-- Get tasks assigned to a specific worker:
+--   SELECT * FROM tasks
+--   WHERE assigned_worker = 'bot-backend-specialist-123'
+--   AND status IN ('assigned', 'active')
+--   ORDER BY priority DESC;
+--   (Uses: idx_tasks_assigned_worker, idx_tasks_priority)
+
+-- Get completed tasks with automation details:
+--   SELECT
+--     t.id, t.title, t.type,
+--     tar.duration_ms, tar.quality_passed,
+--     tar.test_passed, tar.test_failed
+--   FROM tasks t
+--   JOIN task_automation_runs tar ON t.id = tar.task_id
+--   WHERE t.status = 'completed'
+--   ORDER BY tar.completed_at DESC
+--   LIMIT 50;
+--   (Uses: idx_tasks_status, idx_automation_runs_task)
+
+-- Get task statistics by status:
+--   SELECT
+--     status,
+--     COUNT(*) as count,
+--     AVG(priority) as avg_priority,
+--     MIN(created_at) as oldest,
+--     MAX(created_at) as newest
+--   FROM tasks
+--   GROUP BY status;
+--   (Uses: idx_tasks_status)
+
+-- Get failed tasks with error patterns:
+--   SELECT
+--     t.id, t.title, t.error,
+--     t.retry_count, t.max_retries,
+--     tar.failure_reason
+--   FROM tasks t
+--   LEFT JOIN task_automation_runs tar ON t.id = tar.task_id
+--   WHERE t.status = 'failed'
+--   ORDER BY t.created_at DESC;
+--   (Uses: idx_tasks_status, idx_automation_runs_task)
+
+-- ============================================================================
+-- DATA TYPE RATIONALE
+-- ============================================================================
+--
+-- TEXT for IDs and timestamps:
+--   - SQLite recommendation for UUIDs
+--   - ISO 8601 format for timestamps (human-readable)
+--   - Maintains compatibility with existing JSON data
+--   - Example: "task-5-1762413618572", "2025-11-06T07:20:18.572Z"
+--
+-- INTEGER for numeric values:
+--   - Priority (0-10), retry counts, exit codes
+--   - Enables efficient range queries and mathematical operations
+--   - NULL allowed for optional values (e.g., exit_code)
+--
+-- TEXT for JSON fields:
+--   - files, dependencies, metadata, context_json
+--   - Flexibility for schema evolution
+--   - Compatible with SQLite JSON1 extension
+--   - Example: '["file1.ts", "file2.ts"]', '{"key": "value"}'
+--
+-- CHECK constraints:
+--   - Status values enforced at database level
+--   - Priority range validation (0-10)
+--   - Title length constraints (1-200 characters)
+--   - Prevents invalid data from entering the database
+
+-- ============================================================================
+-- INDEX STRATEGY
+-- ============================================================================
+--
+-- Primary Indexes (single column):
+--   - status: Most frequent filter (pending, active, completed)
+--   - type: Task type grouping for reports
+--   - assigned_worker: Worker-specific task lists
+--   - assigned_agent: Agent routing and assignment
+--   - project: Project-scoped queries
+--   - priority DESC: Priority-based sorting
+--   - created_at DESC: Chronological ordering
+--
+-- Composite Index:
+--   - (status, priority DESC, created_at): Optimizes the most common
+--     query pattern - "Get pending tasks ordered by priority then time"
+--     This single index serves multiple query patterns efficiently.
+--
+-- Foreign Key Indexes:
+--   - task_automation_runs.task_id: Fast joins and cascade deletes
+--   - Supporting table run_id indexes: Efficient detail lookups
+--
+-- Index Overhead:
+--   - ~5-10% storage overhead per index
+--   - Maintained automatically on INSERT/UPDATE/DELETE
+--   - Worth the cost for read-heavy task queue operations
+
+-- ============================================================================
+-- MIGRATION FROM JSON TO SQLITE
+-- ============================================================================
+--
+-- Current state: TaskPersistence service uses JSON files (tasks.json)
+-- Target state: SQLite as primary storage with JSON as backup
+--
+-- Phase 1: Parallel Writes (RECOMMENDED STARTING POINT)
+--   1. Write to both JSON (primary) and SQLite (shadow)
+--   2. Verify data integrity between both stores
+--   3. Test query performance with realistic load
+--   4. Monitor for discrepancies
+--
+-- Phase 2: Read from SQLite
+--   1. Switch reads to SQLite while keeping JSON writes
+--   2. JSON remains as backup and verification
+--   3. Monitor for issues (performance, data integrity)
+--   4. Gradual rollout with ability to rollback
+--
+-- Phase 3: SQLite Primary
+--   1. Make SQLite the source of truth
+--   2. JSON used only for backups via TaskPersistence.createBackup()
+--   3. Remove JSON from hot path (only backup operations)
+--   4. Archive old JSON files
+--
+-- Migration Code Pattern:
+--   class TaskPersistence {
+--     saveTasks(tasks: Task[]): void {
+--       // Phase 1: Write to both
+--       this.saveToJSON(tasks);
+--       this.saveToSQLite(tasks);
+--
+--       // Phase 2: Read from SQLite
+--       // const loadedTasks = this.loadFromSQLite();
+--
+--       // Phase 3: SQLite primary, JSON backup only
+--       // this.saveToSQLite(tasks);
+--       // this.createJSONBackup(tasks);
+--     }
+--   }
+
+-- ============================================================================
+-- PERFORMANCE CHARACTERISTICS
+-- ============================================================================
+--
+-- Storage Efficiency:
+--   - Base table: ~1-2 KB per task (varies with field lengths)
+--   - Indexes: ~5-10% overhead per index (8 indexes = ~40-80% overhead)
+--   - JSON fields: More compact than normalized tables
+--   - WAL file: Temporary overhead during writes
+--   - Total: ~2-3 KB per task with all indexes
+--
+-- Query Performance:
+--   - Indexed queries: O(log n) lookup time
+--   - Status filter: ~0.1ms for 10k tasks
+--   - Composite index: Single index scan (no merge needed)
+--   - JOIN with automation_runs: Fast with proper indexes
+--   - Full table scan: Avoid by using indexed WHERE clauses
+--
+-- Write Performance:
+--   - Single insert: ~0.1-0.5ms
+--   - Batch insert (transaction): ~0.01ms per task
+--   - Index maintenance: Automatic, minimal overhead
+--   - WAL mode: Non-blocking reads during writes
+--   - PRAGMA synchronous=NORMAL: Good balance of safety/speed
+--
+-- Concurrency:
+--   - WAL mode: Multiple readers + single writer
+--   - Read locks: Non-blocking (readers don't block readers)
+--   - Write locks: Brief exclusive lock (milliseconds)
+--   - Connection pool: Reuse connections for better performance
+--   - Recommended: 1 writer connection, N reader connections
+
+-- ============================================================================
+-- SCHEMA EVOLUTION
+-- ============================================================================
+--
+-- The schema supports evolution through:
+--
+-- 1. Metadata JSON field:
+--    - Add custom fields without schema changes
+--    - Example: metadata='{"customField": "value"}'
+--    - Queryable with JSON1 extension
+--
+-- 2. Migration system:
+--    - Versioned schema changes in migrations/
+--    - Applied automatically on database.ts initialization
+--    - Tracked in migrations table
+--
+-- 3. Context JSON field:
+--    - Extended task context for TC-1 support
+--    - Flexible structure for future context types
+--
+-- 4. Views:
+--    - Analytics without modifying base tables
+--    - Can be dropped and recreated without data loss
+--    - Easier to evolve than denormalized columns
+--
+-- Adding a new field example:
+--   -- migrations/005_add_estimated_duration.sql
+--   ALTER TABLE tasks ADD COLUMN estimated_duration_ms INTEGER;
+--   CREATE INDEX idx_tasks_estimated_duration
+--     ON tasks(estimated_duration_ms);
+
+-- ============================================================================
+-- BACKUP AND RECOVERY
+-- ============================================================================
+--
+-- SQLite Backup Methods:
+--
+-- 1. File System Copy (database at rest):
+--    - Copy dev-bots.db file
+--    - Include dev-bots.db-wal and dev-bots.db-shm
+--    - Requires database to be closed or checkpointed
+--
+-- 2. SQLite BACKUP API (online backup):
+--    - No downtime required
+--    - Handled by better-sqlite3 library
+--    - Example: db.backup('backup.db')
+--
+-- 3. JSON Export (TaskPersistence):
+--    - Existing backup mechanism
+--    - Human-readable format
+--    - Useful for auditing and migration
+--
+-- 4. SQL Dump:
+--    - sqlite3 dev-bots.db .dump > backup.sql
+--    - Platform-independent
+--    - Rebuilds indexes automatically
+--
+-- Recovery:
+--   1. Stop the application
+--   2. Restore backup file to dev-bots.db
+--   3. Run integrity check: PRAGMA integrity_check
+--   4. Restart application
+--
+-- Backup Schedule Recommendation:
+--   - Continuous: JSON backups (existing TaskPersistence)
+--   - Hourly: SQLite online backup
+--   - Daily: Full database file copy
+--   - Weekly: SQL dump for long-term archive
+
+-- ============================================================================
+-- MAINTENANCE
+-- ============================================================================
+--
+-- Regular Maintenance Tasks:
+--
+-- 1. VACUUM (reclaim space):
+--    - Run monthly or after large deletions
+--    - Rebuilds database file, reclaims free pages
+--    - Requires exclusive lock (brief downtime)
+--    - Command: VACUUM;
+--
+-- 2. ANALYZE (update statistics):
+--    - Run weekly or after bulk changes
+--    - Updates query planner statistics
+--    - Improves query optimization
+--    - Command: ANALYZE;
+--
+-- 3. Integrity Check:
+--    - Run after crashes or disk errors
+--    - Verifies database consistency
+--    - Command: PRAGMA integrity_check;
+--
+-- 4. WAL Checkpoint:
+--    - Usually automatic (every 1000 pages)
+--    - Manual: PRAGMA wal_checkpoint(TRUNCATE);
+--    - Merges WAL into main database file
+--
+-- 5. Index Rebuild (if needed):
+--    - Drop and recreate specific indexes
+--    - Useful if index is corrupted
+--    - Automatic with VACUUM
+--
+-- Monitoring:
+--   - Database size: Check file growth trends
+--   - Query performance: Log slow queries (>100ms)
+--   - WAL file size: Should checkpoint regularly
+--   - Index usage: EXPLAIN QUERY PLAN for common queries
+
+-- ============================================================================
+-- SECURITY CONSIDERATIONS
+-- ============================================================================
+--
+-- 1. File Permissions:
+--    - Database file: 640 (rw-r-----)
+--    - Directory: 750 (rwxr-x---)
+--    - Owner: Application user
+--
+-- 2. SQL Injection Prevention:
+--    - Use parameterized queries (better-sqlite3 .prepare())
+--    - Never concatenate user input into SQL strings
+--    - Example: db.prepare('SELECT * FROM tasks WHERE id = ?').get(id)
+--
+-- 3. Data Validation:
+--    - CHECK constraints enforce data integrity
+--    - Foreign key constraints prevent orphaned records
+--    - Application-level validation (Zod schemas)
+--
+-- 4. Encryption (if needed):
+--    - SQLCipher: Transparent database encryption
+--    - File system encryption: OS-level protection
+--    - Encryption at rest: For sensitive task data
+--
+-- 5. Audit Logging:
+--    - Log all schema changes (migrations table)
+--    - Log data access patterns (application logs)
+--    - Retain backup history for forensics
+
+-- ============================================================================
+-- TROUBLESHOOTING
+-- ============================================================================
+--
+-- Common Issues and Solutions:
+--
+-- 1. "Database is locked" error:
+--    - Cause: WAL mode not enabled or long-running transaction
+--    - Solution: Enable WAL mode (PRAGMA journal_mode=WAL)
+--    - Check: PRAGMA journal_mode; should return "wal"
+--
+-- 2. Slow queries:
+--    - Cause: Missing indexes or inefficient query
+--    - Solution: Run EXPLAIN QUERY PLAN, add indexes
+--    - Check: Look for "SCAN TABLE" without index
+--
+-- 3. Database corruption:
+--    - Cause: Disk failure, improper shutdown, SQLite bug
+--    - Solution: Restore from backup, run integrity_check
+--    - Prevention: Use WAL mode, regular backups
+--
+-- 4. Large database file:
+--    - Cause: Auto-vacuum disabled, many deletions
+--    - Solution: Run VACUUM, enable auto_vacuum
+--    - Check: PRAGMA auto_vacuum; (should be 1 or 2)
+--
+-- 5. Migration conflicts:
+--    - Cause: Migrations applied out of order
+--    - Solution: Check migrations table, re-apply if needed
+--    - Prevention: Version control migration files
+
+-- ============================================================================
+-- REFERENCES
+-- ============================================================================
+--
+-- Documentation:
+--   - SQLite Documentation: https://www.sqlite.org/docs.html
+--   - better-sqlite3: https://github.com/WiseLibs/better-sqlite3
+--   - SQLite WAL mode: https://www.sqlite.org/wal.html
+--
+-- Related Files:
+--   - migrations/002_tasks_table.sql - Base tasks table
+--   - migrations/004_task_context.sql - Context tracking
+--   - src/services/database.ts - Database wrapper
+--   - src/services/taskPersistence.ts - JSON persistence
+--   - src/types/taskSchema.ts - TypeScript types
+--
+-- Schema Version: 1.0
+-- Last Updated: 2025-11-06
+-- Author: Backend Specialist Agent
+-- Migration: 003_task_persistence_schema.sql (documentation only)

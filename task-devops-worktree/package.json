@@ -1,0 +1,50 @@
+{
+  "name": "app-monitor",
+  "version": "1.0.0",
+  "description": "Developer monitoring and automation tool for job-finder-app-manager",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "backend",
+    "frontend",
+    "dev-bots",
+    "packages/api-contracts"
+  ],
+  "scripts": {
+    "install:all": "npm install && npm install --workspaces",
+    "dev": "concurrently \"npm run dev -w backend\" \"npm run dev -w frontend\"",
+    "dev:backend": "npm run dev -w backend",
+    "dev:frontend": "npm run dev -w frontend",
+    "build": "npm run build --workspaces",
+    "build:backend": "npm run build -w backend",
+    "build:frontend": "npm run build -w frontend",
+    "test": "npm run test --workspaces",
+    "test:quick": "npm run test:backend && npm run test:frontend",
+    "test:backend": "npm run test -w backend",
+    "test:frontend": "npm run test -w frontend",
+    "lint": "npm run lint --workspaces",
+    "lint:fix": "npm run lint:fix --workspaces",
+    "clean": "npm run clean --workspaces",
+    "prepare": "husky || true"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.1",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.6"
+  },
+  "overrides": {
+    "typescript": "5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
+  "lint-staged": {
+    "backend/**/*.ts": [
+      "eslint --fix"
+    ],
+    "frontend/**/*.{ts,tsx}": [
+      "eslint --fix"
+    ]
+  }
+}

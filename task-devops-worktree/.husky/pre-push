@@ -1,0 +1,47 @@
+#!/bin/sh
+
+echo "🔍 Running app-monitor pre-push lint + test checks..."
+
+# Ensure legacy mirror directories are not present in the repo
+if [ -d "dev-bots/mirror" ]; then
+    echo "❌ Refusing to push with dev-bots/mirror present. Run 'rm -rf dev-bots/mirror' and retry."
+    exit 1
+fi
+
+if find . -path "*/dev-bots/mirror/*" -print -quit | grep -q .; then
+    echo "❌ Refusing to push: nested dev-bots/mirror paths detected."
+    exit 1
+fi
+
+if [ -d "backend/dev-bots" ]; then
+    echo "❌ Refusing to push with backend/dev-bots artifacts present. Run 'rm -rf backend/dev-bots' and retry."
+    exit 1
+fi
+
+# Run linting for backend and frontend workspaces
+npm run lint -w backend || {
+    echo "❌ Backend linting failed! Please fix errors before pushing."
+    exit 1
+}
+
+npm run lint -w frontend || {
+    echo "❌ Frontend linting failed! Please fix errors before pushing."
+    exit 1
+}
+
+echo ""
+echo "🧪 Running backend test suite (543 tests expected)..."
+CI=true NODE_OPTIONS='--max-old-space-size=2048' npm run test:backend || {
+    echo "❌ Backend tests failed! Please investigate before pushing."
+    exit 1
+}
+
+echo ""
+echo "🧪 Running frontend test suite..."
+CI=true NODE_OPTIONS='--max-old-space-size=2048' npm run test:frontend || {
+    echo "❌ Frontend tests failed! Please investigate before pushing."
+    exit 1
+}
+
+echo ""
+echo "✅ Pre-push lint + test checks completed successfully"

@@ -133,6 +133,18 @@ Use three fields to control file access:
 > **Validation rule (PE-1):** Every `doNotCreate` entry now requires a plain-language explanation that points the agent back to an existing file or pattern (e.g. `"foo.ts (reuse existing service)"`). The backend validator rejects templates that omit these reasons or use generic phrases, preventing bots from recreating files that already exist.
 ```
 
+### 6. Validation Guardrails (PE-1)
+
+`validateTaskTemplate()` now enforces the following before a task is accepted:
+
+- **Investigation** – every step must start with an action verb (READ/GREP/CHECK/VERIFY) and `mustFind`/`mustNotDuplicate` entries must reference concrete artifacts.
+- **Acceptance criteria** – at least one criterion must include `EXACTLY`/`NO MORE` language *and* another must include a `DO NOT` / `MUST NOT` guardrail to block feature creep.
+- **Constraints** – each constraint must begin with `MUST`/`MUST NOT`, and the list must include at least one `MUST NOT` directive.
+- **doNotCreate** – required list where every entry follows `<path> (reason)` with instructions about which existing code to reuse.
+- **Files & git workflow** – missing `files`, `doNotCreate`, or `gitWorkflow.branch` entries produce actionable errors.
+
+Use `shouldValidateAsV3Template()` anywhere templates are submitted; it triggers the validator even when request bodies omit required sections so we return actionable errors instead of silently accepting incomplete prompts.
+
 ## Task Template v3
 
 ### Complete Example:
