@@ -4,9 +4,9 @@ import * as crypto from 'crypto';
 import { logger } from '../utils/logger.js';
 import { ProcessManager, ProcessInfo } from './processManager.js';
 import Docker from 'dockerode';
-import { TaskPersistence } from './taskPersistence.js';
+// TaskPersistence removed - using SQLite directly
 import { TaskQueueService, Task, TaskStatus as SQLiteTaskStatus, TaskExecution } from './taskQueue.sqlite.js';
-import { TaskQueueMigration } from './taskQueue.migration.js';
+// Migration completed - SQLite is the only implementation now
 import { AgentPersonalityManager, AgentPersonality } from './agentPersonalities.js';
 import { TaskPromptTemplateManager } from './taskPromptTemplates.js';
 import { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js';
@@ -15,7 +15,7 @@ import { WorkspaceSyncManager, SyncOptions, SyncResult } from './workspaceSyncMa
 import { DockerManager, DockerValidationResult } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
 import { getTokenTrackingService } from './tokenTracking.js';
-import { WorkspaceOrchestrator, PushCoordinator } from './workspaceOrchestrator.js';
+// WorkspaceOrchestrator removed - using container isolation instead
 import { MetricsEmitter } from './metricsEmitter.js';
 import { TIME_BASED_GUARDS } from './taskFailureGuards.js';
 import { SimpleFailureRecovery } from './failureRecovery.js';
@@ -25,6 +25,10 @@ import type { EphemeralWorkerService, EphemeralWorker as EphemeralWorkerType } f
 import type { TaskExecutionService } from './taskExecution.service.js';
 import { TaskCompletionService } from './taskCompletion.service.js';
 import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
+import { InteractiveSessionService, StartInteractiveSessionOptions, ActivityKind } from './interactiveSession.service.js';
+import { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
+import { InteractiveSessionStreamManager, InteractiveStreamMessage } from './interactiveSessionStreamManager.js';
+import type { InteractiveSessionRecord } from './database.js';
 
 export interface RetryAttempt {
   attemptNumber: number;
@@ -111,23 +115,26 @@ export class DevBotsManager extends EventEmitter {
   private lastAgentType: 'claude' | 'codex' = 'claude';
 
   // Enhanced services
-  private taskPersistence!: TaskPersistence; // Deprecated - keeping for migration only
+  // TaskPersistence removed - using SQLite directly
   private taskQueue!: TaskQueueService; // SQLite-based queue (replaces in-memory arrays)
   private agentManager!: AgentPersonalityManager;
   private templateManager!: TaskPromptTemplateManager;
   private guidelinesManager!: TaskCreationGuidelinesManager;
   private workspaceSyncManager!: WorkspaceSyncManager;
   private retryManager!: RetryManager;
-  private workspaceOrchestrator!: WorkspaceOrchestrator;
-  private pushCoordinator: PushCoordinator = new PushCoordinator();
+  // WorkspaceOrchestrator and PushCoordinator removed - using container isolation
   private recovery!: SimpleFailureRecovery;
   private scopeControl!: ScopeControlService;
   private ephemeralWorkerService!: EphemeralWorkerService;
   private taskExecutionService!: TaskExecutionService;
   private taskCompletionService!: TaskCompletionService;
   private prWorkflowOrchestrator!: PRWorkflowOrchestrator;
+  private interactiveSessionService!: InteractiveSessionService;
+  private interactiveSessionOrchestrator!: InteractiveSessionOrchestrator;
+  private interactiveSessionStreamManager!: InteractiveSessionStreamManager;
   private taskQueueWorker?: any; // TaskQueueWorker (imported lazily to avoid circular deps)
   private metricsEmitter?: MetricsEmitter;
+  private interactiveIdleInterval?: NodeJS.Timeout;
 
   // System state
   private startTime = Date.now();
@@ -145,12 +152,15 @@ export class DevBotsManager extends EventEmitter {
     this.guidelinesManager = dependencies.guidelinesManager;
     this.workspaceSyncManager = dependencies.workspaceSyncManager;
     this.retryManager = dependencies.retryManager;
-    this.workspaceOrchestrator = dependencies.workspaceOrchestrator;
-    this.taskPersistence = dependencies.taskPersistence;
+    // WorkspaceOrchestrator removed - using container isolation
+    // TaskPersistence removed - using SQLite directly
     this.scopeControl = dependencies.scopeControl;
     this.ephemeralWorkerService = dependencies.ephemeralWorkerService;
     this.taskExecutionService = dependencies.taskExecutionService;
     this.prWorkflowOrchestrator = dependencies.prWorkflowOrchestrator;
+    this.interactiveSessionService = dependencies.interactiveSessionService;
+    this.interactiveSessionOrchestrator = dependencies.interactiveSessionOrchestrator;
+    this.interactiveSessionStreamManager = dependencies.interactiveSessionStreamManager;
 
     // Initialize SimpleFailureRecovery
     this.recovery = new SimpleFailureRecovery(this);
@@ -184,7 +194,7 @@ export class DevBotsManager extends EventEmitter {
     // Validate Docker environment and initialize
     this.initializeDockerEnvironment();
 
-    // Run async initialization (SQLite migration)
+    // Run async initialization (orphaned task recovery)
     void this.initializeAsync();
 
     // Listen for retry events
@@ -205,59 +215,7 @@ export class DevBotsManager extends EventEmitter {
     });
   }
 
-  /**
-   * Migrate existing JSON tasks to SQLite
-   */
-  private migrateToSQLite(): void {
-    try {
-      // Check if migration marker exists
-      const migrationMarker = './data/tasks/.migrated-to-sqlite';
-      if (fs.existsSync(migrationMarker)) {
-        logger.info({
-          category: 'process',
-          action: 'migration_already_completed',
-          message: 'SQLite migration already completed, skipping'
-        });
-        return;
-      }
-
-      // Backup legacy files
-      TaskQueueMigration.backupLegacyFiles('./data/tasks', './data/backups');
-
-      // Run migration
-      const migration = new TaskQueueMigration(this.taskQueue, './data/tasks');
-      const result = migration.migrate();
-
-      if (result.success) {
-        logger.info({
-          category: 'process',
-          action: 'migration_successful',
-          message: `Successfully migrated ${result.tasksImported} tasks and ${result.executionsCreated} executions to SQLite`
-        });
-
-        // Create migration marker to prevent re-running
-        fs.writeFileSync(migrationMarker, JSON.stringify({
-          migratedAt: new Date().toISOString(),
-          tasksImported: result.tasksImported,
-          executionsCreated: result.executionsCreated
-        }));
-      } else {
-        logger.error({
-          category: 'process',
-          action: 'migration_failed',
-          message: `Migration completed with ${result.errors.length} errors`,
-          details: { errors: result.errors }
-        });
-      }
-    } catch (error) {
-      logger.error({
-        category: 'process',
-        action: 'migration_exception',
-        message: 'Migration failed with exception',
-        error
-      });
-    }
-  }
+  // Migration to SQLite completed - method removed
 
   /**
    * Initialize and validate Docker environment
@@ -344,12 +302,11 @@ export class DevBotsManager extends EventEmitter {
   }
 
   /**
-   * Initialize async components (SQLite migration and orphaned task recovery)
-   * Dependencies are now injected, so this only runs migrations and startup recovery
+   * Initialize async components (orphaned task recovery)
+   * Dependencies are now injected, so this only runs startup recovery
    */
   private async initializeAsync(): Promise<void> {
-    // Run migration from JSON to SQLite
-    this.migrateToSQLite();
+    // Migration to SQLite completed - going straight to recovery
 
     // Recover orphaned tasks from previous server crash/restart
     const orphanedTaskIds = this.taskQueue.recoverOrphanedTasks();
@@ -411,7 +368,7 @@ export class DevBotsManager extends EventEmitter {
     logger.info({
       category: 'process',
       action: 'async_initialization_complete',
-      message: 'Async initialization complete: SQLite migration and orphaned task recovery finished'
+      message: 'Async initialization complete: orphaned task recovery finished'
     });
 
     // Start background task queue worker
@@ -679,9 +636,96 @@ export class DevBotsManager extends EventEmitter {
       details: {
         checkInterval_ms: 300000,
         softTimeout_minutes: TIME_BASED_GUARDS.SOFT_TIMEOUT_MS / 60000,
-        hardTimeout_minutes: TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS / 60000
+      hardTimeout_minutes: TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS / 60000
       }
     });
+  }
+
+  private wireInteractiveStreamEvents(): void {
+    this.interactiveSessionStreamManager.on('message', (message: InteractiveStreamMessage) => {
+      if (message.kind === 'stdout' || message.kind === 'stderr') {
+        try {
+          this.interactiveSessionService.recordActivity(message.sessionId, 'agent');
+        } catch (error) {
+          logger.warn({
+            category: 'interactive-session',
+            action: 'activity_record_failed',
+            message: `Failed to record agent activity for session ${message.sessionId}`,
+            error,
+          });
+        }
+      }
+    });
+
+    this.interactiveSessionStreamManager.on('error', ({ sessionId, error }) => {
+      logger.error({
+        category: 'interactive-session',
+        action: 'stream_error',
+        message: `Interactive stream error for session ${sessionId}`,
+        error,
+      });
+      const session = this.interactiveSessionService.getSessionById(sessionId);
+      if (session && session.status !== 'ended') {
+        this.interactiveSessionService.endSession(sessionId, error.message, 'error');
+      }
+    });
+
+    this.interactiveSessionStreamManager.on('closed', ({ sessionId, reason }) => {
+      const session = this.interactiveSessionService.getSessionById(sessionId);
+      if (session && session.status !== 'ended') {
+        this.interactiveSessionService.setStatus(sessionId, 'disconnecting', {
+          terminationReason: reason,
+        });
+      }
+    });
+  }
+
+  private startInteractiveIdleWatchdog(): void {
+    if (this.interactiveIdleInterval) {
+      clearInterval(this.interactiveIdleInterval);
+    }
+    this.interactiveIdleInterval = setInterval(() => {
+      const session = this.interactiveSessionService.getActiveSession();
+      if (!session) {
+        return;
+      }
+      const lastActivity = this.getInteractiveLastActivity(session);
+      if (!lastActivity) {
+        return;
+      }
+      const idleTimeout = this.interactiveSessionService.getIdleTimeoutMs();
+      const idleDuration = Date.now() - lastActivity;
+      if (idleDuration >= idleTimeout) {
+        logger.warn({
+          category: 'interactive-session',
+          action: 'idle_timeout',
+          message: 'Interactive session exceeded idle timeout',
+          details: {
+            sessionId: session.id,
+            idleDurationMs: idleDuration,
+            idleTimeoutMs: idleTimeout,
+          },
+        });
+        void this.endInteractiveSession(session.id, 'Idle timeout (no activity)').catch((error) => {
+          logger.error({
+            category: 'interactive-session',
+            action: 'idle_timeout_cleanup_failed',
+            message: `Failed to stop idle interactive session ${session.id}`,
+            error,
+          });
+        });
+      }
+    }, 30000);
+  }
+
+  private getInteractiveLastActivity(session: InteractiveSessionRecord): number | null {
+    const timestamps = [session.startedAt, session.lastUserActivityAt, session.lastAgentActivityAt]
+      .map((value) => (value ? Date.parse(value) : Number.NaN))
+      .filter((value) => Number.isFinite(value)) as number[];
+    if (!timestamps.length) {
+      return null;
+    }
+    return Math.max(...timestamps);
   }
 
   // cleanupStuckTaskContainers moved to EphemeralWorkerService
@@ -712,6 +756,83 @@ export class DevBotsManager extends EventEmitter {
    */
   public getAgentComparisonMetrics() {
     return this.taskQueue.getAgentComparisonMetrics();
+  }
+
+  // ============================================================================
+  // Interactive Sessions
+  // ============================================================================
+
+  public getActiveInteractiveSession(): InteractiveSessionRecord | null {
+    return this.interactiveSessionService.getActiveSession();
+  }
+
+  public getInteractiveSession(sessionId: string): InteractiveSessionRecord | null {
+    return this.interactiveSessionService.getSessionById(sessionId);
+  }
+
+  public listInteractiveSessions(limit = 20): InteractiveSessionRecord[] {
+    return this.interactiveSessionService.listRecentSessions(limit);
+  }
+
+  public async launchInteractiveSession(
+    options: StartInteractiveSessionOptions,
+  ): Promise<InteractiveSessionRecord> {
+    const session = this.interactiveSessionService.startSession(options);
+    try {
+      const containerId = await this.interactiveSessionOrchestrator.start(session);
+      this.interactiveSessionService.setStatus(session.id, 'running', { containerId });
+      await this.interactiveSessionStreamManager.attach(session.id, containerId);
+      const updated = this.interactiveSessionService.getSessionById(session.id);
+      if (!updated) {
+        throw new Error('Interactive session missing after launch');
+      }
+      return updated;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Interactive session launch failed';
+      this.interactiveSessionService.endSession(session.id, message, 'error');
+      await this.interactiveSessionStreamManager.detach(session.id).catch(() => {
+        /* noop */
+      });
+      throw error;
+    }
+  }
+
+  public async endInteractiveSession(sessionId: string, reason?: string): Promise<void> {
+    const session = this.interactiveSessionService.getSessionById(sessionId);
+    if (session?.containerId) {
+      await this.interactiveSessionOrchestrator.stop(session.containerId);
+    }
+    await this.interactiveSessionStreamManager.detach(sessionId);
+    this.interactiveSessionService.endSession(sessionId, reason);
+  }
+
+  public sendInteractiveInput(sessionId: string, payload: string): void {
+    this.interactiveSessionStreamManager.sendInput(sessionId, payload);
+    this.interactiveSessionService.recordActivity(sessionId, 'user');
+  }
+
+  public sendInteractiveSignal(
+    sessionId: string,
+    signal: 'interrupt' | 'terminate' = 'interrupt',
+  ): void {
+    this.interactiveSessionStreamManager.sendSignal(sessionId, signal);
+    this.interactiveSessionService.recordActivity(sessionId, 'user');
+  }
+
+  public recordInteractiveActivity(sessionId: string, kind: ActivityKind): void {
+    this.interactiveSessionService.recordActivity(sessionId, kind);
+  }
+
+  public updateInteractiveContext(
+    sessionId: string,
+    contextSnapshot?: unknown,
+    metadata?: Record<string, unknown>,
+  ): void {
+    this.interactiveSessionService.updateContext(sessionId, contextSnapshot, metadata);
+  }
+
+  public getInteractiveIdleTimeoutMs(): number {
+    return this.interactiveSessionService.getIdleTimeoutMs();
   }
 
   /**
@@ -1165,6 +1286,11 @@ export class DevBotsManager extends EventEmitter {
     }
 
     this.isCoordinatorHealthy = false;
+
+    if (this.interactiveIdleInterval) {
+      clearInterval(this.interactiveIdleInterval);
+      this.interactiveIdleInterval = undefined;
+    }
 
     // Stop background task queue worker
     if (this.taskQueueWorker) {

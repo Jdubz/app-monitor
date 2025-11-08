@@ -325,119 +325,7 @@ export class EphemeralWorkerService {
     }
   }
 
-  /**
-   * Copy workspace directory into container using tar pipe
-   * Mimics imagineer's approach for efficient workspace copying
-   */
-  private async copyWorkspaceToContainer(containerId: string, repoRoot: string): Promise<void> {
-    const { spawn } = await import('child_process');
-    logger.info({
-      category: 'process',
-      action: 'copying_workspace_to_container',
-      message: `Copying workspace from ${repoRoot} into container ${containerId}`
-    });
-
-    // Create /workspace directory in container first
-    try {
-      logger.info({
-        category: 'process',
-        action: 'creating_workspace_directory',
-        message: `Creating /workspace directory in container ${containerId}`
-      });
-
-      const container = this.docker.getContainer(containerId);
-      const createDirExec = await container.exec({
-        Cmd: ['/bin/bash', '-c', 'mkdir -p /workspace && chown -R worker:worker /workspace'],
-        AttachStdout: true,
-        AttachStderr: true
-      });
-
-      const createDirStream = await createDirExec.start({ Detach: false, Tty: false });
-      await new Promise((resolve, reject) => {
-        createDirStream.on('end', resolve);
-        createDirStream.on('error', reject);
-      });
-    } catch (mkdirError) {
-      logger.error({
-        category: 'process',
-        action: 'failed_to_create_workspace_directory',
-        message: `Failed to create workspace directory in container ${containerId}:`,
-        error: mkdirError
-      });
-      throw mkdirError;
-    }
-
-    return new Promise((resolve, reject) => {
-      // Create tar archive of workspace excluding node_modules, .git, etc.
-      const tar = spawn('tar', [
-        '-czf', '-', // Create gzip tar to stdout
-        '--exclude=node_modules',
-        '--exclude=.git',
-        '--exclude=dist',
-        '--exclude=build',
-        '--exclude=coverage',
-        '--exclude=.next',
-        '--exclude=.cache',
-        '-C', repoRoot,  // Change to repo root
-        '.'              // Archive everything in current directory
-      ]);
-
-      // Pipe tar output directly to Docker container /workspace
-      const dockerCp = spawn('docker', [
-        'cp', '-', `${containerId}:/workspace`
-      ]);
-
-      tar.stdout.pipe(dockerCp.stdin);
-
-      let tarError = '';
-      let dockerError = '';
-
-      tar.stderr.on('data', (data) => {
-        tarError += data.toString();
-      });
-
-      dockerCp.stderr.on('data', (data) => {
-        dockerError += data.toString();
-      });
-
-      tar.on('error', (error) => {
-        logger.error({
-          category: 'process',
-          action: 'tar_process_error',
-          message: `Tar process error: ${error.message}`
-        });
-        reject(error);
-      });
-
-      dockerCp.on('error', (error) => {
-        logger.error({
-          category: 'process',
-          action: 'docker_cp_process_error',
-          message: `Docker cp process error: ${error.message}`
-        });
-        reject(error);
-      });
-
-      dockerCp.on('close', (code) => {
-        if (code !== 0) {
-          const errorMsg = `Docker cp failed with code ${code}. Tar errors: ${tarError}. Docker errors: ${dockerError}`;
-          logger.error({
-            category: 'process',
-            action: 'docker_cp_failed',
-            message: errorMsg
-          });
-          reject(new Error(errorMsg));
-        } else {
-          logger.info({
-            category: 'process',
-            action: 'workspace_copied_successfully',
-            message: `Workspace copied to container ${containerId} successfully`
-          });
-          resolve();
-        }
-      });
-    });
-  }
+  // copyWorkspaceToContainer method removed - using cloneFreshRepoInContainer instead
 
   /**
    * Initialize worker-specific log file
@@ -861,5 +749,9 @@ export class EphemeralWorkerService {
         message: `Failed to list containers for cleanup: ${error instanceof Error ? error.message : String(error)}`
       });
     }
+  }
+
+  public async populateWorkspaceFromRepo(containerId: string, repoRoot: string): Promise<void> {
+    await this.copyWorkspaceToContainer(containerId, repoRoot);
   }
 }

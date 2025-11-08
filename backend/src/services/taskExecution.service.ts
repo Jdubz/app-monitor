@@ -21,7 +21,7 @@ import type { AgentPersonality, AgentPersonalityManager } from './agentPersonali
 import type { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplates.js';
 // WorkspaceOrchestrator removed - we use Docker cp for file systems, not git mirrors
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
-import type { TaskPersistence } from './taskPersistence.js';
+// TaskPersistence removed - using SQLite directly
 import { isTaskStuck, detectFailurePattern } from './taskFailureGuards.js';
 import type { SimpleFailureRecovery } from './failureRecovery.js';
 import { resolveArtifactsDir } from '../utils/repoPaths.js';
@@ -50,7 +50,7 @@ export class TaskExecutionService {
   private readonly agentManager: AgentPersonalityManager;
   private readonly templateManager: TaskPromptTemplateManager;
   private readonly ephemeralWorkerService: EphemeralWorkerService;
-  private readonly taskPersistence: TaskPersistence;
+  // TaskPersistence removed - using SQLite directly
   private readonly config: TaskExecutionServiceConfig;
   private recovery?: SimpleFailureRecovery; // Optional: set via setRecovery()
   private dockerCircuitBreaker?: any; // CircuitBreaker (imported lazily)
@@ -63,14 +63,14 @@ export class TaskExecutionService {
     agentManager: AgentPersonalityManager,
     templateManager: TaskPromptTemplateManager,
     ephemeralWorkerService: EphemeralWorkerService,
-    taskPersistence: TaskPersistence,
+    // TaskPersistence removed - using SQLite directly
     config: Partial<TaskExecutionServiceConfig> = {}
   ) {
     this.taskQueue = taskQueue;
     this.agentManager = agentManager;
     this.templateManager = templateManager;
     this.ephemeralWorkerService = ephemeralWorkerService;
-    this.taskPersistence = taskPersistence;
+    // TaskPersistence removed - using SQLite directly
 
     this.config = {
       maxConcurrentWorkers: config.maxConcurrentWorkers ?? 2,
