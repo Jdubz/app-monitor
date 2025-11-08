@@ -474,7 +474,8 @@ export class PRMonitorService {
       type: 'fix',
       priority: 8, // High priority (scale is 1-10)
       acceptance_criteria: [`All CI checks pass`, `Address all Copilot blocking issues`, `Resolve human reviewer feedback`],
-      followup_for_pr: monitoredPR.prNumber
+      followup_for_pr: monitoredPR.prNumber,
+      assigned_agent: originalTask.assigned_agent || 'backend-specialist' // Use same agent as original task
     });
 
     // Update original task with followup link

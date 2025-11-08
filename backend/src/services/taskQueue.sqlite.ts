@@ -414,7 +414,7 @@ export class TaskQueueService {
       status: 'pending',
       priority: taskData.priority || 5,
       created_at: now,
-      assigned_agent: taskData.assigned_agent || 'general-purpose',
+      assigned_agent: taskData.assigned_agent || 'backend-specialist',
       prompt: taskData.prompt,
       can_retry: taskData.can_retry !== undefined ? taskData.can_retry : true,
       retry_count: 0,
