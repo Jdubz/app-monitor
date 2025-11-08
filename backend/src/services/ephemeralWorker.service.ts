@@ -154,9 +154,26 @@ export class EphemeralWorkerService {
     const containerName = `dev-bot-${workerId}`;
 
     try {
-      // Ensure we're on staging branch (no new branch creation)
+      // Determine branch to work on
       const repoRoot = process.cwd();
-      const baseBranch = 'staging';  // Always work from staging branch
+      let baseBranch = 'staging';  // Default to staging
+
+      // For improvement tasks (repair bots), use the parent task's branch
+      if (task.is_repair_bot && task.pr_branch) {
+        baseBranch = task.pr_branch;
+        logger.info({
+          category: 'process',
+          action: 'improvement_task_branch',
+          message: `Improvement task will work on branch: ${baseBranch}`,
+          details: {
+            taskId: task.id,
+            parentTaskId: task.original_task_id,
+            branch: baseBranch
+          }
+        });
+      }
+
+      // Checkout and update the target branch
       await this.execGitCommand(['checkout', baseBranch], repoRoot);
       await this.execGitCommand(['pull', 'origin', baseBranch], repoRoot);
 
@@ -210,8 +227,9 @@ export class EphemeralWorkerService {
         `AGENT_NAME=${agent.name}`,
         `TASK_ID=${task.id}`,
         `WORKER_ID=${workerId}`,
-        `WORKSPACE_BRANCH=staging`,
-        `WORKSPACE_ID=${workspaceId}`
+        `WORKSPACE_BRANCH=${baseBranch}`,
+        `WORKSPACE_ID=${workspaceId}`,
+        ...(task.is_repair_bot ? [`IS_IMPROVEMENT_TASK=true`, `PARENT_TASK_ID=${task.original_task_id}`] : [])
       ];
 
       for (const key of this.config.envPassthroughKeys) {

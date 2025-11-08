@@ -1,71 +1,307 @@
 # App Monitor Documentation
 
-Comprehensive documentation for the App Monitor developer tool.
+Comprehensive documentation for the App Monitor developer tool and autonomous development platform.
 
-## Quick Links
+**Version:** 0.2.0
+**Last Updated:** November 7, 2025
+**Status:** Pre-POC Stabilization
 
-- [Getting Started](./getting-started.md)
-- [Development Guide](./DEVELOPMENT.md)
-- [Architecture Overview](./ARCHITECTURE_V2.md)
-- [Evolution Plan](./plans/EVOLUTION_PLAN.md)
-- [Migration Guide](./MIGRATION_GUIDE.md)
-- [API Reference](./api/README.md)
+---
+
+## Quick Navigation
+
+### Essential Documentation
+- [Architecture Overview](./architecture.md) - Complete system design and components
+- [Setup Guide](./setup.md) - Detailed installation, configuration, and troubleshooting
+- [Next Steps & Roadmap](./next-steps.md) - Prioritized tasks and long-term vision
+
+### Development
+- [Development Guide](./DEVELOPMENT.md) - Developer workflows and best practices
+- [Contributing Guide](../CONTRIBUTING.md) - Git hooks, CI/CD, contribution guidelines
+
+### Planning & Strategy
+- [Stabilization Plan](./plans/APP_MONITOR_STABILIZATION_PLAN.md) - Current phase (v0.2.0) details
+- [Capability Roadmap](./plans/APP_MONITOR_CAPABILITY_ROADMAP.md) - Feature swimlanes and autonomy phases
+- [Planning Overview](./plans/README.md) - All planning documents
+
+### Migration & History
+- [Migration Guide](./MIGRATION_GUIDE.md) - From dev-monitor to app-monitor
+- [Session Summaries](./sessions/) - Historical implementation and fix sessions
+- [Recovery Complete](./sessions/RECOVERY_COMPLETE.md) - System recovery documentation (Oct 25, 2025)
+
+---
 
 ## Documentation Structure
 
-### `/dev-monitor/`
-Original dev-monitor documentation, including:
-- Refactoring documentation
-- Phase completion summaries
-- Component style guides
-- Testing guides
-- Architecture documents
+### Core Documentation (Start Here)
 
-**Key Files:**
-- [REFACTORING_DOCUMENTATION.md](./dev-monitor/REFACTORING_DOCUMENTATION.md)
-- [ARCHITECTURE.md](./dev-monitor/ARCHITECTURE.md)
-- [E2E_TESTING_GUIDE.md](./dev-monitor/E2E_TESTING_GUIDE.md)
-- [STATUS.md](./dev-monitor/STATUS.md)
+#### `/architecture.md`
+Complete system architecture covering:
+- System vision and evolution phases
+- Component relationships and data flow
+- Technology stack (backend, frontend, dev-bots)
+- Security and safety mechanisms
+- API contracts and design decisions
 
-### `/dev-bots/`
-Dev-bots (formerly claude-workers) documentation:
-- Worker coordination system
-- Docker orchestration
-- Healing and learning systems
-- Mode decision trees
+#### `/setup.md`
+Comprehensive setup guide including:
+- Prerequisites and installation
+- Configuration (log sources, ports, services)
+- Verification and testing procedures
+- Production setup instructions
+- Troubleshooting common issues
 
-**Key Files:**
-- [README.md](./dev-bots/README.md)
-- [HEALING_SYSTEM_DESIGN.md](./dev-bots/HEALING_SYSTEM_DESIGN.md)
-- [LEARNING_SYSTEM_ANALYSIS.md](./dev-bots/LEARNING_SYSTEM_ANALYSIS.md)
-- [WORKER_ONBOARDING.md](./dev-bots/WORKER_ONBOARDING.md)
+#### `/next-steps.md`
+Roadmap and task prioritization:
+- Current status and recent accomplishments
+- Immediate priorities (critical path)
+- Stabilization tasks (detailed breakdown)
+- POC phase plans
+- Autonomy phase vision
+- Success metrics and priority matrix
 
-### `/plans/`
-Evolution and strategic planning documents:
-- Master evolution plan for autonomous development
-- Dev-bots agents strategy and Claude focus
-- Claude agent experimentation framework
-- GitHub Copilot integration design
+### Planning Documentation (`/plans/`)
 
-**Key Files:**
-- [EVOLUTION_PLAN.md](./plans/EVOLUTION_PLAN.md) - Master evolution strategy
-- [DEV_BOTS_AGENTS_PLAN.md](./plans/DEV_BOTS_AGENTS_PLAN.md) - Agent strategy and Claude focus
-- [CLAUDE_AGENT_EXPERIMENTS.md](./plans/CLAUDE_AGENT_EXPERIMENTS.md) - Experimentation framework
-- [COPILOT_INTEGRATION_DESIGN.md](./plans/COPILOT_INTEGRATION_DESIGN.md) - Copilot integration strategy
+Strategic planning and evolution documents:
+- **APP_MONITOR_STABILIZATION_PLAN.md** - v0.2.0 stabilization workstreams
+- **APP_MONITOR_CAPABILITY_ROADMAP.md** - Feature swimlanes (Stabilize → POC → Autonomy)
+- **BOT_PROMPT_ENGINEERING_V3.md** - Prompt engineering strategy
+- **BOT_EXECUTION_FINDINGS_2025-11-06.md** - Recent execution analysis
+- **DEV_BOT_PIPELINE_ENHANCEMENT_PLAN.md** - Pipeline improvements
+- **CONTEXT_BLOB_PRELOADING.md** - Context management strategy
+- See [plans/README.md](./plans/README.md) for complete list
 
-### `/architecture/`
-System architecture and design documents (to be created)
+### Dev-Bots Documentation (`/dev-bots/`)
 
-### `/api/`
-API documentation and reference (to be created)
+Autonomous development system documentation:
+- **README.md** - Dev-bots overview and quick start
+- **architecture/** - System design and context isolation
+- **api/** - API endpoints and agent personalities
+- **analysis/** - Comprehensive analysis and quick reference
+- **deployment/** - Deployment checklists and orchestration
+- **examples/** - Task examples and templates
+- **healing/** - Healing system design
+- **learning/** - Learning system analysis
+- **scope-control/** - Scope control system
+- See [dev-bots/docs/README.md](./dev-bots/README.md) for complete structure
 
-## Project Context
+### Dev-Monitor Documentation (`/dev-monitor/`)
 
-App Monitor is a developer tool for the job-finder-app-manager ecosystem. It is:
+Original dev-monitor documentation (legacy):
+- **REFACTORING_DOCUMENTATION.md** - Historical refactoring notes
+- **E2E_TESTING_GUIDE.md** - End-to-end testing strategies
+- **STATUS.md** - Historical status tracking
+- Phase completion summaries (Phase 3, 4)
+- Implementation review summaries
+
+### Session Documentation (`/sessions/`)
+
+Historical implementation and fix sessions:
+- **RECOVERY_COMPLETE.md** - System recovery (Oct 25, 2025)
+- **FRONTEND_FIX_SUMMARY.md** - Frontend fixes
+- **GIT_HOOKS_SETUP_SUMMARY.md** - Git hooks implementation
+- **WEBSOCKET_FIX.md** - WebSocket issues resolution
+- **TEST_CONFIG_AUDIT.md** - Test configuration audit
+- Other session summaries and implementation notes
+
+### Other Documentation
+
+- **MIGRATION_GUIDE.md** - Migration from dev-monitor/claude-workers
+- **DEVELOPMENT.md** - Detailed development workflows
+- **GOOGLE_CLOUD_LOGGING_PERMISSIONS.md** - GCP IAM setup for logging
+- **PLANNING_SUMMARY.md** - Planning document summary
+- **ANALYSIS_INDEX.md** - Analysis documents index
+
+---
+
+## Document Categories
+
+### By Topic
+
+**Architecture & Design**
+- [architecture.md](./architecture.md) - System architecture
+- [dev-bots/architecture/](./dev-bots/architecture/) - Dev-bots architecture
+- [dev-monitor/ARCHITECTURE.md](./dev-monitor/ARCHITECTURE.md) - Legacy architecture
+
+**Setup & Configuration**
+- [setup.md](./setup.md) - Complete setup guide
+- [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md) - Migration instructions
+- Backend config in `../backend/config/log-sources.json`
+
+**Development & Contributing**
+- [DEVELOPMENT.md](./DEVELOPMENT.md) - Development guide
+- [../CONTRIBUTING.md](../CONTRIBUTING.md) - Contributing guidelines
+- [dev-monitor/E2E_TESTING_GUIDE.md](./dev-monitor/E2E_TESTING_GUIDE.md) - E2E testing
+
+**Planning & Roadmap**
+- [next-steps.md](./next-steps.md) - Prioritized roadmap
+- [plans/](./plans/) - All planning documents
+- [PLANNING_SUMMARY.md](./PLANNING_SUMMARY.md) - Planning overview
+
+**Dev-Bots & Automation**
+- [dev-bots/](./dev-bots/) - Complete dev-bots documentation
+- [dev-bots/api/](./dev-bots/api/) - API and agent personalities
+- [dev-bots/examples/](./dev-bots/examples/) - Task examples
+
+### By Audience
+
+**New Contributors**
+1. Start with [../README.md](../README.md) - Project overview
+2. Read [setup.md](./setup.md) - Get system running
+3. Review [DEVELOPMENT.md](./DEVELOPMENT.md) - Learn workflows
+4. Check [next-steps.md](./next-steps.md) - Pick a task
+
+**Experienced Developers**
+1. [architecture.md](./architecture.md) - Understand system design
+2. [plans/APP_MONITOR_STABILIZATION_PLAN.md](./plans/APP_MONITOR_STABILIZATION_PLAN.md) - Current work
+3. [next-steps.md](./next-steps.md) - Prioritized tasks
+4. [dev-bots/](./dev-bots/) - Deep dive into dev-bots
+
+**Planning & Strategy**
+1. [plans/APP_MONITOR_CAPABILITY_ROADMAP.md](./plans/APP_MONITOR_CAPABILITY_ROADMAP.md) - Long-term vision
+2. [plans/APP_MONITOR_STABILIZATION_PLAN.md](./plans/APP_MONITOR_STABILIZATION_PLAN.md) - Current phase
+3. [PLANNING_SUMMARY.md](./PLANNING_SUMMARY.md) - Planning overview
+4. [plans/README.md](./plans/README.md) - All planning docs
+
+---
+
+## Key Concepts
+
+### Project Context
 - **Not public-facing** - Internal developer tool only
-- **Not deployed** - Runs in development mode
-- **Not performance-critical** - Functionality over optimization
+- **Development-focused** - Not deployed to production
+- **Evolving platform** - From monitoring tool to autonomous development system
 
-## Contributing
+### Current Phase: Pre-POC Stabilization (v0.2.0)
+**Goal:** Restore green builds/tests and establish foundations for autonomous continuous task queue
 
-See [DEVELOPMENT.md](./DEVELOPMENT.md) for contribution guidelines.
+**Completion:** 85% production-ready
+- Backend: 543/543 tests passing ✅
+- Frontend: Build and tests passing ✅
+- Infrastructure: Ephemeral containers, safety mechanisms ✅
+
+### Evolution Phases
+1. **Stabilization** (Current) - Restore health, establish foundations
+2. **POC** (Next) - Prove autonomous continuous task queue
+3. **Autonomy** (Future) - Self-building, self-improving system
+
+---
+
+## Finding What You Need
+
+### Common Questions
+
+**"How do I set up the system?"**
+→ [setup.md](./setup.md)
+
+**"What's the architecture?"**
+→ [architecture.md](./architecture.md)
+
+**"What should I work on next?"**
+→ [next-steps.md](./next-steps.md) or [plans/APP_MONITOR_STABILIZATION_PLAN.md](./plans/APP_MONITOR_STABILIZATION_PLAN.md)
+
+**"How do I contribute?"**
+→ [../CONTRIBUTING.md](../CONTRIBUTING.md) and [DEVELOPMENT.md](./DEVELOPMENT.md)
+
+**"What are dev-bots?"**
+→ [dev-bots/README.md](./dev-bots/README.md) and [dev-bots/docs/analysis/START_HERE.md](./dev-bots/docs/analysis/START_HERE.md)
+
+**"How do I troubleshoot issues?"**
+→ [setup.md#troubleshooting](./setup.md#troubleshooting)
+
+**"What's the long-term vision?"**
+→ [plans/APP_MONITOR_CAPABILITY_ROADMAP.md](./plans/APP_MONITOR_CAPABILITY_ROADMAP.md)
+
+---
+
+## Documentation Standards
+
+### File Organization
+- **Root docs/** - Essential documentation (architecture, setup, next-steps)
+- **docs/plans/** - Strategic planning documents
+- **docs/dev-bots/** - Dev-bots system documentation
+- **docs/dev-monitor/** - Legacy dev-monitor documentation
+- **docs/sessions/** - Historical session notes
+
+### Naming Conventions
+- `*.md` - All documentation in Markdown
+- `UPPERCASE_WITH_UNDERSCORES.md` - Planning and formal documents
+- `lowercase-with-dashes.md` - Technical documentation
+- `README.md` - Directory overview and navigation
+
+### Document Structure
+All major documents should include:
+1. Title and metadata (version, date, status)
+2. Table of contents (for longer docs)
+3. Clear sections with headers
+4. Cross-references to related docs
+5. Last updated date
+
+---
+
+## Contributing to Documentation
+
+### When to Update Documentation
+
+**Always update documentation when:**
+- Adding new features or components
+- Changing architecture or workflows
+- Fixing bugs that affected documented behavior
+- Adding new configuration options
+- Creating new planning documents
+
+**Documentation checklist:**
+- [ ] Update relevant technical docs
+- [ ] Update architecture if system design changed
+- [ ] Update setup guide if installation changed
+- [ ] Update next-steps if priorities shifted
+- [ ] Update README navigation if structure changed
+
+### Documentation Review Process
+
+1. **Technical accuracy** - Verify against actual code
+2. **Completeness** - No missing information
+3. **Clarity** - Easy to understand
+4. **Cross-references** - Links work and are relevant
+5. **Formatting** - Consistent style and structure
+
+---
+
+## Document Maintenance
+
+### Regular Updates
+- **Weekly**: Update [next-steps.md](./next-steps.md) with completed tasks
+- **Monthly**: Review and update [plans/APP_MONITOR_STABILIZATION_PLAN.md](./plans/APP_MONITOR_STABILIZATION_PLAN.md)
+- **Per phase**: Update [architecture.md](./architecture.md) for major changes
+- **As needed**: Session notes in [sessions/](./sessions/)
+
+### Deprecation Process
+1. Mark document as deprecated with notice at top
+2. Link to replacement documentation
+3. Move to appropriate archive after 1 month
+4. Update all cross-references
+
+### Archive Structure
+- **docs/dev-monitor/archive/** - Archived dev-monitor docs
+- **docs/dev-bots/archive/** - Archived dev-bots docs
+- **docs/plans/archive/** - Archived planning docs
+
+---
+
+## Getting Help
+
+### Documentation Issues
+- Missing documentation? Create an issue
+- Found an error? Submit a PR with correction
+- Need clarification? Ask in discussions
+
+### Support Resources
+- **GitHub Issues** - Bug reports and feature requests
+- **GitHub Discussions** - Questions and community help
+- **Documentation** - Start here first
+
+---
+
+**Version:** 1.0
+**Last Updated:** November 7, 2025
+**Maintained by:** Platform Tooling

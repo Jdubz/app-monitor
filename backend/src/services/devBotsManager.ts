@@ -160,6 +160,7 @@ export class DevBotsManager extends EventEmitter {
       this.emit.bind(this),
       {
         enableQualityGates: true,
+        enableTaskVerification: true,  // Enable comprehensive task verification
         onPRCreated: (task: Task) => {
           // Handle PR workflow after task completion
           this.prWorkflowOrchestrator.handleTaskCompletion(task, task.output || '').catch(error => {
