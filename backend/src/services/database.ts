@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { TaskCreationContextSchema, type TaskCreationContext } from '../types/taskContext';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -385,6 +386,17 @@ export class DevBotsDatabase {
       timestamp: row.timestamp,
       resolved: Boolean(row.resolved)
     }));
+  }
+
+  // Task Creation Context
+  saveTaskCreationContext(taskId: string, context: TaskCreationContext): void {
+    // Validate context against schema
+    const validatedContext = TaskCreationContextSchema.parse(context);
+
+    // Store as JSON in tasks table
+    this.db.prepare(
+      'UPDATE tasks SET context_json = ? WHERE id = ?'
+    ).run(JSON.stringify(validatedContext), taskId);
   }
 
   // Quality Observations

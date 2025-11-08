@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import type { TaskExecution, TokenUsage, FailurePattern } from '../database';
+import type { TaskCreationContext } from '../../types/taskContext';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -413,6 +414,156 @@ describeNativeDb('DevBotsDatabase', () => {
         const patterns = db.getFailurePatterns(`task-${index}`);
         expect(patterns[0].category).toBe(category);
       });
+    });
+  });
+
+  describe('Task Creation Context', () => {
+    it('should save and retrieve task creation context', () => {
+      // First, we need to create a task in the tasks table
+      const taskId = 'task-context-1';
+      (db as any).db.prepare(`
+        INSERT INTO tasks (
+          id, type, title, status, created_at, assigned_agent
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `).run(taskId, 'implementation', 'Test Task', 'pending', new Date().toISOString(), 'backend-specialist');
+
+      // Create valid task creation context
+      const context = {
+        environment: {
+          appVersion: '1.0.0',
+          gitSha: 'abc123',
+          buildTime: new Date().toISOString(),
+          nodeVersion: '20.0.0',
+          npmVersion: '10.0.0'
+        },
+        workTarget: 'dev-monitor',
+        targetBranch: 'main',
+        affectedFiles: ['src/index.ts', 'src/utils.ts']
+      };
+
+      // Save context
+      db.saveTaskCreationContext(taskId, context);
+
+      // Retrieve and verify
+      const result = (db as any).db.prepare(
+        'SELECT context_json FROM tasks WHERE id = ?'
+      ).get(taskId);
+
+      expect(result).toBeDefined();
+      expect(result.context_json).toBeDefined();
+
+      const savedContext = JSON.parse(result.context_json);
+      expect(savedContext.environment.appVersion).toBe('1.0.0');
+      expect(savedContext.workTarget).toBe('dev-monitor');
+      expect(savedContext.targetBranch).toBe('main');
+      expect(savedContext.affectedFiles).toEqual(['src/index.ts', 'src/utils.ts']);
+    });
+
+    it('should reject invalid context with validation error', () => {
+      const taskId = 'task-context-2';
+      (db as any).db.prepare(`
+        INSERT INTO tasks (
+          id, type, title, status, created_at, assigned_agent
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `).run(taskId, 'implementation', 'Test Task 2', 'pending', new Date().toISOString(), 'backend-specialist');
+
+      // Invalid context missing required fields
+      const invalidContext = {
+        workTarget: 'dev-monitor'
+        // Missing required 'environment' field
+      } as any;
+
+      // Should throw validation error
+      expect(() => {
+        db.saveTaskCreationContext(taskId, invalidContext);
+      }).toThrow();
+    });
+
+    it('should handle task with optional context fields', () => {
+      const taskId = 'task-context-3';
+      (db as any).db.prepare(`
+        INSERT INTO tasks (
+          id, type, title, status, created_at, assigned_agent
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `).run(taskId, 'implementation', 'Test Task 3', 'pending', new Date().toISOString(), 'backend-specialist');
+
+      // Context with optional fields
+      const context: TaskCreationContext = {
+        environment: {
+          appVersion: '1.0.0',
+          gitSha: null,
+          buildTime: null
+        },
+        workTarget: 'dev-monitor',
+        targetBranch: 'main',
+        clientMeta: {
+          userAgent: 'Mozilla/5.0',
+          platform: 'linux',
+          timestamp: new Date().toISOString()
+        },
+        recentLogs: [
+          {
+            level: 'info' as const,
+            message: 'Test log',
+            timestamp: new Date().toISOString()
+          }
+        ],
+        screenshot: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA',
+        appState: {
+          currentView: 'dashboard',
+          isLoading: false
+        }
+      };
+
+      db.saveTaskCreationContext(taskId, context);
+
+      const result = (db as any).db.prepare(
+        'SELECT context_json FROM tasks WHERE id = ?'
+      ).get(taskId);
+
+      const savedContext = JSON.parse(result.context_json);
+      expect(savedContext.clientMeta.userAgent).toBe('Mozilla/5.0');
+      expect(savedContext.recentLogs).toHaveLength(1);
+      expect(savedContext.screenshot).toBe('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAUA');
+      expect(savedContext.appState.currentView).toBe('dashboard');
+    });
+
+    it('should not throw when updating context for non-existent task', () => {
+      const context: TaskCreationContext = {
+        environment: {
+          appVersion: '1.0.0',
+          gitSha: 'abc123',
+          buildTime: new Date().toISOString()
+        },
+        workTarget: 'dev-monitor',
+        targetBranch: 'main'
+      };
+
+      // Should not throw even if task doesn't exist (UPDATE will just affect 0 rows)
+      expect(() => {
+        db.saveTaskCreationContext('non-existent-task', context);
+      }).not.toThrow();
+    });
+
+    it('should validate environment snapshot structure', () => {
+      const taskId = 'task-context-4';
+      (db as any).db.prepare(`
+        INSERT INTO tasks (
+          id, type, title, status, created_at, assigned_agent
+        ) VALUES (?, ?, ?, ?, ?, ?)
+      `).run(taskId, 'implementation', 'Test Task 4', 'pending', new Date().toISOString(), 'backend-specialist');
+
+      const invalidContext = {
+        environment: {
+          // Missing all required nullable fields - this should fail validation
+          // since EnvironmentSnapshot requires these fields even if null
+        },
+        workTarget: 'dev-monitor'
+      } as any;
+
+      expect(() => {
+        db.saveTaskCreationContext(taskId, invalidContext);
+      }).toThrow();
     });
   });
 
