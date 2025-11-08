@@ -111,37 +111,10 @@ const INVESTIGATION_ACTION_VERBS = ['READ', 'GREP', 'CHECK', 'VERIFY', 'INSPECT'
 const ACCEPTANCE_SCOPE_KEYWORDS = ['EXACTLY', 'NO MORE', 'NO LESS'];
 const ACCEPTANCE_GUARDRAIL_KEYWORDS = ['DO NOT', 'MUST NOT'];
 const CONSTRAINT_ALLOWED_PREFIXES = ['MUST', 'DO NOT'];
-const DO_NOT_CREATE_ACTIONABLE_KEYWORDS = ['reuse', 'extend', 'existing', 'leverage', 'use existing'];
-
-function isPopulatedString(value: unknown): value is string {
-  return typeof value === 'string' && value.trim().length > 0;
-}
 
 function containsInvestigationActionVerb(step: string): boolean {
   const normalized = step.trim().toUpperCase();
   return INVESTIGATION_ACTION_VERBS.some(verb => normalized.startsWith(verb) || normalized.includes(`${verb} `));
-}
-
-function parseDoNotCreateEntry(entry: string): { filePath: string; reason: string } | null {
-  const normalized = entry.trim();
-  const match = normalized.match(/^([^()]+)\(([^()]+)\)$/);
-  if (!match) {
-    return null;
-  }
-
-  const filePath = match[1]?.trim() ?? '';
-  const reason = match[2]?.trim() ?? '';
-
-  if (filePath === '' || reason === '') {
-    return null;
-  }
-
-  return { filePath, reason };
-}
-
-function hasActionableExplanation(reason: string): boolean {
-  const normalized = reason.toLowerCase();
-  return DO_NOT_CREATE_ACTIONABLE_KEYWORDS.some(keyword => normalized.includes(keyword));
 }
 
 /**
