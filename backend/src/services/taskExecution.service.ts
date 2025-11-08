@@ -25,6 +25,8 @@ import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import { isTaskStuck, detectFailurePattern } from './taskFailureGuards.js';
 import type { SimpleFailureRecovery } from './failureRecovery.js';
 import { resolveArtifactsDir } from '../utils/repoPaths.js';
+import { AgentTypeManager, type AgentType } from './agentTypeManager.js';
+import * as DockerConfig from './dockerConfig.js';
 
 // ============================================================================
 // Types & Interfaces
@@ -54,9 +56,7 @@ export class TaskExecutionService {
   private readonly config: TaskExecutionServiceConfig;
   private recovery?: SimpleFailureRecovery; // Optional: set via setRecovery()
   private dockerCircuitBreaker?: any; // CircuitBreaker (imported lazily)
-
-  private lastAgentType: 'claude' | 'codex' = 'claude';
-  private readonly AGENT_ROTATION_STRATEGY: 'alternate' | 'random' | 'claude-only' | 'codex-only' = 'alternate';
+  private agentTypeManager: AgentTypeManager; // Centralized agent type management
 
   constructor(
     taskQueue: TaskQueueService,
@@ -82,6 +82,12 @@ export class TaskExecutionService {
         dryRun: config.recovery?.dryRun ?? false
       }
     };
+
+    // Initialize centralized agent type manager
+    this.agentTypeManager = new AgentTypeManager({
+      strategy: 'alternate',
+      defaultType: 'claude'
+    });
 
     // Initialize circuit breaker for Docker operations
     this.initializeCircuitBreaker();
@@ -212,21 +218,7 @@ export class TaskExecutionService {
     }
   }
 
-  private chooseAgentType(): 'claude' | 'codex' {
-    switch (this.AGENT_ROTATION_STRATEGY) {
-      case 'alternate':
-        this.lastAgentType = this.lastAgentType === 'claude' ? 'codex' : 'claude';
-        return this.lastAgentType;
-      case 'random':
-        return Math.random() < 0.5 ? 'claude' : 'codex';
-      case 'claude-only':
-        return 'claude';
-      case 'codex-only':
-        return 'codex';
-      default:
-        return 'claude';
-    }
-  }
+  // Removed duplicate chooseAgentType - now using AgentTypeManager
 
   private getAgentDockerImage(_agent: AgentPersonality): string {
     return 'dev-bot:latest';
@@ -449,8 +441,8 @@ export class TaskExecutionService {
   private async executeTaskWithDockerRun(task: Task, agent: AgentPersonality, agentType?: 'claude' | 'codex'): Promise<void> {
     const { spawn } = await import('child_process');
 
-    // Choose agent type if not specified
-    const chosenAgentType = agentType || this.chooseAgentType();
+    // Choose agent type if not specified (using centralized manager)
+    const chosenAgentType = agentType || this.agentTypeManager.chooseAgentType();
     const workerId = `bot-${chosenAgentType}-${agent.id}-${Date.now()}`;
 
     try {
@@ -486,23 +478,8 @@ export class TaskExecutionService {
     let dockerArgs: string[];
     let cliCommand: string;
 
-    // Prepare git environment variables
-    const gitEnvVars: string[] = [];
-    const gitIdentityEnvKeys = [
-      'GIT_AUTHOR_NAME',
-      'GIT_AUTHOR_EMAIL',
-      'GIT_COMMITTER_NAME',
-      'GIT_COMMITTER_EMAIL',
-      'GITHUB_TOKEN'
-    ];
-    const providedGitEnvKeys: string[] = [];
-    for (const key of gitIdentityEnvKeys) {
-      const value = process.env[key];
-      if (value) {
-        gitEnvVars.push('-e', `${key}=${value}`);
-        providedGitEnvKeys.push(key);
-      }
-    }
+    // Prepare git environment variables (using centralized config)
+    const gitEnvVars = DockerConfig.buildGitEnvVars();
 
     if (chosenAgentType === 'codex') {
       // Codex execution with isolated repository

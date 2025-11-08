@@ -22,6 +22,7 @@ import type { Task } from './taskQueue.sqlite.js';
 import type { AgentPersonality } from './agentPersonalities.js';
 import type { DockerManager } from './dockerManager.js';
 // WorkspaceOrchestrator removed - we use Docker cp for file systems, not git mirrors
+import * as DockerConfig from './dockerConfig.js';
 
 export interface WorkspaceContext {
   id: string;
@@ -406,28 +407,8 @@ export class EphemeralWorkerService {
 
     const container = this.docker.getContainer(containerId);
 
-    // Setup script to clone repository and checkout the correct branch
-    const setupScript = `
-      set -e
-      mkdir -p /workspace
-      cd /workspace
-      git clone https://github.com/Jdubz/app-monitor.git .
-      git config --global user.name "DevBot"
-      git config --global user.email "devbot@local"
-      git fetch --all
-
-      # Checkout the appropriate branch
-      if [ "${baseBranch}" != "main" ] && [ "${baseBranch}" != "staging" ]; then
-        # For PR branches, checkout from origin
-        git checkout -b ${baseBranch} origin/${baseBranch} || git checkout ${baseBranch}
-      else
-        git checkout ${baseBranch}
-      fi
-
-      git pull origin ${baseBranch} || true
-      chown -R worker:worker /workspace
-      echo "Repository setup complete on branch ${baseBranch}"
-    `;
+    // Use centralized repository clone script
+    const setupScript = DockerConfig.getRepoCloneScript(baseBranch);
 
     try {
       const exec = await container.exec({

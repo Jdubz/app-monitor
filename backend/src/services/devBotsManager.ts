@@ -110,9 +110,8 @@ export class DevBotsManager extends EventEmitter {
   private workers = new Map<string, WorkerInfo>();
   // ephemeralWorkers now managed by ephemeralWorkerService
 
-  // Agent type rotation configuration
-  private readonly AGENT_ROTATION_STRATEGY: 'alternate' | 'random' | 'claude-only' | 'codex-only' = 'alternate';
-  private lastAgentType: 'claude' | 'codex' = 'claude';
+  // Agent type rotation - now managed by AgentTypeManager
+  // Removed duplicate logic - using centralized AgentTypeManager instead
 
   // Enhanced services
   // TaskPersistence removed - using SQLite directly
