@@ -163,3 +163,26 @@ idle → starting → running → (terminating|disconnecting) → ended
 3. Spike WebSocket + xterm integration behind feature flag in staging.
 4. Implement backend session orchestration + idle monitor.
 5. Harden auth + release to admin for acceptance testing.
+
+---
+
+## 9. Workstreams Overview
+
+### 9.1 Backend Orchestration & APIs
+- **Schema**: add `interactive_sessions` table plus migrations to store session state, heartbeat timestamps, container metadata, and serialized context blobs.
+- **DevBotsManager**: new `launchInteractiveWorker` path that skips concurrency limits, applies `interactive=true` labels, and plugs into the idle watchdog + reconnection story.
+- **Lifecycle APIs**: `POST /interactive/session`, `GET /interactive/session`, `DELETE /interactive/session`, `POST /interactive/heartbeat`, `POST /interactive/interrupt`, and WebSocket streaming endpoints with admin gating.
+- **Idle Enforcement**: background job to monitor combined user/agent activity, broadcast impending timeout warnings, and gracefully stop containers after 5 minutes.
+- **Persistence & Telemetry**: archive transcripts/log artifacts, emit metrics (`interactive_session_started`, `idle_timeout`, duration histograms), and log every command for auditing.
+
+### 9.2 Frontend Interactive Tab
+- **Store/Hook**: manage session state, WebSocket connection, reconnect logic, heartbeat pings, and command dispatch APIs.
+- **UI**: new “Interactive Session (Admins)” tab with model selector (Claude/Codex), session controls, status pill, idle timer, and a collapsible hotkey drawer.
+- **Terminal Layer**: integrate xterm.js + addons, wire standard shortcuts (Esc, Ctrl+C/L/U/W, etc.), and display both terminal output and optional chat/thread summaries.
+- **Access Control**: hide/lock the tab for non-admins, surface “session in use” messaging, and provide reconnect flow when returning after disconnection.
+
+### 9.3 Ops & Enablement
+- **Feature Flags/Env**: configuration toggles for enabling the tab, setting admin email(s), and future model additions.
+- **Observability**: dashboards/alerts for long-running sessions, idle timeouts, and container cleanup failures.
+- **Docs & Runbooks**: operational guide for starting/stopping sessions, interpreting logs/artifacts, and responding to stuck containers or idle failures.
+- **Tech Debt Guardrails**: optional follow-up to quiet recurring `no-explicit-any` lint warnings so pre-push hooks stay signal-rich.
