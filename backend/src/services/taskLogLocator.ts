@@ -100,8 +100,19 @@ export class WorkerLogLocator {
 
   private buildMatcher(pattern: string, taskId: string) {
     const resolved = pattern.replace('{taskId}', taskId);
-    if (!resolved.includes('*')) {
+    const wildcardCount = (resolved.match(/\*/g) ?? []).length;
+
+    if (wildcardCount === 0) {
       return (filename: string) => filename === resolved;
+    }
+
+    if (wildcardCount !== 1) {
+      logger.warn({
+        category: 'dev-bots',
+        action: 'worker_log_pattern_invalid',
+        message: `Log pattern "${pattern}" (resolved: "${resolved}") must contain exactly one wildcard '*'`
+      });
+      return (_filename: string) => false;
     }
 
     const [prefix, suffix] = resolved.split('*');

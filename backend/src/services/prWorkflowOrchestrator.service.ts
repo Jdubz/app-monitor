@@ -296,6 +296,30 @@ export class PRWorkflowOrchestrator {
   // ==========================================================================
 
   /**
+   * Register an existing task's PR (e.g. orphaned after restart) for monitoring.
+   * Returns false when required metadata is missing so callers can surface skips.
+   */
+  registerExistingPR(task: Task): boolean {
+    if (!task.pr_number || !task.pr_url || !task.pr_branch) {
+      logger.warn({
+        category: 'pr-workflow',
+        action: 'register_existing_pr_skipped',
+        message: `Skipped registering task ${task.id} because PR metadata is incomplete`,
+        details: {
+          taskId: task.id,
+          hasNumber: Boolean(task.pr_number),
+          hasUrl: Boolean(task.pr_url),
+          hasBranch: Boolean(task.pr_branch)
+        }
+      });
+      return false;
+    }
+
+    this.prMonitor.registerPR(task);
+    return true;
+  }
+
+  /**
    * Get all monitored PRs
    */
   getMonitoredPRs() {
