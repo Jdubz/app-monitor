@@ -53,7 +53,6 @@ const panelClasses = {
     "rounded-md border border-border/50 bg-background/60 px-3 py-2 text-sm text-muted-foreground",
   errorContainer:
     "space-y-4 rounded-xl border border-destructive/50 bg-destructive/10 p-5 text-sm",
-  label: "text-sm font-medium text-foreground",
 };
 
 const statusAccent: Record<string, string> = {
@@ -305,7 +304,7 @@ export const WorkspaceSyncPanel: React.FC<WorkspaceSyncPanelProps> = ({
             </label>
 
             <div className="space-y-2">
-              <label className={panelClasses.label}>Conflict Strategy</label>
+              <label className="text-sm font-medium text-foreground">Conflict Strategy</label>
               <select
                 value={syncOptions.conflictStrategy}
                 onChange={(event) =>

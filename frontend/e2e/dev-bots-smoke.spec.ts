@@ -125,11 +125,12 @@ test.describe('Dev Bots Command Center', () => {
 
   test('captures layout screenshot', async ({ page }) => {
     await disableAnimations(page);
-    await expect(page).toHaveScreenshot('dev-bots-layout.png', {
+    const screenshot = await page.screenshot({
       animations: 'disabled',
       mask: [],
       fullPage: false,
     });
+    expect(screenshot).toMatchSnapshot('dev-bots-layout.png');
   });
 });
 

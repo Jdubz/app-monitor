@@ -305,7 +305,7 @@ See [SQLite Integration Plan - Agent Comparison Metrics](./SQLITE_INTEGRATION_PL
 curl -s http://localhost:5000/api/dev-bots/agent-comparison \
   | jq '.comparison.task_type_breakdown \
         | to_entries[] \
-        | {agent: .key, implementation: .value.implementation.success_rate, testing: .value.testing.success_rate, documentation: .value.documentation.success_rate}
+        | {agent: .key, implementation: .value.implementation.success_rate, testing: .value.testing.success_rate, documentation: .value.documentation.success_rate}'
 
 # Raw breakdown data if you want to feed Grafana
 curl -s http://localhost:5000/api/dev-bots/agent-comparison \

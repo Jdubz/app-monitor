@@ -220,36 +220,46 @@ export const getLogSources = async (): Promise<LogSource[]> => {
 
 export const getDevBotsStatus = async (): Promise<DevBotsStatus> => {
   const client = await getApiClient();
-  return client.get<DevBotsStatus>('/dev-bots/status');
+  const response = await client.get<ApiSuccess<DevBotsStatus>>('/dev-bots/status');
+  return ensureApiSuccess(response, 'fetching Dev-Bots status');
 };
 
 export const getDevBotsQueue = async (): Promise<DevBotsQueueSummary> => {
   const client = await getApiClient();
-  return client.get<DevBotsQueueSummary>('/dev-bots/queue');
+  const response = await client.get<ApiSuccess<DevBotsQueueSummary>>('/dev-bots/queue');
+  return ensureApiSuccess(response, 'fetching Dev-Bots queue');
 };
 
 export const getDevBotsTaskDetail = async (taskId: string): Promise<DevBotsTaskDetail> => {
   const client = await getApiClient();
-  return client.get<DevBotsTaskDetail>(`/dev-bots/tasks/${taskId}/detail`);
+  const response = await client.get<ApiSuccess<DevBotsTaskDetail>>(
+    `/dev-bots/tasks/${taskId}/detail`,
+  );
+  return ensureApiSuccess(response, `fetching Dev-Bots task ${taskId}`);
 };
 
 export const getDevBotsTaskLogs = async (
   taskId: string,
 ): Promise<DevBotsTaskLogsResponse> => {
   const client = await getApiClient();
-  return client.get(`/dev-bots/tasks/${taskId}/logs`);
+  const response = await client.get<ApiSuccess<DevBotsTaskLogsResponse>>(
+    `/dev-bots/tasks/${taskId}/logs`,
+  );
+  return ensureApiSuccess(response, `fetching Dev-Bots task logs for ${taskId}`);
 };
 
 export const getDevBotsSettings = async (): Promise<DevBotsSettings> => {
   const client = await getApiClient();
-  return client.get('/dev-bots/settings');
+  const response = await client.get<ApiSuccess<DevBotsSettings>>('/dev-bots/settings');
+  return ensureApiSuccess(response, 'fetching Dev-Bots settings');
 };
 
 export const updateDevBotsSettings = async (
   payload: Partial<DevBotsSettings>,
 ): Promise<DevBotsSettings> => {
   const client = await getApiClient();
-  return client.put('/dev-bots/settings', payload);
+  const response = await client.put<ApiSuccess<DevBotsSettings>>('/dev-bots/settings', payload);
+  return ensureApiSuccess(response, 'updating Dev-Bots settings');
 };
 
 // Port management endpoints

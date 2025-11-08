@@ -297,7 +297,7 @@ export function getCanonicalTaskMetadataKeys(): readonly TaskMetadataFieldKey[] 
 export function ensureTaskMetadataFieldKeys<const T extends readonly TaskMetadataFieldKey[]>(fields: T): T {
   fields.forEach((field) => {
     if (!TASK_METADATA_FIELD_LOOKUP[field]) {
-      throw new Error();
+      throw new Error(`Invalid task metadata field: ${field}`);
     }
   });
   return fields;
