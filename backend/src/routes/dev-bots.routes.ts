@@ -13,11 +13,12 @@
  * Total: 30+ endpoints organized into logical groups
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import type { DevBotsManager } from '../services/devBotsManager.js';
 import { logger } from '../utils/logger.js';
 import type { LogEntry } from '../utils/logger.js';
 import { validateTaskTemplate, formatValidationErrors, isV3Template } from '../services/taskTemplateValidator.js';
+import type { ApiError, ApiSuccess } from '@app-monitor/api-contracts';
 
 const TECHNICAL_TASK_TYPES = new Set(['refactor', 'implementation', 'bug', 'feature']);
 const MIN_DOCUMENTATION_LENGTH = 50;
@@ -31,6 +32,62 @@ const MIN_ACCEPTANCE_CRITERION_LENGTH = 30;
  */
 export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Router {
   const router = Router();
+
+  router.use((_req: Request, res: Response, next: NextFunction) => {
+    const originalJson = res.json.bind(res);
+
+    res.json = ((body?: unknown) => {
+      if (body && typeof body === 'object' && body !== null && 'success' in (body as Record<string, unknown>)) {
+        return originalJson(body);
+      }
+
+      if (res.statusCode >= 400) {
+        let errorLabel = 'Request failed';
+        let message: string | undefined;
+        let code: string | undefined;
+        let details: Record<string, unknown> | undefined;
+
+        if (body && typeof body === 'object' && body !== null && !Array.isArray(body)) {
+          const { error, message: bodyMessage, code: bodyCode, details: bodyDetails, ...rest } = body as Record<string, unknown>;
+          if (typeof error === 'string') {
+            errorLabel = error;
+          }
+          if (typeof bodyMessage === 'string') {
+            message = bodyMessage;
+          }
+          if (typeof bodyCode === 'string') {
+            code = bodyCode;
+          }
+          if (bodyDetails && typeof bodyDetails === 'object') {
+            details = bodyDetails as Record<string, unknown>;
+          } else if (Object.keys(rest).length > 0) {
+            details = rest;
+          }
+        } else if (typeof body === 'string') {
+          message = body;
+        }
+
+        const errorPayload: ApiError = {
+          success: false,
+          error: errorLabel,
+          ...(message ? { message } : {}),
+          ...(code ? { code } : {}),
+          ...(details ? { details } : {}),
+        };
+
+        return originalJson(errorPayload);
+      }
+
+      const payload: ApiSuccess<unknown> = {
+        success: true,
+        data: body as unknown,
+      };
+
+      return originalJson(payload);
+    }) as typeof res.json;
+
+    next();
+  });
 
   // ============================================================================
   // System Status & Health
@@ -287,21 +344,50 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
         warnings.forEach((warning) => logger.warn(warning));
       }
 
-      const result = await devBotsManager.addTask({
-        type,
-        title,
-        description: taskDescription,
-        acceptanceCriteria: Array.isArray(acceptanceCriteria) ? acceptanceCriteria : [acceptanceCriteria],
-        files,
-        dependencies,
-        project: project || repository, // Accept either 'project' or 'repository'
-        assignedAgent,
-        notes,
-        architectureReferences,
-        validationSteps,
-        successMetrics,
-        estimatedEffort
-      });
+      // Add timeout protection to prevent API from hanging indefinitely
+      const TASK_CREATION_TIMEOUT_MS = 10000; // 10 seconds
+      const taskCreationStartTime = Date.now();
+
+      const result = await Promise.race([
+        devBotsManager.addTask({
+          type,
+          title,
+          description: taskDescription,
+          acceptanceCriteria: Array.isArray(acceptanceCriteria) ? acceptanceCriteria : [acceptanceCriteria],
+          files,
+          dependencies,
+          project: project || repository, // Accept either 'project' or 'repository'
+          assignedAgent,
+          notes,
+          architectureReferences,
+          validationSteps,
+          successMetrics,
+          estimatedEffort
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error('Task creation timeout - operation took longer than 10 seconds')),
+            TASK_CREATION_TIMEOUT_MS
+          )
+        )
+      ]);
+
+      const taskCreationDuration = Date.now() - taskCreationStartTime;
+
+      // Log slow task creation for monitoring
+      if (taskCreationDuration > 1000) {
+        logger.warn({
+          category: 'api',
+          action: 'slow_task_creation',
+          message: `Task creation took ${taskCreationDuration}ms (expected < 1000ms)`,
+          details: {
+            durationMs: taskCreationDuration,
+            taskId: result.task.id,
+            taskTitle: title
+          }
+        });
+      }
+
       res.json({
         task: result.task,
         validation: result.validation,

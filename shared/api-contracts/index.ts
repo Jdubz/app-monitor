@@ -221,6 +221,153 @@ export interface QualityGateResetPayload {
   configs: Record<string, QualityGateConfig>;
 }
 
+// -----------------------------------------------------------------------------
+// Dev-Bots Contracts
+// -----------------------------------------------------------------------------
+
+export type DevBotsTaskStatus = 'pending' | 'assigned' | 'active' | 'completed' | 'failed';
+
+export interface DevBotsTaskScope {
+  type: string;
+  boundaries: {
+    maxChanges: number;
+    forbiddenActions: string[];
+    maxNewLines: number;
+  };
+  validation: {
+    forbiddenPatterns: string[];
+    allowedPatterns: string[];
+  };
+}
+
+export interface DevBotsTask {
+  id: string;
+  type: string;
+  description: string;
+  status: DevBotsTaskStatus;
+  createdAt: string;
+  assignedWorker?: string;
+  assignedAgent: string;
+  assignedAt?: string;
+  completedAt?: string;
+  output?: string;
+  error?: string;
+  exitCode?: number;
+  prompt?: string;
+  files?: string[];
+  dependencies?: string[];
+  project?: string;
+  priority?: number;
+  retryCount?: number;
+  maxRetries?: number;
+  canRetry?: boolean;
+  scope?: DevBotsTaskScope;
+  isEmergency?: boolean;
+  documentation?: string;
+  acceptanceCriteria?: string;
+  notes?: string;
+  environment?: string;
+  repository?: string;
+  summary?: string;
+  chainId?: string;
+  scopeViolations?: Array<{ type: string; severity: string }>;
+  isPeriodicCleanup?: boolean;
+}
+
+export interface DevBotsTaskCollections {
+  pending: DevBotsTask[];
+  active: DevBotsTask[];
+  completed: DevBotsTask[];
+}
+
+export interface DevBotsWorkerStatus {
+  id: string;
+  status: 'idle' | 'busy' | 'stopped';
+  lastSeen: number;
+  onboardingComplete?: boolean;
+  lastOnboardingCheck?: number;
+  currentTask?: string;
+  personality?: DevBotsAgentPersonality;
+}
+
+export interface DevBotsStatus {
+  systemStatus: 'running' | 'stopped' | 'error';
+  workers: Record<string, DevBotsWorkerStatus>;
+  queueSize: number;
+  activeTasks: number;
+  uptime: number;
+  workerCount: number;
+  maxWorkers: number;
+  activeWorkerTypes: string[];
+  availableWorkerTypes: string[];
+  tasks: DevBotsTaskCollections;
+}
+
+export interface DevBotsScopeViolation {
+  taskId: string;
+  violations: Array<{
+    type: string;
+    severity: string;
+  }>;
+}
+
+export interface DevBotsCleanupStatus {
+  schedules: string[];
+  recentTasks: DevBotsTask[];
+  totalCleanupTasks: number;
+}
+
+export interface DevBotsAgentPersonality {
+  id: string;
+  name: string;
+  role: string;
+  description: string;
+  specialties: string[];
+  expertise: {
+    primary: string[];
+    secondary: string[];
+    tools: string[];
+  };
+  personality: {
+    communicationStyle: 'formal' | 'casual' | 'technical' | 'collaborative';
+    approach: 'methodical' | 'creative' | 'analytical' | 'pragmatic';
+    focus: 'quality' | 'speed' | 'innovation' | 'reliability';
+  };
+  taskPreferences: {
+    preferredTypes: string[];
+    avoidedTypes: string[];
+    complexityRange: 'simple' | 'medium' | 'complex' | 'any';
+  };
+}
+
+export interface DevBotsTaskTemplate {
+  id: string;
+  name: string;
+  description: string;
+  taskTypes: string[];
+  agentTypes: string[];
+  template: string;
+  variables: string[];
+  validationRules: string[];
+}
+
+export interface DevBotsWorkspaceSyncStatus {
+  isRunning: boolean;
+  syncInProgress: boolean;
+  lastSyncTime?: string;
+  baseDir: string;
+  repositories: string[];
+  workers: string[];
+  conflictStrategy: string;
+}
+
+export interface DevBotsWorkspaceSyncResult {
+  successful: Array<{ worker?: string; repo: string; action: string }>;
+  conflicts: Array<{ worker: string; repo: string; path: string; timestamp: string; strategy: string; status?: string }>;
+  errors: Array<{ worker?: string; repo: string; error: string }>;
+  skipped: Array<{ worker?: string; repo: string; reason: string }>;
+}
+
 export interface ApiSuccess<T> {
   success: true;
   data: T;
@@ -265,3 +412,13 @@ export type QualityGateResetResponse = ApiSuccess<QualityGateResetPayload>;
 export type QualityGateStatusResponse = ApiSuccess<QualityGateStatus>;
 export type DockerInfoResponse = ApiSuccess<DockerContainerInfo>;
 export type DockerActionResponse = ApiSuccess<{ message: string }>;
+
+export type DevBotsStatusResponse = ApiSuccess<DevBotsStatus>;
+export type DevBotsTasksResponse = ApiSuccess<DevBotsTask[]>;
+export type DevBotsScopeViolationsResponse = ApiSuccess<DevBotsScopeViolation[]>;
+export type DevBotsCleanupStatusResponse = ApiSuccess<DevBotsCleanupStatus>;
+export type DevBotsAgentsResponse = ApiSuccess<{ agents: DevBotsAgentPersonality[] }>;
+export type DevBotsTemplatesResponse = ApiSuccess<{ templates: DevBotsTaskTemplate[] }>;
+export type DevBotsMessageResponse = ApiSuccess<{ message: string }>;
+export type DevBotsWorkspaceSyncStatusResponse = ApiSuccess<DevBotsWorkspaceSyncStatus>;
+export type DevBotsWorkspaceSyncResultResponse = ApiSuccess<DevBotsWorkspaceSyncResult>;

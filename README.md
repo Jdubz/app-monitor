@@ -121,6 +121,7 @@ make monitor-stop     # Stop app-monitor
 - `shared/api-contracts/index.ts` contains the only source of truth for every REST/Socket DTO that the backend emits and the frontend consumes.
 - All JSON responses must use the shared `ApiSuccess<T>` and `ApiError` envelopes so clients can rely on `success`/`data`/`error` fields; the backend routes import these helpers and the frontend services unwrap them before returning data.
 - If you add a new endpoint, extend the shared contract file first, update the backend route to return the contract, and then consume it in `frontend/src/services/api.ts` so both sides stay in sync.
+- Dev-Bots management endpoints (`/api/dev-bots/*`) expose types such as `DevBotsStatus`, `DevBotsTask`, and `DevBotsWorkspaceSyncStatus` from the shared contracts package, and the frontend imports those exact types to avoid drift across panels.
 
 ## Configuration
 
@@ -277,11 +278,23 @@ make stop
 
 ## Documentation
 
-- [Architecture](./docs/ARCHITECTURE.md) - System design
-- [Development Guide](./docs/DEVELOPMENT.md) - Developer guide
-- [Migration Guide](./docs/MIGRATION_GUIDE.md) - Migration notes
-- [Google Cloud Logging Permissions](./docs/GOOGLE_CLOUD_LOGGING_PERMISSIONS.md) - GCP IAM setup
-- [API Documentation](./docs/api/) - API reference
+### Getting Started
+- [Complete Setup Guide](./docs/setup.md) - Detailed installation and configuration
+- [Architecture Overview](./docs/architecture.md) - System design and components
+- [Development Guide](./docs/DEVELOPMENT.md) - Developer workflows and best practices
+
+### Planning & Roadmap
+- [Next Steps & Roadmap](./docs/next-steps.md) - Prioritized tasks and milestones
+- [Stabilization Plan](./docs/plans/APP_MONITOR_STABILIZATION_PLAN.md) - Current phase details
+- [Capability Roadmap](./docs/plans/APP_MONITOR_CAPABILITY_ROADMAP.md) - Long-term vision
+
+### Migration & History
+- [Migration Guide](./docs/MIGRATION_GUIDE.md) - Migrating from dev-monitor
+- [Session Summaries](./docs/sessions/) - Historical implementation sessions
+- [Google Cloud Logging](./docs/GOOGLE_CLOUD_LOGGING_PERMISSIONS.md) - GCP IAM setup
+
+### Contributing
+- [Contributing Guide](./CONTRIBUTING.md) - Git hooks, CI/CD, and development workflows
 
 ## Features
 

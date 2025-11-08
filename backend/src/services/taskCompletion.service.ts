@@ -19,12 +19,20 @@ import type { TaskPersistence } from './taskPersistence.js';
 import { getTokenTrackingService } from './tokenTracking.js';
 import { getQualityGateValidator, type QualityValidationResult } from './qualityGates.js';
 import { extractPRInfo, isValidPRInfo } from '../utils/prExtractor.js';
+import { getTaskVerificationService, type TaskVerificationResult } from './taskVerification.service.js';
+import { getQualityObservationService, type QualityObservation } from './qualityObservation.service.js';
+import { getQualityImprovementTaskGenerator } from './qualityImprovementTaskGenerator.js';
+import { getDatabase } from './database.js';
 
 export interface TaskCompletionServiceConfig {
   /**
    * Whether to run quality gate validation before pushing
    */
   enableQualityGates: boolean;
+  /**
+   * Whether to run comprehensive task verification (acceptance criteria, coverage, scope)
+   */
+  enableTaskVerification: boolean;
   /**
    * Optional callback for PR registration after task completion
    */
@@ -47,6 +55,7 @@ export class TaskCompletionService {
   ) {
     this.config = {
       enableQualityGates: config.enableQualityGates ?? true,
+      enableTaskVerification: config.enableTaskVerification ?? true,
     };
   }
 
@@ -71,8 +80,31 @@ export class TaskCompletionService {
 
     const workspacePath = worker.workspace.hostPath;
     let qualityValidation: QualityValidationResult | undefined;
+    let taskVerification: TaskVerificationResult | undefined;
     let shouldPush = exitCode === 0;
 
+    // Run comprehensive task verification first (if enabled)
+    if (shouldPush && this.config.enableTaskVerification) {
+      taskVerification = await this.runTaskVerification(task, workspacePath, output);
+      shouldPush = taskVerification.passed;
+
+      // Log verification details
+      if (!taskVerification.passed) {
+        logger.warn({
+          category: 'verification',
+          action: 'task_verification_failed',
+          message: `Task verification failed for ${task.id}`,
+          details: {
+            acceptanceCriteriaMet: taskVerification.acceptanceCriteria.percentMet,
+            testCoverage: taskVerification.testCoverage?.totalCoverage,
+            scopeViolations: taskVerification.scopeBoundaries?.violationCount,
+            recommendations: taskVerification.recommendations
+          }
+        });
+      }
+    }
+
+    // Run quality gates (if verification passed and quality gates enabled)
     if (shouldPush && this.config.enableQualityGates) {
       qualityValidation = await this.runQualityGateValidation(task, workspacePath);
       shouldPush = qualityValidation.passed;
@@ -106,6 +138,8 @@ export class TaskCompletionService {
       failureReason =
         exitCode !== 0
           ? `Task exited with code ${exitCode}`
+          : taskVerification && !taskVerification.passed
+          ? `Task verification failed: ${taskVerification.recommendations?.join('; ') || 'See verification details'}`
           : qualityValidation && !qualityValidation.passed
           ? 'Quality gates failed'
           : 'Task did not meet push requirements';
@@ -126,6 +160,11 @@ export class TaskCompletionService {
 
     // Save to persistence (task already updated in SQLite)
     this.taskPersistence.saveCompletedTasks([task]);
+
+    // Create quality observation and generate improvement tasks (if task completed successfully)
+    if (finalStatus === 'completed') {
+      await this.createQualityObservationAndImprovements(task, taskVerification, qualityValidation);
+    }
 
     await this.ephemeralWorkerService.destroyWorker(worker.id);
 
@@ -323,6 +362,203 @@ export class TaskCompletionService {
         duration: 0,
         timestamp: new Date().toISOString()
       };
+    }
+  }
+
+  /**
+   * Run comprehensive task verification
+   */
+  private async runTaskVerification(task: Task, workspacePath: string, output: string): Promise<TaskVerificationResult> {
+    try {
+      const verificationService = getTaskVerificationService();
+
+      logger.info({
+        category: 'verification',
+        action: 'task_verification_started',
+        message: `Starting task verification for ${task.id}`,
+        details: {
+          taskId: task.id,
+          taskTitle: task.title,
+          hasAcceptanceCriteria: !!task.acceptance_criteria,
+          workspacePath
+        }
+      });
+
+      // Run comprehensive verification
+      const result = await verificationService.verifyTask(task, workspacePath, output);
+
+      // Emit verification result event
+      this.emit('task_verification_completed', {
+        taskId: task.id,
+        result
+      });
+
+      // Log summary
+      logger.info({
+        category: 'verification',
+        action: 'task_verification_completed',
+        message: `Task verification completed for ${task.id}`,
+        details: {
+          passed: result.passed,
+          overallScore: result.overallScore,
+          acceptanceCriteriaMet: `${result.acceptanceCriteria.metCount}/${result.acceptanceCriteria.totalCriteria}`,
+          testCoverage: result.testCoverage?.totalCoverage,
+          scopeViolations: result.scopeBoundaries?.violationCount
+        }
+      });
+
+      return result;
+    } catch (error) {
+      logger.error({
+        category: 'verification',
+        action: 'task_verification_error',
+        message: `Error running task verification for ${task.id}`,
+        error
+      });
+
+      // Return a failed verification result instead of throwing
+      return {
+        taskId: task.id,
+        passed: false,
+        acceptanceCriteria: {
+          taskId: task.id,
+          criteria: [],
+          allMet: false,
+          totalCriteria: 0,
+          metCount: 0,
+          percentMet: 0
+        },
+        overallScore: 0,
+        timestamp: new Date().toISOString(),
+        recommendations: ['Task verification failed due to error']
+      };
+    }
+  }
+
+  /**
+   * Create quality observation and generate improvement tasks
+   */
+  private async createQualityObservationAndImprovements(
+    task: Task,
+    verificationResult?: TaskVerificationResult,
+    qualityGateResult?: QualityValidationResult
+  ): Promise<void> {
+    try {
+      const observationService = getQualityObservationService();
+
+      // Create quality observation
+      const observation = await observationService.observeQuality(
+        task,
+        verificationResult,
+        qualityGateResult
+      );
+
+      // Store observation in database
+      const db = getDatabase();
+      db.storeQualityObservation(observation);
+
+      logger.info({
+        category: 'quality-observation',
+        action: 'observation_stored',
+        message: `Quality observation stored for task ${task.id}`,
+        details: {
+          taskId: task.id,
+          overallScore: observation.overallScore,
+          qualityLevel: observation.qualityLevel,
+          opportunitiesCount: observation.improvementOpportunities.length,
+          readyForMerge: observation.readyForMerge
+        }
+      });
+
+      // Generate improvement tasks if needed
+      if (observation.improvementOpportunities.length > 0 && !task.is_repair_bot) {
+        await this.generateImprovementTasks(task, observation);
+      }
+
+      // Emit observation event for UI updates
+      this.emit('quality_observation_created', {
+        taskId: task.id,
+        observation
+      });
+
+    } catch (error) {
+      logger.error({
+        category: 'quality-observation',
+        action: 'observation_creation_failed',
+        message: `Failed to create quality observation for task ${task.id}`,
+        error
+      });
+      // Don't throw - observation failure shouldn't block task completion
+    }
+  }
+
+  /**
+   * Generate improvement tasks from quality observation
+   */
+  private async generateImprovementTasks(
+    parentTask: Task,
+    observation: QualityObservation
+  ): Promise<void> {
+    try {
+      // Get task queue from TaskCompletionService dependencies
+      // Note: We need access to taskQueue, but it's not directly available here.
+      // For now, we'll get it through the database initialization path.
+      // TODO: Consider refactoring to inject taskQueue as dependency
+
+      const { getTaskQueueService } = await import('./taskQueue.factory.js');
+      const taskQueue = getTaskQueueService();
+
+      const generator = getQualityImprovementTaskGenerator(taskQueue);
+
+      // Check if we should generate improvements
+      if (!generator.shouldGenerateImprovements(parentTask, observation)) {
+        logger.debug({
+          category: 'quality-improvement',
+          action: 'skip_improvement_generation',
+          message: `Skipping improvement task generation for ${parentTask.id}`,
+          details: { taskId: parentTask.id }
+        });
+        return;
+      }
+
+      // Limit opportunities to top 5
+      const limitedOpportunities = {
+        ...observation,
+        improvementOpportunities: generator.getLimitedOpportunities(observation.improvementOpportunities)
+      };
+
+      // Generate improvement tasks
+      const generatedTasks = await generator.generateImprovementTasks(
+        parentTask,
+        limitedOpportunities
+      );
+
+      logger.info({
+        category: 'quality-improvement',
+        action: 'improvement_tasks_generated',
+        message: `Generated ${generatedTasks.length} improvement tasks for ${parentTask.id}`,
+        details: {
+          parentTaskId: parentTask.id,
+          tasksGenerated: generatedTasks.length,
+          taskIds: generatedTasks.map(t => t.task.id)
+        }
+      });
+
+      // Emit event for UI updates
+      this.emit('improvement_tasks_generated', {
+        parentTaskId: parentTask.id,
+        tasks: generatedTasks.map(t => t.task),
+        observation
+      });
+
+    } catch (error) {
+      logger.error({
+        category: 'quality-improvement',
+        action: 'improvement_task_generation_failed',
+        message: `Failed to generate improvement tasks for ${parentTask.id}`,
+        error
+      });
+      // Don't throw - improvement task generation failure shouldn't block completion
     }
   }
 

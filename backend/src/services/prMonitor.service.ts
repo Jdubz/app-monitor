@@ -8,6 +8,7 @@
  * - Creates followup tasks when issues found
  */
 
+import * as crypto from 'crypto';
 import { logger } from '../utils/logger.js';
 import { GitHubPRService, getGitHubPRService, type PRStatus, type CopilotReviewAnalysis } from './githubPR.service.js';
 import { TaskQueueService } from './taskQueue.sqlite.js';
@@ -22,6 +23,7 @@ export interface MonitoredPR {
   lastChecked: number;
   checkCount: number;
   issuesFound: string[];
+  followupFingerprints?: string[]; // Track which issue sets we've created followups for
 }
 
 export interface PRMonitorConfig {
@@ -39,6 +41,8 @@ export class PRMonitorService {
   private readonly config: PRMonitorConfig;
   private readonly githubPR: GitHubPRService;
   private readonly taskQueue: TaskQueueService;
+  private consecutiveFailures = 0;
+  private readonly maxConsecutiveFailures = 10;
 
   constructor(
     taskQueue: TaskQueueService,
@@ -143,35 +147,102 @@ export class PRMonitorService {
    * Poll all monitored PRs
    */
   private async pollAllPRs(): Promise<void> {
-    const prsToMonitor = Array.from(this.monitoredPRs.values()).filter(
-      pr => pr.status === 'monitoring'
-    );
+    try {
+      const prsToMonitor = Array.from(this.monitoredPRs.values()).filter(
+        pr => pr.status === 'monitoring'
+      );
 
-    if (prsToMonitor.length === 0) {
-      this.stopPolling();
-      return;
-    }
+      if (prsToMonitor.length === 0) {
+        logger.debug({
+          category: 'pr-workflow',
+          action: 'poll_no_prs',
+          message: 'No PRs to monitor this cycle'
+        });
+        return; // Don't stop polling, just skip this cycle
+      }
 
-    logger.debug({
-      category: 'pr-workflow',
-      action: 'poll_cycle',
-      message: `Polling ${prsToMonitor.length} PR(s)`,
-      details: { prNumbers: prsToMonitor.map(pr => pr.prNumber) }
-    });
+      logger.debug({
+        category: 'pr-workflow',
+        action: 'poll_cycle',
+        message: `Polling ${prsToMonitor.length} PR(s)`,
+        details: { prNumbers: prsToMonitor.map(pr => pr.prNumber) }
+      });
 
-    for (const monitoredPR of prsToMonitor) {
-      try {
-        await this.checkPR(monitoredPR);
-      } catch (error) {
+      for (const monitoredPR of prsToMonitor) {
+        try {
+          await this.checkPR(monitoredPR);
+        } catch (error) {
+          logger.error({
+            category: 'pr-workflow',
+            action: 'check_pr_error',
+            message: `Error checking PR #${monitoredPR.prNumber}`,
+            error,
+            details: { prNumber: monitoredPR.prNumber }
+          });
+        }
+      }
+
+      // Reset failure counter on successful poll
+      if (this.consecutiveFailures > 0) {
+        logger.info({
+          category: 'pr-workflow',
+          action: 'polling_recovered',
+          message: `PR polling recovered after ${this.consecutiveFailures} failures`
+        });
+        this.consecutiveFailures = 0;
+      }
+
+      // Emit metrics after successful poll
+      this.emitMetrics();
+    } catch (error) {
+      this.consecutiveFailures++;
+
+      logger.error({
+        category: 'pr-workflow',
+        action: 'polling_failed',
+        message: `PR polling cycle failed (${this.consecutiveFailures}/${this.maxConsecutiveFailures})`,
+        error,
+        details: {
+          consecutiveFailures: this.consecutiveFailures,
+          maxConsecutiveFailures: this.maxConsecutiveFailures
+        }
+      });
+
+      // Stop polling if we exceed max consecutive failures
+      if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
         logger.error({
           category: 'pr-workflow',
-          action: 'check_pr_error',
-          message: `Error checking PR #${monitoredPR.prNumber}`,
-          error,
-          details: { prNumber: monitoredPR.prNumber }
+          action: 'polling_max_failures',
+          message: `PR polling exceeded max consecutive failures (${this.maxConsecutiveFailures}), stopping`,
+          details: { consecutiveFailures: this.consecutiveFailures }
         });
+        this.stopPolling();
       }
     }
+  }
+
+  /**
+   * Update monitored PR status atomically (DB first, then in-memory)
+   * Prevents race conditions where in-memory and DB states diverge
+   */
+  private async updateMonitoredPRStatus(
+    monitoredPR: MonitoredPR,
+    newStatus: MonitoredPR['status'],
+    dbStatus: string,
+    notes?: string
+  ): Promise<void> {
+    // Update DB first
+    await this.updateTaskPRStatus(monitoredPR.taskId, dbStatus, notes);
+
+    // Only update in-memory if DB update succeeded
+    monitoredPR.status = newStatus;
+
+    logger.info({
+      category: 'pr-workflow',
+      action: 'pr_status_updated',
+      message: `PR #${monitoredPR.prNumber} status: ${monitoredPR.status}`,
+      details: { prNumber: monitoredPR.prNumber, status: newStatus, dbStatus }
+    });
   }
 
   /**
@@ -189,8 +260,7 @@ export class PRMonitorService {
         message: `PR #${monitoredPR.prNumber} exceeded max polling attempts`,
         details: { prNumber: monitoredPR.prNumber, checkCount: monitoredPR.checkCount }
       });
-      monitoredPR.status = 'failed';
-      await this.updateTaskPRStatus(monitoredPR.taskId, 'pending_checks', 'timeout');
+      await this.updateMonitoredPRStatus(monitoredPR, 'failed', 'pending_checks', 'timeout');
       return;
     }
 
@@ -204,8 +274,7 @@ export class PRMonitorService {
         action: 'pr_already_merged',
         message: `PR #${monitoredPR.prNumber} was already merged`
       });
-      monitoredPR.status = 'merged';
-      await this.updateTaskPRStatus(monitoredPR.taskId, 'merged');
+      await this.updateMonitoredPRStatus(monitoredPR, 'merged', 'merged');
       return;
     }
 
@@ -216,8 +285,7 @@ export class PRMonitorService {
         action: 'pr_closed',
         message: `PR #${monitoredPR.prNumber} was closed without merging`
       });
-      monitoredPR.status = 'failed';
-      await this.updateTaskPRStatus(monitoredPR.taskId, 'closed');
+      await this.updateMonitoredPRStatus(monitoredPR, 'failed', 'closed');
       return;
     }
 
@@ -260,8 +328,7 @@ export class PRMonitorService {
     }
 
     // PR is ready to merge
-    monitoredPR.status = 'ready_to_merge';
-    await this.updateTaskPRStatus(monitoredPR.taskId, 'ready_to_merge');
+    await this.updateMonitoredPRStatus(monitoredPR, 'ready_to_merge', 'ready_to_merge');
 
     if (this.config.enableAutoMerge) {
       await this.mergePR(monitoredPR);
@@ -303,6 +370,13 @@ export class PRMonitorService {
   }
 
   /**
+   * Hash issues to create fingerprint for tracking
+   */
+  private hashIssues(issues: string[]): string {
+    return crypto.createHash('md5').update(issues.sort().join('|')).digest('hex');
+  }
+
+  /**
    * Create a followup task to address PR issues
    */
   private async createFollowupTask(
@@ -310,12 +384,6 @@ export class PRMonitorService {
     prStatus: PRStatus,
     copilotAnalysis: CopilotReviewAnalysis
   ): Promise<void> {
-    // Only create one followup task per PR
-    if (monitoredPR.status === 'needs_followup') {
-      return;
-    }
-
-    monitoredPR.status = 'needs_followup';
 
     // Build task description
     const issues: string[] = [];
@@ -343,6 +411,30 @@ export class PRMonitorService {
     if (changeRequests.length > 0) {
       issues.push(`Human reviewer(s) requested changes: ${changeRequests.map(r => r.author).join(', ')}`);
     }
+
+    // Check if we've already created a followup for these exact issues
+    const issueFingerprint = this.hashIssues(issues);
+    const existingFollowup = monitoredPR.followupFingerprints?.includes(issueFingerprint);
+
+    if (existingFollowup) {
+      logger.info({
+        category: 'pr-workflow',
+        action: 'followup_already_exists',
+        message: `Followup task already exists for these exact issues on PR #${monitoredPR.prNumber}`,
+        details: {
+          prNumber: monitoredPR.prNumber,
+          issueFingerprint,
+          issuesCount: issues.length
+        }
+      });
+      return;
+    }
+
+    // Track fingerprint
+    monitoredPR.followupFingerprints = [
+      ...(monitoredPR.followupFingerprints || []),
+      issueFingerprint
+    ];
 
     monitoredPR.issuesFound = issues;
 
@@ -385,7 +477,13 @@ export class PRMonitorService {
     followupTasks.push(followupTask.id);
     this.taskQueue.updateTask(originalTask.id, { followup_tasks: [...followupTasks] });
 
-    await this.updateTaskPRStatus(monitoredPR.taskId, 'pending_review', `followup_created:${followupTask.id}`);
+    // Mark as needs_followup with atomic update
+    await this.updateMonitoredPRStatus(
+      monitoredPR,
+      'needs_followup',
+      'pending_review',
+      `followup_created:${followupTask.id}`
+    );
   }
 
   /**
@@ -401,8 +499,7 @@ export class PRMonitorService {
 
       await this.githubPR.mergePR(monitoredPR.prNumber);
 
-      monitoredPR.status = 'merged';
-      await this.updateTaskPRStatus(monitoredPR.taskId, 'merged');
+      await this.updateMonitoredPRStatus(monitoredPR, 'merged', 'merged');
 
       logger.info({
         category: 'pr-workflow',
@@ -418,7 +515,7 @@ export class PRMonitorService {
         error,
         details: { prNumber: monitoredPR.prNumber }
       });
-      monitoredPR.status = 'failed';
+      await this.updateMonitoredPRStatus(monitoredPR, 'failed', 'merge_failed');
     }
   }
 
@@ -449,6 +546,31 @@ export class PRMonitorService {
    */
   getMonitoredPRs(): MonitoredPR[] {
     return Array.from(this.monitoredPRs.values());
+  }
+
+  /**
+   * Emit PR workflow metrics
+   */
+  private emitMetrics(): void {
+    const monitoredPRs = Array.from(this.monitoredPRs.values());
+
+    const metrics = {
+      totalMonitored: monitoredPRs.length,
+      monitoring: monitoredPRs.filter(p => p.status === 'monitoring').length,
+      readyToMerge: monitoredPRs.filter(p => p.status === 'ready_to_merge').length,
+      merged: monitoredPRs.filter(p => p.status === 'merged').length,
+      needsFollowup: monitoredPRs.filter(p => p.status === 'needs_followup').length,
+      failed: monitoredPRs.filter(p => p.status === 'failed').length,
+      consecutiveFailures: this.consecutiveFailures,
+      isPolling: this.pollTimer !== null
+    };
+
+    logger.info({
+      category: 'metrics',
+      action: 'pr_workflow_metrics',
+      message: 'PR workflow health metrics',
+      details: metrics
+    });
   }
 
   /**

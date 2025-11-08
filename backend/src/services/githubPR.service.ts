@@ -11,6 +11,25 @@ import { logger } from '../utils/logger.js';
 
 const execAsync = promisify(exec);
 
+/**
+ * Execute command with timeout protection
+ * Prevents GitHub CLI from hanging indefinitely
+ */
+async function execWithTimeout(
+  cmd: string,
+  timeoutMs: number = 30000
+): Promise<{ stdout: string; stderr: string }> {
+  return Promise.race([
+    execAsync(cmd),
+    new Promise<never>((_, reject) =>
+      setTimeout(
+        () => reject(new Error(`GitHub CLI timeout after ${timeoutMs}ms: ${cmd}`)),
+        timeoutMs
+      )
+    )
+  ]);
+}
+
 export interface PRCheckStatus {
   name: string;
   status: 'pending' | 'success' | 'failure' | 'error';
@@ -57,26 +76,56 @@ export interface CopilotReviewAnalysis {
 export class GitHubPRService {
   private repoOwner: string;
   private repoName: string;
+  private githubCircuitBreaker?: any; // CircuitBreaker (imported lazily)
 
   constructor(repoOwner: string = 'Jdubz', repoName: string = 'app-monitor') {
     this.repoOwner = repoOwner;
     this.repoName = repoName;
+    this.initializeCircuitBreaker();
+  }
+
+  /**
+   * Initialize circuit breaker for GitHub API protection
+   */
+  private async initializeCircuitBreaker(): Promise<void> {
+    try {
+      const { CircuitBreaker } = await import('../utils/circuitBreaker.js');
+      this.githubCircuitBreaker = new CircuitBreaker({
+        name: 'github-api',
+        failureThreshold: 5,
+        resetTimeout: 60000 // 1 minute
+      });
+
+      logger.info({
+        category: 'pr-workflow',
+        action: 'circuit_breaker_initialized',
+        message: 'GitHub API circuit breaker initialized'
+      });
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'circuit_breaker_init_failed',
+        message: 'Failed to initialize GitHub API circuit breaker',
+        error
+      });
+    }
   }
 
   /**
    * Get comprehensive PR status including checks, reviews, and comments
    */
   async getPRStatus(prNumber: number): Promise<PRStatus> {
-    try {
+    const executeGetPRStatus = async (): Promise<PRStatus> => {
       logger.info({
         category: 'pr-workflow',
         action: 'fetch_pr_status',
         message: `Fetching status for PR #${prNumber}`
       });
 
-      // Fetch PR data using gh CLI
-      const { stdout } = await execAsync(
-        `gh pr view ${prNumber} --repo ${this.repoOwner}/${this.repoName} --json number,url,state,mergeable,statusCheckRollup,reviews,comments`
+      // Fetch PR data using gh CLI with timeout protection
+      const { stdout } = await execWithTimeout(
+        `gh pr view ${prNumber} --repo ${this.repoOwner}/${this.repoName} --json number,url,state,mergeable,statusCheckRollup,reviews,comments`,
+        30000 // 30 second timeout
       );
 
       const prData = JSON.parse(stdout);
@@ -115,13 +164,33 @@ export class GitHubPRService {
         reviews,
         comments
       };
+    };
+
+    try {
+      // Execute with circuit breaker protection
+      if (this.githubCircuitBreaker) {
+        return await this.githubCircuitBreaker.execute(executeGetPRStatus);
+      } else {
+        return await executeGetPRStatus();
+      }
     } catch (error) {
-      logger.error({
-        category: 'pr-workflow',
-        action: 'fetch_pr_status_failed',
-        message: `Failed to fetch PR status for #${prNumber}`,
-        error
-      });
+      const isCircuitOpen = error instanceof Error && error.message.includes('Circuit breaker');
+
+      if (isCircuitOpen) {
+        logger.error({
+          category: 'circuit-breaker',
+          action: 'github_api_blocked',
+          message: `GitHub API circuit breaker is OPEN, blocking PR status fetch for #${prNumber}`,
+          details: { prNumber }
+        });
+      } else {
+        logger.error({
+          category: 'pr-workflow',
+          action: 'fetch_pr_status_failed',
+          message: `Failed to fetch PR status for #${prNumber}`,
+          error
+        });
+      }
       throw error;
     }
   }
@@ -148,29 +217,39 @@ export class GitHubPRService {
     const blockingIssues: string[] = [];
     const suggestions: string[] = [];
 
-    // Keywords that indicate blocking issues
-    const blockingKeywords = [
-      'security', 'vulnerability', 'critical', 'error', 'bug',
-      'unsafe', 'must fix', 'required', 'breaking',
-      'not satisfied', 'not met', 'missing', 'incomplete',
-      'acceptance criteria', 'requirement not', 'does not meet'
+    // Improved pattern-based matching to reduce false positives
+    const blockingPatterns = [
+      /\b(security|vulnerability)\b/i, // Simplified - any mention of security/vulnerability is blocking
+      /\bcritical\b/i, // Critical is always blocking
+      /\berror\s+(in|with|detected)/i, // Error patterns
+      /\bmust\s+fix\b/i,
+      /\bmust\s+be\s+(fixed|addressed|resolved)/i,
+      /\bacceptance\s+criteria\s+(not\s+)?(met|satisfied)/i,
+      /\brequirement\s+(not\s+)?(met|satisfied)/i,
+      /\bdoes\s+not\s+meet\b/i,
+      /\bunsafe\s+(code|operation|practice)/i,
+      /\bbreaking\s+(change|api)/i,
+      /\b(error|bug|issue)\s+(must|should|needs to)\s+be\s+(fixed|resolved)/i
     ];
 
-    // Keywords that indicate suggestions
-    const suggestionKeywords = [
-      'consider', 'suggest', 'could', 'might', 'recommend',
-      'prefer', 'improve', 'optimize', 'enhance'
+    // Suggestion patterns (more permissive)
+    const suggestionPatterns = [
+      /\bconsider\s+(using|adding|changing)/i,
+      /\bsugg(est|estion)\b/i,
+      /\bcould\s+(be|improve|use)/i,
+      /\bmight\s+(want to|be|consider)/i,
+      /\brecommend(ed)?\b/i,
+      /\bprefer(red)?\b/i,
+      /\bwould\s+be\s+better\b/i
     ];
 
     for (const comment of copilotComments) {
-      const bodyLower = comment.body.toLowerCase();
-
-      // Check for blocking issues
-      if (blockingKeywords.some(keyword => bodyLower.includes(keyword))) {
+      // Check for blocking issues using patterns
+      if (blockingPatterns.some(pattern => pattern.test(comment.body))) {
         blockingIssues.push(comment.body);
       }
-      // Check for suggestions
-      else if (suggestionKeywords.some(keyword => bodyLower.includes(keyword))) {
+      // Check for suggestions using patterns
+      else if (suggestionPatterns.some(pattern => pattern.test(comment.body))) {
         suggestions.push(comment.body);
       }
     }
@@ -204,6 +283,10 @@ export class GitHubPRService {
 
     if (status.mergeable === 'CONFLICTING') {
       return { canMerge: false, reason: 'PR has merge conflicts' };
+    }
+
+    if (status.mergeable === 'UNKNOWN') {
+      return { canMerge: false, reason: 'PR mergeable status is unknown, waiting for GitHub to determine' };
     }
 
     // Check if all CI checks passed
@@ -251,15 +334,16 @@ export class GitHubPRService {
    * Merge a pull request
    */
   async mergePR(prNumber: number, method: 'merge' | 'squash' | 'rebase' = 'squash'): Promise<void> {
-    try {
+    const executeMergePR = async (): Promise<void> => {
       logger.info({
         category: 'pr-workflow',
         action: 'merge_pr',
         message: `Merging PR #${prNumber} using ${method} method`
       });
 
-      await execAsync(
-        `gh pr merge ${prNumber} --repo ${this.repoOwner}/${this.repoName} --${method} --auto`
+      await execWithTimeout(
+        `gh pr merge ${prNumber} --repo ${this.repoOwner}/${this.repoName} --${method} --auto`,
+        30000 // 30 second timeout
       );
 
       logger.info({
@@ -267,6 +351,15 @@ export class GitHubPRService {
         action: 'merge_pr_success',
         message: `Successfully merged PR #${prNumber}`
       });
+    };
+
+    try {
+      // Execute with circuit breaker protection
+      if (this.githubCircuitBreaker) {
+        await this.githubCircuitBreaker.execute(executeMergePR);
+      } else {
+        await executeMergePR();
+      }
     } catch (error) {
       logger.error({
         category: 'pr-workflow',
@@ -283,8 +376,9 @@ export class GitHubPRService {
    */
   async addComment(prNumber: number, body: string): Promise<void> {
     try {
-      await execAsync(
-        `gh pr comment ${prNumber} --repo ${this.repoOwner}/${this.repoName} --body "${body.replace(/"/g, '\\"')}"`
+      await execWithTimeout(
+        `gh pr comment ${prNumber} --repo ${this.repoOwner}/${this.repoName} --body "${body.replace(/"/g, '\\"')}"`,
+        30000 // 30 second timeout
       );
 
       logger.info({

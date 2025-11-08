@@ -2,42 +2,10 @@ import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { api } from "../services/api";
-
-interface SyncStatus {
-  isRunning: boolean;
-  syncInProgress: boolean;
-  lastSyncTime?: string;
-  baseDir: string;
-  repositories: string[];
-  workers: string[];
-  conflictStrategy: string;
-}
-
-interface SyncResult {
-  successful: Array<{
-    worker?: string;
-    repo: string;
-    action: string;
-  }>;
-  conflicts: Array<{
-    worker: string;
-    repo: string;
-    path: string;
-    timestamp: string;
-    strategy: string;
-    status?: string;
-  }>;
-  errors: Array<{
-    worker?: string;
-    repo: string;
-    error: string;
-  }>;
-  skipped: Array<{
-    worker?: string;
-    repo: string;
-    reason: string;
-  }>;
-}
+import type {
+  DevBotsWorkspaceSyncResult as SyncResult,
+  DevBotsWorkspaceSyncStatus as SyncStatus,
+} from "@app-monitor/api-contracts";
 
 interface WorkspaceSyncPanelProps {
   onStatusChange?: (status: SyncStatus) => void;

@@ -54,6 +54,7 @@ export class TaskExecutionService {
   private readonly taskPersistence: TaskPersistence;
   private readonly config: TaskExecutionServiceConfig;
   private recovery?: SimpleFailureRecovery; // Optional: set via setRecovery()
+  private dockerCircuitBreaker?: any; // CircuitBreaker (imported lazily)
 
   private lastAgentType: 'claude' | 'codex' = 'claude';
   private readonly AGENT_ROTATION_STRATEGY: 'alternate' | 'random' | 'claude-only' | 'codex-only' = 'alternate';
@@ -84,6 +85,35 @@ export class TaskExecutionService {
         dryRun: config.recovery?.dryRun ?? false
       }
     };
+
+    // Initialize circuit breaker for Docker operations
+    this.initializeCircuitBreaker();
+  }
+
+  /**
+   * Initialize circuit breaker for Docker operations
+   */
+  private async initializeCircuitBreaker(): Promise<void> {
+    try {
+      const { CircuitBreaker } = await import('../utils/circuitBreaker.js');
+      this.dockerCircuitBreaker = new CircuitBreaker({
+        name: 'docker-execution',
+        failureThreshold: 5, // Open circuit after 5 consecutive failures
+        resetTimeout: 60000 // Try again after 1 minute
+      });
+      logger.info({
+        category: 'circuit-breaker',
+        action: 'initialized',
+        message: 'Docker execution circuit breaker initialized'
+      });
+    } catch (error) {
+      logger.error({
+        category: 'circuit-breaker',
+        action: 'init_failed',
+        message: 'Failed to initialize circuit breaker',
+        error
+      });
+    }
   }
 
   // ==========================================================================
@@ -307,9 +337,7 @@ export class TaskExecutionService {
     const nextTask = sqliteTask;
     const workerId = `worker-${Date.now()}-${Math.random().toString(36).substring(7)}`;
 
-    // Update task status to running
-    nextTask.status = 'running';
-    nextTask.assigned_worker = workerId;
+    // DON'T update task status to running yet - validate first to prevent stuck tasks
 
     // Ensure mirror is up to date before provisioning workspace
     try {
@@ -322,15 +350,21 @@ export class TaskExecutionService {
         error
       });
 
-      // Fail task and trigger recovery
-      await this.failTaskWithRecovery(
-        nextTask,
-        `Workspace initialization failed: ${error instanceof Error ? error.message : String(error)}`,
-        {
-          stderr: error instanceof Error ? error.message : String(error),
-          exitCode: 1
+      // Task is still 'pending' so it can be retried - reset to pending explicitly
+      nextTask.status = 'pending';
+      nextTask.assigned_worker = undefined;
+      this.taskQueue.updateTask(nextTask.id, { status: 'pending', assigned_worker: undefined });
+
+      // Trigger recovery without failing the task (it's still pending)
+      logger.warn({
+        category: 'recovery',
+        action: 'workspace_init_failed_task_remains_pending',
+        message: `Task ${nextTask.id} remains pending after workspace init failure - will retry`,
+        details: {
+          taskId: nextTask.id,
+          error: error instanceof Error ? error.message : String(error)
         }
-      );
+      });
 
       return;
     }
@@ -359,6 +393,11 @@ export class TaskExecutionService {
       return;
     }
 
+    // ALL VALIDATION PASSED - Now mark task as running
+    nextTask.status = 'running';
+    nextTask.assigned_worker = workerId;
+    this.taskQueue.updateTask(nextTask.id, { status: 'running', assigned_worker: workerId });
+
     logger.info({
       category: 'process',
       action: 'assigning_task_to_worker',
@@ -379,8 +418,15 @@ export class TaskExecutionService {
     nextTask.prompt = this.templateManager.generatePrompt(taskContext);
 
     try {
-      // Execute task using imagineer-style ephemeral container
-      await this.executeTaskWithDockerRun(nextTask, agent);
+      // Execute task using imagineer-style ephemeral container with circuit breaker protection
+      if (this.dockerCircuitBreaker) {
+        await this.dockerCircuitBreaker.execute(async () => {
+          await this.executeTaskWithDockerRun(nextTask, agent);
+        });
+      } else {
+        // Fallback if circuit breaker not initialized
+        await this.executeTaskWithDockerRun(nextTask, agent);
+      }
 
       logger.info({
         category: 'process',
@@ -389,12 +435,24 @@ export class TaskExecutionService {
       });
 
     } catch (error) {
-      logger.error({
-        category: 'process',
-        action: 'failed_to_create_ephemeral_worker',
-        message: `Failed to create ephemeral worker for task ${nextTask.id}:`,
-        error: error
-      });
+      // Check if error is from circuit breaker being open
+      const isCircuitOpen = error instanceof Error && error.message.includes('Circuit breaker');
+
+      if (isCircuitOpen) {
+        logger.error({
+          category: 'circuit-breaker',
+          action: 'docker_execution_blocked',
+          message: `Docker execution blocked by circuit breaker for task ${nextTask.id}`,
+          error: error
+        });
+      } else {
+        logger.error({
+          category: 'process',
+          action: 'failed_to_create_ephemeral_worker',
+          message: `Failed to create ephemeral worker for task ${nextTask.id}:`,
+          error: error
+        });
+      }
 
       // Fail task and trigger recovery
       await this.failTaskWithRecovery(
@@ -450,11 +508,20 @@ export class TaskExecutionService {
     let cliCommand: string;
 
     // Prepare git environment variables
-    const gitEnvVars = [];
-    const envKeys = ['GIT_AUTHOR_NAME', 'GIT_AUTHOR_EMAIL', 'GIT_COMMITTER_NAME', 'GIT_COMMITTER_EMAIL', 'GITHUB_TOKEN'];
-    for (const key of envKeys) {
-      if (process.env[key]) {
-        gitEnvVars.push('-e', `${key}=${process.env[key]}`);
+    const gitEnvVars: string[] = [];
+    const gitIdentityEnvKeys = [
+      'GIT_AUTHOR_NAME',
+      'GIT_AUTHOR_EMAIL',
+      'GIT_COMMITTER_NAME',
+      'GIT_COMMITTER_EMAIL',
+      'GITHUB_TOKEN'
+    ];
+    const providedGitEnvKeys: string[] = [];
+    for (const key of gitIdentityEnvKeys) {
+      const value = process.env[key];
+      if (value) {
+        gitEnvVars.push('-e', `${key}=${value}`);
+        providedGitEnvKeys.push(key);
       }
     }
 
@@ -511,15 +578,31 @@ export class TaskExecutionService {
       cliCommand = 'claude';
     }
 
-    // Log the full docker command for debugging
-    const fullCommand = ['docker', ...dockerArgs].join(' ');
+    // Log sanitized docker command details for debugging without leaking secrets
+    const redactedDockerArgs: string[] = [];
+    for (let i = 0; i < dockerArgs.length; i++) {
+      const arg = dockerArgs[i];
+      if (arg === '-e' && dockerArgs[i + 1]) {
+        const [key] = dockerArgs[i + 1].split('=', 1);
+        redactedDockerArgs.push('-e', `${key}=<redacted>`);
+        i++; // Skip the value we just redacted
+        continue;
+      }
+      if (dockerArgs[i - 1] === '-c') {
+        redactedDockerArgs.push('[shell-script-redacted]');
+        continue;
+      }
+      redactedDockerArgs.push(arg);
+    }
+
     logger.info({
       category: 'process',
       action: 'docker_command_debug',
-      message: `Full Docker command: ${fullCommand.substring(0, 500)}...`,
+      message: `Prepared docker invocation for ${cliCommand}`,
       details: {
-        dockerCommandLength: fullCommand.length,
-        dockerArgs: dockerArgs.slice(0, 10) // Log first 10 args for debugging
+        dockerArgsSample: redactedDockerArgs.slice(0, 12),
+        dockerArgCount: dockerArgs.length,
+        gitEnvKeysForwarded: providedGitEnvKeys
       }
     });
 
@@ -649,11 +732,8 @@ export class TaskExecutionService {
         // Parse JSON output from Claude/Codex
         const cliOutput = JSON.parse(stdout);
 
-        // Ensure git operations are synced to disk if git was used
-        // Only add delay if the task involves git operations to avoid unnecessary performance impact
-        if (stdout.includes('git commit') || stdout.includes('git push') || stdout.includes('Created PR')) {
-          await new Promise(resolve => setTimeout(resolve, 500)); // Reduced delay, only for git operations
-        }
+        // Add a small delay to ensure git operations are fully flushed to disk
+        await this.waitForGitFlush();
 
         // Complete task in SQLite with agent type for comparison tracking
         this.taskQueue.completeTask(task.id, JSON.stringify(cliOutput), chosenAgentType);
@@ -684,11 +764,8 @@ export class TaskExecutionService {
           message: `Failed to parse Claude output, marking complete anyway: ${parseError instanceof Error ? parseError.message : String(parseError)}`
         });
 
-        // Ensure git operations are synced to disk if git was used
-        // Only add delay if the task involves git operations to avoid unnecessary performance impact
-        if (stdout.includes('git commit') || stdout.includes('git push') || stdout.includes('Created PR')) {
-          await new Promise(resolve => setTimeout(resolve, 500)); // Reduced delay, only for git operations
-        }
+        // Add a small delay to ensure git operations are fully flushed to disk
+        await this.waitForGitFlush();
 
         // Still complete task even if output parsing fails
         this.taskQueue.completeTask(task.id, stdout, chosenAgentType);
@@ -757,5 +834,16 @@ export class TaskExecutionService {
         }
       );
     }
+  }
+
+  /**
+   * Allow git operations within the container a brief moment to flush to disk.
+   * Prevents race conditions where the host immediately reads from the workspace.
+   */
+  private async waitForGitFlush(delayMs = 2000): Promise<void> {
+    if (delayMs <= 0) {
+      return;
+    }
+    await new Promise(resolve => setTimeout(resolve, delayMs));
   }
 }

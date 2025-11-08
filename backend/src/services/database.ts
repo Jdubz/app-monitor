@@ -191,6 +191,14 @@ export class DevBotsDatabase {
         'utf-8'
       ));
     });
+
+    // Migration 006: Quality Observations
+    this.applyMigration('006_quality_observations', () => {
+      this.db.exec(fs.readFileSync(
+        path.join(__dirname, '..', '..', 'migrations', '005_quality_observations.sql'),
+        'utf-8'
+      ));
+    });
   }
 
   private applyMigration(name: string, migration: () => void): void {
@@ -379,6 +387,116 @@ export class DevBotsDatabase {
     }));
   }
 
+  // Quality Observations
+  storeQualityObservation(observation: any): number {
+    const result = this.db.prepare(`
+      INSERT INTO quality_observations (
+        task_id, pr_number, branch, timestamp,
+        overall_score, quality_level, ready_for_merge,
+        acceptance_criteria_observation,
+        test_coverage_observation,
+        scope_boundaries_observation,
+        quality_gates_observation,
+        improvement_opportunities,
+        blockers
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      observation.taskId,
+      observation.prNumber || null,
+      observation.branch || null,
+      observation.timestamp,
+      observation.overallScore,
+      observation.qualityLevel,
+      observation.readyForMerge ? 1 : 0,
+      observation.observations.acceptanceCriteria ? JSON.stringify(observation.observations.acceptanceCriteria) : null,
+      observation.observations.testCoverage ? JSON.stringify(observation.observations.testCoverage) : null,
+      observation.observations.scopeBoundaries ? JSON.stringify(observation.observations.scopeBoundaries) : null,
+      observation.observations.qualityGates ? JSON.stringify(observation.observations.qualityGates) : null,
+      JSON.stringify(observation.improvementOpportunities),
+      JSON.stringify(observation.blockers)
+    );
+
+    return result.lastInsertRowid as number;
+  }
+
+  getQualityObservation(taskId: string): StoredQualityObservation | null {
+    const row = this.db.prepare(`
+      SELECT * FROM quality_observations
+      WHERE task_id = ?
+      ORDER BY created_at DESC
+      LIMIT 1
+    `).get(taskId) as any;
+
+    if (!row) return null;
+
+    return {
+      id: row.id,
+      task_id: row.task_id,
+      pr_number: row.pr_number,
+      branch: row.branch,
+      timestamp: row.timestamp,
+      overall_score: row.overall_score,
+      quality_level: row.quality_level,
+      ready_for_merge: Boolean(row.ready_for_merge),
+      acceptance_criteria_observation: row.acceptance_criteria_observation,
+      test_coverage_observation: row.test_coverage_observation,
+      scope_boundaries_observation: row.scope_boundaries_observation,
+      quality_gates_observation: row.quality_gates_observation,
+      improvement_opportunities: row.improvement_opportunities,
+      blockers: row.blockers,
+      created_at: row.created_at
+    };
+  }
+
+  getVerificationResult(taskId: string): any | null {
+    // Compatibility method - returns quality observation as verification result
+    const observation = this.getQualityObservation(taskId);
+    if (!observation) return null;
+
+    return {
+      taskId: observation.task_id,
+      passed: observation.ready_for_merge,
+      overallScore: observation.overall_score,
+      acceptanceCriteria: observation.acceptance_criteria_observation ?
+        JSON.parse(observation.acceptance_criteria_observation) : null,
+      testCoverage: observation.test_coverage_observation ?
+        JSON.parse(observation.test_coverage_observation) : null,
+      scopeBoundaries: observation.scope_boundaries_observation ?
+        JSON.parse(observation.scope_boundaries_observation) : null,
+      recommendations: observation.improvement_opportunities ?
+        JSON.parse(observation.improvement_opportunities).map((o: any) => o.suggestedFix) : [],
+      timestamp: observation.timestamp
+    };
+  }
+
+  storeVerificationResult(result: any): void {
+    // Compatibility method - converts verification result to quality observation format
+    const observation = {
+      taskId: result.taskId,
+      timestamp: result.timestamp || new Date().toISOString(),
+      overallScore: result.overallScore || 0,
+      qualityLevel: result.passed ? 'good' : 'needs-improvement',
+      readyForMerge: result.passed || false,
+      observations: {
+        acceptanceCriteria: result.acceptanceCriteria,
+        testCoverage: result.testCoverage,
+        scopeBoundaries: result.scopeBoundaries
+      },
+      improvementOpportunities: result.recommendations?.map((r: string) => ({
+        type: 'criteria',
+        priority: 'medium',
+        description: r,
+        estimatedEffort: 15,
+        complexity: 'moderate',
+        automatable: false,
+        suggestedFix: r
+      })) || [],
+      blockers: []
+    };
+
+    this.storeQualityObservation(observation);
+  }
+
   close(): void {
     this.db.close();
   }
@@ -443,6 +561,24 @@ export interface FailurePattern {
   pattern: string;
   timestamp?: string;
   resolved?: boolean;
+}
+
+export interface StoredQualityObservation {
+  id: number;
+  task_id: string;
+  pr_number?: number;
+  branch?: string;
+  timestamp: string;
+  overall_score: number;
+  quality_level: string;
+  ready_for_merge: boolean;
+  acceptance_criteria_observation?: string;
+  test_coverage_observation?: string;
+  scope_boundaries_observation?: string;
+  quality_gates_observation?: string;
+  improvement_opportunities?: string;
+  blockers?: string;
+  created_at: number;
 }
 
 // Singleton instance

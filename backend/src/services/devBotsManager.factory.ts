@@ -44,6 +44,10 @@ export async function createDevBotsManagerDependencies(
   const taskQueueDbPath = config.taskQueueDbPath ?? './data/tasks/queue.db';
   const taskQueue = new TaskQueueService(taskQueueDbPath);
 
+  // Register with factory for singleton access
+  const { setTaskQueueService } = await import('./taskQueue.factory.js');
+  setTaskQueueService(taskQueue);
+
   // Run recovery system migration
   await taskQueue.runRecoveryMigration();
 

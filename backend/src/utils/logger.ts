@@ -35,6 +35,7 @@ type LogSeverity = 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR';
 export type LogCategory =
   | 'api'
   | 'build'
+  | 'circuit-breaker'
   | 'cloud'
   | 'database'
   | 'docker'
@@ -42,10 +43,14 @@ export type LogCategory =
   | 'log_format'
   | 'logs'
   | 'merge_conflict'
+  | 'metrics'
+  | 'mirror_debug'
   | 'pr-workflow'
   | 'process'
   | 'quality'
   | 'quality-gates'
+  | 'quality-improvement'
+  | 'quality-observation'
   | 'recovery'
   | 'scripts'
   | 'socket'
@@ -54,6 +59,7 @@ export type LogCategory =
   | 'test_failure'
   | 'token-tracking'
   | 'utility'
+  | 'verification'
   | 'workspace';
 
 export interface LogEntry {
