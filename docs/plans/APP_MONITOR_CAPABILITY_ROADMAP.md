@@ -15,7 +15,7 @@
 - **Stabilize**
   - Resolve frontend TypeScript build errors (`DevBotsPanel`, `EnhancedLogsViewer`, `EnhancedTaskCreationForm`, etc.).
   - Unblock backend safe runner by fixing the hanging `ProcessManager` integration specs.
-  - Re-enable pre-push hooks (`lint` + `test:backend` / `test:frontend`) once suites are green.
+  - ✅ (2025-11-08) Re-enabled pre-push hooks (`lint` + `test:backend` / `test:frontend`) after suites returned to green; `.husky/pre-push` now enforces both.
 - **POC**
   - Add smoke-test job per work-target (basic build/test) and expose status in dashboard.
   - Ensure nightly lint/test cron or manual runner keeps regressions visible.
