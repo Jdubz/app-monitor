@@ -45,3 +45,22 @@ cap_add:
 
 ## Status: ✅ WORKING
 Both worker-a and worker-b containers are now running with properly configured Claude Code credentials.
+
+---
+
+## Git Identity Forwarding & Flush Guard (2025-11-08)
+
+### Why
+- Commits created inside Claude/Codex containers were missing the host developer identity.
+- Git pushes occasionally raced the SQLite completion step, so tasks finished before files landed on disk.
+
+### Fix
+1. **Git Env Passthrough**
+   - `taskExecution.service.ts` now forwards `GIT_AUTHOR_*`, `GIT_COMMITTER_*`, and `GITHUB_TOKEN` into both Codex and Claude containers.
+   - Sensitive values are never written to logs (sanitized Docker arg logging).
+2. **Post-Execution Flush Guard**
+   - Added a tiny (2s) flush wait before marking tasks complete so git operations inside the container can finish writing.
+
+### Impact
+- Dev-bots produce commits that match the triggering developer.
+- Race conditions between CLI completion and git writes are eliminated without slowing normal executions.

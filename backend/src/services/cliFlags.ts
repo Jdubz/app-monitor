@@ -118,9 +118,6 @@ export interface CLIFlags {
  * Build CLI arguments for the specified tool
  */
 export function buildCLIArgs(tool: CLITool, flags: CLIFlags): string[] {
-  // Validate flags before building arguments
-  validateCLIFlags(tool, flags);
-
   const args: string[] = [];
 
   if (tool === 'claude') {
@@ -288,6 +285,7 @@ export function buildCLICommand(tool: CLITool, flags: CLIFlags, prompt: string):
  * @param {CLITool} tool Identifier of the CLI tool we are targeting (`claude` or `codex`)
  * @param {CLIFlags} flags Conceptual flag set that should be validated against the target CLI
  * @throws {Error} When a flag is not supported by the specified CLI tool
+ * @see docs/plans/CONTEXT_BLOB_PRELOADING.md (CLI Flag Compatibility pattern)
  */
 export function validateCLIFlags(tool: CLITool, flags: CLIFlags): void {
   if (tool === 'codex') {
@@ -324,7 +322,7 @@ export function validateCLIFlags(tool: CLITool, flags: CLIFlags): void {
 
     if (flags.approvalPolicy) {
       throw new Error(
-        'Claude does NOT support --ask-for-approval. Use --allowedTools instead of --ask-for-approval.'
+        'Claude does NOT support --ask-for-approval. Use --allowedTools instead'
       );
     }
   }

@@ -344,21 +344,50 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
         warnings.forEach((warning) => logger.warn(warning));
       }
 
-      const result = await devBotsManager.addTask({
-        type,
-        title,
-        description: taskDescription,
-        acceptanceCriteria: Array.isArray(acceptanceCriteria) ? acceptanceCriteria : [acceptanceCriteria],
-        files,
-        dependencies,
-        project: project || repository, // Accept either 'project' or 'repository'
-        assignedAgent,
-        notes,
-        architectureReferences,
-        validationSteps,
-        successMetrics,
-        estimatedEffort
-      });
+      // Add timeout protection to prevent API from hanging indefinitely
+      const TASK_CREATION_TIMEOUT_MS = 10000; // 10 seconds
+      const taskCreationStartTime = Date.now();
+
+      const result = await Promise.race([
+        devBotsManager.addTask({
+          type,
+          title,
+          description: taskDescription,
+          acceptanceCriteria: Array.isArray(acceptanceCriteria) ? acceptanceCriteria : [acceptanceCriteria],
+          files,
+          dependencies,
+          project: project || repository, // Accept either 'project' or 'repository'
+          assignedAgent,
+          notes,
+          architectureReferences,
+          validationSteps,
+          successMetrics,
+          estimatedEffort
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error('Task creation timeout - operation took longer than 10 seconds')),
+            TASK_CREATION_TIMEOUT_MS
+          )
+        )
+      ]);
+
+      const taskCreationDuration = Date.now() - taskCreationStartTime;
+
+      // Log slow task creation for monitoring
+      if (taskCreationDuration > 1000) {
+        logger.warn({
+          category: 'api',
+          action: 'slow_task_creation',
+          message: `Task creation took ${taskCreationDuration}ms (expected < 1000ms)`,
+          details: {
+            durationMs: taskCreationDuration,
+            taskId: result.task.id,
+            taskTitle: title
+          }
+        });
+      }
+
       res.json({
         task: result.task,
         validation: result.validation,

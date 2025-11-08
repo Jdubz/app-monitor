@@ -15,6 +15,7 @@ import { DockerManager, DockerValidationResult } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
 import { getTokenTrackingService } from './tokenTracking.js';
 import { WorkspaceOrchestrator, PushCoordinator } from './workspaceOrchestrator.js';
+import { MetricsEmitter } from './metricsEmitter.js';
 import { TIME_BASED_GUARDS } from './taskFailureGuards.js';
 import { SimpleFailureRecovery } from './failureRecovery.js';
 import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
@@ -124,6 +125,8 @@ export class DevBotsManager extends EventEmitter {
   private taskExecutionService!: TaskExecutionService;
   private taskCompletionService!: TaskCompletionService;
   private prWorkflowOrchestrator!: PRWorkflowOrchestrator;
+  private taskQueueWorker?: any; // TaskQueueWorker (imported lazily to avoid circular deps)
+  private metricsEmitter?: MetricsEmitter;
 
   // System state
   private startTime = Date.now();
@@ -410,6 +413,66 @@ export class DevBotsManager extends EventEmitter {
       action: 'async_initialization_complete',
       message: 'Async initialization complete: SQLite migration and orphaned task recovery finished'
     });
+
+    // Start background task queue worker
+    await this.startTaskQueueWorker();
+
+    // Start metrics emitter
+    this.startMetricsEmitter();
+  }
+
+  /**
+   * Start background task queue worker
+   */
+  private async startTaskQueueWorker(): Promise<void> {
+    try {
+      // Dynamically import to avoid circular dependency
+      const { TaskQueueWorker } = await import('./taskQueueWorker.js');
+
+      this.taskQueueWorker = new TaskQueueWorker(this.taskExecutionService, {
+        pollIntervalMs: 5000, // Poll every 5 seconds
+        enabled: true,
+        maxConsecutiveFailures: 10
+      });
+
+      await this.taskQueueWorker.start();
+
+      logger.info({
+        category: 'process',
+        action: 'task_queue_worker_started',
+        message: 'Background task queue worker started successfully'
+      });
+    } catch (error) {
+      logger.error({
+        category: 'process',
+        action: 'task_queue_worker_start_failed',
+        message: 'Failed to start background task queue worker',
+        error
+      });
+    }
+  }
+
+  private startMetricsEmitter(): void {
+    try {
+      this.metricsEmitter = new MetricsEmitter(
+        this.taskQueue,
+        this.ephemeralWorkerService,
+        60000
+      );
+      this.metricsEmitter.start();
+      logger.info({
+        category: 'process',
+        action: 'metrics_emitter_started',
+        message: 'Background metrics emitter started successfully'
+      });
+    } catch (error) {
+      logger.error({
+        category: 'process',
+        action: 'metrics_emitter_start_failed',
+        message: 'Failed to start metrics emitter',
+        error
+      });
+    }
   }
 
   /**
@@ -902,8 +965,15 @@ export class DevBotsManager extends EventEmitter {
       message: `Task added: ${sqliteTask.id} - ${normalizedData.title} (Agent: ${normalizedData.assignedAgent || 'auto-assign'}, fingerprint: ${fingerprint.substring(0, 8)}...)`
     });
 
-    // Try to assign immediately
-    await this.assignNextTask();
+    // Try to assign in background (fire-and-forget to prevent API blocking)
+    this.assignNextTask().catch(error => {
+      logger.error({
+        category: 'process',
+        action: 'background_assignment_failed',
+        message: `Background task assignment failed for ${sqliteTask.id}`,
+        error
+      });
+    });
 
     return { task: sqliteTask, validation };
   }
@@ -1092,6 +1162,44 @@ export class DevBotsManager extends EventEmitter {
 
     this.isCoordinatorHealthy = false;
 
+    // Stop background task queue worker
+    if (this.taskQueueWorker) {
+      try {
+        await this.taskQueueWorker.stop();
+        logger.info({
+          category: 'process',
+          action: 'task_queue_worker_stopped',
+          message: 'Background task queue worker stopped'
+        });
+      } catch (error) {
+        logger.error({
+          category: 'process',
+          action: 'task_queue_worker_stop_failed',
+          message: 'Failed to stop background task queue worker',
+          error
+        });
+      }
+    }
+
+    // Stop metrics emitter
+    if (this.metricsEmitter) {
+      try {
+        this.metricsEmitter.stop();
+        logger.info({
+          category: 'process',
+          action: 'metrics_emitter_stopped',
+          message: 'Metrics emitter stopped'
+        });
+      } catch (error) {
+        logger.error({
+          category: 'process',
+          action: 'metrics_emitter_stop_failed',
+          message: 'Failed to stop metrics emitter',
+          error
+        });
+      }
+    }
+
     // Stop all active ephemeral workers
     for (const worker of this.ephemeralWorkerService.getAllWorkers().values()) {
       if (worker.status !== 'destroyed') {
@@ -1107,10 +1215,10 @@ export class DevBotsManager extends EventEmitter {
         await this.ephemeralWorkerService.destroyWorker(worker.id);
       }
     }
-    
+
     this.ephemeralWorkerService.clearAllWorkers();
     // activeTasks removed - SQLite is source of truth
-    
+
     this.emit('systemStatusChange', 'stopped');
     logger.info({
       category: 'process',
