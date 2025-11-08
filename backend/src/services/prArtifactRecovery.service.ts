@@ -1,7 +1,7 @@
 import { WorkerLogLocator } from './taskLogLocator.js';
 import { extractPRInfo, isValidPRInfo } from '../utils/prExtractor.js';
 import type { PRInfo } from '../utils/prExtractor.js';
-import type { TaskQueueService } from './taskQueue.sqlite.js';
+import type { TaskQueueService, Task } from './taskQueue.sqlite.js';
 import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 import { logger } from '../utils/logger.js';
 import { promises as fs } from 'fs';
@@ -86,7 +86,7 @@ export class PRArtifactRecoveryService {
         category: 'recovery',
         action: 'recovery_scan_completed',
         message: `PR recovery scan completed in ${this.stats.duration}ms`,
-        details: this.stats
+        details: { ...this.stats } as Record<string, unknown>
       });
 
       return this.stats;
@@ -108,50 +108,15 @@ export class PRArtifactRecoveryService {
   /**
    * Find tasks that might have orphaned PRs
    */
-  private async findOrphanedTasks(): Promise<any[]> {
+  private async findOrphanedTasks(): Promise<Task[]> {
     // Strategy 1: Failed tasks with orphaned/restart/crash errors
-    const orphanedByError = await this.taskQueue.db.prepare(`
-      SELECT id, title, status, error, created_at
-      FROM tasks
-      WHERE status = 'failed'
-        AND (
-          error LIKE '%orphaned%'
-          OR error LIKE '%restart%'
-          OR error LIKE '%crash%'
-        )
-        AND pr_number IS NULL
-        AND created_at > ?
-      ORDER BY created_at DESC
-      LIMIT 50
-    `).all(Date.now() - 86400000); // Last 24 hours
+    const orphanedByError = this.taskQueue.findOrphanedTasksByError(24);
 
     // Strategy 2: Completed tasks that should have PRs but don't
-    const completedWithoutPR = await this.taskQueue.db.prepare(`
-      SELECT id, title, status, error, created_at
-      FROM tasks
-      WHERE status = 'completed'
-        AND pr_number IS NULL
-        AND type IN ('implementation', 'feature', 'bug', 'refactor')
-        AND created_at > ?
-      ORDER BY created_at DESC
-      LIMIT 20
-    `).all(Date.now() - 86400000);
+    const completedWithoutPR = this.taskQueue.findCompletedTasksWithoutPR(24);
 
     // Strategy 3: Tasks with suspicious error patterns
-    const suspiciousTasks = await this.taskQueue.db.prepare(`
-      SELECT id, title, status, error, created_at
-      FROM tasks
-      WHERE status = 'failed'
-        AND pr_number IS NULL
-        AND (
-          error LIKE '%server%'
-          OR error LIKE '%timeout%'
-          OR error LIKE '%ECONNREFUSED%'
-        )
-        AND created_at > ?
-      ORDER BY created_at DESC
-      LIMIT 20
-    `).all(Date.now() - 172800000); // Last 48 hours
+    const suspiciousTasks = this.taskQueue.findSuspiciousFailedTasks(48);
 
     // Combine and deduplicate
     const allTasks = [...orphanedByError, ...completedWithoutPR, ...suspiciousTasks];
@@ -163,7 +128,7 @@ export class PRArtifactRecoveryService {
   /**
    * Attempt to recover PR info for a single task
    */
-  private async recoverTaskPR(task: any): Promise<void> {
+  private async recoverTaskPR(task: Task): Promise<void> {
     try {
       // Find stdout artifact for this task
       const descriptor = await this.logLocator.getDescriptor('dev-bots', task.id, 'stdout');
@@ -226,30 +191,17 @@ export class PRArtifactRecoveryService {
   /**
    * Update task with recovered PR information
    */
-  private async updateTaskWithPRInfo(task: any, prInfo: PRInfo): Promise<void> {
-    // Update database
-    await this.taskQueue.db.prepare(`
-      UPDATE tasks
-      SET
-        pr_number = ?,
-        pr_url = ?,
-        pr_branch = ?,
-        pr_status = 'pending_checks',
-        pr_created_at = ?,
-        pr_info_detected_at = ?,
-        status = CASE
-          WHEN status = 'failed' THEN 'completed'
-          ELSE status
-        END
-      WHERE id = ?
-    `).run(
-      prInfo.number,
-      prInfo.url,
-      prInfo.branch,
-      Date.now(),
-      Date.now(),
-      task.id
-    );
+  private async updateTaskWithPRInfo(task: Task, prInfo: PRInfo): Promise<void> {
+    // Update task with recovered PR info
+    await this.taskQueue.updateTask(task.id, {
+      pr_number: prInfo.number,
+      pr_url: prInfo.url,
+      pr_branch: prInfo.branch,
+      pr_status: 'pending_checks',
+      pr_created_at: Date.now(),
+      // If task was failed due to orphaning, mark as completed
+      status: task.status === 'failed' ? 'completed' : task.status
+    });
 
     logger.info({
       category: 'recovery',
@@ -285,7 +237,7 @@ export class PRArtifactRecoveryService {
   /**
    * Investigate why PR info couldn't be found
    */
-  private async investigateFailure(task: any, descriptor: any, logContent: string): Promise<void> {
+  private async investigateFailure(task: Task, descriptor: any, logContent: string): Promise<void> {
     // Check stderr for clues
     const stderrDescriptor = await this.logLocator.getDescriptor('dev-bots', task.id, 'stderr');
 

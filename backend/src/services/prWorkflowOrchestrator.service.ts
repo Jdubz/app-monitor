@@ -91,7 +91,7 @@ export class PRWorkflowOrchestrator {
           category: 'pr-workflow',
           action: 'startup_recovery_completed',
           message: `Recovered ${recoveryStats.prInfoRecovered} PRs from artifacts on startup`,
-          details: recoveryStats
+          details: { ...recoveryStats } as Record<string, unknown>
         });
       }
     } catch (error) {
@@ -385,7 +385,7 @@ export class PRWorkflowOrchestrator {
           category: 'pr-workflow',
           action: 'periodic_artifact_recovery',
           message: `Recovered ${stats.prInfoRecovered} PRs from artifacts during periodic scan`,
-          details: stats
+          details: { ...stats } as Record<string, unknown>
         });
       }
     } catch (error) {

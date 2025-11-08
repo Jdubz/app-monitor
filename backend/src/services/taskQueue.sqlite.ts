@@ -1008,6 +1008,68 @@ export class TaskQueueService {
   }
 
   /**
+   * Find orphaned tasks that may have lost PR info
+   * Used by PR recovery service to find tasks needing recovery
+   */
+  findOrphanedTasksByError(hoursBack: number = 24): Task[] {
+    const cutoffTime = Date.now() - (hoursBack * 3600000);
+    const stmt = this.db.prepare(`
+      SELECT * FROM tasks
+      WHERE status = 'failed'
+        AND (
+          error LIKE '%orphaned%'
+          OR error LIKE '%restart%'
+          OR error LIKE '%crash%'
+        )
+        AND pr_number IS NULL
+        AND created_at > ?
+      ORDER BY created_at DESC
+      LIMIT 50
+    `);
+    return stmt.all(cutoffTime) as Task[];
+  }
+
+  /**
+   * Find completed tasks that should have PRs but don't
+   * Used by PR recovery service for broader recovery attempts
+   */
+  findCompletedTasksWithoutPR(hoursBack: number = 24): Task[] {
+    const cutoffTime = Date.now() - (hoursBack * 3600000);
+    const stmt = this.db.prepare(`
+      SELECT * FROM tasks
+      WHERE status = 'completed'
+        AND pr_number IS NULL
+        AND type IN ('implementation', 'feature', 'bug', 'refactor')
+        AND created_at > ?
+      ORDER BY created_at DESC
+      LIMIT 20
+    `);
+    return stmt.all(cutoffTime) as Task[];
+  }
+
+  /**
+   * Find tasks with suspicious error patterns that may have lost PR info
+   * Used by PR recovery service for detecting crash-related failures
+   */
+  findSuspiciousFailedTasks(hoursBack: number = 48): Task[] {
+    const cutoffTime = Date.now() - (hoursBack * 3600000);
+    const stmt = this.db.prepare(`
+      SELECT * FROM tasks
+      WHERE status = 'failed'
+        AND pr_number IS NULL
+        AND (
+          error LIKE '%server%'
+          OR error LIKE '%timeout%'
+          OR error LIKE '%ECONNREFUSED%'
+        )
+        AND created_at > ?
+      ORDER BY created_at DESC
+      LIMIT 20
+    `);
+    return stmt.all(cutoffTime) as Task[];
+  }
+
+  /**
    * Get task duration statistics by type and complexity
    * Useful for learning baseline durations before setting timeouts
    */
