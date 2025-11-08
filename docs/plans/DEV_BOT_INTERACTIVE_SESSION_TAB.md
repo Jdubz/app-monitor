@@ -146,13 +146,13 @@ idle → starting → running → (terminating|disconnecting) → ended
 
 ---
 
-## 7. Open Questions for Stakeholders
+## 7. Stakeholder Decisions
 
-1. **Model List** – Should the model dropdown mirror all providers (Claude Opus/Sonnet, GPT-4.1, Codex, etc.) or a curated subset? Are there cost constraints we need to enforce?
-2. **Idle Timer Exceptions** – Do we ever allow longer sessions (e.g., during live incident response), and if so, how should the admin request an extension?
-3. **Context Persistence Scope** – Is storing summarized context sufficient, or do we need full command transcripts and file diffs retained indefinitely?
-4. **Frontend Auth Source of Truth** – Can we rely on existing user identity plumbing to expose the authenticated email to the React app, or do we need a new `/me` endpoint to confirm admin status?
-5. **Shortcut Conflicts** – Should we reserve additional hotkeys (Ctrl+Enter to send, Ctrl+L to clear screen) or strictly mimic shell defaults to avoid confusion?
+1. **Supported Models (Answered)** – Keep the selector limited to the already-wired Claude and Codex providers. Future models will hook into the same abstraction once dev-bots support them.
+2. **Idle vs. Long-Lived Sessions (Answered)** – Interactive sessions exist to orchestrate higher-level planning and manual interventions. Admins may step away for stretches, but sessions must spin down after 5 minutes of *combined* inactivity to save resources while preserving state. No special “incident” override is required right now; long-lived behavior will be achieved via seamless context persistence and quick restarts rather than indefinitely running containers.
+3. **Context Persistence (Answered)** – The experience must “feel” persistent even when the container stops. We need a provider-aware context store (recognizing Claude vs. Codex differences) that captures transcript, summarized state, and pending instructions so reconnects resume naturally.
+4. **Auth Assumptions (Answered)** – Today the app only runs on the admin’s local network, so access itself implies admin rights. We can gate purely on email config for now and defer broader auth/hardening until the app is Internet-facing.
+5. **Hotkeys (Answered)** – Support the standard terminal shortcuts (Esc interrupt, Ctrl+C, Ctrl+L clear, Ctrl+U delete line, Ctrl+W delete word, etc.). Surface them in a collapsible “Hotkeys” drawer within the tab so users can reference bindings quickly.
 
 ---
 
