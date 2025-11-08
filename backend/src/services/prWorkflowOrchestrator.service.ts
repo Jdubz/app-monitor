@@ -255,6 +255,30 @@ export class PRWorkflowOrchestrator {
       prBranch = branchMatch[1];
     }
 
+    // Validate extracted PR number
+    if (prNumber) {
+      if (prNumber <= 0 || !Number.isInteger(prNumber)) {
+        logger.warn({
+          category: 'pr-workflow',
+          action: 'invalid_pr_number',
+          message: `Extracted invalid PR number: ${prNumber}`,
+          details: { extractedValue: prNumber }
+        });
+        return null;
+      }
+    }
+
+    // Validate extracted PR URL
+    if (prUrl && !prUrl.startsWith('https://github.com/')) {
+      logger.warn({
+        category: 'pr-workflow',
+        action: 'invalid_pr_url',
+        message: `Extracted invalid PR URL: ${prUrl}`,
+        details: { extractedUrl: prUrl }
+      });
+      prUrl = null; // Reset invalid URL, will use default
+    }
+
     // If we found at least PR number, we can work with that
     if (prNumber) {
       return {
