@@ -79,12 +79,10 @@ export interface ValidationResult {
 // TODO(templates): introduce minimum length constants for investigation steps,
 // acceptance criteria, and constraint text once usage data shows appropriate
 // guardrail values.
-const DO_NOT_CREATE_ACTIONABLE_KEYWORDS: ReadonlyArray<string> = Object.freeze([
-  'reuse',
-  'extend',
-  'existing',
-  'use existing',
-  'leverage existing',
+const DO_NOT_CREATE_ACTIONABLE_PATTERNS: ReadonlyArray<RegExp> = Object.freeze([
+  /\breuse\b/i,
+  /\bextend\b/i,
+  /\bexisting\b/i
 ]);
 
 function isNonEmptyString(value: unknown): value is string {
@@ -109,8 +107,7 @@ function parseDoNotCreateFileEntry(entry: string): { filePath: string; reason: s
 }
 
 function hasActionableDoNotCreateExplanation(reason: string): boolean {
-  const normalized = reason.toLowerCase();
-  return DO_NOT_CREATE_ACTIONABLE_KEYWORDS.some(keyword => normalized.includes(keyword));
+  return DO_NOT_CREATE_ACTIONABLE_PATTERNS.some(pattern => pattern.test(reason));
 }
 
 const INVESTIGATION_ACTION_VERBS = ['READ', 'GREP', 'CHECK', 'VERIFY', 'INSPECT', 'REVIEW', 'TRACE', 'SEARCH'];
