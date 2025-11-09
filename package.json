@@ -25,6 +25,7 @@
     "lint": "npm run lint --workspaces",
     "lint:fix": "npm run lint:fix --workspaces",
     "clean": "npm run clean --workspaces",
+    "migrate:consolidate-db": "tsx scripts/migrate-consolidate-databases.ts",
     "prepare": "husky || true"
   },
   "devDependencies": {

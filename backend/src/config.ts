@@ -16,7 +16,7 @@ export const config = {
   port: parseInt(process.env.PORT || '5000', 10),
   nodeEnv: process.env.NODE_ENV || 'development',
   corsOrigin: process.env.CORS_ORIGIN || 'http://localhost:5174',
-  databasePath: process.env.DATABASE_PATH || path.join(__dirname, '../data/dev-bots.db'),
+  databasePath: process.env.DATABASE_PATH || path.join(__dirname, '../data/app-monitor.db'),
   gcpKeyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS || path.join(ROOT_DIR, '.firebase/serviceAccountKey.json'),
   logSourcesConfig: path.join(__dirname, '../config/log-sources.json'),
   workerLogStreamsConfig: path.join(__dirname, '../config/worker-log-streams.json'),

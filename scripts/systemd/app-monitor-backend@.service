@@ -10,7 +10,7 @@ Group=jdubz
 WorkingDirectory=/opt/app-monitor/current/backend
 Environment="NODE_ENV=production"
 Environment="PORT=%i"
-Environment="DATABASE_PATH=/opt/app-monitor/shared/backend/data/dev-bots.db"
+Environment="DATABASE_PATH=/opt/app-monitor/shared/backend/data/app-monitor.db"
 Environment="LOG_LEVEL=info"
 Environment="CORS_ORIGIN=*"
 Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"

@@ -43,8 +43,9 @@ export async function createDevBotsManagerDependencies(
   const dockerManager = new DockerManager(dockerSocket);
   const docker = dockerManager.getDocker();
 
-  // Initialize SQLite task queue
-  const taskQueueDbPath = config.taskQueueDbPath ?? './data/tasks/queue.db';
+  // Initialize SQLite task queue - use same database as DevBotsDatabase
+  const { config: appConfig } = await import('../config.js');
+  const taskQueueDbPath = config.taskQueueDbPath ?? appConfig.databasePath;
   const taskQueue = new TaskQueueService(taskQueueDbPath);
 
   // Register with factory for singleton access
