@@ -18,7 +18,7 @@ NC='\033[0m' # No Color
 # Configuration
 IMAGE_NAME="${IMAGE_NAME:-dev-bot}"
 IMAGE_TAG="${IMAGE_TAG:-latest}"
-DOCKERFILE="${DOCKERFILE:-dev-bots/docker/Dockerfile.optimized}"
+DOCKERFILE="${DOCKERFILE:-dev-bots/docker/Dockerfile}"
 BUILD_CONTEXT="${BUILD_CONTEXT:-.}"
 
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
