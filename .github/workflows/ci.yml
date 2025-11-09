@@ -29,5 +29,8 @@ jobs:
       - name: Lint frontend
         run: npm run lint -w frontend
 
-      - name: Test frontend
+      - name: Test frontend (unit)
         run: npm run test -w frontend
+
+      - name: Test frontend (integration)
+        run: npm run test:integration -w frontend
