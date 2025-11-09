@@ -6,6 +6,8 @@
  */
 
 import type { ApiClient } from './ApiClient';
+import { getApiBaseUrl } from '@/utils/apiBaseUrl';
+export { getApiBaseUrl, getApiBasePath } from '@/utils/apiBaseUrl';
 import type {
   ApiError,
   ApiSuccess,
@@ -372,11 +374,6 @@ export const handleApiError = (error: unknown): string => {
 
 // Re-export the apiClient for direct use if needed
 export const getApiClientInstance = getApiClient;
-
-export const getApiBaseUrl = (): string =>
-  (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000').replace(/\/$/, '');
-
-export const getApiBasePath = (): string => `${getApiBaseUrl()}/api`;
 
 export const getDevBotsInteractiveStreamUrl = (sessionId: string): string => {
   const baseUrl = getApiBaseUrl();

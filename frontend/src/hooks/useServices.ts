@@ -4,7 +4,9 @@ import { getAllStatuses, startService, stopService, restartService, killService,
 import { io, Socket } from 'socket.io-client';
 import { createLogger } from '@/utils/logger';
 
-const SOCKET_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000';
+import { getApiBaseUrl } from '@/utils/apiBaseUrl';
+
+const SOCKET_URL = getApiBaseUrl();
 
 const log = createLogger('useServices');
 

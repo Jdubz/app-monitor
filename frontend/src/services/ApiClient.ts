@@ -9,14 +9,18 @@ import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
 import type { ApiError } from '@/types/contracts';
 import { createLogger } from '@/utils/logger';
 
+import { getApiBaseUrl } from '@/utils/apiBaseUrl';
+
 export class ApiClient {
   private client: AxiosInstance;
   private log = createLogger('ApiClient');
 
-  constructor(baseURL: string = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000') {
-    const fullBaseURL = `${baseURL}/api`;
+  constructor(baseURL: string = getApiBaseUrl()) {
+    const normalizedBaseUrl = baseURL.replace(/\/+$/, '');
+    const fullBaseURL = `${normalizedBaseUrl}/api`;
     this.log.debug('Initializing with base URL', fullBaseURL);
-    this.log.debug('VITE_API_BASE_URL', import.meta.env.VITE_API_BASE_URL);
+    this.log.debug('Resolved API base input', normalizedBaseUrl || '[current origin]');
+    this.log.debug('Raw VITE_API_BASE_URL', import.meta.env.VITE_API_BASE_URL);
 
     this.client = axios.create({
       baseURL: fullBaseURL,

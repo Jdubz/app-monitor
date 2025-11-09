@@ -15,6 +15,8 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import type { PortInfo } from '@/types/contracts';
 
+import { getApiBaseUrl } from '@/utils/apiBaseUrl';
+
 interface ServiceCardProps {
   service: ProcessInfo;
   onStart: () => Promise<void>;
@@ -56,7 +58,7 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
   const handleDockerAction = async (action: string) => {
     try {
       setIsControlling(true);
-      const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000';
+      const apiBaseUrl = getApiBaseUrl();
       const response = await fetch(
         `${apiBaseUrl}/api/services/${service.name}/docker/${action}`,
         { method: 'POST' },
