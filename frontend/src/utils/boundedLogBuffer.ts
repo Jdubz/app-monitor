@@ -1,38 +1,48 @@
-export class BoundedLogBuffer<T = string> {
-  private buffer: T[] = [];
+export class BoundedLogBuffer<T> {
   private readonly capacity: number;
+  private values: Array<T | undefined>;
+  private head = 0;
+  private length = 0;
 
-  constructor(maxEntries: number = 2000) {
-    if (maxEntries <= 0) {
-      throw new Error('BoundedLogBuffer maxEntries must be greater than zero');
+  constructor(capacity: number) {
+    if (!Number.isFinite(capacity) || capacity <= 0) {
+      throw new Error('BoundedLogBuffer capacity must be a positive number');
     }
-    this.capacity = maxEntries;
+    this.capacity = Math.floor(capacity);
+    this.values = new Array(this.capacity);
   }
 
-  append(entry: T | T[]): T[] {
-    const entries = Array.isArray(entry) ? entry : [entry];
-    for (const item of entries) {
-      this.buffer.push(item);
-    }
-    if (this.buffer.length > this.capacity) {
-      this.buffer.splice(0, this.buffer.length - this.capacity);
-    }
-    return this.toArray();
-  }
+  push(value: T): void {
+    const insertIndex = (this.head + this.length) % this.capacity;
+    this.values[insertIndex] = value;
 
-  toArray(): T[] {
-    return [...this.buffer];
+    if (this.length < this.capacity) {
+      this.length += 1;
+      return;
+    }
+
+    this.head = (this.head + 1) % this.capacity;
   }
 
   clear(): void {
-    this.buffer = [];
+    this.values = new Array(this.capacity);
+    this.head = 0;
+    this.length = 0;
   }
 
-  get size(): number {
-    return this.buffer.length;
+  toArray(): T[] {
+    const result: T[] = [];
+    for (let i = 0; i < this.length; i += 1) {
+      const index = (this.head + i) % this.capacity;
+      const value = this.values[index];
+      if (value !== undefined) {
+        result.push(value);
+      }
+    }
+    return result;
   }
 
-  get maxSize(): number {
-    return this.capacity;
+  size(): number {
+    return this.length;
   }
 }

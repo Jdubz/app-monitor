@@ -32,27 +32,20 @@ export function TaskLogViewer({ taskId, logs }: TaskLogViewerProps) {
   const [streamError, setStreamError] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [bufferVersion, setBufferVersion] = useState(0);
-  const logBufferRef = useRef(new BoundedLogBuffer<string>(MAX_LINES));
   const eventSourceRef = useRef<EventSource | null>(null);
-  const logEndRef = useRef<HTMLSpanElement | null>(null);
-
-  const bumpBufferVersion = useCallback(() => {
-    setBufferVersion((value) => value + 1);
-  }, []);
+  const scrollAnchorRef = useRef<HTMLDivElement | null>(null);
+  const logBufferRef = useRef(new BoundedLogBuffer<string>(MAX_LINES));
+  const [bufferVersion, setBufferVersion] = useState(0);
 
   const resetBuffer = useCallback(() => {
     logBufferRef.current.clear();
-    bumpBufferVersion();
-  }, [bumpBufferVersion]);
+    setBufferVersion((version) => version + 1);
+  }, []);
 
-  const appendLine = useCallback(
-    (line: string) => {
-      logBufferRef.current.push(line);
-      bumpBufferVersion();
-    },
-    [bumpBufferVersion],
-  );
+  const appendLine = useCallback((line: string) => {
+    logBufferRef.current.push(line);
+    setBufferVersion((version) => version + 1);
+  }, []);
 
   const lines = useMemo(() => logBufferRef.current.toArray(), [bufferVersion]);
 
@@ -110,11 +103,17 @@ export function TaskLogViewer({ taskId, logs }: TaskLogViewerProps) {
   }, [taskId, activeStream, refreshKey, appendLine, resetBuffer]);
 
   useEffect(() => {
-    if (!autoScroll) return;
-    const raf = requestAnimationFrame(() => {
-      logEndRef.current?.scrollIntoView({ block: 'end' });
+    if (!autoScroll) {
+      return;
+    }
+    const anchor = scrollAnchorRef.current;
+    if (!anchor) {
+      return;
+    }
+    const frame = requestAnimationFrame(() => {
+      anchor.scrollIntoView({ block: 'end', behavior: 'auto' });
     });
-    return () => cancelAnimationFrame(raf);
+    return () => cancelAnimationFrame(frame);
   }, [bufferVersion, autoScroll]);
 
   const activeDescriptor = useMemo(() => logs?.[activeStream] ?? null, [logs, activeStream]);
@@ -213,14 +212,16 @@ export function TaskLogViewer({ taskId, logs }: TaskLogViewerProps) {
       )}
 
       <ScrollArea className="flex-1 rounded-md border border-border/50 bg-background/70">
-        <pre className="min-h-[320px] whitespace-pre-wrap break-words p-4 text-xs text-foreground">
-          {lines.length === 0 ? (
-            <span className="text-muted-foreground">Waiting for log events...</span>
-          ) : (
-            lines.join('\n')
-          )}
-          <span ref={logEndRef} aria-hidden="true" />
-        </pre>
+        <div>
+          <pre className="min-h-[320px] whitespace-pre-wrap break-words p-4 text-xs text-foreground">
+            {lines.length === 0 ? (
+              <span className="text-muted-foreground">Waiting for log events...</span>
+            ) : (
+              lines.join('\n')
+            )}
+          </pre>
+          <div ref={scrollAnchorRef} aria-hidden="true" />
+        </div>
       </ScrollArea>
     </div>
   );

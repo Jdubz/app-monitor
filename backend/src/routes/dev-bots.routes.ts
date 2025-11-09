@@ -279,19 +279,24 @@ interface LogStreamOptions {
 }
 
 const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOptions) => {
-  const trackerKey = `${filePath}:${stream}`;
-  if (!logStreamAccessTracker.tryAcquire(trackerKey)) {
-    logger.warn({
-      category: 'api',
-      action: 'log_stream_limit_reached',
-      message: `Rejected ${stream} log stream due to subscriber limit`,
-      details: { filePath, limit: MAX_LOG_STREAM_SUBSCRIBERS },
-    });
-    res.status(429).json({
-      error: 'Too many concurrent log subscribers',
-      message: `Only ${MAX_LOG_STREAM_SUBSCRIBERS} concurrent subscribers allowed per log stream`,
-    });
-    return;
+  let slotAcquired = false;
+  const streamKey = filePath;
+
+  if (follow) {
+    slotAcquired = logStreamAccessTracker.tryAcquire(streamKey);
+    if (!slotAcquired) {
+      logger.warn({
+        category: 'api',
+        action: 'log_stream_limit_reached',
+        message: `Rejected ${stream} log stream due to subscriber limit`,
+        details: { filePath, limit: MAX_LOG_STREAM_SUBSCRIBERS },
+      });
+      res.status(429).json({
+        error: 'Log stream limit reached',
+        message: `Only ${MAX_LOG_STREAM_SUBSCRIBERS} concurrent followers are allowed per ${stream} stream.`,
+      });
+      return;
+    }
   }
 
   res.status(200);
@@ -306,6 +311,7 @@ const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOp
   let remainder = '';
   let closed = false;
   let currentRead: Promise<void> = Promise.resolve();
+  let pendingFollowRead = false;
 
   const heartbeat = setInterval(() => {
     if (!closed) {
@@ -313,12 +319,20 @@ const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOp
     }
   }, 15000);
 
+  const releaseFollowSlot = () => {
+    if (!slotAcquired) {
+      return;
+    }
+    logStreamAccessTracker.release(streamKey);
+    slotAcquired = false;
+  };
+
   const cleanup = () => {
     if (closed) return;
     closed = true;
     clearInterval(heartbeat);
     watcher?.close();
-    logStreamAccessTracker.release(trackerKey);
+    releaseFollowSlot();
     res.end();
   };
 

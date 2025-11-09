@@ -13,6 +13,7 @@ import type {
   CloudLogsRequest,
   CloudLogsResponse,
   CloudLoggingStatusApiResponse,
+  DevBotsAgentComparisonResponse,
   EnvironmentsApiResponse,
   EnvironmentsResponse,
   EnvironmentServicesApiResponse,
@@ -38,6 +39,7 @@ import type {
   DevBotsInteractiveSessionInterruptPayload,
 } from '@/types/contracts';
 import type {
+  DevBotsAgentComparison,
   DevBotsQueueSummary,
   DevBotsTaskDetail,
   DevBotsSettings,
@@ -335,6 +337,13 @@ export const sendDevBotsInteractiveHeartbeat = async (
   return result.acknowledged ?? true;
 };
 
+export const getDevBotsAgentComparison = async (): Promise<DevBotsAgentComparison> => {
+  const client = await getApiClient();
+  const response = await client.get<DevBotsAgentComparisonResponse>('/dev-bots/agent-comparison');
+  const data = ensureApiSuccess(response, 'fetching Dev-Bots agent comparison metrics');
+  return data.comparison;
+};
+
 // Port management endpoints
 export const getPortStatuses = async (): Promise<PortStatuses> => {
   const client = await getApiClient();
@@ -413,6 +422,7 @@ export const api = {
   getDevBotsTaskDetail,
   getDevBotsTaskLogs,
   getDevBotsSettings,
+  getDevBotsAgentComparison,
   updateDevBotsSettings,
   getDevBotsInteractiveSession,
   startDevBotsInteractiveSession,

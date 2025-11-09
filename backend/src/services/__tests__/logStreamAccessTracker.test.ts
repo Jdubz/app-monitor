@@ -12,6 +12,14 @@ describe('LogStreamAccessTracker', () => {
     expect(tracker.tryAcquire('stdout')).toBe(true);
   });
 
+  it('limits concurrent acquisitions per key', () => {
+    const tracker = new LogStreamAccessTracker(2);
+    expect(tracker.tryAcquire('stdout.log')).toBe(true);
+    expect(tracker.tryAcquire('stdout.log')).toBe(true);
+    expect(tracker.tryAcquire('stdout.log')).toBe(false);
+    expect(tracker.getActiveCount('stdout.log')).toBe(2);
+  });
+
   it('isolates counters per key', () => {
     const tracker = new LogStreamAccessTracker(1);
     expect(tracker.tryAcquire('stdout')).toBe(true);
@@ -20,10 +28,18 @@ describe('LogStreamAccessTracker', () => {
     expect(tracker.getActiveCount('stderr')).toBe(1);
   });
 
-  it('ignores releases for unknown keys', () => {
+  it('allows reuse after releasing slots', () => {
     const tracker = new LogStreamAccessTracker(1);
-    tracker.release('stdout');
-    expect(tracker.getActiveCount('stdout')).toBe(0);
+    tracker.tryAcquire('stderr.log');
+    tracker.release('stderr.log');
+    expect(tracker.tryAcquire('stderr.log')).toBe(true);
+    expect(tracker.getActiveCount('stderr.log')).toBe(1);
+  });
+
+  it('ignores releases for unknown keys without throwing', () => {
+    const tracker = new LogStreamAccessTracker(1);
+    expect(() => tracker.release('missing.log')).not.toThrow();
+    expect(tracker.getActiveCount('missing.log')).toBe(0);
   });
 
   it('rejects invalid limits', () => {

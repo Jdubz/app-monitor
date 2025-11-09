@@ -1,5 +1,8 @@
 import type {
   DevBotsAgentPersonality as ContractDevBotsAgentPersonality,
+  DevBotsAgentComparison as ContractDevBotsAgentComparison,
+  DevBotsAgentMetrics as ContractDevBotsAgentMetrics,
+  DevBotsAgentTaskTypeBreakdown as ContractDevBotsAgentTaskTypeBreakdown,
   DevBotsCleanupStatus as ContractDevBotsCleanupStatus,
   DevBotsInteractiveSession as ContractDevBotsInteractiveSession,
   DevBotsInteractiveSessionResponse as ContractDevBotsInteractiveSessionResponse,
@@ -7,6 +10,8 @@ import type {
   DevBotsInteractiveHeartbeatPayload as ContractDevBotsInteractiveHeartbeatPayload,
   DevBotsInteractiveInterruptPayload as ContractDevBotsInteractiveInterruptPayload,
   DevBotsInteractiveSessionStatus as ContractDevBotsInteractiveSessionStatus,
+  DevBotsInteractiveSessionModelOption as ContractDevBotsInteractiveSessionModelOption,
+  DevBotsInteractiveSessionState as ContractDevBotsInteractiveSessionState,
   DevBotsScopeViolation as ContractDevBotsScopeViolation,
   DevBotsStatus as ContractDevBotsStatus,
   DevBotsTask as ContractDevBotsTask,
@@ -14,10 +19,7 @@ import type {
   DevBotsWorkerStatus as ContractDevBotsWorkerStatus,
   DevBotsWorkspaceSyncResult as ContractDevBotsWorkspaceSyncResult,
   DevBotsWorkspaceSyncStatus as ContractDevBotsWorkspaceSyncStatus,
-  DevBotsInteractiveSession as ContractDevBotsInteractiveSession,
-  DevBotsInteractiveSessionStatus as ContractDevBotsInteractiveSessionStatus,
-  DevBotsInteractiveSessionModelOption as ContractDevBotsInteractiveSessionModelOption,
-  DevBotsInteractiveSessionState as ContractDevBotsInteractiveSessionState,
+  DevBotsTrackedTaskType as ContractDevBotsTrackedTaskType,
 } from '@/types/contracts';
 
 export type DevBotsStatus = ContractDevBotsStatus;
@@ -33,12 +35,14 @@ export type DevBotsInteractiveSession = ContractDevBotsInteractiveSession;
 export type DevBotsInteractiveSessionStatus = ContractDevBotsInteractiveSessionStatus;
 export type DevBotsInteractiveSessionModelOption = ContractDevBotsInteractiveSessionModelOption;
 export type DevBotsInteractiveSessionState = ContractDevBotsInteractiveSessionState;
-export type DevBotsInteractiveSessionStatus = ContractDevBotsInteractiveSessionStatus;
-export type DevBotsInteractiveSession = ContractDevBotsInteractiveSession;
 export type DevBotsInteractiveSessionResponse = ContractDevBotsInteractiveSessionResponse;
 export type DevBotsInteractiveSessionStartPayload = ContractDevBotsInteractiveSessionStartPayload;
 export type DevBotsInteractiveHeartbeatPayload = ContractDevBotsInteractiveHeartbeatPayload;
 export type DevBotsInteractiveInterruptPayload = ContractDevBotsInteractiveInterruptPayload;
+export type DevBotsAgentComparison = ContractDevBotsAgentComparison;
+export type DevBotsAgentMetrics = ContractDevBotsAgentMetrics;
+export type DevBotsAgentTaskTypeBreakdown = ContractDevBotsAgentTaskTypeBreakdown;
+export type DevBotsTrackedTaskType = ContractDevBotsTrackedTaskType;
 
 export type DevBotsQueueBucket = 'pending' | 'active' | 'completed';
 

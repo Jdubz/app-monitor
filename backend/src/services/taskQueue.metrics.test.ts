@@ -1,21 +1,30 @@
 import { describe, it, expect } from 'vitest';
-import {
-  summarizeAgentComparisonMetrics,
-  type AgentComparisonMetrics,
-} from './taskQueue.sqlite.js';
+import { summarizeAgentComparisonMetrics } from './taskQueue.sqlite.js';
 
 describe('summarizeAgentComparisonMetrics', () => {
-  const zeroMetrics: AgentComparisonMetrics = {
-    claude: { total: 0, completed: 0, failed: 0, success_rate: 0 },
-    codex: { total: 0, completed: 0, failed: 0, success_rate: 0 },
-  };
+  const zeroAgentMetrics = { total: 0, completed: 0, failed: 0, success_rate: 0 };
 
   it('should return zeroed metrics when no stats exist', () => {
     const metrics = summarizeAgentComparisonMetrics([]);
     expect(metrics).toEqual(
       expect.objectContaining({
-        claude: expect.objectContaining(zeroMetrics.claude),
-        codex: expect.objectContaining(zeroMetrics.codex),
+        claude: expect.objectContaining(zeroAgentMetrics),
+        codex: expect.objectContaining(zeroAgentMetrics),
+      }),
+    );
+
+    expect(metrics.task_type_breakdown).toEqual(
+      expect.objectContaining({
+        claude: expect.objectContaining({
+          implementation: expect.objectContaining(zeroAgentMetrics),
+          testing: expect.objectContaining(zeroAgentMetrics),
+          documentation: expect.objectContaining(zeroAgentMetrics),
+        }),
+        codex: expect.objectContaining({
+          implementation: expect.objectContaining(zeroAgentMetrics),
+          testing: expect.objectContaining(zeroAgentMetrics),
+          documentation: expect.objectContaining(zeroAgentMetrics),
+        }),
       }),
     );
   });
@@ -32,7 +41,7 @@ describe('summarizeAgentComparisonMetrics', () => {
     expect(metrics.claude.success_rate).toBeCloseTo(70);
 
     // Codex should remain at defaults when no data exists
-    expect(metrics.codex).toEqual(expect.objectContaining(zeroMetrics.codex));
+    expect(metrics.codex).toEqual(expect.objectContaining(zeroAgentMetrics));
   });
 
   it('should compute metrics for both agents with fractional success rates', () => {
@@ -46,5 +55,53 @@ describe('summarizeAgentComparisonMetrics', () => {
 
     expect(metrics.codex.success_rate).toBeCloseTo((5 / 6) * 100);
     expect(metrics.codex.avg_duration_ms).toBe(2500);
+  });
+
+  it('should include task type breakdown for tracked task types', () => {
+    const metrics = summarizeAgentComparisonMetrics(
+      [
+        { agent_type: 'claude', total: 3, completed: 2, failed: 1, avg_duration_ms: 1500 },
+        { agent_type: 'codex', total: 2, completed: 2, failed: 0, avg_duration_ms: 2200 },
+      ],
+      [
+        {
+          agent_type: 'claude',
+          task_type: 'implementation',
+          total: 2,
+          completed: 2,
+          failed: 0,
+          avg_duration_ms: 1800,
+        },
+        {
+          agent_type: 'codex',
+          task_type: 'documentation',
+          total: 1,
+          completed: 1,
+          failed: 0,
+          avg_duration_ms: 2000,
+        },
+        {
+          agent_type: 'codex',
+          task_type: 'planning',
+          total: 5,
+          completed: 4,
+          failed: 1,
+          avg_duration_ms: 3000,
+        },
+      ],
+    );
+
+    expect(metrics.task_type_breakdown.claude.implementation).toEqual(
+      expect.objectContaining({
+        total: 2,
+        completed: 2,
+        failed: 0,
+        success_rate: 100,
+      }),
+    );
+    expect(metrics.task_type_breakdown.claude.testing).toEqual(expect.objectContaining(zeroAgentMetrics));
+    expect(metrics.task_type_breakdown.codex.documentation.avg_duration_ms).toBe(2000);
+    expect(metrics.task_type_breakdown.codex.testing).toEqual(expect.objectContaining(zeroAgentMetrics));
+    expect(metrics.task_type_breakdown.codex.implementation).toEqual(expect.objectContaining(zeroAgentMetrics));
   });
 });

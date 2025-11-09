@@ -317,6 +317,27 @@ export interface DevBotsCleanupStatus {
   totalCleanupTasks: number;
 }
 
+export type DevBotsTrackedTaskType = 'implementation' | 'testing' | 'documentation';
+
+export interface DevBotsAgentMetrics {
+  total: number;
+  completed: number;
+  failed: number;
+  success_rate: number;
+  avg_duration_ms?: number;
+}
+
+export type DevBotsAgentTaskTypeBreakdown = Record<DevBotsTrackedTaskType, DevBotsAgentMetrics>;
+
+export interface DevBotsAgentComparison {
+  claude: DevBotsAgentMetrics;
+  codex: DevBotsAgentMetrics;
+  task_type_breakdown: {
+    claude: DevBotsAgentTaskTypeBreakdown;
+    codex: DevBotsAgentTaskTypeBreakdown;
+  };
+}
+
 export interface DevBotsAgentPersonality {
   id: string;
   name: string;
@@ -512,6 +533,7 @@ export type DevBotsTasksResponse = ApiSuccess<DevBotsTask[]>;
 export type DevBotsScopeViolationsResponse = ApiSuccess<DevBotsScopeViolation[]>;
 export type DevBotsCleanupStatusResponse = ApiSuccess<DevBotsCleanupStatus>;
 export type DevBotsAgentsResponse = ApiSuccess<{ agents: DevBotsAgentPersonality[] }>;
+export type DevBotsAgentComparisonResponse = ApiSuccess<{ comparison: DevBotsAgentComparison }>;
 export type DevBotsTemplatesResponse = ApiSuccess<{ templates: DevBotsTaskTemplate[] }>;
 export type DevBotsMessageResponse = ApiSuccess<{ message: string }>;
 export type DevBotsWorkspaceSyncStatusResponse = ApiSuccess<DevBotsWorkspaceSyncStatus>;

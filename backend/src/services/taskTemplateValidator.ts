@@ -79,10 +79,15 @@ export interface ValidationResult {
 // TODO(templates): introduce minimum length constants for investigation steps,
 // acceptance criteria, and constraint text once usage data shows appropriate
 // guardrail values.
-const DO_NOT_CREATE_ACTIONABLE_PATTERNS: ReadonlyArray<RegExp> = Object.freeze([
-  /\breuse\b/i,
-  /\bextend\b/i,
-  /\bexisting\b/i
+const DO_NOT_CREATE_ACTIONABLE_KEYWORDS: ReadonlyArray<string> = Object.freeze([
+  // Single-word actions capture directives like "reuse the helper"
+  'reuse',
+  'extend',
+  // "existing" is still actionable but matched as a standalone word to avoid noise
+  'existing',
+  // Explicit phrases retain signal without over-matching every usage of "existing"
+  'use existing',
+  'leverage existing',
 ]);
 
 function isNonEmptyString(value: unknown): value is string {
@@ -107,7 +112,13 @@ function parseDoNotCreateFileEntry(entry: string): { filePath: string; reason: s
 }
 
 function hasActionableDoNotCreateExplanation(reason: string): boolean {
-  return DO_NOT_CREATE_ACTIONABLE_PATTERNS.some(pattern => pattern.test(reason));
+  const normalized = reason.toLowerCase();
+  return DO_NOT_CREATE_ACTIONABLE_KEYWORDS.some((keyword) => {
+    if (keyword === 'existing') {
+      return /\bexisting\b/.test(normalized);
+    }
+    return normalized.includes(keyword);
+  });
 }
 
 const INVESTIGATION_ACTION_VERBS = ['READ', 'GREP', 'CHECK', 'VERIFY', 'INSPECT', 'REVIEW', 'TRACE', 'SEARCH'];

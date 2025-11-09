@@ -1,32 +1,39 @@
-import { describe, expect, it } from 'vitest';
-
+import { describe, it, expect } from 'vitest';
 import { BoundedLogBuffer } from './boundedLogBuffer';
 
 describe('BoundedLogBuffer', () => {
-  it('appends entries and preserves order', () => {
-    const buffer = new BoundedLogBuffer<number>(5);
-    buffer.append(1);
-    buffer.append([2, 3]);
-    expect(buffer.toArray()).toEqual([1, 2, 3]);
-    expect(buffer.size).toBe(3);
+  it('stores entries up to capacity and discards oldest when full', () => {
+    const buffer = new BoundedLogBuffer<string>(3);
+    buffer.push('a');
+    buffer.push('b');
+    buffer.push('c');
+    expect(buffer.toArray()).toEqual(['a', 'b', 'c']);
+    expect(buffer.size()).toBe(3);
+
+    buffer.push('d');
+    expect(buffer.toArray()).toEqual(['b', 'c', 'd']);
   });
 
-  it('enforces the configured capacity', () => {
-    const buffer = new BoundedLogBuffer<number>(3);
-    buffer.append([1, 2, 3, 4, 5]);
-    expect(buffer.toArray()).toEqual([3, 4, 5]);
-  });
-
-  it('clears all entries', () => {
-    const buffer = new BoundedLogBuffer<string>(2);
-    buffer.append('a');
-    buffer.append('b');
+  it('clears stored entries', () => {
+    const buffer = new BoundedLogBuffer<number>(2);
+    buffer.push(1);
+    buffer.push(2);
     buffer.clear();
+    expect(buffer.size()).toBe(0);
     expect(buffer.toArray()).toEqual([]);
-    expect(buffer.size).toBe(0);
   });
 
-  it('throws when constructed with invalid capacity', () => {
+  it('handles wrap-around inserts correctly', () => {
+    const buffer = new BoundedLogBuffer<string>(2);
+    buffer.push('first');
+    buffer.push('second');
+    buffer.push('third');
+    buffer.push('fourth');
+
+    expect(buffer.toArray()).toEqual(['third', 'fourth']);
+  });
+
+  it('throws when initialized with non-positive capacity', () => {
     expect(() => new BoundedLogBuffer(0)).toThrow();
     expect(() => new BoundedLogBuffer(-1)).toThrow();
   });

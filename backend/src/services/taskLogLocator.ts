@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 
 import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
+import { escapeRegExp } from '../utils/stringUtils.js';
 
 type WorkerLogStreamConfig = {
   pattern: string;
@@ -103,22 +104,12 @@ export class WorkerLogLocator {
 
   private buildMatcher(pattern: string, taskId: string) {
     const resolved = pattern.replace('{taskId}', taskId);
-    const wildcardCount = (resolved.match(/\*/g) ?? []).length;
-
-    if (wildcardCount === 0) {
+    if (!resolved.includes('*')) {
       return (filename: string) => filename === resolved;
     }
 
-    if (wildcardCount !== 1) {
-      logger.warn({
-        category: 'process',
-        action: 'worker_log_pattern_invalid',
-        message: `Log pattern "${pattern}" (resolved: "${resolved}") must contain exactly one wildcard '*'`
-      });
-      return (_filename: string) => false;
-    }
-
-    const [prefix, suffix] = resolved.split('*');
-    return (filename: string) => filename.startsWith(prefix) && filename.endsWith(suffix);
+    const escapedSegments = resolved.split('*').map((segment) => escapeRegExp(segment));
+    const regex = new RegExp(`^${escapedSegments.join('.*')}$`);
+    return (filename: string) => regex.test(filename);
   }
 }
