@@ -1,4 +1,4 @@
-import { beforeAll, afterAll, describe, it, expect, vi } from 'vitest';
+import { beforeAll, beforeEach, afterAll, describe, it, expect, vi } from 'vitest';
 import request, { type Response as SupertestResponse } from 'supertest';
 import type { Server } from 'http';
 import type {
@@ -33,12 +33,9 @@ import type {
   QualityGateStatusResponse,
   DevBotsStatus,
 } from '@app-monitor/api-contracts';
-import { createApiTestServer } from '../../helpers/createApiTestServer.js';
 import type { MockServerDependencies } from '../../helpers/mockServerDependencies.js';
 
-const MOCK_TASK_ID = 'task-123';
-const MOCK_PR_NUMBER = 42;
-const MOCK_SOCKET_ID = 'socket-test-1';
+let createApiTestServer: typeof import('../../helpers/createApiTestServer.js').createApiTestServer;
 
 vi.mock('../../src/services/tokenTracking.js', () => {
   const summaries = [
@@ -184,11 +181,185 @@ vi.mock('child_process', () => {
   };
 });
 
+const verificationMocks = vi.hoisted(() => {
+  const MOCK_TASK_ID = 'task-123';
+  const MOCK_PR_NUMBER = 42;
+  const MOCK_SOCKET_ID = 'socket-test-1';
+
+  type VerificationResultPayload = {
+    taskId: string;
+    passed: boolean;
+    acceptanceCriteria: {
+      percentMet: number;
+      criteria: Array<{ text: string; met: boolean }>;
+    };
+    testCoverage: {
+      meetsThreshold: boolean;
+      threshold: number;
+      passed: boolean;
+    };
+    scopeBoundaries: {
+      passed: boolean;
+      violationCount: number;
+      violations: Array<{ file: string; message?: string }>;
+      gitDiff: {
+        filesChanged: string[];
+        filesCreated: string[];
+        filesDeleted: string[];
+        filesModified: string[];
+        totalChanges: number;
+        violations: Array<{ file: string }>;
+      };
+    };
+    overallScore: number;
+    timestamp: string;
+    recommendations: string[];
+  };
+
+  const baseVerificationResult: VerificationResultPayload = {
+    taskId: MOCK_TASK_ID,
+    passed: true,
+    acceptanceCriteria: {
+      percentMet: 80,
+      criteria: [
+        { text: 'Add integration tests', met: false },
+        { text: 'Document edge cases', met: true },
+      ],
+    },
+    testCoverage: {
+      meetsThreshold: false,
+      threshold: 90,
+      passed: false,
+    },
+    scopeBoundaries: {
+      passed: false,
+      violationCount: 1,
+      violations: [{ file: 'src/server.ts', message: 'Unexpected change' }],
+      gitDiff: {
+        filesChanged: ['src/server.ts'],
+        filesCreated: [],
+        filesDeleted: [],
+        filesModified: ['src/server.ts'],
+        totalChanges: 2,
+        violations: [{ file: 'src/server.ts' }],
+      },
+    },
+    overallScore: 82,
+    timestamp: new Date('2024-01-01T00:00:00Z').toISOString(),
+    recommendations: ['Tighten scope boundaries'],
+  };
+
+  const verificationResults = new Map<string, VerificationResultPayload>([
+    [MOCK_TASK_ID, structuredClone(baseVerificationResult)],
+  ]);
+
+  const verificationTask = {
+    id: MOCK_TASK_ID,
+    title: 'Verify API suite',
+    status: 'pending',
+    output: 'Task completed successfully',
+  };
+
+  const tasksByStatus: Record<string, typeof verificationTask[]> = {
+    pending: [verificationTask],
+    running: [],
+    completed: [],
+    failed: [],
+  };
+
+  const mockDatabase = {
+    getVerificationResult: vi.fn((taskId: string) => {
+      const result = verificationResults.get(taskId);
+      return result ? structuredClone(result) : null;
+    }),
+    storeVerificationResult: vi.fn((result: VerificationResultPayload) => {
+      verificationResults.set(result.taskId, structuredClone(result));
+    }),
+  };
+
+  const mockTaskQueue = {
+    getTask: (taskId: string) => (taskId === verificationTask.id ? verificationTask : null),
+    getTasksByStatus: (status: string) => tasksByStatus[status] ?? [],
+  };
+
+  const mockVerificationService = {
+    verifyTask: vi.fn(async (task: typeof verificationTask) => {
+      return {
+        ...structuredClone(baseVerificationResult),
+        taskId: task.id,
+        passed: true,
+        acceptanceCriteria: {
+          percentMet: 100,
+          criteria: baseVerificationResult.acceptanceCriteria.criteria.map((criterion) => ({
+            ...criterion,
+            met: true,
+          })),
+        },
+        testCoverage: {
+          ...baseVerificationResult.testCoverage,
+          meetsThreshold: true,
+          passed: true,
+        },
+        scopeBoundaries: {
+          ...baseVerificationResult.scopeBoundaries,
+          passed: true,
+          violationCount: 0,
+          violations: [],
+        },
+        overallScore: 99,
+        timestamp: new Date().toISOString(),
+        recommendations: ['All verification checks passed'],
+      };
+    }),
+  };
+
+  return {
+    MOCK_TASK_ID,
+    MOCK_PR_NUMBER,
+    MOCK_SOCKET_ID,
+    baseVerificationResult,
+    verificationResults,
+    mockDatabase,
+    mockTaskQueue,
+    mockVerificationService,
+  };
+});
+
+type VerificationResultPayload = ReturnType<typeof verificationMocks>['baseVerificationResult'];
+
+const {
+  MOCK_TASK_ID,
+  MOCK_PR_NUMBER,
+  MOCK_SOCKET_ID,
+  baseVerificationResult,
+  verificationResults,
+  mockDatabase,
+  mockTaskQueue,
+  mockVerificationService,
+} = verificationMocks;
+
 describe('API Integration Suite', () => {
   let server: Server;
   let deps: MockServerDependencies;
 
   beforeAll(async () => {
+    if (!createApiTestServer) {
+      ({ createApiTestServer } = await import('../../helpers/createApiTestServer.js'));
+    }
+    const databaseModule = await import('../../../src/services/database.js');
+    vi.spyOn(databaseModule, 'getDatabase').mockReturnValue(verificationMocks.mockDatabase as any);
+
+    const taskQueueModule = await import('../../../src/services/taskQueue.factory.js');
+    vi.spyOn(taskQueueModule, 'getTaskQueueService').mockReturnValue(verificationMocks.mockTaskQueue as any);
+    vi.spyOn(taskQueueModule, 'setTaskQueueService').mockImplementation(() => {});
+    vi.spyOn(taskQueueModule, 'resetTaskQueueService').mockImplementation(() => {});
+
+    const verificationServiceModule = await import('../../../src/services/taskVerification.service.js');
+    vi.spyOn(verificationServiceModule, 'getTaskVerificationService').mockReturnValue(
+      verificationMocks.mockVerificationService as any,
+    );
+    vi.spyOn(verificationServiceModule, 'resetTaskVerificationService').mockImplementation(() => {});
+
     const context = await createApiTestServer();
     server = context.server;
     deps = context.deps;
@@ -644,6 +815,66 @@ describe('API Integration Suite', () => {
         assert: (res) => {
           const body: QualityGateStatusResponse = res.body;
           expect(body.success).toBe(true);
+        },
+      },
+    ]);
+  });
+
+  describe('Verification API', () => {
+    beforeEach(() => {
+      verificationResults.clear();
+      verificationResults.set(MOCK_TASK_ID, structuredClone(baseVerificationResult));
+      mockVerificationService.verifyTask.mockClear();
+      mockDatabase.getVerificationResult.mockClear();
+      mockDatabase.storeVerificationResult.mockClear();
+    });
+
+    runEndpointTests([
+      {
+        name: `GET /api/verification/task/${MOCK_TASK_ID}`,
+        method: 'get',
+        url: `/api/verification/task/${MOCK_TASK_ID}`,
+        assert: (res) => {
+          expect(res.body.status).toBe('success');
+          expect(res.body.data.taskId).toBe(MOCK_TASK_ID);
+        },
+      },
+      {
+        name: 'GET /api/verification/task/unknown returns 404',
+        method: 'get',
+        url: '/api/verification/task/unknown',
+        expectStatus: 404,
+      },
+      {
+        name: `GET /api/verification/recommendations/${MOCK_TASK_ID}`,
+        method: 'get',
+        url: `/api/verification/recommendations/${MOCK_TASK_ID}`,
+        assert: (res) => {
+          expect(res.body.status).toBe('success');
+          expect(Array.isArray(res.body.data.recommendations)).toBe(true);
+          expect(res.body.data.recommendations.length).toBeGreaterThan(1);
+        },
+      },
+      {
+        name: 'GET /api/verification/stats',
+        method: 'get',
+        url: '/api/verification/stats',
+        assert: (res) => {
+          expect(res.body.status).toBe('success');
+          expect(res.body.data.totalTasks).toBeGreaterThan(0);
+          expect(res.body.data.totalVerified).toBeGreaterThanOrEqual(0);
+        },
+      },
+      {
+        name: `POST /api/verification/verify/${MOCK_TASK_ID}`,
+        method: 'post',
+        url: `/api/verification/verify/${MOCK_TASK_ID}`,
+        body: { workspacePath: '/tmp/workspace' },
+        assert: (res) => {
+          expect(res.body.status).toBe('success');
+          expect(res.body.data.taskId).toBe(MOCK_TASK_ID);
+          expect(res.body.data.acceptanceCriteria.percentMet).toBe(100);
+          expect(mockVerificationService.verifyTask).toHaveBeenCalledOnce();
         },
       },
     ]);
