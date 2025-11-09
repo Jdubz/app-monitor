@@ -27,6 +27,9 @@ on:
         required: true
         default: ''
 
+# SECURITY: Prevent this workflow from running on pull requests or forks
+# Self-hosted runners should NEVER run untrusted code from PRs
+
 jobs:
   # Pre-deployment checks
   pre-deployment-checks:
@@ -80,6 +83,8 @@ jobs:
     name: Deploy to Production Server
     needs: pre-deployment-checks
     runs-on: self-hosted
+    # SECURITY: Only run on main branch to prevent fork PRs from deploying
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     environment:
       name: production
       url: https://app-monitor.yourdomain.com
