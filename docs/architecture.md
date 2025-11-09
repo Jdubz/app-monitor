@@ -51,8 +51,9 @@ App Monitor is evolving from a **development monitoring tool** into a **self-bui
 │  │                  Core Services                       │   │
 │  │  • ProcessManager (service lifecycle)               │   │
 │  │  • LogSourceManager (config-driven log streaming)   │   │
-│  │  • TaskQueueManager (FIFO, SQLite persistence)     │   │
+│  │  • TaskQueueService (SQLite-based task queue)      │   │
 │  │  • DevBotsManager (agent coordination)             │   │
+│  │  • EphemeralWorkerService (Docker containers)      │   │
 │  │  • TokenTrackingService (budget management)         │   │
 │  │  • QualityGateValidator (test/lint/docs)           │   │
 │  └────────────────────────────────────────────────────┘   │
@@ -75,8 +76,9 @@ app-monitor/
 │   │   ├── services/          # 10+ core services
 │   │   │   ├── processManager.ts
 │   │   │   ├── logSourceManager.ts
-│   │   │   ├── taskQueueManager.ts
+│   │   │   ├── taskQueue.sqlite.ts
 │   │   │   ├── devBotsManager.ts
+│   │   │   ├── ephemeralWorker.service.ts
 │   │   │   ├── tokenTracking.ts
 │   │   │   ├── qualityGates.ts
 │   │   │   └── ...
@@ -200,8 +202,8 @@ app-monitor/
 5. Job Finder Worker (Python)
 6. Dev-Bots (disabled, Phase B)
 
-### 3. TaskQueueManager
-**Purpose**: FIFO task queue with SQLite persistence
+### 3. TaskQueueService
+**Purpose**: SQLite-based task queue with ACID transactions
 
 **Task Types**:
 1. feature - New feature implementation

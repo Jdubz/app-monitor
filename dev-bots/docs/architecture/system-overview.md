@@ -1,36 +1,36 @@
-# Claude Workers System Overview
+# Dev-Bots System Overview
 
 ## 🏗️ Architecture Overview
 
-The Claude Workers system is a sophisticated, distributed AI agent coordination framework that has evolved into an integrated component of the dev-monitor system. It manages autonomous task execution through specialized AI agent personalities, with comprehensive support for Docker containerization, workspace synchronization, and advanced task management capabilities.
+The Dev-Bots system is an autonomous AI agent coordination framework integrated into the app-monitor ecosystem. It manages task execution through specialized AI agent personalities using ephemeral Docker containers, with SQLite-based task queuing and PR-based workflows.
 
 ## 🎯 Core Components
 
 ### 1. Task Management System
-- **TaskQueueManager**: FIFO queue with configurable concurrency (default: 3 concurrent)
-- **Task Schema**: Comprehensive zod-based validation
-- **Task Persistence**: File-based JSON storage with automatic backups
-- **Task Lifecycle**: pending → assigned → active → completed/failed → optional retry
+- **TaskQueueService**: SQLite-based queue with ACID transactions
+- **Task Schema**: Comprehensive task metadata and validation
+- **Task Persistence**: SQLite database with automatic migrations
+- **Task Lifecycle**: pending → running → completed/failed
+- **Recovery System**: Automatic detection and handling of orphaned tasks
 
-### 2. Agent Personalities (6 Specialized Agents)
-1. **Backend Specialist** - Node.js, TypeScript, PostgreSQL, Redis, Docker, AWS
-2. **Frontend Specialist** - React, TypeScript, CSS, HTML, JavaScript, Tailwind CSS
-3. **Review Specialist** - Code analysis, security tools, testing frameworks
-4. **Testing Specialist** - Test frameworks, automation tools
-5. **DevOps Specialist** - Docker, Kubernetes, Terraform, CI/CD
-6. **Documentation Specialist** - Technical writing, documentation tools
+### 2. Agent Personalities (5 Specialized Agents)
+1. **backend-specialist** - Node.js, TypeScript, PostgreSQL, Docker, APIs
+2. **frontend-specialist** - React, TypeScript, CSS, HTML, Tailwind CSS
+3. **fullstack-developer** - Full-stack development across backend and frontend
+4. **testing-specialist** - Test frameworks, automation, quality assurance
+5. **devops-engineer** - Docker, CI/CD, deployment automation
 
-### 3. Docker Integration
+### 3. Docker Integration (Ephemeral Containers)
 - **Ephemeral Container Model**: Fresh container created per task
-- **Complete Environment Isolation**: No idle workers running
-- **Automatic Resource Cleanup**: Container and context destruction
-- **Optimized Images**: 72% smaller, 80% faster startup
+- **Complete Environment Isolation**: No persistent workers
+- **Automatic Resource Cleanup**: Containers destroyed after task completion
+- **Modular Architecture**: DevBotContainerBuilder, DevBotWorkspaceManager, DevBotCredentialsManager, DevBotContainerLifecycle
 
-### 4. Workspace Synchronization
-- **SyncManager**: Bidirectional git synchronization
-- **Supported Repos**: job-finder-BE, job-finder-FE, job-finder-shared-types, job-finder-worker
-- **Worker Worktrees**: worker-a, worker-b (separate git worktrees)
-- **Conflict Handling**: auto-merge, stash, or abort strategies
+### 4. PR-Based Workflow
+- **PR Creation**: Automatic PR creation for completed tasks
+- **PR Monitoring**: Track PR status, checks, and reviews
+- **PR Recovery**: Detect and recover orphaned PRs after server restarts
+- **Quality Observation**: Monitor PR checks and create repair bots for failures
 
 ## 🔄 Task Execution Flow
 
@@ -63,13 +63,14 @@ The Claude Workers system is a sophisticated, distributed AI agent coordination 
 
 ## 🔗 Integration Points
 
-### Dev-Monitor Integration
-- **TaskBridge Service**: Bidirectional synchronization between TaskQueueManager and ClaudeWorkersManager
-- **Event Flow**: Queue Task Created → Bridge → Claude Task Created → Assignment → Completion
+### App Monitor Integration
+- **DevBotsManager**: Coordinates task execution and worker lifecycle
+- **Event Flow**: Task Created → Queue → Worker Assignment → Execution → PR Creation → Monitoring
 
 ### Frontend Integration
 - **Socket.IO Events**: Real-time updates for task status changes
-- **API Endpoints**: 30+ endpoints for task management and monitoring
+- **API Endpoints**: REST API for task management and monitoring
+- **Interactive Sessions**: Live streaming of bot execution logs
 
 ## 🚀 Current Status
 
