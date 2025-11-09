@@ -55,7 +55,7 @@ export class TaskExecutionService {
   // TaskPersistence removed - using SQLite directly
   private readonly config: TaskExecutionServiceConfig;
   private recovery?: SimpleFailureRecovery; // Optional: set via setRecovery()
-  private dockerCircuitBreaker?: any; // CircuitBreaker (imported lazily)
+  private dockerCircuitBreaker?: { execute: <T>(fn: () => Promise<T>) => Promise<T> }; // CircuitBreaker (imported lazily)
   private agentTypeManager: AgentTypeManager; // Centralized agent type management
 
   constructor(
@@ -145,7 +145,7 @@ export class TaskExecutionService {
       stderr?: string;
       stdout?: string;
       exitCode?: number;
-      failurePattern?: any;
+      failurePattern?: { name: string; category: string; suggestedFix?: string };
     }
   ): Promise<void> {
     // Mark task as failed in database
@@ -174,7 +174,7 @@ export class TaskExecutionService {
           });
         } else {
           const recoveryResult = await this.recovery.attemptRecovery({
-            task: task as any,
+            task: task as Task & { metadata?: Record<string, unknown> },
             failurePattern,
             stderr: context.stderr || error,
             stdout: context.stdout || '',
@@ -371,7 +371,7 @@ export class TaskExecutionService {
     const taskContext: TaskContext = {
       task: nextTask,
       agent: agent,
-      project: (nextTask as any).project || 'dev-monitor',
+      project: (nextTask as Task & { project?: string }).project || 'dev-monitor',
       worktree: '[dynamic workspace provisioned per task]',
       environment: 'development'
     };

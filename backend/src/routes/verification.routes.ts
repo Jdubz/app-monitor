@@ -241,10 +241,10 @@ router.get('/recommendations/:taskId', async (req, res) => {
     // Add additional recommendations based on the verification results
     const enhancedRecommendations = [...recommendations];
 
-    if (verification.acceptanceCriteria && verification.acceptanceCriteria.percentMet < 100) {
-      const unmetCriteria = verification.acceptanceCriteria.criteria
-        .filter((c: any) => !c.met)
-        .map((c: any) => c.text);
+    if (verification.acceptanceCriteria && (verification.acceptanceCriteria as { percentMet: number; criteria: Array<{ met: boolean; text: string }> }).percentMet < 100) {
+      const unmetCriteria = (verification.acceptanceCriteria as { criteria: Array<{ met: boolean; text: string }> }).criteria
+        .filter((c) => !c.met)
+        .map((c) => c.text);
 
       enhancedRecommendations.push(
         `Focus on completing these criteria: ${unmetCriteria.join(', ')}`
@@ -257,12 +257,12 @@ router.get('/recommendations/:taskId', async (req, res) => {
       );
     }
 
-    if (verification.scopeBoundaries && verification.scopeBoundaries.violationCount > 0) {
+    if (verification.scopeBoundaries && (verification.scopeBoundaries as { violationCount: number; violations: Array<{ file: string }> }).violationCount > 0) {
       enhancedRecommendations.push(
         `Review and revert changes to restricted files: ${
-          verification.scopeBoundaries.violations
+          (verification.scopeBoundaries as { violations: Array<{ file: string }> }).violations
             .slice(0, 3)
-            .map((v: any) => v.file)
+            .map((v) => v.file)
             .join(', ')
         }`
       );

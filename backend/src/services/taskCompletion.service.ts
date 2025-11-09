@@ -52,7 +52,7 @@ export class TaskCompletionService {
     private readonly ephemeralWorkerService: EphemeralWorkerService,
     private readonly taskPersistence: TaskPersistence,
     private readonly pushCoordinator: PushCoordinator,
-    private readonly emit: (event: string, data: any) => void,
+    private readonly emit: (event: string, data: unknown) => void,
     config: Partial<TaskCompletionServiceConfig> = {}
   ) {
     this.config = {
@@ -299,7 +299,7 @@ export class TaskCompletionService {
       const qualityGates = getQualityGateValidator();
 
       // Determine project name from task
-      const project = (task as any).project || 'unknown';
+      const project = (task as Task & { project?: string }).project || 'unknown';
 
       logger.info({
         category: 'quality-gates',

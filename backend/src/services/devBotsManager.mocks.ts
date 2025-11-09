@@ -22,20 +22,25 @@ import type { ScopeControlService } from './scopeControl.service.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskExecutionService } from './taskExecution.service.js';
 import type { TaskCompletionService } from './taskCompletion.service.js';
+import type { SimpleFailureRecovery } from './failureRecovery.js';
+import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
+import type { InteractiveSessionService } from './interactiveSession.service.js';
+import type { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
+import type { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
 import { EventEmitter } from 'events';
 
 /**
  * Create mock ProcessManager
  */
 export function createMockProcessManager(): ProcessManager {
-  const mock = new EventEmitter() as any;
+  const mock = new EventEmitter() as ProcessManager & EventEmitter;
   mock.on = vi.fn().mockReturnThis();
   mock.emit = vi.fn();
   mock.getStatus = vi.fn().mockResolvedValue({ status: 'running' });
   mock.getAllStatuses = vi.fn().mockResolvedValue({});
   mock.startService = vi.fn().mockResolvedValue({ success: true });
   mock.stopService = vi.fn().mockResolvedValue({ success: true });
-  return mock as ProcessManager;
+  return mock;
 }
 
 /**
@@ -64,7 +69,7 @@ export function createMockDocker(): Docker {
     listContainers: vi.fn().mockResolvedValue([]),
     createContainer: vi.fn().mockResolvedValue(mockContainer),
     getContainer: vi.fn().mockReturnValue(mockContainer),
-  } as any;
+  } as unknown as Docker;
 }
 
 /**
@@ -87,7 +92,7 @@ export function createMockDockerManager(): DockerManager {
     stopContainer: vi.fn().mockResolvedValue({ success: true }),
     removeContainer: vi.fn().mockResolvedValue({ success: true }),
     inspectContainer: vi.fn().mockResolvedValue({}),
-  } as any;
+  } as unknown as DockerManager;
 }
 
 /**
@@ -143,7 +148,7 @@ export function createMockTaskQueue(): TaskQueueService {
     runRecoveryMigration: vi.fn().mockResolvedValue(undefined),
     recoverOrphanedTasks: vi.fn(() => []),
     checkDuplicateTask: vi.fn().mockResolvedValue(null),
-  } as any;
+  } as unknown as TaskQueueService;
 }
 
 /**
@@ -183,7 +188,7 @@ export function createMockAgentManager(): AgentPersonalityManager {
     getAllPersonalities: vi.fn().mockReturnValue([testAgent]),
     getPersonalityByType: vi.fn().mockReturnValue(testAgent),
     selectAgentForTask: vi.fn().mockReturnValue(testAgent),
-  } as any;
+  } as unknown as AgentPersonalityManager;
 }
 
 /**
@@ -193,7 +198,7 @@ export function createMockTemplateManager(): TaskPromptTemplateManager {
   return {
     buildTaskPrompt: vi.fn().mockReturnValue('Test prompt for task'),
     buildOnboardingPrompt: vi.fn().mockReturnValue('Test onboarding prompt'),
-  } as any;
+  } as unknown as TaskPromptTemplateManager;
 }
 
 /**
@@ -208,7 +213,7 @@ export function createMockGuidelinesManager(): TaskCreationGuidelinesManager {
       errors: [],
     }),
     getGuidelinesForType: vi.fn().mockReturnValue({ type: 'feature', guidelines: [] }),
-  } as any;
+  } as unknown as TaskCreationGuidelinesManager;
 }
 
 /**
@@ -218,20 +223,20 @@ export function createMockWorkspaceSyncManager(): WorkspaceSyncManager {
   return {
     syncWorkspace: vi.fn().mockResolvedValue({ success: true }),
     getSyncStatus: vi.fn().mockReturnValue({ status: 'synced' }),
-  } as any;
+  } as unknown as WorkspaceSyncManager;
 }
 
 /**
  * Create mock RetryManager
  */
 export function createMockRetryManager(): RetryManager {
-  const mock = new EventEmitter() as any;
+  const mock = new EventEmitter() as RetryManager & EventEmitter;
   mock.on = vi.fn().mockReturnThis();
   mock.emit = vi.fn();
   mock.canRetryTask = vi.fn().mockReturnValue(true);
-  mock.retryTask = vi.fn().mockImplementation((task: any) => ({
+  mock.retryTask = vi.fn().mockImplementation((task: Task) => ({
     success: true,
-    task: { ...task, status: 'pending' },
+    task: { ...task, status: 'pending' as const },
     retryAttempt: { attemptNumber: 1, timestamp: new Date().toISOString(), reason: 'Manual retry' }
   }));
   mock.getRetryHistory = vi.fn().mockReturnValue([]);
@@ -240,7 +245,7 @@ export function createMockRetryManager(): RetryManager {
   mock.clearRetryHistory = vi.fn();
   mock.clearAllRetries = vi.fn();
   mock.getConfig = vi.fn().mockReturnValue({ max_retries: 3 });
-  return mock as RetryManager;
+  return mock;
 }
 
 /**
@@ -252,14 +257,14 @@ export function createMockTaskPersistence(): TaskPersistence {
     saveCompletedTasks: vi.fn().mockResolvedValue(undefined),
     saveTask: vi.fn().mockResolvedValue(undefined),
     loadTask: vi.fn().mockReturnValue(null),
-  } as any;
+  } as unknown as TaskPersistence;
 }
 
 /**
  * Create mock WorkspaceOrchestrator (REMOVED - keeping stub for tests)
  */
-export function createMockWorkspaceOrchestrator(): any {
-  const mockWorkspace: any = {
+export function createMockWorkspaceOrchestrator(): Record<string, unknown> {
+  const mockWorkspace: Record<string, unknown> = {
     id: 'workspace-test',
     hostPath: '/tmp/workspace',
     branchName: 'bots/task-core',
@@ -277,7 +282,7 @@ export function createMockWorkspaceOrchestrator(): any {
     }),
     cleanupWorkspace: vi.fn().mockResolvedValue(undefined),
     createPatchArtifact: vi.fn().mockReturnValue('/tmp/workspace.patch'),
-  } as any;
+  };
 }
 
 /**
@@ -309,7 +314,7 @@ export function createMockScopeControl(): ScopeControlService {
       max_retries: 3,
       timeout_ms: null
     }),
-  } as any;
+  } as unknown as ScopeControlService;
 }
 
 /**
@@ -354,7 +359,7 @@ export function createMockEphemeralWorkerService(): EphemeralWorkerService {
     destroyWorker: vi.fn().mockResolvedValue(undefined),
     destroyAllWorkers: vi.fn().mockResolvedValue(undefined),
     cleanupStuckTaskContainers: vi.fn().mockResolvedValue(undefined),
-  } as any;
+  } as unknown as EphemeralWorkerService;
 }
 
 /**
@@ -364,7 +369,7 @@ export function createMockTaskExecutionService(): TaskExecutionService {
   return {
     assignNextTask: vi.fn().mockResolvedValue(undefined),
     setRecovery: vi.fn(),
-  } as any;
+  } as unknown as TaskExecutionService;
 }
 
 /**
@@ -374,7 +379,7 @@ export function createMockTaskCompletionService(): TaskCompletionService {
   return {
     completeEphemeralTask: vi.fn().mockResolvedValue(undefined),
     failEphemeralTask: vi.fn().mockResolvedValue(undefined),
-  } as any;
+  } as unknown as TaskCompletionService;
 }
 
 /**
@@ -413,7 +418,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     ephemeralWorkerService,
     taskExecutionService,
     taskCompletionService,
-    recovery: null as any, // Will be created by DevBotsManager
+    recovery: null as unknown as SimpleFailureRecovery, // Will be created by DevBotsManager
     prWorkflowOrchestrator: {
       handleTaskCompletion: vi.fn().mockResolvedValue(undefined),
       getMonitoredPRs: vi.fn().mockReturnValue([]),
@@ -422,7 +427,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
         config: { enableAutoMerge: true }
       }),
       stop: vi.fn()
-    } as any,
+    } as unknown as PRWorkflowOrchestrator,
     interactiveSessionService: {
       createSession: vi.fn().mockReturnValue({
         id: 'session-1',
@@ -434,11 +439,11 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
       recordActivity: vi.fn(),
       getIdleTimeoutMs: vi.fn().mockReturnValue(300000),
       listActiveSessions: vi.fn().mockReturnValue([])
-    } as any,
+    } as unknown as InteractiveSessionService,
     interactiveSessionOrchestrator: {
       start: vi.fn().mockResolvedValue('container-id'),
       stop: vi.fn().mockResolvedValue(undefined)
-    } as any,
+    } as unknown as InteractiveSessionOrchestrator,
     interactiveSessionStreamManager: {
       attach: vi.fn().mockResolvedValue(undefined),
       detach: vi.fn().mockResolvedValue(undefined),
@@ -448,6 +453,6 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
       getBacklog: vi.fn().mockReturnValue([]),
       on: vi.fn(),
       removeAllListeners: vi.fn()
-    } as any,
+    } as unknown as InteractiveSessionStreamManager,
   };
 }

@@ -88,7 +88,7 @@ export function setupDevBotsMocks() {
 /**
  * Create a mock task for testing
  */
-export function createMockTask(overrides: Partial<any> = {}) {
+export function createMockTask(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: 'task-123',
     description: 'Test task',
@@ -106,7 +106,7 @@ export function createMockTask(overrides: Partial<any> = {}) {
 /**
  * Create a mock worker for testing
  */
-export function createMockWorker(overrides: Partial<any> = {}) {
+export function createMockWorker(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: 'worker-123',
     containerId: 'container-123',

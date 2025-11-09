@@ -76,7 +76,7 @@ export interface CopilotReviewAnalysis {
 export class GitHubPRService {
   private repoOwner: string;
   private repoName: string;
-  private githubCircuitBreaker?: any; // CircuitBreaker (imported lazily)
+  private githubCircuitBreaker?: { execute: <T>(fn: () => Promise<T>) => Promise<T> }; // CircuitBreaker (imported lazily)
 
   constructor(repoOwner: string = 'Jdubz', repoName: string = 'app-monitor') {
     this.repoOwner = repoOwner;
@@ -131,15 +131,15 @@ export class GitHubPRService {
       const prData = JSON.parse(stdout);
 
       // Parse checks
-      const checks: PRCheckStatus[] = (prData.statusCheckRollup || []).map((check: any) => ({
-        name: check.name || check.context,
-        status: this.normalizeCheckStatus(check.status || check.state),
+      const checks: PRCheckStatus[] = (prData.statusCheckRollup || []).map((check: { name?: string; context?: string; status?: string; state?: string; conclusion?: string | null; targetUrl?: string | null; detailsUrl?: string | null }) => ({
+        name: check.name || check.context || 'unknown',
+        status: this.normalizeCheckStatus(check.status || check.state || 'pending'),
         conclusion: check.conclusion || null,
         detailsUrl: check.targetUrl || check.detailsUrl || null
       }));
 
       // Parse reviews
-      const reviews: PRReview[] = (prData.reviews || []).map((review: any) => ({
+      const reviews: PRReview[] = (prData.reviews || []).map((review: { author?: { login?: string }; state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED'; submittedAt: string; body?: string }) => ({
         author: review.author?.login || 'unknown',
         state: review.state,
         submittedAt: review.submittedAt,
@@ -147,7 +147,7 @@ export class GitHubPRService {
       }));
 
       // Parse comments
-      const comments: PRComment[] = (prData.comments || []).map((comment: any) => ({
+      const comments: PRComment[] = (prData.comments || []).map((comment: { author?: { login?: string }; body?: string; createdAt: string; path?: string | null; line?: number | null }) => ({
         author: comment.author?.login || 'unknown',
         body: comment.body || '',
         createdAt: comment.createdAt,

@@ -237,7 +237,7 @@ export class PRArtifactRecoveryService {
   /**
    * Investigate why PR info couldn't be found
    */
-  private async investigateFailure(task: Task, descriptor: any, logContent: string): Promise<void> {
+  private async investigateFailure(task: Task, descriptor: { path: string; filename: string; size: number }, logContent: string): Promise<void> {
     // Check stderr for clues
     const stderrDescriptor = await this.logLocator.getDescriptor('dev-bots', task.id, 'stderr');
 

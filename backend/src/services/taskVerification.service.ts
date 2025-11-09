@@ -501,7 +501,7 @@ export class TaskVerificationService {
     }
 
     // Check doNotCreate restrictions (from task template)
-    const taskTemplate = task as any;
+    const taskTemplate = task as Task & { doNotCreate?: Array<string>; doNotModify?: Array<string> };
     if (taskTemplate.doNotCreate && Array.isArray(taskTemplate.doNotCreate)) {
       for (const restriction of taskTemplate.doNotCreate) {
         const createdFiles = gitDiff.filesCreated.filter(f => f.includes(restriction));
@@ -646,11 +646,11 @@ export class TaskVerificationService {
       (
         (Array.isArray(boundaries.mustNotChange) && boundaries.mustNotChange.length > 0) ||
         (Array.isArray(boundaries.mustNotAffect) && boundaries.mustNotAffect.length > 0) ||
-        (Array.isArray((boundaries as any).integrationPoints) && (boundaries as any).integrationPoints.length > 0)
+        (Array.isArray((boundaries as { integrationPoints?: Array<string> }).integrationPoints) && (boundaries as { integrationPoints?: Array<string> }).integrationPoints!.length > 0)
       )
     );
 
-    const taskTemplate = task as any;
+    const taskTemplate = task as Task & { doNotCreate?: Array<string>; doNotModify?: Array<string> };
     const hasTemplateRestrictions = !!(
       (Array.isArray(taskTemplate.doNotCreate) && taskTemplate.doNotCreate.length > 0) ||
       (Array.isArray(taskTemplate.doNotModify) && taskTemplate.doNotModify.length > 0)

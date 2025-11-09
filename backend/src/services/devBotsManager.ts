@@ -135,7 +135,7 @@ export class DevBotsManager extends EventEmitter {
   private interactiveSessionService!: InteractiveSessionService;
   private interactiveSessionOrchestrator!: InteractiveSessionOrchestrator;
   private interactiveSessionStreamManager!: InteractiveSessionStreamManager;
-  private taskQueueWorker?: any; // TaskQueueWorker (imported lazily to avoid circular deps)
+  private taskQueueWorker?: { start: () => void; stop: () => void }; // TaskQueueWorker (imported lazily to avoid circular deps)
   private metricsEmitter?: MetricsEmitter;
   private interactiveIdleInterval?: NodeJS.Timeout;
 
@@ -172,8 +172,10 @@ export class DevBotsManager extends EventEmitter {
     // Create no-op implementations for removed dependencies
     const noopTaskPersistence = {
       saveCompletedTasks: () => {}, // No-op - SQLite is source of truth
-      loadCompletedTasks: () => []
-    } as any;
+      loadCompletedTasks: () => [],
+      saveTask: () => {},
+      loadTask: () => null
+    };
     const noopPushCoordinator = {
       enqueue: async <T>(operation: () => Promise<T>) => await operation()
     };
@@ -340,7 +342,7 @@ export class DevBotsManager extends EventEmitter {
         if (task && task.status === 'failed' && this.recovery) {
           try {
             const recoveryResult = await this.recovery.attemptRecovery({
-              task: task as any,
+              task: task as Task & { metadata?: Record<string, unknown> },
               failurePattern: {
                 name: 'server_restart',
                 description: 'Task was orphaned when server restarted or crashed',
@@ -575,7 +577,7 @@ export class DevBotsManager extends EventEmitter {
                   // Actually attempt recovery
                   try {
                     const recoveryResult = await this.recovery.attemptRecovery({
-                      task: fullTask as any,
+                      task: fullTask as Task & { metadata?: Record<string, unknown> },
                       failurePattern,
                       stderr: taskError,
                       stdout: '',
@@ -1461,7 +1463,7 @@ export class DevBotsManager extends EventEmitter {
       created_at: Date.now(),
       assigned_agent: 'backend-specialist'
       // scope and isEmergency removed from Task interface
-    } as any;
+    } as unknown as Task;
 
     // TaskQueueService doesn't have unshift(), use createTask instead
     await this.taskQueue.createTask(recoveryTask);

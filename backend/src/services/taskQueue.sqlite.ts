@@ -898,7 +898,7 @@ export class TaskQueueService {
 
       // Build UPDATE statement dynamically based on provided fields
       const fields: string[] = [];
-      const values: any[] = [];
+      const values: Array<string | number | null | undefined> = [];
 
       if (updates.status !== undefined) {
         fields.push('status = ?');
