@@ -47,15 +47,24 @@ global.confirm = vi.fn();
 // Mock window.prompt
 global.prompt = vi.fn();
 
-// Mock window.location.reload
-delete (window as any).location;
-window.location = { ...window.location, reload: vi.fn() } as any;
-
-// Mock window.location.assign
-window.location.assign = vi.fn();
-
-// Mock window.location.replace
-window.location.replace = vi.fn();
+// Mock window.location with proper defaults for BrowserRouter
+delete (window as unknown as { location?: unknown }).location;
+(window as unknown as { location: Location }).location = {
+  href: 'http://localhost:3000/',
+  origin: 'http://localhost:3000',
+  protocol: 'http:',
+  host: 'localhost:3000',
+  hostname: 'localhost',
+  port: '3000',
+  pathname: '/',
+  search: '',
+  hash: '',
+  reload: vi.fn(),
+  assign: vi.fn(),
+  replace: vi.fn(),
+  toString: () => 'http://localhost:3000/',
+  ancestorOrigins: {} as DOMStringList,
+} as Location;
 
 // Mock window.history
 Object.defineProperty(window, 'history', {
@@ -89,6 +98,49 @@ global.MutationObserver = vi.fn().mockImplementation(() => ({
   disconnect: vi.fn(),
   takeRecords: vi.fn(),
 }));
+
+// Mock HTMLCanvasElement.getContext for xterm.js
+HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+  fillStyle: '',
+  fillRect: vi.fn(),
+  clearRect: vi.fn(),
+  getImageData: vi.fn(() => ({ data: [] })),
+  putImageData: vi.fn(),
+  createImageData: vi.fn(() => ({ data: [] })),
+  setTransform: vi.fn(),
+  drawImage: vi.fn(),
+  save: vi.fn(),
+  restore: vi.fn(),
+  beginPath: vi.fn(),
+  moveTo: vi.fn(),
+  lineTo: vi.fn(),
+  closePath: vi.fn(),
+  stroke: vi.fn(),
+  translate: vi.fn(),
+  scale: vi.fn(),
+  rotate: vi.fn(),
+  arc: vi.fn(),
+  fill: vi.fn(),
+  measureText: vi.fn(() => ({ width: 0 })),
+  transform: vi.fn(),
+  rect: vi.fn(),
+  clip: vi.fn(),
+  font: '',
+  textAlign: '',
+  textBaseline: '',
+  globalAlpha: 1,
+  globalCompositeOperation: '',
+  strokeStyle: '',
+  lineWidth: 1,
+  lineCap: '',
+  lineJoin: '',
+  miterLimit: 0,
+  shadowBlur: 0,
+  shadowColor: '',
+  shadowOffsetX: 0,
+  shadowOffsetY: 0,
+  canvas: null,
+})) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 
 // Mock requestAnimationFrame
 global.requestAnimationFrame = vi.fn((cb) => setTimeout(cb, 0));

@@ -1,15 +1,21 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import path from 'path';
 
 /**
  * Integration Tests Configuration - app-monitor-frontend
- * 
+ *
  * Configuration for integration tests that test component interactions
  * and API integrations with more realistic scenarios.
  */
 
 export default defineConfig({
   plugins: [react()],
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, './src'),
+    },
+  },
   define: {
     'process.env.NODE_ENV': JSON.stringify('test'),
   },
@@ -42,8 +48,21 @@ export default defineConfig({
     
     // Test file patterns - INTEGRATION TESTS ONLY
     include: [
+      // API integration tests
       'src/services/api.integration.test.ts',
+
+      // Component integration tests
       'src/components/ServiceCard.integration.test.tsx',
+
+      // Full application integration tests
+      'src/App.integration.test.tsx',
+
+      // Feature-specific integration tests
+      'src/components/dev-bots/DevBots.integration.test.tsx',
+      'src/components/CloudLogs.integration.test.tsx',
+
+      // All integration test files
+      '**/*.integration.test.{ts,tsx}',
     ],
     exclude: [
       'node_modules',
