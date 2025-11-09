@@ -1,10 +1,11 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { getThreadPoolConfig, TEST_TIMEOUTS } from './vitest.shared.config.js';
 
 /**
  * Unit Tests Only Configuration - app-monitor-frontend
- * 
+ *
  * Excludes problematic integration tests to allow faster, more reliable pushes.
  */
 
@@ -19,21 +20,10 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     globals: true,
-    testTimeout: 10000,
-    hookTimeout: 10000,
 
-    // Balanced parallelism for CI - allows multiple test files to run concurrently
-    pool: 'threads',
-    poolOptions: {
-      threads: {
-        maxThreads: 4,  // Allow up to 4 parallel test files in CI
-        minThreads: 1,
-      },
-    },
-
-    // Enable file parallelism but limit concurrency
-    fileParallelism: true,
-    maxConcurrency: 4,  // Max 4 test files running at once
+    // Shared parallelism and timeout configuration
+    ...getThreadPoolConfig(8),
+    ...TEST_TIMEOUTS.unit,
 
     // Test file patterns - UNIT TESTS ONLY (exclude problematic ones)
     include: [
