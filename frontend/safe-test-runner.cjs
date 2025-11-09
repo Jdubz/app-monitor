@@ -107,13 +107,18 @@ class SafeTestRunner {
   async runTests() {
     return new Promise((resolve) => {
       console.log('\n🧪 Running tests...')
-      
+
+      // Use environment variable to control parallelism (useful for CI)
+      const maxThreads = process.env.CI ? '4' : '1'
+
       const testProcess = spawn('npx', ['vitest', 'run', '--config', 'vitest.unit.config.ts', '--no-coverage', '--reporter=verbose'], {
         stdio: 'inherit',
         shell: process.platform === 'win32',
-        env: { 
-          ...process.env, 
-          NODE_OPTIONS: '--max-old-space-size=2048' 
+        env: {
+          ...process.env,
+          NODE_OPTIONS: '--max-old-space-size=2048',
+          VITEST_MAX_THREADS: maxThreads,
+          VITEST_MIN_THREADS: '1'
         }
       })
 

@@ -21,7 +21,20 @@ export default defineConfig({
     globals: true,
     testTimeout: 10000,
     hookTimeout: 10000,
-    
+
+    // Balanced parallelism for CI - allows multiple test files to run concurrently
+    pool: 'threads',
+    poolOptions: {
+      threads: {
+        maxThreads: 4,  // Allow up to 4 parallel test files in CI
+        minThreads: 1,
+      },
+    },
+
+    // Enable file parallelism but limit concurrency
+    fileParallelism: true,
+    maxConcurrency: 4,  // Max 4 test files running at once
+
     // Test file patterns - UNIT TESTS ONLY (exclude problematic ones)
     include: [
       'src/utils/**/*.{test,spec}.{js,ts,tsx}',

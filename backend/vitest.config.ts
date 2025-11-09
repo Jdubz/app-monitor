@@ -30,19 +30,20 @@ const heavyBotPatterns = [
 
 export default defineConfig({
   test: {
-    // CRITICAL: Single process execution - NO parallelism
+    // Balanced parallelism for CI - allows multiple test files to run concurrently
     pool: 'threads',
     poolOptions: {
       threads: {
-        maxThreads: 1,  // ONLY 1 worker at a time
+        maxThreads: 4,  // Allow up to 4 parallel test files in CI
         minThreads: 1,
       },
     },
-    
-    // CRITICAL: No file parallelism
-    fileParallelism: false,
-    
-    // CRITICAL: No test parallelism
+
+    // Enable file parallelism but limit concurrency
+    fileParallelism: true,
+    maxConcurrency: 4,  // Max 4 test files running at once
+
+    // Reasonable timeouts
     testTimeout: 30000,
     hookTimeout: 30000,
     
