@@ -56,6 +56,24 @@ export type PortStatuses = PortStatusMap;
 
 // Health check endpoint
 const API_CLIENT_SYMBOL = '__APP_MONITOR_API_CLIENT__';
+export type ApiClientAdapter = Pick<ApiClient, 'get' | 'post' | 'put' | 'delete' | 'patch'>;
+
+const setGlobalApiClient = (client: ApiClientAdapter | null) => {
+  const scope = globalThis as Record<string, unknown>;
+  if (client) {
+    scope[API_CLIENT_SYMBOL] = client;
+  } else {
+    delete scope[API_CLIENT_SYMBOL];
+  }
+};
+
+export const setApiClientInstance = (client: ApiClientAdapter | null) => {
+  setGlobalApiClient(client);
+};
+
+export const resetApiClientInstance = () => {
+  setGlobalApiClient(null);
+};
 
 const ensureApiSuccess = <T>(
   response: ApiSuccess<T> | ApiError | null | undefined,
@@ -122,15 +140,15 @@ const unwrapApiResponse = <T>(payload: unknown, context?: string): T => {
   );
 };
 
-const getApiClient = async (): Promise<ApiClient> => {
+const getApiClient = async (): Promise<ApiClientAdapter> => {
   const globalClient = (globalThis as Record<string, unknown>)[API_CLIENT_SYMBOL];
   if (globalClient) {
-    return globalClient as ApiClient;
+    return globalClient as ApiClientAdapter;
   }
 
   const module = await import('./ApiClient');
-  const client = module.apiClient;
-  (globalThis as Record<string, unknown>)[API_CLIENT_SYMBOL] = client;
+  const client = module.apiClient as ApiClientAdapter;
+  setGlobalApiClient(client);
   return client;
 };
 

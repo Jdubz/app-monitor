@@ -34,6 +34,7 @@ export default defineConfig({
       'dist',
       '**/node_modules/**',
       '**/dist/**',
+      'src/**/*.integration.test.{js,ts,tsx}',
     ],
   },
 });

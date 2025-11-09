@@ -2,6 +2,7 @@ import '@testing-library/jest-dom'
 import { vi, beforeEach, afterEach } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import { TextEncoder, TextDecoder } from 'util'
+import { createConfiguredMockApiClient, installMockApiClient } from './api-mocks'
 
 if (!(globalThis as { TextEncoder?: typeof TextEncoder }).TextEncoder) {
   (globalThis as { TextEncoder: typeof TextEncoder }).TextEncoder = TextEncoder
@@ -209,8 +210,15 @@ Object.defineProperty(import.meta, 'env', {
   writable: true,
 });
 
+const resetGlobalApiClientMock = () => {
+  installMockApiClient(createConfiguredMockApiClient())
+}
+
+resetGlobalApiClientMock()
+
 // Setup test environment
 beforeEach(() => {
+  resetGlobalApiClientMock()
   // Clear all mocks before each test
   vi.clearAllMocks();
   

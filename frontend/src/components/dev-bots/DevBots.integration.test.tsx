@@ -13,10 +13,6 @@ import { createMockEnvironment, mockGenerators, apiSuccess } from '../../test/ap
 
 const mockEnv = createMockEnvironment();
 
-vi.mock('../../services/ApiClient', () => ({
-  apiClient: mockEnv.apiClient,
-}));
-
 const renderDevBotsTab = () => {
   return render(
     <BrowserRouter>
@@ -26,9 +22,19 @@ const renderDevBotsTab = () => {
 };
 
 describe('Dev-Bots Integration Tests', () => {
+  const resetApiClientMocks = () => {
+    mockEnv.applyApiMocks();
+    mockEnv.apiClient.get.mockClear();
+    mockEnv.apiClient.post.mockClear();
+    mockEnv.apiClient.put.mockClear();
+    mockEnv.apiClient.delete.mockClear();
+    mockEnv.apiClient.patch.mockClear();
+  };
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockEnv.socket.connected = false;
+    resetApiClientMocks();
 
     // Default mock implementations
     mockEnv.apiClient.get.mockImplementation((url: string) => {

@@ -28,6 +28,16 @@ import type {
   DevBotsInteractiveSession,
   LogSource,
 } from '@app-monitor/api-contracts';
+import { setApiClientInstance, type ApiClientAdapter } from '../services/api';
+
+type MockedApiMethod = ReturnType<typeof vi.fn>;
+export type MockApiClient = ApiClientAdapter & {
+  get: MockedApiMethod;
+  post: MockedApiMethod;
+  put: MockedApiMethod;
+  delete: MockedApiMethod;
+  patch: MockedApiMethod;
+};
 
 // Type-safe success response helper
 export const apiSuccess = <T>(data: T): ApiSuccess<T> => ({
@@ -316,8 +326,8 @@ export const mockGenerators = {
 /**
  * Creates a complete mock API client that uses api-contracts types
  */
-export const createMockApiClient = () => {
-  const mockApiClient = {
+export const createMockApiClient = (): MockApiClient => {
+  const mockApiClient: MockApiClient = {
     get: vi.fn(),
     post: vi.fn(),
     put: vi.fn(),
@@ -331,7 +341,7 @@ export const createMockApiClient = () => {
 /**
  * Creates a mock API client with predefined responses for common endpoints
  */
-export const createConfiguredMockApiClient = () => {
+export const createConfiguredMockApiClient = (): MockApiClient => {
   const mockApiClient = createMockApiClient();
 
   // Configure common endpoint responses
@@ -414,6 +424,11 @@ export const createConfiguredMockApiClient = () => {
   return mockApiClient;
 };
 
+export const installMockApiClient = (client: MockApiClient = createConfiguredMockApiClient()) => {
+  setApiClientInstance(client);
+  return client;
+};
+
 /**
  * Mock Socket.IO client for testing real-time features
  */
@@ -480,6 +495,7 @@ export const createMockEnvironment = () => {
   return {
     apiClient,
     socket,
+    applyApiMocks: () => installMockApiClient(apiClient),
     // Helper to simulate API success
     respondWith: <T>(data: T) => apiSuccess(data),
     // Helper to simulate API error

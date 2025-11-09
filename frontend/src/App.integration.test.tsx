@@ -11,13 +11,10 @@ import userEvent from '@testing-library/user-event';
 import App from './App';
 import { createMockEnvironment, mockGenerators, apiSuccess } from './test/api-mocks';
 import * as socketServiceModule from './services/socketService';
+import { getApiClientInstance } from './services/api';
 
 // Mock the API client globally
 const mockEnv = createMockEnvironment();
-
-vi.mock('./services/ApiClient', () => ({
-  apiClient: mockEnv.apiClient,
-}));
 
 // Mock socket service
 vi.mock('./services/socketService', () => ({
@@ -25,9 +22,21 @@ vi.mock('./services/socketService', () => ({
 }));
 
 describe('App Integration Tests', () => {
-  beforeEach(() => {
+  const resetApiClientMocks = () => {
+    mockEnv.applyApiMocks();
+    mockEnv.apiClient.get.mockClear();
+    mockEnv.apiClient.post.mockClear();
+    mockEnv.apiClient.put.mockClear();
+    mockEnv.apiClient.delete.mockClear();
+    mockEnv.apiClient.patch.mockClear();
+  };
+
+  beforeEach(async () => {
     vi.clearAllMocks();
     mockEnv.socket.connected = false;
+    resetApiClientMocks();
+    const client = await getApiClientInstance();
+    expect(client).toBe(mockEnv.apiClient);
   });
 
   afterEach(() => {
