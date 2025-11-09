@@ -3,7 +3,7 @@ import * as crypto from 'crypto';
 import { logger } from '../utils/logger.js';
 import { ProcessManager, ProcessInfo } from './processManager.js';
 import Docker from 'dockerode';
-// TaskPersistence removed - using SQLite directly
+import type { TaskPersistence } from './taskPersistence.js';
 import { TaskQueueService, Task, TaskStatus as SQLiteTaskStatus, TaskExecution } from './taskQueue.sqlite.js';
 // Migration completed - SQLite is the only implementation now
 import { AgentPersonalityManager, AgentPersonality } from './agentPersonalities.js';
@@ -174,8 +174,18 @@ export class DevBotsManager extends EventEmitter {
       saveCompletedTasks: () => {}, // No-op - SQLite is source of truth
       loadCompletedTasks: () => [],
       saveTask: () => {},
-      loadTask: () => null
-    };
+      saveTasks: () => {},
+      loadTask: () => null,
+      loadTasks: () => [],
+      markDirty: () => {},
+      needsSaving: () => false,
+      exportTasks: () => {},
+      importTasks: () => [],
+      cleanupCompletedTasks: (tasks: Task[]) => tasks,
+      destroy: () => {},
+      shutdown: () => {},
+      stopAutoSave: () => {}
+    } as unknown as TaskPersistence;
     const noopPushCoordinator = {
       enqueue: async <T>(operation: () => Promise<T>) => await operation()
     };

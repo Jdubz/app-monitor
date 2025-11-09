@@ -90,13 +90,8 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
   return prototype === Object.prototype || prototype === null;
 };
 
-// Temporary type until API contracts are updated
-type TaskLogFileDescriptor = {
-  path: string;
-  filename: string;
-  size: number;
-  lastModified: string;
-} | null;
+// Import the actual type from taskLogLocator
+import type { TaskLogFileDescriptor } from '../services/taskLogLocator.js';
 
 interface TaskLogsResponsePayload {
   taskId: string;

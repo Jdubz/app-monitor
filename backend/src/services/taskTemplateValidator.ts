@@ -599,15 +599,19 @@ export function formatValidationErrors(result: ValidationResult): string {
  * Check if a template is v3 compliant (has all required fields)
  */
 export function isV3Template(template: unknown): template is TaskTemplateV3 {
+  if (!template || typeof template !== 'object') {
+    return false;
+  }
+
+  const candidate = template as Record<string, unknown>;
+
   return Boolean(
-    template &&
-    typeof template === 'object' &&
-    template.investigation &&
-    Array.isArray(template.acceptanceCriteria) &&
-    Array.isArray(template.preImplementationChecklist) &&
-    Array.isArray(template.constraints) &&
-    Array.isArray(template.doNotCreate) &&
-    template.gitWorkflow
+    candidate.investigation &&
+    Array.isArray(candidate.acceptanceCriteria) &&
+    Array.isArray(candidate.preImplementationChecklist) &&
+    Array.isArray(candidate.constraints) &&
+    Array.isArray(candidate.doNotCreate) &&
+    candidate.gitWorkflow
   );
 }
 

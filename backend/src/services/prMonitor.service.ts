@@ -228,7 +228,7 @@ export class PRMonitorService {
   private async updateMonitoredPRStatus(
     monitoredPR: MonitoredPR,
     newStatus: MonitoredPR['status'],
-    dbStatus: string,
+    dbStatus: 'creating' | 'pending_checks' | 'pending_review' | 'ready_to_merge' | 'merged' | 'closed' | string,
     notes?: string
   ): Promise<void> {
     // Update DB first
@@ -535,7 +535,9 @@ export class PRMonitorService {
       return;
     }
 
-    const updates: Partial<Task> & { pr_merged_at?: number; notes?: string } = { pr_status: prStatus };
+    const updates: Partial<Task> & { pr_merged_at?: number; notes?: string } = {
+      pr_status: prStatus as 'creating' | 'pending_checks' | 'pending_review' | 'ready_to_merge' | 'merged' | 'closed'
+    };
 
     if (prStatus === 'merged') {
       updates.pr_merged_at = Date.now();

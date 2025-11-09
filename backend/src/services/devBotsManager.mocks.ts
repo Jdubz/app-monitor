@@ -36,10 +36,31 @@ export function createMockProcessManager(): ProcessManager {
   const mock = new EventEmitter() as ProcessManager & EventEmitter;
   mock.on = vi.fn().mockReturnThis();
   mock.emit = vi.fn();
-  mock.getStatus = vi.fn().mockResolvedValue({ status: 'running' });
-  mock.getAllStatuses = vi.fn().mockResolvedValue({});
-  mock.startService = vi.fn().mockResolvedValue({ success: true });
-  mock.stopService = vi.fn().mockResolvedValue({ success: true });
+  mock.getServiceStatus = vi.fn().mockResolvedValue({
+    name: 'test-service',
+    displayName: 'Test Service',
+    status: 'running',
+    pid: 1234,
+    uptime: 1000,
+    restarts: 0
+  });
+  mock.getAllStatuses = vi.fn().mockResolvedValue([]);
+  mock.startService = vi.fn().mockResolvedValue({
+    name: 'test-service',
+    displayName: 'Test Service',
+    status: 'running',
+    pid: 1234,
+    uptime: 0,
+    restarts: 0
+  });
+  mock.stopService = vi.fn().mockResolvedValue({
+    name: 'test-service',
+    displayName: 'Test Service',
+    status: 'stopped',
+    pid: undefined,
+    uptime: 0,
+    restarts: 0
+  });
   return mock;
 }
 

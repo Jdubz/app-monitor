@@ -22,7 +22,7 @@ import type { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplat
 // WorkspaceOrchestrator removed - we use Docker cp for file systems, not git mirrors
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 // TaskPersistence removed - using SQLite directly
-import { isTaskStuck, detectFailurePattern } from './taskFailureGuards.js';
+import { isTaskStuck, detectFailurePattern, type FailurePattern } from './taskFailureGuards.js';
 import type { SimpleFailureRecovery } from './failureRecovery.js';
 import { resolveArtifactsDir } from '../utils/repoPaths.js';
 import { AgentTypeManager } from './agentTypeManager.js';
@@ -145,7 +145,7 @@ export class TaskExecutionService {
       stderr?: string;
       stdout?: string;
       exitCode?: number;
-      failurePattern?: { name: string; category: string; suggestedFix?: string };
+      failurePattern?: { name: string; category: string; suggestedFix?: string } | FailurePattern | null;
     }
   ): Promise<void> {
     // Mark task as failed in database
@@ -153,11 +153,17 @@ export class TaskExecutionService {
 
     // Attempt recovery if enabled and recovery service is available
     if (this.config.recovery.enabled && this.recovery && context) {
-      const failurePattern = context.failurePattern || {
-        name: 'unknown_error',
-        category: 'unknown',
-        suggestedFix: 'Review error logs for details'
-      };
+      // Ensure we have a full FailurePattern for recovery
+      const failurePattern: FailurePattern = context.failurePattern && 'patterns' in context.failurePattern
+        ? context.failurePattern
+        : {
+            name: context.failurePattern?.name || 'unknown_error',
+            description: 'An unknown error occurred during task execution',
+            patterns: [],
+            immediateFailure: false,
+            category: (context.failurePattern?.category as FailurePattern['category']) || 'system_error',
+            suggestedFix: context.failurePattern?.suggestedFix || 'Review error logs for details'
+          };
 
       try {
         if (this.config.recovery.dryRun) {
