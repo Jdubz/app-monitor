@@ -85,6 +85,10 @@ jobs:
         env:
           SKIP_HEAVY_DEV_BOT_TESTS: '1'
 
+      - name: Backend API integration tests
+        working-directory: backend
+        run: npx vitest run tests/integration/api/api.routes.test.ts --reporter tap
+
   # Frontend linting - parallel with backend
   frontend-lint:
     name: Frontend Lint
