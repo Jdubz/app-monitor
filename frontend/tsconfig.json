@@ -26,7 +26,6 @@
     "declarationMap": false,
     "sourceMap": false,
     "outDir": "./dist",
-    "rootDir": "./",
     "removeComments": true,
     "importHelpers": false,
     "downlevelIteration": false,
