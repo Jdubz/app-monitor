@@ -47,6 +47,30 @@ export async function getPortInfo(port: number): Promise<PortInfo> {
 }
 
 /**
+ * Check if multiple ports are available
+ */
+export async function checkPortsAvailable(ports: number[]): Promise<{
+  available: boolean;
+  busyPorts: number[];
+}> {
+  const results = await Promise.all(
+    ports.map(async (port) => ({
+      port,
+      available: !(await isPortInUse(port)),
+    }))
+  );
+
+  const busyPorts = results
+    .filter((r) => !r.available)
+    .map((r) => r.port);
+
+  return {
+    available: busyPorts.length === 0,
+    busyPorts,
+  };
+}
+
+/**
  * Kill process using a port (graceful SIGTERM first, then SIGKILL)
  */
 export async function killPortProcess(port: number): Promise<boolean> {

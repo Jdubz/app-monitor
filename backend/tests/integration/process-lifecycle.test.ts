@@ -29,6 +29,8 @@ vi.mock('../../src/utils/portCheck.js', () => ({
 
 vi.mock('../../src/utils/portManager.js', () => ({
   isPortInUse: vi.fn().mockResolvedValue(false),
+  checkPortsAvailable: vi.fn().mockResolvedValue({ available: true, busyPorts: [] }),
+  getPortInfo: vi.fn().mockResolvedValue({ port: 5000, pid: null, inUse: false }),
   stopDockerContainer: vi.fn().mockResolvedValue({ success: true }),
   getDockerContainerInfo: vi.fn().mockResolvedValue(null),
 }));

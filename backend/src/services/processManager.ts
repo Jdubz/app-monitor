@@ -8,8 +8,9 @@ import { fileURLToPath } from 'url';
 import {
   isPortInUse,
   stopDockerContainer,
+  checkPortsAvailable,
+  getPortInfo,
 } from '../utils/portManager.js';
-import { checkPortsAvailable, getPortInfo } from '../utils/portCheck.js';
 import { ProcessLifecycle } from './processManager/lifecycle.js';
 import { ProcessEventManager } from './processManager/eventHandlers.js';
 import { PortConflictResolver } from './processManager/portConflict.js';
