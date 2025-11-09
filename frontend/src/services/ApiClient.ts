@@ -13,7 +13,7 @@ export class ApiClient {
   private client: AxiosInstance;
   private log = createLogger('ApiClient');
 
-  constructor(baseURL: string = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000') {
+  constructor(baseURL: string = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000') {
     const fullBaseURL = `${baseURL}/api`;
     this.log.debug('Initializing with base URL', fullBaseURL);
     this.log.debug('VITE_API_BASE_URL', import.meta.env.VITE_API_BASE_URL);

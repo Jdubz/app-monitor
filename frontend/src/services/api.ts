@@ -374,7 +374,7 @@ export const handleApiError = (error: unknown): string => {
 export const getApiClientInstance = getApiClient;
 
 export const getApiBaseUrl = (): string =>
-  (import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000').replace(/\/$/, '');
+  (import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:5000').replace(/\/$/, '');
 
 export const getApiBasePath = (): string => `${getApiBaseUrl()}/api`;
 
