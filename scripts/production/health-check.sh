@@ -104,12 +104,14 @@ check_websocket() {
 
     # Use websocat or wscat if available, otherwise skip
     if command -v websocat > /dev/null; then
-        if timeout 5 websocat -n1 "ws://localhost:${PORT}" 2>&1 | grep -q "WebSocket"; then
+        local output
+        if output=$(timeout 5 websocat -n1 "ws://localhost:${PORT}" 2>&1) && echo "$output" | grep -q "WebSocket"; then
             log_info "✓ WebSocket connectivity verified"
             return 0
         fi
     elif command -v wscat > /dev/null; then
-        if timeout 5 wscat -c "ws://localhost:${PORT}" 2>&1 | grep -q "connected"; then
+        local output
+        if output=$(timeout 5 wscat -c "ws://localhost:${PORT}" 2>&1) && echo "$output" | grep -q "connected"; then
             log_info "✓ WebSocket connectivity verified"
             return 0
         fi

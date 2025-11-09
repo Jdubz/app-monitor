@@ -42,7 +42,7 @@ update_nginx_upstream() {
     local port=$1
     log_info "Updating nginx to use backend on port ${port}..."
 
-    sudo sed -i "s/server 127.0.0.1:[^;]*;/server 127.0.0.1:${port};/" \
+    sudo sed -i "s/server 127.0.0.1:[0-9]\+;/server 127.0.0.1:${port};/" \
         /etc/nginx/sites-available/app-monitor
 
     if sudo nginx -t; then
@@ -91,8 +91,8 @@ main() {
     log_info "Restarting service on port ${rollback_port}..."
     sudo systemctl restart "app-monitor-backend@${rollback_port}.service"
 
-    # Wait for service
-    sleep 3
+    # Wait for service to be ready (standardized to 5s to match deploy.sh)
+    sleep 5
 
     # Update nginx to point to rollback port
     update_nginx_upstream "${rollback_port}"

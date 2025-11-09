@@ -63,7 +63,8 @@ main() {
     # Cleanup old backups (keep last MAX_BACKUPS)
     log_info "Cleaning up old backups (keeping last ${MAX_BACKUPS})..."
     cd "${BACKUP_DIR}"
-    ls -t dev-bots_*.db 2>/dev/null | tail -n +$((MAX_BACKUPS + 1)) | xargs -r rm -f
+    # Sort by filename (timestamp) in reverse order, skip first MAX_BACKUPS, delete rest
+    ls -1 dev-bots_*.db 2>/dev/null | sort -r | tail -n +$((MAX_BACKUPS + 1)) | xargs -r rm -f
 
     local backup_count=$(ls -1 dev-bots_*.db 2>/dev/null | wc -l)
     log_info "Current backup count: ${backup_count}"
