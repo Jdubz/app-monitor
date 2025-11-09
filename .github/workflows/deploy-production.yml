@@ -118,24 +118,24 @@ jobs:
         run: |
           echo "🔍 Verifying services..."
           # Check which backend port is active (blue-green deployment)
-          if sudo systemctl is-active --quiet app-monitor-backend@5001.service; then
+          if systemctl is-active --quiet app-monitor-backend@5001.service; then
             echo "✅ Backend running on port 5001"
-          elif sudo systemctl is-active --quiet app-monitor-backend@5002.service; then
+          elif systemctl is-active --quiet app-monitor-backend@5002.service; then
             echo "✅ Backend running on port 5002"
           else
             echo "❌ Backend service not running on either port"
             exit 1
           fi
-          sudo systemctl is-active nginx
+          systemctl is-active nginx
           echo "✅ All services running"
 
       - name: Health check
         run: |
           echo "🏥 Running health checks..."
           # Detect active backend port from running services
-          if sudo systemctl is-active --quiet app-monitor-backend@5001.service; then
+          if systemctl is-active --quiet app-monitor-backend@5001.service; then
             ACTIVE_PORT=5001
-          elif sudo systemctl is-active --quiet app-monitor-backend@5002.service; then
+          elif systemctl is-active --quiet app-monitor-backend@5002.service; then
             ACTIVE_PORT=5002
           else
             echo "❌ No backend service running"
