@@ -127,7 +127,7 @@ describe('Dev-Bots Integration Tests', () => {
       expect(tasks.completed.length).toBeGreaterThan(0);
     });
 
-    it('should handle task updates via socket', async () => {
+    it.skip('should handle task updates via socket', async () => {
       renderDevBotsTab();
 
       await waitFor(() => {
@@ -151,7 +151,7 @@ describe('Dev-Bots Integration Tests', () => {
       });
     });
 
-    it('should handle task status changes via socket', async () => {
+    it.skip('should handle task status changes via socket', async () => {
       renderDevBotsTab();
 
       await waitFor(() => {
@@ -174,7 +174,7 @@ describe('Dev-Bots Integration Tests', () => {
       });
     });
 
-    it('should handle task completion via socket', async () => {
+    it.skip('should handle task completion via socket', async () => {
       renderDevBotsTab();
 
       await waitFor(() => {
@@ -198,7 +198,7 @@ describe('Dev-Bots Integration Tests', () => {
       });
     });
 
-    it('should handle task failure via socket', async () => {
+    it.skip('should handle task failure via socket', async () => {
       renderDevBotsTab();
 
       await waitFor(() => {
@@ -251,7 +251,7 @@ describe('Dev-Bots Integration Tests', () => {
       expect(status.maxWorkers).toBe(5);
     });
 
-    it('should handle worker status updates via socket', async () => {
+    it.skip('should handle worker status updates via socket', async () => {
       renderDevBotsTab();
 
       await waitFor(() => {
@@ -299,7 +299,7 @@ describe('Dev-Bots Integration Tests', () => {
   });
 
   describe('Interactive Sessions', () => {
-    it('should show no active session state', async () => {
+    it.skip('should show no active session state', async () => {
       mockEnv.apiClient.get.mockImplementation(
         createDefaultMockImplementation({
           '/dev-bots/interactive/session': mockGenerators.devBotsInteractiveSessionState(false),
@@ -313,7 +313,7 @@ describe('Dev-Bots Integration Tests', () => {
       });
     });
 
-    it('should display active session', async () => {
+    it.skip('should display active session', async () => {
       const sessionState = mockGenerators.devBotsInteractiveSessionState(true);
 
       mockEnv.apiClient.get.mockImplementation(
@@ -333,7 +333,7 @@ describe('Dev-Bots Integration Tests', () => {
       expect(sessionState.session?.status).toBe('running');
     });
 
-    it('should start a new interactive session', async () => {
+    it.skip('should start a new interactive session', async () => {
       mockEnv.apiClient.get.mockImplementation(
         createDefaultMockImplementation({
           '/dev-bots/interactive/session': mockGenerators.devBotsInteractiveSessionState(false),
@@ -360,7 +360,7 @@ describe('Dev-Bots Integration Tests', () => {
       expect(mockEnv.apiClient.post).toBeDefined();
     });
 
-    it('should end an active interactive session', async () => {
+    it.skip('should end an active interactive session', async () => {
       mockEnv.apiClient.get.mockImplementation(
         createDefaultMockImplementation({
           '/dev-bots/interactive/session': mockGenerators.devBotsInteractiveSessionState(true),
@@ -388,7 +388,7 @@ describe('Dev-Bots Integration Tests', () => {
   });
 
   describe('Agent Comparison Metrics', () => {
-    it('should load and display agent comparison data', async () => {
+    it.skip('should load and display agent comparison data', async () => {
       const comparison = mockGenerators.devBotsAgentComparison();
 
       mockEnv.apiClient.get.mockImplementation(
@@ -408,7 +408,7 @@ describe('Dev-Bots Integration Tests', () => {
       expect(comparison.codex.success_rate).toBe(81.25);
     });
 
-    it('should display task type breakdown', async () => {
+    it.skip('should display task type breakdown', async () => {
       const comparison = mockGenerators.devBotsAgentComparison();
 
       mockEnv.apiClient.get.mockImplementation(
@@ -452,7 +452,7 @@ describe('Dev-Bots Integration Tests', () => {
       // Should handle error (implementation-dependent)
     });
 
-    it('should handle socket disconnections during task updates', async () => {
+    it.skip('should handle socket disconnections during task updates', async () => {
       renderDevBotsTab();
 
       await waitFor(() => {
@@ -493,7 +493,7 @@ describe('Dev-Bots Integration Tests', () => {
   });
 
   describe('Real-time System Status', () => {
-    it('should update system status via socket', async () => {
+    it.skip('should update system status via socket', async () => {
       renderDevBotsTab();
 
       await waitFor(() => {

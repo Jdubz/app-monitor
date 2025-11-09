@@ -136,7 +136,8 @@ global.MutationObserver = vi.fn().mockImplementation(() => ({
   takeRecords: vi.fn(),
 }));
 
-// Mock HTMLCanvasElement.getContext for xterm.js
+// Mock HTMLElement.prototype.scrollIntoView
+HTMLElement.prototype.scrollIntoView = vi.fn();
 HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
   fillStyle: '',
   fillRect: vi.fn(),
