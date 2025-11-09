@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { ProcessManager } from './processManager.js';
 import { services } from '../config.js';
 import { logger } from '../utils/logger.js';
-import { checkPortsAvailable, getPortInfo } from '../utils/portCheck.js';
+import { checkPortsAvailable, getPortInfo } from '../utils/portManager.js';
 import { isPortInUse, stopDockerContainer, getDockerContainerInfo } from '../utils/portManager.js';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
