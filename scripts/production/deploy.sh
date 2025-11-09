@@ -18,6 +18,7 @@ SHARED_DIR="${DEPLOY_DIR}/shared"
 RELEASES_DIR="${DEPLOY_DIR}/releases"
 CURRENT_LINK="${DEPLOY_DIR}/current"
 SCRIPTS_DIR="${DEPLOY_DIR}/scripts"
+LOCK_FILE="${SHARED_DIR}/deploy.lock"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 RELEASE_DIR="${RELEASES_DIR}/${TIMESTAMP}"
 
@@ -39,6 +40,38 @@ log_warn() {
 log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
+
+# Deployment lock management
+acquire_lock() {
+    # Try to acquire lock with 30 second timeout
+    local wait_time=0
+    local max_wait=30
+
+    while [ -f "${LOCK_FILE}" ]; do
+        if [ $wait_time -ge $max_wait ]; then
+            log_error "Another deployment is in progress (lock file exists: ${LOCK_FILE})"
+            log_error "If you're sure no deployment is running, remove: ${LOCK_FILE}"
+            exit 1
+        fi
+        log_warn "Waiting for existing deployment to complete..."
+        sleep 5
+        wait_time=$((wait_time + 5))
+    done
+
+    # Create lock file with PID and timestamp
+    echo "$$:$(date +%s)" > "${LOCK_FILE}"
+    log_info "Deployment lock acquired"
+}
+
+release_lock() {
+    if [ -f "${LOCK_FILE}" ]; then
+        rm -f "${LOCK_FILE}"
+        log_info "Deployment lock released"
+    fi
+}
+
+# Ensure lock is released on exit
+trap release_lock EXIT INT TERM
 
 # Determine current active port
 get_active_port() {
@@ -86,6 +119,9 @@ update_nginx_upstream() {
 # Main deployment flow
 main() {
     log_info "Starting deployment at ${TIMESTAMP}"
+
+    # Acquire deployment lock to prevent concurrent deployments
+    acquire_lock
 
     # Phase 1: Pre-deployment checks
     log_info "Phase 1: Pre-deployment checks"
@@ -151,7 +187,10 @@ main() {
     # Frontend build
     cd "${RELEASE_DIR}/frontend"
     npm ci
-    npm run build
+    NODE_ENV=production npm run build
+
+    # Fix ownership of build artifacts (prevent 403 errors from nginx)
+    sudo chown -R jdubz:jdubz dist/
 
     # Phase 6: Deploy to target port
     log_info "Phase 6: Deploying to target port ${TARGET_PORT}"
@@ -174,8 +213,25 @@ main() {
         exit 1
     fi
 
-    # Wait for service to be ready
-    sleep 5
+    # Wait for service to be ready with smart polling
+    log_info "Waiting for service to be ready..."
+    local max_wait=30
+    local elapsed=0
+    while [ $elapsed -lt $max_wait ]; do
+        if systemctl is-active --quiet "app-monitor-backend@${TARGET_PORT}.service"; then
+            # Service is active, check if port is listening
+            if lsof -i ":${TARGET_PORT}" > /dev/null 2>&1; then
+                log_info "Service ready after ${elapsed} seconds"
+                break
+            fi
+        fi
+        sleep 2
+        elapsed=$((elapsed + 2))
+    done
+
+    if [ $elapsed -ge $max_wait ]; then
+        log_warn "Service startup timeout (${max_wait}s), proceeding to health checks..."
+    fi
 
     # Phase 7: Health checks
     log_info "Phase 7: Running health checks"
@@ -200,6 +256,11 @@ main() {
         log_info "Phase 8: Configuring nginx for port ${TARGET_PORT}"
         update_nginx_upstream "${TARGET_PORT}"
     fi
+
+    # Save active port to config for reference
+    mkdir -p "${SHARED_DIR}/config"
+    echo "${TARGET_PORT}" > "${SHARED_DIR}/config/active-port"
+    log_info "Active port saved: ${TARGET_PORT}"
 
     # Phase 9: Cleanup old releases (keep last 5)
     log_info "Phase 9: Cleaning up old releases"

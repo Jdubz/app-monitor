@@ -12,6 +12,8 @@ Environment="NODE_ENV=production"
 Environment="PORT=%i"
 Environment="DATABASE_PATH=/opt/app-monitor/shared/backend/data/dev-bots.db"
 Environment="LOG_LEVEL=info"
+Environment="CORS_ORIGIN=*"
+Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 # Start the backend server
 ExecStart=/usr/bin/node /opt/app-monitor/current/backend/dist/index.js
@@ -21,9 +23,11 @@ TimeoutStopSec=30
 KillMode=mixed
 KillSignal=SIGTERM
 
-# Restart policy
+# Restart policy - restart on any failure
 Restart=on-failure
 RestartSec=10
+StartLimitInterval=300
+StartLimitBurst=5
 
 # Resource limits
 LimitNOFILE=65536

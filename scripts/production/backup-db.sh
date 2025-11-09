@@ -45,16 +45,30 @@ main() {
     if command -v sqlite3 > /dev/null; then
         log_info "Using SQLite backup command..."
         sqlite3 "${DB_PATH}" ".backup '${BACKUP_FILE}'"
+
+        # Verify backup integrity
+        log_info "Verifying backup integrity..."
+        if ! sqlite3 "${BACKUP_FILE}" "PRAGMA integrity_check;" > /dev/null 2>&1; then
+            log_error "Backup integrity check failed - backup may be corrupted"
+            rm -f "${BACKUP_FILE}"
+            exit 1
+        fi
+        log_info "Backup integrity verified"
     else
         # Fallback to simple copy
         log_info "Using file copy for backup..."
         cp "${DB_PATH}" "${BACKUP_FILE}"
     fi
 
-    # Verify backup was created
+    # Verify backup was created and has content
     if [ -f "${BACKUP_FILE}" ]; then
-        local size=$(du -h "${BACKUP_FILE}" | cut -f1)
-        log_info "Backup created successfully: ${BACKUP_FILE} (${size})"
+        local size=$(stat -f%z "${BACKUP_FILE}" 2>/dev/null || stat -c%s "${BACKUP_FILE}" 2>/dev/null)
+        if [ "$size" -eq 0 ]; then
+            log_error "Backup file is empty"
+            exit 1
+        fi
+        local size_human=$(du -h "${BACKUP_FILE}" | cut -f1)
+        log_info "Backup created successfully: ${BACKUP_FILE} (${size_human})"
     else
         log_error "Backup file was not created"
         exit 1

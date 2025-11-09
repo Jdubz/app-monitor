@@ -84,7 +84,7 @@ jobs:
     needs: pre-deployment-checks
     runs-on: self-hosted
     # SECURITY: Only run on main branch to prevent fork PRs from deploying
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     environment:
       name: production
       url: https://app-monitor.yourdomain.com
@@ -117,7 +117,15 @@ jobs:
       - name: Verify deployment
         run: |
           echo "🔍 Verifying services..."
-          sudo systemctl is-active app-monitor-backend@5001.service
+          # Check which backend port is active (blue-green deployment)
+          if sudo systemctl is-active --quiet app-monitor-backend@5001.service; then
+            echo "✅ Backend running on port 5001"
+          elif sudo systemctl is-active --quiet app-monitor-backend@5002.service; then
+            echo "✅ Backend running on port 5002"
+          else
+            echo "❌ Backend service not running on either port"
+            exit 1
+          fi
           sudo systemctl is-active app-monitor-frontend.service
           sudo systemctl is-active nginx
           echo "✅ All services running"
@@ -125,12 +133,22 @@ jobs:
       - name: Health check
         run: |
           echo "🏥 Running health checks..."
-          # Check backend health (using active port from deployment)
-          ACTIVE_PORT=$(cat /opt/app-monitor/shared/config/active-port 2>/dev/null || echo "5001")
-          timeout 30 bash -c "until curl -f http://localhost:\$ACTIVE_PORT/api/health; do sleep 2; done"
+          # Detect active backend port from running services
+          if sudo systemctl is-active --quiet app-monitor-backend@5001.service; then
+            ACTIVE_PORT=5001
+          elif sudo systemctl is-active --quiet app-monitor-backend@5002.service; then
+            ACTIVE_PORT=5002
+          else
+            echo "❌ No backend service running"
+            exit 1
+          fi
 
-          # Check frontend
-          timeout 30 bash -c 'until curl -f http://localhost:3000; do sleep 2; done'
+          echo "Checking backend health on port ${ACTIVE_PORT}..."
+          timeout 30 bash -c "until curl -f http://localhost:${ACTIVE_PORT}/api/health; do sleep 2; done"
+
+          # Check frontend (nginx on port 80)
+          echo "Checking frontend health..."
+          timeout 30 bash -c 'until curl -f http://localhost/; do sleep 2; done'
 
           echo "✅ Health checks passed"
 
