@@ -40,13 +40,32 @@ check_service_running() {
 # Check 2: Port is listening
 check_port_listening() {
     log_info "Checking if port ${PORT} is listening..."
-    if lsof -i ":${PORT}" > /dev/null 2>&1; then
+
+    # Try multiple methods to check if port is listening
+    # Method 1: ss command (most reliable)
+    if ss -tln | grep -q ":${PORT} "; then
         log_info "✓ Port ${PORT} is listening"
         return 0
-    else
-        log_error "✗ Port ${PORT} is not listening"
-        return 1
     fi
+
+    # Method 2: netcat (if ss fails)
+    if command -v nc > /dev/null 2>&1; then
+        if nc -z localhost "${PORT}" 2>/dev/null; then
+            log_info "✓ Port ${PORT} is listening"
+            return 0
+        fi
+    fi
+
+    # Method 3: lsof (fallback, might not work without sudo)
+    if command -v lsof > /dev/null 2>&1; then
+        if lsof -i ":${PORT}" > /dev/null 2>&1; then
+            log_info "✓ Port ${PORT} is listening"
+            return 0
+        fi
+    fi
+
+    log_error "✗ Port ${PORT} is not listening"
+    return 1
 }
 
 # Check 3: HTTP health endpoint
