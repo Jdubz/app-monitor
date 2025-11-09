@@ -34,9 +34,11 @@ import type {
   DevBotsStatus,
 } from '@app-monitor/api-contracts';
 import { createApiTestServer } from '../../helpers/createApiTestServer.js';
+import type { MockServerDependencies } from '../../helpers/mockServerDependencies.js';
 
 const MOCK_TASK_ID = 'task-123';
 const MOCK_PR_NUMBER = 42;
+const MOCK_SOCKET_ID = 'socket-test-1';
 
 vi.mock('../../src/services/tokenTracking.js', () => {
   const summaries = [
@@ -184,10 +186,13 @@ vi.mock('child_process', () => {
 
 describe('API Integration Suite', () => {
   let server: Server;
+  let deps: MockServerDependencies;
 
   beforeAll(async () => {
     const context = await createApiTestServer();
     server = context.server;
+    deps = context.deps;
+    deps.connectionManager.register({ id: MOCK_SOCKET_ID } as { id: string });
   });
 
   afterAll(async () => {
@@ -485,6 +490,18 @@ describe('API Integration Suite', () => {
         url: '/api/socket/connections',
         assert: (res) => {
           expect(res.body.success).toBe(true);
+          expect(Array.isArray(res.body.connections)).toBe(true);
+          expect(res.body.connections.some((conn: { socketId: string }) => conn.socketId === MOCK_SOCKET_ID)).toBe(true);
+          expect(res.body.count).toBeGreaterThanOrEqual(1);
+        },
+      },
+      {
+        name: `GET /api/socket/connections/${MOCK_SOCKET_ID}`,
+        method: 'get',
+        url: `/api/socket/connections/${MOCK_SOCKET_ID}`,
+        assert: (res) => {
+          expect(res.body.success).toBe(true);
+          expect(res.body.connection?.socketId).toBe(MOCK_SOCKET_ID);
         },
       },
       {
