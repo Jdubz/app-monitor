@@ -1,6 +1,6 @@
 # CI/CD Pipeline Setup Guide
 
-This guide walks through setting up automated production deployments when merging staging to main.
+This guide walks through setting up automated production deployments when merging to main.
 
 ## Overview
 
@@ -10,6 +10,15 @@ The CI/CD pipeline automatically deploys to production when you push to the `mai
 - **Self-hosted runner** on the production server
 - **Blue-green deployment** for zero-downtime updates
 - **Automated health checks** to verify deployments
+
+## Important: Deployment Infrastructure Location
+
+**Deployment scripts and infrastructure are kept in a separate directory** (`../app-monitor-deployment`) to:
+- ✅ Prevent committing machine-specific configurations
+- ✅ Keep deployment infrastructure isolated from application code
+- ✅ Avoid security information leakage
+
+**DO NOT commit the `app-monitor-deployment` directory to version control.**
 
 ## Architecture
 
@@ -36,34 +45,72 @@ The CI/CD pipeline automatically deploys to production when you push to the `mai
 
 1. **Production server** with:
    - Ubuntu/Debian Linux
-   - Node.js 20+
-   - Docker
-   - Nginx
-   - Systemd
-   - `/opt/app-monitor` directory set up
+   - Internet access for package installation
 
 2. **GitHub repository** with:
    - Admin access
    - Actions enabled
 
+3. **Deployment directory** created on your local machine:
+   ```bash
+   # This should be created at the same level as your app-monitor repo
+   cd /path/to/your/projects
+   mkdir app-monitor-deployment
+   ```
+
 ## Setup Steps
 
-### 1. Set Up Self-Hosted GitHub Runner
+### Step 1: Copy Deployment Infrastructure
 
-On your production server:
+The deployment infrastructure is not stored in the repo. You need to create it:
 
 ```bash
-# Run the setup script
-cd /opt/app-monitor
-./scripts/setup-github-runner.sh
+# Create the deployment directory structure
+mkdir -p app-monitor-deployment/{scripts,systemd,github-runner}
+
+# This directory will contain:
+# - Deployment scripts (deploy.sh, rollback.sh, etc.)
+# - Systemd service files
+# - GitHub Actions runner
+# - Production configuration
 ```
 
-This will:
-- Download the latest GitHub Actions runner
-- Extract it to `~/actions-runner`
-- Display next steps
+### Step 2: Automated Setup (Recommended)
 
-### 2. Register the Runner
+Use the automated setup script to install all dependencies on your production server:
+
+```bash
+# 1. SSH into your production server
+ssh user@production-server
+
+# 2. Clone your app-monitor repo
+git clone https://github.com/Jdubz/app-monitor.git
+cd app-monitor
+
+# 3. Create deployment directory
+cd ..
+mkdir -p app-monitor-deployment
+cd app-monitor-deployment
+
+# 4. Copy the setup script from your local machine or create it
+# (See app-monitor-deployment/README.md for the full script)
+
+# 5. Run automated setup
+sudo ./scripts/setup-production.sh
+```
+
+The script will automatically install:
+- ✅ Node.js 20+
+- ✅ Docker
+- ✅ Nginx
+- ✅ GitHub Actions Runner (download)
+- ✅ Production directory at `/opt/app-monitor`
+- ✅ Systemd services
+- ✅ Sudo permissions
+
+### Step 3: Register GitHub Actions Runner
+
+After the automated setup, you must manually register the runner (requires GitHub token):
 
 1. Go to GitHub repository settings:
    ```
@@ -94,54 +141,11 @@ This will:
    sudo ./svc.sh status
    ```
 
-### 3. Configure Sudo Permissions
+### Step 4: Configure Environment Variables
 
-The runner needs sudo access for deployment operations:
-
-```bash
-# Copy the sudoers file
-sudo cp /opt/app-monitor/scripts/production/sudoers-github-runner \
-        /etc/sudoers.d/github-runner-deploy
-
-# Update the username in the file
-# Replace 'runner-user' with your actual runner username
-sudo nano /etc/sudoers.d/github-runner-deploy
-
-# Set correct permissions
-sudo chmod 0440 /etc/sudoers.d/github-runner-deploy
-
-# Verify syntax
-sudo visudo -c
-```
-
-**Find your runner username:**
-```bash
-ps aux | grep "Runner.Listener"
-```
-
-### 4. Set Up Production Environment
-
-Ensure all production infrastructure is in place:
+Create production environment file on the server:
 
 ```bash
-# Run initial setup
-cd /opt/app-monitor
-sudo ./scripts/production/setup.sh
-
-# Verify systemd services are installed
-sudo systemctl list-unit-files | grep app-monitor
-
-# Should show:
-# app-monitor-backend@.service
-# app-monitor-frontend.service
-```
-
-### 5. Configure Environment Variables
-
-Create production environment file:
-
-```bash
-# Backend environment
 sudo nano /opt/app-monitor/shared/config/backend.env
 ```
 
@@ -151,43 +155,61 @@ NODE_ENV=production
 PORT=5001  # Will alternate with 5002
 DATABASE_PATH=/opt/app-monitor/shared/data/dev-bots.db
 LOG_LEVEL=info
+
+# Add any other environment variables your app needs
 ```
 
-### 6. Test the Workflow
+### Step 5: Verify Setup
+
+Run the verification script to ensure everything is configured:
+
+```bash
+cd /path/to/app-monitor-deployment
+sudo ./scripts/verify-production-ready.sh
+```
+
+This checks:
+- ✅ GitHub runner installation and status
+- ✅ Production directory structure
+- ✅ Systemd services
+- ✅ Nginx configuration
+- ✅ Sudo permissions
+- ✅ Environment files
+- ✅ Docker status
+- ✅ Node.js version
+- ✅ Build tests
+
+### Step 6: Test Deployment
 
 #### Manual Test (Recommended First)
 
 1. Trigger a manual deployment:
-   ```bash
-   # Go to GitHub Actions tab
-   # Select "Deploy to PRODUCTION" workflow
-   # Click "Run workflow"
-   # Type "DEPLOY TO PRODUCTION" to confirm
+   ```
+   Go to: https://github.com/Jdubz/app-monitor/actions
+   Select: "Deploy to PRODUCTION" workflow
+   Click: "Run workflow"
+   Type: "DEPLOY TO PRODUCTION" to confirm
    ```
 
 2. Monitor the deployment:
    - Watch the Actions tab in GitHub
    - Check runner logs: `sudo journalctl -u actions.runner.* -f`
+   - Check deployment logs: `tail -f /opt/app-monitor/shared/logs/deployments/deploy-*.log`
 
 #### Automatic Test
 
-1. Create a test change:
+1. Merge a change to main:
    ```bash
-   git checkout staging
-   echo "# Test deployment" >> README.md
-   git add README.md
-   git commit -m "test: Trigger CI/CD pipeline"
-   git push origin staging
-   ```
-
-2. Merge to main:
-   ```bash
+   # Make a small change
    git checkout main
+   git pull origin main
+
+   # Merge your tested changes from staging
    git merge staging
    git push origin main
    ```
 
-3. Watch the deployment in GitHub Actions
+2. Watch the deployment in GitHub Actions
 
 ## Workflow Details
 
@@ -213,7 +235,7 @@ Runs on your production server:
 
 ### Blue-Green Deployment Flow
 
-The deployment script (`deploy.sh`) performs:
+The deployment script performs:
 
 1. **Identify active port** - Determine which backend is running (5001 or 5002)
 2. **Select target port** - Choose the opposite port for new deployment
@@ -225,11 +247,34 @@ The deployment script (`deploy.sh`) performs:
 8. **Stop old instance** - Gracefully shut down previous version
 9. **Update current symlink** - Point to new release
 
+## Production Directory Structure
+
+On the production server at `/opt/app-monitor`:
+
+```
+/opt/app-monitor/
+├── current/                    # Symlink to active release
+├── releases/
+│   ├── 2025-11-08-123456/     # Timestamped releases
+│   └── 2025-11-08-234567/
+└── shared/
+    ├── config/
+    │   ├── backend.env         # Backend environment variables
+    │   └── active-port         # Current active backend port
+    ├── data/
+    │   └── dev-bots.db        # SQLite database (persistent)
+    └── logs/
+        └── deployments/        # Deployment logs
+```
+
 ## Monitoring
 
 ### View Deployment Logs
 
 ```bash
+# Deployment script logs
+tail -f /opt/app-monitor/shared/logs/deployments/deploy-*.log
+
 # GitHub runner logs
 sudo journalctl -u actions.runner.* -f
 
@@ -239,9 +284,6 @@ sudo journalctl -u app-monitor-backend@5002.service -f
 
 # Frontend service logs
 sudo journalctl -u app-monitor-frontend.service -f
-
-# Deployment script logs
-tail -f /opt/app-monitor/shared/logs/deployments/deploy-*.log
 ```
 
 ### Check Service Status
@@ -254,6 +296,9 @@ sudo systemctl status 'app-monitor-*'
 sudo systemctl status app-monitor-backend@5001.service
 sudo systemctl status app-monitor-frontend.service
 sudo systemctl status nginx
+
+# GitHub runner
+sudo systemctl status actions.runner.*
 ```
 
 ### Manual Rollback
@@ -262,7 +307,7 @@ If deployment fails:
 
 ```bash
 cd /opt/app-monitor
-sudo ./scripts/production/rollback.sh
+sudo ./rollback.sh
 ```
 
 ## Troubleshooting
@@ -271,6 +316,7 @@ sudo ./scripts/production/rollback.sh
 
 ```bash
 # Check runner status
+cd ~/actions-runner
 sudo ./svc.sh status
 
 # View runner logs
@@ -327,22 +373,19 @@ sudo systemctl status nginx
 3. **Secrets are managed** through GitHub Secrets (when needed)
 4. **Deployments require** code to be in main branch
 5. **Manual confirmation** required for workflow_dispatch triggers
+6. **Deployment infrastructure** kept separate from codebase
 
-## Adding GitHub Secrets (if needed)
+## Keeping Deployment Scripts Updated
 
-For sensitive environment variables:
+When deployment scripts change in the main repo, copy them to your deployment directory:
 
-1. Go to repository settings → Secrets and variables → Actions
-2. Add secrets:
-   - `PRODUCTION_DATABASE_URL`
-   - `PRODUCTION_API_KEY`
-   - etc.
+```bash
+# Copy updated scripts
+cp /path/to/app-monitor/scripts/production/*.sh ../app-monitor-deployment/scripts/
+cp /path/to/app-monitor/scripts/production/*.service ../app-monitor-deployment/systemd/
+```
 
-3. Reference in workflow:
-   ```yaml
-   env:
-     DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
-   ```
+**Note**: The main repo no longer contains `scripts/production/` - deployment infrastructure is kept separate.
 
 ## Next Steps
 

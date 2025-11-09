@@ -55,3 +55,6 @@ bin/gh
 .dockerignore
 
 dev-bots/volumes/
+
+# Production deployment infrastructure (kept separate for security)
+../app-monitor-deployment/
