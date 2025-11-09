@@ -69,8 +69,8 @@ update_nginx_upstream() {
     local port=$1
     log_info "Updating nginx to use backend on port ${port}..."
 
-    # Update upstream in nginx config (match both numeric ports and "none")
-    sudo sed -i "s/server 127.0.0.1:[^;]*;/server 127.0.0.1:${port};/" \
+    # Update upstream in nginx config (match only numeric ports)
+    sudo sed -i "s/server 127.0.0.1:[0-9]\+;/server 127.0.0.1:${port};/" \
         /etc/nginx/sites-available/app-monitor
 
     # Test nginx config
@@ -126,7 +126,8 @@ main() {
     mkdir -p "${RELEASE_DIR}"
 
     # Copy repository to release directory
-    rsync -av --exclude='node_modules' \
+    rsync -av --delete \
+              --exclude='node_modules' \
               --exclude='.git' \
               --exclude='backend/data' \
               --exclude='frontend/dist' \
@@ -166,7 +167,12 @@ main() {
 
     # Start service on target port
     log_info "Starting service on port ${TARGET_PORT}..."
-    sudo systemctl start "app-monitor-backend@${TARGET_PORT}.service"
+    if ! sudo systemctl start "app-monitor-backend@${TARGET_PORT}.service"; then
+        log_error "Failed to start service on port ${TARGET_PORT}"
+        log_info "Starting rollback..."
+        "${SCRIPTS_DIR}/rollback.sh" "${ACTIVE_PORT}"
+        exit 1
+    fi
 
     # Wait for service to be ready
     sleep 5
@@ -198,7 +204,8 @@ main() {
     # Phase 9: Cleanup old releases (keep last 5)
     log_info "Phase 9: Cleaning up old releases"
     cd "${RELEASES_DIR}"
-    ls -t | tail -n +6 | xargs -r rm -rf
+    # Sort by filename (timestamp) in reverse order, skip first 5, delete rest
+    ls -1 | grep -E '^[0-9]{8}_[0-9]{6}$' | sort -r | tail -n +6 | xargs -r rm -rf
 
     log_info "Deployment completed successfully!"
     log_info "Application is now running on port ${TARGET_PORT}"
