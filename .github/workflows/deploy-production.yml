@@ -111,8 +111,8 @@ jobs:
           # - Blue-green deployment (ports 5001/5002)
           # - Building backend and frontend in /opt/app-monitor
           # - Zero-downtime service switching
-          cd ${{ github.workspace }}
-          sudo /opt/app-monitor/scripts/deploy.sh
+          # Pass the GitHub workspace as source directory
+          sudo /opt/app-monitor/scripts/deploy.sh "${{ github.workspace }}"
 
       - name: Verify deployment
         run: |
