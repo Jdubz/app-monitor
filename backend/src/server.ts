@@ -12,6 +12,7 @@ import { LogStreamer } from './services/logStreamer.js';
 import { LogRotation } from './services/logRotation.js';
 import { ConnectionManager } from './services/connectionManager.js';
 import { LogSourceManager } from './services/logSourceManager.js';
+import { InteractiveSessionGateway } from './services/interactiveSessionGateway.js';
 import { logger } from './utils/logger.js';
 import type {
   ClientToServerEvents,
@@ -40,6 +41,12 @@ export async function createApp() {
   // Create DevBotsManager with dependency injection
   const devBotsDeps = await createDevBotsManagerDependencies(processManager);
   devBotsManager = new DevBotsManager(devBotsDeps);
+
+  new InteractiveSessionGateway({
+    server: httpServer,
+    devBotsManager,
+    streamManager: devBotsDeps.interactiveSessionStreamManager,
+  });
 
   // Initialize LogSourceManager and load configuration
   logSourceManager = new LogSourceManager();

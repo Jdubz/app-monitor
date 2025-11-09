@@ -62,6 +62,24 @@ type TokenUsageStatsRow = {
   request_count: number | null;
 };
 
+type InteractiveSessionRow = {
+  id: string;
+  owner_email: string;
+  model_provider: string;
+  model_name: string;
+  status: string;
+  container_id: string | null;
+  started_at: string;
+  last_user_activity_at: string | null;
+  last_agent_activity_at: string | null;
+  ended_at: string | null;
+  termination_reason: string | null;
+  context_snapshot: string | null;
+  log_path: string | null;
+  metadata: string | null;
+  updated_at: string;
+};
+
 export class DevBotsDatabase {
   private db: Database.Database;
 
@@ -196,6 +214,14 @@ export class DevBotsDatabase {
     this.applyMigration('006_quality_observations', () => {
       this.db.exec(fs.readFileSync(
         path.join(__dirname, '..', '..', 'migrations', '005_quality_observations.sql'),
+        'utf-8'
+      ));
+    });
+
+    // Migration 007: Interactive Sessions Support
+    this.applyMigration('007_interactive_sessions', () => {
+      this.db.exec(fs.readFileSync(
+        path.join(__dirname, '..', '..', 'migrations', '007_interactive_sessions.sql'),
         'utf-8'
       ));
     });
@@ -497,6 +523,153 @@ export class DevBotsDatabase {
     this.storeQualityObservation(observation);
   }
 
+  // Interactive Sessions
+  createInteractiveSession(session: NewInteractiveSession): void {
+    this.db.prepare(`
+      INSERT INTO interactive_sessions (
+        id,
+        owner_email,
+        model_provider,
+        model_name,
+        status,
+        container_id,
+        started_at,
+        last_user_activity_at,
+        last_agent_activity_at,
+        ended_at,
+        termination_reason,
+        context_snapshot,
+        log_path,
+        metadata
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      session.id,
+      session.ownerEmail,
+      session.modelProvider,
+      session.modelName,
+      session.status,
+      session.containerId ?? null,
+      session.startedAt ?? new Date().toISOString(),
+      session.lastUserActivityAt ?? null,
+      session.lastAgentActivityAt ?? null,
+      session.endedAt ?? null,
+      session.terminationReason ?? null,
+      this.serializeNullableJson(session.contextSnapshot),
+      session.logPath ?? null,
+      this.serializeNullableJson(session.metadata)
+    );
+  }
+
+  getInteractiveSessionById(id: string): InteractiveSessionRecord | null {
+    const row = this.db.prepare(`
+      SELECT * FROM interactive_sessions WHERE id = ?
+    `).get(id) as InteractiveSessionRow | undefined;
+
+    if (!row) {
+      return null;
+    }
+    return this.mapInteractiveSessionRow(row);
+  }
+
+  getActiveInteractiveSession(): InteractiveSessionRecord | null {
+    const activeStatuses: InteractiveSessionStatus[] = ['starting', 'running', 'disconnecting', 'terminating'];
+    const row = this.db.prepare(`
+      SELECT *
+      FROM interactive_sessions
+      WHERE status IN (${activeStatuses.map(() => '?').join(', ')})
+      ORDER BY started_at DESC
+      LIMIT 1
+    `).get(...activeStatuses) as InteractiveSessionRow | undefined;
+
+    if (!row) {
+      return null;
+    }
+    return this.mapInteractiveSessionRow(row);
+  }
+
+  listRecentInteractiveSessions(limit = 20): InteractiveSessionRecord[] {
+    const rows = this.db.prepare(`
+      SELECT *
+      FROM interactive_sessions
+      ORDER BY started_at DESC
+      LIMIT ?
+    `).all(limit) as InteractiveSessionRow[];
+
+    return rows.map((row) => this.mapInteractiveSessionRow(row));
+  }
+
+  updateInteractiveSession(id: string, updates: InteractiveSessionUpdate): void {
+    const setClauses: string[] = [];
+    const values: unknown[] = [];
+
+    const push = (clause: string, value: unknown) => {
+      setClauses.push(`${clause} = ?`);
+      values.push(value);
+    };
+
+    if ('status' in updates && updates.status) push('status', updates.status);
+    if ('containerId' in updates) push('container_id', updates.containerId ?? null);
+    if ('lastUserActivityAt' in updates) push('last_user_activity_at', updates.lastUserActivityAt ?? null);
+    if ('lastAgentActivityAt' in updates) push('last_agent_activity_at', updates.lastAgentActivityAt ?? null);
+    if ('endedAt' in updates) push('ended_at', updates.endedAt ?? null);
+    if ('terminationReason' in updates) push('termination_reason', updates.terminationReason ?? null);
+    if ('contextSnapshot' in updates) push('context_snapshot', this.serializeNullableJson(updates.contextSnapshot));
+    if ('logPath' in updates) push('log_path', updates.logPath ?? null);
+    if ('metadata' in updates) push('metadata', this.serializeNullableJson(updates.metadata));
+
+    if (!setClauses.length) {
+      return;
+    }
+
+    setClauses.push('updated_at = CURRENT_TIMESTAMP');
+
+    const sql = `
+      UPDATE interactive_sessions
+      SET ${setClauses.join(', ')}
+      WHERE id = ?
+    `;
+    values.push(id);
+    this.db.prepare(sql).run(...values);
+  }
+
+  private mapInteractiveSessionRow(row: InteractiveSessionRow): InteractiveSessionRecord {
+    return {
+      id: row.id,
+      ownerEmail: row.owner_email,
+      modelProvider: row.model_provider,
+      modelName: row.model_name,
+      status: row.status as InteractiveSessionStatus,
+      containerId: row.container_id ?? undefined,
+      startedAt: row.started_at,
+      lastUserActivityAt: row.last_user_activity_at ?? undefined,
+      lastAgentActivityAt: row.last_agent_activity_at ?? undefined,
+      endedAt: row.ended_at ?? undefined,
+      terminationReason: row.termination_reason ?? undefined,
+      contextSnapshot: this.parseNullableJson(row.context_snapshot),
+      logPath: row.log_path ?? undefined,
+      metadata: this.parseNullableJson<Record<string, unknown>>(row.metadata),
+      updatedAt: row.updated_at
+    };
+  }
+
+  private serializeNullableJson(value: unknown): string | null {
+    if (value === undefined || value === null) {
+      return null;
+    }
+    return JSON.stringify(value);
+  }
+
+  private parseNullableJson<T = unknown>(value: string | null): T | undefined {
+    if (!value) {
+      return undefined;
+    }
+    try {
+      return JSON.parse(value) as T;
+    } catch {
+      return undefined;
+    }
+  }
+
   close(): void {
     this.db.close();
   }
@@ -579,6 +752,61 @@ export interface StoredQualityObservation {
   improvement_opportunities?: string;
   blockers?: string;
   created_at: number;
+}
+
+export type InteractiveSessionStatus =
+  | 'starting'
+  | 'running'
+  | 'disconnecting'
+  | 'terminating'
+  | 'ended'
+  | 'error';
+
+export interface InteractiveSessionRecord {
+  id: string;
+  ownerEmail: string;
+  modelProvider: string;
+  modelName: string;
+  status: InteractiveSessionStatus;
+  containerId?: string;
+  startedAt: string;
+  lastUserActivityAt?: string;
+  lastAgentActivityAt?: string;
+  endedAt?: string;
+  terminationReason?: string;
+  contextSnapshot?: unknown;
+  logPath?: string;
+  metadata?: Record<string, unknown>;
+  updatedAt: string;
+}
+
+export interface NewInteractiveSession {
+  id: string;
+  ownerEmail: string;
+  modelProvider: string;
+  modelName: string;
+  status: InteractiveSessionStatus;
+  containerId?: string;
+  startedAt?: string;
+  lastUserActivityAt?: string;
+  lastAgentActivityAt?: string;
+  endedAt?: string;
+  terminationReason?: string;
+  contextSnapshot?: unknown;
+  logPath?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface InteractiveSessionUpdate {
+  status?: InteractiveSessionStatus;
+  containerId?: string | null;
+  lastUserActivityAt?: string | null;
+  lastAgentActivityAt?: string | null;
+  endedAt?: string | null;
+  terminationReason?: string | null;
+  contextSnapshot?: unknown;
+  logPath?: string | null;
+  metadata?: Record<string, unknown> | null;
 }
 
 // Singleton instance

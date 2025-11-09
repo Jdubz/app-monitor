@@ -389,6 +389,100 @@ export interface DevBotsWorkspaceSyncResult {
   skipped: Array<{ worker?: string; repo: string; reason: string }>;
 }
 
+export interface DevBotsInteractiveSessionModelOption {
+  provider: string;
+  model: string;
+  displayName: string;
+  description?: string;
+  default?: boolean;
+}
+
+export interface DevBotsInteractiveStreamDescriptor {
+  sessionId: string;
+  url: string;
+  token?: string;
+}
+
+export interface DevBotsInteractiveSessionState {
+  session: DevBotsInteractiveSession | null;
+  availableModels: DevBotsInteractiveSessionModelOption[];
+  heartbeatIntervalSeconds: number;
+  idleTimeoutSeconds: number;
+  stream?: DevBotsInteractiveStreamDescriptor;
+  warnings?: string[];
+}
+
+// -----------------------------------------------------------------------------
+// Dev-Bots Interactive Session Contracts
+// -----------------------------------------------------------------------------
+
+export type DevBotsInteractiveSessionStatus =
+  | 'starting'
+  | 'running'
+  | 'disconnecting'
+  | 'terminating'
+  | 'ended'
+  | 'error';
+
+export interface DevBotsInteractiveSessionContextSnapshot {
+  summary?: string;
+  lastCommand?: string;
+  touchedFiles?: string[];
+  pendingDiffPaths?: string[];
+  notes?: string;
+  [key: string]: unknown;
+}
+
+export interface DevBotsInteractiveSession {
+  id: string;
+  ownerEmail: string;
+  modelProvider: string;
+  modelName: string;
+  status: DevBotsInteractiveSessionStatus;
+  containerId?: string;
+  startedAt: string;
+  lastUserActivityAt?: string;
+  lastAgentActivityAt?: string;
+  lastHeartbeatAt?: string;
+  idleTimeoutSeconds: number;
+  idleDeadline?: string;
+  reconnectDeadline?: string;
+  endedAt?: string;
+  terminationReason?: string;
+  contextSnapshot?: DevBotsInteractiveSessionContextSnapshot | null;
+  logPath?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface DevBotsInteractiveSessionResponsePayload {
+  session: DevBotsInteractiveSession | null;
+  message?: string;
+  warnings?: string[];
+}
+
+export type DevBotsInteractiveSessionResponse = ApiSuccess<DevBotsInteractiveSessionResponsePayload>;
+
+export interface DevBotsInteractiveSessionStartPayload {
+  modelProvider: string;
+  modelName: string;
+  metadata?: Record<string, unknown>;
+  resume?: boolean;
+}
+
+export interface DevBotsInteractiveSessionInputPayload {
+  data: string;
+}
+
+export interface DevBotsInteractiveHeartbeatPayload {
+  sessionId: string;
+  source?: 'user' | 'agent';
+}
+
+export interface DevBotsInteractiveInterruptPayload {
+  sessionId: string;
+  reason?: string;
+}
+
 export interface ApiSuccess<T> {
   success: true;
   data: T;
@@ -444,3 +538,5 @@ export type DevBotsTemplatesResponse = ApiSuccess<{ templates: DevBotsTaskTempla
 export type DevBotsMessageResponse = ApiSuccess<{ message: string }>;
 export type DevBotsWorkspaceSyncStatusResponse = ApiSuccess<DevBotsWorkspaceSyncStatus>;
 export type DevBotsWorkspaceSyncResultResponse = ApiSuccess<DevBotsWorkspaceSyncResult>;
+export type DevBotsInteractiveSessionStateResponse = ApiSuccess<DevBotsInteractiveSessionState>;
+export type DevBotsInteractiveSessionInputResponse = ApiSuccess<{ accepted: boolean }>;

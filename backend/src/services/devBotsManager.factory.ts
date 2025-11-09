@@ -14,8 +14,8 @@ import { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js';
 import { WorkspaceSyncManager } from './workspaceSyncManager.js';
 import { DockerManager } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
-import { TaskPersistence, TaskStorageConfig } from './taskPersistence.js';
-import { WorkspaceOrchestrator } from './workspaceOrchestrator.js';
+// TaskPersistence removed - using SQLite directly
+// WorkspaceOrchestrator removed - using container isolation
 import { ScopeControlService } from './scopeControl.service.js';
 import { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import { resolveArtifactsDir } from '../utils/repoPaths.js';
@@ -23,6 +23,9 @@ import { TaskExecutionService } from './taskExecution.service.js';
 import { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 import { SimpleFailureRecovery } from './failureRecovery.js';
 import { TaskCompletionService } from './taskCompletion.service.js';
+import { InteractiveSessionService } from './interactiveSession.service.js';
+import { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
+import { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
 
 /**
@@ -51,15 +54,7 @@ export async function createDevBotsManagerDependencies(
   // Run recovery system migration
   await taskQueue.runRecoveryMigration();
 
-  // Initialize legacy task persistence (for migration only)
-  const storageConfig: TaskStorageConfig = {
-    storagePath: config.taskStoragePath ?? './data/tasks',
-    backupPath: config.taskBackupPath ?? './data/backups',
-    maxBackups: config.maxBackups ?? 10,
-    autoSave: config.autoSave ?? true,
-    saveInterval: config.saveInterval ?? 30000, // 30 seconds
-  };
-  const taskPersistence = new TaskPersistence(storageConfig);
+  // TaskPersistence removed - using SQLite directly
 
   // Initialize agent personality manager
   const agentManager = new AgentPersonalityManager();
@@ -70,14 +65,8 @@ export async function createDevBotsManagerDependencies(
   // Initialize guidelines manager
   const guidelinesManager = new TaskCreationGuidelinesManager();
 
-  // Initialize workspace orchestrator for dynamic workspaces
-  // NOTE: WorkspaceOrchestrator is DEPRECATED - we use Docker cp for file systems
-  // Keeping the instance for backwards compatibility but NOT initializing (no git mirror)
-  const workspaceOrchestrator = new WorkspaceOrchestrator();
-  // DISABLED: initialize() creates git mirrors which we don't use anymore
-  // if (typeof workspaceOrchestrator.initialize === 'function') {
-  //   workspaceOrchestrator.initialize();
-  // }
+  // WorkspaceOrchestrator completely removed - using container isolation instead
+  // Each bot gets its own fresh repository clone inside the container
 
   // Initialize workspace sync manager
   const workspaceBaseDir = config.workspaceBaseDir ?? path.resolve(path.join(process.cwd(), '../../'));
@@ -130,7 +119,7 @@ export async function createDevBotsManagerDependencies(
     agentManager,
     templateManager,
     ephemeralWorkerService,
-    taskPersistence,
+    // TaskPersistence removed
     {
       maxConcurrentWorkers: 2,
       stuckCheckInterval: 60000,
@@ -153,6 +142,38 @@ export async function createDevBotsManagerDependencies(
   // Initialize PR monitoring for existing unmerged PRs
   await prWorkflowOrchestrator.initialize();
 
+  const interactiveSessionService = new InteractiveSessionService({
+    idleTimeoutMs: 5 * 60 * 1000,
+    allowedModels: [
+      { provider: 'claude', name: '*' },
+      { provider: 'codex', name: '*' },
+    ],
+  });
+
+  const interactiveSessionOrchestrator = new InteractiveSessionOrchestrator(
+    docker,
+    ephemeralWorkerService,
+    {
+      dockerImage: 'dev-bot:latest',
+      logsDirectory: './data/logs/interactive',
+      envPassthroughKeys: [
+        'ANTHROPIC_API_KEY',
+        'CLAUDE_API_KEY',
+        'OPENAI_API_KEY',
+        'GITHUB_TOKEN',
+        'GIT_AUTHOR_NAME',
+        'GIT_AUTHOR_EMAIL',
+        'GIT_COMMITTER_NAME',
+        'GIT_COMMITTER_EMAIL',
+      ],
+    },
+  );
+
+  const interactiveSessionStreamManager = new InteractiveSessionStreamManager(docker, {
+    backlogLimit: 500,
+    shellCommand: ['/bin/bash'],
+  });
+
   // Note: SimpleFailureRecovery and TaskCompletionService require DevBotsManager instance
   // They will be created after DevBotsManager is instantiated
   // For now, create placeholders that will be replaced
@@ -169,13 +190,16 @@ export async function createDevBotsManagerDependencies(
     guidelinesManager,
     workspaceSyncManager,
     retryManager,
-    workspaceOrchestrator,
+    // WorkspaceOrchestrator removed - using container isolation
     recovery,
-    taskPersistence,
+    // TaskPersistence removed - using SQLite directly
     scopeControl,
     ephemeralWorkerService,
     taskExecutionService,
     taskCompletionService,
     prWorkflowOrchestrator,
+    interactiveSessionService,
+    interactiveSessionOrchestrator,
+    interactiveSessionStreamManager,
   };
 }

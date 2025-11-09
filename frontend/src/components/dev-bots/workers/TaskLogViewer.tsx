@@ -38,7 +38,7 @@ export function TaskLogViewer({ taskId, logs }: TaskLogViewerProps) {
   const [bufferVersion, setBufferVersion] = useState(0);
 
   const resetBuffer = useCallback(() => {
-    logBufferRef.current = new BoundedLogBuffer<string>(MAX_LINES);
+    logBufferRef.current.clear();
     setBufferVersion((version) => version + 1);
   }, []);
 
@@ -114,7 +114,7 @@ export function TaskLogViewer({ taskId, logs }: TaskLogViewerProps) {
       anchor.scrollIntoView({ block: 'end', behavior: 'auto' });
     });
     return () => cancelAnimationFrame(frame);
-  }, [lines, autoScroll]);
+  }, [bufferVersion, autoScroll]);
 
   const activeDescriptor = useMemo(() => logs?.[activeStream] ?? null, [logs, activeStream]);
 

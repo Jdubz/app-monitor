@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { FilterDropdown } from "@/components/common/FilterDropdown";
 import { cn } from "@/lib/utils";
 import { api } from "../services/api";
 import type {
@@ -32,8 +33,6 @@ const panelClasses = {
     "flex items-start gap-3 rounded-lg border border-border/40 bg-background/70 px-4 py-3 text-sm",
   checkboxInput:
     "mt-1 h-4 w-4 rounded border border-border/60 bg-background text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-  select:
-    "mt-2 h-10 w-full rounded-md border border-border bg-background px-3 text-sm shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
   mutedText: "text-sm text-muted-foreground",
   list: "space-y-2 text-sm text-muted-foreground",
   badge: "rounded-full border border-border/60 bg-muted/60 px-2.5 py-1 text-xs font-medium",
@@ -303,23 +302,24 @@ export const WorkspaceSyncPanel: React.FC<WorkspaceSyncPanelProps> = ({
               </span>
             </label>
 
-            <div className="space-y-2">
-              <label className="text-sm font-medium text-foreground">Conflict Strategy</label>
-              <select
-                value={syncOptions.conflictStrategy}
-                onChange={(event) =>
-                  setSyncOptions({
-                    ...syncOptions,
-                    conflictStrategy: event.target.value as "auto-merge" | "stash" | "abort",
-                  })
-                }
-                className={panelClasses.select}
-              >
-                <option value="auto-merge">Auto-merge (prefer staging)</option>
-                <option value="stash">Stash worker changes</option>
-                <option value="abort">Abort on conflicts</option>
-              </select>
-            </div>
+            <FilterDropdown
+              label="Conflict Strategy"
+              value={syncOptions.conflictStrategy}
+              onValueChange={(value) =>
+                setSyncOptions({
+                  ...syncOptions,
+                  conflictStrategy: value as "auto-merge" | "stash" | "abort",
+                })
+              }
+              options={[
+                { value: "auto-merge", label: "Auto-merge (prefer staging)" },
+                { value: "stash", label: "Stash worker changes" },
+                { value: "abort", label: "Abort on conflicts" },
+              ]}
+              placeholder="Select strategy"
+              title="Select conflict strategy"
+              className="mt-2"
+            />
 
             <div className="flex justify-end">
               <Button variant="outline" onClick={updateConfig}>

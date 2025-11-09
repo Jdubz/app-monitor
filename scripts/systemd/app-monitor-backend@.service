@@ -1,0 +1,38 @@
+[Unit]
+Description=App Monitor Backend Service (Port %i)
+After=network.target docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=jdubz
+Group=jdubz
+WorkingDirectory=/opt/app-monitor/current/backend
+Environment="NODE_ENV=production"
+Environment="PORT=%i"
+Environment="DATABASE_PATH=/opt/app-monitor/shared/backend/data/dev-bots.db"
+Environment="LOG_LEVEL=info"
+
+# Start the backend server
+ExecStart=/usr/bin/node /opt/app-monitor/current/backend/dist/server.js
+
+# Graceful shutdown with 30s timeout
+TimeoutStopSec=30
+KillMode=mixed
+KillSignal=SIGTERM
+
+# Restart policy
+Restart=on-failure
+RestartSec=10
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=app-monitor-backend-%i
+
+[Install]
+WantedBy=multi-user.target

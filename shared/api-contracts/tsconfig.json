@@ -8,9 +8,9 @@
     "declarationMap": true,
     "sourceMap": true,
     "outDir": "dist",
-    "rootDir": "src",
+    "rootDir": ".",
     "composite": true,
     "skipLibCheck": true
   },
-  "include": ["src"]
+  "include": ["index.ts"]
 }

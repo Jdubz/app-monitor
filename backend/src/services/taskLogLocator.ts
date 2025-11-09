@@ -46,7 +46,7 @@ export class WorkerLogLocator {
       return JSON.parse(content) as WorkerLogStreamsConfig;
     } catch (error) {
       logger.warn({
-        category: 'dev-bots',
+        category: 'process',
         action: 'worker_log_config_missing',
         message: 'Unable to load worker log streams configuration, falling back to empty config',
         error,

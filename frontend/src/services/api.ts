@@ -31,6 +31,12 @@ import type {
   ServiceLogsResponse,
   ServiceStatusResponse,
   ServicesStatusResponse,
+  DevBotsInteractiveSessionStateResponse,
+  DevBotsInteractiveSessionInputResponse,
+  DevBotsInteractiveSessionInputPayload,
+  DevBotsInteractiveSessionStartPayload,
+  DevBotsInteractiveHeartbeatPayload,
+  DevBotsInteractiveInterruptPayload,
 } from '@/types/contracts';
 import type {
   DevBotsAgentComparison,
@@ -39,6 +45,7 @@ import type {
   DevBotsSettings,
   DevBotsTaskLogsResponse,
   DevBotsStatus,
+  DevBotsInteractiveSessionState,
 } from '@/types/dev-bots';
 import type { CloudLoggingStatus, CloudService } from '../types/log.types';
 
@@ -264,6 +271,72 @@ export const updateDevBotsSettings = async (
   return ensureApiSuccess(response, 'updating Dev-Bots settings');
 };
 
+export const getDevBotsInteractiveSession = async (): Promise<DevBotsInteractiveSessionState> => {
+  const client = await getApiClient();
+  const response = await client.get<DevBotsInteractiveSessionStateResponse>(
+    '/dev-bots/interactive/session',
+  );
+  return ensureApiSuccess(response, 'fetching interactive session state');
+};
+
+export const startDevBotsInteractiveSession = async (
+  payload: DevBotsInteractiveSessionStartPayload,
+): Promise<DevBotsInteractiveSessionState> => {
+  const client = await getApiClient();
+  const response = await client.post<DevBotsInteractiveSessionStateResponse>(
+    '/dev-bots/interactive/session',
+    payload,
+  );
+  return ensureApiSuccess(response, 'starting interactive session');
+};
+
+export const endDevBotsInteractiveSession = async (): Promise<DevBotsInteractiveSessionState> => {
+  const client = await getApiClient();
+  const response = await client.delete<DevBotsInteractiveSessionStateResponse>(
+    '/dev-bots/interactive/session',
+  );
+  return ensureApiSuccess(response, 'ending interactive session');
+};
+
+export const sendDevBotsInteractiveInput = async (
+  sessionId: string,
+  data: string,
+): Promise<boolean> => {
+  const client = await getApiClient();
+  const payload: DevBotsInteractiveSessionInputPayload = { data };
+  const response = await client.post<DevBotsInteractiveSessionInputResponse>(
+    '/dev-bots/interactive/session/' + sessionId + '/input',
+    payload,
+  );
+  const result = ensureApiSuccess(response, 'sending interactive session input');
+  return Boolean(result.accepted);
+};
+
+export const sendDevBotsInteractiveInterrupt = async (sessionId: string): Promise<string> => {
+  const client = await getApiClient();
+  const payload: DevBotsInteractiveInterruptPayload = { sessionId };
+  const response = await client.post<ApiSuccess<{ message: string }>>(
+    '/dev-bots/interactive/interrupt',
+    payload,
+  );
+  const result = ensureApiSuccess(response, 'interrupting interactive session');
+  return result.message;
+};
+
+export const sendDevBotsInteractiveHeartbeat = async (
+  sessionId: string,
+  source: 'user' | 'agent' = 'user',
+): Promise<boolean> => {
+  const client = await getApiClient();
+  const payload: DevBotsInteractiveHeartbeatPayload = { sessionId, source };
+  const response = await client.post<ApiSuccess<{ acknowledged: boolean }>>(
+    '/dev-bots/interactive/heartbeat',
+    payload,
+  );
+  const result = ensureApiSuccess(response, 'sending interactive session heartbeat');
+  return result.acknowledged ?? true;
+};
+
 export const getDevBotsAgentComparison = async (): Promise<DevBotsAgentComparison> => {
   const client = await getApiClient();
   const response = await client.get<DevBotsAgentComparisonResponse>('/dev-bots/agent-comparison');
@@ -305,6 +378,30 @@ export const getApiBaseUrl = (): string =>
 
 export const getApiBasePath = (): string => `${getApiBaseUrl()}/api`;
 
+export const getDevBotsInteractiveStreamUrl = (sessionId: string): string => {
+  const baseUrl = getApiBaseUrl();
+  try {
+    const parsed = new URL(baseUrl);
+    const wsProtocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+    const basePath = parsed.pathname.replace(/\/$/, '');
+    const streamPath = '/api/dev-bots/interactive/session/' + sessionId + '/stream';
+    const normalizedPath = (basePath || '') + streamPath;
+    const ensuredPath = normalizedPath.startsWith('/') ? normalizedPath : '/' + normalizedPath;
+    return wsProtocol + '//' + parsed.host + ensuredPath;
+  } catch (error) {
+    console.warn('[api] Unable to parse API base URL for interactive stream', error);
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    return (
+      wsProtocol +
+      '//' +
+      window.location.host +
+      '/api/dev-bots/interactive/session/' +
+      sessionId +
+      '/stream'
+    );
+  }
+};
+
 // Export everything as a namespace for components that use `api.method()`
 export const api = {
   healthCheck,
@@ -327,6 +424,13 @@ export const api = {
   getDevBotsSettings,
   getDevBotsAgentComparison,
   updateDevBotsSettings,
+  getDevBotsInteractiveSession,
+  startDevBotsInteractiveSession,
+  endDevBotsInteractiveSession,
+  sendDevBotsInteractiveInput,
+  sendDevBotsInteractiveInterrupt,
+  sendDevBotsInteractiveHeartbeat,
+  getDevBotsInteractiveStreamUrl,
   getPortStatuses,
   killPortProcess,
   handleApiError,

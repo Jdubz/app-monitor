@@ -1,540 +1,305 @@
-/**
- * Task Persistence Service for Dev-Monitor
- * 
- * Provides file-based storage for tasks to persist between restarts
- * Integrates with the existing DevBotsManager
- */
+import fs from 'fs';
+import path from 'path';
 
-import * as fs from 'fs';
-import * as path from 'path';
 import { logger } from '../utils/logger.js';
-import { Task } from './devBotsManager.js';
+import type { Task } from './devBotsManager.js';
+
+const STORAGE_VERSION = '1.0';
 
 export interface TaskStorageConfig {
   storagePath: string;
   backupPath: string;
-  maxBackups: number;
-  autoSave: boolean;
-  saveInterval: number; // milliseconds
+  maxBackups?: number;
+  autoSave?: boolean;
+  saveInterval?: number;
 }
 
+interface StoredTasksPayload {
+  version: string;
+  lastSaved: string;
+  totalTasks?: number;
+  totalCompleted?: number;
+  tasks: Task[];
+}
+
+type BackupKind = 'tasks' | 'completed-tasks';
+
 export class TaskPersistence {
-  private config: TaskStorageConfig;
-  private isDirty: boolean = false;
-  private saveTimer?: NodeJS.Timeout;
+  private readonly storageFile: string;
+  private readonly completedFile: string;
+  private readonly backupPath: string;
+  private readonly config: Required<Pick<TaskStorageConfig, 'maxBackups' | 'autoSave' | 'saveInterval'>> &
+    Pick<TaskStorageConfig, 'storagePath' | 'backupPath'>;
+  private autoSaveTimer?: NodeJS.Timeout;
+  private cachedTasks: Task[] = [];
+  private dirty = false;
 
   constructor(config: TaskStorageConfig) {
-    this.config = config;
-    this.ensureStorageDirectories();
-    
-    if (config.autoSave) {
+    this.config = {
+      storagePath: config.storagePath,
+      backupPath: config.backupPath,
+      maxBackups: config.maxBackups ?? 5,
+      autoSave: config.autoSave ?? false,
+      saveInterval: config.saveInterval ?? 60_000,
+    };
+    this.storageFile = path.join(this.config.storagePath, 'tasks.json');
+    this.completedFile = path.join(this.config.storagePath, 'completed-tasks.json');
+    this.backupPath = this.config.backupPath;
+
+    this.ensureDirectory(this.config.storagePath);
+    this.ensureDirectory(this.backupPath);
+
+    if (this.config.autoSave) {
       this.startAutoSave();
     }
   }
 
-  private ensureStorageDirectories(): void {
-    // Ensure storage directory exists
-    if (!fs.existsSync(this.config.storagePath)) {
-      fs.mkdirSync(this.config.storagePath, { recursive: true });
-    }
-
-    // Ensure backup directory exists
-    if (!fs.existsSync(this.config.backupPath)) {
-      fs.mkdirSync(this.config.backupPath, { recursive: true });
-    }
+  public destroy(): void {
+    this.stopAutoSave();
   }
 
-  /**
-   * Load tasks from storage file
-   */
+  public shutdown(): void {
+    this.destroy();
+  }
+
   public loadTasks(): Task[] {
-    const tasksFile = path.join(this.config.storagePath, 'tasks.json');
-    
-    if (!fs.existsSync(tasksFile)) {
-      logger.info({
-      category: 'process',
-      action: 'no_existing_tasks_file_found_starting_with_empty_t',
-      message: 'No existing tasks file found, starting with empty task storage'
-    });
-      return [];
+    const payload = this.safeReadPayload(this.storageFile);
+    if (payload) {
+      return payload.tasks;
     }
 
-    try {
-      const data = fs.readFileSync(tasksFile, 'utf-8');
-      const tasksData = JSON.parse(data);
-      
-      logger.info({
-      category: 'process',
-      action: 'loaded_tasksdata_tasks_length_0_tasks_from_storage',
-      message: `Loaded ${tasksData.tasks?.length || 0} tasks from storage`
-    });
-      return tasksData.tasks || [];
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_load_tasks_from_storage',
-      message: 'Failed to load tasks from storage:',
-      error: error
-    });
-      // Try to load from backup
-      return this.loadFromBackup();
-    }
+    const backupPayload = this.loadLatestBackup('tasks');
+    return backupPayload?.tasks ?? [];
   }
 
-  /**
-   * Load tasks from backup file
-   */
-  private loadFromBackup(): Task[] {
-    const backupFiles = fs.readdirSync(this.config.backupPath)
-      .filter(file => file.startsWith('tasks-backup-') && file.endsWith('.json'))
-      .sort()
-      .reverse(); // Most recent first
-
-    for (const backupFile of backupFiles) {
-      try {
-        const backupPath = path.join(this.config.backupPath, backupFile);
-        const data = fs.readFileSync(backupPath, 'utf-8');
-        const tasksData = JSON.parse(data);
-        
-        logger.info({
-      category: 'process',
-      action: 'loaded_tasksdata_tasks_length_0_tasks_from_backup_',
-      message: `Loaded ${tasksData.tasks?.length || 0} tasks from backup: ${backupFile}`
-    });
-        return tasksData.tasks || [];
-      } catch (error) {
-        logger.error({
-      category: 'process',
-      action: 'failed_to_load_backup_backupfile',
-      message: `Failed to load backup ${backupFile}:`,
-      error: error
-    });
-        continue;
-      }
-    }
-    
-    logger.info({
-      category: 'process',
-      action: 'no_valid_backup_files_found_starting_with_empty_ta',
-      message: 'No valid backup files found, starting with empty task storage'
-    });
-    return [];
-  }
-
-  /**
-   * Save tasks to storage file
-   */
   public saveTasks(tasks: Task[]): void {
+    this.cachedTasks = [...tasks];
+    this.dirty = false;
+    const serialized = this.serializeTasks(tasks);
     try {
-      // Create backup before saving
-      this.createBackup(tasks);
-      
-      // Save current tasks
-      const tasksFile = path.join(this.config.storagePath, 'tasks.json');
-      const tasksData = {
-        version: '1.0',
-        lastSaved: new Date().toISOString(),
-        tasks: tasks
-      };
-      
-      fs.writeFileSync(tasksFile, JSON.stringify(tasksData, null, 2));
-      this.isDirty = false;
-      
-      logger.info({
-      category: 'process',
-      action: 'saved_tasks_length_tasks_to_storage',
-      message: `Saved ${tasks.length} tasks to storage`
-    });
+      this.writeBackup('tasks', serialized);
+      fs.writeFileSync(this.storageFile, serialized);
+      this.cleanupBackups('tasks');
     } catch (error) {
       logger.error({
-      category: 'process',
-      action: 'failed_to_save_tasks',
-      message: 'Failed to save tasks:',
-      error: error
-    });
+        category: 'system',
+        action: 'save_tasks_failed',
+        message: 'Failed to save tasks:',
+        error,
+      });
     }
   }
 
-  /**
-   * Save completed tasks to separate file for verification
-   */
-  public saveCompletedTasks(completedTasks: Task[]): void {
-    try {
-      // Load existing completed tasks
-      const existingCompleted = this.loadCompletedTasks();
-      
-      // Merge with new completed tasks (avoid duplicates)
-      const existingIds = new Set(existingCompleted.map(t => t.id));
-      const newCompletedTasks = completedTasks.filter(t => !existingIds.has(t.id));
-      const allCompletedTasks = [...existingCompleted, ...newCompletedTasks];
-      
-      // Create backup before saving
-      this.createCompletedTasksBackup(allCompletedTasks);
-      
-      // Save completed tasks
-      const completedFile = path.join(this.config.storagePath, 'completed-tasks.json');
-      const completedData = {
-        version: '1.0',
-        lastSaved: new Date().toISOString(),
-        totalCompleted: allCompletedTasks.length,
-        tasks: allCompletedTasks
-      };
-      
-      fs.writeFileSync(completedFile, JSON.stringify(completedData, null, 2));
-      
-      logger.info({
-      category: 'process',
-      action: 'saved_newcompletedtasks_length_new_completed_tasks',
-      message: `Saved ${newCompletedTasks.length} new completed tasks (total: ${allCompletedTasks.length})`
-    });
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_save_completed_tasks',
-      message: 'Failed to save completed tasks:',
-      error: error
-    });
+  public saveTask(tasks: Task | Task[]): void {
+    if (Array.isArray(tasks)) {
+      this.saveTasks(tasks);
+    } else {
+      this.saveTasks([tasks]);
     }
   }
 
-  /**
-   * Load completed tasks from storage
-   */
+  public markDirty(): void {
+    this.dirty = true;
+  }
+
+  public needsSaving(): boolean {
+    return this.dirty;
+  }
+
+  public saveCompletedTasks(tasks: Task[]): void {
+    const serialized = this.serializeTasks(tasks, { completed: true });
+    try {
+      this.writeBackup('completed-tasks', serialized);
+      fs.writeFileSync(this.completedFile, serialized);
+      this.cleanupBackups('completed-tasks');
+    } catch (error) {
+      logger.error({
+        category: 'system',
+        action: 'save_completed_failed',
+        message: 'Failed to save completed tasks:',
+        error,
+      });
+    }
+  }
+
   public loadCompletedTasks(): Task[] {
-    try {
-      const completedFile = path.join(this.config.storagePath, 'completed-tasks.json');
-      
-      if (!fs.existsSync(completedFile)) {
-        logger.info({
-      category: 'process',
-      action: 'no_completed_tasks_file_found_starting_with_empty_',
-      message: 'No completed tasks file found, starting with empty completed tasks storage'
-    });
-        return [];
-      }
-      
-      const data = fs.readFileSync(completedFile, 'utf-8');
-      const completedData = JSON.parse(data);
-      
-      logger.info({
-      category: 'process',
-      action: 'loaded_completeddata_tasks_length_0_completed_task',
-      message: `Loaded ${completedData.tasks?.length || 0} completed tasks from storage`
-    });
-      return completedData.tasks || [];
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_load_completed_tasks',
-      message: 'Failed to load completed tasks:',
-      error: error
-    });
-      return this.loadCompletedTasksFromBackup();
-    }
+    const payload = this.safeReadPayload(this.completedFile);
+    return payload?.tasks ?? [];
   }
 
-  /**
-   * Create backup of current tasks
-   */
-  private createBackup(tasks: Task[]): void {
-    try {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const backupFile = path.join(this.config.backupPath, `tasks-backup-${timestamp}.json`);
-      
-      const tasksData = {
-        version: '1.0',
-        backupCreated: new Date().toISOString(),
-        tasks: tasks
-      };
-      
-      fs.writeFileSync(backupFile, JSON.stringify(tasksData, null, 2));
-      
-      // Clean up old backups
-      this.cleanupOldBackups();
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_create_backup',
-      message: 'Failed to create backup:',
-      error: error
-    });
-    }
+  public exportTasks(tasks: Task[], exportPath: string): void {
+    const serialized = this.serializeTasks(tasks);
+    fs.writeFileSync(exportPath, serialized);
   }
 
-  /**
-   * Clean up old backup files
-   */
-  private cleanupOldBackups(): void {
-    try {
-      const backupFiles = fs.readdirSync(this.config.backupPath)
-        .filter(file => file.startsWith('tasks-backup-') && file.endsWith('.json'))
-        .map(file => ({
-          name: file,
-          path: path.join(this.config.backupPath, file),
-          stats: fs.statSync(path.join(this.config.backupPath, file))
-        }))
-        .sort((a, b) => b.stats.mtime.getTime() - a.stats.mtime.getTime());
-
-      // Keep only the most recent backups
-      const filesToDelete = backupFiles.slice(this.config.maxBackups);
-      
-      for (const file of filesToDelete) {
-        fs.unlinkSync(file.path);
-        logger.info({
-      category: 'process',
-      action: 'deleted_old_backup_file_name',
-      message: `Deleted old backup: ${file.name}`
-    });
-      }
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_cleanup_old_backups',
-      message: 'Failed to cleanup old backups:',
-      error: error
-    });
-    }
+  public importTasks(importPath: string): Task[] {
+    const payload = this.safeReadPayload(importPath, { throwOnError: true });
+    return payload?.tasks ?? [];
   }
 
-  /**
-   * Start auto-save timer
-   */
+  public cleanupCompletedTasks(tasks: Task[], retentionDays: number): Task[] {
+    if (!retentionDays || retentionDays <= 0) {
+      return tasks;
+    }
+    const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+    const filtered = tasks.filter((task) => {
+      const completedAt = this.getCompletedTimestamp(task);
+      return !completedAt || completedAt >= cutoff;
+    });
+    return filtered;
+  }
+
   private startAutoSave(): void {
-    this.saveTimer = setInterval(() => {
-      // This will be called by the manager when needed
+    this.autoSaveTimer = setInterval(() => {
+      if (!this.dirty || this.cachedTasks.length === 0) {
+        return;
+      }
+      this.saveTasks(this.cachedTasks);
     }, this.config.saveInterval);
   }
 
-  /**
-   * Stop auto-save timer
-   */
   public stopAutoSave(): void {
-    if (this.saveTimer) {
-      clearInterval(this.saveTimer);
-      this.saveTimer = undefined;
+    if (this.autoSaveTimer) {
+      clearInterval(this.autoSaveTimer);
+      this.autoSaveTimer = undefined;
     }
   }
 
-  /**
-   * Mark data as dirty (needs saving)
-   */
-  public markDirty(): void {
-    this.isDirty = true;
-  }
-
-  /**
-   * Check if data needs saving
-   */
-  public needsSaving(): boolean {
-    return this.isDirty;
-  }
-
-  /**
-   * Export tasks to file
-   */
-  public exportTasks(tasks: Task[], exportPath: string): void {
-    try {
-      const tasksData = {
-        version: '1.0',
-        exported: new Date().toISOString(),
-        tasks: tasks
-      };
-      
-      fs.writeFileSync(exportPath, JSON.stringify(tasksData, null, 2));
-      logger.info({
-      category: 'process',
-      action: 'exported_tasks_length_tasks_to_exportpath',
-      message: `Exported ${tasks.length} tasks to ${exportPath}`
-    });
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_export_tasks',
-      message: 'Failed to export tasks:',
-      error: error
-    });
-      throw error;
+  private serializeTasks(tasks: Task[], options?: { completed?: boolean }): string {
+    const payload: StoredTasksPayload = {
+      version: STORAGE_VERSION,
+      lastSaved: new Date().toISOString(),
+      tasks,
+    };
+    if (options?.completed) {
+      payload.totalCompleted = tasks.length;
+    } else {
+      payload.totalTasks = tasks.length;
     }
+    return JSON.stringify(payload, null, 2);
   }
 
-  /**
-   * Import tasks from file
-   */
-  public importTasks(importPath: string): Task[] {
-    try {
-      const data = fs.readFileSync(importPath, 'utf-8');
-      const tasksData = JSON.parse(data);
-      
-      const importedTasks = tasksData.tasks || [];
-      this.markDirty();
-      
-      logger.info({
-      category: 'process',
-      action: 'imported_importedtasks_length_tasks_from_importpat',
-      message: `Imported ${importedTasks.length} tasks from ${importPath}`
-    });
-      return importedTasks;
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_import_tasks',
-      message: 'Failed to import tasks:',
-      error: error
-    });
-      throw error;
-    }
-  }
-
-  /**
-   * Cleanup completed tasks older than specified days
-   */
-  public cleanupCompletedTasks(tasks: Task[], olderThanDays: number = 7): Task[] {
-    const cutoffDate = new Date(Date.now() - (olderThanDays * 24 * 60 * 60 * 1000));
-    
-    const filteredTasks = tasks.filter(task => {
-      if (task.status === 'completed' && task.completed_at) {
-        const completedDate = new Date(task.completed_at);
-        return completedDate >= cutoffDate;
+  private safeReadPayload(filePath: string, options?: { throwOnError?: boolean }): StoredTasksPayload | null {
+    if (!fs.existsSync(filePath)) {
+      if (options?.throwOnError) {
+        throw new Error(`File not found: ${filePath}`);
       }
-      return true; // Keep non-completed tasks
-    });
-    
-    const cleanedCount = tasks.length - filteredTasks.length;
-    if (cleanedCount > 0) {
-      this.markDirty();
-      logger.info({
-      category: 'process',
-      action: 'cleaned_up_cleanedcount_completed_tasks_older_than',
-      message: `Cleaned up ${cleanedCount} completed tasks older than ${olderThanDays} days`
-    });
+      return null;
     }
-    
-    return filteredTasks;
+    try {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      return JSON.parse(raw) as StoredTasksPayload;
+    } catch (error) {
+      if (options?.throwOnError) {
+        throw error;
+      }
+      logger.error({
+        category: 'system',
+        action: 'load_failed',
+        message: 'Failed to load tasks from storage:',
+        error,
+      });
+      return null;
+    }
   }
 
-  /**
-   * Load completed tasks from backup if main file fails
-   */
-  private loadCompletedTasksFromBackup(): Task[] {
+  private loadLatestBackup(kind: BackupKind): StoredTasksPayload | null {
     try {
-      const backupFiles = fs.readdirSync(this.config.backupPath)
-        .filter(file => file.startsWith('completed-tasks-backup-') && file.endsWith('.json'))
-        .sort()
-        .reverse(); // Most recent first
-      
-      for (const backupFile of backupFiles) {
-        try {
-          const backupPath = path.join(this.config.backupPath, backupFile);
-          const data = fs.readFileSync(backupPath, 'utf-8');
-          const completedData = JSON.parse(data);
-          
-          logger.info({
-      category: 'process',
-      action: 'loaded_completeddata_tasks_length_0_completed_task',
-      message: `Loaded ${completedData.tasks?.length || 0} completed tasks from backup: ${backupFile}`
-    });
-          return completedData.tasks || [];
-        } catch (error) {
-          logger.error({
-      category: 'process',
-      action: 'failed_to_load_completed_tasks_backup_backupfile',
-      message: `Failed to load completed tasks backup ${backupFile}:`,
-      error: error
-    });
-          continue;
+      const files = fs.readdirSync(this.backupPath);
+      const prefix = this.backupPrefix(kind);
+      const candidates = files.filter((file) => file.startsWith(prefix));
+      if (!candidates.length) {
+        return null;
+      }
+
+      const sorted = candidates
+        .map((file) => ({
+          file,
+          mtime: fs.statSync(path.join(this.backupPath, file)).mtime.getTime(),
+        }))
+        .sort((a, b) => b.mtime - a.mtime);
+
+      for (const candidate of sorted) {
+        const payload = this.safeReadPayload(path.join(this.backupPath, candidate.file));
+        if (payload) {
+          return payload;
         }
       }
-      
-      logger.info({
-      category: 'process',
-      action: 'no_valid_completed_tasks_backup_files_found_starti',
-      message: 'No valid completed tasks backup files found, starting with empty completed tasks storage'
-    });
-      return [];
     } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_load_completed_tasks_from_backup',
-      message: 'Failed to load completed tasks from backup:',
-      error: error
-    });
-      return [];
+      logger.warn({
+        category: 'system',
+        action: 'backup_load_failed',
+        message: 'Failed to load backup file',
+        error,
+      });
+    }
+    return null;
+  }
+
+  private writeBackup(kind: BackupKind, payload: string): void {
+    try {
+      const timestamp = new Date().toISOString().replace(/[:]/g, '-');
+      const backupFile = path.join(this.backupPath, `${this.backupPrefix(kind)}${timestamp}.json`);
+      fs.writeFileSync(backupFile, payload);
+    } catch (error) {
+      logger.warn({
+        category: 'system',
+        action: 'backup_write_failed',
+        message: 'Failed to write backup file',
+        error,
+      });
     }
   }
 
-  /**
-   * Create backup of completed tasks
-   */
-  private createCompletedTasksBackup(completedTasks: Task[]): void {
+  private cleanupBackups(kind: BackupKind): void {
     try {
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const backupFile = path.join(this.config.backupPath, `completed-tasks-backup-${timestamp}.json`);
-      
-      const backupData = {
-        version: '1.0',
-        backedUp: new Date().toISOString(),
-        totalCompleted: completedTasks.length,
-        tasks: completedTasks
-      };
-      
-      fs.writeFileSync(backupFile, JSON.stringify(backupData, null, 2));
-      
-      // Clean up old backups
-      this.cleanupCompletedTasksBackups();
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_create_completed_tasks_backup',
-      message: 'Failed to create completed tasks backup:',
-      error: error
-    });
-    }
-  }
-
-  /**
-   * Clean up old completed tasks backups
-   */
-  private cleanupCompletedTasksBackups(): void {
-    try {
-      const backupFiles = fs.readdirSync(this.config.backupPath)
-        .filter(file => file.startsWith('completed-tasks-backup-') && file.endsWith('.json'))
-        .map(file => ({
-          name: file,
-          path: path.join(this.config.backupPath, file),
-          stats: fs.statSync(path.join(this.config.backupPath, file))
+      const files = fs.readdirSync(this.backupPath);
+      const prefix = this.backupPrefix(kind);
+      const candidates = files
+        .filter((file) => file.startsWith(prefix))
+        .map((file) => ({
+          file,
+          mtime: fs.statSync(path.join(this.backupPath, file)).mtime.getTime(),
         }))
-        .sort((a, b) => b.stats.mtime.getTime() - a.stats.mtime.getTime());
-      
-      // Keep only the most recent backups
-      const filesToDelete = backupFiles.slice(this.config.maxBackups);
-      
-      for (const file of filesToDelete) {
-        fs.unlinkSync(file.path);
-        logger.info({
-      category: 'process',
-      action: 'deleted_old_completed_tasks_backup_file_name',
-      message: `Deleted old completed tasks backup: ${file.name}`
-    });
+        .sort((a, b) => b.mtime - a.mtime);
+
+      if (candidates.length <= this.config.maxBackups) {
+        return;
       }
+
+      const toRemove = candidates.slice(this.config.maxBackups);
+      toRemove.forEach(({ file }) => {
+        fs.unlinkSync(path.join(this.backupPath, file));
+      });
     } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_cleanup_completed_tasks_backups',
-      message: 'Failed to cleanup completed tasks backups:',
-      error: error
-    });
+      logger.warn({
+        category: 'system',
+        action: 'backup_cleanup_failed',
+        message: 'Failed to cleanup backup files',
+        error,
+      });
     }
   }
 
-  /**
-   * Graceful shutdown
-   */
-  public shutdown(): void {
-    this.stopAutoSave();
-    logger.info({
-      category: 'process',
-      action: 'task_persistence_shutdown_complete',
-      message: 'Task persistence shutdown complete'
-    });
+  private backupPrefix(kind: BackupKind): string {
+    return kind === 'tasks' ? 'tasks-backup-' : 'completed-tasks-backup-';
+  }
+
+  private ensureDirectory(dir: string): void {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+  }
+
+  private getCompletedTimestamp(task: Task): number | undefined {
+    const completedAt = (task as unknown as Record<string, unknown>).completed_at ?? (task as unknown as Record<string, unknown>).completedAt;
+    if (typeof completedAt === 'number') {
+      return completedAt;
+    }
+    if (typeof completedAt === 'string') {
+      const parsed = Date.parse(completedAt);
+      return Number.isNaN(parsed) ? undefined : parsed;
+    }
+    return undefined;
   }
 }

@@ -21,10 +21,12 @@ import type { AgentPersonality, AgentPersonalityManager } from './agentPersonali
 import type { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplates.js';
 // WorkspaceOrchestrator removed - we use Docker cp for file systems, not git mirrors
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
-import type { TaskPersistence } from './taskPersistence.js';
+// TaskPersistence removed - using SQLite directly
 import { isTaskStuck, detectFailurePattern } from './taskFailureGuards.js';
 import type { SimpleFailureRecovery } from './failureRecovery.js';
 import { resolveArtifactsDir } from '../utils/repoPaths.js';
+import { AgentTypeManager } from './agentTypeManager.js';
+import * as DockerConfig from './dockerConfig.js';
 
 // ============================================================================
 // Types & Interfaces
@@ -50,27 +52,25 @@ export class TaskExecutionService {
   private readonly agentManager: AgentPersonalityManager;
   private readonly templateManager: TaskPromptTemplateManager;
   private readonly ephemeralWorkerService: EphemeralWorkerService;
-  private readonly taskPersistence: TaskPersistence;
+  // TaskPersistence removed - using SQLite directly
   private readonly config: TaskExecutionServiceConfig;
   private recovery?: SimpleFailureRecovery; // Optional: set via setRecovery()
   private dockerCircuitBreaker?: any; // CircuitBreaker (imported lazily)
-
-  private lastAgentType: 'claude' | 'codex' = 'claude';
-  private readonly AGENT_ROTATION_STRATEGY: 'alternate' | 'random' | 'claude-only' | 'codex-only' = 'alternate';
+  private agentTypeManager: AgentTypeManager; // Centralized agent type management
 
   constructor(
     taskQueue: TaskQueueService,
     agentManager: AgentPersonalityManager,
     templateManager: TaskPromptTemplateManager,
     ephemeralWorkerService: EphemeralWorkerService,
-    taskPersistence: TaskPersistence,
+    // TaskPersistence removed - using SQLite directly
     config: Partial<TaskExecutionServiceConfig> = {}
   ) {
     this.taskQueue = taskQueue;
     this.agentManager = agentManager;
     this.templateManager = templateManager;
     this.ephemeralWorkerService = ephemeralWorkerService;
-    this.taskPersistence = taskPersistence;
+    // TaskPersistence removed - using SQLite directly
 
     this.config = {
       maxConcurrentWorkers: config.maxConcurrentWorkers ?? 2,
@@ -82,6 +82,12 @@ export class TaskExecutionService {
         dryRun: config.recovery?.dryRun ?? false
       }
     };
+
+    // Initialize centralized agent type manager
+    this.agentTypeManager = new AgentTypeManager({
+      strategy: 'alternate',
+      defaultType: 'claude'
+    });
 
     // Initialize circuit breaker for Docker operations
     this.initializeCircuitBreaker();
@@ -212,21 +218,7 @@ export class TaskExecutionService {
     }
   }
 
-  private chooseAgentType(): 'claude' | 'codex' {
-    switch (this.AGENT_ROTATION_STRATEGY) {
-      case 'alternate':
-        this.lastAgentType = this.lastAgentType === 'claude' ? 'codex' : 'claude';
-        return this.lastAgentType;
-      case 'random':
-        return Math.random() < 0.5 ? 'claude' : 'codex';
-      case 'claude-only':
-        return 'claude';
-      case 'codex-only':
-        return 'codex';
-      default:
-        return 'claude';
-    }
-  }
+  // Removed duplicate chooseAgentType - now using AgentTypeManager
 
   private getAgentDockerImage(_agent: AgentPersonality): string {
     return 'dev-bot:latest';
@@ -449,17 +441,27 @@ export class TaskExecutionService {
   private async executeTaskWithDockerRun(task: Task, agent: AgentPersonality, agentType?: 'claude' | 'codex'): Promise<void> {
     const { spawn } = await import('child_process');
 
-    // Choose agent type if not specified
-    const chosenAgentType = agentType || this.chooseAgentType();
+    // Choose agent type if not specified (using centralized manager)
+    const chosenAgentType = agentType || this.agentTypeManager.chooseAgentType();
     const workerId = `bot-${chosenAgentType}-${agent.id}-${Date.now()}`;
 
     try {
-    // Ensure we're on staging branch
-    // Get the project root (parent of backend directory)
+    // Container will clone fresh repository internally
+    // Get the project root (parent of backend directory) for reference only
     const repoRoot = path.resolve(process.cwd(), '..');
     const baseBranch = 'staging';
-    await this.execGitCommand(['checkout', baseBranch], repoRoot);
-    await this.execGitCommand(['pull', 'origin', baseBranch], repoRoot);
+
+    // Log that container will handle repository setup
+    logger.info({
+      category: 'process',
+      action: 'container_isolation',
+      message: `Container will clone fresh repo and checkout ${baseBranch} internally`,
+      details: {
+        workerId,
+        baseBranch,
+        note: 'Fixed: No longer switching branches in shared filesystem'
+      }
+    });
 
     // Prepare host-side resources
     const hostLogsDir = this.getHostLogsDir();
@@ -476,31 +478,16 @@ export class TaskExecutionService {
     let dockerArgs: string[];
     let cliCommand: string;
 
-    // Prepare git environment variables
-    const gitEnvVars: string[] = [];
-    const gitIdentityEnvKeys = [
-      'GIT_AUTHOR_NAME',
-      'GIT_AUTHOR_EMAIL',
-      'GIT_COMMITTER_NAME',
-      'GIT_COMMITTER_EMAIL',
-      'GITHUB_TOKEN'
-    ];
-    const providedGitEnvKeys: string[] = [];
-    for (const key of gitIdentityEnvKeys) {
-      const value = process.env[key];
-      if (value) {
-        gitEnvVars.push('-e', `${key}=${value}`);
-        providedGitEnvKeys.push(key);
-      }
-    }
+    // Prepare git environment variables (using centralized config)
+    const gitEnvVars = DockerConfig.buildGitEnvVars();
 
     if (chosenAgentType === 'codex') {
-      // Codex execution
+      // Codex execution with isolated repository
       dockerArgs = [
         'run',
         '--rm',  // Auto-remove container after exit
         ...gitEnvVars,  // Pass git environment variables
-        '-v', `${repoRoot}:/workspace:rw`,  // Mount workspace directly
+        // NO direct workspace mount - will clone inside container
         '-v', `${hostLogsDir}:/logs:rw`,  // Mount logs
         '--tmpfs', '/home/node/.codex:uid=1000,gid=1000',  // Writable temp for Codex CLI
         '-v', `${homeDir}/.codex:/tmp/host-codex:ro`,  // Mount Codex credentials
@@ -510,8 +497,15 @@ export class TaskExecutionService {
         '-v', `${homeDir}/.config/gh:/home/node/.config/gh:ro`,  // GitHub CLI auth
         this.getAgentDockerImage(agent),
         'sh', '-c',
-        // Copy credentials and run Codex with full access for git operations
-        // Use 'exec' subcommand for non-interactive execution with sandbox bypass
+        // Clone fresh repository, then copy credentials and run Codex
+        `set -e && ` +
+        `mkdir -p /workspace && cd /workspace && ` +
+        `git clone https://github.com/Jdubz/app-monitor.git . && ` +
+        `git config --global user.name "DevBot" && ` +
+        `git config --global user.email "devbot@local" && ` +
+        `git fetch --all && ` +
+        `git checkout ${baseBranch} && ` +
+        `git pull origin ${baseBranch} || true && ` +
         `cp -r /tmp/host-codex/* /home/node/.codex/ 2>/dev/null || true && ` +
         `codex exec --dangerously-bypass-approvals-and-sandbox '${promptText}'`
       ];
@@ -530,7 +524,7 @@ export class TaskExecutionService {
         'run',
         '--rm',  // Auto-remove container after exit
         ...gitEnvVars,  // Pass git environment variables
-        '-v', `${repoRoot}:/workspace:rw`,  // Mount workspace directly
+        // NO direct workspace mount - will clone inside container
         '-v', `${hostLogsDir}:/logs:rw`,  // Mount logs
         '--tmpfs', '/home/node/.claude:uid=1000,gid=1000',  // Writable temp for Claude CLI
         '-v', `${claudeCredentials}:/tmp/host-creds.json:ro`,  // Mount Claude credentials
@@ -540,7 +534,15 @@ export class TaskExecutionService {
         '-v', `${homeDir}/.config/gh:/home/node/.config/gh:ro`,  // GitHub CLI auth
         this.getAgentDockerImage(agent),
         'sh', '-c',
-        // Copy credentials and run Claude in non-interactive mode
+        // Clone fresh repository, then copy credentials and run Claude
+        `set -e && ` +
+        `mkdir -p /workspace && cd /workspace && ` +
+        `git clone https://github.com/Jdubz/app-monitor.git . && ` +
+        `git config --global user.name "DevBot" && ` +
+        `git config --global user.email "devbot@local" && ` +
+        `git fetch --all && ` +
+        `git checkout ${baseBranch} && ` +
+        `git pull origin ${baseBranch} || true && ` +
         `cp /tmp/host-creds.json /home/node/.claude/.credentials.json && ` +
         `claude --dangerously-skip-permissions '${promptText}'`
       ];
@@ -570,8 +572,7 @@ export class TaskExecutionService {
       message: `Prepared docker invocation for ${cliCommand}`,
       details: {
         dockerArgsSample: redactedDockerArgs.slice(0, 12),
-        dockerArgCount: dockerArgs.length,
-        gitEnvKeysForwarded: providedGitEnvKeys
+        dockerArgCount: dockerArgs.length
       }
     });
 

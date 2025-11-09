@@ -38,7 +38,7 @@ router.get('/config', (req: Request, res: Response) => {
   try {
     const configs = qualityGates.getAllGateConfigs();
     const configObject = Object.fromEntries(configs);
-    respondSuccess(res, { configs: configObject } satisfies QualityGateConfigsResponse['data']);
+    respondSuccess(res, { configs: configObject } as unknown as QualityGateConfigsResponse['data']);
   } catch (error) {
     logger.error({
       category: 'api',
@@ -106,7 +106,7 @@ router.put('/config/:gate', (req: Request, res: Response) => {
 
     qualityGates.setGateConfig(gate, updates);
 
-    const updatedConfig = qualityGates.getGateConfig(gate);
+    const updatedConfig = qualityGates.getGateConfig(gate)!;
     respondSuccess<QualityGateUpdateResponse['data']>(res, {
       message: `Configuration updated for gate: ${gate}`,
       config: updatedConfig

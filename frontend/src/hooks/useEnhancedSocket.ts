@@ -6,8 +6,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import { createSocketService, SocketService, ConnectionState, HealthMetrics } from '../services/socketService';
+import { createLogger } from '@/utils/logger';
 
 const SOCKET_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const log = createLogger('useEnhancedSocket');
 
 export function useEnhancedSocket() {
   const [socketService, setSocketService] = useState<SocketService | null>(null);
@@ -38,7 +40,7 @@ export function useEnhancedSocket() {
 
     // Listen to connection state changes
     service.on('connection:state', (state: ConnectionState) => {
-      console.log('[useEnhancedSocket] Connection state:', state);
+      log.debug('Connection state', state);
       setConnectionState(state);
     });
 
@@ -49,11 +51,11 @@ export function useEnhancedSocket() {
 
     // Listen to reconnection events
     service.on('connection:reconnected', (attempts: number) => {
-      console.log('[useEnhancedSocket] Reconnected after', attempts, 'attempts');
+      log.info('Reconnected', attempts, 'attempts');
     });
 
     service.on('connection:failed', () => {
-      console.error('[useEnhancedSocket] Connection failed');
+      log.error('Connection failed');
     });
 
     setSocketService(service);

@@ -14,6 +14,8 @@ import { logger } from '../utils/logger.js';
 import { PRMonitorService } from './prMonitor.service.js';
 import { TaskQueueService } from './taskQueue.sqlite.js';
 import type { Task } from './taskQueue.sqlite.js';
+import { PRArtifactRecoveryService } from './prArtifactRecovery.service.js';
+import type { RecoveryStats } from './prArtifactRecovery.service.js';
 
 // ============================================================================
 // Types & Interfaces
@@ -39,6 +41,9 @@ export class PRWorkflowOrchestrator {
   private readonly taskQueue: TaskQueueService;
   private readonly prMonitor: PRMonitorService;
   private readonly config: PRWorkflowConfig;
+  private artifactRecovery: PRArtifactRecoveryService;
+  private lastArtifactScan: number = 0;
+  private readonly ARTIFACT_SCAN_INTERVAL = 300000; // 5 minutes
 
   constructor(
     taskQueue: TaskQueueService,
@@ -56,6 +61,9 @@ export class PRWorkflowOrchestrator {
       checkTimeoutMs: config.checkTimeoutMs ?? 600000,  // 10 minutes
       monitorPollIntervalMs: config.monitorPollIntervalMs ?? 60000  // 1 minute
     };
+
+    // Initialize artifact recovery service
+    this.artifactRecovery = new PRArtifactRecoveryService(taskQueue, this);
   }
 
   // ==========================================================================
@@ -73,6 +81,27 @@ export class PRWorkflowOrchestrator {
       action: 'initialize_start',
       message: 'Initializing PR workflow orchestrator, scanning for existing PRs'
     });
+
+    // Step 1: Recover from artifacts on startup
+    try {
+      const recoveryStats = await this.artifactRecovery.recoverOrphanedPRs();
+
+      if (recoveryStats.prInfoRecovered > 0) {
+        logger.info({
+          category: 'pr-workflow',
+          action: 'startup_recovery_completed',
+          message: `Recovered ${recoveryStats.prInfoRecovered} PRs from artifacts on startup`,
+          details: { ...recoveryStats } as Record<string, unknown>
+        });
+      }
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'startup_recovery_failed',
+        message: 'Failed to recover PRs from artifacts on startup',
+        error
+      });
+    }
 
     try {
       // Get all tasks with PR information that are not yet merged
@@ -334,6 +363,52 @@ export class PRWorkflowOrchestrator {
       ...this.prMonitor.getStatus(),
       config: this.config
     };
+  }
+
+  /**
+   * Check if it's time to scan artifacts for orphaned PRs
+   * Called periodically by the PR monitor
+   */
+  async checkForArtifactRecovery(): Promise<void> {
+    // Throttle artifact scanning to avoid excessive disk I/O
+    if (Date.now() - this.lastArtifactScan < this.ARTIFACT_SCAN_INTERVAL) {
+      return;
+    }
+
+    this.lastArtifactScan = Date.now();
+
+    try {
+      const stats = await this.artifactRecovery.recoverOrphanedPRs();
+
+      if (stats.prInfoRecovered > 0) {
+        logger.info({
+          category: 'pr-workflow',
+          action: 'periodic_artifact_recovery',
+          message: `Recovered ${stats.prInfoRecovered} PRs from artifacts during periodic scan`,
+          details: { ...stats } as Record<string, unknown>
+        });
+      }
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'periodic_artifact_recovery_failed',
+        message: 'Periodic artifact recovery failed',
+        error
+      });
+    }
+  }
+
+  /**
+   * Manual trigger for artifact recovery (useful for debugging and API endpoint)
+   */
+  async recoverFromArtifacts(): Promise<RecoveryStats> {
+    logger.info({
+      category: 'pr-workflow',
+      action: 'manual_recovery_triggered',
+      message: 'Manual artifact recovery triggered'
+    });
+
+    return await this.artifactRecovery.recoverOrphanedPRs();
   }
 
   /**

@@ -1,9 +1,20 @@
 name: Deploy to PRODUCTION
 
 # ⚠️  PRODUCTION DEPLOYMENT WORKFLOW
-# This workflow deploys ONLY from main branch to production
-# Triggered on push to main branch
-# Uses self-hosted runner for deployment
+#
+# Purpose: Deploys to /opt/app-monitor (production environment) when code is pushed to main
+#
+# Environment Clarification:
+# - DEV environment: /home/jdubz/Development/app-monitor (for local development/staging)
+# - PROD environment: /opt/app-monitor (where the live application runs)
+#
+# This workflow:
+# 1. Runs pre-deployment checks on GitHub-hosted runner
+# 2. Deploys to /opt/app-monitor on self-hosted runner
+# 3. Performs blue-green deployment with zero downtime
+# 4. Rebuilds production frontend application in /opt/app-monitor
+#
+# Triggered on push to main branch or manual workflow dispatch
 
 on:
   push:
@@ -83,23 +94,39 @@ jobs:
           echo "Triggered by: ${{ github.actor }}"
           echo ""
 
+      - name: Checkout latest code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
       - name: Run deployment script
         run: |
-          cd /opt/app-monitor
-          ./scripts/production/deploy.sh
+          # Deploy to /opt/app-monitor (production environment)
+          # This script handles:
+          # - Blue-green deployment (ports 5001/5002)
+          # - Building backend and frontend in /opt/app-monitor
+          # - Zero-downtime service switching
+          cd ${{ github.workspace }}
+          sudo /opt/app-monitor/scripts/deploy.sh
 
       - name: Verify deployment
         run: |
           echo "🔍 Verifying services..."
-          sudo systemctl is-active app-monitor-backend-prod.service
-          sudo systemctl is-active app-monitor-frontend-prod.service
+          sudo systemctl is-active app-monitor-backend@5001.service
+          sudo systemctl is-active app-monitor-frontend.service
+          sudo systemctl is-active nginx
           echo "✅ All services running"
 
       - name: Health check
         run: |
           echo "🏥 Running health checks..."
-          timeout 30 bash -c 'until curl -f http://localhost:5050/health; do sleep 2; done'
-          timeout 30 bash -c 'until curl -f http://localhost:5173; do sleep 2; done'
+          # Check backend health (using active port from deployment)
+          ACTIVE_PORT=$(cat /opt/app-monitor/shared/config/active-port 2>/dev/null || echo "5001")
+          timeout 30 bash -c "until curl -f http://localhost:\$ACTIVE_PORT/health; do sleep 2; done"
+
+          # Check frontend
+          timeout 30 bash -c 'until curl -f http://localhost:3000; do sleep 2; done'
+
           echo "✅ Health checks passed"
 
   # Post-deployment notification

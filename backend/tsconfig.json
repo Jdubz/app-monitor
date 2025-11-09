@@ -8,7 +8,7 @@
     "moduleResolution": "node",
     "baseUrl": ".",
     "paths": {
-      "@app-monitor/api-contracts": ["../packages/api-contracts/dist/index.d.ts"]
+      "@app-monitor/api-contracts": ["../shared/api-contracts/dist/index.d.ts"]
     },
     "resolveJsonModule": true,
     "allowJs": true,

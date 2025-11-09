@@ -16,7 +16,7 @@ import type { WorkspaceSyncManager } from './workspaceSyncManager.js';
 import type { DockerManager } from './dockerManager.js';
 import type { RetryManager } from './retryManager.js';
 import type { TaskPersistence } from './taskPersistence.js';
-import type { WorkspaceOrchestrator, WorkspaceContext } from './workspaceOrchestrator.js';
+// WorkspaceOrchestrator removed - using container isolation instead
 import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
 import type { ScopeControlService } from './scopeControl.service.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
@@ -256,10 +256,10 @@ export function createMockTaskPersistence(): TaskPersistence {
 }
 
 /**
- * Create mock WorkspaceOrchestrator
+ * Create mock WorkspaceOrchestrator (REMOVED - keeping stub for tests)
  */
-export function createMockWorkspaceOrchestrator(): WorkspaceOrchestrator {
-  const mockWorkspace: WorkspaceContext = {
+export function createMockWorkspaceOrchestrator(): any {
+  const mockWorkspace: any = {
     id: 'workspace-test',
     hostPath: '/tmp/workspace',
     branchName: 'bots/task-core',
@@ -390,8 +390,8 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
   const guidelinesManager = createMockGuidelinesManager();
   const workspaceSyncManager = createMockWorkspaceSyncManager();
   const retryManager = createMockRetryManager();
-  const workspaceOrchestrator = createMockWorkspaceOrchestrator();
-  const taskPersistence = createMockTaskPersistence();
+  // workspaceOrchestrator removed
+  // taskPersistence removed - using SQLite directly
   const scopeControl = createMockScopeControl();
   const ephemeralWorkerService = createMockEphemeralWorkerService();
   const taskExecutionService = createMockTaskExecutionService();
@@ -407,8 +407,8 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     guidelinesManager,
     workspaceSyncManager,
     retryManager,
-    workspaceOrchestrator,
-    taskPersistence,
+    // workspaceOrchestrator removed
+    // taskPersistence removed
     scopeControl,
     ephemeralWorkerService,
     taskExecutionService,
@@ -422,6 +422,32 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
         config: { enableAutoMerge: true }
       }),
       stop: vi.fn()
+    } as any,
+    interactiveSessionService: {
+      createSession: vi.fn().mockReturnValue({
+        id: 'session-1',
+        status: 'active',
+        startedAt: new Date().toISOString()
+      }),
+      getSessionById: vi.fn().mockReturnValue(null),
+      endSession: vi.fn(),
+      recordActivity: vi.fn(),
+      getIdleTimeoutMs: vi.fn().mockReturnValue(300000),
+      listActiveSessions: vi.fn().mockReturnValue([])
+    } as any,
+    interactiveSessionOrchestrator: {
+      start: vi.fn().mockResolvedValue('container-id'),
+      stop: vi.fn().mockResolvedValue(undefined)
+    } as any,
+    interactiveSessionStreamManager: {
+      attach: vi.fn().mockResolvedValue(undefined),
+      detach: vi.fn().mockResolvedValue(undefined),
+      sendInput: vi.fn(),
+      sendSignal: vi.fn(),
+      resizePty: vi.fn().mockResolvedValue(undefined),
+      getBacklog: vi.fn().mockReturnValue([]),
+      on: vi.fn(),
+      removeAllListeners: vi.fn()
     } as any,
   };
 }

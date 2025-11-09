@@ -3,6 +3,7 @@ import { DevMonitorLogLine, LocalService } from '../types/shared.types';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { FilterDropdown } from '@/components/common/FilterDropdown';
 import { cn } from '@/lib/utils';
 
 interface MinimalLogsPanelProps {
@@ -41,19 +42,24 @@ const MinimalLogsPanel = ({
   return (
     <div className="flex min-w-[340px] flex-1 flex-col rounded-xl border border-border/60 bg-black/85 shadow-inner">
       <div className="flex items-center gap-3 border-b border-border/60 bg-black/70 px-3 py-2">
-        <select
-          value={selectedSource || ''}
-          onChange={(e) => onSourceChange(e.target.value as LocalService)}
-          className="flex-1 rounded-lg border border-border/70 bg-background/40 px-3 py-2 text-xs uppercase tracking-[0.25em] text-muted-foreground transition focus:border-primary focus:outline-none"
+        <FilterDropdown
+          label="Source"
+          value={selectedSource ?? undefined}
+          onValueChange={(value) => onSourceChange(value as LocalService)}
+          options={
+            availableSources.length > 0
+              ? availableSources.map((source) => ({
+                  value: source,
+                  label: source,
+                }))
+              : [{ value: 'none', label: 'No sources available', disabled: true }]
+          }
+          placeholder="Select source..."
+          title="Select source"
           disabled={isLoading || availableSources.length === 0}
-        >
-          <option value="" disabled>Select source...</option>
-          {availableSources.map(source => (
-            <option key={source} value={source} className="text-foreground">
-              {source}
-            </option>
-          ))}
-        </select>
+          className="flex-1"
+          triggerClassName="w-full"
+        />
 
         <label className="flex items-center gap-2 text-[11px] uppercase tracking-[0.3em] text-muted-foreground">
           <input

@@ -5,10 +5,10 @@
   "private": true,
   "type": "module",
   "workspaces": [
+    "shared/api-contracts",
     "backend",
     "frontend",
-    "dev-bots",
-    "packages/api-contracts"
+    "dev-bots"
   ],
   "scripts": {
     "install:all": "npm install && npm install --workspaces",

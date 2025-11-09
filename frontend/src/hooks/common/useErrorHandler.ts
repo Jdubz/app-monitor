@@ -7,10 +7,14 @@
 
 import { useState, useCallback } from 'react';
 
+import { createLogger } from '@/utils/logger';
+
 export interface ErrorState {
   error: string | null;
   hasError: boolean;
 }
+
+const log = createLogger('useErrorHandler');
 
 export const useErrorHandler = () => {
   const [errorState, setErrorState] = useState<ErrorState>({
@@ -36,10 +40,7 @@ export const useErrorHandler = () => {
       hasError: true,
     });
 
-    // Log error to console in development
-    if (process.env.NODE_ENV === 'development') {
-      console.error('Error handled:', { error, context, message: fullMessage });
-    }
+    log.error('Error handled', { error, context, message: fullMessage });
   }, []);
 
   const clearError = useCallback(() => {

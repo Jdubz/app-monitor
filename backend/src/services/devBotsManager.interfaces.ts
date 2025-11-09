@@ -15,14 +15,17 @@ import type { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js'
 import type { WorkspaceSyncManager } from './workspaceSyncManager.js';
 import type { DockerManager } from './dockerManager.js';
 import type { RetryManager } from './retryManager.js';
-import type { TaskPersistence } from './taskPersistence.js';
-import type { WorkspaceOrchestrator } from './workspaceOrchestrator.js';
+// TaskPersistence removed - using SQLite directly
+// WorkspaceOrchestrator removed - using container isolation
 import type { SimpleFailureRecovery } from './failureRecovery.js';
 import type { ScopeControlService } from './scopeControl.service.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskExecutionService } from './taskExecution.service.js';
 import type { TaskCompletionService } from './taskCompletion.service.js';
 import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
+import type { InteractiveSessionService } from './interactiveSession.service.js';
+import type { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
+import type { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
 
 /**
  * All dependencies required by DevBotsManager
@@ -40,11 +43,10 @@ export interface DevBotsManagerDependencies {
   guidelinesManager: TaskCreationGuidelinesManager;
   workspaceSyncManager: WorkspaceSyncManager;
   retryManager: RetryManager;
-  workspaceOrchestrator: WorkspaceOrchestrator;
+  // WorkspaceOrchestrator removed - using container isolation
   recovery: SimpleFailureRecovery;
 
-  // Legacy/migration support
-  taskPersistence: TaskPersistence;
+  // TaskPersistence removed - using SQLite directly
 
   // Scope control
   scopeControl: ScopeControlService;
@@ -60,6 +62,11 @@ export interface DevBotsManagerDependencies {
 
   // PR workflow orchestration
   prWorkflowOrchestrator: PRWorkflowOrchestrator;
+
+  // Interactive sessions
+  interactiveSessionService: InteractiveSessionService;
+  interactiveSessionOrchestrator: InteractiveSessionOrchestrator;
+  interactiveSessionStreamManager: InteractiveSessionStreamManager;
 }
 
 /**
