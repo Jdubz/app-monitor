@@ -152,7 +152,6 @@ export async function createDevBotsManagerDependencies(
 
   const interactiveSessionOrchestrator = new InteractiveSessionOrchestrator(
     docker,
-    ephemeralWorkerService,
     {
       dockerImage: 'dev-bot:latest',
       logsDirectory: './data/logs/interactive',
