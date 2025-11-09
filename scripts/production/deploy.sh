@@ -102,15 +102,26 @@ main() {
     log_info "Active port: ${ACTIVE_PORT}"
     log_info "Target port: ${TARGET_PORT}"
 
-    # Phase 2: Database backup
-    log_info "Phase 2: Creating database backup"
+    # Phase 2: Update production scripts
+    log_info "Phase 2: Updating production scripts"
+    if [ -d "${SOURCE_DIR}/scripts/production" ]; then
+        log_info "Copying updated scripts from source to ${SCRIPTS_DIR}..."
+        sudo cp -f "${SOURCE_DIR}/scripts/production/"*.sh "${SCRIPTS_DIR}/"
+        sudo chmod +x "${SCRIPTS_DIR}/"*.sh
+        log_info "Production scripts updated successfully"
+    else
+        log_warn "No scripts/production directory found in source, skipping script update"
+    fi
+
+    # Phase 3: Database backup
+    log_info "Phase 3: Creating database backup"
     if ! "${SCRIPTS_DIR}/backup-db.sh"; then
         log_error "Database backup failed"
         exit 1
     fi
 
-    # Phase 3: Create new release
-    log_info "Phase 3: Creating new release in ${RELEASE_DIR}"
+    # Phase 4: Create new release
+    log_info "Phase 4: Creating new release in ${RELEASE_DIR}"
     log_info "Source directory: ${SOURCE_DIR}"
     mkdir -p "${RELEASE_DIR}"
 
@@ -126,8 +137,8 @@ main() {
     ln -sf "${SHARED_DIR}/backend/data" "${RELEASE_DIR}/backend/data"
     ln -sf "${SHARED_DIR}/logs" "${RELEASE_DIR}/logs"
 
-    # Phase 4: Build and prepare
-    log_info "Phase 4: Building application"
+    # Phase 5: Build and prepare
+    log_info "Phase 5: Building application"
 
     # Backend build
     cd "${RELEASE_DIR}/backend"
@@ -141,8 +152,8 @@ main() {
     npm ci
     npm run build
 
-    # Phase 5: Deploy to target port
-    log_info "Phase 5: Deploying to target port ${TARGET_PORT}"
+    # Phase 6: Deploy to target port
+    log_info "Phase 6: Deploying to target port ${TARGET_PORT}"
 
     # Stop target port service if running
     if systemctl is-active --quiet "app-monitor-backend@${TARGET_PORT}.service"; then
@@ -160,8 +171,8 @@ main() {
     # Wait for service to be ready
     sleep 5
 
-    # Phase 6: Health checks
-    log_info "Phase 6: Running health checks"
+    # Phase 7: Health checks
+    log_info "Phase 7: Running health checks"
     if ! PORT=${TARGET_PORT} "${SCRIPTS_DIR}/health-check.sh"; then
         log_error "Health checks failed on port ${TARGET_PORT}"
         log_info "Starting rollback..."
@@ -171,21 +182,21 @@ main() {
 
     log_info "Health checks passed!"
 
-    # Phase 7: Switch traffic
+    # Phase 8: Switch traffic
     if [ "$ACTIVE_PORT" != "none" ]; then
-        log_info "Phase 7: Switching traffic from ${ACTIVE_PORT} to ${TARGET_PORT}"
+        log_info "Phase 8: Switching traffic from ${ACTIVE_PORT} to ${TARGET_PORT}"
         update_nginx_upstream "${TARGET_PORT}"
 
         # Graceful shutdown of old service
         log_info "Gracefully stopping old service on port ${ACTIVE_PORT}..."
         sudo systemctl stop "app-monitor-backend@${ACTIVE_PORT}.service"
     else
-        log_info "Phase 7: Configuring nginx for port ${TARGET_PORT}"
+        log_info "Phase 8: Configuring nginx for port ${TARGET_PORT}"
         update_nginx_upstream "${TARGET_PORT}"
     fi
 
-    # Phase 8: Cleanup old releases (keep last 5)
-    log_info "Phase 8: Cleaning up old releases"
+    # Phase 9: Cleanup old releases (keep last 5)
+    log_info "Phase 9: Cleaning up old releases"
     cd "${RELEASES_DIR}"
     ls -t | tail -n +6 | xargs -r rm -rf
 
