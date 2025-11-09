@@ -111,7 +111,7 @@ jobs:
 
       - name: Run all backend integration tests
         working-directory: backend
-        run: npx vitest run --config vitest.config.ts 'tests/integration/**/*.test.ts' 'src/**/*.integration.test.ts' --reporter verbose
+        run: npx vitest run --config vitest.config.ts tests/integration src/services/websocket.integration.test.ts --reporter verbose
         # Note: No SKIP_HEAVY_DEV_BOT_TESTS so all integration tests run
 
   # Frontend linting - parallel with backend
