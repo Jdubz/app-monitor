@@ -24,7 +24,7 @@
 
 ## Work-Target Intelligence (SQLite Registry)
 - **Stabilize**
-  - Migrate JSON work-target configs plus doc pointers into `dev-bots.db` (services, repos, env expectations, doc indices).
+  - Migrate JSON work-target configs plus doc pointers into `app-monitor.db` (services, repos, env expectations, doc indices).
   - Provide migration scripts that back up prior JSON files for rollback.
 - **POC**
   - Extend schema for documentation catalogs and service metadata (control commands, health hints, logging sources).

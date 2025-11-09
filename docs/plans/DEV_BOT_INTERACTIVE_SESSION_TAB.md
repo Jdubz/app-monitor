@@ -105,7 +105,7 @@ Operators need a lightweight way to “drop into” a dev-bot shell when automat
 - `completed` → session metadata cleared; frontend returns to idle state.
 
 ### 5.4 Data Persistence & Context
-- Only keep `session_id`, `model`, `status`, `container_id`, `started_at`, `last_activity_at` in SQLite (or an in-memory map). No transcript, file history, or downloadable logs.
+- Only keep `session_id`, `model`, `status`, `container_id`, `started_at`, `last_activity_at` in SQLite using `app-monitor.db` (or an in-memory map). No transcript, file history, or downloadable logs.
 
 ### 5.5 Security Considerations
 1. Trust the local network; no email whitelist for now.
@@ -147,7 +147,7 @@ Operators need a lightweight way to “drop into” a dev-bot shell when automat
 ## 9. Workstreams Overview
 
 ### 9.1 Backend Orchestration & APIs
-- **Schema**: minimal `interactive_sessions` table (id, model, status, container id, timestamps).
+- **Schema**: minimal `interactive_sessions` table in `app-monitor.db` (id, model, status, container id, timestamps).
 - **DevBotsManager**: helper that launches/kills containers with `skipConcurrencyLimits=true` and exposes PTY streams.
 - **Lifecycle APIs**: `GET/POST/DELETE /dev-bots/interactive/session`, plus `POST /interactive/session/:id/{input|interrupt|heartbeat}` and the WebSocket stream.
 - **Idle Enforcement**: simple interval timer that ends the session after 5 minutes without activity and prints a final terminal message.
@@ -172,7 +172,7 @@ The latest dev-bots rewrite replaced the legacy in-memory queue with a SQLite-ba
 
 1. **Manager-owned Services** – `DevBotsManager` already wires `ProcessManager`, `TaskQueueService`, `EphemeralWorkerService`, and `TaskExecutionService` via dependency injection (`backend/src/services/devBotsManager.ts:120-166`). Any interactive capability must be injected the same way so health checks, logging, and lifecycle hooks stay centralized.
 2. **Worker Lifecycle Rules** – `EphemeralWorkerService` enforces a `maxConcurrentWorkers` cap and mirrors the repo into containers via `copyWorkspaceToContainer` (`backend/src/services/ephemeralWorker.service.ts:300-350`). The interactive orchestrator should reuse `populateWorkspaceFromRepo` so the container inherits the same workspace snapshot without incrementing the worker count. Mark containers with `dev-bot.interactive=true` labels so cleanup scripts can continue skipping them.
-3. **SQLite Persistence Expectations** – All task/worker metadata now lives in `backend/data/dev-bots.db`. Interactive session records should reuse this DB (new `interactive_sessions` table defined in `backend/migrations/007_interactive_sessions.sql`) to stay aligned with backup/export flows.
+3. **SQLite Persistence Expectations** – All task/worker metadata now lives in `backend/data/app-monitor.db`. Interactive session records should reuse this DB (new `interactive_sessions` table defined in `backend/migrations/007_interactive_sessions.sql`) to stay aligned with backup/export flows.
 4. **API Middleware & Auth** – Every `/dev-bots/*` route automatically wraps responses in the `{ success, data }` envelope and normalizes errors (`backend/src/routes/dev-bots.routes.ts:120-220`). Interactive endpoints follow the same middleware, but explicit admin gating is deferred until the app has real auth (local network deployments simply use the default owner email for attribution).
 5. **Socket + Log Infrastructure** – Log streaming is rate-limited by `LogStreamAccessTracker` and SSE utilities in the same route module. The interactive terminal should skip SSE entirely and rely on a dedicated WebSocket upgrade (see below) so it does not exhaust log-stream quotas.
 6. **Idle Enforcement** – The dev-bots process already runs periodic health/cleanup intervals (`DevBotsManager.startLongRunningTaskMonitor`). Interactive sessions need a companion watchdog (similar cadence) that terminates the container after 5 minutes of no user+agent activity and emits a structured log event for observability.
