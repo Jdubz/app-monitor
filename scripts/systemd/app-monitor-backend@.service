@@ -14,7 +14,7 @@ Environment="DATABASE_PATH=/opt/app-monitor/shared/backend/data/dev-bots.db"
 Environment="LOG_LEVEL=info"
 
 # Start the backend server
-ExecStart=/usr/bin/node /opt/app-monitor/current/backend/dist/server.js
+ExecStart=/usr/bin/node /opt/app-monitor/current/backend/dist/index.js
 
 # Graceful shutdown with 30s timeout
 TimeoutStopSec=30
