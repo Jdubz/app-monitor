@@ -3,9 +3,6 @@
   "compilerOptions": {
     "composite": true
   },
-  "references": [
-    { "path": "../packages/api-contracts" }
-  ],
   "include": ["src/**/*.ts"],
   "exclude": [
     "node_modules",
@@ -17,5 +14,8 @@
     "src/**/__tests__/**",
     "src/**/*.mock.ts",
     "src/**/*.test-utils.ts"
+  ],
+  "references": [
+    { "path": "../shared/api-contracts" }
   ]
 }

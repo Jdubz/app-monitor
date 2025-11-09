@@ -26,7 +26,7 @@
     "lint:fix": "eslint src --ext .ts,.tsx --fix"
   },
   "dependencies": {
-    "@app-monitor/api-contracts": "file:../packages/api-contracts",
+    "@app-monitor/api-contracts": "file:../shared/api-contracts",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-label": "^2.1.8",
     "@radix-ui/react-navigation-menu": "^1.1.4",

@@ -1,0 +1,18 @@
+{
+  "name": "@app-monitor/api-contracts",
+  "version": "1.0.0",
+  "description": "Shared API contracts between frontend and backend",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  }
+}
