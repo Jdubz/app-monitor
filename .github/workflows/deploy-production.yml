@@ -127,7 +127,7 @@ jobs:
           echo "🏥 Running health checks..."
           # Check backend health (using active port from deployment)
           ACTIVE_PORT=$(cat /opt/app-monitor/shared/config/active-port 2>/dev/null || echo "5001")
-          timeout 30 bash -c "until curl -f http://localhost:\$ACTIVE_PORT/health; do sleep 2; done"
+          timeout 30 bash -c "until curl -f http://localhost:\$ACTIVE_PORT/api/health; do sleep 2; done"
 
           # Check frontend
           timeout 30 bash -c 'until curl -f http://localhost:3000; do sleep 2; done'

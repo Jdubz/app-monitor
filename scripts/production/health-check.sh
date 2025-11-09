@@ -73,7 +73,7 @@ check_http_health() {
 # Check 4: Database connectivity
 check_database() {
     log_info "Checking database connectivity..."
-    local url="http://localhost:${PORT}/api/tasks?limit=1"
+    local url="http://localhost:${PORT}/api/dev-bots/tasks?limit=1"
 
     if curl -sf "${url}" > /dev/null; then
         log_info "✓ Database connectivity verified"
@@ -87,7 +87,7 @@ check_database() {
 # Check 5: Docker connectivity
 check_docker() {
     log_info "Checking Docker connectivity..."
-    local url="http://localhost:${PORT}/api/workers"
+    local url="http://localhost:${PORT}/api/docker/container-info"
 
     if curl -sf "${url}" > /dev/null; then
         log_info "✓ Docker connectivity verified"
