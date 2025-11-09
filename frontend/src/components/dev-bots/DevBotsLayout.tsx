@@ -28,7 +28,7 @@ function DevBotsLayoutContent() {
   const { status, isLoading, refreshStatus } = useDevBotsStore();
   const interactiveTabEnabled =
     (import.meta.env.VITE_FEATURE_DEV_BOTS_INTERACTIVE_TAB ?? 'true').toString().toLowerCase() !== 'false';
-  const [activeTab, setActiveTab] = useState<automation | interactive>(automation);
+  const [activeTab, setActiveTab] = useState<'automation' | 'interactive'>('automation');
 
   const summaryItems = [
     {
@@ -93,7 +93,7 @@ function DevBotsLayoutContent() {
 
       <Tabs
         value={activeTab}
-        onValueChange={(value) => setActiveTab(value as automation | interactive)}
+        onValueChange={(value) => setActiveTab(value as 'automation' | 'interactive')}
         className="flex flex-1 flex-col gap-4"
       >
         <TabsList className="w-fit">

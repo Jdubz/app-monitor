@@ -1376,23 +1376,8 @@ export class DevBotsManager extends EventEmitter {
   }
 
   public exportTasks(_exportPath: string): void {
-    try {
-      // DEPRECATED: Export tasks functionality removed with persistence layer
-      throw new Error('exportTasks() is deprecated - persistence layer removed');
-      logger.info({
-      category: 'process',
-      action: 'tasks_exported_to_exportpath',
-      message: `Tasks exported to ${exportPath}`
-    });
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_export_tasks',
-      message: 'Failed to export tasks:',
-      error: error
-    });
-      throw error;
-    }
+    // DEPRECATED: Export tasks functionality removed with persistence layer
+    throw new Error('exportTasks() is deprecated - persistence layer removed');
   }
 
   public async importTasks(importPath: string): Promise<void> {

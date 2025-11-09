@@ -35,8 +35,8 @@ import type {
   DevBotsInteractiveSessionInputResponse,
   DevBotsInteractiveSessionInputPayload,
   DevBotsInteractiveSessionStartPayload,
-  DevBotsInteractiveSessionHeartbeatPayload,
-  DevBotsInteractiveSessionInterruptPayload,
+  DevBotsInteractiveHeartbeatPayload,
+  DevBotsInteractiveInterruptPayload,
 } from '@/types/contracts';
 import type {
   DevBotsAgentComparison,
@@ -314,7 +314,7 @@ export const sendDevBotsInteractiveInput = async (
 
 export const sendDevBotsInteractiveInterrupt = async (sessionId: string): Promise<string> => {
   const client = await getApiClient();
-  const payload: DevBotsInteractiveSessionInterruptPayload = { sessionId };
+  const payload: DevBotsInteractiveInterruptPayload = { sessionId };
   const response = await client.post<ApiSuccess<{ message: string }>>(
     '/dev-bots/interactive/interrupt',
     payload,
@@ -328,7 +328,7 @@ export const sendDevBotsInteractiveHeartbeat = async (
   source: 'user' | 'agent' = 'user',
 ): Promise<boolean> => {
   const client = await getApiClient();
-  const payload: DevBotsInteractiveSessionHeartbeatPayload = { sessionId, source };
+  const payload: DevBotsInteractiveHeartbeatPayload = { sessionId, source };
   const response = await client.post<ApiSuccess<{ acknowledged: boolean }>>(
     '/dev-bots/interactive/heartbeat',
     payload,

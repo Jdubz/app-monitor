@@ -65,7 +65,7 @@ export function InteractiveSessionTab() {
 
   const sessionStatus = activeSession?.status ?? "idle";
   const connectionBadgeVariant =
-    connectionState === "connected" ? "default" : connectionState === "connecting" ? "secondary" : "outline";
+    connectionState === "connected" ? "default" : connectionState === "connecting" ? "info" : "outline";
   const connectionBadgeLabel =
     connectionState === "connected"
       ? "Connected"
@@ -310,7 +310,7 @@ export function InteractiveSessionTab() {
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Owner</span>
                 {activeSession ? (
-                  <Badge variant="secondary" className="font-mono text-xs">
+                  <Badge variant="outline" className="font-mono text-xs">
                     {activeSession.ownerEmail}
                   </Badge>
                 ) : (

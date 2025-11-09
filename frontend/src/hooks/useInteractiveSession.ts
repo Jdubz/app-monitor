@@ -112,7 +112,7 @@ export function useInteractiveSession(
   }, []);
 
   const appendLog = useCallback((entry: InteractiveLogEntry) => {
-    logBufferRef.current.append(entry);
+    logBufferRef.current.push(entry);
     setLogsVersion((value) => value + 1);
   }, []);
 

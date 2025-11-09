@@ -22,65 +22,56 @@ External inspiration:
 
 ## 2. Problem Statement
 
-Admins (currently limited to `contact@joshwentworth.com`) need a safe way to “drop into” a dev-bot shell, pick a foundation model (Claude, Codex, etc.), run short-lived experiments, and then let the bot continue autonomously even if the operator disconnects. Sessions must:
+Operators need a lightweight way to “drop into” a dev-bot shell when automation falls short. The interactive session must:
 
-1. **Not count toward** the configured `maxWorkers` so the automation queue capacity is unaffected.
-2. **Auto-suspend after 5 minutes** of combined user+agent inactivity unless manually ended.
-3. **Persist conversational + workspace context** so reconnecting to the same session resumes state.
-4. Enforce **single concurrent interactive session** globally, with enforced admin-only access.
-5. Support terminal hotkeys (Esc interrupt, Ctrl+C passthrough, etc.) matching today’s CLI agent ergonomics.
+1. Launch outside the queue so it doesn’t count toward `maxWorkers`.
+2. Offer a 5-minute idle timeout (or manual stop) to avoid orphaned containers.
+3. Stream PTY output over WebSocket with familiar hotkeys (Esc, Ctrl+C, Ctrl+L/U/W).
+4. Skip complex auth/audit requirements—trusted users on the local network can access it.
 
 ---
 
 ## 3. Goals & Non-Goals
 
 ### Goals
-1. Dedicated frontend tab (“Interactive Agent”) under the Dev-Bots navigation that exposes model selection, session controls, and a terminal/chat hybrid surface.
-2. Backend APIs to manage session lifecycle, multiplex I/O, and enforce policy (auth, max-one-session).
-3. Worker orchestration path that spawns an ephemeral container using the same image as other dev-bots but flagged as `interactive=true`, bypassing queue accounting.
-4. Idle detection + teardown logic that respects both agent output and operator input timestamps.
-5. Persisted session metadata (task transcript, file diffs, environment info) stored in SQLite so reconnects restore context.
+1. Ship a frontend “Interactive Session” tab with model selector, terminal output, and start/stop controls.
+2. Provide backend APIs/WebSocket streams so the tab can start a dev-bot container, send commands, and receive PTY output.
+3. Ensure the interactive worker bypasses queue capacity but still uses the canonical dev-bot image/config.
+4. Add a simple idle timeout watchdog and manual “End Session” to keep containers tidy.
 
 ### Non-Goals
-- This does **not** expose interactive sessions to non-admins.
-- No multi-session support; once stable we can revisit pooling.
-- Does not attempt to modify existing task queue behavior or worker scaling limits.
+- Fine-grained auth or email whitelists (assume trusted LAN access).
+- Persisted transcripts, chat summaries, or reconnectable session context.
+- Observability dashboards, Prometheus metrics, or compliance-ready audit logs.
+- Multi-session support or queue-management changes.
 
 ---
 
 ## 4. Experience Blueprint
 
 ### 4.1 Navigation & Access Control
-- Add a new top-level tab in `frontend/src/components/tabs/DevBotsTab.tsx` labeled “Interactive Session (Admins)”.
-- Gate the tab via backend-provided feature flag (e.g., `devBotsStatus.features.interactiveShell`) AND email whitelist check on the authenticated user. UI should show an inline lock state if the viewer lacks access.
+- Add a new top-level tab in `frontend/src/components/tabs/DevBotsTab.tsx` labeled “Interactive Session”.
+- Visibility is controlled only by the existing feature flag (`devBotsStatus.features.interactiveShell` / `VITE_FEATURE_DEV_BOTS_INTERACTIVE_TAB`). No user-level gating in this iteration.
 
 ### 4.2 Session Panel Layout
 1. **Session Header**
    - Model selector (dropdown seeded with providers already configured in `devBotsManager` – default Claude Sonnet).
    - “Start Session” / “End Session” button.
    - Status pill (Disconnected, Connecting, Running, Idle Timeout in XXs).
-2. **Terminal / Console Split View**
-   - Left: xterm.js-powered terminal streaming stdout/stderr via SSE or WebSocket.
-   - Right (optional): collapsible chat thread summarizing agent actions + user prompts for readability.
+2. **Terminal View**
+   - Single xterm.js-powered terminal streaming stdout/stderr via WebSocket.
 3. **Footer Controls**
    - Hotkey legend (Esc interrupt, Ctrl+C, Ctrl+U clear line, etc.).
    - Idle timer indicator + “Keep Alive” button sending a noop ping.
 
 ### 4.3 Interaction Flow
-1. User opens tab → backend reports whether an interactive session exists.
-2. If none, user chooses a model and hits “Start Session”.
-3. Backend spawns an interactive worker container:
-   - Uses existing dev-bot Dockerfile.
-   - Sets labels `interactive=true`, `ownerEmail=...`, `expiresAt=...`.
-   - Registers session row in SQLite with state `running`.
-4. Frontend establishes a WebSocket to `/api/dev-bots/interactive/:sessionId/stream` for bidirectional text (xterm-pty protocol).
-5. User sends commands; agent responses stream back. Esc interrupts by POSTing `/interrupt`.
-6. Idle watchdog: 
-   - Worker emits heartbeats when generating outputs.
-   - Frontend posts `/heartbeat` on keypress/command send.
-   - Backend timer (cron or setInterval) checks combined idle duration; after 5 minutes triggers graceful stop, sending terminal notification first.
-7. If the browser disconnects, backend keeps the container alive, streaming logs to disk. Reconnect replays buffered output then switches to live stream.
-8. “End Session” triggers manual teardown even if idle timer hasn’t fired.
+1. User opens the tab → frontend calls `GET /dev-bots/interactive/session` to learn current status.
+2. If no session is running, user selects a model and clicks “Start Session”.
+3. Backend launches an interactive worker container (same dev-bot image labeled `interactive=true`) and returns `{ sessionId, model, streamUrl }`.
+4. Frontend opens `WS /api/dev-bots/interactive/:sessionId/stream` for PTY output/input.
+5. Commands go through `POST /dev-bots/interactive/session/:id/input`; interrupts hit `/.../interrupt`; optional keep-alives hit `/.../heartbeat`.
+6. Backend watchdog checks the last activity timestamp every minute and ends the session after 5 minutes of inactivity, sending a final socket message.
+7. User can manually press “End Session” at any time, which stops the container and closes the WebSocket.
 
 ---
 
@@ -89,49 +80,37 @@ Admins (currently limited to `contact@joshwentworth.com`) need a safe way to “
 ### 5.1 Backend Additions
 | Area | Implementation Notes |
 | --- | --- |
-| **API Routes** | Extend `backend/src/routes/dev-bots.routes.ts` with `/interactive` namespace: `POST /interactive/session`, `GET /interactive/session`, `DELETE /interactive/session`, `POST /interactive/heartbeat`, `POST /interactive/interrupt`, `WS /interactive/session/:id/stream`. Reuse existing response envelope middleware. |
-| **Auth** | Reuse current JWT cookie but add middleware verifying `user.email === 'contact@joshwentworth.com'`. Consider config-driven whitelist for future admins. |
-| **Session Store** | New table `interactive_sessions` in SQLite (fields: `id`, `owner_email`, `status`, `model`, `started_at`, `last_agent_activity_at`, `last_user_activity_at`, `context_blob`, `container_id`). `context_blob` persists summary + conversation to restore after reconnects/spin down. |
-| **DevBotsManager hooks** | Introduce `launchInteractiveWorker(model, ownerEmail)` delegating to the existing container factory but injecting `skipConcurrencyLimits=true`. Track container id for targeted stop. |
-| **I/O Transport** | Implement PTY bridge using Node `node-pty` or an SSE/WebSocket pump. Because our frontend is React/Vite, use WebSocket for low-latency bidirectional traffic. Terminal input events POST to `/interactive/session/:id/input`. Output events publish to connected clients + append to rolling buffer persisted in SQLite or disk (for reconnection). |
-| **Idle Scheduler** | Background job (setInterval or Bull queue) running every minute: compute `now - max(last_agent_activity_at, last_user_activity_at)`. If > 5 minutes, mark status `terminating`, send message, invoke stop routine, then set `completed_at`. |
-| **Resilience** | On backend restart, sweep `interactive_sessions` for `status='running'` but missing Docker containers → mark `aborted` and free the slot. |
+| **API Routes** | Add `/dev-bots/interactive/session` routes: `GET` (describe session), `POST` (start), `DELETE` (end), plus `POST /interactive/session/:id/input`, `POST /interactive/session/:id/interrupt`, `POST /interactive/session/:id/heartbeat`. |
+| **WebSocket** | Provide `WS /dev-bots/interactive/session/:id/stream` that transports PTY data in both directions. |
+| **Session Tracking** | Persist minimal metadata (id, model, status, timestamps, container id) in SQLite or in-memory. No conversation context blob required. |
+| **DevBotsManager Hook** | Add a helper that launches a container via existing Docker orchestration with `skipConcurrencyLimits=true` and returns stream info/container id. |
+| **Idle Timeout** | Simple `setInterval` inside the service checks `lastActivity` every minute; after 5 minutes of inactivity call `endSession()` and emit a message. |
+| **Restart Cleanup** | On server boot, if a leftover container ID exists, attempt to stop it before accepting a new session. |
 
 ### 5.2 Frontend Changes
 | Component | Details |
 | --- | --- |
-| **Store** | Extend `frontend/src/contexts/devBotsStore.tsx` (or create `useInteractiveSessionStore`) to fetch session state, manage WebSocket lifecycle, and expose commands (`start`, `sendInput`, `interrupt`, `end`, `keepAlive`). |
-| **Terminal** | Add `@xterm/xterm` + `xterm-addon-fit`, `xterm-addon-serialize`. Wrap inside new `InteractiveTerminal` component. Use `xterm-pty` protocol so backend can manage PTY semantics. |
-| **Tab** | New `InteractiveSessionTab.tsx` hooking into store and rendering layout described above. Should display read-only notice if another admin session is active (show owner + started time). |
-| **Notifications** | Use existing toast system to surface idle warnings (e.g., “Session idle for 4 minutes; ending in 60s unless you interact”). |
-| **Hotkeys** | Implement keyboard listener capturing Esc, Ctrl+C, etc., translating into `sendInput('\u0003')` as needed while preventing browser default shortcuts. Provide accessible buttons as fallbacks. |
+| **Hook/Store** | Keep `useInteractiveSession` as the primary state holder: call the new REST endpoints, manage WebSocket lifecycle, expose `start`, `sendInput`, `interrupt`, `keepAlive`, `end`. |
+| **Terminal** | Rely on `@xterm/xterm` + `addon-fit`; no secondary chat pane or serialize addon required for this scope. |
+| **Tab** | `InteractiveSessionTab.tsx` shows model selector, session controls, terminal, and hotkey drawer. If a session already exists, disable the start button and show the running state. |
+| **Notifications** | Optional toast when idle timeout is imminent; otherwise rely on inline status pills. |
+| **Hotkeys** | Maintain the Esc / Ctrl+C / Ctrl+U / Ctrl+W bindings via the existing terminal component. |
 
 ### 5.3 Session Lifecycle State Machine
 
-```
-idle → starting → running → (terminating|disconnecting) → ended
-        ^                                    |
-        |------------ reconnect -------------|
-```
-
-- **starting**: container provisioning; user sees spinner.
-- **running**: active WebSocket; idle timer ops.
-- **disconnecting**: client offline but worker still running. Timer continues.
-- **terminating**: triggered by idle timeout or manual end; backend sends final message, stops container, archives logs, transitions to `ended`.
+- `idle` → no container running.
+- `launching` → container provisioning; frontend shows spinner.
+- `running` → PTY stream active; heartbeat timestamps update on every input/output.
+- `terminating` → triggered by idle timeout or manual “End Session”; backend sends final message, stops container.
+- `completed` → session metadata cleared; frontend returns to idle state.
 
 ### 5.4 Data Persistence & Context
-- Persist `context_blob` as JSON storing:
-  - Rolling conversation summary (for quick reload, not a full transcript).
-  - Files touched / pending diffs.
-  - Last command prompt text.
-- Store raw terminal log on disk under `dev-bots/artifacts/interactive/<sessionId>.log` and register via existing WorkerLogLocator so the Dev-Bots UI can expose “Download Transcript”.
+- Only keep `session_id`, `model`, `status`, `container_id`, `started_at`, `last_activity_at` in SQLite (or an in-memory map). No transcript, file history, or downloadable logs.
 
 ### 5.5 Security Considerations
-1. **Admin-only access** with email whitelist + server-side enforcement.
-2. **Single session guarantee** enforced by locking row in DB before provisioning.
-3. **Resource isolation**: re-use ephemeral containers (no host bind aside from repo copy) + AutoRemove.
-4. **Audit trail**: log every command + model selection to backend logger for compliance.
-5. **Secret handling**: interactive bot inherits same environment variables as regular workers; ensure no additional credentials needed.
+1. Trust the local network; no email whitelist for now.
+2. Still limit to one session at a time so containers don’t pile up.
+3. Interactive worker uses the standard dev-bot image/env; no additional secrets required.
 
 ---
 
@@ -139,10 +118,9 @@ idle → starting → running → (terminating|disconnecting) → ended
 
 | Area | Actions |
 | --- | --- |
-| **Observability** | Add metrics (`interactive_session_start`, `interactive_session_idle_exit`, `interactive_session_duration`). Ship logs into existing logging pipeline with `category: 'interactive-session'`. |
-| **Alerts** | Pager alert if interactive session exceeds 30 minutes (prevents stranding containers). |
-| **Testing** | Unit tests for new routes + idle scheduler. Integration test that mocks Docker client to ensure `skipConcurrencyLimits` works. Cypress/Vitest UI tests to verify tab gating and websocket reconnect. |
-| **Rollout** | Feature flag exposed only in staging initially. After verification, enable in production for admin email. |
+| **Observability** | Rely on structured log lines for start/end/idle events; defer metrics until a later phase. |
+| **Testing** | Unit tests for the new routes + idle watchdog; Vitest coverage for `useInteractiveSession` happy path + socket reconnect. |
+| **Rollout** | Ship behind `DEV_BOTS_ENABLE_INTERACTIVE` + `VITE_FEATURE_DEV_BOTS_INTERACTIVE_TAB`; default on in staging/local. |
 
 ---
 
@@ -150,44 +128,41 @@ idle → starting → running → (terminating|disconnecting) → ended
 
 1. **Supported Models (Answered)** – Keep the selector limited to the already-wired Claude and Codex providers. Future models will hook into the same abstraction once dev-bots support them.
 2. **Idle vs. Long-Lived Sessions (Answered)** – Interactive sessions exist to orchestrate higher-level planning and manual interventions. Admins may step away for stretches, but sessions must spin down after 5 minutes of *combined* inactivity to save resources while preserving state. No special “incident” override is required right now; long-lived behavior will be achieved via seamless context persistence and quick restarts rather than indefinitely running containers.
-3. **Context Persistence (Answered)** – The experience must “feel” persistent even when the container stops. We need a provider-aware context store (recognizing Claude vs. Codex differences) that captures transcript, summarized state, and pending instructions so reconnects resume naturally.
-4. **Auth Assumptions (Answered)** – Today the app only runs on the admin’s local network, so access itself implies admin rights. We can gate purely on email config for now and defer broader auth/hardening until the app is Internet-facing.
+3. **Context Persistence (Revised)** – Not required for this iteration; operators accept that ending a session clears context.
+4. **Auth Assumptions (Revised)** – No whitelist for now. The app still runs on a trusted local network; once we need remote access we’ll revisit auth and auditing.
 5. **Hotkeys (Answered)** – Support the standard terminal shortcuts (Esc interrupt, Ctrl+C, Ctrl+L clear, Ctrl+U delete line, Ctrl+W delete word, etc.). Surface them in a collapsible “Hotkeys” drawer within the tab so users can reference bindings quickly.
 
 ---
 
 ## 8. Next Steps
 
-1. Gather answers to open questions.
-2. Finalize API contract + DB migrations.
-3. Spike WebSocket + xterm integration behind feature flag in staging.
-4. Implement backend session orchestration + idle monitor.
-5. Harden auth + release to admin for acceptance testing.
+1. Finalize the reduced API contract (minimal metadata + PTY WebSocket).
+2. Implement backend session orchestration + idle monitor.
+3. Wire `useInteractiveSession` + InteractiveSessionTab to the real endpoints.
+4. Verify end-to-end flow in staging with the feature flag enabled.
+5. Follow up later with auth/observability enhancements if needed.
 
 ---
 
 ## 9. Workstreams Overview
 
 ### 9.1 Backend Orchestration & APIs
-- **Schema**: add `interactive_sessions` table plus migrations to store session state, heartbeat timestamps, container metadata, and serialized context blobs.
-- **DevBotsManager**: new `launchInteractiveWorker` path that skips concurrency limits, applies `interactive=true` labels, and plugs into the idle watchdog + reconnection story.
-- **Lifecycle APIs**: `POST /interactive/session`, `GET /interactive/session`, `DELETE /interactive/session`, `POST /interactive/heartbeat`, `POST /interactive/interrupt`, and WebSocket streaming endpoints with admin gating.
-- **Session State DTO**: `/interactive/session` responses must return the `DevBotsInteractiveSessionState` contract (session snapshot, allowed model catalog, heartbeat + idle timers, and WebSocket descriptor) sourced from `shared/api-contracts` so backend + frontend never diverge on shape.
-- **Input + Streaming**: expose `POST /interactive/session/:id/input` for REST-based keystroke fallbacks while the `InteractiveSessionGateway` WebSocket handles low-latency PTY data and hotkeys against the shared `InteractiveSessionStreamManager`.
-- **Idle Enforcement**: background job to monitor combined user/agent activity, broadcast impending timeout warnings, and gracefully stop containers after 5 minutes.
-- **Persistence & Telemetry**: archive transcripts/log artifacts, emit metrics (`interactive_session_started`, `idle_timeout`, duration histograms), and log every command for auditing.
+- **Schema**: minimal `interactive_sessions` table (id, model, status, container id, timestamps).
+- **DevBotsManager**: helper that launches/kills containers with `skipConcurrencyLimits=true` and exposes PTY streams.
+- **Lifecycle APIs**: `GET/POST/DELETE /dev-bots/interactive/session`, plus `POST /interactive/session/:id/{input|interrupt|heartbeat}` and the WebSocket stream.
+- **Idle Enforcement**: simple interval timer that ends the session after 5 minutes without activity and prints a final terminal message.
+- **Persistence**: no transcript export—just enough metadata to clean up on restart.
 
 ### 9.2 Frontend Interactive Tab
-- **Store/Hook**: manage session state, WebSocket connection, reconnect logic, heartbeat pings, and command dispatch APIs.
-- **UI**: new “Interactive Session (Admins)” tab with model selector (Claude/Codex), session controls, status pill, idle timer, and a collapsible hotkey drawer.
-- **Terminal Layer**: integrate xterm.js + addons, wire standard shortcuts (Esc, Ctrl+C/L/U/W, etc.), and display both terminal output and optional chat/thread summaries.
-- **Access Control**: today the tab simply checks the feature flag (local network only) and shows the session state to any operator; once real auth lands we can re-introduce admin-specific gating and messaging.
+- **Hook**: `useInteractiveSession` already manages sockets + commands; finish wiring it to the new backend contract.
+- **UI**: keep the existing tab layout (model picker, status pills, xterm terminal, hotkey drawer). Remove admin-only copy.
+- **Terminal Layer**: xterm.js + `addon-fit` only; no chat/thread pane.
+- **Feature Flag**: tab is visible whenever the global flag is on; no additional gating yet.
 
 ### 9.3 Ops & Enablement
-- **Feature Flags/Env**: configuration toggles for enabling the tab, setting admin email(s), and future model additions.
-- **Observability**: dashboards/alerts for long-running sessions, idle timeouts, and container cleanup failures.
-- **Docs & Runbooks**: operational guide for starting/stopping sessions, interpreting logs/artifacts, and responding to stuck containers or idle failures.
-- **Tech Debt Guardrails**: optional follow-up to quiet recurring `no-explicit-any` lint warnings so pre-push hooks stay signal-rich.
+- **Feature Flags/Env**: `DEV_BOTS_ENABLE_INTERACTIVE` on the server + `VITE_FEATURE_DEV_BOTS_INTERACTIVE_TAB` on the client.
+- **Observability**: rely on log messages (start/end/idle timeout). No dashboards in this phase.
+- **Docs**: add a short README/runbook section describing how to start/stop a session and what the idle timeout does.
 
 ---
 
@@ -205,10 +180,10 @@ The latest dev-bots rewrite replaced the legacy in-memory queue with a SQLite-ba
 
 ### Plan Adjustments Based on the Refresh
 
-- **Backend**: implement `InteractiveSessionService`, `InteractiveSessionOrchestrator`, and `InteractiveSessionStreamManager` as DI-managed services so they are constructed inside `createDevBotsManagerDependencies` and owned by `DevBotsManager`. This keeps restart/health semantics aligned with the new architecture.
-- **API Surface**: add admin-only REST endpoints (`GET/POST/DELETE /dev-bots/interactive/session`, heartbeat, interrupt) plus a WebSocket gateway mounted off the existing Express server. The gateway should stream PTY output directly from Docker via `docker.exec` and fan out to the frontend tab.
-- **Idle / Metrics**: reuse the manager’s interval infrastructure to poll for idle sessions, log `interactive_session_idle_timeout` events, and end the session via `endInteractiveSession`. Emit Prometheus-friendly counters on start/end for dashboards.
-- **Frontend Contracts**: rely on the new `DevBotsInteractiveSession*` types exported from `shared/api-contracts/index.ts` so the UI receives idle deadlines, container IDs, stream URLs, and context snapshots straight from the backend. The terminal tab can then reuse the same heartbeat cadence as the manager watchdog.
-- **Terminal UX**: the interactive tab should stream PTY output over WebSocket, surface connection/idle state, expose one-click heartbeats, wire standard hotkeys (Esc / Ctrl+C / Ctrl+L / Ctrl+U / Ctrl+W), and let the hotkey drawer double as an action palette. Since the app still runs on a trusted local network there is no dedicated admin gate yet; once auth is ready we can tie the same UI affordances to role checks. Session details now highlight the owner email, session ID, and connection health so operators can see at a glance whether the socket is healthy.
+- **Backend**: implement `InteractiveSessionService` + stream manager as DI-managed services owned by `DevBotsManager`.
+- **API Surface**: add the minimal REST/WebSocket endpoints described above—no admin-only gating for now.
+- **Idle Enforcement**: reuse the manager’s interval infrastructure to watch idle sessions and end them after 5 minutes, logging to the standard dev-bots logger.
+- **Frontend Contracts**: continue using the shared `DevBotsInteractiveSession*` types so backend/frontend stay in sync on fields (session id, model, stream URL, idle timeout).
+- **Terminal UX**: keep the PTY stream, status pills, hotkey drawer, and keep-alive button; no additional chat pane or role-based messaging until auth hardening returns.
 
 With these adjustments, the plan remains compatible with the refactored dev-bots stack: we leverage the same Docker image, persistence layer, and monitoring hooks instead of bolting on bespoke infrastructure.
