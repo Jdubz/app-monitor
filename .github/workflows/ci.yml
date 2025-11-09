@@ -85,9 +85,34 @@ jobs:
         env:
           SKIP_HEAVY_DEV_BOT_TESTS: '1'
 
-      - name: Backend API integration tests
+  # Backend integration tests - separate job for all integration tests
+  backend-test-integration:
+    name: Backend Integration Tests
+    runs-on: ubuntu-latest
+    needs: install
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Restore node_modules
+        uses: actions/cache/restore@v4
+        with:
+          path: |
+            node_modules
+            backend/node_modules
+            frontend/node_modules
+            shared/api-contracts/node_modules
+          key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Run all backend integration tests
         working-directory: backend
-        run: npx vitest run tests/integration/api/api.routes.test.ts --reporter tap
+        run: npx vitest run --config vitest.config.ts 'tests/integration/**/*.test.ts' 'src/**/*.integration.test.ts' --reporter verbose
+        # Note: No SKIP_HEAVY_DEV_BOT_TESTS so all integration tests run
 
   # Frontend linting - parallel with backend
   frontend-lint:

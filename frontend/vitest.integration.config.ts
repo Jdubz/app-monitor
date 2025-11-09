@@ -1,12 +1,15 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import { getThreadPoolConfig, TEST_TIMEOUTS } from './vitest.shared.config.js';
 
 /**
  * Integration Tests Configuration - app-monitor-frontend
  *
  * Configuration for integration tests that test component interactions
  * and API integrations with more realistic scenarios.
+ *
+ * OPTIMIZED: Uses thread pool with parallelization for faster execution.
  */
 
 export default defineConfig({
@@ -20,21 +23,11 @@ export default defineConfig({
     'process.env.NODE_ENV': JSON.stringify('test'),
   },
   test: {
-    // Single process execution for integration tests
-    pool: 'forks',
-    poolOptions: {
-      forks: {
-        maxForks: 1,
-        minForks: 1,
-      },
-    },
-    
-    // No file parallelism for integration tests
-    fileParallelism: false,
-    
-    // Longer timeouts for integration tests
-    testTimeout: 60000,
-    hookTimeout: 60000,
+    // Parallel execution with thread pool (much faster than forks)
+    ...getThreadPoolConfig(4),
+
+    // Integration test timeouts (reduced from 60s since we have explicit waitFor timeouts)
+    ...TEST_TIMEOUTS.integration,
     
     // Environment setup
     environment: 'jsdom',
