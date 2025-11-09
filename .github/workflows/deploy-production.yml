@@ -1,9 +1,20 @@
 name: Deploy to PRODUCTION
 
 # ⚠️  PRODUCTION DEPLOYMENT WORKFLOW
-# This workflow deploys ONLY from main branch to production
-# Triggered on push to main branch
-# Uses self-hosted runner for deployment
+#
+# Purpose: Deploys to /opt/app-monitor (production environment) when code is pushed to main
+#
+# Environment Clarification:
+# - DEV environment: /home/jdubz/Development/app-monitor (for local development/staging)
+# - PROD environment: /opt/app-monitor (where the live application runs)
+#
+# This workflow:
+# 1. Runs pre-deployment checks on GitHub-hosted runner
+# 2. Deploys to /opt/app-monitor on self-hosted runner
+# 3. Performs blue-green deployment with zero downtime
+# 4. Rebuilds production frontend application in /opt/app-monitor
+#
+# Triggered on push to main branch or manual workflow dispatch
 
 on:
   push:
@@ -90,8 +101,13 @@ jobs:
 
       - name: Run deployment script
         run: |
+          # Deploy to /opt/app-monitor (production environment)
+          # This script handles:
+          # - Blue-green deployment (ports 5001/5002)
+          # - Building backend and frontend in /opt/app-monitor
+          # - Zero-downtime service switching
           cd ${{ github.workspace }}
-          sudo /opt/app-monitor/scripts/production/deploy.sh
+          sudo /opt/app-monitor/scripts/deploy.sh
 
       - name: Verify deployment
         run: |
