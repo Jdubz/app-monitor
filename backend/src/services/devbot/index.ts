@@ -42,21 +42,21 @@ export {
   type TmpfsMount,
   type ContainerResources,
   type DevBotContainerConfig,
-} from './DevBotContainerBuilder';
+} from './DevBotContainerBuilder.js';
 
 export {
   DevBotWorkspaceManager,
   type WorkspaceConfig,
   type CloneOptions,
-} from './DevBotWorkspaceManager';
+} from './DevBotWorkspaceManager.js';
 
 export {
   DevBotCredentialsManager,
   type CredentialMounts,
-} from './DevBotCredentialsManager';
+} from './DevBotCredentialsManager.js';
 
 export {
   DevBotContainerLifecycle,
   type ContainerHealth,
   type ContainerStats,
-} from './DevBotContainerLifecycle';
+} from './DevBotContainerLifecycle.js';

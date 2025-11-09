@@ -150,22 +150,22 @@ router.get('/stats', async (req, res) => {
         if (verification.passed) totalPassed++;
 
         // Acceptance criteria stats
-        if (verification.acceptanceCriteria) {
-          totalAcceptanceCriteriaMet += verification.acceptanceCriteria.percentMet;
+        if (verification.acceptanceCriteria && typeof verification.acceptanceCriteria === 'object' && 'percentMet' in verification.acceptanceCriteria) {
+          totalAcceptanceCriteriaMet += (verification.acceptanceCriteria as { percentMet: number }).percentMet;
         }
 
         // Coverage stats
-        if (verification.testCoverage) {
+        if (verification.testCoverage && typeof verification.testCoverage === 'object') {
           totalCoverageChecks++;
-          if (verification.testCoverage.meetsThreshold) {
+          if ('meetsThreshold' in verification.testCoverage && (verification.testCoverage as { meetsThreshold: boolean }).meetsThreshold) {
             totalCoveragePassed++;
           }
         }
 
         // Scope stats
-        if (verification.scopeBoundaries) {
+        if (verification.scopeBoundaries && typeof verification.scopeBoundaries === 'object') {
           totalScopeChecks++;
-          if (verification.scopeBoundaries.passed) {
+          if ('passed' in verification.scopeBoundaries && (verification.scopeBoundaries as { passed: boolean }).passed) {
             totalScopePassed++;
           }
         }
@@ -251,7 +251,7 @@ router.get('/recommendations/:taskId', async (req, res) => {
       );
     }
 
-    if (verification.testCoverage && !verification.testCoverage.meetsThreshold) {
+    if (verification.testCoverage && typeof verification.testCoverage === 'object' && 'meetsThreshold' in verification.testCoverage && !(verification.testCoverage as { meetsThreshold: boolean }).meetsThreshold) {
       enhancedRecommendations.push(
         `Run 'npm run test:coverage' and add tests for uncovered code`
       );

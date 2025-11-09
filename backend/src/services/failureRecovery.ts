@@ -51,7 +51,7 @@ export class SimpleFailureRecovery {
     });
 
     // CIRCULAR RECOVERY PREVENTION: Never attempt recovery on repair bots themselves
-    const taskMetadata = (task as Task & { metadata?: { isRepairBot?: boolean; repairStage?: string; originalTaskId?: string } }).metadata;
+    const taskMetadata = (task as DevBotsTask & { metadata?: { isRepairBot?: boolean; repairStage?: string; originalTaskId?: string } }).metadata;
     if (taskMetadata?.isRepairBot) {
       logger.warn({
         category: 'recovery',

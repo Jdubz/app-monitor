@@ -1,0 +1,9 @@
+# Ignore all log and temporary files in artifacts directory
+*.log
+*.txt
+*.tmp
+*.out
+*.err
+
+# Keep the gitignore file itself
+!.gitignore

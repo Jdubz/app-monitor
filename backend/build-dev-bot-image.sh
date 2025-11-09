@@ -1,5 +1,8 @@
 #!/bin/bash
 # Build custom Dev-Bot Docker image
+#
+# NOTE: This is a simplified build script. For more advanced features including
+# verification and detailed output, use: ../dev-bots/docker/build.sh
 
 set -e
 
