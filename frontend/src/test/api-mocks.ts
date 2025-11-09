@@ -28,6 +28,7 @@ import type {
   DevBotsInteractiveSession,
   LogSource,
 } from '@app-monitor/api-contracts';
+import type { DevBotsQueueSummary, DevBotsSettings } from '../types/dev-bots';
 import { setApiClientInstance, type ApiClientAdapter } from '../services/api';
 
 type MockedApiMethod = ReturnType<typeof vi.fn>;
@@ -320,6 +321,33 @@ export const mockGenerators = {
           },
         }
       : {}),
+  }),
+
+  devBotsQueueSummary: (): DevBotsQueueSummary => {
+    const tasks = mockGenerators.devBotsTaskCollections();
+    return {
+      items: [
+        ...tasks.pending.map((task) => ({ task, bucket: 'pending' as const })),
+        ...tasks.active.map((task) => ({ task, bucket: 'active' as const })),
+        ...tasks.completed.map((task) => ({ task, bucket: 'completed' as const })),
+      ],
+      counts: {
+        pending: tasks.pending.length,
+        active: tasks.active.length,
+        completed: tasks.completed.length,
+        failed: 0,
+      },
+      lastUpdated: new Date().toISOString(),
+    };
+  },
+
+  devBotsSettings: (overrides?: Partial<DevBotsSettings>): DevBotsSettings => ({
+    modelStrategy: 'alternate',
+    maxWorkers: 5,
+    dryRun: false,
+    autoCleanup: true,
+    updatedAt: new Date().toISOString(),
+    ...overrides,
   }),
 };
 

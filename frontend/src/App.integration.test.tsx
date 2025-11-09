@@ -37,6 +37,25 @@ describe('App Integration Tests', () => {
     resetApiClientMocks();
     const client = await getApiClientInstance();
     expect(client).toBe(mockEnv.apiClient);
+
+    // Set up default mocks for dev-bots endpoints that all tests need
+    const originalMockImplementation = mockEnv.apiClient.get.getMockImplementation();
+    mockEnv.apiClient.get.mockImplementation((url: string) => {
+      // Default mocks for dev-bots endpoints
+      if (url === '/dev-bots/queue') {
+        return Promise.resolve(apiSuccess(mockGenerators.devBotsQueueSummary()));
+      }
+      if (url === '/dev-bots/settings') {
+        return Promise.resolve(apiSuccess(mockGenerators.devBotsSettings()));
+      }
+      if (url === '/dev-bots/status') {
+        return Promise.resolve(apiSuccess(mockGenerators.devBotsStatus()));
+      }
+      // Call original implementation if it exists, otherwise return empty success
+      return originalMockImplementation
+        ? originalMockImplementation(url)
+        : Promise.resolve(apiSuccess({}));
+    });
   });
 
   afterEach(() => {

@@ -3,6 +3,12 @@
 ## Overview
 Transform dev-bot task execution from direct push-to-staging to a full PR-based workflow with automatic checks, review integration, and auto-merge capabilities.
 
+### TL;DR (fast facts)
+- All automation work happens in feature branches + PRs; pushing directly to `staging` is forbidden.
+- CI plus Copilot review are the merge gates: if either fails, we auto-create follow-up tasks instead of merging.
+- `/delegate` comments on PRs offload docs, cleanup, or deterministic test fixes to GitHub Copilot, but the delegated PRs still run through the same CI + review gates.
+- Webhook-driven monitoring keeps task metadata (PR number/status, follow-ups) synchronized for human, bot, and delegated PRs alike.
+
 ## Current Workflow
 ```
 Task → Execute → Commit → Push to staging → Done
@@ -223,6 +229,13 @@ PR_URL: https://github.com/Jdubz/app-monitor/pull/42
 - ✅ PR number captured in output
 \`\`\`
 ```
+
+### Copilot Delegation Flow
+- **Scope:** Issue `/delegate …` from the PR conversation only for low-risk work (docs polish, formatting, deterministic test repairs). Paste any log snippets or reproduction steps Copilot needs because it cannot read gitignored files or local databases.
+- **Lifecycle:** Delegation comments prompt Copilot to open or update PRs. Webhook listeners flag those contributions as `copilot_delegated` and update the originating task’s `pr_*` metadata so dashboards stay accurate.
+- **Gating:** Delegated PRs flow through the same CI + Copilot-review pipeline. `prMonitor.service.ts` (via `githubPR.service.ts`) interprets Copilot comments and decides whether to auto-merge or spawn follow-up tasks.
+- **Failure handling:** If CI fails or Copilot surfaces medium/high-severity feedback, the monitor automatically creates follow-up tasks (or reopens the original) with links to failing checks/comments.
+- **Telemetry:** Delegation events capture requester, scope, SLA, and outcome so we can compare human, dev-bot, and delegated throughput and tighten guardrails without inventing a separate workflow.
 
 ### 3. PR Monitoring Service
 

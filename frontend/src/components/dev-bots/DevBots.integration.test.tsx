@@ -21,6 +21,34 @@ const renderDevBotsTab = () => {
   );
 };
 
+// Helper to create default API mocks (provides safe defaults for all required endpoints)
+const createDefaultMockImplementation = (overrides?: Record<string, any>) => {
+  return (url: string) => {
+    // Check overrides first
+    if (overrides && url in overrides) {
+      return Promise.resolve(apiSuccess(overrides[url]));
+    }
+
+    // Provide safe defaults for required endpoints
+    if (url === '/dev-bots/status') {
+      return Promise.resolve(apiSuccess(mockGenerators.devBotsStatus()));
+    }
+    if (url === '/dev-bots/queue') {
+      return Promise.resolve(apiSuccess(mockGenerators.devBotsQueueSummary()));
+    }
+    if (url === '/dev-bots/settings') {
+      return Promise.resolve(apiSuccess(mockGenerators.devBotsSettings()));
+    }
+    if (url === '/dev-bots/agent-comparison') {
+      return Promise.resolve(apiSuccess({ comparison: mockGenerators.devBotsAgentComparison() }));
+    }
+    if (url === '/dev-bots/interactive/session') {
+      return Promise.resolve(apiSuccess(mockGenerators.devBotsInteractiveSessionState(false)));
+    }
+    return Promise.resolve(apiSuccess({}));
+  };
+};
+
 describe('Dev-Bots Integration Tests', () => {
   const resetApiClientMocks = () => {
     mockEnv.applyApiMocks();
@@ -36,21 +64,8 @@ describe('Dev-Bots Integration Tests', () => {
     mockEnv.socket.connected = false;
     resetApiClientMocks();
 
-    // Default mock implementations
-    mockEnv.apiClient.get.mockImplementation((url: string) => {
-      if (url === '/dev-bots/status') {
-        return Promise.resolve(apiSuccess(mockGenerators.devBotsStatus()));
-      }
-      if (url === '/dev-bots/agent-comparison') {
-        return Promise.resolve(
-          apiSuccess({ comparison: mockGenerators.devBotsAgentComparison() })
-        );
-      }
-      if (url === '/dev-bots/interactive/session') {
-        return Promise.resolve(apiSuccess(mockGenerators.devBotsInteractiveSessionState(false)));
-      }
-      return Promise.resolve(apiSuccess({}));
-    });
+    // Default mock implementations using helper
+    mockEnv.apiClient.get.mockImplementation(createDefaultMockImplementation());
   });
 
   afterEach(() => {
@@ -61,12 +76,11 @@ describe('Dev-Bots Integration Tests', () => {
     it('should load and display task queue', async () => {
       const status = mockGenerators.devBotsStatus();
 
-      mockEnv.apiClient.get.mockImplementation((url: string) => {
-        if (url === '/dev-bots/status') {
-          return Promise.resolve(apiSuccess(status));
-        }
-        return Promise.resolve(apiSuccess({}));
-      });
+      mockEnv.apiClient.get.mockImplementation(
+        createDefaultMockImplementation({
+          '/dev-bots/status': status,
+        })
+      );
 
       renderDevBotsTab();
 

@@ -323,6 +323,12 @@
 4. Learning database integration
 5. Task discovery automation
 
+## Q4 Cleanup & Documentation Focus
+- **Docs refresh cadence:** Every Q4 milestone includes a TL;DR update for the PR workflow, pipeline plan, and roadmap; `/delegate` is the default tool for these bite-sized edits to keep engineers on higher-leverage work.
+- **Style sweep:** Run quarterly Markdown lint/format checks and convert legacy sections to the new task/PR vocabulary. Delegated PRs must carry the `documentation` label so prMonitor can treat them like other low-risk contributions.
+- **Glossary & links sync:** Ensure shared terms (PR monitor, delegation, webhook, TaskAutomationManager) match across `docs/plans/*`, adding anchors for cross-linking so Copilot and dev-bots can deep-link follow-up tasks.
+- **Telemetry hook:** Track how many documentation cleanups close via `/delegate` vs. human PRs to prove the workflow’s ROI before expanding delegation to other categories.
+
 ### Important for Autonomy:
 1. Predictive failure prevention
 2. Self-adjusting scope boundaries
