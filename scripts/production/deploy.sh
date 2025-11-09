@@ -151,7 +151,7 @@ main() {
     # Frontend build
     cd "${RELEASE_DIR}/frontend"
     npm ci
-    npm run build
+    NODE_ENV=production npm run build
 
     # Phase 6: Deploy to target port
     log_info "Phase 6: Deploying to target port ${TARGET_PORT}"
