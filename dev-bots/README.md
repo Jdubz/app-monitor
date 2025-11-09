@@ -1,47 +1,56 @@
-# Claude Workers System
+# Dev-Bots - Autonomous Development Agents
 
-> **⚠️ DEPRECATED**: This directory contains legacy experimental code. The active Claude Workers system is now integrated into the dev-monitor.
+**Status**: Active Development
+**Integration**: Fully integrated with app-monitor system
+**Documentation**: Comprehensive docs in `dev-bots/docs/`
 
-## Active System
+---
 
-The Claude Workers system is now part of the **dev-monitor** and provides:
+## What It Does
 
-- ✅ **Task Management**: Create and assign tasks to specialized AI agents
-- ✅ **6 Agent Personalities**: Backend, Frontend, Testing, Review, DevOps, Documentation specialists  
-- ✅ **Real-time Monitoring**: Live task status and progress tracking
-- ✅ **Docker Integration**: Containerized task execution with proper isolation
-- ✅ **Task Persistence**: File-based storage with automatic backups
+Dev-Bots is an autonomous AI agent system that executes development tasks using specialized agent personalities. Tasks are managed via SQLite queue, executed in ephemeral Docker containers, and submitted as PRs for review.
+
+## Key Features
+
+- **SQLite Task Queue**: ACID-compliant task queue with automatic recovery
+- **Ephemeral Containers**: Fresh Docker container per task, no persistent workers
+- **5 Agent Personalities**: backend-specialist, frontend-specialist, fullstack-developer, testing-specialist, devops-engineer
+- **PR-Based Workflow**: Automatic PR creation, monitoring, and recovery
+- **Quality Observation**: Monitor PR checks and create repair bots for failures
+- **Interactive Sessions**: Real-time streaming of bot execution logs
 
 ## How to Use
 
-1. **Start the dev-monitor system**:
+1. **Start the app-monitor system**:
    ```bash
-   make dev-monitor
+   cd app-monitor
+   make dev
    ```
 
-2. **Access the Claude Workers interface**:
+2. **Access the Dev-Bots interface**:
    - Open http://localhost:5174
-   - Navigate to the "Claude Workers" tab
+   - Navigate to the "Dev-Bots" tab
    - Create and manage tasks
 
 3. **API Access**:
    ```bash
    # Check system status
-   curl http://localhost:5000/api/claude-workers/status
-   
+   curl http://localhost:5000/api/dev-bots/status
+
    # Get tasks
-   curl http://localhost:5000/api/claude-workers/tasks
+   curl http://localhost:5000/api/dev-bots/tasks
    ```
+
+## Current Architecture
+
+- **TaskQueueService** - SQLite-based queue (`backend/src/services/taskQueue.sqlite.ts`)
+- **EphemeralWorkerService** - Docker container management (`backend/src/services/ephemeralWorker.service.ts`)
+- **InteractiveSessionOrchestrator** - Interactive bot sessions (`backend/src/services/interactiveSessionOrchestrator.ts`)
+- **Modular Components**: DevBotContainerBuilder, DevBotWorkspaceManager, DevBotCredentialsManager, DevBotContainerLifecycle
 
 ## Documentation
 
-- **System Architecture**: See `/dev-monitor/` directory
-- **API Documentation**: See `dev-monitor/backend/src/routes/api.ts`
-- **Agent Personalities**: See `dev-monitor/backend/src/services/agentPersonalities.ts`
-
-## 📚 Documentation
-
-All Claude Workers documentation has been consolidated and organized in the `docs/` directory:
+All Dev-Bots documentation is organized in the `docs/` directory:
 
 ### Quick Start
 - [Documentation Overview](docs/README.md) - Complete documentation index
@@ -49,25 +58,10 @@ All Claude Workers documentation has been consolidated and organized in the `doc
 - [API Reference](docs/api/endpoints.md) - Complete API documentation
 
 ### Key Documents
-- [Comprehensive Analysis](docs/analysis/comprehensive-analysis.md) - Complete technical analysis
-- [Quick Reference](docs/analysis/quick-reference.md) - Fast lookup guide
-- [Implementation Guide](docs/implementation/implementation-guide.md) - Step-by-step setup
+- [Agent Personalities](docs/api/agent-personalities.md) - 5 specialized AI agents
 - [Task Examples](docs/examples/task-examples.md) - Sample tasks and templates
-
-### Specialized Documentation
-- [Agent Personalities](docs/api/agent-personalities.md) - 6 specialized AI agents
-- [Learning System](docs/learning/learning-system-analysis.md) - Adaptive learning
-- [Healing System](docs/healing/healing-system-design.md) - Auto-recovery
-- [Scope Control](docs/scope-control/scope-control-system.md) - Feature creep prevention
-
-## Legacy Files
-
-Historical documentation and analysis files are kept for reference in `docs/archive/`:
-
-- `docs/archive/` - All legacy documentation files
-- `docs/archive/migration-notes.md` - System evolution and migration details
-- Various other analysis and documentation files
+- [Deployment Guide](docs/deployment/deployment-checklist.md) - Production deployment
 
 ---
 
-**Note**: The active Claude Workers system is now fully integrated into the dev-monitor. Use the dev-monitor interface for all task management operations.
+**Note**: The Dev-Bots system is fully integrated into app-monitor. Use the app-monitor interface for all task management operations.
