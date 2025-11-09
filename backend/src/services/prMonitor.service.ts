@@ -14,6 +14,8 @@ import { GitHubPRService, getGitHubPRService, type PRStatus, type CopilotReviewA
 import { TaskQueueService } from './taskQueue.sqlite.js';
 import type { Task } from './taskQueue.sqlite.js';
 
+type TaskPRStatus = NonNullable<Task['pr_status']>;
+
 export interface MonitoredPR {
   taskId: string;
   prNumber: number;
@@ -228,7 +230,7 @@ export class PRMonitorService {
   private async updateMonitoredPRStatus(
     monitoredPR: MonitoredPR,
     newStatus: MonitoredPR['status'],
-    dbStatus: 'creating' | 'pending_checks' | 'pending_review' | 'ready_to_merge' | 'merged' | 'closed' | string,
+    dbStatus: TaskPRStatus,
     notes?: string
   ): Promise<void> {
     // Update DB first
@@ -522,21 +524,22 @@ export class PRMonitorService {
         error,
         details: { prNumber: monitoredPR.prNumber }
       });
-      await this.updateMonitoredPRStatus(monitoredPR, 'failed', 'merge_failed');
+      const failureNote = error instanceof Error ? `merge_failed:${error.message}` : 'merge_failed';
+      await this.updateMonitoredPRStatus(monitoredPR, 'failed', 'pending_review', failureNote);
     }
   }
 
   /**
    * Update task PR status in database
    */
-  private async updateTaskPRStatus(taskId: string, prStatus: string, notes?: string): Promise<void> {
+  private async updateTaskPRStatus(taskId: string, prStatus: TaskPRStatus, notes?: string): Promise<void> {
     const task = this.taskQueue.getTask(taskId);
     if (!task) {
       return;
     }
 
     const updates: Partial<Task> & { pr_merged_at?: number; notes?: string } = {
-      pr_status: prStatus as 'creating' | 'pending_checks' | 'pending_review' | 'ready_to_merge' | 'merged' | 'closed'
+      pr_status: prStatus
     };
 
     if (prStatus === 'merged') {
