@@ -85,12 +85,14 @@ export class RetryManager extends EventEmitter {
 
     const retryCount = (task.retry_count || 0) + 1;
     
+    const taskWithExtras = task as Task & { exitCode?: number; retryHistory?: RetryAttempt[] };
+
     const retryAttempt: RetryAttempt = {
       attemptNumber: retryCount,
       timestamp: new Date().toISOString(),
       reason,
       error: task.error,
-      exitCode: (task as any).exitCode,
+      exitCode: taskWithExtras.exitCode,
       workerId: task.assigned_worker,
       agentId: task.assigned_agent
     };
@@ -104,13 +106,14 @@ export class RetryManager extends EventEmitter {
       error: undefined
     };
 
-    // Store extended retry info in any-cast
-    (retryTask as any).retryReason = reason;
-    (retryTask as any).retryHistory = [...((task as any).retryHistory || []), retryAttempt];
-    (retryTask as any).exitCode = undefined;
+    // Store extended retry info
+    const retryTaskWithExtras = retryTask as Task & { retryReason?: string; retryHistory?: RetryAttempt[]; exitCode?: number };
+    retryTaskWithExtras.retryReason = reason;
+    retryTaskWithExtras.retryHistory = [...(taskWithExtras.retryHistory || []), retryAttempt];
+    retryTaskWithExtras.exitCode = undefined;
 
     // Store retry history
-    this.retryHistory.set(task.id, (retryTask as any).retryHistory || []);
+    this.retryHistory.set(task.id, retryTaskWithExtras.retryHistory || []);
 
     logger.info({
       category: 'process',

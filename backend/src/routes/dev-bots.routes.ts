@@ -29,19 +29,23 @@ import type {
 } from '@app-monitor/api-contracts';
 
 // Temporary types until API contracts are updated
-type DevBotsQueueSummary = any;
-type ContractDevBotsTask = any;
-type ContractDevBotsTaskDetail = any;
-type DevBotsTaskHistoryEvent = any;
-type DevBotsTaskStatus = any;
-type DevBotsInteractiveSessionState = any;
-type DevBotsInteractiveSessionStateResponse = any;
-type DevBotsInteractiveSessionModelOption = any;
-type DevBotsInteractiveSession = any;
-type DevBotsInteractiveSessionStartPayload = any;
-type DevBotsInteractiveSessionInputPayload = any;
-type DevBotsInteractiveHeartbeatPayload = any;
-type DevBotsInteractiveInterruptPayload = any;
+type DevBotsQueueSummary = {
+  items: Array<{ bucket: 'pending' | 'active' | 'completed'; task: Record<string, unknown> }>;
+  counts: { pending: number; active: number; completed: number; failed: number };
+  lastUpdated: string;
+};
+type ContractDevBotsTask = Record<string, unknown>;
+type ContractDevBotsTaskDetail = { task: Record<string, unknown>; history: Array<Record<string, unknown>> };
+type DevBotsTaskHistoryEvent = Record<string, unknown>;
+type DevBotsTaskStatus = 'pending' | 'active' | 'completed' | 'failed';
+type DevBotsInteractiveSessionState = Record<string, unknown>;
+type DevBotsInteractiveSessionStateResponse = { data: Record<string, unknown> };
+type DevBotsInteractiveSessionModelOption = Record<string, unknown>;
+type DevBotsInteractiveSession = Record<string, unknown>;
+type DevBotsInteractiveSessionStartPayload = { modelProvider: string; modelName: string; metadata?: Record<string, unknown> };
+type DevBotsInteractiveSessionInputPayload = { data: string };
+type DevBotsInteractiveHeartbeatPayload = { sessionId: string; source?: 'agent' | 'user' };
+type DevBotsInteractiveInterruptPayload = { sessionId: string };
 import type { Task, TaskExecution } from '../services/taskQueue.sqlite.js';
 import type { InteractiveSessionRecord } from '../services/database.js';
 import { WorkerLogLocator } from '../services/taskLogLocator.js';
@@ -87,7 +91,12 @@ const isPlainObject = (value: unknown): value is Record<string, unknown> => {
 };
 
 // Temporary type until API contracts are updated
-type TaskLogFileDescriptor = any;
+type TaskLogFileDescriptor = {
+  path: string;
+  filename: string;
+  size: number;
+  lastModified: string;
+} | null;
 
 interface TaskLogsResponsePayload {
   taskId: string;
@@ -996,7 +1005,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
   router.get('/tasks/completed', (_req: Request, res: Response) => {
     try {
       // getCompletedTasks() is deprecated - return empty array for now
-      const tasks: any[] = []; // TODO: Implement if needed via taskQueue.getTasksByStatus('completed')
+      const tasks: Array<Record<string, unknown>> = []; // TODO: Implement if needed via taskQueue.getTasksByStatus('completed')
       res.json({ tasks });
     } catch (error) {
       logger.error({

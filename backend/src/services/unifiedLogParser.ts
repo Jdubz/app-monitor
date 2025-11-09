@@ -31,7 +31,7 @@ export interface LogEntry {
   usage: UsageData;
   requestId: string;
   agentType: 'claude' | 'codex';
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UsageSummary {

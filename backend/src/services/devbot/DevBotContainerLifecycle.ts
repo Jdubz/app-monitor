@@ -91,7 +91,7 @@ export class DevBotContainerLifecycle {
       });
     } catch (error) {
       // Docker returns 304 if container is already stopped
-      if (!(error instanceof Error) || (error as any).statusCode !== 304) {
+      if (!(error instanceof Error) || (error as { statusCode?: number }).statusCode !== 304) {
         logger.warn({
           category: 'system',
           action: 'container_stop_failed',
@@ -368,7 +368,7 @@ export class DevBotContainerLifecycle {
    * List all dev-bot containers
    */
   async listDevBotContainers(type?: string): Promise<Docker.ContainerInfo[]> {
-    const filters: any = {
+    const filters: { label: string[] } = {
       label: ['app=app-monitor'],
     };
 

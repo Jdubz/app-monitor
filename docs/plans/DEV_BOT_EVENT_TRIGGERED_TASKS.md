@@ -40,6 +40,7 @@ Codify four automation flows that plug into the existing dev-bot task orchestrat
 - **Integration Notes:**  
   - Extend failure handling middleware to publish a `task.failure` event and attach artifacts to `learning-patterns.json`.  
   - Healing task references the same chainId so dashboards visualize the full recovery lifecycle.  
+- **Ownership Rule:** Both diagnostic and healing tasks are auto-assigned; no human override is expected in this pipeline.  
 - **Expected Outcome:** Failures automatically produce actionable remediation tasks instead of ad-hoc retries, improving the adaptive learning data quality.
 
 ### 3. Context Drift Mitigation Task
@@ -51,7 +52,7 @@ Codify four automation flows that plug into the existing dev-bot task orchestrat
 - **Expected Outcome:** Proactively enforces lightweight contexts and prevents runaway sessions without relying on periodic cleanup jobs.
 
 ### 4. Release-Readiness Insight Task
-- **Trigger:** Coordinator detects that N tasks sharing the same `chainId` or feature label finished successfully (configurable threshold, default 3).  
+- **Trigger:** Coordinator detects that N tasks sharing the same `chainId` or feature label finished successfully (threshold configured per work-target once enough telemetry exists).  
 - **Task Graph:** `release-analysis` task assigned to Jordan (DevOps) with Morgan as secondary reviewer. Inputs include task outputs, test summaries, learning metrics, and linked PRs.  
 - **Integration Notes:**  
   - When TaskQueueManager marks the qualifying task complete, publish `feature.slice.completed`. Listener aggregates artifacts and queues the insight task with instructions to summarize readiness, blockers, and recommended follow-ups.  
@@ -64,14 +65,13 @@ Codify four automation flows that plug into the existing dev-bot task orchestrat
 2. Extend TaskBridge to support chained/conditional task insertion.  
 3. Update shared contracts so new task types (`diagnostic`, `healing`, `scope-trim`, `release-analysis`) include required context fields.  
 4. Teach the adaptive learning module to tag outputs from these flows for downstream analytics.  
-5. Document operator runbooks (label conventions, artifact expectations) in `docs/dev-bots` once implementation lands.
+5. Document operator runbooks (label conventions, artifact expectations) in `docs/dev-bots` once implementation lands.  
+6. Introduce elevated review/approval hooks for tasks touching production configs or requiring sudo; surface these as blocking flags until a human executes the flagged script.
 
 ---
 
 ## Open Questions
-- Should diagnostic vs. healing task ownership be auto-determined purely by task type, or should humans be able to override via task metadata?  
-- What’s the right value for `N` in the release-readiness trigger across different work-targets?  
-- Do we need additional security gates before auto-enqueuing tasks that might touch production-facing configs?
+- None for now; revisit if additional telemetry uncovers new routing edge cases.
 
 ---
 

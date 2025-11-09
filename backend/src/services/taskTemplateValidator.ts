@@ -60,7 +60,7 @@ export interface TaskTemplateV3 {
     strictScopeEnforcement: boolean;
     mandatoryInvestigation: boolean;
     duplicateProtection: boolean;
-    [key: string]: unknown;
+    [key: string]: boolean | string | number | unknown;
   };
 }
 
@@ -598,7 +598,7 @@ export function formatValidationErrors(result: ValidationResult): string {
 /**
  * Check if a template is v3 compliant (has all required fields)
  */
-export function isV3Template(template: any): template is TaskTemplateV3 {
+export function isV3Template(template: unknown): template is TaskTemplateV3 {
   return Boolean(
     template &&
     typeof template === 'object' &&

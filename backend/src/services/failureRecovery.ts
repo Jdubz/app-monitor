@@ -51,15 +51,16 @@ export class SimpleFailureRecovery {
     });
 
     // CIRCULAR RECOVERY PREVENTION: Never attempt recovery on repair bots themselves
-    if ((task as any).metadata?.isRepairBot) {
+    const taskMetadata = (task as Task & { metadata?: { isRepairBot?: boolean; repairStage?: string; originalTaskId?: string } }).metadata;
+    if (taskMetadata?.isRepairBot) {
       logger.warn({
         category: 'recovery',
         action: 'circular_recovery_prevented',
         message: `Preventing circular recovery: task ${task.id} is already a repair bot`,
         details: {
           taskId: task.id,
-          repairStage: (task as any).metadata.repairStage,
-          originalTaskId: (task as any).metadata.originalTaskId,
+          repairStage: taskMetadata.repairStage,
+          originalTaskId: taskMetadata.originalTaskId,
           reason: 'Cannot create recovery task for a repair bot itself'
         }
       });
@@ -119,7 +120,7 @@ export class SimpleFailureRecovery {
    * Called by task completion handler when cleanup task finishes
    */
   async createFollowupTask(cleanupTask: DevBotsTask): Promise<{ task: DevBotsTask } | null> {
-    const metadata = (cleanupTask as any).metadata;
+    const metadata = (cleanupTask as DevBotsTask & { metadata?: { isRepairBot?: boolean; repairStage?: string; originalTaskId?: string } }).metadata;
     if (!metadata?.isRepairBot || metadata?.repairStage !== 'cleanup') {
       logger.debug({
         category: 'recovery',

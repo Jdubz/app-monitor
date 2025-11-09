@@ -40,7 +40,33 @@ check_service_running() {
 # Check 2: Port is listening
 check_port_listening() {
     log_info "Checking if port ${PORT} is listening..."
-    if lsof -i ":${PORT}" > /dev/null 2>&1; then
+
+    local port_found=false
+
+    # Try multiple methods to check if port is listening
+    # Method 1: ss command (most reliable)
+    if command -v ss > /dev/null 2>&1; then
+        if ss -tln | grep -E -q ":[[:space:]]*${PORT}([[:space:]]|$)"; then
+            port_found=true
+        fi
+    fi
+
+    # Method 2: netcat (if ss fails or unavailable)
+    if [ "$port_found" = false ] && command -v nc > /dev/null 2>&1; then
+        if nc -z localhost "${PORT}" 2>/dev/null; then
+            port_found=true
+        fi
+    fi
+
+    # Method 3: lsof (fallback, might not work without sudo)
+    if [ "$port_found" = false ] && command -v lsof > /dev/null 2>&1; then
+        if lsof -i ":${PORT}" > /dev/null 2>&1; then
+            port_found=true
+        fi
+    fi
+
+    # Consolidated success/error logging
+    if [ "$port_found" = true ]; then
         log_info "✓ Port ${PORT} is listening"
         return 0
     else

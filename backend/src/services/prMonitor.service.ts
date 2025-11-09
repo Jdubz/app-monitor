@@ -535,7 +535,7 @@ export class PRMonitorService {
       return;
     }
 
-    const updates: any = { pr_status: prStatus };
+    const updates: Partial<Task> & { pr_merged_at?: number; notes?: string } = { pr_status: prStatus };
 
     if (prStatus === 'merged') {
       updates.pr_merged_at = Date.now();

@@ -414,7 +414,23 @@ export class DevBotsDatabase {
   }
 
   // Quality Observations
-  storeQualityObservation(observation: any): number {
+  storeQualityObservation(observation: {
+    taskId: string;
+    prNumber?: number | null;
+    branch?: string | null;
+    timestamp: string;
+    overallScore: number;
+    qualityLevel: string;
+    readyForMerge: boolean;
+    observations: {
+      acceptanceCriteria?: unknown;
+      testCoverage?: unknown;
+      scopeBoundaries?: unknown;
+      qualityGates?: unknown;
+    };
+    improvementOpportunities: Array<unknown>;
+    blockers: Array<unknown>;
+  }): number {
     const result = this.db.prepare(`
       INSERT INTO quality_observations (
         task_id, pr_number, branch, timestamp,
@@ -451,7 +467,7 @@ export class DevBotsDatabase {
       WHERE task_id = ?
       ORDER BY created_at DESC
       LIMIT 1
-    `).get(taskId) as any;
+    `).get(taskId) as StoredQualityObservation | undefined;
 
     if (!row) return null;
 
@@ -474,7 +490,16 @@ export class DevBotsDatabase {
     };
   }
 
-  getVerificationResult(taskId: string): any | null {
+  getVerificationResult(taskId: string): {
+    taskId: string;
+    passed: boolean;
+    overallScore: number;
+    acceptanceCriteria: unknown | null;
+    testCoverage: unknown | null;
+    scopeBoundaries: unknown | null;
+    recommendations: Array<string>;
+    timestamp: string;
+  } | null {
     // Compatibility method - returns quality observation as verification result
     const observation = this.getQualityObservation(taskId);
     if (!observation) return null;
@@ -490,12 +515,21 @@ export class DevBotsDatabase {
       scopeBoundaries: observation.scope_boundaries_observation ?
         JSON.parse(observation.scope_boundaries_observation) : null,
       recommendations: observation.improvement_opportunities ?
-        JSON.parse(observation.improvement_opportunities).map((o: any) => o.suggestedFix) : [],
+        (JSON.parse(observation.improvement_opportunities) as Array<{ suggestedFix: string }>).map((o) => o.suggestedFix) : [],
       timestamp: observation.timestamp
     };
   }
 
-  storeVerificationResult(result: any): void {
+  storeVerificationResult(result: {
+    taskId: string;
+    passed?: boolean;
+    overallScore?: number;
+    acceptanceCriteria?: unknown;
+    testCoverage?: unknown;
+    scopeBoundaries?: unknown;
+    recommendations?: Array<string>;
+    timestamp?: string;
+  }): void {
     // Compatibility method - converts verification result to quality observation format
     const observation = {
       taskId: result.taskId,
