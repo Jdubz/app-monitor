@@ -247,7 +247,8 @@ export class TaskExecutionService {
       };
     }
 
-    return input;
+    // At this point, input is FailurePattern (not FailurePatternSummary)
+    return input as FailurePattern;
   }
 
   // Removed duplicate chooseAgentType - now using AgentTypeManager
