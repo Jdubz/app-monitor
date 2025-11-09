@@ -84,7 +84,7 @@ jobs:
     needs: pre-deployment-checks
     runs-on: self-hosted
     # SECURITY: Only run on main branch to prevent fork PRs from deploying
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     environment:
       name: production
       url: https://app-monitor.yourdomain.com
@@ -146,9 +146,9 @@ jobs:
           echo "Checking backend health on port ${ACTIVE_PORT}..."
           timeout 30 bash -c "until curl -f http://localhost:${ACTIVE_PORT}/api/health; do sleep 2; done"
 
-          # Check frontend
+          # Check frontend (nginx on port 80)
           echo "Checking frontend health..."
-          timeout 30 bash -c 'until curl -f http://localhost:3000; do sleep 2; done'
+          timeout 30 bash -c 'until curl -f http://localhost/; do sleep 2; done'
 
           echo "✅ Health checks passed"
 

@@ -26,7 +26,9 @@ sudo systemctl stop app-monitor-backend@5002.service 2>/dev/null || true
 
 # Step 5: Update current symlink to new release
 echo "Step 5: Updating symlink to new release..."
-sudo ln -sfn /opt/app-monitor/releases/20251108_183251 /opt/app-monitor/current
+LATEST_RELEASE=$(ls -t /opt/app-monitor/releases/ | head -1)
+echo "Latest release: ${LATEST_RELEASE}"
+sudo ln -sfn "/opt/app-monitor/releases/${LATEST_RELEASE}" /opt/app-monitor/current
 
 # Step 6: Start new service
 echo "Step 6: Starting service on port 5001..."

@@ -51,8 +51,8 @@ This project is currently in **pre-POC stabilization** phase, preparing the foun
 **NEVER manually modify - CI/CD only:**
 - **Location**: `/opt/app-monitor` (system service)
 - **Branch**: `main` only
-- **Ports**: Backend 5050, Frontend 5173
-- **Services**: `app-monitor-backend-prod.service`, `app-monitor-frontend-prod.service`
+- **Ports**: Backend 5001/5002 (blue-green), Frontend 80 (nginx)
+- **Services**: `app-monitor-backend@5001.service`, `app-monitor-backend@5002.service`, `nginx`
 - **Deployment**: Automatic via GitHub Actions on push to `main`
 
 📖 See [Production Setup Guide](./docs/production/PRODUCTION_SETUP.md) for production details.
