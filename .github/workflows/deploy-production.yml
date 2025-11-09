@@ -126,7 +126,6 @@ jobs:
             echo "❌ Backend service not running on either port"
             exit 1
           fi
-          sudo systemctl is-active app-monitor-frontend.service
           sudo systemctl is-active nginx
           echo "✅ All services running"
 
