@@ -201,6 +201,11 @@ main() {
         update_nginx_upstream "${TARGET_PORT}"
     fi
 
+    # Save active port to config for reference
+    mkdir -p "${SHARED_DIR}/config"
+    echo "${TARGET_PORT}" > "${SHARED_DIR}/config/active-port"
+    log_info "Active port saved: ${TARGET_PORT}"
+
     # Phase 9: Cleanup old releases (keep last 5)
     log_info "Phase 9: Cleaning up old releases"
     cd "${RELEASES_DIR}"
