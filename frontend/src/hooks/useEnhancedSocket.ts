@@ -8,7 +8,9 @@ import { useState, useEffect, useCallback } from 'react';
 import { createSocketService, SocketService, ConnectionState, HealthMetrics } from '../services/socketService';
 import { createLogger } from '@/utils/logger';
 
-const SOCKET_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+import { getApiBaseUrl } from '@/utils/apiBaseUrl';
+
+const SOCKET_URL = getApiBaseUrl();
 const log = createLogger('useEnhancedSocket');
 
 export function useEnhancedSocket() {

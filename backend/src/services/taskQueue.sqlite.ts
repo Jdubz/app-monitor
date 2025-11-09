@@ -275,11 +275,12 @@ export class TaskQueueService {
   }
 
   private runMigrations(): void {
-    // Check if agent_type column exists, add if missing
+    // Get current columns
     const columns = this.db.prepare(`PRAGMA table_info(tasks)`).all() as Array<{name: string}>;
-    const hasAgentType = columns.some(col => col.name === 'agent_type');
+    const columnNames = new Set(columns.map(col => col.name));
 
-    if (!hasAgentType) {
+    // Migration 1: Add agent_type column
+    if (!columnNames.has('agent_type')) {
       logger.info({
         category: 'process',
         action: 'adding_agent_type_column',
@@ -298,6 +299,92 @@ export class TaskQueueService {
         category: 'process',
         action: 'migration_complete',
         message: 'agent_type column added successfully'
+      });
+    }
+
+    // Migration 2: Add PR workflow columns
+    const prColumns = ['pr_number', 'pr_url', 'pr_branch', 'pr_status', 'pr_checks_status', 'pr_review_status', 'pr_created_at', 'pr_merged_at'];
+    const missingPrColumns = prColumns.filter(col => !columnNames.has(col));
+
+    if (missingPrColumns.length > 0) {
+      logger.info({
+        category: 'process',
+        action: 'adding_pr_workflow_columns',
+        message: `Adding ${missingPrColumns.length} PR workflow columns to tasks table`,
+        details: { columns: missingPrColumns }
+      });
+
+      // Add each missing column
+      if (!columnNames.has('pr_number')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_number INTEGER;`);
+      }
+      if (!columnNames.has('pr_url')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_url TEXT;`);
+      }
+      if (!columnNames.has('pr_branch')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_branch TEXT;`);
+      }
+      if (!columnNames.has('pr_status')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_status TEXT CHECK(pr_status IN ('creating', 'pending_checks', 'pending_review', 'ready_to_merge', 'merged', 'closed'));`);
+      }
+      if (!columnNames.has('pr_checks_status')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_checks_status TEXT CHECK(pr_checks_status IN ('pending', 'success', 'failure'));`);
+      }
+      if (!columnNames.has('pr_review_status')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_review_status TEXT CHECK(pr_review_status IN ('no_reviews', 'approved', 'changes_requested', 'commented'));`);
+      }
+      if (!columnNames.has('pr_created_at')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_created_at INTEGER;`);
+      }
+      if (!columnNames.has('pr_merged_at')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_merged_at INTEGER;`);
+      }
+
+      // Create indexes
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_pr_number ON tasks(pr_number);`);
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_pr_status ON tasks(pr_status) WHERE pr_status IS NOT NULL;`);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'PR workflow columns added successfully'
+      });
+    }
+
+    // Migration 3: Add repair bot / task recovery columns
+    const recoveryColumns = ['is_repair_bot', 'original_task_id', 'followup_for_pr', 'followup_tasks'];
+    const missingRecoveryColumns = recoveryColumns.filter(col => !columnNames.has(col));
+
+    if (missingRecoveryColumns.length > 0) {
+      logger.info({
+        category: 'process',
+        action: 'adding_recovery_columns',
+        message: `Adding ${missingRecoveryColumns.length} task recovery columns to tasks table`,
+        details: { columns: missingRecoveryColumns }
+      });
+
+      if (!columnNames.has('is_repair_bot')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN is_repair_bot INTEGER DEFAULT 0;`);
+      }
+      if (!columnNames.has('original_task_id')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN original_task_id TEXT;`);
+      }
+      if (!columnNames.has('followup_for_pr')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN followup_for_pr INTEGER;`);
+      }
+      if (!columnNames.has('followup_tasks')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN followup_tasks TEXT;`); // JSON array
+      }
+
+      // Create indexes
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_original_task_id ON tasks(original_task_id) WHERE original_task_id IS NOT NULL;`);
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_followup_for_pr ON tasks(followup_for_pr) WHERE followup_for_pr IS NOT NULL;`);
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_is_repair_bot ON tasks(is_repair_bot) WHERE is_repair_bot = 1;`);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'Task recovery columns added successfully'
       });
     }
   }
@@ -1038,15 +1125,29 @@ export class TaskQueueService {
    * Used to resume PR monitoring on startup
    */
   getTasksWithUnmergedPRs(): Task[] {
-    const stmt = this.db.prepare(`
-      SELECT * FROM tasks
-      WHERE pr_number IS NOT NULL
-        AND pr_url IS NOT NULL
-        AND pr_branch IS NOT NULL
-        AND (pr_status IS NULL OR pr_status != 'merged')
-      ORDER BY pr_created_at DESC
-    `);
-    return stmt.all() as Task[];
+    try {
+      const stmt = this.db.prepare(`
+        SELECT * FROM tasks
+        WHERE pr_number IS NOT NULL
+          AND pr_url IS NOT NULL
+          AND pr_branch IS NOT NULL
+          AND (pr_status IS NULL OR pr_status != 'merged')
+        ORDER BY pr_created_at DESC
+      `);
+      return stmt.all() as Task[];
+    } catch (error) {
+      // Gracefully handle missing columns (e.g., pr_number, pr_branch not yet migrated)
+      if (error instanceof Error && error.message.includes('no such column')) {
+        logger.warn({
+          category: 'process',
+          action: 'pr_columns_not_migrated',
+          message: 'PR workflow columns not yet available - returning empty list. Run migrations to enable PR tracking.',
+          error
+        });
+        return [];
+      }
+      throw error;
+    }
   }
 
   /**
@@ -1054,21 +1155,35 @@ export class TaskQueueService {
    * Used by PR recovery service to find tasks needing recovery
    */
   findOrphanedTasksByError(hoursBack: number = 24): Task[] {
-    const cutoffTime = Date.now() - (hoursBack * 3600000);
-    const stmt = this.db.prepare(`
-      SELECT * FROM tasks
-      WHERE status = 'failed'
-        AND (
-          error LIKE '%orphaned%'
-          OR error LIKE '%restart%'
-          OR error LIKE '%crash%'
-        )
-        AND pr_number IS NULL
-        AND created_at > ?
-      ORDER BY created_at DESC
-      LIMIT 50
-    `);
-    return stmt.all(cutoffTime) as Task[];
+    try {
+      const cutoffTime = Date.now() - (hoursBack * 3600000);
+      const stmt = this.db.prepare(`
+        SELECT * FROM tasks
+        WHERE status = 'failed'
+          AND (
+            error LIKE '%orphaned%'
+            OR error LIKE '%restart%'
+            OR error LIKE '%crash%'
+          )
+          AND pr_number IS NULL
+          AND created_at > ?
+        ORDER BY created_at DESC
+        LIMIT 50
+      `);
+      return stmt.all(cutoffTime) as Task[];
+    } catch (error) {
+      // Gracefully handle missing columns (e.g., pr_number not yet migrated)
+      if (error instanceof Error && error.message.includes('no such column')) {
+        logger.warn({
+          category: 'process',
+          action: 'pr_columns_not_migrated',
+          message: 'PR workflow columns not yet available - cannot find orphaned PRs. Run migrations to enable PR recovery.',
+          error
+        });
+        return [];
+      }
+      throw error;
+    }
   }
 
   /**
@@ -1359,28 +1474,56 @@ export class TaskQueueService {
    * Get all repair bots for a specific task
    */
   getRepairBotsForTask(originalTaskId: string): Task[] {
-    const rows = this.db.prepare(`
-      SELECT * FROM tasks
-      WHERE original_task_id = ?
-        AND is_repair_bot = 1
-      ORDER BY created_at ASC
-    `).all(originalTaskId) as Task[];
+    try {
+      const rows = this.db.prepare(`
+        SELECT * FROM tasks
+        WHERE original_task_id = ?
+          AND is_repair_bot = 1
+        ORDER BY created_at ASC
+      `).all(originalTaskId) as Task[];
 
-    return rows;
+      return rows;
+    } catch (error) {
+      // Gracefully handle missing columns (e.g., original_task_id, is_repair_bot not yet migrated)
+      if (error instanceof Error && error.message.includes('no such column')) {
+        logger.warn({
+          category: 'process',
+          action: 'recovery_columns_not_migrated',
+          message: 'Task recovery columns not yet available - cannot retrieve repair bots. Run migrations to enable task recovery.',
+          error
+        });
+        return [];
+      }
+      throw error;
+    }
   }
 
   /**
    * Check if a task already has a recovery attempt
    */
   hasRecoveryAttempt(taskId: string): boolean {
-    const result = this.db.prepare(`
-      SELECT COUNT(*) as count
-      FROM tasks
-      WHERE original_task_id = ?
-        AND is_repair_bot = 1
-    `).get(taskId) as { count: number };
+    try {
+      const result = this.db.prepare(`
+        SELECT COUNT(*) as count
+        FROM tasks
+        WHERE original_task_id = ?
+          AND is_repair_bot = 1
+      `).get(taskId) as { count: number };
 
-    return result.count > 0;
+      return result.count > 0;
+    } catch (error) {
+      // Gracefully handle missing columns (e.g., original_task_id, is_repair_bot not yet migrated)
+      if (error instanceof Error && error.message.includes('no such column')) {
+        logger.debug({
+          category: 'process',
+          action: 'recovery_columns_not_migrated',
+          message: 'Task recovery columns not yet available - assuming no recovery attempt exists.',
+          error
+        });
+        return false;
+      }
+      throw error;
+    }
   }
 
   /**
