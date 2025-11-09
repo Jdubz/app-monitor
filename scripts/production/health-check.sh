@@ -41,31 +41,38 @@ check_service_running() {
 check_port_listening() {
     log_info "Checking if port ${PORT} is listening..."
 
+    local port_found=false
+
     # Try multiple methods to check if port is listening
     # Method 1: ss command (most reliable)
-    if ss -tln | grep -q ":${PORT} "; then
-        log_info "✓ Port ${PORT} is listening"
-        return 0
+    if command -v ss > /dev/null 2>&1; then
+        if ss -tln | grep -E -q ":[[:space:]]*${PORT}([[:space:]]|$)"; then
+            port_found=true
+        fi
     fi
 
-    # Method 2: netcat (if ss fails)
-    if command -v nc > /dev/null 2>&1; then
+    # Method 2: netcat (if ss fails or unavailable)
+    if [ "$port_found" = false ] && command -v nc > /dev/null 2>&1; then
         if nc -z localhost "${PORT}" 2>/dev/null; then
-            log_info "✓ Port ${PORT} is listening"
-            return 0
+            port_found=true
         fi
     fi
 
     # Method 3: lsof (fallback, might not work without sudo)
-    if command -v lsof > /dev/null 2>&1; then
+    if [ "$port_found" = false ] && command -v lsof > /dev/null 2>&1; then
         if lsof -i ":${PORT}" > /dev/null 2>&1; then
-            log_info "✓ Port ${PORT} is listening"
-            return 0
+            port_found=true
         fi
     fi
 
-    log_error "✗ Port ${PORT} is not listening"
-    return 1
+    # Consolidated success/error logging
+    if [ "$port_found" = true ]; then
+        log_info "✓ Port ${PORT} is listening"
+        return 0
+    else
+        log_error "✗ Port ${PORT} is not listening"
+        return 1
+    fi
 }
 
 # Check 3: HTTP health endpoint
