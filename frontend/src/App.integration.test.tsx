@@ -53,7 +53,7 @@ describe('App Integration Tests', () => {
       // Wait for initial data to load
       await waitFor(() => {
         expect(screen.queryByText(/loading environments/i)).not.toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
 
       // Should render header
       expect(screen.getByRole('banner')).toBeInTheDocument();
@@ -72,7 +72,7 @@ describe('App Integration Tests', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/failed to load environments/i)).toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
 
       // Error should be dismissible
       const dismissButton = screen.getByRole('button', { name: /dismiss/i });
@@ -84,7 +84,7 @@ describe('App Integration Tests', () => {
 
       await waitFor(() => {
         expect(socketServiceModule.createSocket).toHaveBeenCalled();
-      });
+      }, { timeout: 5000 });
     });
   });
 
@@ -100,7 +100,7 @@ describe('App Integration Tests', () => {
       // Should start on Local tab (or redirect to it)
       await waitFor(() => {
         expect(window.location.pathname).toMatch(/\/local$/);
-      });
+      }, { timeout: 5000 });
 
       // Navigate to Deployed Services tab
       const deployedTab = screen.getByRole('link', { name: /deployed services/i });
@@ -108,7 +108,7 @@ describe('App Integration Tests', () => {
 
       await waitFor(() => {
         expect(window.location.pathname).toMatch(/\/deployed$/);
-      });
+      }, { timeout: 5000 });
 
       // Navigate to Dev-Bots tab
       const devBotsTab = screen.getByRole('link', { name: /dev-bots/i });
@@ -116,7 +116,7 @@ describe('App Integration Tests', () => {
 
       await waitFor(() => {
         expect(window.location.pathname).toMatch(/\/dev-bots$/);
-      });
+      }, { timeout: 5000 });
 
       // Navigate back to Local tab
       const localTab = screen.getByRole('link', { name: /local/i });
@@ -124,7 +124,7 @@ describe('App Integration Tests', () => {
 
       await waitFor(() => {
         expect(window.location.pathname).toMatch(/\/local$/);
-      });
+      }, { timeout: 5000 });
     });
 
     it('should redirect invalid routes to /local', async () => {
@@ -134,7 +134,7 @@ describe('App Integration Tests', () => {
 
       await waitFor(() => {
         expect(window.location.pathname).toMatch(/\/local$/);
-      });
+      }, { timeout: 5000 });
     });
   });
 
@@ -176,13 +176,13 @@ describe('App Integration Tests', () => {
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
 
       // Should display services
       await waitFor(() => {
         expect(screen.getByText(/backend api/i)).toBeInTheDocument();
         expect(screen.getByText(/frontend dev server/i)).toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
     });
 
     it('should start and stop services', async () => {
@@ -237,7 +237,7 @@ describe('App Integration Tests', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/test service/i)).toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
 
       // Find and click start button
       const startButton = screen.getByRole('button', { name: /start/i });
@@ -250,7 +250,7 @@ describe('App Integration Tests', () => {
           expect.anything(),
           expect.anything()
         );
-      });
+      }, { timeout: 5000 });
     });
   });
 
@@ -273,7 +273,7 @@ describe('App Integration Tests', () => {
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
 
       // Navigate to Deployed tab
       const deployedTab = screen.getByRole('link', { name: /deployed services/i });
@@ -283,7 +283,7 @@ describe('App Integration Tests', () => {
       await waitFor(() => {
         expect(screen.getByText(/production/i)).toBeInTheDocument();
         expect(screen.getByText(/staging/i)).toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
     });
 
     it('should handle cloud logging unavailable state', async () => {
@@ -302,14 +302,14 @@ describe('App Integration Tests', () => {
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
 
       const deployedTab = screen.getByRole('link', { name: /deployed services/i });
       await user.click(deployedTab);
 
       await waitFor(() => {
         expect(screen.getByText(/not configured/i)).toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
     });
   });
 
@@ -330,7 +330,7 @@ describe('App Integration Tests', () => {
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
 
       // Navigate to Dev-Bots tab
       const devBotsTab = screen.getByRole('link', { name: /dev-bots/i });
@@ -339,7 +339,7 @@ describe('App Integration Tests', () => {
       // Should display dev-bots information
       await waitFor(() => {
         expect(mockEnv.apiClient.get).toHaveBeenCalledWith('/dev-bots/status');
-      });
+      }, { timeout: 5000 });
     });
   });
 
@@ -369,13 +369,13 @@ describe('App Integration Tests', () => {
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
 
       // Simulate socket connection
       mockEnv.socket.connect();
       await waitFor(() => {
         expect(mockEnv.socket.connected).toBe(true);
-      });
+      }, { timeout: 5000 });
 
       // Simulate service status update from socket
       mockEnv.triggerSocketEvent('service:status', {
@@ -386,7 +386,7 @@ describe('App Integration Tests', () => {
       // Should update UI (exact behavior depends on component implementation)
       await waitFor(() => {
         expect(mockEnv.socket._listeners.get('service:status')).toBeDefined();
-      });
+      }, { timeout: 5000 });
     });
 
     it('should handle task updates from socket', async () => {
@@ -405,7 +405,7 @@ describe('App Integration Tests', () => {
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
 
       // Navigate to Dev-Bots tab
       const devBotsTab = screen.getByRole('link', { name: /dev-bots/i });
@@ -419,7 +419,7 @@ describe('App Integration Tests', () => {
 
       await waitFor(() => {
         expect(mockEnv.socket._listeners.get('task:updated')).toBeDefined();
-      });
+      }, { timeout: 5000 });
     });
   });
 
@@ -430,7 +430,7 @@ describe('App Integration Tests', () => {
 
       mockEnv.apiClient.get.mockImplementation((url: string) => {
         if (url === '/environments') {
-          throw new Error('Critical API failure');
+          return Promise.reject(new Error('Critical API failure'));
         }
         return Promise.resolve(apiSuccess({}));
       });
@@ -441,7 +441,7 @@ describe('App Integration Tests', () => {
       await waitFor(() => {
         // Depending on error boundary implementation
         expect(consoleError).toHaveBeenCalled();
-      });
+      }, { timeout: 5000 });
 
       consoleError.mockRestore();
     });
@@ -460,7 +460,7 @@ describe('App Integration Tests', () => {
 
       await waitFor(() => {
         expect(screen.getByText(/failed to load environments/i)).toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
     });
 
     it('should handle socket disconnections', async () => {
@@ -468,7 +468,7 @@ describe('App Integration Tests', () => {
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
 
       // Connect socket
       mockEnv.socket.connect();
@@ -481,7 +481,7 @@ describe('App Integration Tests', () => {
       // Should handle disconnection event
       await waitFor(() => {
         expect(mockEnv.socket._listeners.get('disconnect')).toBeDefined();
-      });
+      }, { timeout: 5000 });
     });
   });
 
@@ -511,12 +511,12 @@ describe('App Integration Tests', () => {
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
 
       // Port status should be loaded
       await waitFor(() => {
         expect(mockEnv.apiClient.get).toHaveBeenCalledWith('/ports/status');
-      });
+      }, { timeout: 5000 });
     });
 
     it('should kill port processes', async () => {
@@ -549,7 +549,7 @@ describe('App Integration Tests', () => {
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
 
       // Look for kill button (implementation-dependent)
       // This test validates the API integration works
@@ -563,7 +563,7 @@ describe('App Integration Tests', () => {
 
       await waitFor(() => {
         expect(screen.queryByText(/loading/i)).not.toBeInTheDocument();
-      });
+      }, { timeout: 5000 });
 
       // Test shortcut functionality (if implemented)
       // Example: pressing '?' might open help

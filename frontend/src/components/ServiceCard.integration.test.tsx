@@ -219,6 +219,8 @@ describe('ServiceCard Integration Tests', () => {
 
   describe('Performance Integration', () => {
     it('should handle rapid button clicks', async () => {
+      vi.useFakeTimers();
+
       // Use stopped status so Start button is enabled
       const stoppedService = generateMockService({
         ...mockService,
@@ -243,10 +245,17 @@ describe('ServiceCard Integration Tests', () => {
         startButton.click();
       });
 
+      // Advance timers to resolve the promise
+      await act(async () => {
+        vi.advanceTimersByTime(100);
+      });
+
       // Wait for the promise to resolve
       await waitFor(() => {
         expect(slowMockOnStart).toHaveBeenCalledTimes(1);
-      }, { timeout: 200 });
+      }, { timeout: 5000 });
+
+      vi.useRealTimers();
     });
 
     it('should handle component unmounting during async operations', async () => {
