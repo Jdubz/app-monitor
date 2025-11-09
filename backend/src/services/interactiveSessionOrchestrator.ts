@@ -11,6 +11,7 @@ import {
   DevBotCredentialsManager,
   DevBotContainerLifecycle,
 } from './devbot/index.js';
+import { getLogPaths } from './workTargetDocumentation.js';
 
 export interface InteractiveSessionOrchestratorConfig {
   dockerImage: string;
@@ -96,6 +97,21 @@ export class InteractiveSessionOrchestrator {
     const builder = DevBotContainerPresets.interactiveSession(session.id, session.ownerEmail)
       .label('dev-bot.model.provider', session.modelProvider)
       .label('dev-bot.model.name', session.modelName);
+
+    // Mount work-target specific log directories for troubleshooting
+    // Interactive sessions default to 'dev-bots' work target
+    const workTarget = 'dev-bots';
+    const logPaths = getLogPaths(workTarget);
+    builder.mountWorkTargetLogs(logPaths);
+
+    if (logPaths.length > 0) {
+      logger.info({
+        category: 'system',
+        action: 'work_target_logs_configured',
+        message: `Configured ${logPaths.length} log mount(s) for interactive session`,
+        details: { workTarget, sessionId: session.id },
+      });
+    }
 
     // Add logs directory
     builder.volume(hostLogsDir, '/app/logs', 'rw');

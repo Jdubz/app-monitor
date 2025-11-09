@@ -9,6 +9,7 @@
  */
 
 import Docker from 'dockerode';
+import fs from 'fs';
 import { logger } from '../../utils/logger.js';
 
 export interface ContainerLabels {
@@ -199,6 +200,26 @@ export class DevBotContainerBuilder {
       this.config.extraHosts = [];
     }
     this.config.extraHosts.push(host);
+    return this;
+  }
+
+  /**
+   * Mount work-target specific log directories for troubleshooting
+   *
+   * @param logMappings - Array of log path mappings from work target config
+   * @returns this builder for chaining
+   */
+  mountWorkTargetLogs(logMappings: Array<{ hostPath: string; containerPath: string; mode?: 'ro' | 'rw' }>): this {
+    for (const mapping of logMappings) {
+      // Only mount if the host path exists
+      try {
+        if (fs.existsSync(mapping.hostPath)) {
+          this.volume(mapping.hostPath, mapping.containerPath, mapping.mode || 'ro');
+        }
+      } catch (err) {
+        // Silently skip if we can't check existence (e.g., in test environments)
+      }
+    }
     return this;
   }
 

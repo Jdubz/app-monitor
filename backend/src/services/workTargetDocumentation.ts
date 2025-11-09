@@ -25,9 +25,19 @@ export interface InvestigationStartingPoint {
   searchHints?: string[];
 }
 
+export interface LogPathMapping {
+  hostPath: string;
+  containerPath: string;
+  description: string;
+  mode?: 'ro' | 'rw';
+}
+
 export interface WorkTargetConfig {
   name: string;
   description: string;
+
+  // Log directories to mount for troubleshooting
+  logPaths?: LogPathMapping[];
 
   // Documentation to read FIRST
   gettingStarted: DocumentationReference[];
@@ -62,6 +72,27 @@ export const WORK_TARGET_DOCS: Record<string, WorkTargetConfig> = {
   'dev-bots': {
     name: 'Dev-Bots System',
     description: 'Autonomous AI agents for code tasks with Docker isolation',
+
+    logPaths: [
+      {
+        hostPath: '/opt/app-monitor/shared/backend/logs',
+        containerPath: '/host-logs/backend',
+        description: 'Backend application logs',
+        mode: 'ro'
+      },
+      {
+        hostPath: '/opt/app-monitor/shared/frontend/logs',
+        containerPath: '/host-logs/frontend',
+        description: 'Frontend application logs',
+        mode: 'ro'
+      },
+      {
+        hostPath: '/var/log/nginx',
+        containerPath: '/host-logs/nginx',
+        description: 'Nginx access and error logs',
+        mode: 'ro'
+      }
+    ],
 
     gettingStarted: [
       {
@@ -217,6 +248,21 @@ export const WORK_TARGET_DOCS: Record<string, WorkTargetConfig> = {
     name: 'Backend API',
     description: 'Main backend service with Express.js',
 
+    logPaths: [
+      {
+        hostPath: '/opt/app-monitor/shared/backend/logs',
+        containerPath: '/host-logs/backend',
+        description: 'Backend application logs',
+        mode: 'ro'
+      },
+      {
+        hostPath: '/var/log/nginx',
+        containerPath: '/host-logs/nginx',
+        description: 'Nginx logs for backend requests',
+        mode: 'ro'
+      }
+    ],
+
     gettingStarted: [
       {
         path: '../docs/architecture/backend.md',
@@ -276,6 +322,21 @@ export const WORK_TARGET_DOCS: Record<string, WorkTargetConfig> = {
   'frontend': {
     name: 'Frontend Application',
     description: 'React-based frontend application',
+
+    logPaths: [
+      {
+        hostPath: '/opt/app-monitor/shared/frontend/logs',
+        containerPath: '/host-logs/frontend',
+        description: 'Frontend build and runtime logs',
+        mode: 'ro'
+      },
+      {
+        hostPath: '/var/log/nginx',
+        containerPath: '/host-logs/nginx',
+        description: 'Nginx logs for frontend requests',
+        mode: 'ro'
+      }
+    ],
 
     gettingStarted: [
       {
@@ -349,6 +410,14 @@ export function getCriticalDocumentation(target: string): DocumentationReference
     ...config.gettingStarted.filter(d => d.priority === 'critical'),
     ...config.architecture.filter(d => d.priority === 'critical')
   ];
+}
+
+/**
+ * Get log path mappings for a work target
+ */
+export function getLogPaths(target: string): LogPathMapping[] {
+  const config = getWorkTargetDocs(target);
+  return config?.logPaths || [];
 }
 
 /**
