@@ -311,7 +311,6 @@ const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOp
   let remainder = '';
   let closed = false;
   let currentRead: Promise<void> = Promise.resolve();
-  let pendingFollowRead = false;
 
   const heartbeat = setInterval(() => {
     if (!closed) {

@@ -1,5 +1,4 @@
 import { EventEmitter } from 'events';
-import * as fs from 'fs';
 import * as crypto from 'crypto';
 import { logger } from '../utils/logger.js';
 import { ProcessManager, ProcessInfo } from './processManager.js';
@@ -1380,31 +1379,9 @@ export class DevBotsManager extends EventEmitter {
     throw new Error('exportTasks() is deprecated - persistence layer removed');
   }
 
-  public async importTasks(importPath: string): Promise<void> {
-    try {
-      // const importedTasks = this.taskPersistence.importTasks(importPath); // DEPRECATED - persistence layer removed
-      throw new Error('importTasks() is deprecated - persistence layer removed');
-
-      // Import tasks directly into SQLite
-      // for (const task of importedTasks) {
-      //   await this.taskQueue.createTask(task);
-      // }
-
-      // this.saveTasksToPersistence(); // DEPRECATED
-      // logger.info({
-      // category: 'process',
-      // action: 'imported_importedtasks_length_tasks_from_importpat',
-      // message: `Imported ${importedTasks.length} tasks from ${importPath}`
-      // });
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_import_tasks',
-      message: 'Failed to import tasks:',
-      error: error
-    });
-      throw error;
-    }
+  public async importTasks(_importPath: string): Promise<void> {
+    // DEPRECATED: Import tasks functionality removed with persistence layer
+    throw new Error('importTasks() is deprecated - persistence layer removed');
   }
   
 

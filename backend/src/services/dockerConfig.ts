@@ -7,6 +7,7 @@
 
 import os from 'os';
 import path from 'path';
+import fs from 'fs';
 import { logger } from '../utils/logger.js';
 
 /**
@@ -52,8 +53,6 @@ export function getClaudeCredentialsPaths(): { exists: boolean; path: string } {
   const homeDir = os.homedir();
   const newPath = path.join(homeDir, '.claude', '.credentials.json');
   const oldPath = path.join(homeDir, '.claude', 'credentials.json');
-
-  const fs = require('fs');
 
   if (fs.existsSync(newPath)) {
     return { exists: true, path: newPath };
