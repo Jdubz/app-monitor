@@ -69,7 +69,8 @@ describe('Dev-Bots Integration Tests', () => {
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    // Don't use vi.restoreAllMocks() as it can interfere with API client mocks
+    vi.clearAllMocks();
   });
 
   describe('Task Queue Management', () => {
@@ -99,32 +100,31 @@ describe('Dev-Bots Integration Tests', () => {
 
     it('should display pending, active, and completed tasks', async () => {
       const tasks = mockGenerators.devBotsTaskCollections();
-
-      mockEnv.apiClient.get.mockImplementation((url: string) => {
-        if (url === '/dev-bots/status') {
-          return Promise.resolve(
-            apiSuccess(
-              mockGenerators.devBotsStatus({
-                tasks,
-                queueSize: tasks.pending.length,
-                activeTasks: tasks.active.length,
-              })
-            )
-          );
-        }
-        return Promise.resolve(apiSuccess({}));
+      const status = mockGenerators.devBotsStatus({
+        tasks,
+        queueSize: tasks.pending.length,
+        activeTasks: tasks.active.length,
       });
+
+      mockEnv.apiClient.get.mockImplementation(
+        createDefaultMockImplementation({
+          '/dev-bots/status': status,
+        })
+      );
 
       renderDevBotsTab();
 
-      await waitFor(() => {
-        // Should show pending tasks
-        expect(tasks.pending.length).toBeGreaterThan(0);
-        // Should show active tasks
-        expect(tasks.active.length).toBeGreaterThan(0);
-        // Should show completed tasks
-        expect(tasks.completed.length).toBeGreaterThan(0);
-      });
+      await waitFor(
+        () => {
+          expect(mockEnv.apiClient.get).toHaveBeenCalledWith('/dev-bots/status');
+        },
+        { timeout: 5000 }
+      );
+
+      // Verify the mock data has the expected task counts
+      expect(tasks.pending.length).toBeGreaterThan(0);
+      expect(tasks.active.length).toBeGreaterThan(0);
+      expect(tasks.completed.length).toBeGreaterThan(0);
     });
 
     it('should handle task updates via socket', async () => {
@@ -234,20 +234,21 @@ describe('Dev-Bots Integration Tests', () => {
         maxWorkers: 5,
       });
 
-      mockEnv.apiClient.get.mockImplementation((url: string) => {
-        if (url === '/dev-bots/status') {
-          return Promise.resolve(apiSuccess(status));
-        }
-        return Promise.resolve(apiSuccess({}));
-      });
+      mockEnv.apiClient.get.mockImplementation(
+        createDefaultMockImplementation({
+          '/dev-bots/status': status,
+        })
+      );
 
       renderDevBotsTab();
 
       await waitFor(() => {
-        // Should display worker count
-        expect(status.workerCount).toBe(2);
-        expect(status.maxWorkers).toBe(5);
+        expect(mockEnv.apiClient.get).toHaveBeenCalledWith('/dev-bots/status');
       });
+
+      // Verify the mock data
+      expect(status.workerCount).toBe(2);
+      expect(status.maxWorkers).toBe(5);
     });
 
     it('should handle worker status updates via socket', async () => {
@@ -278,36 +279,32 @@ describe('Dev-Bots Integration Tests', () => {
         availableWorkerTypes: ['automation', 'interactive'],
       });
 
-      mockEnv.apiClient.get.mockImplementation((url: string) => {
-        if (url === '/dev-bots/status') {
-          return Promise.resolve(apiSuccess(status));
-        }
-        return Promise.resolve(apiSuccess({}));
-      });
+      mockEnv.apiClient.get.mockImplementation(
+        createDefaultMockImplementation({
+          '/dev-bots/status': status,
+        })
+      );
 
       renderDevBotsTab();
 
       await waitFor(() => {
-        expect(status.activeWorkerTypes).toContain('automation');
-        expect(status.availableWorkerTypes).toContain('automation');
-        expect(status.availableWorkerTypes).toContain('interactive');
+        expect(mockEnv.apiClient.get).toHaveBeenCalledWith('/dev-bots/status');
       });
+
+      // Verify the mock data
+      expect(status.activeWorkerTypes).toContain('automation');
+      expect(status.availableWorkerTypes).toContain('automation');
+      expect(status.availableWorkerTypes).toContain('interactive');
     });
   });
 
   describe('Interactive Sessions', () => {
     it('should show no active session state', async () => {
-      mockEnv.apiClient.get.mockImplementation((url: string) => {
-        if (url === '/dev-bots/status') {
-          return Promise.resolve(apiSuccess(mockGenerators.devBotsStatus()));
-        }
-        if (url === '/dev-bots/interactive/session') {
-          return Promise.resolve(
-            apiSuccess(mockGenerators.devBotsInteractiveSessionState(false))
-          );
-        }
-        return Promise.resolve(apiSuccess({}));
-      });
+      mockEnv.apiClient.get.mockImplementation(
+        createDefaultMockImplementation({
+          '/dev-bots/interactive/session': mockGenerators.devBotsInteractiveSessionState(false),
+        })
+      );
 
       renderDevBotsTab();
 
@@ -319,15 +316,11 @@ describe('Dev-Bots Integration Tests', () => {
     it('should display active session', async () => {
       const sessionState = mockGenerators.devBotsInteractiveSessionState(true);
 
-      mockEnv.apiClient.get.mockImplementation((url: string) => {
-        if (url === '/dev-bots/status') {
-          return Promise.resolve(apiSuccess(mockGenerators.devBotsStatus()));
-        }
-        if (url === '/dev-bots/interactive/session') {
-          return Promise.resolve(apiSuccess(sessionState));
-        }
-        return Promise.resolve(apiSuccess({}));
-      });
+      mockEnv.apiClient.get.mockImplementation(
+        createDefaultMockImplementation({
+          '/dev-bots/interactive/session': sessionState,
+        })
+      );
 
       renderDevBotsTab();
 
@@ -341,17 +334,11 @@ describe('Dev-Bots Integration Tests', () => {
     });
 
     it('should start a new interactive session', async () => {
-      mockEnv.apiClient.get.mockImplementation((url: string) => {
-        if (url === '/dev-bots/status') {
-          return Promise.resolve(apiSuccess(mockGenerators.devBotsStatus()));
-        }
-        if (url === '/dev-bots/interactive/session') {
-          return Promise.resolve(
-            apiSuccess(mockGenerators.devBotsInteractiveSessionState(false))
-          );
-        }
-        return Promise.resolve(apiSuccess({}));
-      });
+      mockEnv.apiClient.get.mockImplementation(
+        createDefaultMockImplementation({
+          '/dev-bots/interactive/session': mockGenerators.devBotsInteractiveSessionState(false),
+        })
+      );
 
       mockEnv.apiClient.post.mockImplementation((url: string) => {
         if (url === '/dev-bots/interactive/session') {
@@ -374,17 +361,11 @@ describe('Dev-Bots Integration Tests', () => {
     });
 
     it('should end an active interactive session', async () => {
-      mockEnv.apiClient.get.mockImplementation((url: string) => {
-        if (url === '/dev-bots/status') {
-          return Promise.resolve(apiSuccess(mockGenerators.devBotsStatus()));
-        }
-        if (url === '/dev-bots/interactive/session') {
-          return Promise.resolve(
-            apiSuccess(mockGenerators.devBotsInteractiveSessionState(true))
-          );
-        }
-        return Promise.resolve(apiSuccess({}));
-      });
+      mockEnv.apiClient.get.mockImplementation(
+        createDefaultMockImplementation({
+          '/dev-bots/interactive/session': mockGenerators.devBotsInteractiveSessionState(true),
+        })
+      );
 
       mockEnv.apiClient.delete.mockImplementation((url: string) => {
         if (url === '/dev-bots/interactive/session') {
@@ -410,15 +391,11 @@ describe('Dev-Bots Integration Tests', () => {
     it('should load and display agent comparison data', async () => {
       const comparison = mockGenerators.devBotsAgentComparison();
 
-      mockEnv.apiClient.get.mockImplementation((url: string) => {
-        if (url === '/dev-bots/status') {
-          return Promise.resolve(apiSuccess(mockGenerators.devBotsStatus()));
-        }
-        if (url === '/dev-bots/agent-comparison') {
-          return Promise.resolve(apiSuccess({ comparison }));
-        }
-        return Promise.resolve(apiSuccess({}));
-      });
+      mockEnv.apiClient.get.mockImplementation(
+        createDefaultMockImplementation({
+          '/dev-bots/agent-comparison': { comparison },
+        })
+      );
 
       renderDevBotsTab();
 
@@ -434,15 +411,11 @@ describe('Dev-Bots Integration Tests', () => {
     it('should display task type breakdown', async () => {
       const comparison = mockGenerators.devBotsAgentComparison();
 
-      mockEnv.apiClient.get.mockImplementation((url: string) => {
-        if (url === '/dev-bots/status') {
-          return Promise.resolve(apiSuccess(mockGenerators.devBotsStatus()));
-        }
-        if (url === '/dev-bots/agent-comparison') {
-          return Promise.resolve(apiSuccess({ comparison }));
-        }
-        return Promise.resolve(apiSuccess({}));
-      });
+      mockEnv.apiClient.get.mockImplementation(
+        createDefaultMockImplementation({
+          '/dev-bots/agent-comparison': { comparison },
+        })
+      );
 
       renderDevBotsTab();
 
@@ -466,7 +439,8 @@ describe('Dev-Bots Integration Tests', () => {
             mockEnv.respondWithError('SERVER_ERROR', 'Failed to fetch dev-bots status')
           );
         }
-        return Promise.resolve(apiSuccess({}));
+        // Use default mocks for other endpoints
+        return createDefaultMockImplementation()(url);
       });
 
       renderDevBotsTab();
@@ -501,15 +475,13 @@ describe('Dev-Bots Integration Tests', () => {
 
     it('should handle task fetch errors', async () => {
       mockEnv.apiClient.get.mockImplementation((url: string) => {
-        if (url === '/dev-bots/status') {
-          return Promise.resolve(apiSuccess(mockGenerators.devBotsStatus()));
-        }
         if (url.includes('/tasks/') && url.endsWith('/detail')) {
           return Promise.reject(
             mockEnv.respondWithError('NOT_FOUND', 'Task not found')
           );
         }
-        return Promise.resolve(apiSuccess({}));
+        // Use default mocks for other endpoints
+        return createDefaultMockImplementation()(url);
       });
 
       renderDevBotsTab();
