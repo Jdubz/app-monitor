@@ -21,6 +21,8 @@ export interface PRMonitorConfig {
   enableAutoMerge: boolean;
   maxFollowupDepth?: number;
   maxFollowupTotal?: number;
+  mergeRetryAttempts?: number;
+  mergeRetryDelayMs?: number[];
 }
 
 /**
@@ -32,6 +34,8 @@ export class PRMonitorService {
   private readonly taskQueue: TaskQueueService;
   private readonly MAX_FOLLOWUP_DEPTH: number;
   private readonly MAX_FOLLOWUP_TOTAL: number;
+  private readonly MERGE_RETRY_ATTEMPTS: number;
+  private readonly MERGE_RETRY_DELAYS: number[];
 
   constructor(
     taskQueue: TaskQueueService,
@@ -42,10 +46,14 @@ export class PRMonitorService {
     this.config = {
       enableAutoMerge: config.enableAutoMerge ?? true,
       maxFollowupDepth: config.maxFollowupDepth ?? 3,
-      maxFollowupTotal: config.maxFollowupTotal ?? 5
+      maxFollowupTotal: config.maxFollowupTotal ?? 5,
+      mergeRetryAttempts: config.mergeRetryAttempts ?? 3,
+      mergeRetryDelayMs: config.mergeRetryDelayMs ?? [5000, 15000, 45000] // 5s, 15s, 45s
     };
     this.MAX_FOLLOWUP_DEPTH = this.config.maxFollowupDepth!;
     this.MAX_FOLLOWUP_TOTAL = this.config.maxFollowupTotal!;
+    this.MERGE_RETRY_ATTEMPTS = this.config.mergeRetryAttempts!;
+    this.MERGE_RETRY_DELAYS = this.config.mergeRetryDelayMs!;
   }
 
   /**
@@ -371,43 +379,244 @@ ${taskChain}
   }
 
   /**
-   * Merge a PR
+   * Helper to sleep/delay execution
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Check if an error is retryable
+   */
+  private isRetryableError(error: unknown): boolean {
+    const errorMsg = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+    
+    const retryablePatterns = [
+      'temporarily unavailable',
+      'rate limit',
+      'timeout',
+      'network error',
+      'econnreset',
+      '503 service unavailable',
+      '502 bad gateway',
+      'etimedout',
+      'try again'
+    ];
+    
+    return retryablePatterns.some(pattern => errorMsg.includes(pattern));
+  }
+
+  /**
+   * Merge a PR with graceful degradation
+   * Tries multiple merge strategies with retry logic
    */
   async mergePR(prNumber: number, taskId: string): Promise<boolean> {
-    try {
-      logger.info({
-        category: 'pr-workflow',
-        action: 'merging_pr',
-        message: `Merging PR #${prNumber}`
-      });
+    logger.info({
+      category: 'pr-workflow',
+      action: 'merging_pr_start',
+      message: `Attempting to merge PR #${prNumber}`,
+      details: { prNumber, taskId }
+    });
 
-      await this.githubPR.mergePR(prNumber);
-
-      await this.updateTaskPRStatus(taskId, 'merged');
-      
-      // Clear fingerprints for this PR since it's merged
-      this.taskQueue.clearFollowupFingerprints(prNumber);
-
-      logger.info({
-        category: 'pr-workflow',
-        action: 'pr_merged',
-        message: `Successfully merged PR #${prNumber}`,
-        details: { prNumber, taskId }
-      });
-
+    // Strategy 1: Squash merge (preferred - cleanest history)
+    const squashResult = await this.tryMergeStrategy(prNumber, 'squash');
+    if (squashResult.success) {
+      await this.handleMergeSuccess(prNumber, taskId, 'squash');
       return true;
+    }
+
+    // If squash failed with retryable error, it already retried. 
+    // Try next strategy.
+    logger.warn({
+      category: 'pr-workflow',
+      action: 'merge_strategy_failed',
+      message: `Squash merge failed for PR #${prNumber}, trying rebase`,
+      details: { error: squashResult.error }
+    });
+
+    // Strategy 2: Rebase merge
+    const rebaseResult = await this.tryMergeStrategy(prNumber, 'rebase');
+    if (rebaseResult.success) {
+      await this.handleMergeSuccess(prNumber, taskId, 'rebase');
+      return true;
+    }
+
+    logger.warn({
+      category: 'pr-workflow',
+      action: 'merge_strategy_failed',
+      message: `Rebase merge failed for PR #${prNumber}, trying merge commit`,
+      details: { error: rebaseResult.error }
+    });
+
+    // Strategy 3: Merge commit (last resort - preserves all commits)
+    const mergeResult = await this.tryMergeStrategy(prNumber, 'merge');
+    if (mergeResult.success) {
+      await this.handleMergeSuccess(prNumber, taskId, 'merge');
+      return true;
+    }
+
+    // All strategies failed - create manual intervention task
+    logger.error({
+      category: 'pr-workflow',
+      action: 'all_merge_strategies_failed',
+      message: `All merge strategies failed for PR #${prNumber}`,
+      details: {
+        prNumber,
+        taskId,
+        squashError: squashResult.error,
+        rebaseError: rebaseResult.error,
+        mergeError: mergeResult.error
+      }
+    });
+
+    await this.handleMergeFailure(prNumber, taskId, {
+      squashError: squashResult.error,
+      rebaseError: rebaseResult.error,
+      mergeError: mergeResult.error
+    });
+
+    return false;
+  }
+
+  /**
+   * Try a specific merge strategy with retry logic
+   */
+  private async tryMergeStrategy(
+    prNumber: number,
+    method: 'merge' | 'squash' | 'rebase',
+    attempt: number = 0
+  ): Promise<{ success: boolean; error?: string }> {
+    try {
+      await this.githubPR.mergePR(prNumber, method);
+      
+      logger.info({
+        category: 'pr-workflow',
+        action: 'merge_strategy_success',
+        message: `Successfully merged PR #${prNumber} using ${method}`,
+        details: { prNumber, method, attempt }
+      });
+      
+      return { success: true };
     } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      
+      // Check if we should retry
+      if (attempt < this.MERGE_RETRY_ATTEMPTS && this.isRetryableError(error)) {
+        const delay = this.MERGE_RETRY_DELAYS[attempt] || 45000;
+        
+        logger.warn({
+          category: 'pr-workflow',
+          action: 'merge_retry_scheduled',
+          message: `Retrying ${method} merge for PR #${prNumber} in ${delay}ms (attempt ${attempt + 1}/${this.MERGE_RETRY_ATTEMPTS})`,
+          details: { prNumber, method, attempt: attempt + 1, delay, error: errorMsg }
+        });
+        
+        await this.sleep(delay);
+        return await this.tryMergeStrategy(prNumber, method, attempt + 1);
+      }
+      
+      // Non-retryable error or max retries exceeded
       logger.error({
         category: 'pr-workflow',
-        action: 'merge_pr_failed',
-        message: `Failed to merge PR #${prNumber}`,
-        error,
-        details: { prNumber }
+        action: 'merge_strategy_failed',
+        message: `${method} merge failed for PR #${prNumber}`,
+        details: { prNumber, method, attempt, error: errorMsg }
       });
-      const failureNote = error instanceof Error ? `merge_failed:${error.message}` : 'merge_failed';
-      await this.updateTaskPRStatus(taskId, 'pending_review', failureNote);
-      return false;
+      
+      return { success: false, error: errorMsg };
     }
+  }
+
+  /**
+   * Handle successful merge
+   */
+  private async handleMergeSuccess(
+    prNumber: number,
+    taskId: string,
+    method: string
+  ): Promise<void> {
+    await this.updateTaskPRStatus(taskId, 'merged');
+    
+    // Clear fingerprints for this PR since it's merged
+    this.taskQueue.clearFollowupFingerprints(prNumber);
+
+    logger.info({
+      category: 'pr-workflow',
+      action: 'pr_merged',
+      message: `Successfully merged PR #${prNumber} using ${method}`,
+      details: { prNumber, taskId, method }
+    });
+  }
+
+  /**
+   * Handle merge failure - create manual intervention task
+   */
+  private async handleMergeFailure(
+    prNumber: number,
+    taskId: string,
+    errors: { squashError?: string; rebaseError?: string; mergeError?: string }
+  ): Promise<void> {
+    const task = this.taskQueue.getTask(taskId);
+    
+    const manualMergeTask = this.taskQueue.createTask({
+      title: `🚨 MANUAL MERGE REQUIRED: PR #${prNumber}`,
+      description: `All automated merge strategies failed for PR #${prNumber}.
+
+**PR:** ${task?.pr_url || `https://github.com/Jdubz/app-monitor/pull/${prNumber}`}
+**Branch:** ${task?.pr_branch || 'unknown'}
+**Original task:** ${taskId}
+
+**What happened:**
+All three merge strategies failed after retry attempts:
+
+1. **Squash merge:** ${errors.squashError || 'failed'}
+2. **Rebase merge:** ${errors.rebaseError || 'failed'}
+3. **Merge commit:** ${errors.mergeError || 'failed'}
+
+**Possible causes:**
+- Merge conflicts that require manual resolution
+- Branch protection rules preventing merge
+- Required status checks not passing
+- PR not approved by required reviewers
+- Branch is behind main and can't be rebased automatically
+
+**Action required:**
+1. Review the PR and identify the blocking issue
+2. If merge conflicts: Resolve them manually
+3. If status checks: Wait for them to pass or investigate failures
+4. If approvals: Get required reviews
+5. Once ready, merge manually via GitHub UI or CLI
+
+**To merge manually:**
+\`\`\`bash
+gh pr merge ${prNumber} --squash  # Or --merge or --rebase
+\`\`\``,
+      type: 'manual-intervention',
+      priority: 9, // High priority (below escalation)
+      assigned_agent: 'human',
+      followup_for_pr: prNumber,
+      pr_branch: task?.pr_branch,
+      acceptance_criteria: [
+        `PR #${prNumber} is successfully merged`,
+        `Blocking issue is identified and resolved`,
+        `Any systemic merge issues are documented`
+      ]
+    });
+
+    // Update original task
+    await this.updateTaskPRStatus(taskId, 'pending_review', `manual_merge_required:${manualMergeTask.id}`);
+
+    logger.error({
+      category: 'pr-workflow',
+      action: 'manual_merge_required',
+      message: `Manual merge task created for PR #${prNumber}`,
+      details: {
+        prNumber,
+        taskId,
+        manualMergeTaskId: manualMergeTask.id,
+        errors
+      }
+    });
   }
 
   /**

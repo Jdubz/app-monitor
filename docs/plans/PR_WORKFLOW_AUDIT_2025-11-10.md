@@ -18,8 +18,58 @@
 | Item | Status | Time Est | Time Actual | Notes |
 |------|--------|----------|-------------|-------|
 | 1. Followup Depth Limits | ✅ COMPLETE | 4h | 0.5h | Implemented depth/total tracking + escalation |
-| 2. Graceful Degradation | ⏳ PENDING | 6h | - | Next |
-| 3. Edge Case Handling | ⏳ PENDING | 8h | - | After #2 |
+| 2. Graceful Degradation | ✅ COMPLETE | 6h | 0.5h | Multi-strategy merge with retry logic |
+| 3. Edge Case Handling | ⏳ PENDING | 8h | - | Next |
+
+**Implementation Details - Item 2:**
+
+**Files Modified:**
+- `backend/src/services/prMonitor.service.ts`
+  - Added `mergeRetryAttempts` and `mergeRetryDelayMs` config
+  - Added `tryMergeStrategy()` - attempts merge with exponential backoff retry
+  - Added `isRetryableError()` - detects transient failures
+  - Added `handleMergeSuccess()` - cleanup on successful merge
+  - Added `handleMergeFailure()` - creates manual intervention task
+  - Updated `mergePR()` - tries squash → rebase → merge strategies
+
+**How it Works:**
+1. Try squash merge (cleanest history)
+   - If retryable error: Retry with backoff (5s, 15s, 45s)
+   - Max 3 attempts per strategy
+2. If squash fails, try rebase merge
+   - Same retry logic
+3. If rebase fails, try merge commit
+   - Same retry logic
+4. If all fail, create manual merge task
+   - Priority 9 (high)
+   - Type: 'manual-intervention'
+   - Contains all error details
+   - Guides human through resolution
+
+**Retryable Errors:**
+- Rate limits
+- Timeouts
+- Network errors
+- Temporary service unavailability
+
+**Manual Merge Task:**
+- Explains what failed and why
+- Provides troubleshooting steps
+- Includes command to merge manually
+- Links to PR and branch
+
+**Benefits:**
+✅ Handles transient GitHub API failures
+✅ Tries multiple merge strategies automatically
+✅ Exponential backoff prevents hammering API
+✅ Falls back to human when automation can't proceed
+✅ Provides clear guidance for manual intervention
+
+**Configuration:**
+- mergeRetryAttempts: 3 (per strategy)
+- mergeRetryDelayMs: [5000, 15000, 45000] (exponential backoff)
+
+Tests: ✅ All passing
 
 **Implementation Details - Item 1:**
 
