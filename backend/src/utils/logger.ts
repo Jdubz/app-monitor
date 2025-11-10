@@ -51,6 +51,9 @@ export type LogCategory =
   | 'quality-gates'
   | 'quality-improvement'
   | 'quality-observation'
+  | 'classification' // Task classification for intelligent agent selection
+  | 'automation' // Agent selection and automation
+  | 'delegation' // Copilot delegation
   | 'recovery'
   | 'scripts'
   | 'socket'

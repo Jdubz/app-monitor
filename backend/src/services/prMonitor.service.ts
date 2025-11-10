@@ -14,6 +14,8 @@ import { logger } from '../utils/logger.js';
 import { GitHubPRService, getGitHubPRService, type PRStatus, type CopilotReviewAnalysis } from './githubPR.service.js';
 import { TaskQueueService } from './taskQueue.sqlite.js';
 import type { Task } from './taskQueue.sqlite.js';
+import { ReviewCommentTracker } from './reviewCommentTracker.service.js';
+import { getDatabase } from './database.js';
 
 type TaskPRStatus = NonNullable<Task['pr_status']>;
 
@@ -32,6 +34,7 @@ export class PRMonitorService {
   private readonly config: PRMonitorConfig;
   private readonly githubPR: GitHubPRService;
   private readonly taskQueue: TaskQueueService;
+  private readonly reviewCommentTracker: ReviewCommentTracker;
   private readonly MAX_FOLLOWUP_DEPTH: number;
   private readonly MAX_FOLLOWUP_TOTAL: number;
   private readonly MERGE_RETRY_ATTEMPTS: number;
@@ -43,6 +46,7 @@ export class PRMonitorService {
   ) {
     this.taskQueue = taskQueue;
     this.githubPR = getGitHubPRService();
+    this.reviewCommentTracker = new ReviewCommentTracker(getDatabase());
     this.config = {
       enableAutoMerge: config.enableAutoMerge ?? true,
       maxFollowupDepth: config.maxFollowupDepth ?? 3,
@@ -57,9 +61,166 @@ export class PRMonitorService {
   }
 
   /**
+   * Detect if a PR was created by our system (dev bots)
+   * System PRs should be auto-adopted if orphaned, user PRs should not
+   */
+  detectSystemCreatedPR(prBranch: string, prAuthor: string, prTitle: string): {
+    isSystemPR: boolean;
+    reason: string;
+    extractedTaskId?: string;
+  } {
+    // Pattern 1: Branch name matches task pattern
+    const branchMatch = prBranch.match(/task-(implementation|investigation|bugfix|feature|refactor|docs)-([a-f0-9-]+)/i);
+    if (branchMatch && branchMatch[2]) {
+      return {
+        isSystemPR: true,
+        reason: `Branch pattern: ${prBranch}`,
+        extractedTaskId: `task-${branchMatch[1]}-${branchMatch[2]}`
+      };
+    }
+
+    // Pattern 2: Simple task- prefix
+    const simpleTaskMatch = prBranch.match(/^task-([a-f0-9-]{8,})/i);
+    if (simpleTaskMatch) {
+      return {
+        isSystemPR: true,
+        reason: `Branch starts with task-: ${prBranch}`,
+        extractedTaskId: prBranch.split('/')[0] // Take before any slashes
+      };
+    }
+
+    // Pattern 3: Author is a bot
+    const botAuthors = ['github-actions[bot]', 'dependabot[bot]', 'renovate[bot]'];
+    const authorLower = prAuthor.toLowerCase();
+    if (botAuthors.some(bot => authorLower.includes(bot.toLowerCase()))) {
+      return {
+        isSystemPR: true,
+        reason: `Bot author: ${prAuthor}`
+      };
+    }
+
+    // Pattern 4: Title contains task ID
+    const titleMatch = prTitle.match(/\b(task-[a-z]+-[a-f0-9-]{8,})\b/i);
+    if (titleMatch) {
+      return {
+        isSystemPR: true,
+        reason: `Task ID in title: ${titleMatch[1]}`,
+        extractedTaskId: titleMatch[1]
+      };
+    }
+
+    return {
+      isSystemPR: false,
+      reason: 'No system PR indicators found'
+    };
+  }
+
+  /**
+   * Create an adoption task for an orphaned system PR
+   * Attempts to reconstruct minimal task metadata from PR information
+   */
+  async adoptOrphanedSystemPR(
+    prNumber: number,
+    prData: {
+      title: string;
+      branch: string;
+      author: string;
+      description?: string;
+    },
+    extractedTaskId?: string
+  ): Promise<Task | null> {
+    logger.info({
+      category: 'pr-workflow',
+      action: 'adopting_orphaned_pr',
+      message: `Auto-adopting orphaned system PR #${prNumber}`,
+      details: {
+        prNumber,
+        branch: prData.branch,
+        author: prData.author,
+        extractedTaskId
+      }
+    });
+
+    try {
+      // Try to extract meaningful acceptance criteria from PR description
+      const acceptanceCriteria: string[] = [];
+      if (prData.description) {
+        // Look for acceptance criteria patterns in description
+        const criteriaMatch = prData.description.match(/(?:acceptance criteria|criteria|requirements?):\s*\n?((?:[-*]\s+.+\n?)+)/im);
+        if (criteriaMatch) {
+          const extracted = criteriaMatch[1].split('\n')
+            .filter(line => line.trim())
+            .map(line => line.replace(/^[-*]\s+/, '').trim());
+          acceptanceCriteria.push(...extracted);
+        }
+      }
+
+      // Fallback criteria if none found
+      if (acceptanceCriteria.length === 0) {
+        acceptanceCriteria.push(
+          'All CI checks pass',
+          'Code review feedback addressed',
+          'No merge conflicts'
+        );
+      }
+
+      // Use extracted task ID or generate one
+      const taskId = extractedTaskId || `task-adopted-${Date.now().toString(36)}`;
+
+      // Create adoption task
+      const adoptionTask = this.taskQueue.createTask({
+        id: taskId,
+        title: `[ADOPTED] ${prData.title}`,
+        description: `Auto-adopted orphaned system PR #${prNumber}
+
+**Original PR:** #${prNumber}
+**Branch:** ${prData.branch}
+**Author:** ${prData.author}
+
+**Reason for adoption:**
+This PR was created by our system but lost its task association. It has been automatically adopted to ensure quality gates are enforced.
+
+**Original Description:**
+${prData.description || 'No description available'}`,
+        type: 'implementation',
+        priority: 7,
+        assigned_agent: 'backend-specialist',
+        pr_number: prNumber,
+        pr_branch: prData.branch,
+        pr_status: 'pending_checks',
+        acceptance_criteria: acceptanceCriteria,
+        is_orphaned_pr: true, // Mark as orphaned
+        notes: `Auto-adopted on ${new Date().toISOString()}`
+      });
+
+      logger.info({
+        category: 'pr-workflow',
+        action: 'orphaned_pr_adopted',
+        message: `Successfully adopted PR #${prNumber} as task ${adoptionTask.id}`,
+        details: {
+          prNumber,
+          taskId: adoptionTask.id,
+          acceptanceCriteriaCount: acceptanceCriteria.length
+        }
+      });
+
+      return adoptionTask;
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'pr_adoption_failed',
+        message: `Failed to adopt orphaned PR #${prNumber}`,
+        error,
+        details: { prNumber, prData }
+      });
+      return null;
+    }
+  }
+
+  /**
    * Determine if a followup task should be created for PR issues
    */
-  shouldCreateFollowup(prStatus: PRStatus, copilotAnalysis: CopilotReviewAnalysis): boolean {
+  shouldCreateFollowup(prNumber: number, prStatus: PRStatus, copilotAnalysis: CopilotReviewAnalysis, task?: Task): boolean {
     // Create followup for failed checks
     const hasFailedChecks = prStatus.checks.some(c =>
       c.status === 'failure' || c.status === 'error'
@@ -83,6 +244,33 @@ export class PRMonitorService {
 
     // Create followup for merge conflicts
     if (prStatus.mergeable === 'CONFLICTING') {
+      return true;
+    }
+
+    // Create followup for unresolved blocking review comments
+    const resolutionSummary = this.reviewCommentTracker.getResolutionSummary(prNumber);
+    if (resolutionSummary.unresolvedBlocking > 0) {
+      logger.info({
+        category: 'pr-workflow',
+        action: 'followup_needed_unresolved_comments',
+        message: `PR #${prNumber} has ${resolutionSummary.unresolvedBlocking} unresolved blocking comments`,
+        details: { pr_number: prNumber, ...resolutionSummary }
+      });
+      return true;
+    }
+
+    // Create followup for failed task verification (< 80% acceptance criteria met)
+    if (task && task.verification_passed === false) {
+      logger.info({
+        category: 'pr-workflow',
+        action: 'followup_needed_verification_failed',
+        message: `PR #${prNumber} task verification failed`,
+        details: {
+          pr_number: prNumber,
+          task_id: task.id,
+          verification_passed: task.verification_passed
+        }
+      });
       return true;
     }
 

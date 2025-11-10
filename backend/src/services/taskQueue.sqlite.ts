@@ -32,6 +32,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { randomUUID } from 'node:crypto';
 import { logger } from '../utils/logger.js';
+import { TaskClassifier } from './taskClassifier.js';
 
 type AgentStatsRow = {
   agent_type: 'claude' | 'codex';
@@ -177,6 +178,17 @@ export interface Task {
   // Followup task linking
   followup_for_pr?: number; // If this task fixes issues from a PR
   followup_tasks?: string[]; // Child tasks created to fix PR issues
+  // Orphaned PR handling
+  is_orphaned_pr?: boolean; // True if this task was auto-adopted from orphaned system PR
+  // Task verification fields (PR workflow quality gates)
+  verification_passed?: boolean; // True if task verification succeeded (>= 80% criteria met)
+  verification_results?: string; // JSON stringified TaskVerificationResult
+  verification_timestamp?: number; // Unix timestamp when verification was performed
+  // Intelligent agent selection fields (Phase 0)
+  task_category?: 'implementation' | 'analysis' | 'documentation' | 'review' | 'planning';
+  file_patterns?: string; // JSON array of file extensions (e.g., ["ts", "md"])
+  estimated_complexity?: 'simple' | 'medium' | 'complex';
+  preferred_agent?: 'claude' | 'codex' | 'copilot'; // Manual override for agent selection
   // Enhanced task fields for comprehensive task planning
   parent_initiative?: string;
   long_term_goals?: string[];
@@ -239,9 +251,11 @@ export interface QueueMetrics {
 export class TaskQueueService {
   private db: Database.Database;
   private dbPath: string;
+  private readonly taskClassifier: TaskClassifier; // Auto-classification (Phase 0.3)
 
   constructor(dbPath: string) {
     this.dbPath = dbPath;
+    this.taskClassifier = new TaskClassifier();
     this.ensureDirectory();
     this.db = new Database(dbPath);
     this.initialize();
@@ -385,6 +399,75 @@ export class TaskQueueService {
         category: 'process',
         action: 'migration_complete',
         message: 'Task recovery columns added successfully'
+      });
+    }
+
+    // Migration 4: Add intelligent agent selection columns
+    const classificationColumns = ['task_category', 'file_patterns', 'estimated_complexity', 'preferred_agent'];
+    const missingClassificationColumns = classificationColumns.filter(col => !columnNames.has(col));
+
+    if (missingClassificationColumns.length > 0) {
+      logger.info({
+        category: 'process',
+        action: 'adding_classification_columns',
+        message: `Adding ${missingClassificationColumns.length} task classification columns for intelligent agent selection`,
+        details: { columns: missingClassificationColumns }
+      });
+
+      if (!columnNames.has('task_category')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN task_category TEXT CHECK(task_category IN ('implementation', 'analysis', 'documentation', 'review', 'planning'));`);
+      }
+      if (!columnNames.has('file_patterns')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN file_patterns TEXT;`); // JSON array of file extensions
+      }
+      if (!columnNames.has('estimated_complexity')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN estimated_complexity TEXT CHECK(estimated_complexity IN ('simple', 'medium', 'complex'));`);
+      }
+      if (!columnNames.has('preferred_agent')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN preferred_agent TEXT CHECK(preferred_agent IN ('claude', 'codex', 'copilot'));`); // Manual override
+      }
+
+      // Create indexes
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_task_category ON tasks(task_category) WHERE task_category IS NOT NULL;`);
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_complexity ON tasks(estimated_complexity) WHERE estimated_complexity IS NOT NULL;`);
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_preferred_agent ON tasks(preferred_agent) WHERE preferred_agent IS NOT NULL;`);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'Task classification columns added successfully for intelligent agent selection'
+      });
+    }
+
+    // Migration 5: Add task verification columns (PR workflow quality gates)
+    const verificationColumns = ['verification_passed', 'verification_results', 'verification_timestamp'];
+    const missingVerificationColumns = verificationColumns.filter(col => !columnNames.has(col));
+
+    if (missingVerificationColumns.length > 0) {
+      logger.info({
+        category: 'process',
+        action: 'adding_verification_columns',
+        message: `Adding ${missingVerificationColumns.length} task verification columns for PR workflow quality gates`,
+        details: { columns: missingVerificationColumns }
+      });
+
+      if (!columnNames.has('verification_passed')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN verification_passed INTEGER;`); // 0 = failed, 1 = passed
+      }
+      if (!columnNames.has('verification_results')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN verification_results TEXT;`); // JSON stringified TaskVerificationResult
+      }
+      if (!columnNames.has('verification_timestamp')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN verification_timestamp INTEGER;`); // Unix timestamp
+      }
+
+      // Create index for verification status queries
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_verification_passed ON tasks(verification_passed) WHERE verification_passed IS NOT NULL;`);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'Task verification columns added successfully for PR workflow quality gates'
       });
     }
   }
@@ -544,6 +627,37 @@ export class TaskQueueService {
   createTask(taskData: Partial<Task>): Task {
     const now = Date.now();
     const generatedId = `task-${taskData.type || 'implementation'}-${randomUUID()}`;
+    
+    // Auto-classify task if not already classified (Phase 0.3)
+    let taskCategory = taskData.task_category;
+    let filePatterns = taskData.file_patterns;
+    let estimatedComplexity = taskData.estimated_complexity;
+    
+    if (!taskCategory || !filePatterns || !estimatedComplexity) {
+      const classification = this.taskClassifier.classifyTask({
+        title: taskData.title || 'Untitled Task',
+        description: taskData.description
+      });
+      
+      taskCategory = taskCategory || classification.category;
+      // Only use classification if filePatterns is missing or empty
+      filePatterns = (filePatterns && filePatterns !== '') ? filePatterns : JSON.stringify(classification.filePatterns);
+      estimatedComplexity = estimatedComplexity || classification.complexity;
+      
+      logger.info({
+        category: 'classification',
+        action: 'task_auto_classified',
+        message: `Auto-classified task: ${classification.reasoning}`,
+        details: {
+          taskId: generatedId,
+          category: taskCategory,
+          filePatterns: classification.filePatterns,
+          complexity: estimatedComplexity,
+          confidence: classification.confidence
+        }
+      });
+    }
+    
     const task: Task = {
       id: taskData.id || generatedId,
       type: taskData.type || 'implementation',
@@ -559,27 +673,34 @@ export class TaskQueueService {
       can_retry: taskData.can_retry !== undefined ? taskData.can_retry : true,
       retry_count: 0,
       max_retries: taskData.max_retries || 3,
-      timeout_ms: taskData.timeout_ms !== undefined ? taskData.timeout_ms : null, // NULL = no automatic timeout
+      timeout_ms: taskData.timeout_ms !== undefined ? taskData.timeout_ms : null,
       fingerprint: taskData.fingerprint,
       estimated_hours: taskData.estimated_hours,
-      complexity: taskData.complexity
+      complexity: taskData.complexity,
+      // Classification fields (Phase 0.3)
+      task_category: taskCategory,
+      file_patterns: filePatterns,
+      estimated_complexity: estimatedComplexity,
+      preferred_agent: taskData.preferred_agent
     };
 
     return this.transaction(() => {
-      // Insert main task
+      // Insert main task with classification fields
       const stmt = this.db.prepare(`
         INSERT INTO tasks (
           id, type, title, description, documentation, notes, status, priority,
           created_at, assigned_agent, prompt, can_retry, retry_count, max_retries,
-          timeout_ms, fingerprint, estimated_hours, complexity
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          timeout_ms, fingerprint, estimated_hours, complexity,
+          task_category, file_patterns, estimated_complexity, preferred_agent
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       stmt.run(
         task.id, task.type, task.title, task.description, task.documentation,
         task.notes, task.status, task.priority, task.created_at, task.assigned_agent,
         task.prompt, task.can_retry ? 1 : 0, task.retry_count, task.max_retries,
-        task.timeout_ms, task.fingerprint, task.estimated_hours, task.complexity
+        task.timeout_ms, task.fingerprint, task.estimated_hours, task.complexity,
+        task.task_category, task.file_patterns, task.estimated_complexity, task.preferred_agent
       );
 
       // Insert related data

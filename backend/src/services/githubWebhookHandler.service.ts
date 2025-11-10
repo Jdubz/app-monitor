@@ -9,6 +9,9 @@
 import { logger } from '../utils/logger.js';
 import type { TaskQueueService, Task } from './taskQueue.sqlite.js';
 import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
+import { ReviewCommentTracker } from './reviewCommentTracker.service.js';
+import { TaskVerificationService } from './taskVerification.service.js';
+import { getDatabase } from './database.js';
 
 export interface GitHubPullRequestPayload {
   action: string;
@@ -125,6 +128,11 @@ export interface GitHubPullRequestReviewPayload {
   };
 }
 
+export interface AutoMergeBlockReason {
+  reason: string;
+  count: number;
+}
+
 export interface WebhookHandlerStats {
   pr_events_received: number;
   pr_review_events_received: number;
@@ -133,6 +141,23 @@ export interface WebhookHandlerStats {
   copilot_reviews_detected: number;
   errors: number;
   last_event_time: number;
+
+  // PR Workflow Quality Gate Metrics
+  auto_merge_attempts: number;
+  auto_merge_successes: number;
+  auto_merge_failures: number;
+  auto_merge_blocks: AutoMergeBlockReason[];
+  followup_tasks_created: number;
+  task_verifications_run: number;
+  task_verifications_passed: number;
+  task_verifications_failed: number;
+  review_comments_tracked: number;
+  review_comments_resolved: number;
+  orphaned_prs_adopted: number;
+
+  // Time-to-merge tracking (milliseconds)
+  merge_times: number[];  // Array of merge times for calculating average
+  avg_time_to_merge_ms?: number;  // Calculated average
 }
 
 /**
@@ -147,13 +172,36 @@ export class GitHubWebhookHandler {
     task_ids_extracted: 0,
     copilot_reviews_detected: 0,
     errors: 0,
-    last_event_time: 0
+    last_event_time: 0,
+
+    // PR Workflow Quality Gate Metrics
+    auto_merge_attempts: 0,
+    auto_merge_successes: 0,
+    auto_merge_failures: 0,
+    auto_merge_blocks: [],
+    followup_tasks_created: 0,
+    task_verifications_run: 0,
+    task_verifications_passed: 0,
+    task_verifications_failed: 0,
+    review_comments_tracked: 0,
+    review_comments_resolved: 0,
+    orphaned_prs_adopted: 0,
+
+    // Time-to-merge tracking
+    merge_times: [],
+    avg_time_to_merge_ms: undefined
   };
+
+  private reviewCommentTracker: ReviewCommentTracker;
+  private taskVerification: TaskVerificationService;
 
   constructor(
     private readonly taskQueue?: TaskQueueService,
     private readonly prOrchestrator?: PRWorkflowOrchestrator
-  ) {}
+  ) {
+    this.reviewCommentTracker = new ReviewCommentTracker(getDatabase());
+    this.taskVerification = new TaskVerificationService();
+  }
   /**
    * Extract task ID from PR branch name or title
    * Checks branch name first (more reliable), then falls back to title
@@ -258,13 +306,86 @@ export class GitHubWebhookHandler {
     }
 
     if (tasks.length === 0) {
-      logger.info({
-        category: 'api',
-        action: 'pr_no_task_found',
-        message: `No task found for PR #${prNumber}${taskId ? ` (Task ID: ${taskId})` : ''}`,
-        details: { pr_number: prNumber, task_id: taskId }
-      });
-      return;
+      // PR is orphaned - check if it's a system-created PR that should be auto-adopted
+      if (this.prOrchestrator) {
+        const prMonitor = this.prOrchestrator.getPRMonitor();
+        const detection = prMonitor.detectSystemCreatedPR(
+          branchName,
+          pull_request.user.login,
+          pull_request.title
+        );
+
+        if (detection.isSystemPR) {
+          // System PR is orphaned - auto-adopt it
+          logger.warn({
+            category: 'api',
+            action: 'system_pr_orphaned',
+            message: `System PR #${prNumber} is orphaned - auto-adopting`,
+            details: {
+              pr_number: prNumber,
+              reason: detection.reason,
+              extracted_task_id: detection.extractedTaskId
+            }
+          });
+
+          const adoptedTask = await prMonitor.adoptOrphanedSystemPR(
+            prNumber,
+            {
+              title: pull_request.title,
+              branch: branchName,
+              author: pull_request.user.login,
+              description: (pull_request as { body?: string }).body
+            },
+            detection.extractedTaskId
+          );
+
+          if (adoptedTask) {
+            // Successfully adopted - continue processing with adopted task
+            tasks = [adoptedTask];
+            this.stats.orphaned_prs_adopted++;
+
+            logger.info({
+              category: 'api',
+              action: 'system_pr_adopted',
+              message: `Successfully adopted system PR #${prNumber} as task ${adoptedTask.id}`,
+              details: {
+                pr_number: prNumber,
+                task_id: adoptedTask.id
+              }
+            });
+          } else {
+            logger.error({
+              category: 'api',
+              action: 'pr_adoption_failed',
+              message: `Failed to adopt orphaned system PR #${prNumber}`,
+              details: { pr_number: prNumber }
+            });
+            return;
+          }
+        } else {
+          // User-created PR - log but don't auto-adopt
+          logger.info({
+            category: 'api',
+            action: 'user_pr_no_task',
+            message: `User PR #${prNumber} has no task (manual tracking available via /api/dev-bots/pr/track)`,
+            details: {
+              pr_number: prNumber,
+              task_id: taskId,
+              detection_reason: detection.reason
+            }
+          });
+          return;
+        }
+      } else {
+        // Orchestrator not available
+        logger.info({
+          category: 'api',
+          action: 'pr_no_task_found',
+          message: `No task found for PR #${prNumber}${taskId ? ` (Task ID: ${taskId})` : ''}`,
+          details: { pr_number: prNumber, task_id: taskId }
+        });
+        return;
+      }
     }
 
     logger.info({
@@ -525,10 +646,44 @@ export class GitHubWebhookHandler {
         repository.name
       );
       const copilotAnalysis = await githubPR.getCopilotReviewAnalysis(
-        prNumber, 
-        repository.owner.login, 
+        prNumber,
+        repository.owner.login,
         repository.name
       );
+
+      // Store review comments for tracking (only Copilot comments)
+      if (isCopilot && prStatus.comments.length > 0) {
+        const copilotComments = prStatus.comments.filter(c =>
+          c.author.toLowerCase().includes('copilot') || c.author.toLowerCase().includes('bot')
+        );
+
+        let storedCount = 0;
+        for (const comment of copilotComments) {
+          const stored = this.reviewCommentTracker.storeComment({
+            pr_number: prNumber,
+            comment_id: comment.id,
+            file_path: comment.path || undefined,
+            line_number: comment.line || undefined,
+            body: comment.body,
+            fingerprint: '', // Generated by storeComment
+            severity: 'info', // Classified by storeComment
+            created_at: new Date(comment.createdAt).getTime(),
+            reviewer: comment.author,
+            is_copilot: true
+          });
+          if (stored) {
+            storedCount++;
+            this.stats.review_comments_tracked++;
+          }
+        }
+
+        logger.info({
+          category: 'pr-workflow',
+          action: 'comments_stored',
+          message: `Stored ${storedCount}/${copilotComments.length} Copilot comments for PR #${prNumber}`,
+          details: { pr_number: prNumber, stored: storedCount, total: copilotComments.length }
+        });
+      }
 
       // Update task with review status
       for (const task of tasks) {
@@ -557,8 +712,8 @@ export class GitHubWebhookHandler {
         });
 
         // Check if we need followup task or can auto-merge
-        if (prMonitor.shouldCreateFollowup(prStatus, copilotAnalysis)) {
-          const task = tasks[0];
+        const task = tasks[0];
+        if (prMonitor.shouldCreateFollowup(prNumber, prStatus, copilotAnalysis, task)) {
           const prBranch = task.pr_branch || pull_request.head.ref;
 
           const followupTask = await prMonitor.createFollowupTask(
@@ -673,10 +828,68 @@ export class GitHubWebhookHandler {
       const prStatus = await githubPR.getPRStatus(prNumber, owner, repo);
       const copilotAnalysis = await githubPR.getCopilotReviewAnalysis(prNumber, owner, repo);
 
+      // Run task verification when checks pass successfully
+      if (conclusion === 'success' && tasks.length > 0) {
+        const task = tasks[0];
+        try {
+          logger.info({
+            category: 'pr-workflow',
+            action: 'verification_started',
+            message: `Running task verification for PR #${prNumber}`,
+            details: { pr_number: prNumber, task_id: task.id }
+          });
+
+          const verificationResult = await this.taskVerification.verifyTask(
+            task,
+            '/home/jdubz/Development/app-monitor', // workspace path
+            task.output || ''
+          );
+
+          // Store verification results in task
+          await this.taskQueue.updateTask(task.id, {
+            verification_passed: verificationResult.passed,
+            verification_results: JSON.stringify(verificationResult),
+            verification_timestamp: Date.now()
+          });
+
+          // Track verification metrics
+          this.stats.task_verifications_run++;
+          if (verificationResult.passed) {
+            this.stats.task_verifications_passed++;
+          } else {
+            this.stats.task_verifications_failed++;
+          }
+
+          logger.info({
+            category: 'pr-workflow',
+            action: 'verification_completed',
+            message: `Task verification ${verificationResult.passed ? 'PASSED' : 'FAILED'} for PR #${prNumber}`,
+            details: {
+              pr_number: prNumber,
+              task_id: task.id,
+              passed: verificationResult.passed,
+              overall_score: verificationResult.overallScore,
+              acceptance_criteria_met: verificationResult.acceptanceCriteria.percentMet
+            }
+          });
+        } catch (error) {
+          logger.warn({
+            category: 'pr-workflow',
+            action: 'verification_failed',
+            message: `Task verification failed for PR #${prNumber}`,
+            error,
+            details: { pr_number: prNumber, task_id: task.id }
+          });
+        }
+      }
+
       // Check if we should create a followup task
-      if (prMonitor.shouldCreateFollowup(prStatus, copilotAnalysis)) {
-        const task = tasks[0]; // Use first matching task
-        
+      const task = tasks[0]; // Use first matching task
+      if (prMonitor.shouldCreateFollowup(prNumber, prStatus, copilotAnalysis, task)) {
+        // Determine and track specific block reasons
+        const blockReasons = this.determineBlockReasons(prNumber, prStatus, copilotAnalysis, task);
+        blockReasons.forEach(reason => this.trackAutoMergeBlock(reason));
+
         // Get PR branch from status
         const prBranch = task.pr_branch || `pr-${prNumber}`;
 
@@ -689,6 +902,8 @@ export class GitHubWebhookHandler {
         );
 
         if (followupTask) {
+          this.stats.followup_tasks_created++;
+
           logger.info({
             category: 'pr-workflow',
             action: 'followup_task_created_from_check_suite',
@@ -696,20 +911,34 @@ export class GitHubWebhookHandler {
             details: {
               pr_number: prNumber,
               task_id: followupTask.id,
-              parent_task: task.id
+              parent_task: task.id,
+              block_reasons: blockReasons
             }
           });
         }
       } else if (conclusion === 'success') {
         // All checks passed - try auto-merge if enabled
         const task = tasks[0];
+        this.stats.auto_merge_attempts++;
         const merged = await prMonitor.mergePR(prNumber, task.id);
-        
+
         if (merged) {
+          // Track merge success with time-to-merge
+          const prCreatedAt = task.created_at || Date.now();
+          this.trackMergeSuccess(prCreatedAt);
+
           logger.info({
             category: 'pr-workflow',
             action: 'pr_auto_merged_from_check_suite',
             message: `Auto-merged PR #${prNumber} after checks passed`,
+            details: { pr_number: prNumber, task_id: task.id }
+          });
+        } else {
+          this.stats.auto_merge_failures++;
+          logger.info({
+            category: 'pr-workflow',
+            action: 'pr_auto_merge_failed',
+            message: `Auto-merge failed for PR #${prNumber}`,
             details: { pr_number: prNumber, task_id: task.id }
           });
         }
@@ -726,10 +955,95 @@ export class GitHubWebhookHandler {
   }
 
   /**
-   * Get webhook handler statistics
+   * Track auto-merge block reason
+   */
+  private trackAutoMergeBlock(reason: string): void {
+    const existing = this.stats.auto_merge_blocks.find(b => b.reason === reason);
+    if (existing) {
+      existing.count++;
+    } else {
+      this.stats.auto_merge_blocks.push({ reason, count: 1 });
+    }
+  }
+
+  /**
+   * Determine and log the specific reason(s) why auto-merge was blocked
+   */
+  private determineBlockReasons(
+    prNumber: number,
+    prStatus: any,
+    copilotAnalysis: any,
+    task?: any
+  ): string[] {
+    const reasons: string[] = [];
+
+    // Check for failed checks
+    const hasFailedChecks = prStatus.checks.some((c: any) =>
+      c.status === 'failure' || c.status === 'error'
+    );
+    if (hasFailedChecks) {
+      reasons.push('Failed CI checks');
+    }
+
+    // Check for blocking Copilot issues
+    if (copilotAnalysis.severity === 'high' || copilotAnalysis.severity === 'medium') {
+      reasons.push(`Copilot ${copilotAnalysis.severity} severity issues`);
+    }
+
+    // Check for human change requests
+    const hasChangeRequests = prStatus.reviews.some((r: any) =>
+      r.state === 'CHANGES_REQUESTED' && !r.author.toLowerCase().includes('copilot')
+    );
+    if (hasChangeRequests) {
+      reasons.push('Human change requests');
+    }
+
+    // Check for merge conflicts
+    if (prStatus.mergeable === 'CONFLICTING') {
+      reasons.push('Merge conflicts');
+    }
+
+    // Check for unresolved blocking comments
+    const resolutionSummary = this.reviewCommentTracker.getResolutionSummary(prNumber);
+    if (resolutionSummary.unresolvedBlocking > 0) {
+      reasons.push(`${resolutionSummary.unresolvedBlocking} unresolved blocking comments`);
+    }
+
+    // Check for failed task verification
+    if (task && task.verification_passed === false) {
+      reasons.push('Failed task verification');
+    }
+
+    return reasons;
+  }
+
+  /**
+   * Track successful merge with time-to-merge
+   */
+  private trackMergeSuccess(prCreatedAt: number): void {
+    this.stats.auto_merge_successes++;
+    const timeToMerge = Date.now() - prCreatedAt;
+    this.stats.merge_times.push(timeToMerge);
+
+    // Keep only last 100 merge times for performance
+    if (this.stats.merge_times.length > 100) {
+      this.stats.merge_times.shift();
+    }
+  }
+
+  /**
+   * Get webhook handler statistics with calculated metrics
    */
   getStats(): WebhookHandlerStats {
-    return { ...this.stats };
+    const stats = { ...this.stats };
+
+    // Calculate average time-to-merge
+    if (stats.merge_times.length > 0) {
+      const sum = stats.merge_times.reduce((acc, time) => acc + time, 0);
+      stats.avg_time_to_merge_ms = Math.round(sum / stats.merge_times.length);
+    }
+
+    return stats;
   }
 
   // ==========================================================================
@@ -774,6 +1088,48 @@ export class GitHubWebhookHandler {
     });
 
     if (!this.taskQueue) return;
+
+    // Detect resolved comments (comments that no longer exist after sync)
+    if (this.prOrchestrator) {
+      try {
+        const githubPR = this.prOrchestrator.getGitHubPRService();
+        const prStatus = await githubPR.getPRStatus(prNumber);
+
+        const currentCommentIds = prStatus.comments.map(c => c.id);
+        const resolvedFingerprints = this.reviewCommentTracker.detectResolvedComments(
+          prNumber,
+          currentCommentIds
+        );
+
+        if (resolvedFingerprints.length > 0) {
+          // Track resolved comments
+          this.stats.review_comments_resolved += resolvedFingerprints.length;
+
+          logger.info({
+            category: 'pr-workflow',
+            action: 'comments_resolved_detected',
+            message: `Detected ${resolvedFingerprints.length} resolved comments for PR #${prNumber}`,
+            details: { pr_number: prNumber, resolved_count: resolvedFingerprints.length }
+          });
+
+          // Get updated resolution summary
+          const summary = this.reviewCommentTracker.getResolutionSummary(prNumber);
+          logger.info({
+            category: 'pr-workflow',
+            action: 'comment_resolution_summary',
+            message: `PR #${prNumber} comment status: ${summary.unresolved} unresolved (${summary.unresolvedBlocking} blocking)`,
+            details: { pr_number: prNumber, ...summary }
+          });
+        }
+      } catch (error) {
+        logger.warn({
+          category: 'pr-workflow',
+          action: 'comment_resolution_detection_failed',
+          message: `Failed to detect resolved comments for PR #${prNumber}`,
+          error
+        });
+      }
+    }
 
     for (const task of tasks) {
       await this.taskQueue.updatePRStatus(task.id, {
