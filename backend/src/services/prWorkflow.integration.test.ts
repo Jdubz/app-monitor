@@ -11,7 +11,7 @@
  * - Followup task creation
  */
 
-import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { PRMonitorService } from './prMonitor.service.js';
 import type { TaskQueueService } from './taskQueue.sqlite.js';
 import type { PRStatus, CopilotReviewAnalysis } from './githubPR.service.js';
