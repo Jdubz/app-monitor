@@ -101,9 +101,9 @@ jobs:
           
           # Create tarball with all necessary files
           # Note: tar may exit with 1 if files change during archiving (expected when creating in same dir)
-          # --no-dereference prevents following symlinks (critical to avoid infinite loops)
+          # -h prevents following symlinks (critical to avoid infinite loops)
           tar -czf "$TARBALL_NAME" \
-            --no-dereference \
+            -h \
             --exclude=node_modules \
             --exclude=.git \
             --exclude=.github \
