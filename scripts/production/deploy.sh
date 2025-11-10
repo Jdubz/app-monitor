@@ -277,7 +277,7 @@ main() {
         log_info "Waiting for old service to fully stop..."
         local stop_wait=0
         while systemctl is-active --quiet "app-monitor-backend@${ACTIVE_PORT}.service"; do
-            if [ $stop_wait -ge 30 ]; then
+            if [ $stop_wait -ge 120 ]; then
                 log_warn "Old service taking longer than 30s to stop, continuing anyway..."
                 break
             fi

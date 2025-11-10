@@ -92,7 +92,7 @@ async function gracefulShutdown(signal: string) {
   const taskWaitTimeout = 60000; // 60 seconds (increased from 20s)
 
   // Simple wait - actual task completion detection would require getStats() method
-  await new Promise(resolve => setTimeout(resolve, Math.min(taskWaitTimeout, 10000)));
+  await new Promise(resolve => setTimeout(resolve, taskWaitTimeout));
   console.log('⏳ Task wait period complete');
 
   // Phase 4: Drain WebSocket connections (with timeout)

@@ -101,7 +101,8 @@ export class EphemeralWorkerService {
     };
 
     // Dev-bots consolidated log file for real-time monitoring
-    this.devBotsLogPath = path.join(process.cwd(), 'dev-bots', 'logs', 'dev-bots.log');
+    const devBotsLogDir = path.join(process.cwd(), 'dev-bots', 'logs');
+    this.devBotsLogPath = path.join(devBotsLogDir, 'dev-bots.log');
     this.ensureLogDirectory();
   }
 
@@ -556,21 +557,45 @@ export class EphemeralWorkerService {
       let errorOutput = '';
 
       stream.on('data', (data: Buffer) => {
-        const chunk = data.toString();
-        
-        // Write to consolidated log file for real-time monitoring
+        // Write raw data to log file for real-time monitoring
         if (logStream && !logStream.destroyed) {
-          logStream.write(chunk);
+          logStream.write(data);
         }
 
-        // Parse Docker multiplexed stream
-        if (chunk.startsWith('1:')) {
-          output += chunk.substring(2);
-        } else if (chunk.startsWith('2:')) {
-          errorOutput += chunk.substring(2);
-        } else {
-          // Fallback for non-multiplexed streams
-          output += chunk;
+        // Parse Docker multiplexed stream format
+        // Docker uses 8-byte header: [stream_type, 0, 0, 0, size (4 bytes big-endian)]
+        let buffer = data;
+        while (buffer.length > 0) {
+          if (buffer.length < 8) {
+            // Not enough data for header, treat remaining as plain text
+            output += buffer.toString();
+            break;
+          }
+
+          const streamType = buffer[0];
+          const payloadLength = buffer.readUInt32BE(4);
+          
+          if (buffer.length < 8 + payloadLength) {
+            // Incomplete payload, treat as plain text
+            output += buffer.toString();
+            break;
+          }
+
+          const payload = buffer.slice(8, 8 + payloadLength);
+          const chunk = payload.toString();
+          
+          if (streamType === 1) {
+            // stdout
+            output += chunk;
+          } else if (streamType === 2) {
+            // stderr
+            errorOutput += chunk;
+          } else {
+            // Unknown stream type, default to stdout
+            output += chunk;
+          }
+          
+          buffer = buffer.slice(8 + payloadLength);
         }
       });
 
@@ -652,6 +677,11 @@ export class EphemeralWorkerService {
 
     // Store stream for cleanup
     this.logStreams.set(worker.id, stream);
+    
+    // Remove stream from map when closed to prevent memory leak
+    stream.on('close', () => {
+      this.logStreams.delete(worker.id);
+    });
 
     logger.info({
       category: 'process',
