@@ -80,12 +80,12 @@ App Monitor already treats everything as a task. The gaps are that tasks lack ri
 2. Harden workspace mirrors + bootstrap templates so every run emits summary/log artifacts and cleans up reliably.
 3. Integrate run results into the task timeline/UI, including log links, exit code, summary, commit SHA, and follow-up actions.
 
-#### Run Artifact Checklist (applies to dev-bots & `/delegate`)
-- `session.log` stored under `logs/dev-bots/<task_id>/<timestamp>/` with timestamps + command summaries.
-- `session_summary.json` capturing exit code, retry count, token usage, linked PR number, and whether the run was human, dev-bot, or `copilot_delegated`.
-- Linked task context snapshot (inputs, scope metadata, reproduction snippets) so downstream reviewers do not need gitignored assets.
-- CI/test transcript excerpt or URL for any command that failed, attached to the task timeline for auto-generated follow-ups.
-- Delegation telemetry (who requested `/delegate`, SLA, outcome) appended to the same run record so analytics can compare automation paths.
+**Artifacts Captured Per Automation Run:**
+- **Session Log:** Complete stdout/stderr from the dev-bot execution stored as `session.log` (see Artifact Trail section)
+- **Summary JSON:** Structured `session_summary.json` containing exit code, failure reason, commit SHA, and token usage
+- **Retry Count:** Automation attempt counter tracked in `task_automation_runs` table to enforce retry thresholds
+- **Linked Task Context:** Reference back to the originating task ID with attached diagnostic breadcrumbs (logs, environment snapshot, artifacts)
+- **Storage Location:** All artifacts persisted under `logs/dev-bots/<task_id>/<run_timestamp>/` for traceability and inspection
 
 ### Stage 4 – Work-Target Rollout
 1. Populate registry entries for automation config per target (branch, test commands, bootstrap path, credential passthrough).
