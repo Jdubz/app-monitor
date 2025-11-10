@@ -134,18 +134,18 @@ curl http://localhost/api/github/webhooks/health
 ## Current Implementation Status
 
 ✅ **Implemented:**
-- Basic webhook endpoints (`/pr`, `/push`, `/health`)
-- Request logging
-- Error handling
-- Response acknowledgment
+- Webhook endpoints (`/pr`, `/push`, `/check_suite`, `/check_run`, `/health`)
+- Event processing and task integration
+- Task status updates via webhooks
+- PR lifecycle management (opened, synchronize, merged, closed)
+- Check suite and check run handling for auto-merge
+- Followup task creation on CI failures
+- Request logging and error handling
 
-⏳ **TODO:**
+⏳ **Recommended Improvements:**
 - [ ] Webhook signature verification (HMAC)
-- [ ] Actual event processing logic
-- [ ] Integration with dev-bots for automated testing
-- [ ] PR status updates
-- [ ] Automated comments
-- [ ] Build/test triggering
+- [ ] IP allowlist for GitHub webhook IPs
+- [ ] Remove polling fallback after validation period
 
 ## Security Considerations
 
