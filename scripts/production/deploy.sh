@@ -191,7 +191,9 @@ main() {
     # Load environment variables from shared config if available
     if [ -f "${SHARED_DIR}/config/.env.production" ]; then
         log_info "Loading production environment variables..."
-        export $(grep -v '^#' "${SHARED_DIR}/config/.env.production" | xargs)
+        set -a
+        source "${SHARED_DIR}/config/.env.production"
+        set +a
     else
         log_warn "No production environment file found at ${SHARED_DIR}/config/.env.production"
         log_warn "Frontend may use default values. Create this file with VITE_PASSWORD=your-password"
