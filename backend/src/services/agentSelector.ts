@@ -127,7 +127,7 @@ export class AgentSelector {
   private applySelectionRules(
     category?: TaskCategory,
     filePatterns?: string[],
-    complexity?: TaskComplexity
+    _complexity?: TaskComplexity
   ): AgentSelection {
     const patterns = filePatterns || [];
     const taskCat = category; // Preserve for later checks

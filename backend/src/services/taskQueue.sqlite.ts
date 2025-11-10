@@ -177,6 +177,8 @@ export interface Task {
   // Followup task linking
   followup_for_pr?: number; // If this task fixes issues from a PR
   followup_tasks?: string[]; // Child tasks created to fix PR issues
+  // Orphaned PR handling
+  is_orphaned_pr?: boolean; // True if this task was auto-adopted from orphaned system PR
   // Intelligent agent selection fields (Phase 0)
   task_category?: 'implementation' | 'analysis' | 'documentation' | 'review' | 'planning';
   file_patterns?: string; // JSON array of file extensions (e.g., ["ts", "md"])

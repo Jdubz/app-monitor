@@ -258,13 +258,84 @@ export class GitHubWebhookHandler {
     }
 
     if (tasks.length === 0) {
-      logger.info({
-        category: 'api',
-        action: 'pr_no_task_found',
-        message: `No task found for PR #${prNumber}${taskId ? ` (Task ID: ${taskId})` : ''}`,
-        details: { pr_number: prNumber, task_id: taskId }
-      });
-      return;
+      // PR is orphaned - check if it's a system-created PR that should be auto-adopted
+      if (this.prOrchestrator) {
+        const prMonitor = this.prOrchestrator.getPRMonitor();
+        const detection = prMonitor.detectSystemCreatedPR(
+          branchName,
+          pull_request.user.login,
+          pull_request.title
+        );
+
+        if (detection.isSystemPR) {
+          // System PR is orphaned - auto-adopt it
+          logger.warn({
+            category: 'api',
+            action: 'system_pr_orphaned',
+            message: `System PR #${prNumber} is orphaned - auto-adopting`,
+            details: {
+              pr_number: prNumber,
+              reason: detection.reason,
+              extracted_task_id: detection.extractedTaskId
+            }
+          });
+
+          const adoptedTask = await prMonitor.adoptOrphanedSystemPR(
+            prNumber,
+            {
+              title: pull_request.title,
+              branch: branchName,
+              author: pull_request.user.login,
+              description: (pull_request as { body?: string }).body
+            },
+            detection.extractedTaskId
+          );
+
+          if (adoptedTask) {
+            // Successfully adopted - continue processing with adopted task
+            tasks = [adoptedTask];
+            logger.info({
+              category: 'api',
+              action: 'system_pr_adopted',
+              message: `Successfully adopted system PR #${prNumber} as task ${adoptedTask.id}`,
+              details: {
+                pr_number: prNumber,
+                task_id: adoptedTask.id
+              }
+            });
+          } else {
+            logger.error({
+              category: 'api',
+              action: 'pr_adoption_failed',
+              message: `Failed to adopt orphaned system PR #${prNumber}`,
+              details: { pr_number: prNumber }
+            });
+            return;
+          }
+        } else {
+          // User-created PR - log but don't auto-adopt
+          logger.info({
+            category: 'api',
+            action: 'user_pr_no_task',
+            message: `User PR #${prNumber} has no task (manual tracking available via /api/dev-bots/pr/track)`,
+            details: {
+              pr_number: prNumber,
+              task_id: taskId,
+              detection_reason: detection.reason
+            }
+          });
+          return;
+        }
+      } else {
+        // Orchestrator not available
+        logger.info({
+          category: 'api',
+          action: 'pr_no_task_found',
+          message: `No task found for PR #${prNumber}${taskId ? ` (Task ID: ${taskId})` : ''}`,
+          details: { pr_number: prNumber, task_id: taskId }
+        });
+        return;
+      }
     }
 
     logger.info({
