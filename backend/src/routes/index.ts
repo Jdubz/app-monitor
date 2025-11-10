@@ -28,6 +28,7 @@ import { createEnvironmentsRoutes } from './environments.routes.js';
 import tokenTrackingRoutes from './token-tracking.routes.js';
 import qualityGatesRoutes from './quality-gates.routes.js';
 import verificationRoutes from './verification.routes.js';
+import githubWebhooksRoutes from './github-webhooks.routes.js';
 
 /**
  * Create the main API router with all sub-routes
@@ -91,6 +92,7 @@ export function createApiRouter(deps: {
   router.use('/token-tracking', tokenTrackingRoutes);
   router.use('/quality-gates', qualityGatesRoutes);
   router.use('/verification', verificationRoutes);
+  router.use('/github/webhooks', githubWebhooksRoutes);
 
   return router;
 }
