@@ -418,7 +418,7 @@ export class PRWorkflowOrchestrator {
   /**
    * Handle PR opened event from webhook
    */
-  async onPROpened(prNumber: number, pr: any): Promise<void> {
+  async onPROpened(prNumber: number, pr: import('./githubWebhookHandler.service.js').GitHubPullRequestPayload['pull_request']): Promise<void> {
     logger.info({
       category: 'pr-workflow',
       action: 'webhook_pr_opened',
@@ -434,7 +434,7 @@ export class PRWorkflowOrchestrator {
   /**
    * Handle PR synchronized event (new commits pushed)
    */
-  async onPRSynchronize(prNumber: number, pr: any): Promise<void> {
+  async onPRSynchronize(prNumber: number, pr: import('./githubWebhookHandler.service.js').GitHubPullRequestPayload['pull_request']): Promise<void> {
     logger.info({
       category: 'pr-workflow',
       action: 'webhook_pr_synchronized',
@@ -449,7 +449,7 @@ export class PRWorkflowOrchestrator {
   /**
    * Handle PR merged event
    */
-  async onPRMerged(prNumber: number, pr: any): Promise<void> {
+  async onPRMerged(prNumber: number, pr: import('./githubWebhookHandler.service.js').GitHubPullRequestPayload['pull_request']): Promise<void> {
     logger.info({
       category: 'pr-workflow',
       action: 'webhook_pr_merged',
@@ -464,7 +464,7 @@ export class PRWorkflowOrchestrator {
   /**
    * Handle PR closed without merging
    */
-  async onPRClosed(prNumber: number, pr: any): Promise<void> {
+  async onPRClosed(prNumber: number, pr: import('./githubWebhookHandler.service.js').GitHubPullRequestPayload['pull_request']): Promise<void> {
     logger.info({
       category: 'pr-workflow',
       action: 'webhook_pr_closed',
@@ -478,7 +478,7 @@ export class PRWorkflowOrchestrator {
   /**
    * Handle PR reopened event
    */
-  async onPRReopened(prNumber: number, pr: any): Promise<void> {
+  async onPRReopened(prNumber: number, pr: import('./githubWebhookHandler.service.js').GitHubPullRequestPayload['pull_request']): Promise<void> {
     logger.info({
       category: 'pr-workflow',
       action: 'webhook_pr_reopened',
@@ -492,7 +492,7 @@ export class PRWorkflowOrchestrator {
   /**
    * Handle PR ready for review event
    */
-  async onPRReadyForReview(prNumber: number, pr: any): Promise<void> {
+  async onPRReadyForReview(prNumber: number, pr: import('./githubWebhookHandler.service.js').GitHubPullRequestPayload['pull_request']): Promise<void> {
     logger.info({
       category: 'pr-workflow',
       action: 'webhook_pr_ready_for_review',

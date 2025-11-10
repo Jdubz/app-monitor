@@ -178,8 +178,8 @@ cp /opt/app-monitor/shared/backend/data/dev-bots.db.backup-before-fingerprint \
 **Status**: Ready for manual switchover
 
 **Commands executed to fix database:**
-```javascript
-// Added columns
+```sql
+-- Added columns
 ALTER TABLE tasks ADD COLUMN fingerprint TEXT
 ALTER TABLE tasks ADD COLUMN started_at INTEGER
 ALTER TABLE tasks ADD COLUMN agent_type TEXT
@@ -188,11 +188,11 @@ ALTER TABLE tasks ADD COLUMN timeout_ms INTEGER
 ALTER TABLE tasks ADD COLUMN estimated_hours REAL
 ALTER TABLE tasks ADD COLUMN complexity TEXT
 
-// Created tables
+-- Created tables
 CREATE TABLE IF NOT EXISTS workers (...)
 CREATE TABLE IF NOT EXISTS task_executions (...)
 CREATE TABLE IF NOT EXISTS task_files (...)
-// ... and 5 more
+-- ... and 5 more
 ```
 
 **Last Updated**: 2025-11-10T05:32:00Z
