@@ -28,7 +28,6 @@ export class PRMonitorService {
   private readonly config: PRMonitorConfig;
   private readonly githubPR: GitHubPRService;
   private readonly taskQueue: TaskQueueService;
-  private followupFingerprints: Map<number, Set<string>> = new Map();
 
   constructor(
     taskQueue: TaskQueueService,
@@ -120,9 +119,8 @@ export class PRMonitorService {
 
     // Check if we've already created a followup for these exact issues
     const issueFingerprint = this.hashIssues(issues);
-    const prFingerprints = this.followupFingerprints.get(prNumber);
     
-    if (prFingerprints?.has(issueFingerprint)) {
+    if (this.taskQueue.hasFollowupFingerprint(prNumber, issueFingerprint)) {
       logger.info({
         category: 'pr-workflow',
         action: 'followup_already_exists',
@@ -136,12 +134,8 @@ export class PRMonitorService {
       return null;
     }
 
-    // Track fingerprint
-    if (!prFingerprints) {
-      this.followupFingerprints.set(prNumber, new Set([issueFingerprint]));
-    } else {
-      prFingerprints.add(issueFingerprint);
-    }
+    // Track fingerprint in database
+    this.taskQueue.addFollowupFingerprint(prNumber, issueFingerprint);
 
     const taskDescription = `Fix issues found in PR #${prNumber}:\n\n${issues.join('\n')}`;
 
@@ -208,6 +202,9 @@ export class PRMonitorService {
       await this.githubPR.mergePR(prNumber);
 
       await this.updateTaskPRStatus(taskId, 'merged');
+      
+      // Clear fingerprints for this PR since it's merged
+      this.taskQueue.clearFollowupFingerprints(prNumber);
 
       logger.info({
         category: 'pr-workflow',
@@ -271,8 +268,7 @@ export class PRMonitorService {
    */
   getStatus() {
     return {
-      enableAutoMerge: this.config.enableAutoMerge,
-      trackedPRs: this.followupFingerprints.size
+      enableAutoMerge: this.config.enableAutoMerge
     };
   }
 }

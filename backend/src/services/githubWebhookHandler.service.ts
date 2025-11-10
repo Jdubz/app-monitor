@@ -308,19 +308,67 @@ export class GitHubWebhookHandler {
   }
 
   /**
+   * Handle check_run webhook events
+   * Similar to check_suite but for individual check runs
+   */
+  async handleCheckRun(payload: any): Promise<void> {
+    this.stats.last_event_time = Date.now();
+    
+    const { action, check_run, repository } = payload;
+    
+    // Only process 'completed' check runs
+    if (action !== 'completed') {
+      logger.debug({
+        category: 'api',
+        action: 'check_run_ignored',
+        message: `Check run action '${action}' ignored (only processing 'completed')`,
+        details: { action, conclusion: check_run?.conclusion }
+      });
+      return;
+    }
+
+    const pullRequests = check_run?.pull_requests || [];
+    if (pullRequests.length === 0) {
+      logger.debug({
+        category: 'api',
+        action: 'check_run_no_prs',
+        message: 'Check run not associated with any PRs'
+      });
+      return;
+    }
+
+    logger.info({
+      category: 'api',
+      action: 'check_run_completed',
+      message: `Check run '${check_run?.name}' completed with ${check_run?.conclusion}`,
+      details: {
+        name: check_run?.name,
+        conclusion: check_run?.conclusion,
+        pr_count: pullRequests.length,
+        pr_numbers: pullRequests.map((pr: any) => pr.number),
+        repository: repository?.full_name
+      }
+    });
+
+    // Process each PR - reuse check suite logic since both trigger same workflow
+    for (const pr of pullRequests) {
+      await this.processCheckSuiteForPR(pr.number, check_run, repository);
+    }
+  }
+
+  /**
    * Process check suite completion for a specific PR
-   * TODO: Implement full followup task creation and auto-merge logic
    */
   private async processCheckSuiteForPR(
     prNumber: number,
     checkSuite: any,
     repository: any
   ): Promise<void> {
-    if (!this.taskQueue) {
+    if (!this.taskQueue || !this.prOrchestrator) {
       logger.warn({
         category: 'api',
         action: 'check_suite_handler_not_ready',
-        message: 'Task queue not available'
+        message: 'Task queue or PR orchestrator not available'
       });
       return;
     }
@@ -338,11 +386,13 @@ export class GitHubWebhookHandler {
     }
 
     const conclusion = checkSuite.conclusion;
+    const owner = repository.owner.login;
+    const repo = repository.name;
     
     logger.info({
       category: 'pr-workflow',
       action: 'check_suite_processed',
-      message: `Check suite ${conclusion} for PR #${prNumber} with ${tasks.length} task(s)`,
+      message: `Processing check suite ${conclusion} for PR #${prNumber}`,
       details: {
         pr_number: prNumber,
         conclusion,
@@ -351,9 +401,64 @@ export class GitHubWebhookHandler {
       }
     });
 
-    // TODO: Call prMonitor.shouldCreateFollowup() and prMonitor.createFollowupTask()
-    // TODO: Call prMonitor.mergePR() if checks passed and PR is ready
-    // Note: Needs GitHub API calls to get PR status and Copilot review data
+    try {
+      const prMonitor = this.prOrchestrator.getPRMonitor();
+      const githubPR = this.prOrchestrator.getGitHubPRService();
+      
+      // Get PR status and Copilot analysis
+      const prStatus = await githubPR.getPRStatus(prNumber, owner, repo);
+      const copilotAnalysis = await githubPR.getCopilotReviewAnalysis(prNumber, owner, repo);
+
+      // Check if we should create a followup task
+      if (prMonitor.shouldCreateFollowup(prStatus, copilotAnalysis)) {
+        const task = tasks[0]; // Use first matching task
+        
+        // Get PR branch from status
+        const prBranch = task.pr_branch || `pr-${prNumber}`;
+
+        const followupTask = await prMonitor.createFollowupTask(
+          prNumber,
+          task.id,
+          prBranch,
+          prStatus,
+          copilotAnalysis
+        );
+
+        if (followupTask) {
+          logger.info({
+            category: 'pr-workflow',
+            action: 'followup_task_created_from_check_suite',
+            message: `Created followup task ${followupTask.id} for PR #${prNumber}`,
+            details: {
+              pr_number: prNumber,
+              task_id: followupTask.id,
+              parent_task: task.id
+            }
+          });
+        }
+      } else if (conclusion === 'success') {
+        // All checks passed - try auto-merge if enabled
+        const task = tasks[0];
+        const merged = await prMonitor.mergePR(prNumber, task.id);
+        
+        if (merged) {
+          logger.info({
+            category: 'pr-workflow',
+            action: 'pr_auto_merged_from_check_suite',
+            message: `Auto-merged PR #${prNumber} after checks passed`,
+            details: { pr_number: prNumber, task_id: task.id }
+          });
+        }
+      }
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'check_suite_processing_error',
+        message: `Error processing check suite for PR #${prNumber}`,
+        error,
+        details: { pr_number: prNumber, repository: repository?.full_name }
+      });
+    }
   }
 
   /**
