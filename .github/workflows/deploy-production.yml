@@ -100,6 +100,7 @@ jobs:
           MANIFEST_NAME="${ARTIFACT_NAME}.manifest.json"
           
           # Create tarball with all necessary files
+          # Note: GNU tar is available on GitHub-hosted runners (Ubuntu)
           tar -czf "$TARBALL_NAME" \
             --exclude=node_modules \
             --exclude=.git \
@@ -110,8 +111,6 @@ jobs:
             --exclude=releases \
             --exclude=shared \
             --exclude='*.log' \
-            --exclude="$TARBALL_NAME" \
-            --exclude="$MANIFEST_NAME" \
             --warning=no-file-changed \
             .
           

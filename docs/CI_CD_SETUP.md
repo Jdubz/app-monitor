@@ -377,6 +377,8 @@ For issues or questions:
 3. **Manual test**: `~/Development/app-monitor-deployment/scripts/deploy-agent.sh`
 4. **GitHub issues**: https://github.com/Jdubz/app-monitor/issues
 
+---
+
 ## Reference Documentation
 
 - **Deployment Infrastructure**: `~/Development/app-monitor-deployment/README.md`
