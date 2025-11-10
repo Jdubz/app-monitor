@@ -109,7 +109,6 @@ jobs:
             --exclude=current \
             --exclude=current.backup \
             --exclude=releases \
-            --exclude=shared \
             --exclude='*.log' \
             . || [[ $? -eq 1 ]]
           
