@@ -20,6 +20,10 @@ export const config = {
   gcpKeyFile: process.env.GOOGLE_APPLICATION_CREDENTIALS || path.join(ROOT_DIR, '.firebase/serviceAccountKey.json'),
   logSourcesConfig: path.join(__dirname, '../config/log-sources.json'),
   workerLogStreamsConfig: path.join(__dirname, '../config/worker-log-streams.json'),
+  
+  // Simple API Key Authentication
+  apiKey: process.env.API_KEY || 'dev-key-change-in-production',
+  requireAuth: process.env.REQUIRE_AUTH !== 'false' && process.env.NODE_ENV === 'production', // Only require in production
 
   // Automatic Failure Recovery Feature Flags
   recovery: {

@@ -17,6 +17,7 @@ import type { LogRotation } from '../services/logRotation.js';
 import type { LogStreamer } from '../services/logStreamer.js';
 import type { ServiceConfig } from '../config.js';
 import type { HealthCheckApiResponse } from '@app-monitor/api-contracts';
+import { requireApiKey } from '../middleware/auth.js';
 
 import { createServicesRouter } from './services.routes.js';
 import { createSocketRoutes } from './socket-task.routes.js';
@@ -51,6 +52,7 @@ export function createApiRouter(deps: {
 }) {
   const router = Router();
 
+  // Health check - no auth required
   router.get('/health', (_req, res) => {
     const payload: HealthCheckApiResponse = {
       success: true,
@@ -63,20 +65,21 @@ export function createApiRouter(deps: {
     res.json(payload);
   });
 
-  router.use('/services', createServicesRouter(deps.processManager));
+  // Apply API key authentication to all routes except health and webhooks
+  router.use('/services', requireApiKey, createServicesRouter(deps.processManager));
 
   if (deps.connectionManager) {
-    router.use('/socket', createSocketRoutes(deps.connectionManager));
+    router.use('/socket', requireApiKey, createSocketRoutes(deps.connectionManager));
   }
 
-  router.use('/docker', createDockerRouter());
+  router.use('/docker', requireApiKey, createDockerRouter());
 
   if (deps.devBotsManager) {
-    router.use('/dev-bots', createClaudeWorkersRouter(deps.devBotsManager));
+    router.use('/dev-bots', requireApiKey, createClaudeWorkersRouter(deps.devBotsManager));
   }
 
   if (deps.logRotation && deps.logStreamer) {
-    router.use('/logs', createLogsRoutes({
+    router.use('/logs', requireApiKey, createLogsRoutes({
       logRotation: deps.logRotation,
       cloudLogging: deps.cloudLogging,
       logStreamer: deps.logStreamer,
@@ -85,13 +88,15 @@ export function createApiRouter(deps: {
   }
 
   if (deps.services) {
-    router.use('/ports', createPortsRoutes({ services: deps.services }));
+    router.use('/ports', requireApiKey, createPortsRoutes({ services: deps.services }));
   }
 
-  router.use('/environments', createEnvironmentsRoutes({ cloudLogging: deps.cloudLogging }));
-  router.use('/token-tracking', tokenTrackingRoutes);
-  router.use('/quality-gates', qualityGatesRoutes);
-  router.use('/verification', verificationRoutes);
+  router.use('/environments', requireApiKey, createEnvironmentsRoutes({ cloudLogging: deps.cloudLogging }));
+  router.use('/token-tracking', requireApiKey, tokenTrackingRoutes);
+  router.use('/quality-gates', requireApiKey, qualityGatesRoutes);
+  router.use('/verification', requireApiKey, verificationRoutes);
+  
+  // Webhooks don't require API key (GitHub signature verification instead)
   router.use('/github/webhooks', githubWebhooksRoutes);
 
   return router;
