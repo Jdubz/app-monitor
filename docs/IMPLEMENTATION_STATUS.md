@@ -134,25 +134,32 @@ ALTER TABLE tasks ADD COLUMN followup_tasks TEXT;
 
 ## 🚧 PARTIAL IMPLEMENTATIONS
 
-### Dev-Bot Pipeline Enhancements (30% Complete)
+### Dev-Bot Pipeline Enhancements (60-70% Complete) ✅ REVISED
 
 **Completed:**
-- ✅ Task queue infrastructure
-- ✅ Docker workspace orchestration
-- ✅ Basic task execution
+- ✅ Task queue infrastructure (TaskQueueService - 1,780 lines)
+- ✅ Docker workspace orchestration (DevBotsManager - 1,786 lines)
+- ✅ Task execution service (TaskExecutionService)
+- ✅ Artifact logging system (dev-bots/artifacts/)
+  - stdout/stderr capture working
+  - 16+ log files currently stored
+  - Path: dev-bots/artifacts/task-{id}-{stdout|stderr}-{timestamp}.log
+- ✅ Failure handling (FailureRecovery, TaskFailureGuards, RetryManager)
+- ✅ Task log viewer UI (real-time streaming via EventSource)
 
 **In Progress:**
-- 🚧 Context-rich task attachments (logs, network traces)
-- 🚧 Artifact trail persistence
-- 🚧 Automation run tracking
-- 🚧 Bootstrap script hardening
+- 🚧 Database schema for artifacts (no task_artifacts table yet)
+- 🚧 session_summary.json generation (not implemented)
+- 🚧 Quarantine system for repeated failures
 
 **Not Started:**
-- ❌ Session summary JSON generation
-- ❌ Automation analytics dashboard
-- ❌ CLI helpers for task automation
+- ❌ Analytics API (success rate, MTTR metrics)
+- ❌ Auto-close on PR merge integration
+- ❌ Auto-followup task creation on failures
 
-**Reference:** `docs/plans/DEV_BOT_PIPELINE_ENHANCEMENT_PLAN.md`
+**Reference:** `docs/DEV_BOT_PIPELINE_COMPLETION_PLAN_REVISED.md`
+
+**Revised Estimate:** 1-2 weeks to completion (down from 3-4 weeks)
 
 ### Frontend Stabilization (Status Unknown)
 
