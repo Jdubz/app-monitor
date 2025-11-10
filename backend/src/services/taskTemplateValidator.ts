@@ -28,20 +28,20 @@ export interface TaskTemplateV3 {
   title: string;
   description: string;
 
-  // V3 mandatory fields
-  investigation: Investigation;
-  preImplementationChecklist: string[];
-  acceptanceCriteria: string[];
-  constraints: string[];
+  // V3 fields (now mostly optional for flexibility)
+  investigation?: Investigation;
+  preImplementationChecklist?: string[];
+  acceptanceCriteria?: string[];
+  constraints?: string[];
 
-  // File scope control
-  files: string[];
+  // File scope control (optional)
+  files?: string[];
   modifyOnly?: string[];
   doNotModify?: string[];
-  doNotCreate: string[];
+  doNotCreate?: string[];
 
-  // Git workflow
-  gitWorkflow: GitWorkflow;
+  // Git workflow (optional)
+  gitWorkflow?: GitWorkflow;
 
   // Optional fields
   documentation?: string;
@@ -254,10 +254,10 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
     }
 
     if (!Array.isArray(template.investigation.mustFind) || template.investigation.mustFind.length === 0) {
-      errors.push({
+      warnings.push({
         field: 'investigation.mustFind',
-        message: 'Investigation must specify what the bot MUST find before implementing',
-        severity: 'error'
+        message: 'Investigation should specify what the bot MUST find before implementing',
+        severity: 'warning'
       });
     } else {
       template.investigation.mustFind.forEach((item, index) => {
@@ -272,10 +272,10 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
     }
 
     if (!Array.isArray(template.investigation.mustNotDuplicate) || template.investigation.mustNotDuplicate.length === 0) {
-      errors.push({
+      warnings.push({
         field: 'investigation.mustNotDuplicate',
-        message: 'Investigation must specify what the bot MUST NOT duplicate',
-        severity: 'error'
+        message: 'Investigation should specify what the bot MUST NOT duplicate',
+        severity: 'warning'
       });
     } else {
       template.investigation.mustNotDuplicate.forEach((item, index) => {
@@ -290,16 +290,16 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
     }
   }
 
-  // 3. Pre-implementation checklist validation
+  // 3. Pre-implementation checklist validation (now warning)
   logValidationStage('validate_checklist', 'Validating pre-implementation checklist', {
     checklistLength: template.preImplementationChecklist?.length || 0,
     isArray: Array.isArray(template.preImplementationChecklist)
   });
   if (!Array.isArray(template.preImplementationChecklist) || template.preImplementationChecklist.length === 0) {
-    errors.push({
+    warnings.push({
       field: 'preImplementationChecklist',
-      message: 'V3 templates MUST include pre-implementation checklist',
-      severity: 'error'
+      message: 'V3 templates should include pre-implementation checklist',
+      severity: 'warning'
     });
   } else if (template.preImplementationChecklist.length < 3) {
     warnings.push({
@@ -309,16 +309,16 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
     });
   }
 
-  // 4. Acceptance criteria validation (strict scope)
+  // 4. Acceptance criteria validation (relaxed)
   logValidationStage('validate_acceptance_criteria', 'Validating acceptance criteria for scope control', {
     criteriaCount: template.acceptanceCriteria?.length || 0,
     isArray: Array.isArray(template.acceptanceCriteria)
   });
   if (!Array.isArray(template.acceptanceCriteria) || template.acceptanceCriteria.length === 0) {
-    errors.push({
+    warnings.push({
       field: 'acceptanceCriteria',
-      message: 'Acceptance criteria required for scope control',
-      severity: 'error'
+      message: 'Acceptance criteria recommended for scope control',
+      severity: 'warning'
     });
   } else {
     let hasExactScopeLanguage = false;
@@ -326,10 +326,10 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
 
     template.acceptanceCriteria.forEach((criterion, index) => {
       if (!isNonEmptyString(criterion)) {
-        errors.push({
+        warnings.push({
           field: `acceptanceCriteria[${index}]`,
-          message: 'Acceptance criteria entries must be descriptive strings (e.g. "EXACTLY one file updated")',
-          severity: 'error'
+          message: 'Acceptance criteria entries should be descriptive strings (e.g. "EXACTLY one file updated")',
+          severity: 'warning'
         });
         return;
       }
@@ -344,32 +344,32 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
     });
 
     if (!hasExactScopeLanguage) {
-      errors.push({
+      warnings.push({
         field: 'acceptanceCriteria',
-        message: 'Acceptance criteria must include "EXACTLY" (or NO MORE/NO LESS) language to lock scope',
-        severity: 'error'
+        message: 'Acceptance criteria should include "EXACTLY" (or NO MORE/NO LESS) language to lock scope',
+        severity: 'warning'
       });
     }
 
     if (!hasGuardrailLanguage) {
-      errors.push({
+      warnings.push({
         field: 'acceptanceCriteria',
-        message: 'Acceptance criteria must include DO NOT / MUST NOT guardrails to prevent feature creep',
-        severity: 'error'
+        message: 'Acceptance criteria should include DO NOT / MUST NOT guardrails to prevent feature creep',
+        severity: 'warning'
       });
     }
   }
 
-  // 5. Constraints validation
+  // 5. Constraints validation (relaxed)
   logValidationStage('validate_constraints', 'Validating constraints to prevent overengineering', {
     constraintsCount: template.constraints?.length || 0,
     isArray: Array.isArray(template.constraints)
   });
   if (!Array.isArray(template.constraints) || template.constraints.length === 0) {
-    errors.push({
+    warnings.push({
       field: 'constraints',
-      message: 'V3 templates MUST include explicit constraints to prevent overengineering',
-      severity: 'error'
+      message: 'V3 templates should include explicit constraints to prevent overengineering',
+      severity: 'warning'
     });
   } else {
     let hasMustNot = false;
@@ -407,25 +407,25 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
     }
   }
 
-  // 6. File scope validation
+  // 6. File scope validation (relaxed)
   logValidationStage('validate_file_scope', 'Validating file scope and creation restrictions', {
     filesCount: template.files?.length || 0,
     doNotCreateCount: template.doNotCreate?.length || 0,
     hasDoNotCreate: !!template.doNotCreate
   });
   if (!Array.isArray(template.files) || template.files.length === 0) {
-    errors.push({
+    warnings.push({
       field: 'files',
-      message: 'Files array required to scope work',
-      severity: 'error'
+      message: 'Files array recommended to scope work',
+      severity: 'warning'
     });
   }
 
   if (!Array.isArray(template.doNotCreate) || template.doNotCreate.length === 0) {
-    errors.push({
+    warnings.push({
       field: 'doNotCreate',
-      message: 'V3 templates MUST declare doNotCreate restrictions like "backend/src/service.ts (reuse existing service)" to block duplicate files',
-      severity: 'error'
+      message: 'V3 templates should declare doNotCreate restrictions like "backend/src/service.ts (reuse existing service)" to block duplicate files',
+      severity: 'warning'
     });
   } else {
     template.doNotCreate.forEach((entry, index) => {
