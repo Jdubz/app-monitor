@@ -177,7 +177,7 @@ describe('TaskTemplateValidator', () => {
         },
         preImplementationChecklist: ['test'],
         acceptanceCriteria: ['EXACTLY one thing', 'MUST NOT break'],
-        constraints: ['MUST use existing code'],
+        constraints: ['MUST use existing code', 'MUST NOT create new files'],
         files: ['test.ts'],
         gitWorkflow: { required: true, branch: 'main', commitMessage: 'test' }
       };
@@ -204,7 +204,7 @@ describe('TaskTemplateValidator', () => {
         },
         preImplementationChecklist: ['test'],
         acceptanceCriteria: ['EXACTLY one thing', 'MUST NOT break'],
-        constraints: ['MUST use existing code'],
+        constraints: ['MUST use existing code', 'MUST NOT create new files'],
         files: ['test.ts'],
         gitWorkflow: { required: true, branch: 'main', commitMessage: 'test' }
       };
@@ -231,7 +231,7 @@ describe('TaskTemplateValidator', () => {
         },
         // No checklist!
         acceptanceCriteria: ['EXACTLY one thing', 'MUST NOT break'],
-        constraints: ['MUST use existing code'],
+        constraints: ['MUST use existing code', 'MUST NOT create new files'],
         files: ['test.ts'],
         gitWorkflow: { required: true, branch: 'main', commitMessage: 'test' }
       };
@@ -285,7 +285,7 @@ describe('TaskTemplateValidator', () => {
         },
         preImplementationChecklist: ['test'],
         // No acceptanceCriteria!
-        constraints: ['MUST use existing code'],
+        constraints: ['MUST use existing code', 'MUST NOT create new files'],
         files: ['test.ts'],
         gitWorkflow: { required: true, branch: 'main', commitMessage: 'test' }
       };
@@ -396,8 +396,8 @@ describe('TaskTemplateValidator', () => {
           mustNotDuplicate: ['something']
         },
         preImplementationChecklist: ['test'],
-        acceptanceCriteria: ['test'],
-        constraints: ['test'],
+        acceptanceCriteria: ['EXACTLY one thing', 'MUST NOT break'],
+        constraints: ['MUST use existing code', 'MUST NOT create new files'],
         // No files!
         gitWorkflow: { required: true, branch: 'main', commitMessage: 'test' }
       };
