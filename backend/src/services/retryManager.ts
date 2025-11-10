@@ -7,6 +7,8 @@
 import { EventEmitter } from 'events';
 import { logger } from '../utils/logger.js';
 import { Task, RetryAttempt } from './devBotsManager.js';
+import { ShutdownStateManager } from './shutdownStateManager.js';
+import { getDatabase } from './database.js';
 
 export interface RetryConfig {
   max_retries: number;
@@ -22,6 +24,7 @@ export interface RetryResult {
 export class RetryManager extends EventEmitter {
   private config: RetryConfig;
   private retryHistory: Map<string, RetryAttempt[]> = new Map();
+  private shutdownStateManager: ShutdownStateManager;
 
   constructor(config: Partial<RetryConfig> = {}) {
     super();
@@ -29,11 +32,40 @@ export class RetryManager extends EventEmitter {
       max_retries: 3,
       ...config,
     };
+    this.shutdownStateManager = new ShutdownStateManager(getDatabase());
+
     logger.info({
       category: 'process',
       action: 'manual_retrymanager_initialized',
       message: 'Manual RetryManager initialized'
     });
+
+    // Restore state on initialization
+    this.restoreState();
+  }
+
+  /**
+   * Restore retry history from database
+   */
+  private async restoreState(): Promise<void> {
+    try {
+      const restoredHistory = await this.shutdownStateManager.restoreRetryHistory();
+      this.retryHistory = restoredHistory;
+
+      logger.info({
+        category: 'process',
+        action: 'retry_history_restored',
+        message: 'Retry history restored from previous session',
+        details: { taskCount: this.retryHistory.size }
+      });
+    } catch (error) {
+      logger.error({
+        category: 'process',
+        action: 'retry_history_restore_failed',
+        message: 'Failed to restore retry history',
+        error
+      });
+    }
   }
 
   /**
@@ -202,6 +234,26 @@ export class RetryManager extends EventEmitter {
       category: 'process',
       action: 'all_retry_history_cleared',
       message: 'All retry history cleared'
+    });
+  }
+
+  /**
+   * Export retry history for persistence (called during shutdown)
+   */
+  public exportHistory(): Map<string, RetryAttempt[]> {
+    return this.retryHistory;
+  }
+
+  /**
+   * Import retry history (for manual restoration)
+   */
+  public importHistory(history: Map<string, RetryAttempt[]>): void {
+    this.retryHistory = history;
+    logger.info({
+      category: 'process',
+      action: 'retry_history_imported',
+      message: 'Retry history manually imported',
+      details: { taskCount: this.retryHistory.size }
     });
   }
 }
