@@ -291,15 +291,15 @@ describe('TaskTemplateValidator', () => {
       };
 
       const result = validateTaskTemplate(template);
-      expect(result.isValid).toBe(false);
-      expect(result.errors).toContainEqual(
+      expect(result.isValid).toBe(true);
+      expect(result.warnings).toContainEqual(
         expect.objectContaining({
           field: 'acceptanceCriteria'
         })
       );
     });
 
-    it('should fail when acceptanceCriteria lacks EXACTLY language', () => {
+    it('should warn when acceptanceCriteria lacks EXACTLY language', () => {
       const template: Partial<TaskTemplateV3> = {
         type: 'implementation',
         title: 'Test',
@@ -319,8 +319,8 @@ describe('TaskTemplateValidator', () => {
       };
 
       const result = validateTaskTemplate(template);
-      expect(result.isValid).toBe(false);
-      expect(result.errors).toContainEqual(
+      expect(result.isValid).toBe(true);
+      expect(result.warnings).toContainEqual(
         expect.objectContaining({
           field: 'acceptanceCriteria',
           message: expect.stringContaining('EXACTLY')
@@ -328,7 +328,7 @@ describe('TaskTemplateValidator', () => {
       );
     });
 
-    it('should fail when constraints is missing', () => {
+    it('should warn when constraints is missing', () => {
       const template = {
         type: 'implementation',
         title: 'Test',
@@ -347,8 +347,8 @@ describe('TaskTemplateValidator', () => {
       };
 
       const result = validateTaskTemplate(template);
-      expect(result.isValid).toBe(false);
-      expect(result.errors).toContainEqual(
+      expect(result.isValid).toBe(true);
+      expect(result.warnings).toContainEqual(
         expect.objectContaining({
           field: 'constraints'
         })
@@ -384,7 +384,7 @@ describe('TaskTemplateValidator', () => {
       );
     });
 
-    it('should fail when files array is missing', () => {
+    it('should warn when files array is missing', () => {
       const template = {
         type: 'implementation',
         title: 'Test',
@@ -403,8 +403,8 @@ describe('TaskTemplateValidator', () => {
       };
 
       const result = validateTaskTemplate(template);
-      expect(result.isValid).toBe(false);
-      expect(result.errors).toContainEqual(
+      expect(result.isValid).toBe(true); // Changed: files now optional
+      expect(result.warnings).toContainEqual(
         expect.objectContaining({
           field: 'files'
         })
