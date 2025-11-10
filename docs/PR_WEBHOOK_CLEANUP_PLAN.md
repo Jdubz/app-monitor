@@ -1,5 +1,45 @@
 # PR Webhook Migration - Cleanup Plan
 
+## Status: PARTIALLY COMPLETE
+
+### ✅ Completed (Phase 4a)
+
+1. **PRWorkflowOrchestrator Webhook Methods** ✅
+   - Added `onPROpened()` - Handles PR opened events
+   - Added `onPRSynchronize()` - Handles new commits
+   - Added `onPRMerged()` - Handles PR merge  
+   - Added `onPRClosed()` - Handles PR closed without merge
+   - Added `onPRReopened()` - Handles PR reopened
+   - Added `onPRReadyForReview()` - Handles draft → ready transition
+
+2. **GitHubWebhookHandler Cleanup** ✅
+   - Removed `typeof` checks for orchestrator methods
+   - Clean, type-safe method calls
+   - Proper integration with orchestrator
+
+### ⚠️ Deferred (Phase 4b - Future Work)
+
+**Reason for Deferral**: Polling removal is complex and risky. The current hybrid approach (webhooks primary, polling backup) is safer for production deployment.
+
+**Polling Code Still Present**:
+- `PRMonitorService.registerPR()` - Still called, starts polling
+- `PRMonitorService.startPolling()` - Still creates interval timer
+- `PRMonitorService.pollAllPRs()` - Still polls GitHub API every 60s
+- `PRMonitorService.checkPR()` - Still checks individual PRs
+- `PRMonitorService.stopPolling()` - Still called on shutdown
+
+**Impact**:
+- ⚠️ Dual updates: Both webhook AND polling update task status
+- ⚠️ Race conditions possible between webhook and poll
+- ⚠️ Unnecessary GitHub API calls (rate limit impact)
+- ⚠️ Increased complexity with two code paths
+
+**Mitigation**:
+- Webhooks are faster (instant vs 60s delay)
+- Webhook updates will typically win race conditions
+- Polling provides fallback if webhooks fail
+- Can monitor logs to verify webhooks working
+
 ## Current State Analysis
 
 ### ✅ NEW (Webhook-Based)
@@ -169,3 +209,88 @@ Keep:
 - [ ] All tests passing
 - [ ] Documentation updated
 - [ ] Zero regression in PR workflow functionality
+
+## Phase 4b: Complete Polling Removal (Future Work)
+
+### When to Execute
+
+Execute polling removal after:
+1. Webhook system proven stable in production (2-4 weeks)
+2. Monitoring confirms webhooks receiving all events
+3. No webhook delivery issues observed
+4. Team comfortable with webhook-only approach
+
+### Implementation Steps
+
+1. **Disable Polling in PRMonitorService**
+   ```typescript
+   registerPR(): void {
+     // Log deprecation warning, don't start polling
+   }
+   
+   startPolling(): void {
+     // No-op, polling disabled
+   }
+   ```
+
+2. **Remove Polling Infrastructure**
+   - Remove `pollTimer` property
+   - Remove `monitoredPRs` Map
+   - Remove `pollAllPRs()` method
+   - Remove `checkPR()` method
+   - Remove `updateMonitoredPRStatus()` method
+
+3. **Extract Business Logic**
+   Move these to PRWorkflowOrchestrator:
+   - `shouldCreateFollowup()`
+   - `createFollowupTask()`
+   - `mergePR()`
+
+4. **Remove Config Options**
+   - `prMonitorPollIntervalMs`
+   - `monitorPollIntervalMs`
+   - `maxPollAttempts`
+
+5. **Update Call Sites**
+   - Remove `prMonitor.registerPR()` calls
+   - Remove `prMonitor.stopPolling()` calls
+   - Update tests
+
+6. **Delete or Archive**
+   - Option A: Delete `PRMonitorService` entirely
+   - Option B: Keep as utility class for business logic
+
+### Risk Assessment
+
+**Low Risk After Validation**:
+- Webhooks proven reliable
+- Business logic preserved
+- Can always re-enable polling if needed
+
+**Rollback Plan**:
+- Git revert to restore polling
+- Webhooks continue working
+- No data loss risk
+
+## Recommended Timeline
+
+1. **Now**: Deploy current hybrid system
+2. **Week 1-2**: Monitor webhook delivery, verify all events received
+3. **Week 3-4**: Confirm no issues, build confidence
+4. **Week 5**: Execute Phase 4b (polling removal)
+5. **Week 6+**: Monitor webhook-only system
+
+## Conclusion
+
+**Current Decision**: Keep polling as backup during initial webhook deployment.
+
+**Rationale**:
+- Safety first: Dual system provides redundancy
+- Webhooks are proven technology but new to this codebase
+- Easy to remove polling once webhooks proven reliable
+- Minimal downside to temporary duplication
+
+**Next Steps**:
+1. Deploy current code to production
+2. Monitor webhook delivery
+3. Schedule Phase 4b after validation period
