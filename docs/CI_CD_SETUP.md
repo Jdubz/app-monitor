@@ -1,412 +1,385 @@
-# CI/CD Pipeline Setup Guide
+# CI/CD Pipeline Setup Guide - Pull Agent Architecture
 
-This guide walks through setting up automated production deployments when merging to main.
+This guide covers setting up automated production deployments using the secure pull-agent architecture.
 
 ## Overview
 
-The CI/CD pipeline automatically deploys to production when you push to the `main` branch. It uses:
+The CI/CD pipeline automatically deploys to production when you push to the `main` branch using:
 
-- **GitHub Actions** for CI/CD orchestration
-- **Self-hosted runner** on the production server
+- **GitHub Actions** for build and test on GitHub-hosted runners
+- **Pull Agent** on production server for deployment execution
+- **1Password** for secure credential management
 - **Blue-green deployment** for zero-downtime updates
 - **Automated health checks** to verify deployments
-
-## Important: Deployment Infrastructure Location
-
-**Deployment scripts and infrastructure are kept in a separate directory** (`../app-monitor-deployment`) to:
-- ✅ Prevent committing machine-specific configurations
-- ✅ Keep deployment infrastructure isolated from application code
-- ✅ Avoid security information leakage
-
-**DO NOT commit the `app-monitor-deployment` directory to version control.**
 
 ## Architecture
 
 ```
-┌─────────────────┐      ┌──────────────────┐      ┌────────────────────┐
-│   Git Push to   │─────▶│  GitHub Actions  │─────▶│  Self-Hosted       │
-│   main branch   │      │  Workflow        │      │  Runner            │
-└─────────────────┘      └──────────────────┘      └────────────────────┘
-                                                              │
-                                                              ▼
-                                                    ┌─────────────────────┐
-                                                    │  Production Server  │
-                                                    │  /opt/app-monitor   │
-                                                    └─────────────────────┘
-                                                              │
-                                                              ▼
-                                              ┌───────────────┴───────────────┐
-                                              │                               │
-                                         Backend:5001/5002            Frontend:3000
-                                         (Blue-Green)
+┌─────────────────┐      ┌──────────────────────────────┐
+│ Push to main    │─────▶│  GitHub Actions              │
+│                 │      │  (GitHub-hosted runner)      │
+└─────────────────┘      │  - Run tests                 │
+                         │  - Build application         │
+                         │  - Create artifact           │
+                         │  - Create deployment record  │
+                         └───────────────┬──────────────┘
+                                         │
+                                         ▼
+                         ┌───────────────────────────────┐
+                         │  GitHub Deployments API       │
+                         │  Status: queued               │
+                         └───────────────┬───────────────┘
+                                         │
+                                 ┌───────┴────────┐
+                                 │  Pull every    │
+                                 │  2 minutes     │
+                                 └───────┬────────┘
+                                         ▼
+                         ┌───────────────────────────────┐
+                         │  Pull Agent (systemd timer)   │
+                         │  On production server         │
+                         │  - Fetch PAT from 1Password   │
+                         │  - Check for deployments      │
+                         │  - Download artifact          │
+                         │  - Run deploy script          │
+                         │  - Report status              │
+                         └───────────────┬───────────────┘
+                                         │
+                                         ▼
+                         ┌───────────────────────────────┐
+                         │  /opt/app-monitor             │
+                         │  (Production environment)     │
+                         │  - Blue-green deployment      │
+                         │  - Health checks              │
+                         │  - Zero downtime              │
+                         └───────────────────────────────┘
 ```
+
+## Security Benefits
+
+| Aspect | Self-Hosted Runner | Pull Agent |
+|--------|-------------------|------------|
+| **Credentials** | Stored on disk | Fetched from 1Password on-demand |
+| **Runner Process** | Always running | Periodic (2min intervals) |
+| **Code Execution** | Runs workflow YAML | Only local scripts |
+| **Permissions** | Broad sudo access | Limited to deploy script |
+| **Attack Surface** | Constantly exposed | Minimal exposure |
+| **Trust Model** | Trusts all workflows | Only trusts local scripts |
 
 ## Prerequisites
 
-1. **Production server** with:
+1. **Production Server**
    - Ubuntu/Debian Linux
-   - Internet access for package installation
+   - Node.js 20+
+   - Docker
+   - Nginx
+   - 1Password CLI
 
-2. **GitHub repository** with:
-   - Admin access
+2. **1Password**
+   - Service account token
+   - GitHub PAT stored in vault
+
+3. **GitHub**
+   - Admin access to repository
    - Actions enabled
-
-3. **Deployment directory** created on your local machine:
-   ```bash
-   # This should be created at the same level as your app-monitor repo
-   cd /path/to/your/projects
-   mkdir app-monitor-deployment
-   ```
 
 ## Setup Steps
 
-### Step 1: Copy Deployment Infrastructure
+### Step 1: Install Pull Agent Infrastructure
 
-The deployment infrastructure is not stored in the repo. You need to create it:
-
-```bash
-# Create the deployment directory structure
-mkdir -p app-monitor-deployment/{scripts,systemd,github-runner}
-
-# This directory will contain:
-# - Deployment scripts (deploy.sh, rollback.sh, etc.)
-# - Systemd service files
-# - GitHub Actions runner
-# - Production configuration
-```
-
-### Step 2: Automated Setup (Recommended)
-
-Use the automated setup script to install all dependencies on your production server:
+On your production server:
 
 ```bash
-# 1. SSH into your production server
-ssh user@production-server
-
-# 2. Clone your app-monitor repo
-git clone https://github.com/Jdubz/app-monitor.git
-cd app-monitor
-
-# 3. Create deployment directory
-cd ..
-mkdir -p app-monitor-deployment
-cd app-monitor-deployment
-
-# 4. Copy the setup script from your local machine or create it
-# (See app-monitor-deployment/README.md for the full script)
-
-# 5. Run automated setup
-sudo ./scripts/setup-production.sh
+# 1. Install deployment infrastructure
+cd ~/Development/app-monitor-deployment
+sudo ./scripts/install-deploy-agent.sh
 ```
 
-The script will automatically install:
-- ✅ Node.js 20+
-- ✅ Docker
-- ✅ Nginx
-- ✅ GitHub Actions Runner (download)
-- ✅ Production directory at `/opt/app-monitor`
-- ✅ Systemd services
-- ✅ Sudo permissions
+This installs:
+- Systemd service (`app-monitor-deploy-agent.service`)
+- Systemd timer (`app-monitor-deploy-agent.timer`)
+- Work directories (`~/.cache/app-monitor-deploy-agent/`)
 
-### Step 3: Register GitHub Actions Runner
-
-After the automated setup, you must manually register the runner (requires GitHub token):
-
-1. Go to GitHub repository settings:
-   ```
-   https://github.com/Jdubz/app-monitor/settings/actions/runners/new
-   ```
-
-2. Select **Linux** and **x64** architecture
-
-3. Copy the registration token
-
-4. Run the configuration:
-   ```bash
-   cd ~/actions-runner
-   ./config.sh --url https://github.com/Jdubz/app-monitor \
-               --token YOUR_TOKEN \
-               --name production-runner \
-               --labels production
-   ```
-
-5. Install as a system service:
-   ```bash
-   sudo ./svc.sh install
-   sudo ./svc.sh start
-   ```
-
-6. Verify it's running:
-   ```bash
-   sudo ./svc.sh status
-   ```
-
-### Step 4: Configure Environment Variables
-
-Create production environment file on the server:
+### Step 2: Configure 1Password Service Account
 
 ```bash
-sudo nano /opt/app-monitor/shared/config/backend.env
+# 1. Create service account in 1Password
+# 2. Grant access to Development vault
+# 3. Save token to .env file
+
+echo "OP_SERVICE_ACCOUNT_TOKEN=ops_..." >> ~/Development/.env
 ```
 
-Add:
+### Step 3: Create GitHub Personal Access Token
+
+1. Go to: https://github.com/settings/tokens/new
+2. Name: `app-monitor-deploy-agent`
+3. Scopes: **`repo`** only
+4. Expiration: 1 year (recommended)
+5. Generate and copy token
+
+### Step 4: Store GitHub PAT in 1Password
+
 ```bash
-NODE_ENV=production
-PORT=5001  # Will alternate with 5002
-DATABASE_PATH=/opt/app-monitor/shared/data/dev-bots.db
-LOG_LEVEL=info
+# Using 1Password CLI
+source ~/Development/.env
 
-# Add any other environment variables your app needs
+op item create \
+  --vault Development \
+  --category "API Credential" \
+  --title "app-monitor-deploy-agent" \
+  token='ghp_YOUR_TOKEN_HERE'
 ```
 
-### Step 5: Verify Setup
-
-Run the verification script to ensure everything is configured:
+### Step 5: Test the Pull Agent
 
 ```bash
-cd /path/to/app-monitor-deployment
-sudo ./scripts/verify-production-ready.sh
+cd ~/Development/app-monitor-deployment
+
+# Run health check
+./scripts/test-deploy-agent.sh
+
+# All checks should pass ✓
 ```
 
-This checks:
-- ✅ GitHub runner installation and status
-- ✅ Production directory structure
-- ✅ Systemd services
-- ✅ Nginx configuration
-- ✅ Sudo permissions
-- ✅ Environment files
-- ✅ Docker status
-- ✅ Node.js version
-- ✅ Build tests
+### Step 6: Enable the Timer
 
-### Step 6: Test Deployment
+```bash
+# Start the timer (runs every 2 minutes)
+sudo systemctl enable --now app-monitor-deploy-agent.timer
 
-#### Manual Test (Recommended First)
-
-1. Trigger a manual deployment:
-   ```
-   Go to: https://github.com/Jdubz/app-monitor/actions
-   Select: "Deploy to PRODUCTION" workflow
-   Click: "Run workflow"
-   Type: "DEPLOY TO PRODUCTION" to confirm
-   ```
-
-2. Monitor the deployment:
-   - Watch the Actions tab in GitHub
-   - Check runner logs: `sudo journalctl -u actions.runner.* -f`
-   - Check deployment logs: `tail -f /opt/app-monitor/shared/logs/deployments/deploy-*.log`
-
-#### Automatic Test
-
-1. Merge a change to main:
-   ```bash
-   # Make a small change
-   git checkout main
-   git pull origin main
-
-   # Merge your tested changes from staging
-   git merge staging
-   git push origin main
-   ```
-
-2. Watch the deployment in GitHub Actions
-
-## Workflow Details
-
-### Pre-Deployment Checks (GitHub-Hosted)
-
-Runs on GitHub's infrastructure to validate code:
-
-1. ✅ **Branch verification** - Ensures deployment from main only
-2. ✅ **Install dependencies** - `npm ci`
-3. ✅ **Run backend tests** - All tests must pass
-4. ✅ **Lint backend** - Code quality checks
-5. ✅ **Build backend** - TypeScript compilation
-6. ✅ **Build frontend** - Production build
-
-### Deployment (Self-Hosted)
-
-Runs on your production server:
-
-1. 🚀 **Checkout code** - Pull latest from main
-2. 🔧 **Run deployment script** - Execute blue-green deployment
-3. ✅ **Verify services** - Check systemd service status
-4. 🏥 **Health checks** - Verify endpoints are responding
-
-### Blue-Green Deployment Flow
-
-The deployment script performs:
-
-1. **Identify active port** - Determine which backend is running (5001 or 5002)
-2. **Select target port** - Choose the opposite port for new deployment
-3. **Create release** - Extract code to `/opt/app-monitor/releases/TIMESTAMP`
-4. **Build application** - Compile backend and frontend
-5. **Start new instance** - Launch backend on target port
-6. **Health check** - Verify new instance is healthy
-7. **Switch traffic** - Update nginx to route to new instance
-8. **Stop old instance** - Gracefully shut down previous version
-9. **Update current symlink** - Point to new release
-
-## Production Directory Structure
-
-On the production server at `/opt/app-monitor`:
-
+# Check status
+systemctl status app-monitor-deploy-agent.timer
 ```
-/opt/app-monitor/
-├── current/                    # Symlink to active release
-├── releases/
-│   ├── 2025-11-08-123456/     # Timestamped releases
-│   └── 2025-11-08-234567/
-└── shared/
-    ├── config/
-    │   ├── backend.env         # Backend environment variables
-    │   └── active-port         # Current active backend port
-    ├── data/
-    │   └── dev-bots.db        # SQLite database (persistent)
-    └── logs/
-        └── deployments/        # Deployment logs
+
+## Workflow Configuration
+
+The workflow file is located at `.github/workflows/deploy-production.yml`.
+
+### Key Features
+
+1. **Pre-deployment Checks** (GitHub-hosted)
+   - Branch verification (main only)
+   - Manual confirmation (workflow_dispatch)
+   - Tests (backend, frontend)
+   - Linting (backend, frontend)
+   - Builds (backend, frontend)
+
+2. **Artifact Creation** (GitHub-hosted)
+   - Packages entire application
+   - Creates checksum
+   - Uploads to GitHub
+
+3. **Deployment Record** (GitHub-hosted)
+   - Creates GitHub deployment
+   - Includes artifact metadata
+   - Sets status to "queued"
+
+4. **Monitoring** (GitHub-hosted)
+   - Polls deployment status
+   - Waits for pull agent
+   - Reports success/failure
+
+### Trigger Deployment
+
+```bash
+# Automatic on push to main
+git push origin main
+
+# Manual with confirmation
+gh workflow run deploy-production.yml
+# Then type "DEPLOY TO PRODUCTION" when prompted
 ```
 
 ## Monitoring
 
-### View Deployment Logs
+### Watch Pull Agent
 
 ```bash
-# Deployment script logs
-tail -f /opt/app-monitor/shared/logs/deployments/deploy-*.log
+# Follow agent logs
+journalctl -u app-monitor-deploy-agent.service -f
 
-# GitHub runner logs
-sudo journalctl -u actions.runner.* -f
+# Check timer schedule
+systemctl list-timers app-monitor-deploy-agent.timer
 
-# Backend service logs
-sudo journalctl -u app-monitor-backend@5001.service -f
-sudo journalctl -u app-monitor-backend@5002.service -f
-
-# Frontend service logs
-sudo journalctl -u app-monitor-frontend.service -f
+# View recent runs
+journalctl -u app-monitor-deploy-agent.service --since "1 hour ago"
 ```
 
-### Check Service Status
+### Watch GitHub Actions
 
 ```bash
-# All services
-sudo systemctl status 'app-monitor-*'
+# List recent runs
+gh run list --limit 5
 
-# Specific services
-sudo systemctl status app-monitor-backend@5001.service
-sudo systemctl status app-monitor-frontend.service
-sudo systemctl status nginx
+# Watch current run
+gh run watch
 
-# GitHub runner
-sudo systemctl status actions.runner.*
+# View specific run
+gh run view <run-id>
 ```
 
-### Manual Rollback
-
-If deployment fails:
+### Check Deployment Status
 
 ```bash
-cd /opt/app-monitor
-sudo ./rollback.sh
+# List deployments
+gh api repos/Jdubz/app-monitor/deployments --jq '.[] | {id, created_at, environment}'
+
+# Check deployment statuses
+gh api repos/Jdubz/app-monitor/deployments/<ID>/statuses
 ```
 
 ## Troubleshooting
 
-### Runner Not Starting
+### Pull Agent Not Running
 
 ```bash
-# Check runner status
-cd ~/actions-runner
-sudo ./svc.sh status
+# Check timer status
+systemctl status app-monitor-deploy-agent.timer
 
-# View runner logs
-sudo journalctl -u actions.runner.* -n 100
+# Check service status
+systemctl status app-monitor-deploy-agent.service
 
-# Restart runner
-sudo ./svc.sh stop
-sudo ./svc.sh start
+# View logs
+journalctl -u app-monitor-deploy-agent.service -n 50
+
+# Test manually
+cd ~/Development/app-monitor-deployment
+./scripts/deploy-agent.sh
 ```
 
-### Permission Denied Errors
+### GitHub PAT Issues
 
 ```bash
-# Verify sudoers file
-sudo visudo -c
+# Test PAT retrieval
+cd ~/Development/app-monitor-deployment
+./scripts/test-deploy-agent.sh
 
-# Check file permissions
-sudo ls -la /etc/sudoers.d/github-runner-deploy
-
-# Should be: -r--r----- root root
+# Should show:
+# ✓ PAT retrieved from 1Password
+# ✓ GitHub API authentication successful
 ```
 
-### Deployment Fails at Build Step
+### Deployment Not Triggered
+
+1. **Check workflow ran**: `gh run list --limit 5`
+2. **Check deployment created**: `gh api repos/Jdubz/app-monitor/deployments`
+3. **Check pull agent logs**: `journalctl -u app-monitor-deploy-agent.service -f`
+4. **Manual trigger**: `./scripts/deploy-agent.sh`
+
+### Health Checks Failing
 
 ```bash
-# Check if dependencies are installed
-cd /opt/app-monitor/current
-npm list
+# Test health endpoints
+curl http://localhost:5001/api/health
+curl http://localhost:5002/api/health
 
-# Run build manually to see errors
-npm run build -w backend
-npm run build -w frontend
+# Check services
+systemctl status 'app-monitor-backend@*'
+
+# View application logs
+journalctl -u app-monitor-backend@5001.service -n 100
 ```
 
-### Health Check Fails
+## Configuration
+
+### Pull Agent Environment Variables
+
+Set in `/home/jdubz/Development/.env`:
 
 ```bash
-# Check backend is running
-curl http://localhost:5001/health
-curl http://localhost:5002/health
-
-# Check frontend
-curl http://localhost:3000
-
-# Check nginx
-sudo nginx -t
-sudo systemctl status nginx
+OP_SERVICE_ACCOUNT_TOKEN=ops_...
+DEPLOY_AGENT_REPO=Jdubz/app-monitor
+DEPLOY_AGENT_GITHUB_PAT_ITEM=op://Development/app-monitor-deploy-agent/token
+DEPLOY_AGENT_ENVIRONMENT_URL=https://app-monitor.yourdomain.com
 ```
 
-## Security Considerations
+### Timer Configuration
 
-1. **Sudo access is restricted** to specific deployment commands only
-2. **Runner runs as a service** with limited system access
-3. **Secrets are managed** through GitHub Secrets (when needed)
-4. **Deployments require** code to be in main branch
-5. **Manual confirmation** required for workflow_dispatch triggers
-6. **Deployment infrastructure** kept separate from codebase
+Edit `/etc/systemd/system/app-monitor-deploy-agent.timer`:
 
-## Keeping Deployment Scripts Updated
+```ini
+[Timer]
+OnBootSec=2m           # Run 2 minutes after boot
+OnUnitActiveSec=2m     # Run every 2 minutes
+AccuracySec=30s        # Allow 30s jitter
+RandomizedDelaySec=15s # Random delay up to 15s
+```
 
-When deployment scripts change in the main repo, copy them to your deployment directory:
+After changes:
+```bash
+sudo systemctl daemon-reload
+sudo systemctl restart app-monitor-deploy-agent.timer
+```
+
+## Maintenance
+
+### Update GitHub PAT
 
 ```bash
-# Copy updated scripts
-cp /path/to/app-monitor/scripts/production/*.sh ../app-monitor-deployment/scripts/
-cp /path/to/app-monitor/scripts/production/*.service ../app-monitor-deployment/systemd/
+# Create new token (see Step 3)
+# Update in 1Password
+source ~/Development/.env
+op item edit "app-monitor-deploy-agent" \
+  --vault Development \
+  token='ghp_NEW_TOKEN'
+
+# Verify
+./scripts/test-deploy-agent.sh
 ```
 
-**Note**: The main repo no longer contains `scripts/production/` - deployment infrastructure is kept separate.
+### Pause Deployments
 
-## Next Steps
+```bash
+# Stop timer (deployments won't run)
+sudo systemctl stop app-monitor-deploy-agent.timer
 
-After setup is complete:
+# Resume
+sudo systemctl start app-monitor-deploy-agent.timer
+```
 
-1. ✅ Test with a small change
-2. ✅ Verify rollback works
-3. ✅ Set up monitoring alerts
-4. ✅ Document any custom configurations
-5. ✅ Create runbook for common issues
+### View Deployment History
+
+```bash
+# Local deployment logs
+ls -la ~/.cache/app-monitor-deploy-agent/logs/
+
+# GitHub deployment history
+gh api repos/Jdubz/app-monitor/deployments --jq '.[] | {id, created_at, creator: .creator.login, sha: .sha[0:7]}'
+```
+
+## Migration from Self-Hosted Runner
+
+If migrating from a self-hosted runner:
+
+1. **Test pull agent** first (both can run concurrently)
+2. **Verify 2-3 successful deployments**
+3. **Stop self-hosted runner**:
+   ```bash
+   cd ~/actions-runner
+   sudo ./svc.sh stop
+   sudo ./svc.sh uninstall
+   ```
+4. **Remove runner from GitHub**:
+   - Settings → Actions → Runners → Remove runner
+5. **Archive runner directory**:
+   ```bash
+   tar -czf actions-runner-backup.tar.gz actions-runner
+   rm -rf actions-runner
+   ```
 
 ## Support
 
-For issues with the CI/CD pipeline:
+For issues or questions:
 
-1. Check GitHub Actions logs
-2. Review runner logs on server
-3. Consult deployment script logs
-4. Check systemd service status
+1. **Check health**: `~/Development/app-monitor-deployment/scripts/test-deploy-agent.sh`
+2. **View logs**: `journalctl -u app-monitor-deploy-agent.service -f`
+3. **Manual test**: `~/Development/app-monitor-deployment/scripts/deploy-agent.sh`
+4. **GitHub issues**: https://github.com/Jdubz/app-monitor/issues
 
----
+## Reference Documentation
 
-**Last Updated:** 2025-11-08
-**Maintained By:** Development Team
+- **Deployment Infrastructure**: `~/Development/app-monitor-deployment/README.md`
+- **Migration Plan**: `~/Development/app-monitor-deployment/MIGRATION_PLAN.md`
+- **Quick Reference**: `~/Development/app-monitor-deployment/QUICK_REFERENCE.md`
+- **Production Deployment**: `docs/PRODUCTION_DEPLOYMENT.md`

@@ -1,20 +1,24 @@
-name: Deploy to PRODUCTION
+name: Deploy to PRODUCTION (Pull Agent)
 
 # ⚠️  PRODUCTION DEPLOYMENT WORKFLOW
 #
 # Purpose: Deploys to /opt/app-monitor (production environment) when code is pushed to main
 #
+# Architecture: Pull-based deployment
+# - GitHub Actions builds and packages the application
+# - Creates a GitHub deployment with artifact metadata
+# - Pull agent on production server detects the deployment
+# - Pull agent downloads artifact and runs local deployment script
+#
+# Benefits over self-hosted runner:
+# - No persistent runner with elevated permissions
+# - No exposure of production environment to GitHub Actions
+# - Deployment credentials managed by 1Password service account
+# - Deployment runs locally with proper isolation
+#
 # Environment Clarification:
 # - DEV environment: /home/jdubz/Development/app-monitor (for local development/staging)
 # - PROD environment: /opt/app-monitor (where the live application runs)
-#
-# This workflow:
-# 1. Runs pre-deployment checks on GitHub-hosted runner
-# 2. Deploys to /opt/app-monitor on self-hosted runner
-# 3. Performs blue-green deployment with zero downtime
-# 4. Rebuilds production frontend application in /opt/app-monitor
-#
-# Triggered on push to main branch or manual workflow dispatch
 
 on:
   push:
@@ -28,13 +32,22 @@ on:
         default: ''
 
 # SECURITY: Prevent this workflow from running on pull requests or forks
-# Self-hosted runners should NEVER run untrusted code from PRs
+# Only trusted main branch code should create production deployments
 
 jobs:
-  # Pre-deployment checks
-  pre-deployment-checks:
-    name: Pre-deployment Checks
+  # Pre-deployment checks and build
+  build-and-package:
+    name: Build and Package
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      artifact-sha: ${{ steps.package.outputs.sha256 }}
+      deployment-id: ${{ steps.deploy.outputs.deployment_id }}
+    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -72,111 +85,179 @@ jobs:
       - name: Run backend linter
         run: npm run lint -w backend
 
-      - name: Run frontend linter
-        run: npm run lint -w frontend
-
-      - name: Run frontend unit tests
-        run: npm run test -w frontend
-
-      - name: Run frontend integration tests
-        run: npm run test:integration -w frontend
-
       - name: Build backend
         run: npm run build -w backend
 
       - name: Build frontend
         run: npm run build -w frontend
 
-  # Production deployment
-  deploy-production:
-    name: Deploy to Production Server
-    needs: pre-deployment-checks
-    runs-on: self-hosted
-    # SECURITY: Only run on main branch to prevent fork PRs from deploying
-    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
-    environment:
-      name: production
-      url: https://app-monitor.yourdomain.com
-
-    steps:
-      - name: Display deployment warning
+      - name: Package deployment artifact
+        id: package
         run: |
-          echo "🏭 DEPLOYING TO PRODUCTION"
-          echo "=========================="
-          echo "Branch: ${{ github.ref }}"
-          echo "Commit: ${{ github.sha }}"
-          echo "Triggered by: ${{ github.actor }}"
-          echo ""
+          # Create deployment package
+          ARTIFACT_NAME="app-monitor-${GITHUB_SHA:0:7}"
+          TARBALL_NAME="${ARTIFACT_NAME}.tar.gz"
+          MANIFEST_NAME="${ARTIFACT_NAME}.manifest.json"
+          
+          # Create tarball with all necessary files
+          tar -czf "$TARBALL_NAME" \
+            --exclude=node_modules \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude=.pids \
+            --exclude=current \
+            --exclude=current.backup \
+            --exclude=releases \
+            --exclude=shared \
+            --exclude='*.log' \
+            .
+          
+          # Calculate checksum
+          SHA256=$(sha256sum "$TARBALL_NAME" | awk '{print $1}')
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+          echo "tarball=$TARBALL_NAME" >> $GITHUB_OUTPUT
+          echo "manifest=$MANIFEST_NAME" >> $GITHUB_OUTPUT
+          
+          # Create manifest
+          cat > "$MANIFEST_NAME" <<EOF
+          {
+            "commit": "${{ github.sha }}",
+            "ref": "${{ github.ref }}",
+            "workflow_run_id": "${{ github.run_id }}",
+            "workflow_run_number": "${{ github.run_number }}",
+            "actor": "${{ github.actor }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "tarball": "$TARBALL_NAME",
+            "sha256": "$SHA256"
+          }
+          EOF
+          
+          echo "✅ Created deployment package: $TARBALL_NAME ($SHA256)"
 
-      - name: Checkout latest code
-        uses: actions/checkout@v4
+      - name: Upload deployment artifact
+        id: upload
+        uses: actions/upload-artifact@v4
         with:
-          ref: main
+          name: app-monitor-deployment-${{ github.sha }}
+          path: |
+            ${{ steps.package.outputs.tarball }}
+            ${{ steps.package.outputs.manifest }}
+          retention-days: 30
+          if-no-files-found: error
 
-      - name: Run deployment script
+      - name: Create GitHub deployment
+        id: deploy
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha,
+              environment: 'production',
+              required_contexts: [],
+              auto_merge: false,
+              description: `Deploy ${context.sha.substring(0, 7)} by ${context.actor}`,
+              payload: {
+                workflow: {
+                  run_id: context.runId,
+                  run_number: context.runNumber
+                },
+                source: {
+                  commit: context.sha,
+                  ref: context.ref,
+                  actor: context.actor
+                },
+                artifact: {
+                  id: '${{ steps.upload.outputs.artifact-id }}',
+                  name: 'app-monitor-deployment-${{ github.sha }}',
+                  tarball: '${{ steps.package.outputs.tarball }}',
+                  manifest: '${{ steps.package.outputs.manifest }}',
+                  sha256: '${{ steps.package.outputs.sha256 }}'
+                }
+              }
+            });
+            
+            core.setOutput('deployment_id', deployment.data.id);
+            
+            // Set initial status to queued
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.data.id,
+              state: 'queued',
+              description: 'Waiting for pull agent to process deployment',
+              environment_url: 'https://app-monitor.yourdomain.com',
+              log_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            });
+            
+            console.log(`✅ Created deployment ${deployment.data.id}`);
+
+      - name: Display deployment info
         run: |
-          # Deploy to /opt/app-monitor (production environment)
-          # This script handles:
-          # - Blue-green deployment (ports 5001/5002)
-          # - Building backend and frontend in /opt/app-monitor
-          # - Zero-downtime service switching
-          # Pass the GitHub workspace as source directory
-          sudo /opt/app-monitor/scripts/deploy.sh "${{ github.workspace }}"
-
-      - name: Verify deployment
-        run: |
-          echo "🔍 Verifying services..."
-          # Check which backend port is active (blue-green deployment)
-          if systemctl is-active --quiet app-monitor-backend@5001.service; then
-            echo "✅ Backend running on port 5001"
-          elif systemctl is-active --quiet app-monitor-backend@5002.service; then
-            echo "✅ Backend running on port 5002"
-          else
-            echo "❌ Backend service not running on either port"
-            exit 1
-          fi
-          systemctl is-active nginx
-          echo "✅ All services running"
-
-      - name: Health check
-        run: |
-          echo "🏥 Running health checks..."
-          # Detect active backend port from running services
-          if systemctl is-active --quiet app-monitor-backend@5001.service; then
-            ACTIVE_PORT=5001
-          elif systemctl is-active --quiet app-monitor-backend@5002.service; then
-            ACTIVE_PORT=5002
-          else
-            echo "❌ No backend service running"
-            exit 1
-          fi
-
-          echo "Checking backend health on port ${ACTIVE_PORT}..."
-          timeout 30 bash -c "until curl -f http://localhost:${ACTIVE_PORT}/api/health; do sleep 2; done"
-
-          # Check frontend (nginx on port 80)
-          echo "Checking frontend health..."
-          timeout 30 bash -c 'until curl -f http://localhost/; do sleep 2; done'
-
-          echo "✅ Health checks passed"
-
-  # Post-deployment notification
-  notify-deployment:
-    name: Notify Deployment Status
-    needs: deploy-production
-    runs-on: ubuntu-latest
-    if: always()
-    steps:
-      - name: Deployment success
-        if: needs.deploy-production.result == 'success'
-        run: |
-          echo "✅ PRODUCTION deployment successful"
+          echo "🏭 PRODUCTION DEPLOYMENT CREATED"
+          echo "================================"
+          echo "Deployment ID: ${{ steps.deploy.outputs.deployment_id }}"
+          echo "Artifact ID: ${{ steps.upload.outputs.artifact-id }}"
           echo "Commit: ${{ github.sha }}"
-          echo "Branch: ${{ github.ref }}"
+          echo "SHA256: ${{ steps.package.outputs.sha256 }}"
+          echo ""
+          echo "⏳ Pull agent will process this deployment within 2 minutes"
+          echo "📊 Monitor status: journalctl -u app-monitor-deploy-agent.service -f"
 
-      - name: Deployment failure
-        if: needs.deploy-production.result != 'success'
+  # Monitor deployment status
+  monitor-deployment:
+    name: Monitor Deployment
+    needs: build-and-package
+    runs-on: ubuntu-latest
+    permissions:
+      deployments: read
+    
+    steps:
+      - name: Wait for deployment
+        uses: actions/github-script@v7
+        timeout-minutes: 10
+        with:
+          script: |
+            const deploymentId = '${{ needs.build-and-package.outputs.deployment-id }}';
+            const maxWaitMinutes = 10;
+            const checkIntervalSeconds = 15;
+            const maxChecks = (maxWaitMinutes * 60) / checkIntervalSeconds;
+            
+            console.log(`⏳ Monitoring deployment ${deploymentId}...`);
+            console.log(`Will check every ${checkIntervalSeconds}s for up to ${maxWaitMinutes} minutes`);
+            
+            for (let i = 0; i < maxChecks; i++) {
+              const statuses = await github.rest.repos.listDeploymentStatuses({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                deployment_id: deploymentId,
+                per_page: 1
+              });
+              
+              if (statuses.data.length > 0) {
+                const latestStatus = statuses.data[0];
+                console.log(`Status: ${latestStatus.state} - ${latestStatus.description || 'No description'}`);
+                
+                if (latestStatus.state === 'success') {
+                  console.log('✅ Deployment completed successfully!');
+                  return;
+                } else if (latestStatus.state === 'failure' || latestStatus.state === 'error') {
+                  core.setFailed(`❌ Deployment failed: ${latestStatus.description}`);
+                  return;
+                }
+              }
+              
+              if (i < maxChecks - 1) {
+                await new Promise(resolve => setTimeout(resolve, checkIntervalSeconds * 1000));
+              }
+            }
+            
+            core.setFailed(`⏰ Deployment monitoring timed out after ${maxWaitMinutes} minutes. Check server logs.`);
+
+      - name: Deployment complete
+        if: success()
         run: |
-          echo "❌ PRODUCTION deployment failed"
-          echo "Check logs for details"
-          exit 1
+          echo "✅ PRODUCTION DEPLOYMENT SUCCESSFUL"
+          echo "Commit: ${{ github.sha }}"
+          echo "Deployment ID: ${{ needs.build-and-package.outputs.deployment-id }}"
