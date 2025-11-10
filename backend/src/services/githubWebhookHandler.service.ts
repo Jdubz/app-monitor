@@ -665,7 +665,7 @@ export class GitHubWebhookHandler {
         });
 
         // Check if we need followup task or can auto-merge
-        if (prMonitor.shouldCreateFollowup(prStatus, copilotAnalysis)) {
+        if (prMonitor.shouldCreateFollowup(prNumber, prStatus, copilotAnalysis)) {
           const task = tasks[0];
           const prBranch = task.pr_branch || pull_request.head.ref;
 
@@ -782,7 +782,7 @@ export class GitHubWebhookHandler {
       const copilotAnalysis = await githubPR.getCopilotReviewAnalysis(prNumber, owner, repo);
 
       // Check if we should create a followup task
-      if (prMonitor.shouldCreateFollowup(prStatus, copilotAnalysis)) {
+      if (prMonitor.shouldCreateFollowup(prNumber, prStatus, copilotAnalysis)) {
         const task = tasks[0]; // Use first matching task
         
         // Get PR branch from status

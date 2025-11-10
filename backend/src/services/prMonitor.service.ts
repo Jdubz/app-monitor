@@ -14,6 +14,8 @@ import { logger } from '../utils/logger.js';
 import { GitHubPRService, getGitHubPRService, type PRStatus, type CopilotReviewAnalysis } from './githubPR.service.js';
 import { TaskQueueService } from './taskQueue.sqlite.js';
 import type { Task } from './taskQueue.sqlite.js';
+import { ReviewCommentTracker } from './reviewCommentTracker.service.js';
+import { getDatabase } from './database.js';
 
 type TaskPRStatus = NonNullable<Task['pr_status']>;
 
@@ -32,6 +34,7 @@ export class PRMonitorService {
   private readonly config: PRMonitorConfig;
   private readonly githubPR: GitHubPRService;
   private readonly taskQueue: TaskQueueService;
+  private readonly reviewCommentTracker: ReviewCommentTracker;
   private readonly MAX_FOLLOWUP_DEPTH: number;
   private readonly MAX_FOLLOWUP_TOTAL: number;
   private readonly MERGE_RETRY_ATTEMPTS: number;
@@ -43,6 +46,7 @@ export class PRMonitorService {
   ) {
     this.taskQueue = taskQueue;
     this.githubPR = getGitHubPRService();
+    this.reviewCommentTracker = new ReviewCommentTracker(getDatabase());
     this.config = {
       enableAutoMerge: config.enableAutoMerge ?? true,
       maxFollowupDepth: config.maxFollowupDepth ?? 3,
@@ -216,7 +220,7 @@ ${prData.description || 'No description available'}`,
   /**
    * Determine if a followup task should be created for PR issues
    */
-  shouldCreateFollowup(prStatus: PRStatus, copilotAnalysis: CopilotReviewAnalysis): boolean {
+  shouldCreateFollowup(prNumber: number, prStatus: PRStatus, copilotAnalysis: CopilotReviewAnalysis): boolean {
     // Create followup for failed checks
     const hasFailedChecks = prStatus.checks.some(c =>
       c.status === 'failure' || c.status === 'error'
@@ -240,6 +244,18 @@ ${prData.description || 'No description available'}`,
 
     // Create followup for merge conflicts
     if (prStatus.mergeable === 'CONFLICTING') {
+      return true;
+    }
+
+    // Create followup for unresolved blocking review comments
+    const resolutionSummary = this.reviewCommentTracker.getResolutionSummary(prNumber);
+    if (resolutionSummary.unresolvedBlocking > 0) {
+      logger.info({
+        category: 'pr-workflow',
+        action: 'followup_needed_unresolved_comments',
+        message: `PR #${prNumber} has ${resolutionSummary.unresolvedBlocking} unresolved blocking comments`,
+        details: { pr_number: prNumber, ...resolutionSummary }
+      });
       return true;
     }
 
