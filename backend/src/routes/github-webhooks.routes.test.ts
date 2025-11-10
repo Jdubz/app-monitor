@@ -33,7 +33,19 @@ describe('GitHub Webhooks Routes', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.event).toBe('pull_request');
+      expect(response.body.data.event).toBe('pull_request');
+    });
+
+    it('should reject non-pull_request events', async () => {
+      const response = await request(app)
+        .post('/api/github/webhooks/pr')
+        .set('x-github-event', 'push')
+        .set('x-github-delivery', 'test-delivery-id')
+        .send({});
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toBe('INVALID_EVENT_TYPE');
     });
 
     it('should handle errors gracefully', async () => {
@@ -70,7 +82,19 @@ describe('GitHub Webhooks Routes', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.event).toBe('push');
+      expect(response.body.data.event).toBe('push');
+    });
+
+    it('should reject non-push events', async () => {
+      const response = await request(app)
+        .post('/api/github/webhooks/push')
+        .set('x-github-event', 'pull_request')
+        .set('x-github-delivery', 'test-delivery-id')
+        .send({});
+
+      expect(response.status).toBe(400);
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toBe('INVALID_EVENT_TYPE');
     });
   });
 
@@ -81,8 +105,8 @@ describe('GitHub Webhooks Routes', () => {
 
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
-      expect(response.body.message).toContain('healthy');
-      expect(response.body.timestamp).toBeDefined();
+      expect(response.body.data.message).toContain('healthy');
+      expect(response.body.data.timestamp).toBeDefined();
     });
   });
 });
