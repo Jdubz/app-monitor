@@ -106,6 +106,9 @@ export class PRMonitorService {
   /**
    * Calculate followup depth by traversing the followup_tasks chain
    * Protected against circular dependencies and stack overflow
+   *
+   * Note: This method is synchronous because taskQueue.getTask() is synchronous
+   * (better-sqlite3 provides synchronous database access for performance)
    */
   private getFollowupDepth(taskId: string, visited: Set<string> = new Set(), depth: number = 0): number {
     // Prevent circular dependency stack overflow
@@ -532,8 +535,9 @@ ${taskChain}
         message: `PR #${prNumber} branch was updated, waiting for CI to complete`,
         details: { prNumber, taskId }
       });
-      
-      // Branch was updated - CI will re-run and webhook will retry merge
+
+      // Branch was updated - CI will re-run. When CI completes, the GitHubWebhookHandler
+      // will receive a status webhook and attempt to retry the merge.
       return false;
     }
 
@@ -699,7 +703,7 @@ All three merge strategies failed after retry attempts:
 - Branch protection rules preventing merge
 - Required status checks not passing
 - PR not approved by required reviewers
-- Branch is behind main and can't be rebased automatically
+- Branch is behind the base branch and can't be rebased automatically
 
 **Action required:**
 1. Review the PR and identify the blocking issue
@@ -761,9 +765,18 @@ gh pr merge ${prNumber} --squash  # Or --merge or --rebase
     await this.taskQueue.updatePRStatus(taskId, prUpdates);
 
     // Update notes separately using updateTask (which now supports notes)
+    // Note: updateTask is synchronous (better-sqlite3)
     if (notes) {
       const updatedNotes = task.notes ? `${task.notes}\n${notes}` : notes;
-      this.taskQueue.updateTask(taskId, { notes: updatedNotes });
+      const updated = this.taskQueue.updateTask(taskId, { notes: updatedNotes });
+      if (!updated) {
+        logger.warn({
+          category: 'pr-workflow',
+          action: 'notes_update_failed',
+          message: `Failed to update notes for task ${taskId}`,
+          details: { taskId }
+        });
+      }
     }
 
     logger.info({
