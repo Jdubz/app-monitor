@@ -63,9 +63,11 @@ LABEL version="3.0.0"
 RUN apk add --no-cache \
     bash \
     git \
+    git-lfs \
     curl \
     wget \
     jq \
+    yq \
     ca-certificates \
     openssh-client \
     vim \
@@ -74,6 +76,15 @@ RUN apk add --no-cache \
     sqlite \
     sqlite-libs \
     github-cli \
+    python3 \
+    py3-pip \
+    make \
+    zip \
+    unzip \
+    postgresql-client \
+    openssl \
+    shellcheck \
+    ripgrep \
     && rm -rf /var/cache/apk/*
 
 # Create non-root user for security
@@ -161,13 +172,18 @@ fi
 echo ""
 
 echo "🛠️  Development Tools:"
-for tool in typescript eslint prettier vitest; do
+for tool in typescript eslint prettier vitest git-lfs make shellcheck yq rg psql; do
     if which $tool >/dev/null 2>&1 || npm list -g $tool >/dev/null 2>&1; then
         echo "  ✅ $tool"
     else
         echo "  ⚠️  $tool"
     fi
 done
+echo ""
+
+echo "🐍 Python Environment:"
+echo "  Python:      $(python3 --version 2>&1 | cut -d' ' -f2)"
+echo "  pip:         $(pip3 --version 2>&1 | cut -d' ' -f2)"
 echo ""
 
 echo "📁 Workspace:"
