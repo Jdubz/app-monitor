@@ -25,6 +25,9 @@ export const config = {
   apiKey: process.env.API_KEY || 'dev-key-change-in-production',
   requireAuth: process.env.REQUIRE_AUTH !== 'false' && process.env.NODE_ENV === 'production', // Only require in production
 
+  // GitHub Webhook Secret for HMAC signature verification
+  githubWebhookSecret: process.env.GITHUB_WEBHOOK_SECRET || '',
+
   // Automatic Failure Recovery Feature Flags
   recovery: {
     // Enable automatic recovery system (default: disabled for safety)

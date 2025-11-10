@@ -109,4 +109,38 @@ describe('GitHub Webhooks Routes', () => {
       expect(response.body.data.timestamp).toBeDefined();
     });
   });
+
+  describe('Webhook signature verification', () => {
+    it('should accept webhooks without signature when secret is not configured', async () => {
+      // Default config has empty secret, so verification is disabled
+      const mockPrPayload = {
+        action: 'opened',
+        pull_request: {
+          number: 123,
+          title: 'Test PR',
+          state: 'open',
+          user: { login: 'testuser' },
+          base: { ref: 'main' },
+          head: { ref: 'feature-branch' }
+        },
+        repository: {
+          full_name: 'owner/repo'
+        }
+      };
+
+      const response = await request(app)
+        .post('/api/github/webhooks/pr')
+        .set('x-github-event', 'pull_request')
+        .set('x-github-delivery', 'test-delivery-id')
+        // No x-hub-signature-256 header
+        .send(mockPrPayload);
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+    });
+
+    // Note: Testing with a configured secret would require mocking the config
+    // or setting environment variables, which is more complex.
+    // The utility function tests cover the signature verification logic thoroughly.
+  });
 });
