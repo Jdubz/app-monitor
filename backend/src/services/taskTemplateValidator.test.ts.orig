@@ -176,8 +176,8 @@ describe('TaskTemplateValidator', () => {
           mustNotDuplicate: ['something']
         },
         preImplementationChecklist: ['test'],
-        acceptanceCriteria: ['EXACTLY one thing', 'MUST NOT break'],
-        constraints: ['MUST use existing code'],
+        acceptanceCriteria: ['test'],
+        constraints: ['test'],
         files: ['test.ts'],
         gitWorkflow: { required: true, branch: 'main', commitMessage: 'test' }
       };
@@ -203,8 +203,8 @@ describe('TaskTemplateValidator', () => {
           mustNotDuplicate: [] // Empty!
         },
         preImplementationChecklist: ['test'],
-        acceptanceCriteria: ['EXACTLY one thing', 'MUST NOT break'],
-        constraints: ['MUST use existing code'],
+        acceptanceCriteria: ['test'],
+        constraints: ['test'],
         files: ['test.ts'],
         gitWorkflow: { required: true, branch: 'main', commitMessage: 'test' }
       };
@@ -230,8 +230,8 @@ describe('TaskTemplateValidator', () => {
           mustNotDuplicate: ['something']
         },
         // No checklist!
-        acceptanceCriteria: ['EXACTLY one thing', 'MUST NOT break'],
-        constraints: ['MUST use existing code'],
+        acceptanceCriteria: ['test'],
+        constraints: ['test'],
         files: ['test.ts'],
         gitWorkflow: { required: true, branch: 'main', commitMessage: 'test' }
       };
@@ -285,7 +285,7 @@ describe('TaskTemplateValidator', () => {
         },
         preImplementationChecklist: ['test'],
         // No acceptanceCriteria!
-        constraints: ['MUST use existing code'],
+        constraints: ['test'],
         files: ['test.ts'],
         gitWorkflow: { required: true, branch: 'main', commitMessage: 'test' }
       };
