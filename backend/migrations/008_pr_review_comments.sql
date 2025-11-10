@@ -1,7 +1,7 @@
 -- Migration 008: PR Review Comments Tracking
 -- Purpose: Store and track review comments to verify resolution before merge
 
-CREATE TABLE IF NOT EXISTS pr_review_comments (
+CREATE TABLE pr_review_comments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   pr_number INTEGER NOT NULL,
   comment_id INTEGER NOT NULL,

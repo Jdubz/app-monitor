@@ -640,7 +640,8 @@ export class TaskQueueService {
       });
       
       taskCategory = taskCategory || classification.category;
-      filePatterns = filePatterns || JSON.stringify(classification.filePatterns);
+      // Only use classification if filePatterns is missing or empty
+      filePatterns = (filePatterns && filePatterns !== '') ? filePatterns : JSON.stringify(classification.filePatterns);
       estimatedComplexity = estimatedComplexity || classification.complexity;
       
       logger.info({

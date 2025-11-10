@@ -1,6 +1,6 @@
 import crypto from 'crypto';
-import { DevBotsDatabase } from './database';
-import { logger } from '../utils/logger';
+import { DevBotsDatabase } from './database.js';
+import { logger } from '../utils/logger.js';
 
 export interface ReviewComment {
   id?: number;

@@ -254,8 +254,8 @@ agent_type TEXT CHECK(agent_type IN ('claude', 'codex')) -- Which agent executed
 
 **Comments in devBotsManager.ts:**
 - Found: "Agent type rotation - now managed by AgentTypeManager"
-- Status: Outdated comment (AgentTypeManager is deprecated)
-- Action: Comment is harmless, can update in future cleanup
+- Status: Already updated (AgentTypeManager is deprecated)
+- Action: No action needed - cleaned up in earlier commits
 
 ---
 

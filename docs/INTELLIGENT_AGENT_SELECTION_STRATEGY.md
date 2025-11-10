@@ -263,7 +263,7 @@
        const matches = task.description.match(fileRegex) || [];
        
        // Get unique extensions
-       const extensions = [...new Set(matches.map(f => f.split('.').pop()))];
+       const extensions = [...new Set(matches.map(f => f.split('.').pop()).filter((ext): ext is string => ext !== undefined))];
        return extensions;
      }
      

@@ -255,7 +255,7 @@ All scenarios pass:
 
 ---
 
-## ⏳ Phase 0.4: Learning & Optimization (PLANNED)
+## ⏳ Phase 0.5: Learning & Optimization (PLANNED)
 
 **Estimated:** 1 day  
 **Status:** Not started
@@ -306,7 +306,7 @@ All scenarios pass:
 - [ ] Webhook integration
 - [ ] Monitoring working
 
-### Phase 0.4 (Not Started)
+### Phase 0.5 (Not Started)
 - [ ] Performance tracking query
 - [ ] Learning algorithm
 - [ ] Manual override support

@@ -335,7 +335,7 @@ Codex fails at code editing but excels at analysis. Need intelligent routing.
      private quarantined = new Map<string, QuarantineRecord>();
      private readonly FAILURE_THRESHOLD = 3;
      
-     shouldQuarantine(taskId: string): boolean {
+     async shouldQuarantine(taskId: string): Promise<boolean> {
        const runs = await this.getRecentRuns(taskId);
        const failures = runs.filter(r => r.status === 'failure');
        return failures.length >= this.FAILURE_THRESHOLD;

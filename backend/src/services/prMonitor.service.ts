@@ -71,7 +71,7 @@ export class PRMonitorService {
   } {
     // Pattern 1: Branch name matches task pattern
     const branchMatch = prBranch.match(/task-(implementation|investigation|bugfix|feature|refactor|docs)-([a-f0-9-]+)/i);
-    if (branchMatch) {
+    if (branchMatch && branchMatch[2]) {
       return {
         isSystemPR: true,
         reason: `Branch pattern: ${prBranch}`,
