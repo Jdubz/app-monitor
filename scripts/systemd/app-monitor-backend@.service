@@ -15,6 +15,9 @@ Environment="LOG_LEVEL=info"
 Environment="CORS_ORIGIN=*"
 Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
+# Load API keys and other secrets from shared .env
+EnvironmentFile=-/opt/app-monitor/shared/.env
+
 # Start the backend server
 ExecStart=/usr/bin/node /opt/app-monitor/current/backend/dist/index.js
 
