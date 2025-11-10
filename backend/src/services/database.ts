@@ -704,6 +704,14 @@ export class DevBotsDatabase {
     }
   }
 
+  /**
+   * Get direct database connection for advanced operations
+   * Used by ShutdownStateManager for state persistence
+   */
+  getConnection(): Database.Database {
+    return this.db;
+  }
+
   close(): void {
     this.db.close();
   }
