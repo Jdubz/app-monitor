@@ -80,6 +80,13 @@ App Monitor already treats everything as a task. The gaps are that tasks lack ri
 2. Harden workspace mirrors + bootstrap templates so every run emits summary/log artifacts and cleans up reliably.
 3. Integrate run results into the task timeline/UI, including log links, exit code, summary, commit SHA, and follow-up actions.
 
+**Artifacts Captured Per Automation Run:**
+- **Session Log:** Complete stdout/stderr from the dev-bot execution stored as `session.log` (see Artifact Trail section)
+- **Summary JSON:** Structured `session_summary.json` containing exit code, failure reason, commit SHA, and token usage
+- **Retry Count:** Automation attempt counter tracked in `task_automation_runs` table to enforce retry thresholds
+- **Linked Task Context:** Reference back to the originating task ID with attached diagnostic breadcrumbs (logs, environment snapshot, artifacts)
+- **Storage Location:** All artifacts persisted under `logs/dev-bots/<task_id>/<run_timestamp>/` for traceability and inspection
+
 ### Stage 4 – Work-Target Rollout
 1. Populate registry entries for automation config per target (branch, test commands, bootstrap path, credential passthrough).
 2. Validate container images (reuse `dev-bots/docker/Dockerfile` or produce derivatives) and ensure no cross-repo secrets leak.
