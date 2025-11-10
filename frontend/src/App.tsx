@@ -8,6 +8,7 @@ import { Header, MainLayout, TabNav, TabContent } from './components/layout';
 import { LocalTab, DeployedServicesTab, DevBotsTab } from './components/tabs';
 import { ErrorBoundary, LoadingSpinner, InlineError } from './components/common';
 import { ThemeProvider } from './components/theme/ThemeProvider';
+import { PasswordGate } from './components/PasswordGate';
 
 // Component that handles routing and tab state
 function AppContent() {
@@ -79,11 +80,13 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider>
-        <LogProvider socket={socket}>
-          <Router>
-            <AppContent />
-          </Router>
-        </LogProvider>
+        <PasswordGate>
+          <LogProvider socket={socket}>
+            <Router>
+              <AppContent />
+            </Router>
+          </LogProvider>
+        </PasswordGate>
       </ThemeProvider>
     </ErrorBoundary>
   );

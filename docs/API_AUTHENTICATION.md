@@ -32,9 +32,16 @@ openssl rand -base64 32
 cp frontend/.env.example frontend/.env
 ```
 
-2. Set the same API key in `frontend/.env`:
+2. Set the same API key and a secure password in `frontend/.env`:
 ```env
 VITE_API_KEY=your-secure-random-key-here
+VITE_PASSWORD=your-secure-frontend-password
+```
+
+3. Generate a secure password:
+```bash
+# Generate a random 24-character password
+openssl rand -base64 24
 ```
 
 ## Usage
@@ -87,6 +94,11 @@ fetch('https://app-monitor.joshwentworth.com/api/dev-bots/tasks', {
 - All `/api/docker/*` endpoints
 - All `/api/logs/*` endpoints
 - All other API endpoints
+
+### Frontend
+- Password-protected (VITE_PASSWORD)
+- Prevents unauthorized access to service controls
+- Session-based authentication (cleared on browser close)
 
 ## Development
 
