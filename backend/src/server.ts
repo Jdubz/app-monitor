@@ -98,6 +98,9 @@ export async function createApp(options: CreateAppOptions = {}) {
   // Initialize ConnectionManager
   connectionManager = overrides.connectionManager ?? new ConnectionManager();
 
+  // Set Socket.IO instance for broadcasting
+  connectionManager.setIO(io);
+
   // Initialize and start log rotation
   logRotation = overrides.logRotation ?? new LogRotation();
   if (!overrides.logRotation) {

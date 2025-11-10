@@ -123,16 +123,38 @@ export class GitHubWebhookHandler {
     private readonly prOrchestrator?: PRWorkflowOrchestrator
   ) {}
   /**
-   * Extract task ID from PR title
-   * Looks for patterns like:
+   * Extract task ID from PR branch name or title
+   * Checks branch name first (more reliable), then falls back to title
+   * 
+   * Supported formats:
+   * Branch:
+   * - "task-implementation-abc123def456" (standard bot branch pattern)
+   * - "fix/task-abc123"
+   * - "feature/task-abc123"
+   * 
+   * Title:
    * - "Task: task-abc123"
    * - "[task-abc123]"
    * - "task-abc123:"
    * - "(task-abc123)"
    */
-  private extractTaskIdFromTitle(title: string): string | null {
+  private extractTaskIdFromBranchOrTitle(branchName: string, title: string): string | null {
+    // PRIORITY 1: Check branch name first (most reliable)
+    // Pattern: task-{type}-{uuid} (standard bot pattern)
+    let match = branchName.match(/task-(implementation|investigation|bugfix|feature|refactor|docs)-([a-f0-9-]{36})/i);
+    if (match) return `task-${match[1]}-${match[2]}`;
+    
+    // Pattern: task-{uuid} (simplified)
+    match = branchName.match(/task-([a-f0-9-]{36})\b/i);
+    if (match) return `task-${match[1]}`;
+    
+    // Pattern: any branch with task-{type}-{shortid}
+    match = branchName.match(/(task-[a-z]+-[a-f0-9-]{8,})/i);
+    if (match) return match[1];
+
+    // PRIORITY 2: Fall back to title patterns
     // Pattern 1: "Task: task-xyz" or "Task task-xyz"
-    let match = title.match(/Task[:\s]+([a-f0-9-]{8,})/i);
+    match = title.match(/Task[:\s]+([a-f0-9-]{8,})/i);
     if (match) return match[1];
 
     // Pattern 2: "[task-xyz]"
@@ -147,7 +169,7 @@ export class GitHubWebhookHandler {
     match = title.match(/\(([a-f0-9-]{8,})\)/);
     if (match) return match[1];
 
-    // Pattern 5: Just "task-xyz" as a word
+    // Pattern 5: Just "task-xyz" as a word (UUID format)
     match = title.match(/\b([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})\b/);
     if (match) return match[1];
 
@@ -163,7 +185,8 @@ export class GitHubWebhookHandler {
 
     const { action, pull_request, repository } = payload;
     const prNumber = pull_request.number;
-    const taskId = this.extractTaskIdFromTitle(pull_request.title);
+    const branchName = pull_request.head.ref;
+    const taskId = this.extractTaskIdFromBranchOrTitle(branchName, pull_request.title);
 
     if (taskId) {
       this.stats.task_ids_extracted++;
@@ -178,8 +201,8 @@ export class GitHubWebhookHandler {
         task_id: taskId,
         action,
         title: pull_request.title,
+        branch: branchName,
         user: pull_request.user.login,
-        branch: pull_request.head.ref,
         repo: repository.full_name,
         draft: pull_request.draft,
         merged: pull_request.merged

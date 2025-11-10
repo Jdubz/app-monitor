@@ -73,6 +73,8 @@ export class EphemeralWorkerService {
   private readonly config: EphemeralWorkerServiceConfig;
   private readonly docker: Docker;
   private readonly dockerManager: DockerManager;
+  private logStreams = new Map<string, fs.WriteStream>();
+  private readonly devBotsLogPath: string;
 
   constructor(
     docker: Docker,
@@ -97,6 +99,26 @@ export class EphemeralWorkerService {
         'GIT_COMMITTER_EMAIL'
       ]
     };
+
+    // Dev-bots consolidated log file for real-time monitoring
+    const devBotsLogDir = path.join(process.cwd(), 'dev-bots', 'logs');
+    this.devBotsLogPath = path.join(devBotsLogDir, 'dev-bots.log');
+    this.ensureLogDirectory();
+  }
+
+  /**
+   * Ensure dev-bots log directory exists
+   */
+  private ensureLogDirectory(): void {
+    const logDir = path.dirname(this.devBotsLogPath);
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+      logger.info({
+        category: 'process',
+        action: 'dev_bots_log_directory_created',
+        message: `Created dev-bots log directory: ${logDir}`
+      });
+    }
   }
 
   // ==========================================================================
@@ -250,6 +272,23 @@ export class EphemeralWorkerService {
       const sshDir = path.join(homeDir, '.ssh');
       if (fs.existsSync(sshDir)) {
         binds.push(`${sshDir}:/home/worker/.ssh:ro`);
+      }
+
+      // Mount GitHub CLI config for gh pr create
+      const ghConfigDir = path.join(homeDir, '.config', 'gh');
+      if (fs.existsSync(ghConfigDir)) {
+        binds.push(`${ghConfigDir}:/home/node/.config/gh:ro`);
+        logger.info({
+          category: 'process',
+          action: 'gh_config_mounted',
+          message: `Mounting GitHub CLI config from: ${ghConfigDir}`
+        });
+      } else {
+        logger.warn({
+          category: 'process',
+          action: 'gh_config_not_found',
+          message: 'GitHub CLI config not found, PR creation may fail. Run: gh auth login'
+        });
       }
 
       const envVars = [
@@ -485,10 +524,15 @@ export class EphemeralWorkerService {
    * Execute task in ephemeral worker container
    */
   async executeTask(worker: EphemeralWorker): Promise<TaskExecutionResult> {
+    let logStream: fs.WriteStream | null = null;
+
     try {
       worker.status = 'running';
 
       const container = this.docker.getContainer(worker.containerId);
+
+      // Create log stream for real-time monitoring
+      logStream = await this.createLogStream(worker);
 
       // Determine log file path per worker
       const sanitizedId = worker.id.replace(/[^a-zA-Z0-9-_]/g, '_');
@@ -513,11 +557,45 @@ export class EphemeralWorkerService {
       let errorOutput = '';
 
       stream.on('data', (data: Buffer) => {
-        const chunk = data.toString();
-        if (chunk.startsWith('1:')) {
-          output += chunk.substring(2);
-        } else if (chunk.startsWith('2:')) {
-          errorOutput += chunk.substring(2);
+        // Write raw data to log file for real-time monitoring
+        if (logStream && !logStream.destroyed) {
+          logStream.write(data);
+        }
+
+        // Parse Docker multiplexed stream format
+        // Docker uses 8-byte header: [stream_type, 0, 0, 0, size (4 bytes big-endian)]
+        let buffer = data;
+        while (buffer.length > 0) {
+          if (buffer.length < 8) {
+            // Not enough data for header, treat remaining as plain text
+            output += buffer.toString();
+            break;
+          }
+
+          const streamType = buffer[0];
+          const payloadLength = buffer.readUInt32BE(4);
+          
+          if (buffer.length < 8 + payloadLength) {
+            // Incomplete payload, treat as plain text
+            output += buffer.toString();
+            break;
+          }
+
+          const payload = buffer.slice(8, 8 + payloadLength);
+          const chunk = payload.toString();
+          
+          if (streamType === 1) {
+            // stdout
+            output += chunk;
+          } else if (streamType === 2) {
+            // stderr
+            errorOutput += chunk;
+          } else {
+            // Unknown stream type, default to stdout
+            output += chunk;
+          }
+          
+          buffer = buffer.slice(8 + payloadLength);
         }
       });
 
@@ -526,6 +604,11 @@ export class EphemeralWorkerService {
         stream.on('end', resolve);
         stream.on('error', reject);
       });
+
+      // Close log stream
+      if (logStream && !logStream.destroyed) {
+        logStream.end();
+      }
 
       // Get exit code
       const inspect = await exec.inspect();
@@ -543,6 +626,12 @@ export class EphemeralWorkerService {
       };
 
     } catch (error) {
+      // Close log stream on error
+      if (logStream && !logStream.destroyed) {
+        logStream.write(`\nERROR: ${error instanceof Error ? error.message : String(error)}\n`);
+        logStream.end();
+      }
+
       logger.error({
         category: 'process',
         action: 'task_execution_failed',
@@ -558,6 +647,50 @@ export class EphemeralWorkerService {
         error: error instanceof Error ? error : new Error(String(error))
       };
     }
+  }
+
+  /**
+   * Create a log stream for real-time monitoring
+   * Writes to consolidated dev-bots.log file that LogWatcher monitors
+   */
+  private async createLogStream(worker: EphemeralWorker): Promise<fs.WriteStream> {
+    const timestamp = new Date().toISOString();
+    const separator = '='.repeat(80);
+    
+    const header = [
+      `\n${separator}`,
+      `[${timestamp}] NEW TASK STARTED`,
+      `Worker: ${worker.id}`,
+      `Agent: ${worker.agent.name} (${worker.agent.id})`,
+      `Task ID: ${worker.task.id}`,
+      `Task Title: ${worker.task.title}`,
+      `Task Type: ${worker.task.type}`,
+      `Container: ${worker.containerId}`,
+      separator + '\n'
+    ].join('\n');
+
+    // Create append stream to consolidated log file
+    const stream = fs.createWriteStream(this.devBotsLogPath, { flags: 'a' });
+    
+    // Write header
+    stream.write(header);
+
+    // Store stream for cleanup
+    this.logStreams.set(worker.id, stream);
+    
+    // Remove stream from map when closed to prevent memory leak
+    stream.on('close', () => {
+      this.logStreams.delete(worker.id);
+    });
+
+    logger.info({
+      category: 'process',
+      action: 'log_stream_created',
+      message: `Created log stream for worker ${worker.id}`,
+      details: { logPath: this.devBotsLogPath, workerId: worker.id }
+    });
+
+    return stream;
   }
 
   /**
