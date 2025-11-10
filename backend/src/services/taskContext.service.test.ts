@@ -5,32 +5,29 @@ import type {
   TaskCreationContext,
   TaskExecutionContext,
 } from '../types/taskContext.js';
-import * as fs from 'fs';
-import * as path from 'path';
 
 describe('TaskContextService', () => {
   let service: TaskContextService;
-  const testDbPath = path.join(__dirname, '..', '..', 'data', 'test-task-context.db');
 
   beforeEach(() => {
-    // Clean up any existing test database
-    if (fs.existsSync(testDbPath)) {
-      fs.unlinkSync(testDbPath);
-    }
-
     // Create new service instance
     service = new TaskContextService();
 
-    // Create dummy tasks in the tasks table to satisfy foreign key constraint
+    // Get database connection
     const db = getDatabase();
     const connection = db.getConnection();
+
+    // Clean up any existing test data from task_context tables
+    connection.prepare('DELETE FROM task_creation_context WHERE task_id LIKE ?').run('task-test-%');
+    connection.prepare('DELETE FROM task_execution_context WHERE run_id LIKE ?').run('run-%');
+    connection.prepare('DELETE FROM tasks WHERE id LIKE ?').run('task-test-%');
 
     // Insert test tasks for foreign key constraints
     const taskIds = ['task-test-001', 'task-test-002', 'task-test-003', 'task-test-004', 'task-test-005', 'task-test-006', 'task-test-007', 'task-test-008', 'task-test-009', 'task-test-010'];
 
     for (const taskId of taskIds) {
       connection.prepare(`
-        INSERT OR IGNORE INTO tasks (
+        INSERT INTO tasks (
           id, type, title, status, priority, created_at, assigned_agent
         ) VALUES (?, 'test', 'Test Task', 'pending', 5, ?, 'test-agent')
       `).run(taskId, Date.now());
@@ -38,13 +35,16 @@ describe('TaskContextService', () => {
   });
 
   afterEach(() => {
+    // Clean up test data
+    const db = getDatabase();
+    const connection = db.getConnection();
+
+    connection.prepare('DELETE FROM task_creation_context WHERE task_id LIKE ?').run('task-test-%');
+    connection.prepare('DELETE FROM task_execution_context WHERE run_id LIKE ?').run('run-%');
+    connection.prepare('DELETE FROM tasks WHERE id LIKE ?').run('task-test-%');
+
     // Close database connection
     closeDatabase();
-
-    // Clean up test database
-    if (fs.existsSync(testDbPath)) {
-      fs.unlinkSync(testDbPath);
-    }
   });
 
   describe('Task Creation Context', () => {
