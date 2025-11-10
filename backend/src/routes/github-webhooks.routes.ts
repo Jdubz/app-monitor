@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import type { GitHubWebhookHandler } from '../services/githubWebhookHandler.service.js';
 
 const router = Router();
 
@@ -7,6 +8,17 @@ const logger = {
   info: (msg: string, data?: any) => console.log(`[INFO] ${msg}`, data || ''),
   error: (msg: string, data?: any) => console.error(`[ERROR] ${msg}`, data || '')
 };
+
+// Webhook handler will be injected when routes are created
+let webhookHandler: GitHubWebhookHandler | null = null;
+
+/**
+ * Set the webhook handler (called during app initialization)
+ */
+export function setWebhookHandler(handler: GitHubWebhookHandler): void {
+  webhookHandler = handler;
+  logger.info('GitHub webhook handler configured');
+}
 
 /**
  * GitHub Webhook endpoint for Pull Request events
@@ -29,28 +41,22 @@ router.post('/pr', async (req: Request, res: Response) => {
       repository: req.body?.repository?.full_name
     });
 
-    // Placeholder: Log the event for now
-    if (event === 'pull_request') {
-      const { action, pull_request, repository } = req.body;
-      
-      logger.info('PR Event', {
-        action,
+    // Process with webhook handler if available
+    if (event === 'pull_request' && webhookHandler) {
+      await webhookHandler.handlePullRequest(req.body);
+    } else if (!webhookHandler) {
+      logger.info('PR Event (handler not configured)', {
+        action: req.body?.action,
         pr: {
-          number: pull_request?.number,
-          title: pull_request?.title,
-          state: pull_request?.state,
-          user: pull_request?.user?.login,
-          base: pull_request?.base?.ref,
-          head: pull_request?.head?.ref
+          number: req.body?.pull_request?.number,
+          title: req.body?.pull_request?.title,
+          state: req.body?.pull_request?.state,
+          user: req.body?.pull_request?.user?.login,
+          base: req.body?.pull_request?.base?.ref,
+          head: req.body?.pull_request?.head?.ref
         },
-        repo: repository?.full_name
+        repo: req.body?.repository?.full_name
       });
-
-      // TODO: Add actual webhook processing logic here
-      // - Trigger builds/tests
-      // - Update PR status
-      // - Post comments
-      // - etc.
     }
 
     // Acknowledge receipt
@@ -88,17 +94,19 @@ router.post('/push', async (req: Request, res: Response) => {
       pusher: req.body?.pusher?.name
     });
 
-    const { ref, commits, repository, pusher } = req.body;
-
-    logger.info('Push Event', {
-      ref,
-      commit_count: commits?.length,
-      repo: repository?.full_name,
-      pusher: pusher?.name,
-      head_commit: commits?.[0]?.message
-    });
-
-    // TODO: Add actual webhook processing logic
+    // Process with webhook handler if available
+    if (event === 'push' && webhookHandler) {
+      await webhookHandler.handlePush(req.body);
+    } else if (!webhookHandler) {
+      const { ref, commits, repository, pusher } = req.body;
+      logger.info('Push Event (handler not configured)', {
+        ref,
+        commit_count: commits?.length,
+        repo: repository?.full_name,
+        pusher: pusher?.name,
+        head_commit: commits?.[0]?.message
+      });
+    }
 
     res.status(200).json({
       success: true,
