@@ -88,8 +88,8 @@ jobs:
       - name: Build backend
         run: npm run build -w backend
 
-      - name: Build frontend
-        run: npm run build -w frontend
+      # Frontend is built on the server during deployment (not here)
+      # The server build uses VITE_PASSWORD from /opt/app-monitor/shared/config/.env.production
 
       - name: Package deployment artifact
         id: package
