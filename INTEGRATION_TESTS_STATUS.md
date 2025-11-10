@@ -2,7 +2,7 @@
 
 ## Summary
 
-The frontend integration test suite has been partially fixed and stabilized. Currently **13 tests pass** across 2 test files, with 13 tests intentionally skipped pending further investigation.
+The frontend integration test suite has been fixed and stabilized. Currently **26 tests pass** across 2 test files, with no tests skipped.
 
 ## ✅ Passing Tests
 
@@ -12,11 +12,11 @@ Tests the ServiceCard component integration with the API and WebSocket.
 - Well-structured with proper mocking
 - Tests service status display, actions, and real-time updates
 
-### DevBots.integration.test.tsx (19 tests, 13 skipped)
+### DevBots.integration.test.tsx (19 tests)
 Tests the Dev-Bots tab integration including task management and worker status.
-- 6 core tests passing ✅
-- 13 tests skipped (socket-based real-time features that need deeper investigation)
-- Tests task queue, worker management, error handling
+- All 19 tests passing ✅
+- Tests task queue, worker management, socket-based real-time updates, error handling
+- Socket event tests now use correct event names (task:* instead of claude:*)
 
 ## ⏸️ Skipped Tests (Require Refactoring)
 
@@ -102,8 +102,8 @@ npx vitest -c vitest.integration.config.ts
 ## Metrics
 
 - **Total test files**: 5 (2 active, 3 skipped)
-- **Tests passing**: 13
-- **Tests skipped**: 13 (in active files)
+- **Tests passing**: 26
+- **Tests skipped**: 0 (in active files)
 - **Test files skipped**: 3
-- **Overall health**: ✅ Good (all active tests passing)
-- **Coverage**: Adequate (core integration paths covered)
+- **Overall health**: ✅ Excellent (all active tests passing)
+- **Coverage**: Good (core integration paths and socket-based real-time updates covered)
