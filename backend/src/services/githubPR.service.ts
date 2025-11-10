@@ -57,6 +57,7 @@ export interface PRStatus {
   url: string;
   state: 'OPEN' | 'CLOSED' | 'MERGED';
   mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
+  mergeable_state?: string; // behind, clean, dirty, unknown, blocked, unstable
   checks: PRCheckStatus[];
   reviews: PRReview[];
   comments: PRComment[];
@@ -387,6 +388,95 @@ export class GitHubPRService {
         category: 'pr-workflow',
         action: 'merge_pr_failed',
         message: `Failed to merge PR #${prNumber}`,
+        error
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Get PR details including mergeable_state
+   */
+  async getPR(prNumber: number, repoOwner?: string, repoName?: string): Promise<{ 
+    number: number;
+    mergeable_state: string;
+    state: string;
+    title: string;
+  }> {
+    const owner = repoOwner || this.repoOwner;
+    const repo = repoName || this.repoName;
+
+    const executeGetPR = async () => {
+      const { stdout } = await execWithTimeout(
+        `gh pr view ${prNumber} --repo ${owner}/${repo} --json number,state,title,mergeStateStatus`,
+        30000
+      );
+      
+      const data = JSON.parse(stdout);
+      return {
+        number: data.number,
+        state: data.state,
+        title: data.title,
+        mergeable_state: data.mergeStateStatus || 'unknown'
+      };
+    };
+
+    try {
+      if (this.githubCircuitBreaker) {
+        return await this.githubCircuitBreaker.execute(executeGetPR);
+      } else {
+        return await executeGetPR();
+      }
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'get_pr_failed',
+        message: `Failed to get PR #${prNumber}`,
+        error
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Update PR branch with latest base (merge base into PR branch)
+   * Useful when PR is behind and needs to be brought up to date
+   */
+  async updateBranch(prNumber: number, repoOwner?: string, repoName?: string): Promise<void> {
+    const owner = repoOwner || this.repoOwner;
+    const repo = repoName || this.repoName;
+
+    const executeUpdateBranch = async (): Promise<void> => {
+      logger.info({
+        category: 'pr-workflow',
+        action: 'update_pr_branch',
+        message: `Updating PR #${prNumber} branch with latest base`
+      });
+
+      // Use GitHub API to update branch (merges base into PR branch)
+      await execWithTimeout(
+        `gh api repos/${owner}/${repo}/pulls/${prNumber}/update-branch -X PUT`,
+        30000
+      );
+
+      logger.info({
+        category: 'pr-workflow',
+        action: 'update_pr_branch_success',
+        message: `Successfully updated PR #${prNumber} branch`
+      });
+    };
+
+    try {
+      if (this.githubCircuitBreaker) {
+        await this.githubCircuitBreaker.execute(executeUpdateBranch);
+      } else {
+        await executeUpdateBranch();
+      }
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'update_pr_branch_failed',
+        message: `Failed to update PR #${prNumber} branch`,
         error
       });
       throw error;

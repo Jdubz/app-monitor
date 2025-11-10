@@ -47,9 +47,7 @@ export class ProcessManager extends EventEmitter {
       message: 'ProcessManager initialized',
     });
 
-    // Cleanup on exit
-    process.on('SIGTERM', () => this.cleanupAll());
-    process.on('SIGINT', () => this.cleanupAll());
+    // Note: SIGTERM/SIGINT handlers removed - shutdown is coordinated by index.ts gracefulShutdown()
   }
 
   /**
@@ -631,8 +629,9 @@ export class ProcessManager extends EventEmitter {
 
   /**
    * Cleanup all processes on shutdown
+   * Made public to be called by index.ts gracefulShutdown()
    */
-  private async cleanupAll(): Promise<void> {
+  public async cleanupAll(): Promise<void> {
     logger.info({
       category: 'process',
       action: 'cleanup',
