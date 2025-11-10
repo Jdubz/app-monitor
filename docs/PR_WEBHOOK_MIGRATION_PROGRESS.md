@@ -4,19 +4,19 @@
 
 ### ✅ Completed Tasks
 
-1. **GitHub Webhooks Setup**
+1. **GitHub Webhooks Setup** ✅
    - Created webhook endpoints (`/api/github/webhooks/pr` and `/push`)
    - Configured webhooks in GitHub repository
    - Set up Cloudflare tunnel (`https://app-monitor.joshwentworth.com`)
    - Webhooks are active and receiving events
 
-2. **Webhook Handler Service (Phase 1)**
+2. **Webhook Handler Service (Phase 1)** ✅
    - Created `GitHubWebhookHandler` service
    - Implemented task ID extraction from PR titles
    - Added comprehensive logging and statistics tracking
    - Full test suite with 100% passing tests
 
-3. **Task ID Extraction**
+3. **Task ID Extraction** ✅
    - Supports multiple PR title formats:
      - `Task: task-id` or `Task task-id`
      - `[task-id]` anywhere in title
@@ -25,6 +25,13 @@
      - Full UUID format recognition
    - Minimum 8 characters for task ID
    - Case-insensitive matching
+
+4. **Task Queue Integration (Phase 2)** ✅
+   - Added `findByPRNumber(prNumber)` method
+   - Added `findByTaskId(taskId)` method
+   - Added `updatePRStatus(taskId, prStatus)` method
+   - Webhook handler now finds and updates tasks
+   - Tasks marked complete when PR merges
 
 ### 📋 Infrastructure Created
 
@@ -45,49 +52,22 @@
 - Tunnel ID: `f522d5d2-4766-4b01-b35a-5f624d443d2c`
 - DNS: `app-monitor.joshwentworth.com`
 
-### 🚧 Phase 2 TODO (Next Steps)
+### 🚧 Phase 3 TODO (Final Steps)
 
 The following items need to be implemented to complete the PR workflow migration:
 
-#### 1. Task Queue Integration
+#### 1. Service Initialization ⚠️ NEXT
 ```typescript
-// Add to TaskQueueService (taskQueue.sqlite.ts):
-async findByPRNumber(prNumber: number): Promise<Task[]>
-async findByTaskId(taskId: string): Promise<Task | null>
-async updatePRStatus(taskId: string, prStatus: Partial<Task>): Promise<void>
-```
-
-#### 2. PR Orchestrator Integration
-```typescript
-// Add to PRWorkflowOrchestrator:
-async onPROpened(prNumber: number, pr: any): Promise<void>
-async onPRSynchronize(prNumber: number, pr: any): Promise<void>
-async onPRMerged(prNumber: number, pr: any): Promise<void>
-async onPRClosed(prNumber: number, pr: any): Promise<void>
-async onPRReopened(prNumber: number, pr: any): Promise<void>
-async onPRReadyForReview(prNumber: number, pr: any): Promise<void>
-```
-
-#### 3. Service Initialization
-```typescript
-// In server.ts or app initialization:
+// In server.ts or index.ts - wire up the webhook handler:
 import { GitHubWebhookHandler } from './services/githubWebhookHandler.service.js';
 import { setWebhookHandler } from './routes/github-webhooks.routes.js';
 
+// After taskQueue and prOrchestrator are initialized:
 const webhookHandler = new GitHubWebhookHandler(taskQueue, prOrchestrator);
 setWebhookHandler(webhookHandler);
 ```
 
-#### 4. Database Schema Updates
-Already defined in Task interface, but verify database migration:
-```sql
--- Verify these columns exist in tasks table:
--- pr_number, pr_url, pr_branch, pr_status, pr_checks_status, 
--- pr_review_status, pr_created_at, pr_merged_at,
--- followup_for_pr, followup_tasks
-```
-
-#### 5. Update Bot Templates
+#### 2. Update Bot Templates
 Update task prompt templates to include task ID in PR titles:
 ```bash
 gh pr create \
@@ -95,7 +75,7 @@ gh pr create \
   --body "..."
 ```
 
-#### 6. Testing & Validation
+#### 3. Testing & Validation
 - [ ] Test webhook with real PR creation
 - [ ] Verify task lookup by PR number
 - [ ] Verify task lookup by task ID from title
@@ -140,11 +120,13 @@ From PR_BASED_WORKFLOW.md:
 - [x] PR number captured in task metadata (structure exists)
 - [x] Webhook infrastructure for PR events
 - [x] Task ID extraction from PR titles
-- [ ] Automatic monitoring of CI checks (TODO Phase 2)
-- [ ] Automatic monitoring of Copilot reviews (TODO Phase 2)
-- [ ] Auto-merge when all conditions met (TODO Phase 2)
-- [ ] Followup tasks created for failures/comments (TODO Phase 2)
-- [ ] Full audit trail in task history (TODO Phase 2)
+- [x] Task lookup by PR number and task ID ✅
+- [x] Automatic PR status updates via webhooks ✅
+- [ ] Automatic monitoring of CI checks (TODO Phase 3)
+- [ ] Automatic monitoring of Copilot reviews (TODO Phase 3)
+- [ ] Auto-merge when all conditions met (TODO Phase 3)
+- [ ] Followup tasks created for failures/comments (TODO Phase 3)
+- [ ] Full audit trail in task history (TODO Phase 3)
 
 ### 💡 Implementation Notes
 
@@ -162,16 +144,16 @@ From PR_BASED_WORKFLOW.md:
 
 ## Next Session
 
-Continue with Phase 2 implementation:
-1. Add TaskQueue methods for PR lookup
-2. Wire up webhook handler to task queue  
-3. Implement PR status updates
-4. Add PR orchestrator webhook methods
-5. Update bot templates with task ID in title
-6. Test end-to-end PR flow
+Continue with Phase 3 implementation:
+1. **Wire up webhook handler in server initialization** ⚠️ PRIORITY
+2. Update bot templates with task ID in PR title
+3. Test end-to-end PR flow
+4. Add CI check monitoring
+5. Add PR review monitoring
+6. Implement auto-merge logic
 
 ---
 
-**Status**: Phase 1 Complete ✅  
-**Last Updated**: 2025-11-10T04:50:00Z  
+**Status**: Phase 2 Complete ✅  
+**Last Updated**: 2025-11-10T04:58:00Z  
 **Branch**: staging
