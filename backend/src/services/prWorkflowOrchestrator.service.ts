@@ -374,6 +374,4 @@ export class PRWorkflowOrchestrator {
     return getGitHubPRService();
   }
 
-  // ==========================================================================
-  // Webhook Event Handlers
 }

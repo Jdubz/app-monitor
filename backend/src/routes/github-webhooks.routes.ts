@@ -38,7 +38,7 @@ const respondError = (res: Response, status: number, error: string, message?: st
 
 /**
  * GitHub Webhook endpoint for Pull Request events
- * Handles PR opened, closed, synchronize, etc.
+ * Handles PR lifecycle: opened, closed, merged, synchronize, ready_for_review
  * 
  * @route POST /api/github/webhooks/pr
  */

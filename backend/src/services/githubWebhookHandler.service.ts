@@ -1,9 +1,9 @@
 /**
  * GitHub Webhook Handler Service
  * 
- * Processes incoming webhooks from GitHub
- * Phase 1: Basic event logging, task ID extraction from PR titles
- * Phase 2: Integration with task queue and PR status updates
+ * Processes incoming webhooks from GitHub for PR lifecycle management.
+ * Handles PR events, check suites, and check runs to update task status,
+ * create followup tasks, and trigger auto-merge when appropriate.
  */
 
 import { logger } from '../utils/logger.js';

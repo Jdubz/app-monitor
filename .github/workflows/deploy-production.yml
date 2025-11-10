@@ -101,8 +101,9 @@ jobs:
           
           # Create tarball with all necessary files
           # Note: tar may exit with 1 if files change during archiving (expected when creating in same dir)
-          # By default, tar doesn't follow symlinks (safe behavior)
+          # Use -h to dereference symlinks (include actual files instead of links)
           tar -czf "$TARBALL_NAME" \
+            -h \
             --exclude=node_modules \
             --exclude=.git \
             --exclude=.github \
