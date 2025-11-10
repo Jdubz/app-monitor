@@ -220,7 +220,7 @@ ${prData.description || 'No description available'}`,
   /**
    * Determine if a followup task should be created for PR issues
    */
-  shouldCreateFollowup(prNumber: number, prStatus: PRStatus, copilotAnalysis: CopilotReviewAnalysis): boolean {
+  shouldCreateFollowup(prNumber: number, prStatus: PRStatus, copilotAnalysis: CopilotReviewAnalysis, task?: Task): boolean {
     // Create followup for failed checks
     const hasFailedChecks = prStatus.checks.some(c =>
       c.status === 'failure' || c.status === 'error'
@@ -255,6 +255,21 @@ ${prData.description || 'No description available'}`,
         action: 'followup_needed_unresolved_comments',
         message: `PR #${prNumber} has ${resolutionSummary.unresolvedBlocking} unresolved blocking comments`,
         details: { pr_number: prNumber, ...resolutionSummary }
+      });
+      return true;
+    }
+
+    // Create followup for failed task verification (< 80% acceptance criteria met)
+    if (task && task.verification_passed === false) {
+      logger.info({
+        category: 'pr-workflow',
+        action: 'followup_needed_verification_failed',
+        message: `PR #${prNumber} task verification failed`,
+        details: {
+          pr_number: prNumber,
+          task_id: task.id,
+          verification_passed: task.verification_passed
+        }
       });
       return true;
     }

@@ -10,6 +10,7 @@ import { logger } from '../utils/logger.js';
 import type { TaskQueueService, Task } from './taskQueue.sqlite.js';
 import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 import { ReviewCommentTracker } from './reviewCommentTracker.service.js';
+import { TaskVerificationService } from './taskVerification.service.js';
 import { getDatabase } from './database.js';
 
 export interface GitHubPullRequestPayload {
@@ -153,12 +154,14 @@ export class GitHubWebhookHandler {
   };
 
   private reviewCommentTracker: ReviewCommentTracker;
+  private taskVerification: TaskVerificationService;
 
   constructor(
     private readonly taskQueue?: TaskQueueService,
     private readonly prOrchestrator?: PRWorkflowOrchestrator
   ) {
     this.reviewCommentTracker = new ReviewCommentTracker(getDatabase());
+    this.taskVerification = new TaskVerificationService();
   }
   /**
    * Extract task ID from PR branch name or title
@@ -665,8 +668,8 @@ export class GitHubWebhookHandler {
         });
 
         // Check if we need followup task or can auto-merge
-        if (prMonitor.shouldCreateFollowup(prNumber, prStatus, copilotAnalysis)) {
-          const task = tasks[0];
+        const task = tasks[0];
+        if (prMonitor.shouldCreateFollowup(prNumber, prStatus, copilotAnalysis, task)) {
           const prBranch = task.pr_branch || pull_request.head.ref;
 
           const followupTask = await prMonitor.createFollowupTask(
@@ -781,9 +784,56 @@ export class GitHubWebhookHandler {
       const prStatus = await githubPR.getPRStatus(prNumber, owner, repo);
       const copilotAnalysis = await githubPR.getCopilotReviewAnalysis(prNumber, owner, repo);
 
+      // Run task verification when checks pass successfully
+      if (conclusion === 'success' && tasks.length > 0) {
+        const task = tasks[0];
+        try {
+          logger.info({
+            category: 'pr-workflow',
+            action: 'verification_started',
+            message: `Running task verification for PR #${prNumber}`,
+            details: { pr_number: prNumber, task_id: task.id }
+          });
+
+          const verificationResult = await this.taskVerification.verifyTask(
+            task,
+            '/home/jdubz/Development/app-monitor', // workspace path
+            task.output || ''
+          );
+
+          // Store verification results in task
+          await this.taskQueue.updateTask(task.id, {
+            verification_passed: verificationResult.passed,
+            verification_results: JSON.stringify(verificationResult),
+            verification_timestamp: Date.now()
+          });
+
+          logger.info({
+            category: 'pr-workflow',
+            action: 'verification_completed',
+            message: `Task verification ${verificationResult.passed ? 'PASSED' : 'FAILED'} for PR #${prNumber}`,
+            details: {
+              pr_number: prNumber,
+              task_id: task.id,
+              passed: verificationResult.passed,
+              overall_score: verificationResult.overallScore,
+              acceptance_criteria_met: verificationResult.acceptanceCriteria.percentMet
+            }
+          });
+        } catch (error) {
+          logger.warn({
+            category: 'pr-workflow',
+            action: 'verification_failed',
+            message: `Task verification failed for PR #${prNumber}`,
+            error,
+            details: { pr_number: prNumber, task_id: task.id }
+          });
+        }
+      }
+
       // Check if we should create a followup task
-      if (prMonitor.shouldCreateFollowup(prNumber, prStatus, copilotAnalysis)) {
-        const task = tasks[0]; // Use first matching task
+      const task = tasks[0]; // Use first matching task
+      if (prMonitor.shouldCreateFollowup(prNumber, prStatus, copilotAnalysis, task)) {
         
         // Get PR branch from status
         const prBranch = task.pr_branch || `pr-${prNumber}`;
