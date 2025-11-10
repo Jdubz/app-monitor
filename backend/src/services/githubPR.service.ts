@@ -206,6 +206,7 @@ export class GitHubPRService {
 
   /**
    * Analyze Copilot's review comments for blocking issues
+   * Uses structured tag parsing with fallback to keyword matching
    */
   analyzeCopilotReview(comments: PRComment[]): CopilotReviewAnalysis {
     const copilotComments = comments.filter(c =>
@@ -226,44 +227,110 @@ export class GitHubPRService {
     const blockingIssues: string[] = [];
     const suggestions: string[] = [];
 
-    // Improved pattern-based matching to reduce false positives
-    const blockingPatterns = [
-      /\b(security|vulnerability)\b/i, // Simplified - any mention of security/vulnerability is blocking
-      /\bcritical\b/i, // Critical is always blocking
-      /\berror\s+(in|with|detected)/i, // Error patterns
-      /\bmust\s+fix\b/i,
-      /\bmust\s+be\s+(fixed|addressed|resolved)/i,
-      /\bacceptance\s+criteria\s+(not\s+)?(met|satisfied)/i,
-      /\brequirement\s+(not\s+)?(met|satisfied)/i,
-      /\bdoes\s+not\s+meet\b/i,
-      /\bunsafe\s+(code|operation|practice)/i,
-      /\bbreaking\s+(change|api)/i,
-      /\b(error|bug|issue)\s+(must|should|needs to)\s+be\s+(fixed|resolved)/i
+    // Priority 1: Explicit markdown tags (most accurate)
+    const explicitBlockingTags = [
+      /\*\*Critical Bug:\*\*/i,
+      /\*\*Security [Cc]oncern:\*\*/i,
+      /\*\*MUST fix:\*\*/i,
+      /\*\*Required:\*\*/i,
+      /\*\*Blocking:\*\*/i,
+      /\*\*Error:\*\*/i
     ];
 
-    // Suggestion patterns (more permissive)
+    const explicitNitpickTags = [
+      /\[nitpick\]/i,
+      /\[nit\]/i,
+      /\*\*Nitpick:\*\*/i,
+      /\*\*Minor:\*\*/i
+    ];
+
+    const explicitSuggestionTags = [
+      /\*\*Suggestion:\*\*/i,
+      /\*\*Consider:\*\*/i,
+      /\*\*Recommendation:\*\*/i,
+      /\[suggestion\]/i,
+      /\[optional\]/i
+    ];
+
+    // Priority 2: Bracketed severity indicators
+    const bracketedBlocking = /\[(critical|blocking|security|required)\]/i;
+    const bracketedSuggestion = /\[(suggestion|consider|optional|recommend)\]/i;
+
+    // Priority 3: Strong keyword patterns (fallback)
+    const strongBlockingPatterns = [
+      /\b(security vulnerability|security issue)\b/i,
+      /\bcritical\s+(bug|error|issue|problem)\b/i,
+      /\bmust\s+(be\s+)?(fixed|addressed|resolved)/i,
+      /\bunsafe\s+(code|operation|practice)/i,
+      /\bbreaking\s+(change|api|contract)/i
+    ];
+
+    // Priority 4: Weak keyword patterns (lowest priority, most prone to false positives)
+    const weakBlockingPatterns = [
+      /\bacceptance\s+criteria\s+not\s+met\b/i,
+      /\brequirement\s+not\s+(met|satisfied)\b/i,
+      /\bdoes\s+not\s+meet\s+requirements\b/i
+    ];
+
     const suggestionPatterns = [
-      /\bconsider\s+(using|adding|changing)/i,
-      /\bsugg(est|estion)\b/i,
-      /\bcould\s+(be|improve|use)/i,
-      /\bmight\s+(want to|be|consider)/i,
-      /\brecommend(ed)?\b/i,
-      /\bprefer(red)?\b/i,
-      /\bwould\s+be\s+better\b/i
+      /\bconsider\s+(using|adding|changing|implementing)/i,
+      /\bsugg(est|estion):/i,
+      /\bcould\s+(be|improve|use|benefit)/i,
+      /\bmight\s+(want to|consider|benefit)/i,
+      /\brecommend(ed)?\s+(to|that|using)/i,
+      /\bwould\s+be\s+(better|clearer|safer)\b/i,
+      /\bprefer(red)?\s+to\b/i
     ];
 
     for (const comment of copilotComments) {
-      // Check for blocking issues using patterns
-      if (blockingPatterns.some(pattern => pattern.test(comment.body))) {
-        blockingIssues.push(comment.body);
+      const body = comment.body;
+      let isBlocking = false;
+      let isSuggestion = false;
+      let isNitpick = false;
+
+      // Priority 1: Check explicit tags first (highest accuracy)
+      if (explicitBlockingTags.some(tag => tag.test(body))) {
+        isBlocking = true;
+      } else if (explicitNitpickTags.some(tag => tag.test(body))) {
+        isNitpick = true;
+        isSuggestion = true; // Nitpicks are treated as suggestions
+      } else if (explicitSuggestionTags.some(tag => tag.test(body))) {
+        isSuggestion = true;
       }
-      // Check for suggestions using patterns
-      else if (suggestionPatterns.some(pattern => pattern.test(comment.body))) {
-        suggestions.push(comment.body);
+      // Priority 2: Check bracketed tags
+      else if (bracketedBlocking.test(body)) {
+        isBlocking = true;
+      } else if (bracketedSuggestion.test(body)) {
+        isSuggestion = true;
       }
+      // Priority 3: Strong patterns
+      else if (strongBlockingPatterns.some(pattern => pattern.test(body))) {
+        isBlocking = true;
+      }
+      // Priority 4: Weak patterns (require additional context)
+      else if (weakBlockingPatterns.some(pattern => pattern.test(body))) {
+        // Only treat as blocking if it also contains strong language
+        if (/\b(must|required|critical|fail)/i.test(body)) {
+          isBlocking = true;
+        } else {
+          isSuggestion = true; // Downgrade to suggestion
+        }
+      }
+      // Priority 5: Suggestion patterns (fallback)
+      else if (suggestionPatterns.some(pattern => pattern.test(body))) {
+        isSuggestion = true;
+      }
+
+      // Categorize the comment
+      if (isBlocking) {
+        blockingIssues.push(body);
+      } else if (isSuggestion && !isNitpick) {
+        suggestions.push(body);
+      }
+      // Nitpicks are counted but not added to either list to reduce noise
     }
 
-    // Determine severity
+    // Determine severity based on blocking issues count
     let severity: 'none' | 'low' | 'medium' | 'high' = 'low';
     if (blockingIssues.length > 0) {
       severity = blockingIssues.length >= 3 ? 'high' : 'medium';
