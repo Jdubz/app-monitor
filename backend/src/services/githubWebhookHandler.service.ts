@@ -290,8 +290,8 @@ export class GitHubWebhookHandler {
       });
     }
 
-    if (this.prOrchestrator && typeof (this.prOrchestrator as any).onPROpened === 'function') {
-      await (this.prOrchestrator as any).onPROpened(prNumber, pr);
+    if (this.prOrchestrator) {
+      await this.prOrchestrator.onPROpened(prNumber, pr);
     }
   }
 
@@ -312,8 +312,8 @@ export class GitHubWebhookHandler {
       });
     }
 
-    if (this.prOrchestrator && typeof (this.prOrchestrator as any).onPRSynchronize === 'function') {
-      await (this.prOrchestrator as any).onPRSynchronize(prNumber, pr);
+    if (this.prOrchestrator) {
+      await this.prOrchestrator.onPRSynchronize(prNumber, pr);
     }
   }
 
@@ -345,8 +345,8 @@ export class GitHubWebhookHandler {
       }
     }
 
-    if (this.prOrchestrator && typeof (this.prOrchestrator as any).onPRMerged === 'function') {
-      await (this.prOrchestrator as any).onPRMerged(prNumber, pr);
+    if (this.prOrchestrator) {
+      await this.prOrchestrator.onPRMerged(prNumber, pr);
     }
   }
 
@@ -366,8 +366,8 @@ export class GitHubWebhookHandler {
       });
     }
 
-    if (this.prOrchestrator && typeof (this.prOrchestrator as any).onPRClosed === 'function') {
-      await (this.prOrchestrator as any).onPRClosed(prNumber, pr);
+    if (this.prOrchestrator) {
+      await this.prOrchestrator.onPRClosed(prNumber, pr);
     }
   }
 
@@ -387,8 +387,8 @@ export class GitHubWebhookHandler {
       });
     }
 
-    if (this.prOrchestrator && typeof (this.prOrchestrator as any).onPRReopened === 'function') {
-      await (this.prOrchestrator as any).onPRReopened(prNumber, pr);
+    if (this.prOrchestrator) {
+      await this.prOrchestrator.onPRReopened(prNumber, pr);
     }
   }
 
@@ -408,8 +408,8 @@ export class GitHubWebhookHandler {
       });
     }
 
-    if (this.prOrchestrator && typeof (this.prOrchestrator as any).onPRReadyForReview === 'function') {
-      await (this.prOrchestrator as any).onPRReadyForReview(prNumber, pr);
+    if (this.prOrchestrator) {
+      await this.prOrchestrator.onPRReadyForReview(prNumber, pr);
     }
   }
 }
