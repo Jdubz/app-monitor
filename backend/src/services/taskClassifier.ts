@@ -132,7 +132,7 @@ export class TaskClassifier {
     const patternMatches = description.match(patternRegex) || [];
     
     patternMatches.forEach(pattern => {
-      const ext = pattern.replace(/[*.]/g, '').toLowerCase();
+      const ext = pattern.replace(/^\*\./, '').replace(/^\./, '').toLowerCase();
       if (ext) patterns.add(ext);
     });
 

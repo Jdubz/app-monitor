@@ -64,8 +64,21 @@ export class ReviewCommentTracker {
     const blockingKeywords = ['critical', 'must fix', 'security', 'vulnerability', 'bug', 'error', 'broken'];
     const suggestionKeywords = ['suggest', 'consider', 'recommend', 'could', 'might want to'];
 
-    const hasBlocking = blockingKeywords.some(kw => lowerBody.includes(kw));
-    const hasSuggestion = suggestionKeywords.some(kw => lowerBody.includes(kw));
+    const hasBlocking = blockingKeywords.some(kw => {
+      // Use word boundaries for single words, and simple includes for multi-word phrases
+      if (kw.includes(' ')) {
+        return lowerBody.includes(kw);
+      } else {
+        return new RegExp(`\\b${kw}\\b`, 'i').test(body);
+      }
+    });
+    const hasSuggestion = suggestionKeywords.some(kw => {
+      if (kw.includes(' ')) {
+        return lowerBody.includes(kw);
+      } else {
+        return new RegExp(`\\b${kw}\\b`, 'i').test(body);
+      }
+    });
 
     if (hasBlocking) return 'blocking';
     if (hasSuggestion) return 'suggestion';
