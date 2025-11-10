@@ -1691,19 +1691,19 @@ export class TaskQueueService {
    */
   async updatePRStatus(taskId: string, prStatus: Partial<Task>): Promise<void> {
     const updates: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
 
     // Build dynamic UPDATE statement based on provided fields
     const prFields = [
       'pr_number', 'pr_url', 'pr_branch', 'pr_status',
       'pr_checks_status', 'pr_review_status', 
       'pr_created_at', 'pr_merged_at'
-    ];
+    ] as const;
 
     for (const field of prFields) {
       if (field in prStatus) {
         updates.push(`${field} = ?`);
-        values.push((prStatus as any)[field]);
+        values.push(prStatus[field]);
       }
     }
 

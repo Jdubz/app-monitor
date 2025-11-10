@@ -7,7 +7,7 @@
  */
 
 import { logger } from '../utils/logger.js';
-import type { TaskQueueService } from './taskQueue.sqlite.js';
+import type { TaskQueueService, Task } from './taskQueue.sqlite.js';
 import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 
 export interface GitHubPullRequestPayload {
@@ -55,6 +55,45 @@ export interface GitHubPushPayload {
   };
   pusher: {
     name: string;
+  };
+}
+
+export interface GitHubCheckSuitePR {
+  number: number;
+}
+
+export interface GitHubCheckSuitePayload {
+  action: string;
+  check_suite: {
+    id: number;
+    status: string;
+    conclusion: string | null;
+    pull_requests: GitHubCheckSuitePR[];
+  };
+  repository: {
+    full_name: string;
+    name: string;
+    owner: {
+      login: string;
+    };
+  };
+}
+
+export interface GitHubCheckRunPayload {
+  action: string;
+  check_run: {
+    id: number;
+    name: string;
+    status: string;
+    conclusion: string | null;
+    pull_requests: GitHubCheckSuitePR[];
+  };
+  repository: {
+    full_name: string;
+    name: string;
+    owner: {
+      login: string;
+    };
   };
 }
 
@@ -148,7 +187,7 @@ export class GitHubWebhookHandler {
     });
 
     // Find associated task(s)
-    let tasks: any[] = [];
+    let tasks: Task[] = [];
     
     if (this.taskQueue) {
       // Try to find by PR number first
@@ -263,7 +302,7 @@ export class GitHubWebhookHandler {
    * Handle check_suite webhook events
    * Triggers followup task creation and auto-merge when checks complete
    */
-  async handleCheckSuite(payload: any): Promise<void> {
+  async handleCheckSuite(payload: GitHubCheckSuitePayload): Promise<void> {
     this.stats.last_event_time = Date.now();
     
     const { action, check_suite, repository } = payload;
@@ -294,10 +333,10 @@ export class GitHubWebhookHandler {
       action: 'check_suite_completed',
       message: `Check suite completed with ${check_suite?.conclusion}`,
       details: {
-        conclusion: check_suite?.conclusion,
+        conclusion: check_suite.conclusion,
         pr_count: pullRequests.length,
-        pr_numbers: pullRequests.map((pr: any) => pr.number),
-        repository: repository?.full_name
+        pr_numbers: pullRequests.map((pr) => pr.number),
+        repository: repository.full_name
       }
     });
 
@@ -311,7 +350,7 @@ export class GitHubWebhookHandler {
    * Handle check_run webhook events
    * Similar to check_suite but for individual check runs
    */
-  async handleCheckRun(payload: any): Promise<void> {
+  async handleCheckRun(payload: GitHubCheckRunPayload): Promise<void> {
     this.stats.last_event_time = Date.now();
     
     const { action, check_run, repository } = payload;
@@ -322,12 +361,12 @@ export class GitHubWebhookHandler {
         category: 'api',
         action: 'check_run_ignored',
         message: `Check run action '${action}' ignored (only processing 'completed')`,
-        details: { action, conclusion: check_run?.conclusion }
+        details: { action, conclusion: check_run.conclusion }
       });
       return;
     }
 
-    const pullRequests = check_run?.pull_requests || [];
+    const pullRequests = check_run.pull_requests || [];
     if (pullRequests.length === 0) {
       logger.debug({
         category: 'api',
@@ -340,13 +379,13 @@ export class GitHubWebhookHandler {
     logger.info({
       category: 'api',
       action: 'check_run_completed',
-      message: `Check run '${check_run?.name}' completed with ${check_run?.conclusion}`,
+      message: `Check run '${check_run.name}' completed with ${check_run.conclusion}`,
       details: {
-        name: check_run?.name,
-        conclusion: check_run?.conclusion,
+        name: check_run.name,
+        conclusion: check_run.conclusion,
         pr_count: pullRequests.length,
-        pr_numbers: pullRequests.map((pr: any) => pr.number),
-        repository: repository?.full_name
+        pr_numbers: pullRequests.map((pr) => pr.number),
+        repository: repository.full_name
       }
     });
 
@@ -361,8 +400,8 @@ export class GitHubWebhookHandler {
    */
   private async processCheckSuiteForPR(
     prNumber: number,
-    checkSuite: any,
-    repository: any
+    checkSuite: { conclusion: string | null },
+    repository: { owner: { login: string }; name: string; full_name: string }
   ): Promise<void> {
     if (!this.taskQueue || !this.prOrchestrator) {
       logger.warn({
@@ -397,7 +436,7 @@ export class GitHubWebhookHandler {
         pr_number: prNumber,
         conclusion,
         task_ids: tasks.map(t => t.id),
-        repository: repository?.full_name
+        repository: repository.full_name
       }
     });
 
@@ -472,7 +511,11 @@ export class GitHubWebhookHandler {
   // PR Event Handlers
   // ==========================================================================
 
-  private async handlePROpened(prNumber: number, pr: any, tasks: any[]): Promise<void> {
+  private async handlePROpened(
+    prNumber: number,
+    pr: GitHubPullRequestPayload['pull_request'],
+    tasks: Task[]
+  ): Promise<void> {
     logger.info({
       category: 'api',
       action: 'pr_opened',
@@ -493,7 +536,11 @@ export class GitHubWebhookHandler {
     }
   }
 
-  private async handlePRSynchronize(prNumber: number, pr: any, tasks: any[]): Promise<void> {
+  private async handlePRSynchronize(
+    prNumber: number,
+    pr: GitHubPullRequestPayload['pull_request'],
+    tasks: Task[]
+  ): Promise<void> {
     logger.info({
       category: 'api',
       action: 'pr_synchronized',
@@ -511,7 +558,11 @@ export class GitHubWebhookHandler {
     }
   }
 
-  private async handlePRMerged(prNumber: number, pr: any, tasks: any[]): Promise<void> {
+  private async handlePRMerged(
+    prNumber: number,
+    pr: GitHubPullRequestPayload['pull_request'],
+    tasks: Task[]
+  ): Promise<void> {
     logger.info({
       category: 'api',
       action: 'pr_merged',
@@ -529,7 +580,7 @@ export class GitHubWebhookHandler {
 
       // Mark task as completed if not already
       if (task.status !== 'completed') {
-        const completeStmt = (this.taskQueue as any).db.prepare(`
+        const completeStmt = (this.taskQueue as unknown as { db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } } }).db.prepare(`
           UPDATE tasks 
           SET status = 'completed', 
               completed_at = ?
@@ -540,7 +591,11 @@ export class GitHubWebhookHandler {
     }
   }
 
-  private async handlePRClosed(prNumber: number, pr: any, tasks: any[]): Promise<void> {
+  private async handlePRClosed(
+    prNumber: number,
+    pr: GitHubPullRequestPayload['pull_request'],
+    tasks: Task[]
+  ): Promise<void> {
     logger.info({
       category: 'api',
       action: 'pr_closed',
@@ -557,7 +612,11 @@ export class GitHubWebhookHandler {
     }
   }
 
-  private async handlePRReopened(prNumber: number, pr: any, tasks: any[]): Promise<void> {
+  private async handlePRReopened(
+    prNumber: number,
+    pr: GitHubPullRequestPayload['pull_request'],
+    tasks: Task[]
+  ): Promise<void> {
     logger.info({
       category: 'api',
       action: 'pr_reopened',
@@ -574,7 +633,11 @@ export class GitHubWebhookHandler {
     }
   }
 
-  private async handlePRReadyForReview(prNumber: number, pr: any, tasks: any[]): Promise<void> {
+  private async handlePRReadyForReview(
+    prNumber: number,
+    pr: GitHubPullRequestPayload['pull_request'],
+    tasks: Task[]
+  ): Promise<void> {
     logger.info({
       category: 'api',
       action: 'pr_ready_for_review',

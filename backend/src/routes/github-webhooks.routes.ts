@@ -220,7 +220,7 @@ router.post('/check_suite', async (req: Request, res: Response) => {
         delivery,
         action: req.body?.action,
         conclusion: req.body?.check_suite?.conclusion,
-        pr_numbers: req.body?.check_suite?.pull_requests?.map((pr: any) => pr.number),
+        pr_numbers: req.body?.check_suite?.pull_requests?.map((pr: { number: number }) => pr.number),
         repository: req.body?.repository?.full_name
       }
     });
@@ -282,7 +282,7 @@ router.post('/check_run', async (req: Request, res: Response) => {
         action: req.body?.action,
         name: req.body?.check_run?.name,
         conclusion: req.body?.check_run?.conclusion,
-        pr_numbers: req.body?.check_run?.pull_requests?.map((pr: any) => pr.number),
+        pr_numbers: req.body?.check_run?.pull_requests?.map((pr: { number: number }) => pr.number),
         repository: req.body?.repository?.full_name
       }
     });
