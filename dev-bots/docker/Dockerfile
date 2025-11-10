@@ -73,6 +73,7 @@ RUN apk add --no-cache \
     procps \
     sqlite \
     sqlite-libs \
+    github-cli \
     && rm -rf /var/cache/apk/*
 
 # Create non-root user for security
@@ -150,6 +151,13 @@ else
     echo "  ❌ Codex:       NOT FOUND"
     exit 1
 fi
+
+if which gh >/dev/null 2>&1; then
+    echo "  ✅ GitHub CLI:  $(which gh)"
+else
+    echo "  ❌ GitHub CLI:  NOT FOUND"
+    exit 1
+fi
 echo ""
 
 echo "🛠️  Development Tools:"
@@ -178,7 +186,7 @@ RUN chmod +x /home/node/verify-install.sh
 # ==============================================================================
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD which claude && which codex && which node || exit 1
+  CMD which claude && which codex && which gh && which node || exit 1
 
 # ==============================================================================
 # DEFAULT COMMAND
