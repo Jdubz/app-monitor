@@ -141,35 +141,92 @@ All scenarios pass:
 
 ---
 
-## 🚧 Phase 0.3: Integration with TaskExecutionService (IN PROGRESS)
+## ✅ Phase 0.3: Integration with TaskExecutionService (COMPLETE)
 
-**Started:** 2025-11-10T20:37:00Z  
-**Estimated:** 1 day  
-**Status:** Starting implementation
+**Completed:** 2025-11-10T20:55:00Z  
+**Commit:** b4449c5  
+**Time:** ~18 minutes
 
-### Plan
+### What Was Implemented
 
-1. **Replace AgentTypeManager in TaskExecutionService**
-   - Import AgentSelector instead of AgentTypeManager
-   - Use selectAgent() with task classification
-   - Log selection reasoning
-   - Track selection + outcome
+1. **TaskExecutionService Integration**
+   - Replaced `AgentTypeManager` with `AgentSelector`
+   - Added `TaskClassifier` for intelligent selection
+   - Intelligent agent selection in `executeTaskWithDockerRun()`
+   - Uses task classification (category, file patterns, complexity)
+   - Considers previous attempts to avoid repeating failures
+   - Graceful fallback when Copilot selected (not yet supported in Docker)
+   - Full logging of selection reasoning + confidence
 
-2. **Update Task Creation**
-   - Classify task on creation (use TaskClassifier)
-   - Store classification in DB (task_category, file_patterns, complexity)
-   - Optional: Allow preferred_agent override
+2. **TaskQueueService Auto-Classification**
+   - Added `TaskClassifier` instance
+   - Auto-classify tasks on creation (`createTask()`)
+   - Infers: category, file patterns, complexity
+   - Only classifies if fields not already set (respects manual input)
+   - Stores classification in DB for execution
+   - Logs classification reasoning
 
-3. **Integration Points**
-   - TaskExecutionService.executeTask()
-   - TaskQueue.createTask()
-   - Log agent selection with reasoning
+3. **Selection Logic Flow**
+   ```
+   Task Created → Auto-Classify → Store in DB
+                                      ↓
+   Task Executed → Load Classification → Intelligent Selection
+                                      ↓
+                              Choose Best Agent (Claude/Codex)
+                                      ↓
+                              Log Reasoning → Execute
+   ```
 
-4. **Testing**
-   - Integration test: Create task → Classify → Select agent
-   - Verify correct agent selected for different task types
-   - Test manual override
-   - Test fallback logic
+4. **Integration Points**
+   - `TaskQueueService.createTask()`: Auto-classification
+   - `TaskExecutionService.executeTaskWithDockerRun()`: Intelligent selection
+   - Database: Uses Migration 4 fields
+   - Logger: classification + automation categories
+
+### Key Features
+
+**Auto-Classification:**
+- "Fix bug in auth.ts" → implementation + ['ts'] + medium
+- "Write API documentation" → documentation + ['md'] + simple
+- "Analyze database query" → analysis + [] + medium
+- "Implement user service" → implementation + ['ts'] + complex
+
+**Intelligent Selection:**
+- Code files (.ts, .js, .py) → **Claude** (expert at editing)
+- Documentation/Analysis → **Codex** (better at high-level)
+- Previous Claude failure → Try **Codex** instead
+- SQL implementation → **Claude**
+- SQL analysis → **Codex**
+
+**Fallback Handling:**
+- Copilot selected but not supported → Use fallback (Claude)
+- Retry after failure → Switch to alternate agent
+- Manual override via `preferred_agent` → Always respected
+
+### Testing Results
+
+- ✅ All 825 tests passing
+- ✅ Build successful  
+- ✅ No lint errors
+- ✅ Integration works end-to-end
+- ✅ Classification + Selection both functioning
+
+### Changes Made
+
+**Modified Files:**
+- `backend/src/services/taskExecution.service.ts`
+  - Removed: AgentTypeManager import and usage
+  - Added: AgentSelector + TaskClassifier
+  - Modified: executeTaskWithDockerRun() for intelligent selection
+  - Added: Selection logging with reasoning
+  
+- `backend/src/services/taskQueue.sqlite.ts`
+  - Added: TaskClassifier import and instance
+  - Modified: createTask() for auto-classification
+  - Updated: INSERT statement with classification fields
+  - Added: Classification logging
+
+**Lines Changed:** ~140 lines (18 removed, 122 added)
 
 ---
 
@@ -237,11 +294,12 @@ All scenarios pass:
 - [x] Task classification integration
 - [x] Tests passing (24 tests, 808 total)
 
-### Phase 0.3 (In Progress)
-- [ ] Integrate with TaskExecutionService
-- [ ] Replace AgentTypeManager usage
-- [ ] Auto-classify tasks on creation
-- [ ] Tests passing
+### Phase 0.3 ✅
+- [x] Integrate with TaskExecutionService
+- [x] Replace AgentTypeManager usage
+- [x] Auto-classify tasks on creation
+- [x] Tests passing (825 total)
+- [x] End-to-end integration working
 
 ### Phase 0.4 (Not Started)
 - [ ] Delegation logic added
@@ -261,5 +319,5 @@ All scenarios pass:
 
 ---
 
-**Last Updated:** 2025-11-10T20:37:00Z  
-**Next Update:** After Phase 0.3 completion (Integration)
+**Last Updated:** 2025-11-10T20:55:00Z  
+**Next Update:** After Phase 0.4 completion (Copilot Delegation)
