@@ -187,6 +187,16 @@ main() {
     # Frontend build
     cd "${RELEASE_DIR}/frontend"
     npm ci
+
+    # Load environment variables from shared config if available
+    if [ -f "${SHARED_DIR}/config/.env.production" ]; then
+        log_info "Loading production environment variables..."
+        export $(grep -v '^#' "${SHARED_DIR}/config/.env.production" | xargs)
+    else
+        log_warn "No production environment file found at ${SHARED_DIR}/config/.env.production"
+        log_warn "Frontend may use default values. Create this file with VITE_PASSWORD=your-password"
+    fi
+
     NODE_ENV=production npm run build
 
     # Fix ownership of build artifacts (prevent 403 errors from nginx)

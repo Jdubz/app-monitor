@@ -90,6 +90,8 @@ jobs:
 
       - name: Build frontend
         run: npm run build -w frontend
+        env:
+          VITE_PASSWORD: ${{ secrets.VITE_PASSWORD }}
 
       - name: Package deployment artifact
         id: package
