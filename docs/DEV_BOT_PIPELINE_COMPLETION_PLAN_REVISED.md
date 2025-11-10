@@ -9,9 +9,10 @@
 
 ## REVISION NOTES
 
-**Previous Assessment:** Incorrectly stated ~30% complete
-**Actual Status:** ~60-70% complete based on deep audit
-**Key Discovery:** Artifact logging, task execution, and failure handling already implemented
+**Previous Assessment:** Incorrectly stated ~30% complete  
+**Actual Status:** ~60-70% complete based on deep audit  
+**Key Discovery:** Artifact logging, task execution, and failure handling already implemented  
+**CRITICAL MISSING:** Intelligent agent selection (Codex vs Claude vs Copilot delegation)
 
 ---
 
@@ -147,9 +148,71 @@
   - Attach session logs
   - Include failure summary
 
+### Intelligent Agent Selection (0% - CRITICAL!) 🔴
+- ❌ **Task classification** system
+  - Infer category (implementation, analysis, documentation, review, planning)
+  - Extract file patterns from task description
+  - Estimate complexity (simple, medium, complex)
+- ❌ **Agent capability mapping**
+  - Claude: Code editing, implementation, refactoring
+  - Codex: Analysis, planning, documentation (BAD at file editing)
+  - Copilot: Async delegation for simple, low-risk polish tasks
+- ❌ **Intelligent selection logic**
+  - Decision tree based on task category, file patterns, complexity
+  - Learn from previous attempts (if Claude failed, try Codex)
+  - Explain selection reasoning in logs
+- ❌ **Copilot delegation integration**
+  - `/delegate` comment on PRs for simple docs/formatting
+  - Monitor delegation results via webhooks
+
+**Why Critical:** Current random/alternating selection wastes tokens and causes failures.
+Codex fails at code editing but excels at analysis. Need intelligent routing.
+
+**Reference:** `docs/INTELLIGENT_AGENT_SELECTION_STRATEGY.md`
+
 ---
 
 ## REVISED Path to Completion
+
+### Phase 0: Intelligent Agent Selection (1.5 weeks) - P0 🔴 NEW
+
+**Priority:** P0 (BLOCKING - Required for effective automation)
+
+**Why P0:** Without this, we're sending tasks to the wrong agents, causing:
+- Codex failing at code editing (should use Claude)
+- Claude wasting tokens on simple docs (should use Codex or Copilot)
+- High failure rates that could be avoided
+
+**Tasks:**
+1. **Task Classification System** (2-3 days)
+   - Add fields: task_category, file_patterns, estimated_complexity
+   - Create TaskClassifier service
+   - Classify on task creation
+
+2. **Intelligent AgentSelector** (2-3 days)
+   - Decision tree: category → file patterns → complexity
+   - Learn from previous failures
+   - Explain selection reasoning
+
+3. **Copilot Delegation** (1-2 days)
+   - Integrate `/delegate` for simple tasks
+   - Monitor delegation outcomes
+
+4. **Learning & Optimization** (1 day)
+   - Track success rates by agent + category
+   - Adjust selection weights
+
+**Deliverables:**
+- Task classification working
+- Intelligent agent selection active
+- Copilot delegation available
+- Selection metrics tracked
+
+**Estimated Time:** 6-9 days (1.5 weeks)
+
+**Reference:** `docs/INTELLIGENT_AGENT_SELECTION_STRATEGY.md`
+
+---
 
 ### Phase 1: Database Schema & Artifact Registration (3-4 days)
 
@@ -414,37 +477,44 @@
 
 | Phase | Description | Duration | Total |
 |-------|-------------|----------|-------|
-| 1 | Database & Artifact Registration | 3-4 days | 3-4 days |
-| 2 | Session Summary & Analytics | 2-3 days | 5-7 days |
-| 3 | Quarantine System | 2-3 days | 7-10 days |
-| 4 | Auto-Actions | 1-2 days | 8-12 days |
-| 5 | Polish & Docs | 1 day | 9-13 days |
+| 0 | **Intelligent Agent Selection** 🔴 | 1.5 weeks | 1.5 weeks |
+| 1 | Database & Artifact Registration | 3-4 days | 2-2.5 weeks |
+| 2 | Session Summary & Analytics | 2-3 days | 2.5-3 weeks |
+| 3 | Quarantine System | 2-3 days | 3-3.5 weeks |
+| 4 | Auto-Actions | 1-2 days | 3.5-4 weeks |
+| 5 | Polish & Docs | 1 day | 3.5-4 weeks |
 
-**Total Time:** 9-13 days (~2 weeks with one developer)
+**Total Time:** 3.5-4 weeks (with one developer)
 
 **Can Parallelize:**
+- Phase 0 must complete first (blocking)
 - Phase 2 can start once Phase 1 DB migration is done
 - Phase 3 can develop in parallel with Phase 2
 
-**Optimized Timeline:** 1.5-2 weeks with parallelization
+**Optimized Timeline:** 3-3.5 weeks with parallelization
 
 ---
 
 ## Priority Recommendation (REVISED)
 
-### P0 (Blocking - Week 1)
+### P0 (Blocking - MUST DO FIRST)
+- **Phase 0:** Intelligent Agent Selection 🔴 **NEW**
+  - **CRITICAL:** Without this, automation will continue to fail unnecessarily
+  - Codex failing at code editing is a major waste
+  - Must route tasks to appropriate agents
+  - Blocks everything else from being effective
+
+### P1 (High Value - Week 2-3)
 - **Phase 1:** Database schema + artifact registration
   - Critical for data persistence
   - Enables everything else
-
-### P1 (High Value - Week 1-2)
 - **Phase 2:** session_summary.json + analytics
   - Improves debugging significantly
   - Foundation for metrics
 - **Phase 3:** Quarantine system
   - Prevents runaway failures (production concern)
 
-### P2 (Nice to Have - Week 2)
+### P2 (Nice to Have - Week 3-4)
 - **Phase 4:** Auto-actions
   - Convenience features
   - Builds on existing PR workflow
