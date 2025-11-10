@@ -19,6 +19,8 @@ type TaskPRStatus = NonNullable<Task['pr_status']>;
 
 export interface PRMonitorConfig {
   enableAutoMerge: boolean;
+  maxFollowupDepth?: number;
+  maxFollowupTotal?: number;
 }
 
 /**
@@ -28,6 +30,8 @@ export class PRMonitorService {
   private readonly config: PRMonitorConfig;
   private readonly githubPR: GitHubPRService;
   private readonly taskQueue: TaskQueueService;
+  private readonly MAX_FOLLOWUP_DEPTH: number;
+  private readonly MAX_FOLLOWUP_TOTAL: number;
 
   constructor(
     taskQueue: TaskQueueService,
@@ -36,8 +40,12 @@ export class PRMonitorService {
     this.taskQueue = taskQueue;
     this.githubPR = getGitHubPRService();
     this.config = {
-      enableAutoMerge: config.enableAutoMerge ?? true
+      enableAutoMerge: config.enableAutoMerge ?? true,
+      maxFollowupDepth: config.maxFollowupDepth ?? 3,
+      maxFollowupTotal: config.maxFollowupTotal ?? 5
     };
+    this.MAX_FOLLOWUP_DEPTH = this.config.maxFollowupDepth!;
+    this.MAX_FOLLOWUP_TOTAL = this.config.maxFollowupTotal!;
   }
 
   /**
@@ -81,6 +89,150 @@ export class PRMonitorService {
   }
 
   /**
+   * Get all tasks associated with a PR (original + all followups)
+   */
+  private async getTasksForPR(prNumber: number): Promise<Task[]> {
+    return await this.taskQueue.findByPRNumber(prNumber);
+  }
+
+  /**
+   * Calculate followup depth by traversing the followup_tasks chain
+   */
+  private getFollowupDepth(taskId: string): number {
+    const task = this.taskQueue.getTask(taskId);
+    if (!task || !task.followup_tasks || task.followup_tasks.length === 0) {
+      return 0;
+    }
+
+    // Find max depth of any child
+    let maxChildDepth = 0;
+    for (const childId of task.followup_tasks) {
+      const childDepth = this.getFollowupDepth(childId);
+      maxChildDepth = Math.max(maxChildDepth, childDepth);
+    }
+
+    return 1 + maxChildDepth;
+  }
+
+  /**
+   * Count total followup tasks for a PR
+   */
+  private async countFollowupsForPR(prNumber: number): Promise<number> {
+    const tasks = await this.getTasksForPR(prNumber);
+    return tasks.filter(t => t.followup_for_pr === prNumber).length;
+  }
+
+  /**
+   * Check if we can create another followup task
+   */
+  private async checkFollowupLimits(prNumber: number, parentTaskId: string): Promise<{
+    allowed: boolean;
+    reason?: string;
+    depth: number;
+    total: number;
+  }> {
+    const depth = this.getFollowupDepth(parentTaskId);
+    const total = await this.countFollowupsForPR(prNumber);
+
+    if (depth >= this.MAX_FOLLOWUP_DEPTH) {
+      return {
+        allowed: false,
+        reason: `Maximum followup depth (${this.MAX_FOLLOWUP_DEPTH}) exceeded`,
+        depth,
+        total
+      };
+    }
+
+    if (total >= this.MAX_FOLLOWUP_TOTAL) {
+      return {
+        allowed: false,
+        reason: `Maximum total followups (${this.MAX_FOLLOWUP_TOTAL}) for PR exceeded`,
+        depth,
+        total
+      };
+    }
+
+    return { allowed: true, depth, total };
+  }
+
+  /**
+   * Create escalation task for human intervention
+   */
+  private async createEscalationTask(
+    prNumber: number,
+    parentTaskId: string,
+    reason: string,
+    depth: number,
+    total: number
+  ): Promise<Task> {
+    const parentTask = this.taskQueue.getTask(parentTaskId);
+    const prTasks = await this.getTasksForPR(prNumber);
+    const taskChain = prTasks.map(t => `- ${t.id}: ${t.title} (${t.status})`).join('\n');
+
+    const escalationTask = this.taskQueue.createTask({
+      title: `🚨 ESCALATION: PR #${prNumber} followup limit exceeded`,
+      description: `PR #${prNumber} has reached the maximum automated fix attempts and requires human intervention.
+
+**Reason:** ${reason}
+**Followup depth:** ${depth}/${this.MAX_FOLLOWUP_DEPTH}
+**Total followups:** ${total}/${this.MAX_FOLLOWUP_TOTAL}
+**Original task:** ${parentTaskId}
+
+**Task chain for this PR:**
+${taskChain}
+
+**Action required:**
+1. Review PR #${prNumber}: ${parentTask?.pr_url || `https://github.com/Jdubz/app-monitor/pull/${prNumber}`}
+2. Investigate why automated fixes failed
+3. Either:
+   - Fix manually and merge
+   - Close PR if not viable
+   - Adjust approach and retry with new task
+
+**Common causes:**
+- Complex issue requiring architectural changes
+- Missing requirements/unclear specifications  
+- External dependencies or environment issues
+- Test infrastructure problems
+
+**Note:** GitHub Copilot will be notified of this escalation via PR review.`,
+      type: 'manual-intervention',
+      priority: 10, // Highest priority
+      assigned_agent: 'human',
+      followup_for_pr: prNumber,
+      pr_branch: parentTask?.pr_branch,
+      acceptance_criteria: [
+        `PR #${prNumber} is either merged or closed with explanation`,
+        `Root cause of repeated failures is documented`,
+        `Any systemic issues are addressed`
+      ]
+    });
+
+    // Update parent task
+    if (parentTask) {
+      this.taskQueue.updateTask(parentTaskId, {
+        notes: `Escalated to human: ${reason}. See task ${escalationTask.id}`
+      });
+    }
+
+    logger.error({
+      category: 'pr-workflow',
+      action: 'followup_limit_exceeded',
+      message: `PR #${prNumber} escalated: ${reason}`,
+      details: {
+        prNumber,
+        parentTaskId,
+        escalationTaskId: escalationTask.id,
+        depth,
+        total,
+        reason
+      }
+    });
+
+    return escalationTask;
+  }
+
+  /**
    * Create a followup task to address PR issues
    */
   async createFollowupTask(
@@ -90,6 +242,36 @@ export class PRMonitorService {
     prStatus: PRStatus,
     copilotAnalysis: CopilotReviewAnalysis
   ): Promise<Task | null> {
+    // Check followup limits FIRST
+    const limitCheck = await this.checkFollowupLimits(prNumber, taskId);
+    
+    if (!limitCheck.allowed) {
+      logger.warn({
+        category: 'pr-workflow',
+        action: 'followup_limit_reached',
+        message: `Cannot create followup for PR #${prNumber}: ${limitCheck.reason}`,
+        details: {
+          prNumber,
+          parentTaskId: taskId,
+          depth: limitCheck.depth,
+          total: limitCheck.total,
+          maxDepth: this.MAX_FOLLOWUP_DEPTH,
+          maxTotal: this.MAX_FOLLOWUP_TOTAL
+        }
+      });
+
+      // Create escalation task for human intervention
+      await this.createEscalationTask(
+        prNumber,
+        taskId,
+        limitCheck.reason!,
+        limitCheck.depth,
+        limitCheck.total
+      );
+
+      return null;
+    }
+
     // Build task description
     const issues: string[] = [];
 
