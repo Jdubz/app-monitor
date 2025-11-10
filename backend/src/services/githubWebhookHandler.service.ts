@@ -97,10 +97,40 @@ export interface GitHubCheckRunPayload {
   };
 }
 
+export interface GitHubPullRequestReviewPayload {
+  action: 'submitted' | 'edited' | 'dismissed';
+  review: {
+    id: number;
+    user: {
+      login: string;
+      type: string;
+    };
+    body: string;
+    state: 'commented' | 'approved' | 'changes_requested';
+    submitted_at: string;
+  };
+  pull_request: {
+    number: number;
+    title: string;
+    head: {
+      ref: string;
+    };
+  };
+  repository: {
+    full_name: string;
+    name: string;
+    owner: {
+      login: string;
+    };
+  };
+}
+
 export interface WebhookHandlerStats {
   pr_events_received: number;
+  pr_review_events_received: number;
   push_events_received: number;
   task_ids_extracted: number;
+  copilot_reviews_detected: number;
   errors: number;
   last_event_time: number;
 }
@@ -112,8 +142,10 @@ export interface WebhookHandlerStats {
 export class GitHubWebhookHandler {
   private stats: WebhookHandlerStats = {
     pr_events_received: 0,
+    pr_review_events_received: 0,
     push_events_received: 0,
     task_ids_extracted: 0,
+    copilot_reviews_detected: 0,
     errors: 0,
     last_event_time: 0
   };
@@ -415,6 +447,176 @@ export class GitHubWebhookHandler {
     // Process each PR - reuse check suite logic since both trigger same workflow
     for (const pr of pullRequests) {
       await this.processCheckSuiteForPR(pr.number, check_run, repository);
+    }
+  }
+
+  /**
+   * Handle pull_request_review webhook events
+   * Detects when Copilot or humans submit reviews
+   */
+  async handlePullRequestReview(payload: GitHubPullRequestReviewPayload): Promise<void> {
+    this.stats.pr_review_events_received++;
+    this.stats.last_event_time = Date.now();
+    
+    const { action, review, pull_request, repository } = payload;
+    
+    // Only process 'submitted' reviews
+    if (action !== 'submitted') {
+      logger.debug({
+        category: 'api',
+        action: 'review_ignored',
+        message: `Review action '${action}' ignored (only processing 'submitted')`,
+        details: { action, pr_number: pull_request.number }
+      });
+      return;
+    }
+
+    const prNumber = pull_request.number;
+    const reviewer = review.user.login;
+    const isCopilot = reviewer.toLowerCase().includes('copilot') || 
+                      review.user.type === 'Bot';
+
+    if (isCopilot) {
+      this.stats.copilot_reviews_detected++;
+    }
+
+    logger.info({
+      category: 'api',
+      action: 'review_submitted',
+      message: `${isCopilot ? 'Copilot' : 'Human'} review submitted for PR #${prNumber}`,
+      details: {
+        pr_number: prNumber,
+        reviewer,
+        review_state: review.state,
+        is_copilot: isCopilot,
+        repository: repository.full_name
+      }
+    });
+
+    if (!this.taskQueue || !this.prOrchestrator) {
+      logger.warn({
+        category: 'api',
+        action: 'review_handler_not_ready',
+        message: 'Task queue or PR orchestrator not available'
+      });
+      return;
+    }
+
+    // Find associated tasks
+    const tasks = await this.taskQueue.findByPRNumber(prNumber);
+    if (tasks.length === 0) {
+      logger.debug({
+        category: 'api',
+        action: 'review_no_tasks',
+        message: `No tasks found for PR #${prNumber}`,
+        details: { pr_number: prNumber }
+      });
+      return;
+    }
+
+    try {
+      const prMonitor = this.prOrchestrator.getPRMonitor();
+      const githubPR = this.prOrchestrator.getGitHubPRService();
+      
+      // Get current PR status and analysis
+      const prStatus = await githubPR.getPRStatus(
+        prNumber, 
+        repository.owner.login, 
+        repository.name
+      );
+      const copilotAnalysis = await githubPR.getCopilotReviewAnalysis(
+        prNumber, 
+        repository.owner.login, 
+        repository.name
+      );
+
+      // Update task with review status
+      for (const task of tasks) {
+        const reviewStatus = review.state === 'changes_requested' ? 'changes_requested' :
+                            review.state === 'approved' ? 'approved' :
+                            'commented';
+        
+        await this.taskQueue.updateTask(task.id, {
+          pr_review_status: reviewStatus,
+          notes: `${isCopilot ? 'Copilot' : reviewer} review: ${review.state}`
+        });
+      }
+
+      // If Copilot review completed, check if ready to merge
+      if (isCopilot) {
+        logger.info({
+          category: 'pr-workflow',
+          action: 'copilot_review_completed',
+          message: `Copilot review completed for PR #${prNumber}`,
+          details: {
+            pr_number: prNumber,
+            review_state: review.state,
+            severity: copilotAnalysis.severity,
+            blocking_issues: copilotAnalysis.blockingIssues.length
+          }
+        });
+
+        // Check if we need followup task or can auto-merge
+        if (prMonitor.shouldCreateFollowup(prStatus, copilotAnalysis)) {
+          const task = tasks[0];
+          const prBranch = task.pr_branch || pull_request.head.ref;
+
+          const followupTask = await prMonitor.createFollowupTask(
+            prNumber,
+            task.id,
+            prBranch,
+            prStatus,
+            copilotAnalysis
+          );
+
+          if (followupTask) {
+            logger.info({
+              category: 'pr-workflow',
+              action: 'followup_created_from_copilot_review',
+              message: `Created followup task ${followupTask.id} for Copilot findings`,
+              details: {
+                pr_number: prNumber,
+                followup_id: followupTask.id,
+                parent_task: task.id,
+                severity: copilotAnalysis.severity
+              }
+            });
+          }
+        } else {
+          // Copilot review passed, check if all other gates passed
+          const canMerge = githubPR.canAutoMerge(prStatus, copilotAnalysis);
+          
+          if (canMerge.canMerge) {
+            const task = tasks[0];
+            const merged = await prMonitor.mergePR(prNumber, task.id);
+            
+            if (merged) {
+              logger.info({
+                category: 'pr-workflow',
+                action: 'pr_auto_merged_after_copilot_review',
+                message: `Auto-merged PR #${prNumber} after Copilot approval`,
+                details: { pr_number: prNumber, task_id: task.id }
+              });
+            }
+          } else {
+            logger.info({
+              category: 'pr-workflow',
+              action: 'merge_blocked_after_copilot_review',
+              message: `Cannot auto-merge PR #${prNumber}: ${canMerge.reason}`,
+              details: { pr_number: prNumber, reason: canMerge.reason }
+            });
+          }
+        }
+      }
+    } catch (error) {
+      this.stats.errors++;
+      logger.error({
+        category: 'pr-workflow',
+        action: 'review_processing_error',
+        message: `Error processing review for PR #${prNumber}`,
+        error,
+        details: { pr_number: prNumber, repository: repository.full_name }
+      });
     }
   }
 
