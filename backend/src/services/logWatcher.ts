@@ -17,6 +17,8 @@ import { fileURLToPath } from 'url';
 import { Server as SocketIOServer } from 'socket.io';
 import { logger } from '../utils/logger.js';
 import type { LogSourceManager } from './logSourceManager.js';
+import { ShutdownStateManager } from './shutdownStateManager.js';
+import { getDatabase } from './database.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -126,6 +128,7 @@ export class LogWatcher {
   private recentEntries: Map<string, StructuredLogEntry[]> = new Map();
   private maxRecentEntries: number;
   private logIdCounter = 0;
+  private shutdownStateManager: ShutdownStateManager;
 
   constructor(io: SocketIOServer, options: LogWatcherOptions = {}) {
     this.io = io;
@@ -134,8 +137,13 @@ export class LogWatcher {
     this.logDir = logDir || DEFAULT_LOG_DIR;
     this.logSourceManager = logSourceManager;
     this.maxRecentEntries = maxRecentEntries ?? DEFAULT_MAX_RECENT_ENTRIES;
+    this.shutdownStateManager = new ShutdownStateManager(getDatabase());
 
     this.initializeWatchers();
+
+    // Restore file positions on startup
+    this.restoreFilePositions();
+
     logger.info({
       category: 'system',
       action: 'initialized',
@@ -856,6 +864,48 @@ export class LogWatcher {
     });
 
     return [];
+  }
+
+  /**
+   * Restore file read positions from database
+   */
+  private async restoreFilePositions(): Promise<void> {
+    try {
+      const positions = await this.shutdownStateManager.restoreLogFilePositions();
+
+      for (const [filePath, position] of positions.entries()) {
+        const watchedFile = this.watchedFiles.get(filePath);
+        if (watchedFile) {
+          watchedFile.position = position;
+          logger.info({
+            category: 'system',
+            action: 'file_position_restored',
+            message: 'File position restored from previous session',
+            details: { filePath, position }
+          });
+        }
+      }
+    } catch (error) {
+      logger.error({
+        category: 'system',
+        action: 'file_position_restore_failed',
+        message: 'Failed to restore file positions',
+        error
+      });
+    }
+  }
+
+  /**
+   * Get current file positions for persistence
+   */
+  public getFilePositions(): Map<string, number> {
+    const positions = new Map<string, number>();
+
+    for (const [filePath, watchedFile] of this.watchedFiles.entries()) {
+      positions.set(filePath, watchedFile.position);
+    }
+
+    return positions;
   }
 
   /**

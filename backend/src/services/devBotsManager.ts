@@ -1752,6 +1752,13 @@ export class DevBotsManager extends EventEmitter {
   }
 
   /**
+   * Get retry manager instance (for state persistence)
+   */
+  public getRetryManager(): RetryManager {
+    return this.retryManager;
+  }
+
+  /**
    * Update retry configuration
    */
   public updateRetryConfig(config: Partial<RetryConfig>): void {
