@@ -177,6 +177,11 @@ export interface Task {
   // Followup task linking
   followup_for_pr?: number; // If this task fixes issues from a PR
   followup_tasks?: string[]; // Child tasks created to fix PR issues
+  // Intelligent agent selection fields (Phase 0)
+  task_category?: 'implementation' | 'analysis' | 'documentation' | 'review' | 'planning';
+  file_patterns?: string; // JSON array of file extensions (e.g., ["ts", "md"])
+  estimated_complexity?: 'simple' | 'medium' | 'complex';
+  preferred_agent?: 'claude' | 'codex' | 'copilot'; // Manual override for agent selection
   // Enhanced task fields for comprehensive task planning
   parent_initiative?: string;
   long_term_goals?: string[];
@@ -385,6 +390,43 @@ export class TaskQueueService {
         category: 'process',
         action: 'migration_complete',
         message: 'Task recovery columns added successfully'
+      });
+    }
+
+    // Migration 4: Add intelligent agent selection columns
+    const classificationColumns = ['task_category', 'file_patterns', 'estimated_complexity', 'preferred_agent'];
+    const missingClassificationColumns = classificationColumns.filter(col => !columnNames.has(col));
+
+    if (missingClassificationColumns.length > 0) {
+      logger.info({
+        category: 'process',
+        action: 'adding_classification_columns',
+        message: `Adding ${missingClassificationColumns.length} task classification columns for intelligent agent selection`,
+        details: { columns: missingClassificationColumns }
+      });
+
+      if (!columnNames.has('task_category')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN task_category TEXT CHECK(task_category IN ('implementation', 'analysis', 'documentation', 'review', 'planning'));`);
+      }
+      if (!columnNames.has('file_patterns')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN file_patterns TEXT;`); // JSON array of file extensions
+      }
+      if (!columnNames.has('estimated_complexity')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN estimated_complexity TEXT CHECK(estimated_complexity IN ('simple', 'medium', 'complex'));`);
+      }
+      if (!columnNames.has('preferred_agent')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN preferred_agent TEXT CHECK(preferred_agent IN ('claude', 'codex', 'copilot'));`); // Manual override
+      }
+
+      // Create indexes
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_task_category ON tasks(task_category) WHERE task_category IS NOT NULL;`);
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_complexity ON tasks(estimated_complexity) WHERE estimated_complexity IS NOT NULL;`);
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_preferred_agent ON tasks(preferred_agent) WHERE preferred_agent IS NOT NULL;`);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'Task classification columns added successfully for intelligent agent selection'
       });
     }
   }
