@@ -100,6 +100,7 @@ jobs:
           MANIFEST_NAME="${ARTIFACT_NAME}.manifest.json"
           
           # Create tarball with all necessary files
+          # Note: tar may exit with 1 if files change during archiving (expected when creating in same dir)
           tar -czf "$TARBALL_NAME" \
             --exclude=node_modules \
             --exclude=.git \
@@ -110,7 +111,7 @@ jobs:
             --exclude=releases \
             --exclude=shared \
             --exclude='*.log' \
-            .
+            . || [[ $? -eq 1 ]]
           
           # Calculate checksum
           SHA256=$(sha256sum "$TARBALL_NAME" | awk '{print $1}')
