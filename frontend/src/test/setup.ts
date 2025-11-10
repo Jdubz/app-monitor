@@ -93,6 +93,42 @@ global.IntersectionObserver = vi.fn().mockImplementation(() => ({
   disconnect: vi.fn(),
 }));
 
+// Mock EventSource for SSE (Server-Sent Events)
+class MockEventSource {
+  url: string;
+  withCredentials: boolean;
+  readyState: number;
+  onmessage: ((event: MessageEvent) => void) | null;
+  onerror: ((event: Event) => void) | null;
+  onopen: ((event: Event) => void) | null;
+  
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSED = 2;
+  
+  readonly CONNECTING = 0;
+  readonly OPEN = 1;
+  readonly CLOSED = 2;
+
+  constructor(url: string, config?: EventSourceInit) {
+    this.url = url;
+    this.withCredentials = config?.withCredentials ?? false;
+    this.readyState = MockEventSource.CONNECTING;
+    this.onmessage = null;
+    this.onerror = null;
+    this.onopen = null;
+  }
+
+  addEventListener = vi.fn();
+  removeEventListener = vi.fn();
+  close = vi.fn(() => {
+    this.readyState = MockEventSource.CLOSED;
+  });
+  dispatchEvent = vi.fn();
+}
+
+global.EventSource = MockEventSource as unknown as typeof EventSource;
+
 // Mock MutationObserver
 global.MutationObserver = vi.fn().mockImplementation(() => ({
   observe: vi.fn(),
@@ -100,7 +136,8 @@ global.MutationObserver = vi.fn().mockImplementation(() => ({
   takeRecords: vi.fn(),
 }));
 
-// Mock HTMLCanvasElement.getContext for xterm.js
+// Mock HTMLElement.prototype.scrollIntoView
+HTMLElement.prototype.scrollIntoView = vi.fn();
 HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
   fillStyle: '',
   fillRect: vi.fn(),
