@@ -17,6 +17,15 @@ PUT    /api/claude-workers/tasks/:id        # Update task
 DELETE /api/claude-workers/tasks/:id        # Delete task
 ```
 
+### Task Context & Automation Runs (NEW)
+```http
+GET    /api/dev-bots/tasks/:id/context      # Get latest automation run for task
+GET    /api/dev-bots/tasks/:id/runs         # Get all automation runs for task
+GET    /api/dev-bots/tasks/:id/runs/:runId  # Get specific automation run details
+```
+
+**Purpose**: Access task automation run data, including execution history, quality metrics, and build/test results.
+
 ### Task Status Management
 ```http
 POST   /api/claude-workers/tasks/:id/assign    # Assign task to worker
@@ -197,6 +206,133 @@ Content-Type: application/json
     "disk": "2.1GB"
   }
 }
+```
+
+### Task Context Endpoints
+
+#### Get Latest Automation Run
+```http
+GET /api/dev-bots/tasks/:id/context
+```
+
+Returns the most recent automation run for the specified task, including execution details, quality metrics, and build/test results.
+
+**Example Response**:
+```json
+{
+  "run_id": "run-abc123",
+  "task_id": "task-implementation-8065108ee20a",
+  "worker_id": "worker-001",
+  "container_id": "container-xyz789",
+  "started_at": "2025-11-10T10:00:00Z",
+  "completed_at": "2025-11-10T10:30:00Z",
+  "duration_ms": 1800000,
+  "exit_code": 0,
+  "status": "success",
+  "failure_reason": null,
+  "commit_sha": "abc123def456",
+  "branch": "task-implementation-8065108ee20a",
+  "quality_passed": 1,
+  "quality_validation_json": "{\"passed\": true, \"score\": 95}",
+  "resource_usage_json": "{\"cpu\": 50, \"memory\": 1024}",
+  "token_usage_json": "{\"input\": 1000, \"output\": 2000}",
+  "container_meta_json": "{\"image\": \"node:18\", \"platform\": \"linux/amd64\"}",
+  "build_exit_code": 0,
+  "test_passed": 10,
+  "test_failed": 0,
+  "test_skipped": 1,
+  "lint_errors": 0,
+  "lint_warnings": 2,
+  "created_at": "2025-11-10T10:00:00Z"
+}
+```
+
+**Status Codes**:
+- `200 OK` - Latest run found and returned
+- `404 Not Found` - No automation runs found for this task
+- `500 Internal Server Error` - Server error retrieving context
+
+#### Get All Automation Runs
+```http
+GET /api/dev-bots/tasks/:id/runs
+```
+
+Returns all automation runs for the specified task, ordered by `started_at` DESC (most recent first).
+
+**Example Response**:
+```json
+{
+  "runs": [
+    {
+      "run_id": "run-003",
+      "task_id": "task-123",
+      "started_at": "2025-11-10T11:00:00Z",
+      "status": "success",
+      "exit_code": 0,
+      "duration_ms": 1500000
+    },
+    {
+      "run_id": "run-002",
+      "task_id": "task-123",
+      "started_at": "2025-11-10T10:00:00Z",
+      "status": "failed",
+      "exit_code": 1,
+      "failure_reason": "Build failed: TypeScript errors",
+      "duration_ms": 300000
+    },
+    {
+      "run_id": "run-001",
+      "task_id": "task-123",
+      "started_at": "2025-11-10T09:00:00Z",
+      "status": "success",
+      "exit_code": 0,
+      "duration_ms": 1800000
+    }
+  ]
+}
+```
+
+**Status Codes**:
+- `200 OK` - Runs retrieved (may be empty array)
+- `500 Internal Server Error` - Server error retrieving runs
+
+#### Get Specific Automation Run
+```http
+GET /api/dev-bots/tasks/:id/runs/:runId
+```
+
+Returns details for a specific automation run. Verifies that the run belongs to the specified task.
+
+**Parameters**:
+- `id` - Task ID
+- `runId` - Automation run ID
+
+**Example Response**:
+Same structure as "Get Latest Automation Run" above.
+
+**Status Codes**:
+- `200 OK` - Run found and returned
+- `404 Not Found` - Run not found or doesn't belong to specified task
+- `500 Internal Server Error` - Server error retrieving run
+
+**Usage Examples**:
+```bash
+# Get latest context for a task
+curl http://localhost:5000/api/dev-bots/tasks/task-123/context
+
+# Get all runs for a task
+curl http://localhost:5000/api/dev-bots/tasks/task-123/runs
+
+# Get specific run details
+curl http://localhost:5000/api/dev-bots/tasks/task-123/runs/run-abc123
+
+# Check test results from latest run
+curl http://localhost:5000/api/dev-bots/tasks/task-123/context | \
+  jq '{passed: .test_passed, failed: .test_failed, skipped: .test_skipped}'
+
+# Check quality validation
+curl http://localhost:5000/api/dev-bots/tasks/task-123/context | \
+  jq '.quality_validation_json | fromjson'
 ```
 
 ## 🔐 Authentication
