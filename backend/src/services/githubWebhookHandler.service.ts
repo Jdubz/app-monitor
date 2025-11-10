@@ -3,10 +3,12 @@
  * 
  * Processes incoming webhooks from GitHub
  * Phase 1: Basic event logging, task ID extraction from PR titles
- * Phase 2: Integration with PR monitoring and task queue (TODO)
+ * Phase 2: Integration with task queue and PR status updates
  */
 
 import { logger } from '../utils/logger.js';
+import type { TaskQueueService } from './taskQueue.sqlite.js';
+import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 
 export interface GitHubPullRequestPayload {
   action: string;
@@ -66,7 +68,7 @@ export interface WebhookHandlerStats {
 
 /**
  * Service for handling GitHub webhook events
- * Phase 1: Logging and event structure with task ID extraction
+ * Phase 2: Integrated with task queue
  */
 export class GitHubWebhookHandler {
   private stats: WebhookHandlerStats = {
@@ -77,6 +79,10 @@ export class GitHubWebhookHandler {
     last_event_time: 0
   };
 
+  constructor(
+    private readonly taskQueue?: TaskQueueService,
+    private readonly prOrchestrator?: PRWorkflowOrchestrator
+  ) {}
   /**
    * Extract task ID from PR title
    * Looks for patterns like:
@@ -141,9 +147,88 @@ export class GitHubWebhookHandler {
       }
     });
 
-    // TODO Phase 2: Look up task by task_id from PR title or pr_number from DB
-    // TODO Phase 2: Update task PR status
-    // TODO Phase 2: Notify PR orchestrator
+    // Find associated task(s)
+    let tasks: any[] = [];
+    
+    if (this.taskQueue) {
+      // Try to find by PR number first
+      tasks = await this.taskQueue.findByPRNumber(prNumber);
+      
+      // If not found and we have a task ID from title, try that
+      if (tasks.length === 0 && taskId) {
+        const task = await this.taskQueue.findByTaskId(taskId);
+        if (task) {
+          tasks = [task];
+        }
+      }
+    }
+
+    if (tasks.length === 0) {
+      logger.info({
+        category: 'api',
+        action: 'pr_no_task_found',
+        message: `No task found for PR #${prNumber}${taskId ? ` (Task ID: ${taskId})` : ''}`,
+        details: { pr_number: prNumber, task_id: taskId }
+      });
+      return;
+    }
+
+    logger.info({
+      category: 'api',
+      action: 'pr_tasks_found',
+      message: `Found ${tasks.length} task(s) for PR #${prNumber}`,
+      details: { 
+        pr_number: prNumber, 
+        task_count: tasks.length,
+        task_ids: tasks.map(t => t.id)
+      }
+    });
+
+    // Handle the PR event
+    try {
+      switch (action) {
+        case 'opened':
+          await this.handlePROpened(prNumber, pull_request, tasks);
+          break;
+
+        case 'synchronize':
+          await this.handlePRSynchronize(prNumber, pull_request, tasks);
+          break;
+
+        case 'closed':
+          if (pull_request.merged) {
+            await this.handlePRMerged(prNumber, pull_request, tasks);
+          } else {
+            await this.handlePRClosed(prNumber, pull_request, tasks);
+          }
+          break;
+
+        case 'reopened':
+          await this.handlePRReopened(prNumber, pull_request, tasks);
+          break;
+
+        case 'ready_for_review':
+          await this.handlePRReadyForReview(prNumber, pull_request, tasks);
+          break;
+
+        default:
+          logger.info({
+            category: 'api',
+            action: 'pr_event_ignored',
+            message: `Ignoring PR action: ${action}`,
+            details: { pr_number: prNumber, action }
+          });
+      }
+    } catch (error) {
+      this.stats.errors++;
+      logger.error({
+        category: 'api',
+        action: 'pr_event_error',
+        message: `Error handling PR #${prNumber} ${action}`,
+        error: error instanceof Error ? error.message : String(error)
+      });
+      throw error;
+    }
   }
 
   /**
@@ -179,5 +264,152 @@ export class GitHubWebhookHandler {
    */
   getStats(): WebhookHandlerStats {
     return { ...this.stats };
+  }
+
+  // ==========================================================================
+  // PR Event Handlers
+  // ==========================================================================
+
+  private async handlePROpened(prNumber: number, pr: any, tasks: any[]): Promise<void> {
+    logger.info({
+      category: 'api',
+      action: 'pr_opened',
+      message: `PR #${prNumber} opened - updating ${tasks.length} task(s)`,
+      details: { pr_number: prNumber, task_count: tasks.length }
+    });
+
+    if (!this.taskQueue) return;
+
+    for (const task of tasks) {
+      await this.taskQueue.updatePRStatus(task.id, {
+        pr_number: prNumber,
+        pr_url: pr.html_url,
+        pr_branch: pr.head.ref,
+        pr_status: pr.draft ? 'creating' : 'pending_checks',
+        pr_created_at: Date.now()
+      });
+    }
+
+    if (this.prOrchestrator && typeof (this.prOrchestrator as any).onPROpened === 'function') {
+      await (this.prOrchestrator as any).onPROpened(prNumber, pr);
+    }
+  }
+
+  private async handlePRSynchronize(prNumber: number, pr: any, tasks: any[]): Promise<void> {
+    logger.info({
+      category: 'api',
+      action: 'pr_synchronized',
+      message: `PR #${prNumber} updated with new commits`,
+      details: { pr_number: prNumber, task_count: tasks.length }
+    });
+
+    if (!this.taskQueue) return;
+
+    for (const task of tasks) {
+      await this.taskQueue.updatePRStatus(task.id, {
+        pr_status: 'pending_checks',
+        pr_checks_status: 'pending'
+      });
+    }
+
+    if (this.prOrchestrator && typeof (this.prOrchestrator as any).onPRSynchronize === 'function') {
+      await (this.prOrchestrator as any).onPRSynchronize(prNumber, pr);
+    }
+  }
+
+  private async handlePRMerged(prNumber: number, pr: any, tasks: any[]): Promise<void> {
+    logger.info({
+      category: 'api',
+      action: 'pr_merged',
+      message: `PR #${prNumber} merged - marking ${tasks.length} task(s) complete`,
+      details: { pr_number: prNumber, task_count: tasks.length }
+    });
+
+    if (!this.taskQueue) return;
+
+    for (const task of tasks) {
+      await this.taskQueue.updatePRStatus(task.id, {
+        pr_status: 'merged',
+        pr_merged_at: Date.now()
+      });
+
+      // Mark task as completed if not already
+      if (task.status !== 'completed') {
+        const completeStmt = (this.taskQueue as any).db.prepare(`
+          UPDATE tasks 
+          SET status = 'completed', 
+              completed_at = ?
+          WHERE id = ?
+        `);
+        completeStmt.run(Date.now(), task.id);
+      }
+    }
+
+    if (this.prOrchestrator && typeof (this.prOrchestrator as any).onPRMerged === 'function') {
+      await (this.prOrchestrator as any).onPRMerged(prNumber, pr);
+    }
+  }
+
+  private async handlePRClosed(prNumber: number, pr: any, tasks: any[]): Promise<void> {
+    logger.info({
+      category: 'api',
+      action: 'pr_closed',
+      message: `PR #${prNumber} closed without merging`,
+      details: { pr_number: prNumber, task_count: tasks.length }
+    });
+
+    if (!this.taskQueue) return;
+
+    for (const task of tasks) {
+      await this.taskQueue.updatePRStatus(task.id, {
+        pr_status: 'closed'
+      });
+    }
+
+    if (this.prOrchestrator && typeof (this.prOrchestrator as any).onPRClosed === 'function') {
+      await (this.prOrchestrator as any).onPRClosed(prNumber, pr);
+    }
+  }
+
+  private async handlePRReopened(prNumber: number, pr: any, tasks: any[]): Promise<void> {
+    logger.info({
+      category: 'api',
+      action: 'pr_reopened',
+      message: `PR #${prNumber} reopened`,
+      details: { pr_number: prNumber, task_count: tasks.length }
+    });
+
+    if (!this.taskQueue) return;
+
+    for (const task of tasks) {
+      await this.taskQueue.updatePRStatus(task.id, {
+        pr_status: 'pending_checks'
+      });
+    }
+
+    if (this.prOrchestrator && typeof (this.prOrchestrator as any).onPRReopened === 'function') {
+      await (this.prOrchestrator as any).onPRReopened(prNumber, pr);
+    }
+  }
+
+  private async handlePRReadyForReview(prNumber: number, pr: any, tasks: any[]): Promise<void> {
+    logger.info({
+      category: 'api',
+      action: 'pr_ready_for_review',
+      message: `PR #${prNumber} marked ready for review`,
+      details: { pr_number: prNumber, task_count: tasks.length }
+    });
+
+    if (!this.taskQueue) return;
+
+    for (const task of tasks) {
+      await this.taskQueue.updatePRStatus(task.id, {
+        pr_status: 'pending_review'
+      });
+    }
+
+    if (this.prOrchestrator && typeof (this.prOrchestrator as any).onPRReadyForReview === 'function') {
+      await (this.prOrchestrator as any).onPRReadyForReview(prNumber, pr);
+    }
   }
 }

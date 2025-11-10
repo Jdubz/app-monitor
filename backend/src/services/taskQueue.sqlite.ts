@@ -1644,4 +1644,78 @@ export class TaskQueueService {
   // They were part of the complex recovery orchestrator that has been replaced with SimpleFailureRecovery.
   // The simplified system only uses task metadata (is_repair_bot, original_task_id, repair_stage) for tracking.
   // These methods are kept for backwards compatibility with existing databases, but are not called by the new system.
+
+  // ==========================================================================
+  // PR Workflow Methods
+  // ==========================================================================
+
+  /**
+   * Find tasks by PR number
+   */
+  async findByPRNumber(prNumber: number): Promise<Task[]> {
+    const stmt = this.db.prepare(`
+      SELECT * FROM tasks 
+      WHERE pr_number = ?
+      ORDER BY created_at DESC
+    `);
+
+    return stmt.all(prNumber) as Task[];
+  }
+
+  /**
+   * Find task by task ID
+   */
+  async findByTaskId(taskId: string): Promise<Task | null> {
+    const stmt = this.db.prepare(`
+      SELECT * FROM tasks 
+      WHERE id = ?
+    `);
+
+    const row = stmt.get(taskId);
+    return row ? (row as Task) : null;
+  }
+
+  /**
+   * Update PR status fields for a task
+   */
+  async updatePRStatus(taskId: string, prStatus: Partial<Task>): Promise<void> {
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    // Build dynamic UPDATE statement based on provided fields
+    const prFields = [
+      'pr_number', 'pr_url', 'pr_branch', 'pr_status',
+      'pr_checks_status', 'pr_review_status', 
+      'pr_created_at', 'pr_merged_at'
+    ];
+
+    for (const field of prFields) {
+      if (field in prStatus) {
+        updates.push(`${field} = ?`);
+        values.push((prStatus as any)[field]);
+      }
+    }
+
+    if (updates.length === 0) {
+      return; // Nothing to update
+    }
+
+    values.push(taskId); // Add taskId for WHERE clause
+
+    const sql = `
+      UPDATE tasks 
+      SET ${updates.join(', ')}
+      WHERE id = ?
+    `;
+
+    const stmt = this.db.prepare(sql);
+    stmt.run(...values);
+
+    logger.info({
+      category: 'process',
+      action: 'pr_status_updated',
+      message: `Updated PR status for task ${taskId}`,
+      details: { taskId, updates: Object.keys(prStatus) }
+    });
+  }
 }
