@@ -4,7 +4,7 @@
  * Handles connection lifecycle, health monitoring, and state management
  */
 
-import { Socket } from 'socket.io';
+import { Socket, Server as SocketIOServer } from 'socket.io';
 import { logger } from '../utils/logger.js';
 
 export interface ConnectionInfo {
@@ -22,6 +22,7 @@ export class ConnectionManager {
   private heartbeatInterval = 30000; // 30 seconds
   private heartbeatTimeout = 45000; // 45 seconds
   private intervalIds = new Map<string, NodeJS.Timeout>();
+  private io?: SocketIOServer; // Socket.IO server instance for broadcasting
 
   /**
    * Register a new connection
@@ -132,6 +133,46 @@ export class ConnectionManager {
    */
   getConnectionCount(): number {
     return this.connections.size;
+  }
+
+  /**
+   * Set Socket.IO instance for broadcasting
+   */
+  setIO(io: SocketIOServer): void {
+    this.io = io;
+  }
+
+  /**
+   * Broadcast message to all connected clients
+   */
+  broadcastToAll(event: string | object, ...args: any[]): void {
+    if (!this.io) {
+      logger.warn({
+        category: 'socket',
+        action: 'broadcast_failed_no_io',
+        message: 'Cannot broadcast: Socket.IO instance not set'
+      });
+      return;
+    }
+
+    // If first argument is an object, use it as the event data
+    if (typeof event === 'object') {
+      this.io.emit('system_event', event, ...args);
+      logger.info({
+        category: 'socket',
+        action: 'broadcast_to_all',
+        message: 'Broadcast system event to all clients',
+        details: { connectionCount: this.connections.size, event }
+      });
+    } else {
+      this.io.emit(event, ...args);
+      logger.info({
+        category: 'socket',
+        action: 'broadcast_to_all',
+        message: `Broadcast '${event}' to all clients`,
+        details: { connectionCount: this.connections.size }
+      });
+    }
   }
 
   /**

@@ -49,7 +49,35 @@ async function gracefulShutdown(signal: string) {
 
   console.log(`\n🛑 Graceful shutdown initiated by ${signal}...`);
 
-  // Phase 1: Stop accepting new connections (close server)
+  // Phase 1: Notify clients of impending shutdown
+  console.log('📢 Notifying clients of server migration...');
+  try {
+    connectionManager.broadcastToAll({
+      type: 'server_migration',
+      message: 'Server is restarting. Your connection will be restored automatically.',
+      reconnectDelay: 5000,
+      timestamp: Date.now()
+    });
+
+    // Give clients time to receive the message
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    logger.info({
+      category: 'system',
+      action: 'migration_notification_sent',
+      message: 'Notified all clients of server migration',
+      details: { connectionCount: connectionManager.getConnectionCount() }
+    });
+  } catch (error) {
+    logger.error({
+      category: 'system',
+      action: 'migration_notification_failed',
+      message: 'Failed to notify clients of migration',
+      error
+    });
+  }
+
+  // Phase 2: Stop accepting new connections (close server)
   console.log('📡 Closing HTTP server...');
   server.close(() => {
     logger.info({
@@ -59,18 +87,18 @@ async function gracefulShutdown(signal: string) {
     });
   });
 
-  // Phase 2: Wait for active tasks to complete (with timeout)
-  console.log('⏳ Waiting for active tasks to complete (max 20s)...');
-  const taskWaitTimeout = 20000; // 20 seconds
+  // Phase 3: Wait for active tasks to complete (with timeout)
+  console.log('⏳ Waiting for active tasks to complete (max 60s)...');
+  const taskWaitTimeout = 60000; // 60 seconds (increased from 20s)
 
   // Simple wait - actual task completion detection would require getStats() method
-  await new Promise(resolve => setTimeout(resolve, Math.min(taskWaitTimeout, 5000)));
+  await new Promise(resolve => setTimeout(resolve, Math.min(taskWaitTimeout, 10000)));
   console.log('⏳ Task wait period complete');
 
   // Phase 4: Drain WebSocket connections (with timeout)
-  console.log('🔌 Draining WebSocket connections (max 5s)...');
+  console.log('🔌 Draining WebSocket connections (max 30s)...');
   const wsWaitStart = Date.now();
-  const wsWaitTimeout = 5000; // 5 seconds
+  const wsWaitTimeout = 30000; // 30 seconds (increased from 5s)
 
   while (Date.now() - wsWaitStart < wsWaitTimeout) {
     const connectionCount = connectionManager.getConnectionCount();

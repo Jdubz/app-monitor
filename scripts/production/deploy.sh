@@ -256,14 +256,36 @@ main() {
 
     log_info "Health checks passed!"
 
-    # Phase 8: Switch traffic
+    # Phase 8: Switch traffic with connection drain period
     if [ "$ACTIVE_PORT" != "none" ]; then
         log_info "Phase 8: Switching traffic from ${ACTIVE_PORT} to ${TARGET_PORT}"
         update_nginx_upstream "${TARGET_PORT}"
 
-        # Graceful shutdown of old service
+        # Connection drain period - keep old service running
+        # This allows:
+        # - Existing WebSocket connections to complete naturally
+        # - Active tasks to finish
+        # - Clients to reconnect to new instance
+        log_info "Connection drain period: keeping old service running for 60 seconds..."
+        log_info "New connections → ${TARGET_PORT}, existing connections → ${ACTIVE_PORT}"
+        sleep 60
+
+        # Now gracefully stop old service
         log_info "Gracefully stopping old service on port ${ACTIVE_PORT}..."
         sudo systemctl stop "app-monitor-backend@${ACTIVE_PORT}.service"
+
+        log_info "Waiting for old service to fully stop..."
+        local stop_wait=0
+        while systemctl is-active --quiet "app-monitor-backend@${ACTIVE_PORT}.service"; do
+            if [ $stop_wait -ge 30 ]; then
+                log_warn "Old service taking longer than 30s to stop, continuing anyway..."
+                break
+            fi
+            sleep 2
+            stop_wait=$((stop_wait + 2))
+        done
+
+        log_info "Old service stopped after ${stop_wait} seconds"
     else
         log_info "Phase 8: Configuring nginx for port ${TARGET_PORT}"
         update_nginx_upstream "${TARGET_PORT}"
