@@ -1,8 +1,24 @@
 import { Router, Request, Response } from 'express';
 import { ApiError } from '@app-monitor/api-contracts';
 import { logger } from '../utils/logger.js';
+import type { GitHubWebhookHandler } from '../services/githubWebhookHandler.service.js';
 
 const router = Router();
+
+// Webhook handler will be injected during server initialization
+let webhookHandler: GitHubWebhookHandler | null = null;
+
+/**
+ * Set the webhook handler instance (called during app initialization)
+ */
+export function setWebhookHandler(handler: GitHubWebhookHandler): void {
+  webhookHandler = handler;
+  logger.info({
+    category: 'api',
+    action: 'webhook_handler_set',
+    message: 'GitHub webhook handler configured for routes'
+  });
+}
 
 const respondSuccess = <T>(res: Response, data: T, status = 200) => {
   return res.status(status).json({
@@ -76,11 +92,16 @@ router.post('/pr', async (req: Request, res: Response) => {
       }
     });
 
-    // TODO: Add actual webhook processing logic here
-    // - Trigger builds/tests
-    // - Update PR status
-    // - Post comments
-    // - etc.
+    // Process webhook with handler if available
+    if (webhookHandler) {
+      await webhookHandler.handlePullRequest(req.body);
+    } else {
+      logger.warn({
+        category: 'api',
+        action: 'webhook_handler_not_configured',
+        message: 'Webhook handler not configured, event logged but not processed'
+      });
+    }
 
     // Acknowledge receipt
     return respondSuccess(res, {
@@ -148,7 +169,10 @@ router.post('/push', async (req: Request, res: Response) => {
       }
     });
 
-    // TODO: Add actual webhook processing logic
+    // Process webhook with handler if available
+    if (webhookHandler) {
+      await webhookHandler.handlePush(req.body);
+    }
 
     return respondSuccess(res, {
       message: 'Webhook received',

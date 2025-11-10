@@ -14,6 +14,8 @@ import { LogRotation } from './services/logRotation.js';
 import { ConnectionManager } from './services/connectionManager.js';
 import { LogSourceManager } from './services/logSourceManager.js';
 import { InteractiveSessionGateway } from './services/interactiveSessionGateway.js';
+import { GitHubWebhookHandler } from './services/githubWebhookHandler.service.js';
+import { setWebhookHandler } from './routes/github-webhooks.routes.js';
 import { logger } from './utils/logger.js';
 import type {
   ClientToServerEvents,
@@ -173,6 +175,25 @@ export async function createApp(options: CreateAppOptions = {}) {
         message: 'Docker warning emitted to clients',
         details: { warning },
       });
+    });
+  }
+
+  // Initialize GitHub Webhook Handler
+  if (devBotsManager) {
+    const taskQueue = devBotsManager.getTaskQueue();
+    const prOrchestrator = devBotsManager.getPRWorkflowOrchestrator();
+    
+    const webhookHandler = new GitHubWebhookHandler(taskQueue, prOrchestrator);
+    setWebhookHandler(webhookHandler);
+    
+    logger.info({
+      category: 'system',
+      action: 'webhook_handler_initialized',
+      message: 'GitHub webhook handler configured and ready',
+      details: {
+        has_task_queue: !!taskQueue,
+        has_pr_orchestrator: !!prOrchestrator
+      }
     });
   }
 
