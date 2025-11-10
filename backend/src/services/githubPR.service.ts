@@ -526,7 +526,7 @@ export class GitHubPRService {
       
       // Extract task ID from branch name (format: task/{taskId}/description or task-{taskId})
       let taskId: string | null = null;
-      const taskBranchMatch = branchName.match(/^task\/([^\/]+)/);
+      const taskBranchMatch = branchName.match(/^task\/([^/]+)/);
       if (taskBranchMatch) {
         taskId = taskBranchMatch[1];
       } else {
@@ -574,25 +574,10 @@ export class GitHubPRService {
         }
       }
 
-      // Trigger webhook handler to process the PR
-      const { getGitHubWebhookHandler } = await import('./githubWebhook.handler.js');
-      const webhookHandler = getGitHubWebhookHandler();
-      
-      await webhookHandler.handlePullRequest({
-        action: 'synchronize',
-        number: prNumber,
-        pull_request: {
-          number: prNumber,
-          html_url: prData.url,
-          state: prData.state.toLowerCase(),
-          head: { ref: branchName }
-        }
-      } as any);
-
       logger.info({
         category: 'pr-workflow',
         action: 'track_pr_complete',
-        message: `PR #${prNumber} added to workflow tracking`
+        message: `PR #${prNumber} added to workflow tracking${taskId ? ` (task: ${taskId})` : ''}`
       });
     } catch (error) {
       logger.error({
