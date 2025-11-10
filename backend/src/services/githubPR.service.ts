@@ -45,6 +45,7 @@ export interface PRReview {
 }
 
 export interface PRComment {
+  id: number;
   author: string;
   body: string;
   createdAt: string;
@@ -154,7 +155,8 @@ export class GitHubPRService {
       }));
 
       // Parse comments
-      const comments: PRComment[] = (prData.comments || []).map((comment: { author?: { login?: string }; body?: string; createdAt: string; path?: string | null; line?: number | null }) => ({
+      const comments: PRComment[] = (prData.comments || []).map((comment: { id?: number; author?: { login?: string }; body?: string; createdAt: string; path?: string | null; line?: number | null }) => ({
+        id: comment.id || 0,
         author: comment.author?.login || 'unknown',
         body: comment.body || '',
         createdAt: comment.createdAt,
