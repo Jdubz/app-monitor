@@ -435,7 +435,7 @@ router.post('/pr_review', async (req: Request, res: Response) => {
 
 /**
  * Health check endpoint for webhooks
- * 
+ *
  * @route GET /api/github/webhooks/health
  */
 router.get('/health', (_req: Request, res: Response) => {
@@ -443,6 +443,71 @@ router.get('/health', (_req: Request, res: Response) => {
     message: 'GitHub webhooks endpoint is healthy',
     timestamp: new Date().toISOString()
   });
+});
+
+/**
+ * PR Workflow Metrics endpoint
+ * Returns comprehensive metrics about PR workflow quality gates
+ *
+ * @route GET /api/github/webhooks/pr-workflow/metrics
+ */
+router.get('/pr-workflow/metrics', (_req: Request, res: Response) => {
+  try {
+    if (!webhookHandler) {
+      return respondError(
+        res,
+        503,
+        'WEBHOOK_HANDLER_NOT_CONFIGURED',
+        'Webhook handler not configured'
+      );
+    }
+
+    const stats = webhookHandler.getStats();
+
+    // Calculate derived metrics
+    const autoMergeRate = stats.auto_merge_attempts > 0
+      ? (stats.auto_merge_successes / stats.auto_merge_attempts) * 100
+      : 0;
+
+    const verificationPassRate = stats.task_verifications_run > 0
+      ? (stats.task_verifications_passed / stats.task_verifications_run) * 100
+      : 0;
+
+    const commentResolutionRate = stats.review_comments_tracked > 0
+      ? (stats.review_comments_resolved / stats.review_comments_tracked) * 100
+      : 0;
+
+    return respondSuccess(res, {
+      // Raw stats
+      stats,
+
+      // Calculated metrics
+      metrics: {
+        auto_merge_rate: Math.round(autoMergeRate * 100) / 100, // 2 decimal places
+        auto_merge_failure_rate: Math.round((100 - autoMergeRate) * 100) / 100,
+        verification_pass_rate: Math.round(verificationPassRate * 100) / 100,
+        comment_resolution_rate: Math.round(commentResolutionRate * 100) / 100,
+        avg_time_to_merge_hours: stats.avg_time_to_merge_ms
+          ? Math.round((stats.avg_time_to_merge_ms / (1000 * 60 * 60)) * 100) / 100
+          : null,
+      },
+
+      // Top blocking reasons
+      top_block_reasons: stats.auto_merge_blocks
+        .sort((a, b) => b.count - a.count)
+        .slice(0, 5)
+        .map(r => ({ ...r, percentage: Math.round((r.count / stats.auto_merge_attempts) * 10000) / 100 }))
+    });
+
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'pr_workflow_metrics_error',
+      message: 'Error getting PR workflow metrics',
+      error
+    });
+    return respondError(res, 500, 'METRICS_RETRIEVAL_FAILED', 'Failed to retrieve metrics');
+  }
 });
 
 export default router;
