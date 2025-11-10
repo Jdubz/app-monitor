@@ -260,6 +260,103 @@ export class GitHubWebhookHandler {
   }
 
   /**
+   * Handle check_suite webhook events
+   * Triggers followup task creation and auto-merge when checks complete
+   */
+  async handleCheckSuite(payload: any): Promise<void> {
+    this.stats.last_event_time = Date.now();
+    
+    const { action, check_suite, repository } = payload;
+    
+    // Only process 'completed' check suites
+    if (action !== 'completed') {
+      logger.debug({
+        category: 'api',
+        action: 'check_suite_ignored',
+        message: `Check suite action '${action}' ignored (only processing 'completed')`,
+        details: { action, conclusion: check_suite?.conclusion }
+      });
+      return;
+    }
+
+    const pullRequests = check_suite?.pull_requests || [];
+    if (pullRequests.length === 0) {
+      logger.debug({
+        category: 'api',
+        action: 'check_suite_no_prs',
+        message: 'Check suite not associated with any PRs'
+      });
+      return;
+    }
+
+    logger.info({
+      category: 'api',
+      action: 'check_suite_completed',
+      message: `Check suite completed with ${check_suite?.conclusion}`,
+      details: {
+        conclusion: check_suite?.conclusion,
+        pr_count: pullRequests.length,
+        pr_numbers: pullRequests.map((pr: any) => pr.number),
+        repository: repository?.full_name
+      }
+    });
+
+    // Process each PR
+    for (const pr of pullRequests) {
+      await this.processCheckSuiteForPR(pr.number, check_suite, repository);
+    }
+  }
+
+  /**
+   * Process check suite completion for a specific PR
+   * TODO: Implement full followup task creation and auto-merge logic
+   */
+  private async processCheckSuiteForPR(
+    prNumber: number,
+    checkSuite: any,
+    repository: any
+  ): Promise<void> {
+    if (!this.taskQueue) {
+      logger.warn({
+        category: 'api',
+        action: 'check_suite_handler_not_ready',
+        message: 'Task queue not available'
+      });
+      return;
+    }
+
+    // Find associated tasks
+    const tasks = await this.taskQueue.findByPRNumber(prNumber);
+    if (tasks.length === 0) {
+      logger.debug({
+        category: 'api',
+        action: 'check_suite_no_tasks',
+        message: `No tasks found for PR #${prNumber}`,
+        details: { pr_number: prNumber }
+      });
+      return;
+    }
+
+    const conclusion = checkSuite.conclusion;
+    
+    logger.info({
+      category: 'pr-workflow',
+      action: 'check_suite_processed',
+      message: `Check suite ${conclusion} for PR #${prNumber} with ${tasks.length} task(s)`,
+      details: {
+        pr_number: prNumber,
+        conclusion,
+        task_ids: tasks.map(t => t.id),
+        repository: repository?.full_name
+      }
+    });
+
+    // TODO: Call prMonitor.shouldCreateFollowup() and prMonitor.createFollowupTask()
+    // TODO: Call prMonitor.mergePR() if checks passed and PR is ready
+    // Note: Needs GitHub API calls to get PR status and Copilot review data
+  }
+
+  /**
    * Get webhook handler statistics
    */
   getStats(): WebhookHandlerStats {

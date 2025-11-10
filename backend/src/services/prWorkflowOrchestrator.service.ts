@@ -16,6 +16,7 @@ import { TaskQueueService } from './taskQueue.sqlite.js';
 import type { Task } from './taskQueue.sqlite.js';
 import { PRArtifactRecoveryService } from './prArtifactRecovery.service.js';
 import type { RecoveryStats } from './prArtifactRecovery.service.js';
+import { getGitHubPRService } from './githubPR.service.js';
 
 // ============================================================================
 // Types & Interfaces
@@ -357,6 +358,20 @@ export class PRWorkflowOrchestrator {
     });
 
     return await this.artifactRecovery.recoverOrphanedPRs();
+  }
+
+  /**
+   * Get PR monitor service instance
+   */
+  getPRMonitor(): PRMonitorService {
+    return this.prMonitor;
+  }
+
+  /**
+   * Get GitHub PR service instance
+   */
+  getGitHubPRService() {
+    return getGitHubPRService();
   }
 
   // ==========================================================================

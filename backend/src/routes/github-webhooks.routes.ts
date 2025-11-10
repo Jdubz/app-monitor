@@ -192,6 +192,67 @@ router.post('/push', async (req: Request, res: Response) => {
 });
 
 /**
+ * GitHub Webhook endpoint for Check Suite events
+ * Handles check suite completion to trigger followup tasks and auto-merge
+ * 
+ * @route POST /api/github/webhooks/check_suite
+ */
+router.post('/check_suite', async (req: Request, res: Response) => {
+  try {
+    const event = req.headers['x-github-event'] as string;
+    const delivery = req.headers['x-github-delivery'] as string;
+    
+    if (event !== 'check_suite') {
+      return respondError(
+        res,
+        400,
+        'INVALID_EVENT_TYPE',
+        `Expected check_suite event, received: ${event}`
+      );
+    }
+
+    logger.info({
+      category: 'api',
+      action: 'github_check_suite_webhook_received',
+      message: 'Received check_suite webhook',
+      details: {
+        event,
+        delivery,
+        action: req.body?.action,
+        conclusion: req.body?.check_suite?.conclusion,
+        pr_numbers: req.body?.check_suite?.pull_requests?.map((pr: any) => pr.number),
+        repository: req.body?.repository?.full_name
+      }
+    });
+
+    if (webhookHandler) {
+      await webhookHandler.handleCheckSuite(req.body);
+    } else {
+      logger.warn({
+        category: 'api',
+        action: 'webhook_handler_not_configured',
+        message: 'Webhook handler not configured for check_suite'
+      });
+    }
+
+    return respondSuccess(res, {
+      message: 'Check suite webhook received',
+      event,
+      delivery
+    });
+
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'github_check_suite_webhook_error',
+      message: 'Error processing check_suite webhook',
+      error
+    });
+    return respondError(res, 500, 'WEBHOOK_PROCESSING_FAILED', 'Failed to process webhook');
+  }
+});
+
+/**
  * Health check endpoint for webhooks
  * 
  * @route GET /api/github/webhooks/health
