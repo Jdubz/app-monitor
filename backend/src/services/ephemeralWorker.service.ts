@@ -281,13 +281,28 @@ export class EphemeralWorkerService {
         logger.info({
           category: 'process',
           action: 'gh_config_mounted',
-          message: `Mounting GitHub CLI config from: ${ghConfigDir}`
+          message: `Mounting GitHub CLI config from: ${ghConfigDir}`,
+          details: {
+            homeDir,
+            ghConfigDir,
+            hostsFile: fs.existsSync(path.join(ghConfigDir, 'hosts.yml')),
+            configFile: fs.existsSync(path.join(ghConfigDir, 'config.yml')),
+            mountBind: `${ghConfigDir}:/home/node/.config/gh:ro`,
+            hasGithubToken: !!process.env.GITHUB_TOKEN,
+            hasGhToken: !!process.env.GH_TOKEN
+          }
         });
       } else {
         logger.warn({
           category: 'process',
           action: 'gh_config_not_found',
-          message: 'GitHub CLI config not found, PR creation may fail. Run: gh auth login'
+          message: 'GitHub CLI config not found, PR creation may fail. Run: gh auth login',
+          details: {
+            homeDir,
+            ghConfigDir,
+            hasGithubToken: !!process.env.GITHUB_TOKEN,
+            hasGhToken: !!process.env.GH_TOKEN
+          }
         });
       }
 
@@ -298,6 +313,7 @@ export class EphemeralWorkerService {
         `WORKER_ID=${workerId}`,
         `WORKSPACE_BRANCH=${baseBranch}`,
         `WORKSPACE_ID=${workspaceId}`,
+        `GITHUB_TOKEN=${process.env.GITHUB_TOKEN || process.env.GH_TOKEN || ''}`,
         ...(task.is_repair_bot ? [`IS_IMPROVEMENT_TASK=true`, `PARENT_TASK_ID=${task.original_task_id}`] : [])
       ];
 
@@ -395,6 +411,31 @@ export class EphemeralWorkerService {
 
       if (!fs.existsSync(logDir)) {
         fs.mkdirSync(logDir, { recursive: true });
+        logger.info({
+          category: 'process',
+          action: 'created_log_directory',
+          message: `Created log directory: ${logDir}`
+        });
+      }
+
+      // Verify directory is writable
+      try {
+        fs.accessSync(logDir, fs.constants.W_OK);
+      } catch (err) {
+        logger.error({
+          category: 'process',
+          action: 'log_directory_not_writable',
+          message: `Log directory not writable: ${logDir}`,
+          error: err,
+          details: {
+            logDir,
+            cwd: process.cwd(),
+            user: process.env.USER,
+            uid: typeof process.getuid === 'function' ? process.getuid() : 'unknown',
+            gid: typeof process.getgid === 'function' ? process.getgid() : 'unknown'
+          }
+        });
+        throw err;
       }
 
       const timestamp = new Date().toISOString();
@@ -405,15 +446,27 @@ export class EphemeralWorkerService {
       logger.info({
         category: 'process',
         action: 'initialized_worker_log_file',
-        message: `Initialized log file for worker ${workerId} at ${logFilePath}`
+        message: `Initialized log file for worker ${workerId}`,
+        details: {
+          path: logFilePath,
+          size: header.length,
+          logDir
+        }
       });
     } catch (error) {
       logger.error({
         category: 'process',
         action: 'failed_to_initialize_worker_log_file',
-        message: `Failed to initialize log file for worker ${workerId}:`,
-        error: error
+        message: `Failed to initialize log file for worker ${workerId}`,
+        error: error,
+        details: {
+          logDir: this.getHostLogsDir(),
+          workerId,
+          cwd: process.cwd()
+        }
       });
+      // Throw error so caller knows initialization failed
+      throw error;
     }
   }
 
@@ -671,6 +724,17 @@ export class EphemeralWorkerService {
 
     // Create append stream to consolidated log file
     const stream = fs.createWriteStream(this.devBotsLogPath, { flags: 'a' });
+    
+    // Add error handler for write failures
+    stream.on('error', (error) => {
+      logger.error({
+        category: 'process',
+        action: 'log_stream_error',
+        message: `Failed to write to log stream for worker ${worker.id}`,
+        error,
+        details: { logPath: this.devBotsLogPath, workerId: worker.id }
+      });
+    });
     
     // Write header
     stream.write(header);
