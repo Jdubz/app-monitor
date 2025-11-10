@@ -25,7 +25,8 @@ import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import { isTaskStuck, detectFailurePattern, type FailurePattern } from './taskFailureGuards.js';
 import type { SimpleFailureRecovery } from './failureRecovery.js';
 import { resolveArtifactsDir } from '../utils/repoPaths.js';
-import { AgentTypeManager } from './agentTypeManager.js';
+import { AgentSelector, type AgentSelectionCriteria, type AgentAttempt } from './agentSelector.js';
+import { TaskClassifier } from './taskClassifier.js';
 import * as DockerConfig from './dockerConfig.js';
 
 // ============================================================================
@@ -61,11 +62,11 @@ export class TaskExecutionService {
   private readonly agentManager: AgentPersonalityManager;
   private readonly templateManager: TaskPromptTemplateManager;
   private readonly ephemeralWorkerService: EphemeralWorkerService;
-  // TaskPersistence removed - using SQLite directly
   private readonly config: TaskExecutionServiceConfig;
-  private recovery?: SimpleFailureRecovery; // Optional: set via setRecovery()
-  private dockerCircuitBreaker?: { execute: <T>(fn: () => Promise<T>) => Promise<T> }; // CircuitBreaker (imported lazily)
-  private agentTypeManager: AgentTypeManager; // Centralized agent type management
+  private recovery?: SimpleFailureRecovery;
+  private dockerCircuitBreaker?: { execute: <T>(fn: () => Promise<T>) => Promise<T> };
+  private readonly agentSelector: AgentSelector; // Intelligent agent selection
+  private readonly taskClassifier: TaskClassifier; // Task classification
 
   constructor(
     taskQueue: TaskQueueService,
@@ -92,11 +93,9 @@ export class TaskExecutionService {
       }
     };
 
-    // Initialize centralized agent type manager
-    this.agentTypeManager = new AgentTypeManager({
-      strategy: 'alternate',
-      defaultType: 'claude'
-    });
+    // Initialize intelligent agent selection (Phase 0.2)
+    this.agentSelector = new AgentSelector();
+    this.taskClassifier = new TaskClassifier();
 
     // Initialize circuit breaker for Docker operations
     this.initializeCircuitBreaker();
@@ -474,8 +473,73 @@ export class TaskExecutionService {
   private async executeTaskWithDockerRun(task: Task, agent: AgentPersonality, agentType?: 'claude' | 'codex'): Promise<void> {
     const { spawn } = await import('child_process');
 
-    // Choose agent type if not specified (using centralized manager)
-    const chosenAgentType = agentType || this.agentTypeManager.chooseAgentType();
+    // Use intelligent agent selection (Phase 0.3 Integration)
+    let chosenAgentType: 'claude' | 'codex';
+    
+    if (agentType) {
+      // Manual override specified
+      chosenAgentType = agentType;
+    } else {
+      // Intelligent selection based on task classification
+      const filePatterns = task.file_patterns ? JSON.parse(task.file_patterns) : undefined;
+      
+      // Build previous attempts from retry count
+      const previousAttempts: AgentAttempt[] = [];
+      if (task.retry_count > 0 && task.agent_type) {
+        // Previous attempt failed with this agent
+        previousAttempts.push({
+          agent: task.agent_type as 'claude' | 'codex',
+          result: 'failure',
+          timestamp: Date.now()
+        });
+      }
+
+      const criteria: AgentSelectionCriteria = {
+        taskCategory: task.task_category,
+        filePatterns,
+        complexity: task.estimated_complexity,
+        preferredAgent: task.preferred_agent as 'claude' | 'codex' | 'copilot' | undefined,
+        previousAttempts,
+        taskTitle: task.title,
+        taskDescription: task.description
+      };
+
+      const selection = this.agentSelector.selectAgent(criteria);
+      
+      // Copilot not supported in Docker execution yet
+      if (selection.agent === 'copilot') {
+        logger.warn({
+          category: 'automation',
+          action: 'copilot_fallback',
+          message: 'Copilot selected but not yet supported, using fallback',
+          details: {
+            taskId: task.id,
+            fallback: selection.fallbackAgent || 'claude'
+          }
+        });
+        chosenAgentType = (selection.fallbackAgent || 'claude') as 'claude' | 'codex';
+      } else {
+        chosenAgentType = selection.agent as 'claude' | 'codex';
+      }
+
+      // Log the intelligent selection
+      logger.info({
+        category: 'automation',
+        action: 'intelligent_agent_selected',
+        message: `Selected ${chosenAgentType} for task: ${selection.reasoning}`,
+        details: {
+          taskId: task.id,
+          agent: chosenAgentType,
+          reasoning: selection.reasoning,
+          confidence: selection.confidence,
+          category: task.task_category,
+          filePatterns,
+          complexity: task.estimated_complexity,
+          retryCount: task.retry_count
+        }
+      });
+    }
+
     const workerId = `bot-${chosenAgentType}-${agent.id}-${Date.now()}`;
 
     try {

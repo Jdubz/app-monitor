@@ -32,6 +32,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { randomUUID } from 'node:crypto';
 import { logger } from '../utils/logger.js';
+import { TaskClassifier } from './taskClassifier.js';
 
 type AgentStatsRow = {
   agent_type: 'claude' | 'codex';
@@ -246,9 +247,11 @@ export interface QueueMetrics {
 export class TaskQueueService {
   private db: Database.Database;
   private dbPath: string;
+  private readonly taskClassifier: TaskClassifier; // Auto-classification (Phase 0.3)
 
   constructor(dbPath: string) {
     this.dbPath = dbPath;
+    this.taskClassifier = new TaskClassifier();
     this.ensureDirectory();
     this.db = new Database(dbPath);
     this.initialize();
@@ -588,6 +591,36 @@ export class TaskQueueService {
   createTask(taskData: Partial<Task>): Task {
     const now = Date.now();
     const generatedId = `task-${taskData.type || 'implementation'}-${randomUUID()}`;
+    
+    // Auto-classify task if not already classified (Phase 0.3)
+    let taskCategory = taskData.task_category;
+    let filePatterns = taskData.file_patterns;
+    let estimatedComplexity = taskData.estimated_complexity;
+    
+    if (!taskCategory || !filePatterns || !estimatedComplexity) {
+      const classification = this.taskClassifier.classifyTask({
+        title: taskData.title || 'Untitled Task',
+        description: taskData.description
+      });
+      
+      taskCategory = taskCategory || classification.category;
+      filePatterns = filePatterns || JSON.stringify(classification.filePatterns);
+      estimatedComplexity = estimatedComplexity || classification.complexity;
+      
+      logger.info({
+        category: 'classification',
+        action: 'task_auto_classified',
+        message: `Auto-classified task: ${classification.reasoning}`,
+        details: {
+          taskId: generatedId,
+          category: taskCategory,
+          filePatterns: classification.filePatterns,
+          complexity: estimatedComplexity,
+          confidence: classification.confidence
+        }
+      });
+    }
+    
     const task: Task = {
       id: taskData.id || generatedId,
       type: taskData.type || 'implementation',
@@ -603,27 +636,34 @@ export class TaskQueueService {
       can_retry: taskData.can_retry !== undefined ? taskData.can_retry : true,
       retry_count: 0,
       max_retries: taskData.max_retries || 3,
-      timeout_ms: taskData.timeout_ms !== undefined ? taskData.timeout_ms : null, // NULL = no automatic timeout
+      timeout_ms: taskData.timeout_ms !== undefined ? taskData.timeout_ms : null,
       fingerprint: taskData.fingerprint,
       estimated_hours: taskData.estimated_hours,
-      complexity: taskData.complexity
+      complexity: taskData.complexity,
+      // Classification fields (Phase 0.3)
+      task_category: taskCategory,
+      file_patterns: filePatterns,
+      estimated_complexity: estimatedComplexity,
+      preferred_agent: taskData.preferred_agent
     };
 
     return this.transaction(() => {
-      // Insert main task
+      // Insert main task with classification fields
       const stmt = this.db.prepare(`
         INSERT INTO tasks (
           id, type, title, description, documentation, notes, status, priority,
           created_at, assigned_agent, prompt, can_retry, retry_count, max_retries,
-          timeout_ms, fingerprint, estimated_hours, complexity
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          timeout_ms, fingerprint, estimated_hours, complexity,
+          task_category, file_patterns, estimated_complexity, preferred_agent
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       stmt.run(
         task.id, task.type, task.title, task.description, task.documentation,
         task.notes, task.status, task.priority, task.created_at, task.assigned_agent,
         task.prompt, task.can_retry ? 1 : 0, task.retry_count, task.max_retries,
-        task.timeout_ms, task.fingerprint, task.estimated_hours, task.complexity
+        task.timeout_ms, task.fingerprint, task.estimated_hours, task.complexity,
+        task.task_category, task.file_patterns, task.estimated_complexity, task.preferred_agent
       );
 
       // Insert related data
