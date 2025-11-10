@@ -128,6 +128,11 @@ export interface GitHubPullRequestReviewPayload {
   };
 }
 
+export interface AutoMergeBlockReason {
+  reason: string;
+  count: number;
+}
+
 export interface WebhookHandlerStats {
   pr_events_received: number;
   pr_review_events_received: number;
@@ -136,6 +141,23 @@ export interface WebhookHandlerStats {
   copilot_reviews_detected: number;
   errors: number;
   last_event_time: number;
+
+  // PR Workflow Quality Gate Metrics
+  auto_merge_attempts: number;
+  auto_merge_successes: number;
+  auto_merge_failures: number;
+  auto_merge_blocks: AutoMergeBlockReason[];
+  followup_tasks_created: number;
+  task_verifications_run: number;
+  task_verifications_passed: number;
+  task_verifications_failed: number;
+  review_comments_tracked: number;
+  review_comments_resolved: number;
+  orphaned_prs_adopted: number;
+
+  // Time-to-merge tracking (milliseconds)
+  merge_times: number[];  // Array of merge times for calculating average
+  avg_time_to_merge_ms?: number;  // Calculated average
 }
 
 /**
@@ -150,7 +172,24 @@ export class GitHubWebhookHandler {
     task_ids_extracted: 0,
     copilot_reviews_detected: 0,
     errors: 0,
-    last_event_time: 0
+    last_event_time: 0,
+
+    // PR Workflow Quality Gate Metrics
+    auto_merge_attempts: 0,
+    auto_merge_successes: 0,
+    auto_merge_failures: 0,
+    auto_merge_blocks: [],
+    followup_tasks_created: 0,
+    task_verifications_run: 0,
+    task_verifications_passed: 0,
+    task_verifications_failed: 0,
+    review_comments_tracked: 0,
+    review_comments_resolved: 0,
+    orphaned_prs_adopted: 0,
+
+    // Time-to-merge tracking
+    merge_times: [],
+    avg_time_to_merge_ms: undefined
   };
 
   private reviewCommentTracker: ReviewCommentTracker;
@@ -303,6 +342,8 @@ export class GitHubWebhookHandler {
           if (adoptedTask) {
             // Successfully adopted - continue processing with adopted task
             tasks = [adoptedTask];
+            this.stats.orphaned_prs_adopted++;
+
             logger.info({
               category: 'api',
               action: 'system_pr_adopted',
@@ -630,7 +671,10 @@ export class GitHubWebhookHandler {
             reviewer: comment.author,
             is_copilot: true
           });
-          if (stored) storedCount++;
+          if (stored) {
+            storedCount++;
+            this.stats.review_comments_tracked++;
+          }
         }
 
         logger.info({
@@ -808,6 +852,14 @@ export class GitHubWebhookHandler {
             verification_timestamp: Date.now()
           });
 
+          // Track verification metrics
+          this.stats.task_verifications_run++;
+          if (verificationResult.passed) {
+            this.stats.task_verifications_passed++;
+          } else {
+            this.stats.task_verifications_failed++;
+          }
+
           logger.info({
             category: 'pr-workflow',
             action: 'verification_completed',
@@ -834,7 +886,10 @@ export class GitHubWebhookHandler {
       // Check if we should create a followup task
       const task = tasks[0]; // Use first matching task
       if (prMonitor.shouldCreateFollowup(prNumber, prStatus, copilotAnalysis, task)) {
-        
+        // Determine and track specific block reasons
+        const blockReasons = this.determineBlockReasons(prNumber, prStatus, copilotAnalysis, task);
+        blockReasons.forEach(reason => this.trackAutoMergeBlock(reason));
+
         // Get PR branch from status
         const prBranch = task.pr_branch || `pr-${prNumber}`;
 
@@ -847,6 +902,8 @@ export class GitHubWebhookHandler {
         );
 
         if (followupTask) {
+          this.stats.followup_tasks_created++;
+
           logger.info({
             category: 'pr-workflow',
             action: 'followup_task_created_from_check_suite',
@@ -854,20 +911,34 @@ export class GitHubWebhookHandler {
             details: {
               pr_number: prNumber,
               task_id: followupTask.id,
-              parent_task: task.id
+              parent_task: task.id,
+              block_reasons: blockReasons
             }
           });
         }
       } else if (conclusion === 'success') {
         // All checks passed - try auto-merge if enabled
         const task = tasks[0];
+        this.stats.auto_merge_attempts++;
         const merged = await prMonitor.mergePR(prNumber, task.id);
-        
+
         if (merged) {
+          // Track merge success with time-to-merge
+          const prCreatedAt = task.created_at || Date.now();
+          this.trackMergeSuccess(prCreatedAt);
+
           logger.info({
             category: 'pr-workflow',
             action: 'pr_auto_merged_from_check_suite',
             message: `Auto-merged PR #${prNumber} after checks passed`,
+            details: { pr_number: prNumber, task_id: task.id }
+          });
+        } else {
+          this.stats.auto_merge_failures++;
+          logger.info({
+            category: 'pr-workflow',
+            action: 'pr_auto_merge_failed',
+            message: `Auto-merge failed for PR #${prNumber}`,
             details: { pr_number: prNumber, task_id: task.id }
           });
         }
@@ -884,10 +955,95 @@ export class GitHubWebhookHandler {
   }
 
   /**
-   * Get webhook handler statistics
+   * Track auto-merge block reason
+   */
+  private trackAutoMergeBlock(reason: string): void {
+    const existing = this.stats.auto_merge_blocks.find(b => b.reason === reason);
+    if (existing) {
+      existing.count++;
+    } else {
+      this.stats.auto_merge_blocks.push({ reason, count: 1 });
+    }
+  }
+
+  /**
+   * Determine and log the specific reason(s) why auto-merge was blocked
+   */
+  private determineBlockReasons(
+    prNumber: number,
+    prStatus: any,
+    copilotAnalysis: any,
+    task?: any
+  ): string[] {
+    const reasons: string[] = [];
+
+    // Check for failed checks
+    const hasFailedChecks = prStatus.checks.some((c: any) =>
+      c.status === 'failure' || c.status === 'error'
+    );
+    if (hasFailedChecks) {
+      reasons.push('Failed CI checks');
+    }
+
+    // Check for blocking Copilot issues
+    if (copilotAnalysis.severity === 'high' || copilotAnalysis.severity === 'medium') {
+      reasons.push(`Copilot ${copilotAnalysis.severity} severity issues`);
+    }
+
+    // Check for human change requests
+    const hasChangeRequests = prStatus.reviews.some((r: any) =>
+      r.state === 'CHANGES_REQUESTED' && !r.author.toLowerCase().includes('copilot')
+    );
+    if (hasChangeRequests) {
+      reasons.push('Human change requests');
+    }
+
+    // Check for merge conflicts
+    if (prStatus.mergeable === 'CONFLICTING') {
+      reasons.push('Merge conflicts');
+    }
+
+    // Check for unresolved blocking comments
+    const resolutionSummary = this.reviewCommentTracker.getResolutionSummary(prNumber);
+    if (resolutionSummary.unresolvedBlocking > 0) {
+      reasons.push(`${resolutionSummary.unresolvedBlocking} unresolved blocking comments`);
+    }
+
+    // Check for failed task verification
+    if (task && task.verification_passed === false) {
+      reasons.push('Failed task verification');
+    }
+
+    return reasons;
+  }
+
+  /**
+   * Track successful merge with time-to-merge
+   */
+  private trackMergeSuccess(prCreatedAt: number): void {
+    this.stats.auto_merge_successes++;
+    const timeToMerge = Date.now() - prCreatedAt;
+    this.stats.merge_times.push(timeToMerge);
+
+    // Keep only last 100 merge times for performance
+    if (this.stats.merge_times.length > 100) {
+      this.stats.merge_times.shift();
+    }
+  }
+
+  /**
+   * Get webhook handler statistics with calculated metrics
    */
   getStats(): WebhookHandlerStats {
-    return { ...this.stats };
+    const stats = { ...this.stats };
+
+    // Calculate average time-to-merge
+    if (stats.merge_times.length > 0) {
+      const sum = stats.merge_times.reduce((acc, time) => acc + time, 0);
+      stats.avg_time_to_merge_ms = Math.round(sum / stats.merge_times.length);
+    }
+
+    return stats;
   }
 
   // ==========================================================================
@@ -946,6 +1102,9 @@ export class GitHubWebhookHandler {
         );
 
         if (resolvedFingerprints.length > 0) {
+          // Track resolved comments
+          this.stats.review_comments_resolved += resolvedFingerprints.length;
+
           logger.info({
             category: 'pr-workflow',
             action: 'comments_resolved_detected',
