@@ -1,6 +1,8 @@
-import { createApp, logRotation, connectionManager } from './server.js';
+import { createApp, logRotation, connectionManager, devBotsManager, processManager } from './server.js';
 import { config } from './config.js';
 import { logger } from './utils/logger.js';
+import { ShutdownStateManager } from './services/shutdownStateManager.js';
+import { getDatabase } from './services/database.js';
 
 // Global error handlers to catch crashes
 process.on('uncaughtException', (error) => {
@@ -126,7 +128,54 @@ async function gracefulShutdown(signal: string) {
     console.log(`⚠️  Shutting down with ${remainingConnections} active WebSocket connections`);
   }
 
-  // Phase 5: Stop log rotation
+  // Phase 5: Persist ephemeral state
+  console.log('💾 Persisting ephemeral state...');
+  try {
+    const shutdownStateManager = new ShutdownStateManager(getDatabase());
+
+    // Get retry history from retry manager
+    const retryManager = devBotsManager?.getRetryManager?.();
+    if (retryManager) {
+      const retryHistory = retryManager.exportHistory();
+      await shutdownStateManager.saveRetryHistory(retryHistory);
+      logger.info({
+        category: 'system',
+        action: 'retry_history_persisted',
+        message: 'Retry history persisted',
+        details: { taskCount: retryHistory.size }
+      });
+    }
+
+    // Get log file positions from log watcher
+    const logWatcher = processManager?.getLogWatcher?.();
+    if (logWatcher && typeof logWatcher.getFilePositions === 'function') {
+      const filePositions = logWatcher.getFilePositions();
+      await shutdownStateManager.saveLogFilePositions(filePositions);
+      logger.info({
+        category: 'system',
+        action: 'log_positions_persisted',
+        message: 'Log file positions persisted',
+        details: { fileCount: filePositions.size }
+      });
+    }
+
+    logger.info({
+      category: 'system',
+      action: 'ephemeral_state_persisted',
+      message: 'Ephemeral state successfully persisted'
+    });
+    console.log('✅ Ephemeral state persisted');
+  } catch (error) {
+    logger.error({
+      category: 'system',
+      action: 'state_persistence_failed',
+      message: 'Failed to persist ephemeral state',
+      error
+    });
+    console.log('⚠️  Failed to persist ephemeral state:', error);
+  }
+
+  // Phase 6: Stop log rotation
   console.log('📝 Stopping log rotation...');
   try {
     logRotation.stop();
@@ -144,7 +193,7 @@ async function gracefulShutdown(signal: string) {
     });
   }
 
-  // Phase 6: Cleanup (graceful shutdown complete)
+  // Phase 7: Cleanup (graceful shutdown complete)
   console.log('🗄️  Cleaning up resources...');
   logger.info({
     category: 'system',
