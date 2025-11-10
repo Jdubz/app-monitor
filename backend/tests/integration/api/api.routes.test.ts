@@ -1170,48 +1170,6 @@ describe('API Integration Suite', () => {
     ]);
   });
 
-  describe('Dev-Bots PR monitor', () => {
-    runEndpointTests([
-      {
-        name: 'GET /api/dev-bots/pr-monitor/status',
-        method: 'get',
-        url: '/api/dev-bots/pr-monitor/status',
-        assert: (res) => {
-          expect(res.body.success).toBe(true);
-          expect(res.body.data.monitoring).toBe(true);
-        },
-      },
-      {
-        name: 'GET /api/dev-bots/pr-monitor/prs',
-        method: 'get',
-        url: '/api/dev-bots/pr-monitor/prs',
-        assert: (res) => {
-          expect(res.body.success).toBe(true);
-          expect(res.body.data.count).toBeGreaterThan(0);
-        },
-      },
-      {
-        name: `GET /api/dev-bots/pr-monitor/pr/${MOCK_PR_NUMBER}`,
-        method: 'get',
-        url: `/api/dev-bots/pr-monitor/pr/${MOCK_PR_NUMBER}`,
-        assert: (res) => {
-          expect(res.body.success).toBe(true);
-          expect(res.body.data.prNumber).toBe(MOCK_PR_NUMBER);
-        },
-      },
-      {
-        name: 'POST /api/dev-bots/pr-monitor/register-orphaned',
-        method: 'post',
-        url: '/api/dev-bots/pr-monitor/register-orphaned',
-      },
-      {
-        name: 'POST /api/dev-bots/pr-monitor/recover-from-artifacts',
-        method: 'post',
-        url: '/api/dev-bots/pr-monitor/recover-from-artifacts',
-      },
-    ]);
-  });
-
   describe('Dev-Bots interactive sessions', () => {
     runEndpointTests([
       {

@@ -524,6 +524,17 @@ export class TaskQueueService {
         PRIMARY KEY (task_id, sort_order),
         FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
       );
+
+      -- PR followup fingerprints (track which issues already have followup tasks)
+      CREATE TABLE IF NOT EXISTS pr_followup_fingerprints (
+        pr_number INTEGER NOT NULL,
+        fingerprint TEXT NOT NULL,
+        created_at INTEGER NOT NULL,
+
+        PRIMARY KEY (pr_number, fingerprint)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_fingerprints_pr ON pr_followup_fingerprints(pr_number);
     `);
   }
 
@@ -1680,19 +1691,19 @@ export class TaskQueueService {
    */
   async updatePRStatus(taskId: string, prStatus: Partial<Task>): Promise<void> {
     const updates: string[] = [];
-    const values: any[] = [];
+    const values: unknown[] = [];
 
     // Build dynamic UPDATE statement based on provided fields
     const prFields = [
       'pr_number', 'pr_url', 'pr_branch', 'pr_status',
       'pr_checks_status', 'pr_review_status', 
       'pr_created_at', 'pr_merged_at'
-    ];
+    ] as const;
 
     for (const field of prFields) {
       if (field in prStatus) {
         updates.push(`${field} = ?`);
-        values.push((prStatus as any)[field]);
+        values.push(prStatus[field]);
       }
     }
 
@@ -1717,5 +1728,49 @@ export class TaskQueueService {
       message: `Updated PR status for task ${taskId}`,
       details: { taskId, updates: Object.keys(prStatus) }
     });
+  }
+
+  /**
+   * Check if a fingerprint already exists for a PR
+   */
+  hasFollowupFingerprint(prNumber: number, fingerprint: string): boolean {
+    const stmt = this.db.prepare(`
+      SELECT 1 FROM pr_followup_fingerprints 
+      WHERE pr_number = ? AND fingerprint = ?
+    `);
+    return !!stmt.get(prNumber, fingerprint);
+  }
+
+  /**
+   * Add a followup fingerprint for a PR
+   */
+  addFollowupFingerprint(prNumber: number, fingerprint: string): void {
+    const stmt = this.db.prepare(`
+      INSERT OR IGNORE INTO pr_followup_fingerprints (pr_number, fingerprint, created_at)
+      VALUES (?, ?, ?)
+    `);
+    stmt.run(prNumber, fingerprint, Date.now());
+  }
+
+  /**
+   * Get all fingerprints for a PR
+   */
+  getFollowupFingerprints(prNumber: number): string[] {
+    const stmt = this.db.prepare(`
+      SELECT fingerprint FROM pr_followup_fingerprints 
+      WHERE pr_number = ?
+    `);
+    const rows = stmt.all(prNumber) as { fingerprint: string }[];
+    return rows.map(r => r.fingerprint);
+  }
+
+  /**
+   * Clear all fingerprints for a PR (when PR is merged/closed)
+   */
+  clearFollowupFingerprints(prNumber: number): void {
+    const stmt = this.db.prepare(`
+      DELETE FROM pr_followup_fingerprints WHERE pr_number = ?
+    `);
+    stmt.run(prNumber);
   }
 }

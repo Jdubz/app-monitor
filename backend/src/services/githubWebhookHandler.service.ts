@@ -7,7 +7,7 @@
  */
 
 import { logger } from '../utils/logger.js';
-import type { TaskQueueService } from './taskQueue.sqlite.js';
+import type { TaskQueueService, Task } from './taskQueue.sqlite.js';
 import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 
 export interface GitHubPullRequestPayload {
@@ -55,6 +55,45 @@ export interface GitHubPushPayload {
   };
   pusher: {
     name: string;
+  };
+}
+
+export interface GitHubCheckSuitePR {
+  number: number;
+}
+
+export interface GitHubCheckSuitePayload {
+  action: string;
+  check_suite: {
+    id: number;
+    status: string;
+    conclusion: string | null;
+    pull_requests: GitHubCheckSuitePR[];
+  };
+  repository: {
+    full_name: string;
+    name: string;
+    owner: {
+      login: string;
+    };
+  };
+}
+
+export interface GitHubCheckRunPayload {
+  action: string;
+  check_run: {
+    id: number;
+    name: string;
+    status: string;
+    conclusion: string | null;
+    pull_requests: GitHubCheckSuitePR[];
+  };
+  repository: {
+    full_name: string;
+    name: string;
+    owner: {
+      login: string;
+    };
   };
 }
 
@@ -148,7 +187,7 @@ export class GitHubWebhookHandler {
     });
 
     // Find associated task(s)
-    let tasks: any[] = [];
+    let tasks: Task[] = [];
     
     if (this.taskQueue) {
       // Try to find by PR number first
@@ -260,6 +299,208 @@ export class GitHubWebhookHandler {
   }
 
   /**
+   * Handle check_suite webhook events
+   * Triggers followup task creation and auto-merge when checks complete
+   */
+  async handleCheckSuite(payload: GitHubCheckSuitePayload): Promise<void> {
+    this.stats.last_event_time = Date.now();
+    
+    const { action, check_suite, repository } = payload;
+    
+    // Only process 'completed' check suites
+    if (action !== 'completed') {
+      logger.debug({
+        category: 'api',
+        action: 'check_suite_ignored',
+        message: `Check suite action '${action}' ignored (only processing 'completed')`,
+        details: { action, conclusion: check_suite?.conclusion }
+      });
+      return;
+    }
+
+    const pullRequests = check_suite?.pull_requests || [];
+    if (pullRequests.length === 0) {
+      logger.debug({
+        category: 'api',
+        action: 'check_suite_no_prs',
+        message: 'Check suite not associated with any PRs'
+      });
+      return;
+    }
+
+    logger.info({
+      category: 'api',
+      action: 'check_suite_completed',
+      message: `Check suite completed with ${check_suite?.conclusion}`,
+      details: {
+        conclusion: check_suite.conclusion,
+        pr_count: pullRequests.length,
+        pr_numbers: pullRequests.map((pr) => pr.number),
+        repository: repository.full_name
+      }
+    });
+
+    // Process each PR
+    for (const pr of pullRequests) {
+      await this.processCheckSuiteForPR(pr.number, check_suite, repository);
+    }
+  }
+
+  /**
+   * Handle check_run webhook events
+   * Similar to check_suite but for individual check runs
+   */
+  async handleCheckRun(payload: GitHubCheckRunPayload): Promise<void> {
+    this.stats.last_event_time = Date.now();
+    
+    const { action, check_run, repository } = payload;
+    
+    // Only process 'completed' check runs
+    if (action !== 'completed') {
+      logger.debug({
+        category: 'api',
+        action: 'check_run_ignored',
+        message: `Check run action '${action}' ignored (only processing 'completed')`,
+        details: { action, conclusion: check_run.conclusion }
+      });
+      return;
+    }
+
+    const pullRequests = check_run.pull_requests || [];
+    if (pullRequests.length === 0) {
+      logger.debug({
+        category: 'api',
+        action: 'check_run_no_prs',
+        message: 'Check run not associated with any PRs'
+      });
+      return;
+    }
+
+    logger.info({
+      category: 'api',
+      action: 'check_run_completed',
+      message: `Check run '${check_run.name}' completed with ${check_run.conclusion}`,
+      details: {
+        name: check_run.name,
+        conclusion: check_run.conclusion,
+        pr_count: pullRequests.length,
+        pr_numbers: pullRequests.map((pr) => pr.number),
+        repository: repository.full_name
+      }
+    });
+
+    // Process each PR - reuse check suite logic since both trigger same workflow
+    for (const pr of pullRequests) {
+      await this.processCheckSuiteForPR(pr.number, check_run, repository);
+    }
+  }
+
+  /**
+   * Process check suite completion for a specific PR
+   */
+  private async processCheckSuiteForPR(
+    prNumber: number,
+    checkSuite: { conclusion: string | null },
+    repository: { owner: { login: string }; name: string; full_name: string }
+  ): Promise<void> {
+    if (!this.taskQueue || !this.prOrchestrator) {
+      logger.warn({
+        category: 'api',
+        action: 'check_suite_handler_not_ready',
+        message: 'Task queue or PR orchestrator not available'
+      });
+      return;
+    }
+
+    // Find associated tasks
+    const tasks = await this.taskQueue.findByPRNumber(prNumber);
+    if (tasks.length === 0) {
+      logger.debug({
+        category: 'api',
+        action: 'check_suite_no_tasks',
+        message: `No tasks found for PR #${prNumber}`,
+        details: { pr_number: prNumber }
+      });
+      return;
+    }
+
+    const conclusion = checkSuite.conclusion;
+    const owner = repository.owner.login;
+    const repo = repository.name;
+    
+    logger.info({
+      category: 'pr-workflow',
+      action: 'check_suite_processed',
+      message: `Processing check suite ${conclusion} for PR #${prNumber}`,
+      details: {
+        pr_number: prNumber,
+        conclusion,
+        task_ids: tasks.map(t => t.id),
+        repository: repository.full_name
+      }
+    });
+
+    try {
+      const prMonitor = this.prOrchestrator.getPRMonitor();
+      const githubPR = this.prOrchestrator.getGitHubPRService();
+      
+      // Get PR status and Copilot analysis
+      const prStatus = await githubPR.getPRStatus(prNumber, owner, repo);
+      const copilotAnalysis = await githubPR.getCopilotReviewAnalysis(prNumber, owner, repo);
+
+      // Check if we should create a followup task
+      if (prMonitor.shouldCreateFollowup(prStatus, copilotAnalysis)) {
+        const task = tasks[0]; // Use first matching task
+        
+        // Get PR branch from status
+        const prBranch = task.pr_branch || `pr-${prNumber}`;
+
+        const followupTask = await prMonitor.createFollowupTask(
+          prNumber,
+          task.id,
+          prBranch,
+          prStatus,
+          copilotAnalysis
+        );
+
+        if (followupTask) {
+          logger.info({
+            category: 'pr-workflow',
+            action: 'followup_task_created_from_check_suite',
+            message: `Created followup task ${followupTask.id} for PR #${prNumber}`,
+            details: {
+              pr_number: prNumber,
+              task_id: followupTask.id,
+              parent_task: task.id
+            }
+          });
+        }
+      } else if (conclusion === 'success') {
+        // All checks passed - try auto-merge if enabled
+        const task = tasks[0];
+        const merged = await prMonitor.mergePR(prNumber, task.id);
+        
+        if (merged) {
+          logger.info({
+            category: 'pr-workflow',
+            action: 'pr_auto_merged_from_check_suite',
+            message: `Auto-merged PR #${prNumber} after checks passed`,
+            details: { pr_number: prNumber, task_id: task.id }
+          });
+        }
+      }
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'check_suite_processing_error',
+        message: `Error processing check suite for PR #${prNumber}`,
+        error,
+        details: { pr_number: prNumber, repository: repository?.full_name }
+      });
+    }
+  }
+
+  /**
    * Get webhook handler statistics
    */
   getStats(): WebhookHandlerStats {
@@ -270,7 +511,11 @@ export class GitHubWebhookHandler {
   // PR Event Handlers
   // ==========================================================================
 
-  private async handlePROpened(prNumber: number, pr: any, tasks: any[]): Promise<void> {
+  private async handlePROpened(
+    prNumber: number,
+    pr: GitHubPullRequestPayload['pull_request'],
+    tasks: Task[]
+  ): Promise<void> {
     logger.info({
       category: 'api',
       action: 'pr_opened',
@@ -289,13 +534,13 @@ export class GitHubWebhookHandler {
         pr_created_at: Date.now()
       });
     }
-
-    if (this.prOrchestrator) {
-      await this.prOrchestrator.onPROpened(prNumber, pr);
-    }
   }
 
-  private async handlePRSynchronize(prNumber: number, pr: any, tasks: any[]): Promise<void> {
+  private async handlePRSynchronize(
+    prNumber: number,
+    pr: GitHubPullRequestPayload['pull_request'],
+    tasks: Task[]
+  ): Promise<void> {
     logger.info({
       category: 'api',
       action: 'pr_synchronized',
@@ -311,13 +556,13 @@ export class GitHubWebhookHandler {
         pr_checks_status: 'pending'
       });
     }
-
-    if (this.prOrchestrator) {
-      await this.prOrchestrator.onPRSynchronize(prNumber, pr);
-    }
   }
 
-  private async handlePRMerged(prNumber: number, pr: any, tasks: any[]): Promise<void> {
+  private async handlePRMerged(
+    prNumber: number,
+    pr: GitHubPullRequestPayload['pull_request'],
+    tasks: Task[]
+  ): Promise<void> {
     logger.info({
       category: 'api',
       action: 'pr_merged',
@@ -335,7 +580,7 @@ export class GitHubWebhookHandler {
 
       // Mark task as completed if not already
       if (task.status !== 'completed') {
-        const completeStmt = (this.taskQueue as any).db.prepare(`
+        const completeStmt = (this.taskQueue as unknown as { db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } } }).db.prepare(`
           UPDATE tasks 
           SET status = 'completed', 
               completed_at = ?
@@ -344,13 +589,13 @@ export class GitHubWebhookHandler {
         completeStmt.run(Date.now(), task.id);
       }
     }
-
-    if (this.prOrchestrator) {
-      await this.prOrchestrator.onPRMerged(prNumber, pr);
-    }
   }
 
-  private async handlePRClosed(prNumber: number, pr: any, tasks: any[]): Promise<void> {
+  private async handlePRClosed(
+    prNumber: number,
+    pr: GitHubPullRequestPayload['pull_request'],
+    tasks: Task[]
+  ): Promise<void> {
     logger.info({
       category: 'api',
       action: 'pr_closed',
@@ -365,13 +610,13 @@ export class GitHubWebhookHandler {
         pr_status: 'closed'
       });
     }
-
-    if (this.prOrchestrator) {
-      await this.prOrchestrator.onPRClosed(prNumber, pr);
-    }
   }
 
-  private async handlePRReopened(prNumber: number, pr: any, tasks: any[]): Promise<void> {
+  private async handlePRReopened(
+    prNumber: number,
+    pr: GitHubPullRequestPayload['pull_request'],
+    tasks: Task[]
+  ): Promise<void> {
     logger.info({
       category: 'api',
       action: 'pr_reopened',
@@ -386,13 +631,13 @@ export class GitHubWebhookHandler {
         pr_status: 'pending_checks'
       });
     }
-
-    if (this.prOrchestrator) {
-      await this.prOrchestrator.onPRReopened(prNumber, pr);
-    }
   }
 
-  private async handlePRReadyForReview(prNumber: number, pr: any, tasks: any[]): Promise<void> {
+  private async handlePRReadyForReview(
+    prNumber: number,
+    pr: GitHubPullRequestPayload['pull_request'],
+    tasks: Task[]
+  ): Promise<void> {
     logger.info({
       category: 'api',
       action: 'pr_ready_for_review',
@@ -406,10 +651,6 @@ export class GitHubWebhookHandler {
       await this.taskQueue.updatePRStatus(task.id, {
         pr_status: 'pending_review'
       });
-    }
-
-    if (this.prOrchestrator) {
-      await this.prOrchestrator.onPRReadyForReview(prNumber, pr);
     }
   }
 }

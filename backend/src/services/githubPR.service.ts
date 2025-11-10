@@ -113,18 +113,24 @@ export class GitHubPRService {
 
   /**
    * Get comprehensive PR status including checks, reviews, and comments
+   * @param prNumber PR number
+   * @param repoOwner Optional repo owner (defaults to instance owner)
+   * @param repoName Optional repo name (defaults to instance name)
    */
-  async getPRStatus(prNumber: number): Promise<PRStatus> {
+  async getPRStatus(prNumber: number, repoOwner?: string, repoName?: string): Promise<PRStatus> {
+    const owner = repoOwner || this.repoOwner;
+    const repo = repoName || this.repoName;
+    
     const executeGetPRStatus = async (): Promise<PRStatus> => {
       logger.info({
         category: 'pr-workflow',
         action: 'fetch_pr_status',
-        message: `Fetching status for PR #${prNumber}`
+        message: `Fetching status for PR #${prNumber} in ${owner}/${repo}`
       });
 
       // Fetch PR data using gh CLI with timeout protection
       const { stdout } = await execWithTimeout(
-        `gh pr view ${prNumber} --repo ${this.repoOwner}/${this.repoName} --json number,url,state,mergeable,statusCheckRollup,reviews,comments`,
+        `gh pr view ${prNumber} --repo ${owner}/${repo} --json number,url,state,mergeable,statusCheckRollup,reviews,comments`,
         30000 // 30 second timeout
       );
 
@@ -331,25 +337,41 @@ export class GitHubPRService {
   }
 
   /**
-   * Merge a pull request
+   * Get Copilot review analysis for a PR
+   * Convenience method that fetches PR status and analyzes Copilot comments
    */
-  async mergePR(prNumber: number, method: 'merge' | 'squash' | 'rebase' = 'squash'): Promise<void> {
+  async getCopilotReviewAnalysis(prNumber: number, repoOwner?: string, repoName?: string): Promise<CopilotReviewAnalysis> {
+    const status = await this.getPRStatus(prNumber, repoOwner, repoName);
+    return this.analyzeCopilotReview(status.comments);
+  }
+
+  /**
+   * Merge a pull request
+   * @param prNumber PR number
+   * @param method Merge method (merge, squash, rebase)
+   * @param repoOwner Optional repo owner (defaults to instance owner)
+   * @param repoName Optional repo name (defaults to instance name)
+   */
+  async mergePR(prNumber: number, method: 'merge' | 'squash' | 'rebase' = 'squash', repoOwner?: string, repoName?: string): Promise<void> {
+    const owner = repoOwner || this.repoOwner;
+    const repo = repoName || this.repoName;
+    
     const executeMergePR = async (): Promise<void> => {
       logger.info({
         category: 'pr-workflow',
         action: 'merge_pr',
-        message: `Merging PR #${prNumber} using ${method} method`
+        message: `Merging PR #${prNumber} in ${owner}/${repo} using ${method} method`
       });
 
       await execWithTimeout(
-        `gh pr merge ${prNumber} --repo ${this.repoOwner}/${this.repoName} --${method} --auto`,
-        30000 // 30 second timeout
+        `gh pr merge ${prNumber} --repo ${owner}/${repo} --${method} --auto`,
+        30000
       );
 
       logger.info({
         category: 'pr-workflow',
         action: 'merge_pr_success',
-        message: `Successfully merged PR #${prNumber}`
+        message: `Successfully merged PR #${prNumber} in ${owner}/${repo}`
       });
     };
 
