@@ -105,21 +105,50 @@ export class PRMonitorService {
 
   /**
    * Calculate followup depth by traversing the followup_tasks chain
+   * Protected against circular dependencies and stack overflow
    */
-  private getFollowupDepth(taskId: string): number {
-    const task = this.taskQueue.getTask(taskId);
-    if (!task || !task.followup_tasks || task.followup_tasks.length === 0) {
-      return 0;
+  private getFollowupDepth(taskId: string, visited: Set<string> = new Set(), depth: number = 0): number {
+    // Prevent circular dependency stack overflow
+    if (visited.has(taskId)) {
+      logger.warn({
+        category: 'pr-workflow',
+        action: 'circular_dependency_detected',
+        message: `Circular dependency detected in followup chain at task ${taskId}`,
+        details: { taskId, visitedChain: Array.from(visited) }
+      });
+      return depth; // Return current depth, don't recurse further
     }
 
+    // Safety: max depth limit (double the configured max to catch issues)
+    if (depth > this.MAX_FOLLOWUP_DEPTH * 2) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'max_recursion_depth_exceeded',
+        message: `Maximum recursion depth exceeded at task ${taskId}`,
+        details: { taskId, depth, maxAllowed: this.MAX_FOLLOWUP_DEPTH * 2 }
+      });
+      return depth;
+    }
+
+    const task = this.taskQueue.getTask(taskId);
+    if (!task || !task.followup_tasks || task.followup_tasks.length === 0) {
+      return depth;
+    }
+
+    // Add current task to visited set
+    visited.add(taskId);
+
     // Find max depth of any child
-    let maxChildDepth = 0;
+    let maxChildDepth = depth;
     for (const childId of task.followup_tasks) {
-      const childDepth = this.getFollowupDepth(childId);
+      const childDepth = this.getFollowupDepth(childId, visited, depth + 1);
       maxChildDepth = Math.max(maxChildDepth, childDepth);
     }
 
-    return 1 + maxChildDepth;
+    // Remove from visited when backtracking (allows same task in different branches)
+    visited.delete(taskId);
+
+    return maxChildDepth;
   }
 
   /**
@@ -720,19 +749,22 @@ gh pr merge ${prNumber} --squash  # Or --merge or --rebase
       return;
     }
 
-    const updates: Partial<Task> & { pr_merged_at?: number; notes?: string } = {
+    // Use updatePRStatus for PR-specific fields
+    const prUpdates: Partial<Task> = {
       pr_status: prStatus
     };
 
     if (prStatus === 'merged') {
-      updates.pr_merged_at = Date.now();
+      prUpdates.pr_merged_at = Date.now();
     }
 
+    await this.taskQueue.updatePRStatus(taskId, prUpdates);
+
+    // Update notes separately using updateTask (which now supports notes)
     if (notes) {
-      updates.notes = task.notes ? `${task.notes}\n${notes}` : notes;
+      const updatedNotes = task.notes ? `${task.notes}\n${notes}` : notes;
+      this.taskQueue.updateTask(taskId, { notes: updatedNotes });
     }
-
-    this.taskQueue.updateTask(taskId, updates);
 
     logger.info({
       category: 'pr-workflow',

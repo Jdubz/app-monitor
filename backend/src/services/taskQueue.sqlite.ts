@@ -931,6 +931,10 @@ export class TaskQueueService {
         fields.push('retry_count = ?');
         values.push(updates.retry_count);
       }
+      if (updates.notes !== undefined) {
+        fields.push('notes = ?');
+        values.push(updates.notes);
+      }
 
       if (fields.length === 0) {
         return task; // No updates needed
