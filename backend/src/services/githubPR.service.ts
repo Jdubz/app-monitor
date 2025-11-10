@@ -545,19 +545,19 @@ export class GitHubPRService {
       }
 
       // Import task queue to update task
-      const { getTaskQueue } = await import('./taskQueue.sqlite.js');
-      const taskQueue = getTaskQueue();
+      const { getTaskQueueService } = await import('./taskQueue.factory.js');
+      const taskQueue = getTaskQueueService();
 
       if (taskId) {
         // Find and update task
-        const task = await taskQueue.get(taskId);
+        const task = taskQueue.getTask(taskId);
         if (task) {
-          await taskQueue.updatePRInfo(taskId, {
-            prNumber,
-            prUrl: prData.url,
-            prBranch: branchName,
-            prStatus: prData.state === 'MERGED' ? 'merged' : 
-                     prData.state === 'CLOSED' ? 'closed' : 'pending_checks'
+          await taskQueue.updatePRStatus(taskId, {
+            pr_number: prNumber,
+            pr_url: prData.url,
+            pr_branch: branchName,
+            pr_status: prData.state === 'MERGED' ? 'merged' :
+                      prData.state === 'CLOSED' ? 'closed' : 'pending_checks'
           });
           
           logger.info({
