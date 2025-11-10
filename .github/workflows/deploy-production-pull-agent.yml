@@ -1,0 +1,263 @@
+name: Deploy to PRODUCTION (Pull Agent)
+
+# ⚠️  PRODUCTION DEPLOYMENT WORKFLOW
+#
+# Purpose: Deploys to /opt/app-monitor (production environment) when code is pushed to main
+#
+# Architecture: Pull-based deployment
+# - GitHub Actions builds and packages the application
+# - Creates a GitHub deployment with artifact metadata
+# - Pull agent on production server detects the deployment
+# - Pull agent downloads artifact and runs local deployment script
+#
+# Benefits over self-hosted runner:
+# - No persistent runner with elevated permissions
+# - No exposure of production environment to GitHub Actions
+# - Deployment credentials managed by 1Password service account
+# - Deployment runs locally with proper isolation
+#
+# Environment Clarification:
+# - DEV environment: /home/jdubz/Development/app-monitor (for local development/staging)
+# - PROD environment: /opt/app-monitor (where the live application runs)
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "DEPLOY TO PRODUCTION" to confirm'
+        required: true
+        default: ''
+
+# SECURITY: Prevent this workflow from running on pull requests or forks
+# Only trusted main branch code should create production deployments
+
+jobs:
+  # Pre-deployment checks and build
+  build-and-package:
+    name: Build and Package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    
+    outputs:
+      artifact-id: ${{ steps.upload.outputs.artifact-id }}
+      artifact-sha: ${{ steps.package.outputs.sha256 }}
+      deployment-id: ${{ steps.deploy.outputs.deployment_id }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Verify branch
+        run: |
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "❌ ERROR: Can only deploy from main branch"
+            exit 1
+          fi
+
+      - name: Confirm manual deployment
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "DEPLOY TO PRODUCTION" ]; then
+            echo "❌ ERROR: Deployment not confirmed"
+            echo "   You must type 'DEPLOY TO PRODUCTION' to confirm"
+            exit 1
+          fi
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run backend tests
+        run: npm run test:backend
+
+      - name: Run backend linter
+        run: npm run lint -w backend
+
+      - name: Build backend
+        run: npm run build -w backend
+
+      - name: Build frontend
+        run: npm run build -w frontend
+
+      - name: Package deployment artifact
+        id: package
+        run: |
+          # Create deployment package
+          ARTIFACT_NAME="app-monitor-${GITHUB_SHA:0:7}"
+          TARBALL_NAME="${ARTIFACT_NAME}.tar.gz"
+          MANIFEST_NAME="${ARTIFACT_NAME}.manifest.json"
+          
+          # Create tarball with all necessary files
+          tar -czf "$TARBALL_NAME" \
+            --exclude=node_modules \
+            --exclude=.git \
+            --exclude=.github \
+            --exclude=.pids \
+            --exclude=current \
+            --exclude=current.backup \
+            --exclude=releases \
+            --exclude=shared \
+            --exclude='*.log' \
+            .
+          
+          # Calculate checksum
+          SHA256=$(sha256sum "$TARBALL_NAME" | awk '{print $1}')
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+          echo "tarball=$TARBALL_NAME" >> $GITHUB_OUTPUT
+          echo "manifest=$MANIFEST_NAME" >> $GITHUB_OUTPUT
+          
+          # Create manifest
+          cat > "$MANIFEST_NAME" <<EOF
+          {
+            "commit": "${{ github.sha }}",
+            "ref": "${{ github.ref }}",
+            "workflow_run_id": "${{ github.run_id }}",
+            "workflow_run_number": "${{ github.run_number }}",
+            "actor": "${{ github.actor }}",
+            "timestamp": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
+            "tarball": "$TARBALL_NAME",
+            "sha256": "$SHA256"
+          }
+          EOF
+          
+          echo "✅ Created deployment package: $TARBALL_NAME ($SHA256)"
+
+      - name: Upload deployment artifact
+        id: upload
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-monitor-deployment-${{ github.sha }}
+          path: |
+            ${{ steps.package.outputs.tarball }}
+            ${{ steps.package.outputs.manifest }}
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Create GitHub deployment
+        id: deploy
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha,
+              environment: 'production',
+              required_contexts: [],
+              auto_merge: false,
+              description: `Deploy ${context.sha.substring(0, 7)} by ${context.actor}`,
+              payload: {
+                workflow: {
+                  run_id: context.runId,
+                  run_number: context.runNumber
+                },
+                source: {
+                  commit: context.sha,
+                  ref: context.ref,
+                  actor: context.actor
+                },
+                artifact: {
+                  id: '${{ steps.upload.outputs.artifact-id }}',
+                  name: 'app-monitor-deployment-${{ github.sha }}',
+                  tarball: '${{ steps.package.outputs.tarball }}',
+                  manifest: '${{ steps.package.outputs.manifest }}',
+                  sha256: '${{ steps.package.outputs.sha256 }}'
+                }
+              }
+            });
+            
+            core.setOutput('deployment_id', deployment.data.id);
+            
+            // Set initial status to queued
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.data.id,
+              state: 'queued',
+              description: 'Waiting for pull agent to process deployment',
+              environment_url: 'https://app-monitor.yourdomain.com',
+              log_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            });
+            
+            console.log(`✅ Created deployment ${deployment.data.id}`);
+
+      - name: Display deployment info
+        run: |
+          echo "🏭 PRODUCTION DEPLOYMENT CREATED"
+          echo "================================"
+          echo "Deployment ID: ${{ steps.deploy.outputs.deployment_id }}"
+          echo "Artifact ID: ${{ steps.upload.outputs.artifact-id }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "SHA256: ${{ steps.package.outputs.sha256 }}"
+          echo ""
+          echo "⏳ Pull agent will process this deployment within 2 minutes"
+          echo "📊 Monitor status: journalctl -u app-monitor-deploy-agent.service -f"
+
+  # Monitor deployment status
+  monitor-deployment:
+    name: Monitor Deployment
+    needs: build-and-package
+    runs-on: ubuntu-latest
+    permissions:
+      deployments: read
+    
+    steps:
+      - name: Wait for deployment
+        uses: actions/github-script@v7
+        timeout-minutes: 10
+        with:
+          script: |
+            const deploymentId = '${{ needs.build-and-package.outputs.deployment-id }}';
+            const maxWaitMinutes = 10;
+            const checkIntervalSeconds = 15;
+            const maxChecks = (maxWaitMinutes * 60) / checkIntervalSeconds;
+            
+            console.log(`⏳ Monitoring deployment ${deploymentId}...`);
+            console.log(`Will check every ${checkIntervalSeconds}s for up to ${maxWaitMinutes} minutes`);
+            
+            for (let i = 0; i < maxChecks; i++) {
+              const statuses = await github.rest.repos.listDeploymentStatuses({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                deployment_id: deploymentId,
+                per_page: 1
+              });
+              
+              if (statuses.data.length > 0) {
+                const latestStatus = statuses.data[0];
+                console.log(`Status: ${latestStatus.state} - ${latestStatus.description || 'No description'}`);
+                
+                if (latestStatus.state === 'success') {
+                  console.log('✅ Deployment completed successfully!');
+                  return;
+                } else if (latestStatus.state === 'failure' || latestStatus.state === 'error') {
+                  core.setFailed(`❌ Deployment failed: ${latestStatus.description}`);
+                  return;
+                }
+              }
+              
+              if (i < maxChecks - 1) {
+                await new Promise(resolve => setTimeout(resolve, checkIntervalSeconds * 1000));
+              }
+            }
+            
+            core.setFailed(`⏰ Deployment monitoring timed out after ${maxWaitMinutes} minutes. Check server logs.`);
+
+      - name: Deployment complete
+        if: success()
+        run: |
+          echo "✅ PRODUCTION DEPLOYMENT SUCCESSFUL"
+          echo "Commit: ${{ github.sha }}"
+          echo "Deployment ID: ${{ needs.build-and-package.outputs.deployment-id }}"
