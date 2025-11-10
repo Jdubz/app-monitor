@@ -372,6 +372,16 @@ describe('PRMonitorService', () => {
         assigned_agent: 'backend-specialist',
         followup_tasks: []
       } as any);
+
+      // Mock createTask to return a followup task with an ID
+      vi.mocked(mockTaskQueue.createTask!).mockReturnValue({
+        id: 'followup-task-456',
+        title: 'Fix PR #123 issues',
+        type: 'fix',
+        status: 'pending',
+        assigned_agent: 'backend-specialist',
+        followup_for_pr: 123
+      } as any);
     });
 
     it('should include failure category in task description', async () => {
