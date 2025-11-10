@@ -372,6 +372,68 @@ router.post('/check_run', async (req: Request, res: Response) => {
 });
 
 /**
+ * GitHub Webhook endpoint for Pull Request Review events
+ * Handles Copilot and human code reviews to trigger followup tasks and auto-merge
+ * 
+ * @route POST /api/github/webhooks/pr_review
+ */
+router.post('/pr_review', async (req: Request, res: Response) => {
+  try {
+    const event = req.headers['x-github-event'] as string;
+    const delivery = req.headers['x-github-delivery'] as string;
+    
+    if (event !== 'pull_request_review') {
+      return respondError(
+        res,
+        400,
+        'INVALID_EVENT_TYPE',
+        `Expected pull_request_review event, received: ${event}`
+      );
+    }
+
+    logger.info({
+      category: 'api',
+      action: 'github_pr_review_webhook_received',
+      message: 'Received pull_request_review webhook',
+      details: {
+        event,
+        delivery,
+        action: req.body?.action,
+        reviewer: req.body?.review?.user?.login,
+        review_state: req.body?.review?.state,
+        pr_number: req.body?.pull_request?.number,
+        repository: req.body?.repository?.full_name
+      }
+    });
+
+    if (webhookHandler) {
+      await webhookHandler.handlePullRequestReview(req.body);
+    } else {
+      logger.warn({
+        category: 'api',
+        action: 'webhook_handler_not_configured',
+        message: 'Webhook handler not configured for pull_request_review'
+      });
+    }
+
+    return respondSuccess(res, {
+      message: 'Pull request review webhook received',
+      event,
+      delivery
+    });
+
+  } catch (error) {
+    logger.error({
+      category: 'api',
+      action: 'github_pr_review_webhook_error',
+      message: 'Error processing pull_request_review webhook',
+      error
+    });
+    return respondError(res, 500, 'WEBHOOK_PROCESSING_FAILED', 'Failed to process webhook');
+  }
+});
+
+/**
  * Health check endpoint for webhooks
  * 
  * @route GET /api/github/webhooks/health

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-echo "🔍 Running app-monitor pre-push lint + unit tests..."
+echo "🔍 Running app-monitor pre-push quality checks (lint + tsc + unit tests)..."
 
 # Ensure legacy mirror directories are not present in the repo
 if [ -d "dev-bots/mirror" ]; then
@@ -30,6 +30,18 @@ npm run lint -w frontend || {
 }
 
 echo ""
+echo "🔧 Running TypeScript compilation checks..."
+npm run build -w backend || {
+    echo "❌ Backend TypeScript compilation failed! Please fix errors before pushing."
+    exit 1
+}
+
+npx tsc --noEmit -p frontend/tsconfig.json || {
+    echo "❌ Frontend TypeScript compilation failed! Please fix errors before pushing."
+    exit 1
+}
+
+echo ""
 echo "🧪 Running backend unit tests..."
 CI=true npm run test:unit -w backend || {
     echo "❌ Backend unit tests failed! Please investigate before pushing."
@@ -44,4 +56,4 @@ CI=true npm run test:unit -w frontend || {
 }
 
 echo ""
-echo "✅ Pre-push lint + unit tests completed successfully"
+echo "✅ Pre-push quality checks completed successfully"

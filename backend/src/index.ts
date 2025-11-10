@@ -89,6 +89,24 @@ async function gracefulShutdown(signal: string) {
     });
   });
 
+  // Phase 2.5: Cleanup managed processes
+  console.log('🧹 Cleaning up managed processes...');
+  try {
+    await processManager.cleanupAll();
+    logger.info({
+      category: 'system',
+      action: 'process_cleanup_complete',
+      message: 'Managed processes cleaned up'
+    });
+  } catch (error) {
+    logger.error({
+      category: 'system',
+      action: 'process_cleanup_failed',
+      message: 'Failed to cleanup managed processes',
+      error
+    });
+  }
+
   // Phase 3: Wait for active tasks to complete (with timeout)
   console.log('⏳ Waiting for active tasks to complete (max 60s)...');
   const taskWaitTimeout = 60000; // 60 seconds (increased from 20s)
@@ -213,5 +231,7 @@ async function gracefulShutdown(signal: string) {
 }
 
 // Register shutdown handlers
+// Note: These are the ONLY signal handlers - processManager no longer registers its own
+// The graceful shutdown function is async and will call process.exit() when complete
 process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
 process.on('SIGINT', () => gracefulShutdown('SIGINT'));

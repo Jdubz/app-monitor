@@ -57,6 +57,7 @@ export interface PRStatus {
   url: string;
   state: 'OPEN' | 'CLOSED' | 'MERGED';
   mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
+  mergeable_state?: string; // behind, clean, dirty, unknown, blocked, unstable
   checks: PRCheckStatus[];
   reviews: PRReview[];
   comments: PRComment[];
@@ -394,6 +395,95 @@ export class GitHubPRService {
   }
 
   /**
+   * Get PR details including mergeable_state
+   */
+  async getPR(prNumber: number, repoOwner?: string, repoName?: string): Promise<{ 
+    number: number;
+    mergeable_state: string;
+    state: string;
+    title: string;
+  }> {
+    const owner = repoOwner || this.repoOwner;
+    const repo = repoName || this.repoName;
+
+    const executeGetPR = async () => {
+      const { stdout } = await execWithTimeout(
+        `gh pr view ${prNumber} --repo ${owner}/${repo} --json number,state,title,mergeStateStatus`,
+        30000
+      );
+      
+      const data = JSON.parse(stdout);
+      return {
+        number: data.number,
+        state: data.state,
+        title: data.title,
+        mergeable_state: data.mergeStateStatus || 'unknown'
+      };
+    };
+
+    try {
+      if (this.githubCircuitBreaker) {
+        return await this.githubCircuitBreaker.execute(executeGetPR);
+      } else {
+        return await executeGetPR();
+      }
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'get_pr_failed',
+        message: `Failed to get PR #${prNumber}`,
+        error
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Update PR branch with latest base (merge base into PR branch)
+   * Useful when PR is behind and needs to be brought up to date
+   */
+  async updateBranch(prNumber: number, repoOwner?: string, repoName?: string): Promise<void> {
+    const owner = repoOwner || this.repoOwner;
+    const repo = repoName || this.repoName;
+
+    const executeUpdateBranch = async (): Promise<void> => {
+      logger.info({
+        category: 'pr-workflow',
+        action: 'update_pr_branch',
+        message: `Updating PR #${prNumber} branch with latest base`
+      });
+
+      // Use GitHub API to update branch (merges base into PR branch)
+      await execWithTimeout(
+        `gh api repos/${owner}/${repo}/pulls/${prNumber}/update-branch -X PUT`,
+        30000
+      );
+
+      logger.info({
+        category: 'pr-workflow',
+        action: 'update_pr_branch_success',
+        message: `Successfully updated PR #${prNumber} branch`
+      });
+    };
+
+    try {
+      if (this.githubCircuitBreaker) {
+        await this.githubCircuitBreaker.execute(executeUpdateBranch);
+      } else {
+        await executeUpdateBranch();
+      }
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'update_pr_branch_failed',
+        message: `Failed to update PR #${prNumber} branch`,
+        error
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Add a comment to a PR
    */
   async addComment(prNumber: number, body: string): Promise<void> {
@@ -413,6 +503,87 @@ export class GitHubPRService {
         category: 'pr-workflow',
         action: 'add_pr_comment_failed',
         message: `Failed to add comment to PR #${prNumber}`,
+        error
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Manually track a PR in the workflow
+   * Extracts task ID from branch name if present, associates PR with task
+   */
+  async trackPR(prNumber: number): Promise<void> {
+    try {
+      // Get PR details including branch name
+      const { stdout } = await execWithTimeout(
+        `gh pr view ${prNumber} --repo ${this.repoOwner}/${this.repoName} --json number,headRefName,url,state`,
+        30000
+      );
+      
+      const prData = JSON.parse(stdout);
+      const branchName: string = prData.headRefName;
+      
+      // Extract task ID from branch name (format: task/{taskId}/description or task-{taskId})
+      let taskId: string | null = null;
+      const taskBranchMatch = branchName.match(/^task\/([^/]+)/);
+      if (taskBranchMatch) {
+        taskId = taskBranchMatch[1];
+      } else {
+        const taskDashMatch = branchName.match(/^task-(.+)/);
+        if (taskDashMatch) {
+          taskId = taskDashMatch[1];
+        }
+      }
+
+      if (!taskId) {
+        logger.info({
+          category: 'pr-workflow',
+          action: 'track_pr_no_task',
+          message: `PR #${prNumber} has no task ID in branch name (${branchName}), tracking as standalone PR`
+        });
+      }
+
+      // Import task queue to update task
+      const { getTaskQueueService } = await import('./taskQueue.factory.js');
+      const taskQueue = getTaskQueueService();
+
+      if (taskId) {
+        // Find and update task
+        const task = taskQueue.getTask(taskId);
+        if (task) {
+          await taskQueue.updatePRStatus(taskId, {
+            pr_number: prNumber,
+            pr_url: prData.url,
+            pr_branch: branchName,
+            pr_status: prData.state === 'MERGED' ? 'merged' :
+                      prData.state === 'CLOSED' ? 'closed' : 'pending_checks'
+          });
+          
+          logger.info({
+            category: 'pr-workflow',
+            action: 'track_pr_success',
+            message: `Successfully tracked PR #${prNumber} for task ${taskId}`
+          });
+        } else {
+          logger.warn({
+            category: 'pr-workflow',
+            action: 'track_pr_task_not_found',
+            message: `Task ${taskId} not found, cannot associate with PR #${prNumber}`
+          });
+        }
+      }
+
+      logger.info({
+        category: 'pr-workflow',
+        action: 'track_pr_complete',
+        message: `PR #${prNumber} added to workflow tracking${taskId ? ` (task: ${taskId})` : ''}`
+      });
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'track_pr_failed',
+        message: `Failed to track PR #${prNumber}`,
         error
       });
       throw error;
