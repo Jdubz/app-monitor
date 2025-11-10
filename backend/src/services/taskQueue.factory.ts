@@ -6,6 +6,7 @@
  */
 
 import { TaskQueueService } from './taskQueue.sqlite.js';
+import { config } from '../config.js';
 
 // Singleton instance
 let taskQueueInstance: TaskQueueService | null = null;
@@ -15,7 +16,7 @@ let taskQueueInstance: TaskQueueService | null = null;
  */
 export function getTaskQueueService(dbPath?: string): TaskQueueService {
   if (!taskQueueInstance) {
-    const queueDbPath = dbPath ?? './data/tasks/queue.db';
+    const queueDbPath = dbPath ?? config.databasePath;
     taskQueueInstance = new TaskQueueService(queueDbPath);
   }
   return taskQueueInstance;

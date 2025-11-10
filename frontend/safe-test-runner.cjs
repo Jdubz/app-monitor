@@ -2,7 +2,7 @@
 
 /**
  * Safe Test Runner - app-monitor-frontend
- * 
+ *
  * Prevents test explosions through process locking and resource control.
  * This is the ONLY way to run tests in this repository.
  */
@@ -10,6 +10,7 @@
 const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
+const { getMaxThreads } = require('./vitest.shared.config.js')
 
 // Configuration
 const LOCK_FILE = path.join(__dirname, '.test-lock')
@@ -107,13 +108,18 @@ class SafeTestRunner {
   async runTests() {
     return new Promise((resolve) => {
       console.log('\n🧪 Running tests...')
-      
-      const testProcess = spawn('npx', ['vitest', 'run', '--no-coverage', '--reporter=verbose'], {
+
+      // Get thread count from shared config
+      const maxThreads = getMaxThreads()
+
+      const testProcess = spawn('npx', ['vitest', 'run', '--config', 'vitest.unit.config.ts', '--no-coverage', '--reporter=verbose'], {
         stdio: 'inherit',
         shell: process.platform === 'win32',
-        env: { 
-          ...process.env, 
-          NODE_OPTIONS: '--max-old-space-size=2048' 
+        env: {
+          ...process.env,
+          NODE_OPTIONS: '--max-old-space-size=2048',
+          VITEST_MAX_THREADS: maxThreads,
+          VITEST_MIN_THREADS: '1'
         }
       })
 

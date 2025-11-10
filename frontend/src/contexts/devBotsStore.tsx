@@ -115,8 +115,8 @@ export function DevBotsStoreProvider({ children, socket }: DevBotsStoreProviderP
 
       setSelectedTaskId((current) => {
         if (current) return current;
-        const firstPending = queueResult.items.find((item) => item.bucket === 'pending');
-        const firstActive = queueResult.items.find((item) => item.bucket === 'active');
+        const firstPending = queueResult.items?.find((item) => item.bucket === 'pending');
+        const firstActive = queueResult.items?.find((item) => item.bucket === 'active');
         return firstPending?.task.id ?? firstActive?.task.id ?? null;
       });
       setSelectedWorkerId((current) => {
@@ -227,7 +227,7 @@ export function DevBotsStoreProvider({ children, socket }: DevBotsStoreProviderP
   }, [selectedTaskId, fetchTaskDetail]);
 
   const queueRows = useMemo<QueueRow[]>(() => {
-    if (queueSummary) {
+    if (queueSummary?.items) {
       return queueSummary.items;
     }
     if (!status) {

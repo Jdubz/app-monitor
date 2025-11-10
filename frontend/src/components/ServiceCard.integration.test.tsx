@@ -225,8 +225,11 @@ describe('ServiceCard Integration Tests', () => {
         status: 'stopped'
       });
 
-      // Use a slow mock to test loading state properly
-      const slowMockOnStart = vi.fn().mockImplementation(() => new Promise(resolve => setTimeout(resolve, 100)));
+      // Use a slow mock to test loading state properly - real promise without setTimeout
+      let resolveStart: (() => void) | undefined;
+      const slowMockOnStart = vi.fn().mockImplementation(() => new Promise<void>((resolve) => {
+        resolveStart = resolve;
+      }));
 
       render(<ServiceCard {...defaultProps} service={stoppedService} onStart={slowMockOnStart} />);
 
@@ -243,10 +246,15 @@ describe('ServiceCard Integration Tests', () => {
         startButton.click();
       });
 
+      // Resolve the promise
+      await act(async () => {
+        resolveStart!();
+      });
+
       // Wait for the promise to resolve
       await waitFor(() => {
         expect(slowMockOnStart).toHaveBeenCalledTimes(1);
-      }, { timeout: 200 });
+      }, { timeout: 5000 });
     });
 
     it('should handle component unmounting during async operations', async () => {

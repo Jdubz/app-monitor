@@ -1,8 +1,9 @@
 import { defineConfig } from 'vitest/config';
+import { getThreadPoolConfig, TEST_TIMEOUTS } from './vitest.shared.config.js';
 
 /**
  * Safe Vitest Configuration - dev-monitor-backend
- * 
+ *
  * Prevents test explosions through strict file inclusion and process limits.
  */
 
@@ -30,21 +31,11 @@ const heavyBotPatterns = [
 
 export default defineConfig({
   test: {
-    // CRITICAL: Single process execution - NO parallelism
-    pool: 'threads',
-    poolOptions: {
-      threads: {
-        maxThreads: 1,  // ONLY 1 worker at a time
-        minThreads: 1,
-      },
-    },
-    
-    // CRITICAL: No file parallelism
-    fileParallelism: false,
-    
-    // CRITICAL: No test parallelism
-    testTimeout: 30000,
-    hookTimeout: 30000,
+    // Shared parallelism configuration
+    ...getThreadPoolConfig(8),
+
+    // Integration test timeouts
+    ...TEST_TIMEOUTS.integration,
     
     // Environment setup
     environment: 'node',

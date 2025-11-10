@@ -72,6 +72,15 @@ jobs:
       - name: Run backend linter
         run: npm run lint -w backend
 
+      - name: Run frontend linter
+        run: npm run lint -w frontend
+
+      - name: Run frontend unit tests
+        run: npm run test -w frontend
+
+      - name: Run frontend integration tests
+        run: npm run test:integration -w frontend
+
       - name: Build backend
         run: npm run build -w backend
 

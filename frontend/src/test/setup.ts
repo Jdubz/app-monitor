@@ -2,6 +2,7 @@ import '@testing-library/jest-dom'
 import { vi, beforeEach, afterEach } from 'vitest'
 import { cleanup } from '@testing-library/react'
 import { TextEncoder, TextDecoder } from 'util'
+import { createConfiguredMockApiClient, installMockApiClient } from './api-mocks'
 
 if (!(globalThis as { TextEncoder?: typeof TextEncoder }).TextEncoder) {
   (globalThis as { TextEncoder: typeof TextEncoder }).TextEncoder = TextEncoder
@@ -47,15 +48,24 @@ global.confirm = vi.fn();
 // Mock window.prompt
 global.prompt = vi.fn();
 
-// Mock window.location.reload
-delete (window as any).location;
-window.location = { ...window.location, reload: vi.fn() } as any;
-
-// Mock window.location.assign
-window.location.assign = vi.fn();
-
-// Mock window.location.replace
-window.location.replace = vi.fn();
+// Mock window.location with proper defaults for BrowserRouter
+delete (window as unknown as { location?: unknown }).location;
+(window as unknown as { location: Location }).location = {
+  href: 'http://localhost:3000/',
+  origin: 'http://localhost:3000',
+  protocol: 'http:',
+  host: 'localhost:3000',
+  hostname: 'localhost',
+  port: '3000',
+  pathname: '/',
+  search: '',
+  hash: '',
+  reload: vi.fn(),
+  assign: vi.fn(),
+  replace: vi.fn(),
+  toString: () => 'http://localhost:3000/',
+  ancestorOrigins: {} as DOMStringList,
+} as Location;
 
 // Mock window.history
 Object.defineProperty(window, 'history', {
@@ -83,12 +93,92 @@ global.IntersectionObserver = vi.fn().mockImplementation(() => ({
   disconnect: vi.fn(),
 }));
 
+// Mock EventSource for SSE (Server-Sent Events)
+class MockEventSource {
+  url: string;
+  withCredentials: boolean;
+  readyState: number;
+  onmessage: ((event: MessageEvent) => void) | null;
+  onerror: ((event: Event) => void) | null;
+  onopen: ((event: Event) => void) | null;
+  
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSED = 2;
+  
+  readonly CONNECTING = 0;
+  readonly OPEN = 1;
+  readonly CLOSED = 2;
+
+  constructor(url: string, config?: EventSourceInit) {
+    this.url = url;
+    this.withCredentials = config?.withCredentials ?? false;
+    this.readyState = MockEventSource.CONNECTING;
+    this.onmessage = null;
+    this.onerror = null;
+    this.onopen = null;
+  }
+
+  addEventListener = vi.fn();
+  removeEventListener = vi.fn();
+  close = vi.fn(() => {
+    this.readyState = MockEventSource.CLOSED;
+  });
+  dispatchEvent = vi.fn();
+}
+
+global.EventSource = MockEventSource as unknown as typeof EventSource;
+
 // Mock MutationObserver
 global.MutationObserver = vi.fn().mockImplementation(() => ({
   observe: vi.fn(),
   disconnect: vi.fn(),
   takeRecords: vi.fn(),
 }));
+
+// Mock HTMLElement.prototype.scrollIntoView
+HTMLElement.prototype.scrollIntoView = vi.fn();
+HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
+  fillStyle: '',
+  fillRect: vi.fn(),
+  clearRect: vi.fn(),
+  getImageData: vi.fn(() => ({ data: [] })),
+  putImageData: vi.fn(),
+  createImageData: vi.fn(() => ({ data: [] })),
+  setTransform: vi.fn(),
+  drawImage: vi.fn(),
+  save: vi.fn(),
+  restore: vi.fn(),
+  beginPath: vi.fn(),
+  moveTo: vi.fn(),
+  lineTo: vi.fn(),
+  closePath: vi.fn(),
+  stroke: vi.fn(),
+  translate: vi.fn(),
+  scale: vi.fn(),
+  rotate: vi.fn(),
+  arc: vi.fn(),
+  fill: vi.fn(),
+  measureText: vi.fn(() => ({ width: 0 })),
+  transform: vi.fn(),
+  rect: vi.fn(),
+  clip: vi.fn(),
+  font: '',
+  textAlign: '',
+  textBaseline: '',
+  globalAlpha: 1,
+  globalCompositeOperation: '',
+  strokeStyle: '',
+  lineWidth: 1,
+  lineCap: '',
+  lineJoin: '',
+  miterLimit: 0,
+  shadowBlur: 0,
+  shadowColor: '',
+  shadowOffsetX: 0,
+  shadowOffsetY: 0,
+  canvas: null,
+})) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 
 // Mock requestAnimationFrame
 global.requestAnimationFrame = vi.fn((cb) => setTimeout(cb, 0));
@@ -157,8 +247,15 @@ Object.defineProperty(import.meta, 'env', {
   writable: true,
 });
 
+const resetGlobalApiClientMock = () => {
+  installMockApiClient(createConfiguredMockApiClient())
+}
+
+resetGlobalApiClientMock()
+
 // Setup test environment
 beforeEach(() => {
+  resetGlobalApiClientMock()
   // Clear all mocks before each test
   vi.clearAllMocks();
   

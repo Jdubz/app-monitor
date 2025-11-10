@@ -23,6 +23,7 @@ import type { AgentPersonality } from './agentPersonalities.js';
 import type { DockerManager } from './dockerManager.js';
 // WorkspaceOrchestrator removed - we use Docker cp for file systems, not git mirrors
 import * as DockerConfig from './dockerConfig.js';
+import { getLogPaths } from './workTargetDocumentation.js';
 
 export interface WorkspaceContext {
   id: string;
@@ -200,6 +201,22 @@ export class EphemeralWorkerService {
       const binds: string[] = [
         `${hostLogsDir}:/app/logs:rw`
       ];
+
+      // Mount work-target specific log directories for troubleshooting
+      // Default to 'dev-bots' work target for all tasks
+      const workTarget = 'dev-bots';
+      const logPaths = getLogPaths(workTarget);
+      for (const logPath of logPaths) {
+        if (fs.existsSync(logPath.hostPath)) {
+          binds.push(`${logPath.hostPath}:${logPath.containerPath}:${logPath.mode || 'ro'}`);
+          logger.info({
+            category: 'process',
+            action: 'work_target_log_mounted',
+            message: `Mounting ${logPath.description} for work target: ${workTarget}`,
+            details: { hostPath: logPath.hostPath, containerPath: logPath.containerPath }
+          });
+        }
+      }
 
       const homeDir = os.homedir();
 

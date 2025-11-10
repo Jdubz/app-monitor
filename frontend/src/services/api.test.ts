@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import axios from 'axios';
 import type { AxiosInstance } from 'axios';
 import * as apiModule from './api';
+import { resetApiClientInstance } from './api';
 import { mockServices, mockHealthCheckResponse, mockPortStatuses } from '../test/fixtures';
 import type { ApiError } from '@/types/contracts';
 
@@ -40,6 +41,7 @@ const mockAxiosInstance = (axios.create as ReturnType<typeof vi.fn>)() as AxiosI
 describe('API Service', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetApiClientInstance();
   });
 
   describe('Health Check', () => {
