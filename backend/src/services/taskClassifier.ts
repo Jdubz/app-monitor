@@ -128,11 +128,11 @@ export class TaskClassifier {
     });
 
     // Pattern mentions like "*.ts" or "TypeScript files"
-    const patternRegex = /\*?\.(ts|js|md|sql|json|yaml|yml|tsx|jsx|py|go|css|scss|html)\b/gi;
+    const patternRegex = /[*]?\.(ts|js|md|sql|json|yaml|yml|tsx|jsx|py|go|css|scss|html)\b/gi;
     const patternMatches = description.match(patternRegex) || [];
     
     patternMatches.forEach(pattern => {
-      const ext = pattern.replace(/[\*.]/g, '').toLowerCase();
+      const ext = pattern.replace(/[*.]/g, '').toLowerCase();
       if (ext) patterns.add(ext);
     });
 

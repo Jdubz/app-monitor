@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { TaskClassifier, type TaskCategory, type TaskComplexity } from './taskClassifier.js';
+import { TaskClassifier } from './taskClassifier.js';
 
 describe('TaskClassifier', () => {
   let classifier: TaskClassifier;
