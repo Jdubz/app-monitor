@@ -273,6 +273,23 @@ export class EphemeralWorkerService {
         binds.push(`${sshDir}:/home/worker/.ssh:ro`);
       }
 
+      // Mount GitHub CLI config for gh pr create
+      const ghConfigDir = path.join(homeDir, '.config', 'gh');
+      if (fs.existsSync(ghConfigDir)) {
+        binds.push(`${ghConfigDir}:/home/node/.config/gh:ro`);
+        logger.info({
+          category: 'process',
+          action: 'gh_config_mounted',
+          message: `Mounting GitHub CLI config from: ${ghConfigDir}`
+        });
+      } else {
+        logger.warn({
+          category: 'process',
+          action: 'gh_config_not_found',
+          message: 'GitHub CLI config not found, PR creation may fail. Run: gh auth login'
+        });
+      }
+
       const envVars = [
         `AGENT_ID=${agent.id}`,
         `AGENT_NAME=${agent.name}`,
