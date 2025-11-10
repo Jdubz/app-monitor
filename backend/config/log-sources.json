@@ -48,13 +48,13 @@
     },
     "dev-bots": {
       "name": "Dev Bots",
-      "enabled": false,
+      "enabled": true,
       "path": "../dev-bots/logs/dev-bots.log",
       "format": "structured",
       "color": "#805AD5",
       "parser": "winston",
       "displayOrder": 6,
-      "note": "Enable after Phase B (dev-bots integration)"
+      "note": "Real-time monitoring of dev-bot task execution"
     }
   },
   "globalSettings": {

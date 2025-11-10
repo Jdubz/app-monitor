@@ -21,8 +21,13 @@ EnvironmentFile=-/opt/app-monitor/shared/.env
 # Start the backend server
 ExecStart=/usr/bin/node /opt/app-monitor/current/backend/dist/index.js
 
-# Graceful shutdown with 30s timeout
-TimeoutStopSec=30
+# Graceful shutdown with extended timeout for active tasks
+# Allows time for:
+# - Active tasks to complete (up to 60s)
+# - WebSocket connections to drain (30s)
+# - State persistence (10s)
+# - Buffer (20s)
+TimeoutStopSec=120
 KillMode=mixed
 KillSignal=SIGTERM
 

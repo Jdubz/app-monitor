@@ -196,6 +196,20 @@ export class SocketService {
       };
       this.emit('health:update', this.healthMetrics);
     });
+
+    // Server migration notification (for zero-downtime deployments)
+    this.socket.on('system_event', (data: any) => {
+      if (data.type === 'server_migration') {
+        log.info('Server migration detected', data.message);
+        log.info(`Will automatically reconnect in ${data.reconnectDelay}ms`);
+
+        // Emit migration event for UI notification
+        this.emit('server:migration', data);
+
+        // Socket.IO will automatically reconnect after disconnect
+        // No manual action needed - reconnection is handled automatically
+      }
+    });
   }
 
   /**

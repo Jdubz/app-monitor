@@ -327,6 +327,14 @@ export class MockConnectionManager {
     return this.connections.size;
   }
 
+  setIO(_io: unknown) {
+    // Mock implementation - no-op for tests
+  }
+
+  broadcastToAll(_event: string | object, ..._args: any[]) {
+    // Mock implementation - no-op for tests
+  }
+
   getStats() {
     return {
       totalConnections: this.connections.size,

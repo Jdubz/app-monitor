@@ -63,9 +63,11 @@ LABEL version="3.0.0"
 RUN apk add --no-cache \
     bash \
     git \
+    git-lfs \
     curl \
     wget \
     jq \
+    yq \
     ca-certificates \
     openssh-client \
     vim \
@@ -73,6 +75,16 @@ RUN apk add --no-cache \
     procps \
     sqlite \
     sqlite-libs \
+    github-cli \
+    python3 \
+    py3-pip \
+    make \
+    zip \
+    unzip \
+    postgresql-client \
+    openssl \
+    shellcheck \
+    ripgrep \
     && rm -rf /var/cache/apk/*
 
 # Create non-root user for security
@@ -150,16 +162,28 @@ else
     echo "  ❌ Codex:       NOT FOUND"
     exit 1
 fi
+
+if which gh >/dev/null 2>&1; then
+    echo "  ✅ GitHub CLI:  $(which gh)"
+else
+    echo "  ❌ GitHub CLI:  NOT FOUND"
+    exit 1
+fi
 echo ""
 
 echo "🛠️  Development Tools:"
-for tool in typescript eslint prettier vitest; do
+for tool in typescript eslint prettier vitest git-lfs make shellcheck yq rg psql; do
     if which $tool >/dev/null 2>&1 || npm list -g $tool >/dev/null 2>&1; then
         echo "  ✅ $tool"
     else
         echo "  ⚠️  $tool"
     fi
 done
+echo ""
+
+echo "🐍 Python Environment:"
+echo "  Python:      $(python3 --version 2>&1 | cut -d' ' -f2)"
+echo "  pip:         $(pip3 --version 2>&1 | cut -d' ' -f2)"
 echo ""
 
 echo "📁 Workspace:"
@@ -178,7 +202,7 @@ RUN chmod +x /home/node/verify-install.sh
 # ==============================================================================
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD which claude && which codex && which node || exit 1
+  CMD which claude && which codex && which gh && which node || exit 1
 
 # ==============================================================================
 # DEFAULT COMMAND
