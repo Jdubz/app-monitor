@@ -250,7 +250,7 @@ export class TaskExecutionService {
     return input as FailurePattern;
   }
 
-  // Removed duplicate chooseAgentType - now using AgentTypeManager
+  // Agent selection handled by AgentSelector (intelligent, task-aware selection)
 
   private getAgentDockerImage(_agent: AgentPersonality): string {
     return 'dev-bot:latest';

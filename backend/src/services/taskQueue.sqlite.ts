@@ -180,6 +180,10 @@ export interface Task {
   followup_tasks?: string[]; // Child tasks created to fix PR issues
   // Orphaned PR handling
   is_orphaned_pr?: boolean; // True if this task was auto-adopted from orphaned system PR
+  // Task verification fields (PR workflow quality gates)
+  verification_passed?: boolean; // True if task verification succeeded (>= 80% criteria met)
+  verification_results?: string; // JSON stringified TaskVerificationResult
+  verification_timestamp?: number; // Unix timestamp when verification was performed
   // Intelligent agent selection fields (Phase 0)
   task_category?: 'implementation' | 'analysis' | 'documentation' | 'review' | 'planning';
   file_patterns?: string; // JSON array of file extensions (e.g., ["ts", "md"])
@@ -432,6 +436,38 @@ export class TaskQueueService {
         category: 'process',
         action: 'migration_complete',
         message: 'Task classification columns added successfully for intelligent agent selection'
+      });
+    }
+
+    // Migration 5: Add task verification columns (PR workflow quality gates)
+    const verificationColumns = ['verification_passed', 'verification_results', 'verification_timestamp'];
+    const missingVerificationColumns = verificationColumns.filter(col => !columnNames.has(col));
+
+    if (missingVerificationColumns.length > 0) {
+      logger.info({
+        category: 'process',
+        action: 'adding_verification_columns',
+        message: `Adding ${missingVerificationColumns.length} task verification columns for PR workflow quality gates`,
+        details: { columns: missingVerificationColumns }
+      });
+
+      if (!columnNames.has('verification_passed')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN verification_passed INTEGER;`); // 0 = failed, 1 = passed
+      }
+      if (!columnNames.has('verification_results')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN verification_results TEXT;`); // JSON stringified TaskVerificationResult
+      }
+      if (!columnNames.has('verification_timestamp')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN verification_timestamp INTEGER;`); // Unix timestamp
+      }
+
+      // Create index for verification status queries
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_verification_passed ON tasks(verification_passed) WHERE verification_passed IS NOT NULL;`);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'Task verification columns added successfully for PR workflow quality gates'
       });
     }
   }

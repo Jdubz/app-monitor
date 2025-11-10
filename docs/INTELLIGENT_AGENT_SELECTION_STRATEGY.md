@@ -1,7 +1,7 @@
 # Intelligent Agent Selection Strategy
 
 **Date:** 2025-11-10T20:15:00Z  
-**Status:** CRITICAL - Missing from Dev-Bot Pipeline  
+**Status:** ✅ IMPLEMENTED (Phase 0 Complete)  
 **Priority:** P0 (Blocks effective automation)  
 **Owner:** Platform Tooling Team
 
@@ -9,7 +9,9 @@
 
 ## Problem Statement
 
-**Current State:** AgentTypeManager uses simple rotation strategies (alternate, random, claude-only, codex-only) without considering task requirements or agent capabilities.
+**Previous State:** AgentTypeManager used simple rotation strategies (alternate, random, claude-only, codex-only) without considering task requirements or agent capabilities.
+
+**✅ RESOLVED:** Now using `AgentSelector` with intelligent, rule-based selection that considers task category, complexity, and agent capabilities.
 
 **Issue:** Not all agents are good at all tasks:
 - **Codex** is bad at editing files (especially code) but great for analysis, review, planning, documentation
@@ -134,9 +136,77 @@
 
 ---
 
-## Implementation Plan
+## Implementation Status
 
-### Phase 1: Task Classification System (2-3 days)
+### ✅ Phase 1: Task Classification System
+**Status:** COMPLETE (2025-11-10)
+
+**Completed:**
+- ✅ Added classification fields to tasks table (`task_category`, `file_patterns`, `estimated_complexity`, `preferred_agent`, `classification_reasoning`)
+- ✅ Created TaskClassifier service (`backend/src/services/taskClassifier.ts`)
+- ✅ Integrated auto-classification in TaskQueueService.createTask()
+- ✅ 17 comprehensive tests (100% coverage)
+
+**Implementation Details:**
+- Category inference using regex keyword matching
+- File pattern extraction from task description
+- Complexity estimation based on file count and scope keywords
+- Preferred agent suggestion based on classification
+- Detailed reasoning logged for audit trail
+
+**Files:**
+- `backend/src/services/taskClassifier.ts` (270 lines)
+- `backend/tests/taskClassifier.test.ts` (570 lines, 17 tests)
+- `backend/migrations/007_add_task_classification.sql`
+
+---
+
+### ✅ Phase 2: Intelligent AgentSelector
+**Status:** COMPLETE (2025-11-10)
+
+**Completed:**
+- ✅ Created AgentSelector service (`backend/src/services/agentSelector.ts`)
+- ✅ Integrated with TaskExecutionService for intelligent selection
+- ✅ 20 comprehensive tests (100% coverage)
+- ✅ 9 intelligent selection rules implemented
+
+**Selection Rules:**
+1. Documentation tasks → Codex
+2. Analysis/Planning/Review → Codex
+3. Markdown-only files → Codex
+4. Code files (.ts/.js/.py) → Claude
+5. Previous agent failure → Try alternate agent
+6. Complex tasks → Claude
+7. Fallback for CodexAgent → Claude
+8. Explicit preferred_agent → Use preferred
+9. Default fallback → Claude
+
+**Implementation Details:**
+- Rule-based selection (O(9) constant time)
+- Considers task classification, file patterns, complexity, retry history
+- Logs detailed selection reasoning
+- Handles edge cases and fallbacks
+
+**Files:**
+- `backend/src/services/agentSelector.ts` (280 lines)
+- `backend/tests/agentSelector.test.ts` (700 lines, 20 tests)
+
+---
+
+### 🔄 Phase 3: Learning & Optimization (Future)
+**Status:** PLANNED for Phase 0.5
+
+**Goals:**
+- Track success rates by agent/category
+- Optimize rules based on historical data
+- Add machine learning for pattern detection
+- Monitor classification accuracy
+
+---
+
+## Original Implementation Plan
+
+### Phase 1: Task Classification System (2-3 days) - ✅ COMPLETE
 
 **Goal:** Add intelligent classification to TaskQueue
 
@@ -337,11 +407,45 @@
    - Track success rates by agent + task category
    - Adjust selection logic based on empirical data
 
-**Estimated Time:** 2-3 days
+**Original Plan:** Replace AgentTypeManager with intelligent selection
+
+**Actual Implementation:**
+```typescript
+// AgentSelector provides intelligent, rule-based selection
+export class AgentSelector {
+  selectAgent(criteria: AgentSelectionCriteria): AgentType {
+    // 9 intelligent rules considering:
+    // - Task category (documentation, analysis, implementation, etc.)
+    // - File patterns (.md, .ts, .js, etc.)
+    // - Complexity (simple, medium, complex)
+    // - Retry history (avoid repeating failures)
+    // - Explicit preferences (preferred_agent field)
+  }
+  
+  explainSelection(criteria, selected): string {
+    // Returns human-readable reasoning
+  }
+}
+```
+
+**Integration:**
+```typescript
+// In TaskExecutionService.executeTaskWithDockerRun()
+const classification = await this.taskQueue.getTaskClassification(task.id);
+const agentType = this.agentSelector.selectAgent({
+  taskCategory: classification.task_category,
+  filePatterns: JSON.parse(classification.file_patterns || '[]'),
+  complexity: classification.estimated_complexity,
+  previousAttempts: retryHistory
+});
+
+// Logs reasoning and executes with selected agent
+```
 
 ---
 
-### Phase 3: Copilot Delegation Integration (1-2 days)
+### 🔄 Phase 3: Copilot Delegation Integration (Future)
+**Status:** NOT IMPLEMENTED (Low Priority)
 
 **Goal:** Enable async delegation for low-risk tasks
 

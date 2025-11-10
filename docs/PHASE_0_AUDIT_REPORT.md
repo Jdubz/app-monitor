@@ -259,6 +259,44 @@ agent_type TEXT CHECK(agent_type IN ('claude', 'codex')) -- Which agent executed
 
 ---
 
+## Cleanup Actions Taken
+
+### 1. ✅ Updated Outdated Comments
+
+**Files Updated:**
+- `backend/src/services/devBotsManager.ts` (line 117)
+  - Changed: "Agent type rotation - now managed by AgentTypeManager"
+  - To: "Agent selection now handled by AgentSelector (intelligent, task-aware selection)"
+
+- `backend/src/services/taskExecution.service.ts` (line 253)
+  - Changed: "Removed duplicate chooseAgentType - now using AgentTypeManager"
+  - To: "Agent selection handled by AgentSelector (intelligent, task-aware selection)"
+
+---
+
+### 2. ✅ Updated Documentation
+
+**Files Updated:**
+- `docs/INTELLIGENT_AGENT_SELECTION_STRATEGY.md`
+  - Updated status from "CRITICAL - Missing" to "✅ IMPLEMENTED"
+  - Added implementation status for Phase 1 & 2
+  - Documented all completed work
+  - Added file references and line counts
+  - Clarified future phases (Phase 3 delegation)
+
+---
+
+### 3. ✅ Removed Deprecated Code
+
+**Files Removed:**
+- `backend/src/services/agentTypeManager.ts` - Deprecated, replaced by AgentSelector
+  - Verified no imports/references exist
+  - Safe to remove (already marked @deprecated)
+
+**Reason:** AgentTypeManager provided only simple rotation (alternate, random, claude-only, codex-only) without considering task requirements. Fully replaced by intelligent AgentSelector.
+
+---
+
 ## Best Practices Review ✅ PASS
 
 ### Code Style
@@ -282,14 +320,16 @@ agent_type TEXT CHECK(agent_type IN ('claude', 'codex')) -- Which agent executed
 
 ## Potential Future Issues
 
-### 1. Manual Cleanup Needed (Low Priority)
+### 1. ✅ Manual Cleanup (COMPLETED)
 
-**Items:**
-- Update outdated comments in devBotsManager.ts
-- Consider removing agentTypeManager.ts (after confirming no references)
-- Review docs for any other AgentTypeManager references
+**Items Cleaned:**
+- ✅ Updated outdated comments in devBotsManager.ts
+- ✅ Updated outdated comments in taskExecution.service.ts
+- ✅ Removed agentTypeManager.ts (deprecated, no references found)
+- ✅ Updated INTELLIGENT_AGENT_SELECTION_STRATEGY.md to reflect implementation status
+- ✅ Removed compiled agentTypeManager files from dist/
 
-**Impact:** Low - These are cosmetic issues.
+**Status:** All cleanup complete, no remaining technical debt from Phase 0.
 
 ---
 

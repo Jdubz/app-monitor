@@ -113,9 +113,7 @@ export class DevBotsManager extends EventEmitter {
   // Worker management
   private workers = new Map<string, WorkerInfo>();
   // ephemeralWorkers now managed by ephemeralWorkerService
-
-  // Agent type rotation - now managed by AgentTypeManager
-  // Removed duplicate logic - using centralized AgentTypeManager instead
+  // Agent selection now handled by AgentSelector (intelligent, task-aware selection)
 
   // Enhanced services
   // TaskPersistence removed - using SQLite directly
