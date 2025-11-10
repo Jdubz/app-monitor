@@ -461,6 +461,102 @@ ${taskChain}
   }
 
   /**
+   * Categorize failure type based on issue content using keyword pattern matching
+   */
+  private categorizeFailure(issues: string[]): {
+    category: 'ci_failure' | 'test_failure' | 'lint_failure' | 'merge_conflict' | 'review_feedback' | 'verification_failure' | 'unknown';
+    confidence: 'high' | 'medium' | 'low';
+  } {
+    const issuesText = issues.join(' ').toLowerCase();
+
+    // CI/Build failures - high confidence patterns
+    const ciBuildPatterns = [
+      /build.*fail/i,
+      /compilation.*error/i,
+      /webpack.*error/i,
+      /rollup.*error/i,
+      /vite.*error/i,
+      /tsc.*error/i,
+      /docker.*build.*fail/i,
+      /npm.*build.*fail/i
+    ];
+    if (ciBuildPatterns.some(p => p.test(issuesText))) {
+      return { category: 'ci_failure', confidence: 'high' };
+    }
+
+    // Test failures - high confidence patterns
+    const testPatterns = [
+      /test.*fail/i,
+      /jest.*fail/i,
+      /mocha.*fail/i,
+      /vitest.*fail/i,
+      /cypress.*fail/i,
+      /e2e.*fail/i,
+      /unit.*test.*fail/i,
+      /integration.*test.*fail/i,
+      /\d+.*failing/i,
+      /expected.*received/i
+    ];
+    if (testPatterns.some(p => p.test(issuesText))) {
+      return { category: 'test_failure', confidence: 'high' };
+    }
+
+    // Linting/Type checking failures - high confidence patterns
+    const lintPatterns = [
+      /lint.*fail/i,
+      /eslint.*error/i,
+      /prettier.*error/i,
+      /type.*check.*fail/i,
+      /typescript.*error/i,
+      /type.*error/i,
+      /syntax.*error/i,
+      /formatting.*error/i
+    ];
+    if (lintPatterns.some(p => p.test(issuesText))) {
+      return { category: 'lint_failure', confidence: 'high' };
+    }
+
+    // Merge conflicts - high confidence patterns
+    const mergeConflictPatterns = [
+      /merge.*conflict/i,
+      /conflicting/i,
+      /cannot.*merge/i,
+      /resolve.*conflict/i,
+      /branch.*conflict/i
+    ];
+    if (mergeConflictPatterns.some(p => p.test(issuesText))) {
+      return { category: 'merge_conflict', confidence: 'high' };
+    }
+
+    // Review feedback - medium confidence patterns
+    const reviewPatterns = [
+      /copilot.*found/i,
+      /blocking.*issue/i,
+      /requested.*change/i,
+      /reviewer.*feedback/i,
+      /code.*review/i,
+      /change.*request/i
+    ];
+    if (reviewPatterns.some(p => p.test(issuesText))) {
+      return { category: 'review_feedback', confidence: 'medium' };
+    }
+
+    // Verification failures - medium confidence patterns
+    const verificationPatterns = [
+      /verification.*fail/i,
+      /acceptance.*criteria/i,
+      /criteria.*not.*met/i,
+      /verification.*passed.*false/i
+    ];
+    if (verificationPatterns.some(p => p.test(issuesText))) {
+      return { category: 'verification_failure', confidence: 'medium' };
+    }
+
+    // Default to unknown with low confidence
+    return { category: 'unknown', confidence: 'low' };
+  }
+
+  /**
    * Create a followup task to address PR issues
    */
   async createFollowupTask(
@@ -527,9 +623,12 @@ ${taskChain}
       issues.push(`Human reviewer(s) requested changes: ${changeRequests.map(r => r.author).join(', ')}`);
     }
 
+    // Categorize the failure type
+    const failureClassification = this.categorizeFailure(issues);
+
     // Check if we've already created a followup for these exact issues
     const issueFingerprint = this.hashIssues(issues);
-    
+
     if (this.taskQueue.hasFollowupFingerprint(prNumber, issueFingerprint)) {
       logger.info({
         category: 'pr-workflow',
@@ -538,7 +637,9 @@ ${taskChain}
         details: {
           prNumber,
           issueFingerprint,
-          issuesCount: issues.length
+          issuesCount: issues.length,
+          failureCategory: failureClassification.category,
+          confidence: failureClassification.confidence
         }
       });
       return null;
@@ -547,7 +648,7 @@ ${taskChain}
     // Track fingerprint in database
     this.taskQueue.addFollowupFingerprint(prNumber, issueFingerprint);
 
-    const taskDescription = `Fix issues found in PR #${prNumber}:\n\n${issues.join('\n')}`;
+    const taskDescription = `Fix issues found in PR #${prNumber}:\n\n${issues.join('\n')}\n\n**Failure Category:** ${failureClassification.category} (confidence: ${failureClassification.confidence})`;
 
     logger.info({
       category: 'pr-workflow',
@@ -556,7 +657,9 @@ ${taskChain}
       details: {
         prNumber,
         parentTaskId: taskId,
-        issuesCount: issues.length
+        issuesCount: issues.length,
+        failureCategory: failureClassification.category,
+        failureConfidence: failureClassification.confidence
       }
     });
 
