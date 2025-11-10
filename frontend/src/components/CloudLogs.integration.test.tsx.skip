@@ -8,8 +8,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
-import { DeployedServicesTab } from '../tabs/DeployedServicesTab';
-import { createMockEnvironment, mockGenerators, apiSuccess } from '../../test/api-mocks';
+import { DeployedServicesTab } from './tabs/DeployedServicesTab';
+import { createMockEnvironment, mockGenerators, apiSuccess } from '../test/api-mocks';
 
 const mockEnv = createMockEnvironment();
 
