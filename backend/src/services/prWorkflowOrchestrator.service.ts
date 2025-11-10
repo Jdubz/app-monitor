@@ -411,6 +411,98 @@ export class PRWorkflowOrchestrator {
     return await this.artifactRecovery.recoverOrphanedPRs();
   }
 
+  // ==========================================================================
+  // Webhook Event Handlers
+  // ==========================================================================
+
+  /**
+   * Handle PR opened event from webhook
+   */
+  async onPROpened(prNumber: number, pr: import('./githubWebhookHandler.service.js').GitHubPullRequestPayload['pull_request']): Promise<void> {
+    logger.info({
+      category: 'pr-workflow',
+      action: 'webhook_pr_opened',
+      message: `Webhook: PR #${prNumber} opened`,
+      details: { pr_number: prNumber, title: pr.title }
+    });
+
+    // PR status is already updated by webhook handler
+    // Here we can add any orchestrator-specific logic
+    // Future: Trigger initial checks, notify stakeholders, etc.
+  }
+
+  /**
+   * Handle PR synchronized event (new commits pushed)
+   */
+  async onPRSynchronize(prNumber: number, _pr: import('./githubWebhookHandler.service.js').GitHubPullRequestPayload['pull_request']): Promise<void> {
+    logger.info({
+      category: 'pr-workflow',
+      action: 'webhook_pr_synchronized',
+      message: `Webhook: PR #${prNumber} synchronized with new commits`,
+      details: { pr_number: prNumber }
+    });
+
+    // PR status reset to pending_checks by webhook handler
+    // Future: Could trigger re-check logic here
+  }
+
+  /**
+   * Handle PR merged event
+   */
+  async onPRMerged(prNumber: number, _pr: import('./githubWebhookHandler.service.js').GitHubPullRequestPayload['pull_request']): Promise<void> {
+    logger.info({
+      category: 'pr-workflow',
+      action: 'webhook_pr_merged',
+      message: `Webhook: PR #${prNumber} merged`,
+      details: { pr_number: prNumber, merged_at: pr.merged_at }
+    });
+
+    // Task completion is handled by webhook handler
+    // Future: Could trigger post-merge workflows here
+  }
+
+  /**
+   * Handle PR closed without merging
+   */
+  async onPRClosed(prNumber: number, _pr: import('./githubWebhookHandler.service.js').GitHubPullRequestPayload['pull_request']): Promise<void> {
+    logger.info({
+      category: 'pr-workflow',
+      action: 'webhook_pr_closed',
+      message: `Webhook: PR #${prNumber} closed without merging`,
+      details: { pr_number: prNumber }
+    });
+
+    // Future: Could create followup task to understand why PR was closed
+  }
+
+  /**
+   * Handle PR reopened event
+   */
+  async onPRReopened(prNumber: number, _pr: import('./githubWebhookHandler.service.js').GitHubPullRequestPayload['pull_request']): Promise<void> {
+    logger.info({
+      category: 'pr-workflow',
+      action: 'webhook_pr_reopened',
+      message: `Webhook: PR #${prNumber} reopened`,
+      details: { pr_number: prNumber }
+    });
+
+    // PR status reset to pending_checks by webhook handler
+  }
+
+  /**
+   * Handle PR ready for review event
+   */
+  async onPRReadyForReview(prNumber: number, _pr: import('./githubWebhookHandler.service.js').GitHubPullRequestPayload['pull_request']): Promise<void> {
+    logger.info({
+      category: 'pr-workflow',
+      action: 'webhook_pr_ready_for_review',
+      message: `Webhook: PR #${prNumber} marked ready for review`,
+      details: { pr_number: prNumber }
+    });
+
+    // Future: Could trigger review request workflows here
+  }
+
   /**
    * Stop monitoring (cleanup)
    */

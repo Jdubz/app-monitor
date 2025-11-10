@@ -16,6 +16,9 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  define: {
+    'process.env.NODE_ENV': JSON.stringify('test'),
+  },
   test: {
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
