@@ -51,8 +51,6 @@ export class PRWorkflowOrchestrator {
   ) {
     this.taskQueue = taskQueue;
     this.prMonitor = new PRMonitorService(taskQueue, {
-      pollIntervalMs: config.monitorPollIntervalMs ?? 60000,
-      maxPollAttempts: (config.checkTimeoutMs ?? 600000) / (config.monitorPollIntervalMs ?? 60000),
       enableAutoMerge: config.enableAutoMerge ?? true
     });
 
@@ -126,22 +124,8 @@ export class PRWorkflowOrchestrator {
         }
       });
 
-      // Register each PR for monitoring
-      for (const task of tasksWithPRs) {
-        if (task.pr_number && task.pr_url && task.pr_branch) {
-          this.prMonitor.registerPR(task);
-          logger.info({
-            category: 'pr-workflow',
-            action: 'pr_registered_on_startup',
-            message: `Registered PR #${task.pr_number} for monitoring on startup`,
-            details: {
-              taskId: task.id,
-              prNumber: task.pr_number,
-              prStatus: task.pr_status
-            }
-          });
-        }
-      }
+      // Note: PR monitoring now webhook-driven via GitHubWebhookHandler
+      // No need to register PRs - webhooks will handle status updates
 
       logger.info({
         category: 'pr-workflow',
@@ -212,22 +196,17 @@ export class PRWorkflowOrchestrator {
         pr_created_at: Date.now()
       });
 
-      // 3. Register PR for monitoring (async - non-blocking)
-      const updatedTask = this.taskQueue.getTask(task.id);
-      if (updatedTask) {
-        this.prMonitor.registerPR(updatedTask);
-
-        logger.info({
-          category: 'pr-workflow',
-          action: 'pr_monitoring_started',
-          message: `Started monitoring PR #${prInfo.number} for task ${task.id}`,
-          details: {
-            taskId: task.id,
-            prNumber: prInfo.number,
-            prUrl: prInfo.url
-          }
-        });
-      }
+      // Note: PR monitoring now webhook-driven via GitHubWebhookHandler
+      logger.info({
+        category: 'pr-workflow',
+        action: 'pr_created_awaiting_webhook',
+        message: `PR #${prInfo.number} created, webhook will handle status updates`,
+        details: {
+          taskId: task.id,
+          prNumber: prInfo.number,
+          prUrl: prInfo.url
+        }
+      });
 
     } catch (error) {
       logger.error({
@@ -325,37 +304,6 @@ export class PRWorkflowOrchestrator {
   // ==========================================================================
 
   /**
-   * Register an existing task's PR (e.g. orphaned after restart) for monitoring.
-   * Returns false when required metadata is missing so callers can surface skips.
-   */
-  registerExistingPR(task: Task): boolean {
-    if (!task.pr_number || !task.pr_url || !task.pr_branch) {
-      logger.warn({
-        category: 'pr-workflow',
-        action: 'register_existing_pr_skipped',
-        message: `Skipped registering task ${task.id} because PR metadata is incomplete`,
-        details: {
-          taskId: task.id,
-          hasNumber: Boolean(task.pr_number),
-          hasUrl: Boolean(task.pr_url),
-          hasBranch: Boolean(task.pr_branch)
-        }
-      });
-      return false;
-    }
-
-    this.prMonitor.registerPR(task);
-    return true;
-  }
-
-  /**
-   * Get all monitored PRs
-   */
-  getMonitoredPRs() {
-    return this.prMonitor.getMonitoredPRs();
-  }
-
-  /**
    * Get orchestrator status
    */
   getStatus() {
@@ -413,100 +361,4 @@ export class PRWorkflowOrchestrator {
 
   // ==========================================================================
   // Webhook Event Handlers
-  // ==========================================================================
-
-  /**
-   * Handle PR opened event from webhook
-   */
-  async onPROpened(prNumber: number, pr: import('./githubWebhookHandler.service.js').GitHubPullRequestPayload['pull_request']): Promise<void> {
-    logger.info({
-      category: 'pr-workflow',
-      action: 'webhook_pr_opened',
-      message: `Webhook: PR #${prNumber} opened`,
-      details: { pr_number: prNumber, title: pr.title }
-    });
-
-    // PR status is already updated by webhook handler
-    // Here we can add any orchestrator-specific logic
-    // Future: Trigger initial checks, notify stakeholders, etc.
-  }
-
-  /**
-   * Handle PR synchronized event (new commits pushed)
-   */
-  async onPRSynchronize(prNumber: number, _pr: import('./githubWebhookHandler.service.js').GitHubPullRequestPayload['pull_request']): Promise<void> {
-    logger.info({
-      category: 'pr-workflow',
-      action: 'webhook_pr_synchronized',
-      message: `Webhook: PR #${prNumber} synchronized with new commits`,
-      details: { pr_number: prNumber }
-    });
-
-    // PR status reset to pending_checks by webhook handler
-    // Future: Could trigger re-check logic here
-  }
-
-  /**
-   * Handle PR merged event
-   */
-  async onPRMerged(prNumber: number, _pr: import('./githubWebhookHandler.service.js').GitHubPullRequestPayload['pull_request']): Promise<void> {
-    logger.info({
-      category: 'pr-workflow',
-      action: 'webhook_pr_merged',
-      message: `Webhook: PR #${prNumber} merged`,
-      details: { pr_number: prNumber, merged_at: pr.merged_at }
-    });
-
-    // Task completion is handled by webhook handler
-    // Future: Could trigger post-merge workflows here
-  }
-
-  /**
-   * Handle PR closed without merging
-   */
-  async onPRClosed(prNumber: number, _pr: import('./githubWebhookHandler.service.js').GitHubPullRequestPayload['pull_request']): Promise<void> {
-    logger.info({
-      category: 'pr-workflow',
-      action: 'webhook_pr_closed',
-      message: `Webhook: PR #${prNumber} closed without merging`,
-      details: { pr_number: prNumber }
-    });
-
-    // Future: Could create followup task to understand why PR was closed
-  }
-
-  /**
-   * Handle PR reopened event
-   */
-  async onPRReopened(prNumber: number, _pr: import('./githubWebhookHandler.service.js').GitHubPullRequestPayload['pull_request']): Promise<void> {
-    logger.info({
-      category: 'pr-workflow',
-      action: 'webhook_pr_reopened',
-      message: `Webhook: PR #${prNumber} reopened`,
-      details: { pr_number: prNumber }
-    });
-
-    // PR status reset to pending_checks by webhook handler
-  }
-
-  /**
-   * Handle PR ready for review event
-   */
-  async onPRReadyForReview(prNumber: number, _pr: import('./githubWebhookHandler.service.js').GitHubPullRequestPayload['pull_request']): Promise<void> {
-    logger.info({
-      category: 'pr-workflow',
-      action: 'webhook_pr_ready_for_review',
-      message: `Webhook: PR #${prNumber} marked ready for review`,
-      details: { pr_number: prNumber }
-    });
-
-    // Future: Could trigger review request workflows here
-  }
-
-  /**
-   * Stop monitoring (cleanup)
-   */
-  stop() {
-    this.prMonitor.stopPolling();
-  }
 }

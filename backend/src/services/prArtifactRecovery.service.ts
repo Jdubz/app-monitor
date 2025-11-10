@@ -215,12 +215,10 @@ export class PRArtifactRecoveryService {
       }
     });
 
-    // Get updated task and register with PR orchestrator
+    // Get updated task
     const updatedTask = this.taskQueue.getTask(task.id);
     if (updatedTask) {
-      // Register for monitoring
-      this.prOrchestrator.registerExistingPR(updatedTask);
-
+      // Webhook-driven monitoring, no registration needed
       logger.info({
         category: 'recovery',
         action: 'pr_registered_for_monitoring',

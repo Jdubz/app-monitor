@@ -289,10 +289,6 @@ export class GitHubWebhookHandler {
         pr_created_at: Date.now()
       });
     }
-
-    if (this.prOrchestrator) {
-      await this.prOrchestrator.onPROpened(prNumber, pr);
-    }
   }
 
   private async handlePRSynchronize(prNumber: number, pr: any, tasks: any[]): Promise<void> {
@@ -310,10 +306,6 @@ export class GitHubWebhookHandler {
         pr_status: 'pending_checks',
         pr_checks_status: 'pending'
       });
-    }
-
-    if (this.prOrchestrator) {
-      await this.prOrchestrator.onPRSynchronize(prNumber, pr);
     }
   }
 
@@ -344,10 +336,6 @@ export class GitHubWebhookHandler {
         completeStmt.run(Date.now(), task.id);
       }
     }
-
-    if (this.prOrchestrator) {
-      await this.prOrchestrator.onPRMerged(prNumber, pr);
-    }
   }
 
   private async handlePRClosed(prNumber: number, pr: any, tasks: any[]): Promise<void> {
@@ -364,10 +352,6 @@ export class GitHubWebhookHandler {
       await this.taskQueue.updatePRStatus(task.id, {
         pr_status: 'closed'
       });
-    }
-
-    if (this.prOrchestrator) {
-      await this.prOrchestrator.onPRClosed(prNumber, pr);
     }
   }
 
@@ -386,10 +370,6 @@ export class GitHubWebhookHandler {
         pr_status: 'pending_checks'
       });
     }
-
-    if (this.prOrchestrator) {
-      await this.prOrchestrator.onPRReopened(prNumber, pr);
-    }
   }
 
   private async handlePRReadyForReview(prNumber: number, pr: any, tasks: any[]): Promise<void> {
@@ -406,10 +386,6 @@ export class GitHubWebhookHandler {
       await this.taskQueue.updatePRStatus(task.id, {
         pr_status: 'pending_review'
       });
-    }
-
-    if (this.prOrchestrator) {
-      await this.prOrchestrator.onPRReadyForReview(prNumber, pr);
     }
   }
 }
