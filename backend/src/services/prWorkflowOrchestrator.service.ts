@@ -10,6 +10,8 @@
  * This is the entry point for PR workflow after task execution completes.
  */
 
+import { exec } from 'child_process';
+import { promisify } from 'util';
 import { logger } from '../utils/logger.js';
 import { PRMonitorService } from './prMonitor.service.js';
 import { TaskQueueService } from './taskQueue.sqlite.js';
@@ -17,6 +19,8 @@ import type { Task } from './taskQueue.sqlite.js';
 import { PRArtifactRecoveryService } from './prArtifactRecovery.service.js';
 import type { RecoveryStats } from './prArtifactRecovery.service.js';
 import { getGitHubPRService } from './githubPR.service.js';
+
+const execAsync = promisify(exec);
 
 // ============================================================================
 // Types & Interfaces
@@ -372,6 +376,95 @@ export class PRWorkflowOrchestrator {
    */
   getGitHubPRService() {
     return getGitHubPRService();
+  }
+
+  /**
+   * Detect if a branch is stale (behind the base branch)
+   * Uses git commands to determine if a PR branch has diverged from its base
+   *
+   * @param branch The branch name to check (e.g., 'feature-branch')
+   * @param baseBranch The base branch to compare against (default: 'main')
+   * @param repoPath The path to the git repository (default: current directory)
+   * @returns Object containing staleness info: { isStale: boolean, commitsBehind: number, commitsAhead: number }
+   */
+  async detectStaleBranch(
+    branch: string,
+    baseBranch: string = 'main',
+    repoPath: string = '.'
+  ): Promise<{
+    isStale: boolean;
+    commitsBehind: number;
+    commitsAhead: number;
+    mergeBase: string;
+  }> {
+    try {
+      logger.info({
+        category: 'pr-workflow',
+        action: 'detect_stale_branch',
+        message: `Checking if branch '${branch}' is stale compared to '${baseBranch}'`,
+        details: { branch, baseBranch, repoPath }
+      });
+
+      // Step 1: Find the merge base (common ancestor) between the branch and base
+      const { stdout: mergeBase } = await execAsync(
+        `git -C "${repoPath}" merge-base "${baseBranch}" "${branch}"`,
+        { timeout: 10000 }
+      );
+      const mergeBaseCommit = mergeBase.trim();
+
+      logger.debug({
+        category: 'pr-workflow',
+        action: 'merge_base_found',
+        message: `Merge base found: ${mergeBaseCommit}`,
+        details: { branch, baseBranch, mergeBase: mergeBaseCommit }
+      });
+
+      // Step 2: Count commits the branch is behind (commits in base not in branch)
+      const { stdout: behindCount } = await execAsync(
+        `git -C "${repoPath}" rev-list --count "${branch}..${baseBranch}"`,
+        { timeout: 10000 }
+      );
+      const commitsBehind = parseInt(behindCount.trim(), 10);
+
+      // Step 3: Count commits the branch is ahead (commits in branch not in base)
+      const { stdout: aheadCount } = await execAsync(
+        `git -C "${repoPath}" rev-list --count "${baseBranch}..${branch}"`,
+        { timeout: 10000 }
+      );
+      const commitsAhead = parseInt(aheadCount.trim(), 10);
+
+      const isStale = commitsBehind > 0;
+
+      logger.info({
+        category: 'pr-workflow',
+        action: 'stale_branch_detected',
+        message: `Branch '${branch}' is ${isStale ? 'stale' : 'up to date'} (${commitsBehind} behind, ${commitsAhead} ahead)`,
+        details: {
+          branch,
+          baseBranch,
+          isStale,
+          commitsBehind,
+          commitsAhead,
+          mergeBase: mergeBaseCommit
+        }
+      });
+
+      return {
+        isStale,
+        commitsBehind,
+        commitsAhead,
+        mergeBase: mergeBaseCommit
+      };
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'detect_stale_branch_failed',
+        message: `Failed to detect stale branch for '${branch}'`,
+        error,
+        details: { branch, baseBranch, repoPath }
+      });
+      throw error;
+    }
   }
 
 }
