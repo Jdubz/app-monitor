@@ -407,6 +407,63 @@ ${taskChain}
   }
 
   /**
+   * Check if PR branch is behind base and auto-update if possible
+   * Returns true if branch is up to date (or was successfully updated)
+   */
+  private async ensureBranchUpToDate(prNumber: number): Promise<{ 
+    upToDate: boolean; 
+    updated?: boolean; 
+    error?: string 
+  }> {
+    try {
+      // Check if PR is behind base branch
+      const prData = await this.githubPR.getPR(prNumber);
+      
+      // If mergeable_state indicates branch is behind, try to update
+      if (prData.mergeable_state === 'behind') {
+        logger.info({
+          category: 'pr-workflow',
+          action: 'branch_behind_detected',
+          message: `PR #${prNumber} branch is behind base, attempting auto-update`,
+          details: { prNumber, mergeable_state: prData.mergeable_state }
+        });
+
+        // Use GitHub's update branch API (merges base into PR branch)
+        await this.githubPR.updateBranch(prNumber);
+        
+        logger.info({
+          category: 'pr-workflow',
+          action: 'branch_updated',
+          message: `Successfully updated PR #${prNumber} branch with latest base`,
+          details: { prNumber }
+        });
+        
+        return { upToDate: true, updated: true };
+      }
+      
+      // Branch is already up to date
+      return { upToDate: true };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      
+      logger.warn({
+        category: 'pr-workflow',
+        action: 'branch_update_failed',
+        message: `Failed to update PR #${prNumber} branch`,
+        details: { prNumber, error: errorMsg }
+      });
+      
+      // Check if it's a merge conflict
+      if (errorMsg.toLowerCase().includes('conflict') || errorMsg.toLowerCase().includes('merge')) {
+        return { upToDate: false, error: 'merge_conflicts' };
+      }
+      
+      // Other error - don't block merge attempt
+      return { upToDate: true, error: errorMsg };
+    }
+  }
+
+  /**
    * Merge a PR with graceful degradation
    * Tries multiple merge strategies with retry logic
    */
@@ -417,6 +474,41 @@ ${taskChain}
       message: `Attempting to merge PR #${prNumber}`,
       details: { prNumber, taskId }
     });
+
+    // STEP 1: Ensure branch is up to date with base
+    const branchStatus = await this.ensureBranchUpToDate(prNumber);
+    
+    if (!branchStatus.upToDate) {
+      // Branch has merge conflicts - create intervention task
+      logger.error({
+        category: 'pr-workflow',
+        action: 'merge_blocked_by_conflicts',
+        message: `PR #${prNumber} has merge conflicts, cannot auto-merge`,
+        details: { prNumber, taskId, error: branchStatus.error }
+      });
+      
+      await this.handleMergeFailure(prNumber, taskId, {
+        squashError: `Branch has merge conflicts: ${branchStatus.error}`,
+        rebaseError: 'Skipped - conflicts detected',
+        mergeError: 'Skipped - conflicts detected'
+      });
+      
+      return false;
+    }
+    
+    if (branchStatus.updated) {
+      logger.info({
+        category: 'pr-workflow',
+        action: 'branch_updated_before_merge',
+        message: `PR #${prNumber} branch was updated, waiting for CI to complete`,
+        details: { prNumber, taskId }
+      });
+      
+      // Branch was updated - CI will re-run and webhook will retry merge
+      return false;
+    }
+
+    // STEP 2: Proceed with merge strategies
 
     // Strategy 1: Squash merge (preferred - cleanest history)
     const squashResult = await this.tryMergeStrategy(prNumber, 'squash');
