@@ -1146,6 +1146,46 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
     }
   });
 
+  /**
+   * POST /dev-bots/pr/track
+   * Manually submit a PR for tracking in the workflow
+   */
+  router.post('/pr/track', async (req: Request, res: Response) => {
+    try {
+      const { prNumber } = req.body;
+
+      if (!prNumber || typeof prNumber !== 'number') {
+        return res.status(400).json({
+          error: 'PR number is required and must be a number'
+        });
+      }
+
+      // Import PR service
+      const { getGitHubPRService } = await import('../services/githubPR.service.js');
+      const prService = getGitHubPRService();
+
+      // Track the PR - it will extract task ID from branch name if present
+      await prService.trackPR(prNumber);
+
+      res.json({
+        success: true,
+        message: `PR #${prNumber} added to tracking workflow`,
+        prNumber
+      });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_tracking_pr',
+        message: `Error tracking PR: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to track PR',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
   // ============================================================================
   // Agent Management
   // ============================================================================

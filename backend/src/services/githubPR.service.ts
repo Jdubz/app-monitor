@@ -510,6 +510,87 @@ export class GitHubPRService {
   }
 
   /**
+   * Manually track a PR in the workflow
+   * Extracts task ID from branch name if present, associates PR with task
+   */
+  async trackPR(prNumber: number): Promise<void> {
+    try {
+      // Get PR details including branch name
+      const { stdout } = await execWithTimeout(
+        `gh pr view ${prNumber} --repo ${this.repoOwner}/${this.repoName} --json number,headRefName,url,state`,
+        30000
+      );
+      
+      const prData = JSON.parse(stdout);
+      const branchName: string = prData.headRefName;
+      
+      // Extract task ID from branch name (format: task/{taskId}/description or task-{taskId})
+      let taskId: string | null = null;
+      const taskBranchMatch = branchName.match(/^task\/([^/]+)/);
+      if (taskBranchMatch) {
+        taskId = taskBranchMatch[1];
+      } else {
+        const taskDashMatch = branchName.match(/^task-(.+)/);
+        if (taskDashMatch) {
+          taskId = taskDashMatch[1];
+        }
+      }
+
+      if (!taskId) {
+        logger.info({
+          category: 'pr-workflow',
+          action: 'track_pr_no_task',
+          message: `PR #${prNumber} has no task ID in branch name (${branchName}), tracking as standalone PR`
+        });
+      }
+
+      // Import task queue to update task
+      const { getTaskQueue } = await import('./taskQueue.sqlite.js');
+      const taskQueue = getTaskQueue();
+
+      if (taskId) {
+        // Find and update task
+        const task = await taskQueue.get(taskId);
+        if (task) {
+          await taskQueue.updatePRInfo(taskId, {
+            prNumber,
+            prUrl: prData.url,
+            prBranch: branchName,
+            prStatus: prData.state === 'MERGED' ? 'merged' : 
+                     prData.state === 'CLOSED' ? 'closed' : 'pending_checks'
+          });
+          
+          logger.info({
+            category: 'pr-workflow',
+            action: 'track_pr_success',
+            message: `Successfully tracked PR #${prNumber} for task ${taskId}`
+          });
+        } else {
+          logger.warn({
+            category: 'pr-workflow',
+            action: 'track_pr_task_not_found',
+            message: `Task ${taskId} not found, cannot associate with PR #${prNumber}`
+          });
+        }
+      }
+
+      logger.info({
+        category: 'pr-workflow',
+        action: 'track_pr_complete',
+        message: `PR #${prNumber} added to workflow tracking${taskId ? ` (task: ${taskId})` : ''}`
+      });
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'track_pr_failed',
+        message: `Failed to track PR #${prNumber}`,
+        error
+      });
+      throw error;
+    }
+  }
+
+  /**
    * Normalize check status to standard values
    */
   private normalizeCheckStatus(status: string): 'pending' | 'success' | 'failure' | 'error' {
