@@ -40,6 +40,11 @@ export default defineConfig({
     // Environment setup
     environment: 'node',
     
+    // Set NODE_ENV to test to disable auth
+    env: {
+      NODE_ENV: 'test',
+    },
+    
     // Coverage configuration
     coverage: {
       provider: 'v8',
