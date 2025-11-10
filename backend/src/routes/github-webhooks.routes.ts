@@ -1,6 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { ApiError } from '@app-monitor/api-contracts';
 import { logger } from '../utils/logger.js';
+import { verifyGitHubWebhookSignature } from '../utils/githubWebhookVerification.js';
+import { config } from '../config.js';
 import type { GitHubWebhookHandler } from '../services/githubWebhookHandler.service.js';
 
 const router = Router();
@@ -37,6 +39,22 @@ const respondError = (res: Response, status: number, error: string, message?: st
 };
 
 /**
+ * Verify GitHub webhook signature
+ *
+ * @param req - Express request object
+ * @returns true if signature is valid or verification is disabled
+ */
+const verifyWebhookSignature = (req: Request): boolean => {
+  const signature = req.headers['x-hub-signature-256'] as string | undefined;
+
+  // Get raw body - Express json middleware stores it in req.body
+  // For signature verification, we need the raw body as string
+  const rawBody = JSON.stringify(req.body);
+
+  return verifyGitHubWebhookSignature(rawBody, signature, config.githubWebhookSecret);
+};
+
+/**
  * GitHub Webhook endpoint for Pull Request events
  * Handles PR lifecycle: opened, closed, merged, synchronize, ready_for_review
  * 
@@ -44,10 +62,19 @@ const respondError = (res: Response, status: number, error: string, message?: st
  */
 router.post('/pr', async (req: Request, res: Response) => {
   try {
+    // Verify webhook signature
+    if (!verifyWebhookSignature(req)) {
+      logger.warn({
+        category: 'api',
+        action: 'github_webhook_signature_invalid',
+        message: 'Invalid webhook signature for PR event'
+      });
+      return respondError(res, 401, 'INVALID_SIGNATURE', 'Webhook signature verification failed');
+    }
+
     const event = req.headers['x-github-event'] as string;
-    // TODO: Implement HMAC signature verification for GitHub webhooks
     const delivery = req.headers['x-github-delivery'] as string;
-    
+
     // Validate event type
     if (event !== 'pull_request') {
       return respondError(
@@ -128,9 +155,19 @@ router.post('/pr', async (req: Request, res: Response) => {
  */
 router.post('/push', async (req: Request, res: Response) => {
   try {
+    // Verify webhook signature
+    if (!verifyWebhookSignature(req)) {
+      logger.warn({
+        category: 'api',
+        action: 'github_webhook_signature_invalid',
+        message: 'Invalid webhook signature for push event'
+      });
+      return respondError(res, 401, 'INVALID_SIGNATURE', 'Webhook signature verification failed');
+    }
+
     const event = req.headers['x-github-event'] as string;
     const delivery = req.headers['x-github-delivery'] as string;
-    
+
     // Validate event type
     if (event !== 'push') {
       return respondError(
@@ -199,9 +236,19 @@ router.post('/push', async (req: Request, res: Response) => {
  */
 router.post('/check_suite', async (req: Request, res: Response) => {
   try {
+    // Verify webhook signature
+    if (!verifyWebhookSignature(req)) {
+      logger.warn({
+        category: 'api',
+        action: 'github_webhook_signature_invalid',
+        message: 'Invalid webhook signature for check_suite event'
+      });
+      return respondError(res, 401, 'INVALID_SIGNATURE', 'Webhook signature verification failed');
+    }
+
     const event = req.headers['x-github-event'] as string;
     const delivery = req.headers['x-github-delivery'] as string;
-    
+
     if (event !== 'check_suite') {
       return respondError(
         res,
@@ -260,9 +307,19 @@ router.post('/check_suite', async (req: Request, res: Response) => {
  */
 router.post('/check_run', async (req: Request, res: Response) => {
   try {
+    // Verify webhook signature
+    if (!verifyWebhookSignature(req)) {
+      logger.warn({
+        category: 'api',
+        action: 'github_webhook_signature_invalid',
+        message: 'Invalid webhook signature for check_run event'
+      });
+      return respondError(res, 401, 'INVALID_SIGNATURE', 'Webhook signature verification failed');
+    }
+
     const event = req.headers['x-github-event'] as string;
     const delivery = req.headers['x-github-delivery'] as string;
-    
+
     if (event !== 'check_run') {
       return respondError(
         res,
