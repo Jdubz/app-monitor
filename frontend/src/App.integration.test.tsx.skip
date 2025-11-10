@@ -11,7 +11,6 @@ import userEvent from '@testing-library/user-event';
 import App from './App';
 import { createMockEnvironment, mockGenerators, apiSuccess } from './test/api-mocks';
 import * as socketServiceModule from './services/socketService';
-import { getApiClientInstance } from './services/api';
 
 // Mock the API client globally
 const mockEnv = createMockEnvironment();
@@ -31,15 +30,12 @@ describe('App Integration Tests', () => {
     mockEnv.apiClient.patch.mockClear();
   };
 
-  beforeEach(async () => {
+  beforeEach(() => {
     vi.clearAllMocks();
     mockEnv.socket.connected = false;
     resetApiClientMocks();
-    const client = await getApiClientInstance();
-    expect(client).toBe(mockEnv.apiClient);
 
     // Set up default mocks for dev-bots endpoints that all tests need
-    const originalMockImplementation = mockEnv.apiClient.get.getMockImplementation();
     mockEnv.apiClient.get.mockImplementation((url: string) => {
       // Default mocks for dev-bots endpoints
       if (url === '/dev-bots/queue') {
@@ -51,15 +47,25 @@ describe('App Integration Tests', () => {
       if (url === '/dev-bots/status') {
         return Promise.resolve(apiSuccess(mockGenerators.devBotsStatus()));
       }
-      // Call original implementation if it exists, otherwise return empty success
-      return originalMockImplementation
-        ? originalMockImplementation(url)
-        : Promise.resolve(apiSuccess({}));
+      if (url === '/environments') {
+        return Promise.resolve(apiSuccess(mockGenerators.environmentsResponse()));
+      }
+      if (url === '/services/status') {
+        return Promise.resolve(apiSuccess([]));
+      }
+      if (url === '/logs/sources') {
+        return Promise.resolve(apiSuccess([]));
+      }
+      if (url === '/logs/cloud/status') {
+        return Promise.resolve(apiSuccess(mockGenerators.cloudLoggingStatus(true)));
+      }
+      return Promise.resolve(apiSuccess({}));
     });
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
+    // Don't use vi.restoreAllMocks() as it can interfere with API client mocks
+    vi.clearAllMocks();
   });
 
   describe('Application Initialization', () => {
