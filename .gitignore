@@ -25,6 +25,8 @@ backend/dev-bots/
 .env
 .env.local
 .env.*.local
+.env.production
+.env.development
 
 # IDE
 .vscode/
