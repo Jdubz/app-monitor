@@ -481,7 +481,22 @@ export class TaskExecutionService {
       chosenAgentType = agentType;
     } else {
       // Intelligent selection based on task classification
-      const filePatterns = task.file_patterns ? JSON.parse(task.file_patterns) : undefined;
+      let filePatterns: string[] | undefined;
+      try {
+        filePatterns = task.file_patterns ? JSON.parse(task.file_patterns) : undefined;
+      } catch (error) {
+        logger.warn({
+          category: 'automation',
+          action: 'json_parse_error',
+          message: 'Failed to parse file_patterns, using undefined',
+          details: {
+            taskId: task.id,
+            filePatterns: task.file_patterns,
+            error: error instanceof Error ? error.message : String(error)
+          }
+        });
+        filePatterns = undefined;
+      }
       
       // Build previous attempts from retry count
       const previousAttempts: AgentAttempt[] = [];

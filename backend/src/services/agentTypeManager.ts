@@ -1,4 +1,18 @@
 /**
+ * @deprecated This file is deprecated as of Phase 0.3 (2025-11-10)
+ * Replaced by: AgentSelector (intelligent selection) + TaskClassifier
+ * 
+ * AgentTypeManager provided simple rotation/random selection.
+ * The new system uses intelligent task-based selection with:
+ * - TaskClassifier: Categorizes tasks by type, complexity, file patterns
+ * - AgentSelector: Chooses optimal agent based on task characteristics
+ * 
+ * Migration path: Use AgentSelector instead
+ * This file kept for reference only. Will be removed in future cleanup.
+ * 
+ * ============================================================================
+ * OLD DOCUMENTATION (for reference):
+ * ============================================================================
  * Centralized Agent Type Management
  * Consolidates agent type selection and rotation logic that was previously
  * duplicated across devBotsManager.ts and taskExecution.service.ts
