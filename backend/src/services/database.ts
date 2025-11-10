@@ -225,6 +225,14 @@ export class DevBotsDatabase {
         'utf-8'
       ));
     });
+
+    // Migration 008: PR Review Comments Tracking
+    this.applyMigration('008_pr_review_comments', () => {
+      this.db.exec(fs.readFileSync(
+        path.join(__dirname, '..', '..', 'migrations', '008_pr_review_comments.sql'),
+        'utf-8'
+      ));
+    });
   }
 
   private applyMigration(name: string, migration: () => void): void {
