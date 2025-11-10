@@ -100,8 +100,19 @@ check_http_health() {
 check_database() {
     log_info "Checking database connectivity..."
     local url="http://localhost:${PORT}/api/dev-bots/tasks?limit=1"
+    
+    # Load API key from shared .env if available
+    local api_key=""
+    if [ -f "/opt/app-monitor/shared/.env" ]; then
+        api_key=$(grep "^API_KEY=" /opt/app-monitor/shared/.env | cut -d'=' -f2-)
+    fi
 
-    if curl -sf "${url}" > /dev/null; then
+    local curl_opts="-sf"
+    if [ -n "$api_key" ]; then
+        curl_opts="${curl_opts} -H 'X-API-Key: ${api_key}'"
+    fi
+
+    if eval curl ${curl_opts} "${url}" > /dev/null; then
         log_info "✓ Database connectivity verified"
         return 0
     else
@@ -114,8 +125,19 @@ check_database() {
 check_docker() {
     log_info "Checking Docker connectivity..."
     local url="http://localhost:${PORT}/api/docker/container-info"
+    
+    # Load API key from shared .env if available
+    local api_key=""
+    if [ -f "/opt/app-monitor/shared/.env" ]; then
+        api_key=$(grep "^API_KEY=" /opt/app-monitor/shared/.env | cut -d'=' -f2-)
+    fi
 
-    if curl -sf "${url}" > /dev/null; then
+    local curl_opts="-sf"
+    if [ -n "$api_key" ]; then
+        curl_opts="${curl_opts} -H 'X-API-Key: ${api_key}'"
+    fi
+
+    if eval curl ${curl_opts} "${url}" > /dev/null; then
         log_info "✓ Docker connectivity verified"
         return 0
     else
