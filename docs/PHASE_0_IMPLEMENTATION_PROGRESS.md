@@ -71,44 +71,109 @@ All test scenarios pass:
 
 ---
 
-## 🚧 Phase 0.2: Intelligent AgentSelector (IN PROGRESS)
+## ✅ Phase 0.2: Intelligent AgentSelector (COMPLETE)
 
-**Started:** 2025-11-10T20:30:00Z  
-**Estimated:** 2-3 days  
+**Completed:** 2025-11-10T20:37:00Z  
+**Commit:** f276c1c  
+**Time:** ~7 minutes
+
+### What Was Implemented
+
+1. **AgentSelector Service** (`backend/src/services/agentSelector.ts` - 308 lines)
+   - Intelligent decision tree for agent selection
+   - Uses TaskClassifier for automatic classification
+   - Manual override support via `preferred_agent` field
+   - Learns from previous failures (switches agents)
+   - Human-readable explanation generation
+   - Confidence scoring for selections
+
+2. **Selection Rules** (Priority Order)
+   - **Rule 1:** Documentation → Codex
+   - **Rule 2:** Analysis/Review/Planning → Codex  
+   - **Rule 3:** Only .md files → Codex
+   - **Rule 4:** Code files (.ts, .js, .py, etc.) → Claude
+   - **Rule 5:** SQL files → Claude (implementation) or Codex (analysis)
+   - **Rule 6:** Implementation → Claude
+   - **Rule 7:** Default → Claude (general purpose)
+
+3. **Fallback Logic**
+   - Claude fails → Try Codex
+   - Codex fails on code files → Try Claude
+   - Copilot fails → Escalate to Claude
+
+4. **Static Methods**
+   - `getDockerImage(agent)`: Returns Docker image name
+   - `isValidAgentType(type)`: Validates agent type string
+   - `getSupportedTypes()`: Returns ['claude', 'codex', 'copilot']
+
+5. **Tests** (`backend/src/services/agentSelector.test.ts` - 24 tests)
+   - Manual override functionality
+   - All task categories (docs, analysis, implementation, review, planning)
+   - File pattern detection (md, ts, js, py, sql)
+   - Fallback after failure logic
+   - Task classification integration
+   - Explanation generation
+   - ✅ All 808 tests passing
+
+### Key Design Decisions
+
+- **Category First:** Check task category before file patterns
+- **Code Files → Claude:** Any code extension triggers Claude (expert at editing)
+- **Analysis → Codex:** Better at high-level review and analysis
+- **Fallback Strategy:** Try alternate agent after failure, not same agent
+- **Preserved Category:** Use const to avoid TypeScript type narrowing issues
+- **Switch Statement:** For fallback agent selection (handles all cases)
+
+### Testing Results
+
+All scenarios pass:
+- ✅ Manual override respected (100% confidence)
+- ✅ Documentation tasks → Codex
+- ✅ Analysis/Review/Planning → Codex
+- ✅ Implementation tasks → Claude
+- ✅ Code files (TS, JS, Py) → Claude
+- ✅ SQL implementation → Claude
+- ✅ SQL analysis → Codex (via category)
+- ✅ Fallback after Claude failure → Codex
+- ✅ Fallback after Codex failure → Claude
+- ✅ Task classification from title/description
+- ✅ Detailed explanation generation
+
+---
+
+## 🚧 Phase 0.3: Integration with TaskExecutionService (IN PROGRESS)
+
+**Started:** 2025-11-10T20:37:00Z  
+**Estimated:** 1 day  
 **Status:** Starting implementation
 
 ### Plan
 
-1. **Create AgentSelector Service**
-   - Decision tree based on classification
-   - Use TaskClassifier results
-   - Consider previous attempts (learn from failures)
-   - Generate explanation for selection
+1. **Replace AgentTypeManager in TaskExecutionService**
+   - Import AgentSelector instead of AgentTypeManager
+   - Use selectAgent() with task classification
+   - Log selection reasoning
+   - Track selection + outcome
 
-2. **Selection Rules**
-   ```
-   Documentation → Codex
-   Analysis/Review/Planning → Codex
-   Implementation/Bugfix/Refactoring → Claude
-   Only .md files → Codex
-   Any code files (.ts, .js, .py) → Claude
-   Previous failure with X → Try Y
-   ```
+2. **Update Task Creation**
+   - Classify task on creation (use TaskClassifier)
+   - Store classification in DB (task_category, file_patterns, complexity)
+   - Optional: Allow preferred_agent override
 
 3. **Integration Points**
-   - TaskExecutionService: Use AgentSelector instead of AgentTypeManager rotation
-   - Log selection reasoning
-   - Track selection + outcome for learning
+   - TaskExecutionService.executeTask()
+   - TaskQueue.createTask()
+   - Log agent selection with reasoning
 
 4. **Testing**
-   - Test all selection rules
+   - Integration test: Create task → Classify → Select agent
+   - Verify correct agent selected for different task types
+   - Test manual override
    - Test fallback logic
-   - Test explanation generation
-   - Integration test with TaskClassifier
 
 ---
 
-## ⏳ Phase 0.3: Copilot Delegation (PLANNED)
+## ⏳ Phase 0.4: Copilot Delegation (PLANNED)
 
 **Estimated:** 1-2 days  
 **Status:** Not started
@@ -165,13 +230,20 @@ All test scenarios pass:
 - [x] All tests passing
 - [x] Documentation updated
 
-### Phase 0.2 (In Progress)
-- [ ] AgentSelector created
-- [ ] Selection rules implemented
-- [ ] Integration with TaskExecutionService
+### Phase 0.2 ✅
+- [x] AgentSelector created
+- [x] Selection rules implemented
+- [x] Fallback logic working
+- [x] Task classification integration
+- [x] Tests passing (24 tests, 808 total)
+
+### Phase 0.3 (In Progress)
+- [ ] Integrate with TaskExecutionService
+- [ ] Replace AgentTypeManager usage
+- [ ] Auto-classify tasks on creation
 - [ ] Tests passing
 
-### Phase 0.3 (Not Started)
+### Phase 0.4 (Not Started)
 - [ ] Delegation logic added
 - [ ] Webhook integration
 - [ ] Monitoring working
@@ -189,5 +261,5 @@ All test scenarios pass:
 
 ---
 
-**Last Updated:** 2025-11-10T20:30:00Z  
-**Next Update:** After Phase 0.2 completion
+**Last Updated:** 2025-11-10T20:37:00Z  
+**Next Update:** After Phase 0.3 completion (Integration)
