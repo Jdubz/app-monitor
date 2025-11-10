@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import type { TaskExecution, TokenUsage, FailurePattern } from '../database';
+import type { TaskCreationContext } from '../../types/taskContext';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -413,6 +414,150 @@ describeNativeDb('DevBotsDatabase', () => {
         const patterns = db.getFailurePatterns(`task-${index}`);
         expect(patterns[0].category).toBe(category);
       });
+    });
+  });
+
+  describe('Task Creation Context', () => {
+    it('should save task creation context', () => {
+      // First, create a task in the tasks table
+      const taskId = 'test-task-1';
+      (db as any).db.prepare(`
+        INSERT INTO tasks (
+          id, type, title, status, created_at, assigned_agent, priority
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(taskId, 'implementation', 'Test Task', 'pending', new Date().toISOString(), 'backend-specialist', 5);
+
+      // Create a task creation context
+      const context: TaskCreationContext = {
+        environment: {
+          appVersion: '1.0.0',
+          gitSha: 'abc123',
+          buildTime: '2025-11-10T12:00:00Z',
+          nodeVersion: 'v20.0.0'
+        },
+        workTarget: 'dev-monitor',
+        targetBranch: 'main'
+      };
+
+      // Save the context
+      db.saveTaskCreationContext(taskId, context);
+
+      // Verify the context was saved
+      const result = (db as any).db.prepare('SELECT context_json FROM tasks WHERE id = ?').get(taskId);
+      expect(result).toBeDefined();
+      expect(result.context_json).toBeDefined();
+
+      const savedContext = JSON.parse(result.context_json);
+      expect(savedContext.environment.appVersion).toBe('1.0.0');
+      expect(savedContext.environment.gitSha).toBe('abc123');
+      expect(savedContext.workTarget).toBe('dev-monitor');
+      expect(savedContext.targetBranch).toBe('main');
+    });
+
+    it('should update existing task context', () => {
+      // Create a task with initial context
+      const taskId = 'test-task-2';
+      (db as any).db.prepare(`
+        INSERT INTO tasks (
+          id, type, title, status, created_at, assigned_agent, priority, context_json
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(
+        taskId,
+        'implementation',
+        'Test Task 2',
+        'pending',
+        new Date().toISOString(),
+        'backend-specialist',
+        5,
+        JSON.stringify({ workTarget: 'old-target' })
+      );
+
+      // Update with new context
+      const newContext: TaskCreationContext = {
+        environment: {
+          appVersion: '2.0.0',
+          gitSha: 'def456',
+          buildTime: '2025-11-10T13:00:00Z'
+        },
+        workTarget: 'new-target',
+        targetBranch: 'develop',
+        affectedFiles: ['src/file1.ts', 'src/file2.ts']
+      };
+
+      db.saveTaskCreationContext(taskId, newContext);
+
+      // Verify the context was updated
+      const result = (db as any).db.prepare('SELECT context_json FROM tasks WHERE id = ?').get(taskId);
+      const savedContext = JSON.parse(result.context_json);
+      expect(savedContext.workTarget).toBe('new-target');
+      expect(savedContext.targetBranch).toBe('develop');
+      expect(savedContext.affectedFiles).toEqual(['src/file1.ts', 'src/file2.ts']);
+    });
+
+    it('should handle context with optional fields', () => {
+      const taskId = 'test-task-3';
+      (db as any).db.prepare(`
+        INSERT INTO tasks (
+          id, type, title, status, created_at, assigned_agent, priority
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `).run(taskId, 'implementation', 'Test Task 3', 'pending', new Date().toISOString(), 'backend-specialist', 5);
+
+      // Create context with all optional fields
+      const context: TaskCreationContext = {
+        environment: {
+          appVersion: '1.0.0',
+          gitSha: 'abc123',
+          buildTime: '2025-11-10T12:00:00Z',
+          nodeVersion: 'v20.0.0',
+          npmVersion: '10.0.0',
+          dockerImage: 'node:20-alpine',
+          claudeVersion: '3.5'
+        },
+        clientMeta: {
+          locationHref: 'http://localhost:3000',
+          userAgent: 'Mozilla/5.0',
+          platform: 'linux',
+          timestamp: '2025-11-10T12:00:00Z'
+        },
+        workTarget: 'dev-monitor',
+        targetBranch: 'feature/test',
+        affectedFiles: ['src/test.ts'],
+        screenshot: 'data:image/png;base64,iVBORw0KG...',
+        appState: {
+          activePanel: 'logs',
+          filters: { severity: 'error' }
+        }
+      };
+
+      db.saveTaskCreationContext(taskId, context);
+
+      const result = (db as any).db.prepare('SELECT context_json FROM tasks WHERE id = ?').get(taskId);
+      const savedContext = JSON.parse(result.context_json);
+      expect(savedContext.clientMeta).toBeDefined();
+      expect(savedContext.clientMeta.platform).toBe('linux');
+      expect(savedContext.screenshot).toBeDefined();
+      expect(savedContext.appState.activePanel).toBe('logs');
+    });
+
+    it('should handle non-existent task gracefully', () => {
+      const context: TaskCreationContext = {
+        environment: {
+          appVersion: '1.0.0',
+          gitSha: 'abc123',
+          buildTime: '2025-11-10T12:00:00Z'
+        },
+        workTarget: 'dev-monitor',
+        targetBranch: 'main'
+      };
+
+      // This should not throw but also won't update anything
+      expect(() => {
+        db.saveTaskCreationContext('non-existent-task', context);
+      }).not.toThrow();
+
+      // Verify no row was affected
+      const result = (db as any).db.prepare('SELECT context_json FROM tasks WHERE id = ?').get('non-existent-task');
+      expect(result).toBeUndefined();
     });
   });
 
