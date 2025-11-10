@@ -110,6 +110,9 @@ jobs:
             --exclude=releases \
             --exclude=shared \
             --exclude='*.log' \
+            --exclude="$TARBALL_NAME" \
+            --exclude="$MANIFEST_NAME" \
+            --warning=no-file-changed \
             .
           
           # Calculate checksum
