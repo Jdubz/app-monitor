@@ -1,8 +1,13 @@
 #!/bin/bash
 #
-# Clean up duplicate app-monitor processes and ensure single systemd-managed instance
+# ONE-TIME CLEANUP SCRIPT
+# 
+# This script fixes the immediate duplicate process issue.
+# After deploying the PID-based single instance enforcement,
+# this script is no longer needed for ongoing operation.
 #
-# This fixes the root cause of stuck PRs: duplicate processes causing port conflicts
+# The new backend automatically prevents duplicates on startup.
+# This script is only for cleaning up existing duplicates.
 #
 
 set -euo pipefail
