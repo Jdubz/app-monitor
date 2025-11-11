@@ -3,6 +3,7 @@ import { config } from './config.js';
 import { logger } from './utils/logger.js';
 import { ShutdownStateManager } from './services/shutdownStateManager.js';
 import { getDatabase } from './services/database.js';
+import { ensureSingleInstance } from './utils/singleInstance.js';
 
 // Global error handlers to catch crashes
 process.on('uncaughtException', (error) => {
@@ -16,6 +17,9 @@ process.on('unhandledRejection', (reason, promise) => {
   console.error('Reason:', reason);
   process.exit(1);
 });
+
+// Ensure only one instance runs on this port (prevents duplicate process issues)
+await ensureSingleInstance(config.port);
 
 const server = await createApp();
 
