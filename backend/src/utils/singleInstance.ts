@@ -93,7 +93,7 @@ export async function ensureSingleInstance(port: number): Promise<void> {
             details: { oldPid, pidFile }
           });
           fs.unlinkSync(pidFile);
-        } else if (!nodeErr.code) {
+        } else if (nodeErr.message && nodeErr.message.includes('Duplicate instance detected')) {
           // This is our thrown error, re-throw it
           throw err;
         } else {
@@ -146,7 +146,7 @@ export async function ensureSingleInstance(port: number): Promise<void> {
     }
   };
   
-  process.on('exit', cleanup);
-  process.on('SIGTERM', cleanup);
-  process.on('SIGINT', cleanup);
+  process.once('exit', cleanup);
+  process.once('SIGTERM', () => process.exit(0));
+  process.once('SIGINT', () => process.exit(0));
 }
