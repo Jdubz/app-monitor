@@ -18,7 +18,7 @@ import * as crypto from 'crypto';
 import { logger } from '../utils/logger.js';
 import { getDatabase, type DevBotsDatabase } from './database.js';
 import { GitHubPRService, getGitHubPRService, type PRStatus } from './githubPR.service.js';
-import { ReviewCommentTracker } from './reviewCommentTracker.service.js';
+import { ReviewCommentTracker, type ReviewComment } from './reviewCommentTracker.service.js';
 import { TaskQueueService } from './taskQueue.sqlite.js';
 import type { Task } from './taskQueue.sqlite.js';
 
@@ -828,15 +828,57 @@ export class PRConditionStateService {
   private async evaluateCopilotReviewCondition(prNumber: number): Promise<ConditionEvaluation> {
     try {
       const prStatus = await this.github.getPRStatus(prNumber);
-      const reviews = prStatus.reviews;
-
-      // Check for Copilot reviews
-      const copilotReviews = reviews.filter(review =>
+      
+      // Check for formal Copilot reviews
+      const copilotReviews = prStatus.reviews.filter(review =>
         review.author.toLowerCase().includes('copilot') ||
         review.author.toLowerCase().includes('github-advanced-security')
       );
 
+      // Check for Copilot review comments (inline code suggestions)
+      const copilotComments = prStatus.comments.filter(comment =>
+        comment.author.toLowerCase().includes('copilot')
+      );
+
+      // If Copilot left comments, check if they're resolved
+      if (copilotComments.length > 0) {
+        const allComments = this.reviewTracker.getCommentsForPR(prNumber, true);
+        const copilotUnresolved = allComments.filter((c: ReviewComment) =>
+          c.is_copilot && !c.resolved
+        );
+
+        if (copilotUnresolved.length > 0) {
+          return {
+            condition_id: 'copilot_review_completed',
+            status: 'unmet',
+            fingerprint: this.generateFingerprintFromList(copilotUnresolved.map((c: { body: string }) => c.body)),
+            blocking_issues: copilotUnresolved.map((c: { body: string; path?: string; line?: number }) => ({
+              type: 'copilot_review_comment',
+              description: c.body.substring(0, 200),
+              file: c.path,
+              line: c.line,
+              severity: 'high' as const
+            }))
+          };
+        }
+      }
+
+      // If Copilot submitted formal review, check its state
       if (copilotReviews.length > 0) {
+        const latestReview = copilotReviews[copilotReviews.length - 1];
+        if (latestReview.state === 'CHANGES_REQUESTED') {
+          return {
+            condition_id: 'copilot_review_completed',
+            status: 'unmet',
+            fingerprint: 'copilot-requested-changes',
+            blocking_issues: [{
+              type: 'copilot_changes_requested',
+              description: latestReview.body,
+              severity: 'high'
+            }]
+          };
+        }
+        
         return {
           condition_id: 'copilot_review_completed',
           status: 'met',
@@ -845,7 +887,7 @@ export class PRConditionStateService {
         };
       }
 
-      // No Copilot review yet
+      // No Copilot interaction yet - condition unmet
       return {
         condition_id: 'copilot_review_completed',
         status: 'unmet',
@@ -1480,6 +1522,20 @@ Store validation results in task verification data with score and issues.
 
     state.merge_eligible = allConditionsMet;
 
+    if (!allConditionsMet) {
+      logger.debug({
+        category: 'pr-workflow',
+        action: 'merge_not_ready',
+        message: `PR #${prNumber} not ready - missing conditions`,
+        details: {
+          prNumber,
+          unmet_conditions: this.getUnmetConditions(state)
+        }
+      });
+      return; // Do not attempt merge
+    }
+
+    // Only reach here if allConditionsMet === true
     if (allConditionsMet) {
       logger.info({
         category: 'pr-workflow',
@@ -1556,6 +1612,12 @@ Store validation results in task verification data with score and issues.
 
   private countMetConditions(state: PRConditionState): number {
     return Object.values(state.conditions).filter(c => c.status === 'met').length;
+  }
+
+  private getUnmetConditions(state: PRConditionState): string[] {
+    return Object.entries(state.conditions)
+      .filter(([_, condition]) => condition.status !== 'met')
+      .map(([conditionId, _]) => conditionId);
   }
 
   // ==========================================================================
