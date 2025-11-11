@@ -1299,14 +1299,14 @@ echo "PR created successfully, capturing metadata..."`;
       const actionVerb = context.task.pr_branch ? 'updated' : 'created';
 
       return `# Capture PR metadata for reporting
-PR_NUMBER=$(gh pr view ${viewTarget} --json number --jq .number 2>/dev/null)
-PR_URL=$(gh pr view ${viewTarget} --json url --jq .url 2>/dev/null)
-PR_BRANCH=$(gh pr view ${viewTarget} --json headRefName --jq .headRefName 2>/dev/null)
+PR_NUMBER=$(gh pr view ${viewTarget} --json number --jq .number)
+PR_URL=$(gh pr view ${viewTarget} --json url --jq .url)
+PR_BRANCH=$(gh pr view ${viewTarget} --json headRefName --jq .headRefName)
 
 # Verify PR metadata was captured
 if [ -z "$PR_NUMBER" ] || [ -z "$PR_URL" ]; then
-  echo "❌ ERROR: PR may have been ${actionVerb} but metadata could not be retrieved"
-  echo "This usually means PR creation failed or gh CLI cannot access GitHub"
+  echo "❌ ERROR: Failed to retrieve PR metadata"
+  echo "This usually means PR ${actionVerb} failed or gh CLI cannot access GitHub"
   gh auth status || echo "gh auth verification failed"
   exit 1
 fi

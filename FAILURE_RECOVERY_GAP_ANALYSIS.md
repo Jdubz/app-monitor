@@ -162,7 +162,8 @@ const envVars = [
   `AGENT_ID=${agent.id}`,
   `AGENT_NAME=${agent.name}`,
   // ... existing vars ...
-  `GITHUB_TOKEN=${process.env.GITHUB_TOKEN || process.env.GH_TOKEN || ''}`,  // ADD THIS
+  // Pass GitHub token to enable authenticated API requests
+  `GITHUB_TOKEN=${process.env.GITHUB_TOKEN || process.env.GH_TOKEN || ''}`,
 ];
 ```
 
@@ -252,7 +253,7 @@ private async createLogStream(worker: EphemeralWorker): Promise<fs.WriteStream> 
   
   const stream = fs.createWriteStream(this.devBotsLogPath, { flags: 'a' });
   
-  // ADD ERROR HANDLER
+  // Add error handler for stream write failures
   stream.on('error', (error) => {
     logger.error({
       category: 'process',
@@ -284,7 +285,7 @@ private async initializeWorkerLogFile(workerId: string): Promise<void> {
       });
     }
 
-    // ADD: Verify directory is writable
+    // Verify directory is writable
     try {
       fs.accessSync(logDir, fs.constants.W_OK);
     } catch (err) {
@@ -306,7 +307,7 @@ private async initializeWorkerLogFile(workerId: string): Promise<void> {
       category: 'process',
       action: 'initialized_worker_log_file',
       message: `Initialized log file for worker ${workerId}`,
-      details: { path: logFilePath, size: header.length }  // ADD size
+      details: { path: logFilePath, size: header.length }
     });
   } catch (error) {
     logger.error({
@@ -314,7 +315,7 @@ private async initializeWorkerLogFile(workerId: string): Promise<void> {
       action: 'failed_to_initialize_worker_log_file',
       message: `Failed to initialize log file for worker ${workerId}:`,
       error: error,
-      details: {  // ADD more details
+      details: {
         logDir: this.getHostLogsDir(),
         workerId,
         cwd: process.cwd()
