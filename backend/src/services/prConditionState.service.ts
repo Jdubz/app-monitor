@@ -139,6 +139,18 @@ export class PRConditionStateService {
     this.reviewTracker = new ReviewCommentTracker(this.db);
     this.taskQueue = taskQueue;
 
+    // Cleanup stale evaluation locks every 5 minutes
+    setInterval(() => {
+      const lockCount = this.evaluationLocks.size;
+      if (lockCount > 0) {
+        logger.warn({
+          category: 'pr-workflow',
+          action: 'evaluation_locks_cleanup_check',
+          message: `${lockCount} evaluation locks still active - may indicate stuck evaluations`
+        });
+      }
+    }, 5 * 60 * 1000);
+
     logger.info({
       category: 'pr-workflow',
       action: 'condition_state_service_initialized',
@@ -1506,6 +1518,33 @@ Store validation results in task verification data with score and issues.
           error,
           details: { prNumber }
         });
+        
+        // Create manual intervention task when auto-merge fails
+        try {
+          await this.taskQueue.createTask({
+            type: 'manual-intervention',
+            task_category: 'review',
+            title: `Manual merge needed for PR #${prNumber}`,
+            description: `Automatic merge failed for PR #${prNumber}. All conditions are met but merge operation failed.\n\nError: ${error instanceof Error ? error.message : String(error)}\n\nPlease manually review and merge the PR.`,
+            acceptance_criteria: [`PR #${prNumber} successfully merged`],
+            assigned_agent: 'human',
+            priority: 10,
+            followup_for_pr: prNumber
+          });
+          
+          logger.info({
+            category: 'pr-workflow',
+            action: 'manual_merge_task_created',
+            message: `Created manual intervention task for failed auto-merge of PR #${prNumber}`
+          });
+        } catch (taskError) {
+          logger.error({
+            category: 'pr-workflow',
+            action: 'manual_merge_task_failed',
+            message: `Failed to create manual intervention task for PR #${prNumber}`,
+            error: taskError
+          });
+        }
       }
     }
   }
