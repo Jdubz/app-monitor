@@ -58,6 +58,7 @@ export type LogCategory =
   | 'scripts'
   | 'socket'
   | 'system'
+  | 'task_context' // Task context tracking for CRUD operations
   | 'test'
   | 'test_failure'
   | 'token-tracking'
