@@ -145,7 +145,7 @@ export class ConnectionManager {
   /**
    * Broadcast message to all connected clients
    */
-  broadcastToAll(event: string | object, ...args: any[]): void {
+  broadcastToAll(event: string | object, ...args: unknown[]): void {
     if (!this.io) {
       logger.warn({
         category: 'socket',

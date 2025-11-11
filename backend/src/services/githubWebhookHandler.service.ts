@@ -9,6 +9,7 @@
 import { logger } from '../utils/logger.js';
 import type { TaskQueueService, Task } from './taskQueue.sqlite.js';
 import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
+import type { PRStatus, CopilotReviewAnalysis } from './githubPR.service.js';
 import { ReviewCommentTracker } from './reviewCommentTracker.service.js';
 import { TaskVerificationService } from './taskVerification.service.js';
 import { PRConditionStateService } from './prConditionState.service.js';
@@ -1074,14 +1075,14 @@ export class GitHubWebhookHandler {
    */
   private determineBlockReasons(
     prNumber: number,
-    prStatus: any,
-    copilotAnalysis: any,
-    task?: any
+    prStatus: PRStatus,
+    copilotAnalysis: CopilotReviewAnalysis,
+    task?: Task
   ): string[] {
     const reasons: string[] = [];
 
     // Check for failed checks
-    const hasFailedChecks = prStatus.checks.some((c: any) =>
+    const hasFailedChecks = prStatus.checks.some(c =>
       c.status === 'failure' || c.status === 'error'
     );
     if (hasFailedChecks) {
@@ -1094,7 +1095,7 @@ export class GitHubWebhookHandler {
     }
 
     // Check for human change requests
-    const hasChangeRequests = prStatus.reviews.some((r: any) =>
+    const hasChangeRequests = prStatus.reviews.some(r =>
       r.state === 'CHANGES_REQUESTED' && !r.author.toLowerCase().includes('copilot')
     );
     if (hasChangeRequests) {

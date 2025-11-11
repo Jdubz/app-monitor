@@ -117,7 +117,7 @@ export interface ConditionEvaluation {
   status: ConditionStatus;
   fingerprint: string;
   blocking_issues: BlockingIssue[];
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 // ============================================================================
@@ -907,7 +907,7 @@ export class PRConditionStateService {
     // Check if validation task exists and passed
     const prTasks = await this.taskQueue.findByPRNumber(prNumber);
     const validationTasks = prTasks.filter(t => t.type === 'pr-validation');
-    const latestValidation = validationTasks.sort((a: any, b: any) => (b.created_at || 0) - (a.created_at || 0))[0];
+    const latestValidation = validationTasks.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))[0];
 
     if (latestValidation?.status === 'completed' && latestValidation.verification_passed) {
       // Validation passed
@@ -1569,7 +1569,7 @@ Store validation results in task verification data with score and issues.
     try {
       const row = this.db.getConnection().prepare(
         'SELECT * FROM pr_condition_states WHERE pr_number = ?'
-      ).get(prNumber) as any;
+      ).get(prNumber) as { state_json: string } | undefined;
 
       if (!row) {
         return null;
