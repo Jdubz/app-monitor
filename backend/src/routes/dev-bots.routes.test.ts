@@ -470,35 +470,11 @@ describe('Dev-Bots Routes - Task Quality Validation', () => {
   });
 
   describe('Task Context API Endpoints', () => {
-    let mockTaskContextService: any;
-
-    beforeEach(() => {
-      // Mock TaskContextService methods
-      mockTaskContextService = {
-        getLatestAutomationRun: vi.fn(),
-        getTaskAutomationRuns: vi.fn(),
-        getAutomationRun: vi.fn()
-      };
-
-      // Inject mock into router (we need to access the service instance)
-      // For now, we'll test the route handlers directly
-    });
+    // Note: These tests verify route structure exists
+    // Full integration tests would require mocking TaskContextService
 
     describe('GET /tasks/:id/context', () => {
       it('should return latest automation run for a task', async () => {
-        const mockRun = {
-          run_id: 'run-123',
-          task_id: 'task-456',
-          started_at: '2025-11-10T10:00:00Z',
-          status: 'success',
-          exit_code: 0
-        };
-
-        mockRequest = {
-          params: { id: 'task-456' }
-        };
-
-        // Note: Full integration test would require mocking TaskContextService
         // This test verifies the route structure exists
         const contextRoute = router.stack.find((layer: any) =>
           layer.route?.path === '/tasks/:id/context' && layer.route.methods.get

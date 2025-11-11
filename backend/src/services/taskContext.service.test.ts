@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { TaskContextService, type AutomationRun } from './taskContext.service.js';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { TaskContextService } from './taskContext.service.js';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
@@ -235,7 +235,7 @@ describe('TaskContextService', () => {
       expect(fs.existsSync(dataDir)).toBe(false);
 
       // Service should create the directory
-      const newService = new TaskContextService(nonExistentPath);
+      new TaskContextService(nonExistentPath);
 
       // Directory should now exist
       expect(fs.existsSync(dataDir)).toBe(true);
