@@ -306,6 +306,22 @@ export class EphemeralWorkerService {
         });
       }
 
+      // Validate GITHUB_TOKEN before creating container
+      const githubToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+      if (!githubToken) {
+        logger.error({
+          category: 'system',
+          action: 'missing_github_token',
+          message: 'GITHUB_TOKEN (or GH_TOKEN) is not set. Authentication will fail.',
+          details: {
+            taskId: task.id,
+            hasGithubToken: !!process.env.GITHUB_TOKEN,
+            hasGhToken: !!process.env.GH_TOKEN
+          }
+        });
+        throw new Error('Missing GITHUB_TOKEN (or GH_TOKEN) in environment. Cannot proceed with task execution.');
+      }
+
       const envVars = [
         `AGENT_ID=${agent.id}`,
         `AGENT_NAME=${agent.name}`,
@@ -313,7 +329,7 @@ export class EphemeralWorkerService {
         `WORKER_ID=${workerId}`,
         `WORKSPACE_BRANCH=${baseBranch}`,
         `WORKSPACE_ID=${workspaceId}`,
-        `GITHUB_TOKEN=${process.env.GITHUB_TOKEN || process.env.GH_TOKEN || ''}`,
+        `GITHUB_TOKEN=${githubToken}`,
         ...(task.is_repair_bot ? [`IS_IMPROVEMENT_TASK=true`, `PARENT_TASK_ID=${task.original_task_id}`] : [])
       ];
 
