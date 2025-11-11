@@ -7,7 +7,7 @@
 set -euo pipefail
 
 PR_NUMBERS=(96 97 98 99)
-API_BASE="http://localhost/api"
+API_BASE="${API_BASE:-http://localhost/api}"
 
 echo "Restarting PR tracking for hung PRs..."
 
@@ -15,7 +15,7 @@ for PR in "${PR_NUMBERS[@]}"; do
     echo "Triggering PR #$PR evaluation..."
     
     # Trigger manual PR re-evaluation via webhook simulation
-    curl -X POST "${API_BASE}/webhooks/github" \
+    if curl -X POST "${API_BASE}/webhooks/github" \
         -H "Content-Type: application/json" \
         -H "X-GitHub-Event: pull_request" \
         -d "{
@@ -31,9 +31,11 @@ for PR in "${PR_NUMBERS[@]}"; do
                     \"ref\": \"main\"
                 }
             }
-        }" 2>/dev/null || echo "  Failed to trigger PR #$PR"
-    
-    echo "  ✓ Triggered PR #$PR"
+        }" 2>/dev/null; then
+        echo "  ✓ Triggered PR #$PR"
+    else
+        echo "  ✗ Failed to trigger PR #$PR"
+    fi
     sleep 1
 done
 

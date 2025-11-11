@@ -660,9 +660,6 @@ export class GitHubPRService {
   }
 
   /**
-   * Normalize check status to standard values
-   */
-  /**
    * Normalize GitHub check conclusion to our status enum
    * CRITICAL: Must use conclusion field, NOT status field!
    * - status = execution state (COMPLETED, IN_PROGRESS)

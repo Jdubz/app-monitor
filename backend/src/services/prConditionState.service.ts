@@ -852,11 +852,11 @@ export class PRConditionStateService {
             condition_id: 'copilot_review_completed',
             status: 'unmet',
             fingerprint: this.generateFingerprintFromList(copilotUnresolved.map((c: { body: string }) => c.body)),
-            blocking_issues: copilotUnresolved.map((c: { body: string; path?: string; line?: number }) => ({
+            blocking_issues: copilotUnresolved.map((c: { body: string; file_path?: string; line_number?: number }) => ({
               type: 'copilot_review_comment',
               description: c.body.substring(0, 200),
-              file: c.path,
-              line: c.line,
+              file: c.file_path,
+              line: c.line_number,
               severity: 'high' as const
             }))
           };
@@ -1536,71 +1536,69 @@ Store validation results in task verification data with score and issues.
     }
 
     // Only reach here if allConditionsMet === true
-    if (allConditionsMet) {
-      logger.info({
-        category: 'pr-workflow',
-        action: 'merge_ready',
-        message: `PR #${prNumber} is ready for merge - all conditions met!`,
-        details: { prNumber }
-      });
+    logger.info({
+      category: 'pr-workflow',
+      action: 'merge_ready',
+      message: `PR #${prNumber} is ready for merge - all conditions met!`,
+      details: { prNumber }
+    });
 
-      // Trigger automatic merge
-      try {
-        const tasks = await this.taskQueue.findByPRNumber(prNumber);
+    // Trigger automatic merge
+    try {
+      const tasks = await this.taskQueue.findByPRNumber(prNumber);
 
-        if (tasks.length === 0) {
-          logger.warn({
-            category: 'pr-workflow',
-            action: 'merge_skipped_no_task',
-            message: `Cannot merge PR #${prNumber} - no associated task found`,
-            details: { prNumber }
-          });
-          return;
-        }
-
-        await this.github.mergePR(prNumber, 'squash');
-
-        logger.info({
+      if (tasks.length === 0) {
+        logger.warn({
           category: 'pr-workflow',
-          action: 'pr_auto_merged',
-          message: `Successfully auto-merged PR #${prNumber}`,
-          details: { prNumber, taskId: tasks[0].id }
-        });
-      } catch (error) {
-        logger.error({
-          category: 'pr-workflow',
-          action: 'auto_merge_failed',
-          message: `Failed to auto-merge PR #${prNumber}: ${error}`,
-          error,
+          action: 'merge_skipped_no_task',
+          message: `Cannot merge PR #${prNumber} - no associated task found`,
           details: { prNumber }
         });
+        return;
+      }
+
+      await this.github.mergePR(prNumber, 'squash');
+
+      logger.info({
+        category: 'pr-workflow',
+        action: 'pr_auto_merged',
+        message: `Successfully auto-merged PR #${prNumber}`,
+        details: { prNumber, taskId: tasks[0].id }
+      });
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'auto_merge_failed',
+        message: `Failed to auto-merge PR #${prNumber}: ${error}`,
+        error,
+        details: { prNumber }
+      });
         
-        // Create manual intervention task when auto-merge fails
-        try {
-          await this.taskQueue.createTask({
-            type: 'manual-intervention',
-            task_category: 'review',
-            title: `Manual merge needed for PR #${prNumber}`,
-            description: `Automatic merge failed for PR #${prNumber}. All conditions are met but merge operation failed.\n\nError: ${error instanceof Error ? error.message : String(error)}\n\nPlease manually review and merge the PR.`,
-            acceptance_criteria: [`PR #${prNumber} successfully merged`],
-            assigned_agent: 'human',
-            priority: 10,
-            followup_for_pr: prNumber
-          });
+      // Create manual intervention task when auto-merge fails
+      try {
+        await this.taskQueue.createTask({
+          type: 'manual-intervention',
+          task_category: 'review',
+          title: `Manual merge needed for PR #${prNumber}`,
+          description: `Automatic merge failed for PR #${prNumber}. All conditions are met but merge operation failed.\n\nError: ${error instanceof Error ? error.message : String(error)}\n\nPlease manually review and merge the PR.`,
+          acceptance_criteria: [`PR #${prNumber} successfully merged`],
+          assigned_agent: 'human',
+          priority: 10,
+          followup_for_pr: prNumber
+        });
           
-          logger.info({
-            category: 'pr-workflow',
-            action: 'manual_merge_task_created',
-            message: `Created manual intervention task for failed auto-merge of PR #${prNumber}`
-          });
-        } catch (taskError) {
-          logger.error({
-            category: 'pr-workflow',
-            action: 'manual_merge_task_failed',
-            message: `Failed to create manual intervention task for PR #${prNumber}`,
-            error: taskError
-          });
-        }
+        logger.info({
+          category: 'pr-workflow',
+          action: 'manual_merge_task_created',
+          message: `Created manual intervention task for failed auto-merge of PR #${prNumber}`
+        });
+      } catch (taskError) {
+        logger.error({
+          category: 'pr-workflow',
+          action: 'manual_merge_task_failed',
+          message: `Failed to create manual intervention task for PR #${prNumber}`,
+          error: taskError
+        });
       }
     }
   }
