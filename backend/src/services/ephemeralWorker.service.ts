@@ -276,7 +276,9 @@ export class EphemeralWorkerService {
 
       // Mount GitHub CLI config for gh pr create
       const ghConfigDir = path.join(homeDir, '.config', 'gh');
-      if (fs.existsSync(ghConfigDir)) {
+      const ghConfigExists = fs.existsSync(ghConfigDir);
+      
+      if (ghConfigExists) {
         binds.push(`${ghConfigDir}:/home/node/.config/gh:ro`);
         logger.info({
           category: 'process',
@@ -309,17 +311,33 @@ export class EphemeralWorkerService {
       // Validate GITHUB_TOKEN before creating container
       const githubToken = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
       if (!githubToken) {
-        logger.error({
-          category: 'system',
-          action: 'missing_github_token',
-          message: 'GITHUB_TOKEN (or GH_TOKEN) is not set. Authentication will fail.',
-          details: {
-            taskId: task.id,
-            hasGithubToken: !!process.env.GITHUB_TOKEN,
-            hasGhToken: !!process.env.GH_TOKEN
-          }
-        });
-        throw new Error('Missing GITHUB_TOKEN (or GH_TOKEN) in environment. Cannot proceed with task execution.');
+        // If gh config exists, warn but proceed; otherwise fail
+        if (!ghConfigExists) {
+          logger.error({
+            category: 'system',
+            action: 'missing_github_token_and_config',
+            message: 'GITHUB_TOKEN (or GH_TOKEN) is not set and GitHub CLI config not found. Authentication will fail.',
+            details: {
+              taskId: task.id,
+              hasGithubToken: !!process.env.GITHUB_TOKEN,
+              hasGhToken: !!process.env.GH_TOKEN,
+              ghConfigDir
+            }
+          });
+          throw new Error('Missing GITHUB_TOKEN (or GH_TOKEN) and GitHub CLI config directory. Cannot proceed with task execution.');
+        } else {
+          logger.warn({
+            category: 'system',
+            action: 'missing_github_token_but_config_present',
+            message: 'GITHUB_TOKEN (or GH_TOKEN) is not set, but GitHub CLI config is present. Proceeding; authentication may succeed via config.',
+            details: {
+              taskId: task.id,
+              hasGithubToken: !!process.env.GITHUB_TOKEN,
+              hasGhToken: !!process.env.GH_TOKEN,
+              ghConfigDir
+            }
+          });
+        }
       }
 
       const envVars = [
@@ -329,7 +347,7 @@ export class EphemeralWorkerService {
         `WORKER_ID=${workerId}`,
         `WORKSPACE_BRANCH=${baseBranch}`,
         `WORKSPACE_ID=${workspaceId}`,
-        `GITHUB_TOKEN=${githubToken}`,
+        `GITHUB_TOKEN=${githubToken || ''}`,
         ...(task.is_repair_bot ? [`IS_IMPROVEMENT_TASK=true`, `PARENT_TASK_ID=${task.original_task_id}`] : [])
       ];
 

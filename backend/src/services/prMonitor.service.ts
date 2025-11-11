@@ -613,7 +613,7 @@ ${taskChain}
     // Always include: changes pushed to same PR branch (not new PR)
     acceptanceCriteria.push(`Changes pushed to existing PR #${prNumber} (do NOT create new PR)`);
 
-    const taskDescription = `Fix issues found in PR #${prNumber}:\n\n${issues.join('\n')}\n\n⚠️ IMPORTANT: Work from the existing PR branch "${prBranch}"\n- Checkout: git fetch origin ${prBranch} && git checkout ${prBranch}\n- Make fixes\n- Push to same branch: git push origin ${prBranch}\n- This will update the existing PR #${prNumber}\n- DO NOT create a new PR`;
+    const taskDescription = `Fix issues found in PR #${prNumber}:\n\n${issues.join('\n')}\n\n⚠️ IMPORTANT: Work from the existing PR branch "${prBranch}"\n- Checkout: git fetch origin "${prBranch}" && git checkout "${prBranch}"\n- Make fixes\n- Push to same branch: git push origin "${prBranch}"\n- This will update the existing PR #${prNumber}\n- DO NOT create a new PR`;
 
     logger.info({
       category: 'pr-workflow',

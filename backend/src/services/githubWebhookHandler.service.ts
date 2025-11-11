@@ -11,6 +11,7 @@ import type { TaskQueueService, Task } from './taskQueue.sqlite.js';
 import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 import { ReviewCommentTracker } from './reviewCommentTracker.service.js';
 import { TaskVerificationService } from './taskVerification.service.js';
+import { PRConditionStateService } from './prConditionState.service.js';
 import { getDatabase } from './database.js';
 
 export interface GitHubPullRequestPayload {
@@ -194,6 +195,7 @@ export class GitHubWebhookHandler {
 
   private reviewCommentTracker: ReviewCommentTracker;
   private taskVerification: TaskVerificationService;
+  private prConditionState: PRConditionStateService;
 
   constructor(
     private readonly taskQueue?: TaskQueueService,
@@ -201,6 +203,7 @@ export class GitHubWebhookHandler {
   ) {
     this.reviewCommentTracker = new ReviewCommentTracker(getDatabase());
     this.taskVerification = new TaskVerificationService();
+    this.prConditionState = taskQueue ? new PRConditionStateService(taskQueue) : null!;
   }
   /**
    * Extract task ID from PR branch name or title
@@ -651,6 +654,19 @@ export class GitHubWebhookHandler {
         repository.name
       );
 
+      // Evaluate PR conditions for review-related issues (continuous self-healing)
+      try {
+        await this.prConditionState.evaluateConditions(prNumber, 'pull_request_review');
+      } catch (error) {
+        logger.warn({
+          category: 'pr-workflow',
+          action: 'condition_evaluation_failed',
+          message: `Failed to evaluate PR conditions for PR #${prNumber}`,
+          error,
+          details: { pr_number: prNumber }
+        });
+      }
+
       // Store review comments for tracking (only Copilot comments)
       if (isCopilot && prStatus.comments.length > 0) {
         const copilotComments = prStatus.comments.filter(c =>
@@ -827,6 +843,19 @@ export class GitHubWebhookHandler {
       // Get PR status and Copilot analysis
       const prStatus = await githubPR.getPRStatus(prNumber, owner, repo);
       const copilotAnalysis = await githubPR.getCopilotReviewAnalysis(prNumber, owner, repo);
+
+      // Evaluate PR conditions and spawn fix tasks if needed (continuous self-healing)
+      try {
+        await this.prConditionState.evaluateConditions(prNumber, 'check_suite');
+      } catch (error) {
+        logger.warn({
+          category: 'pr-workflow',
+          action: 'condition_evaluation_failed',
+          message: `Failed to evaluate PR conditions for PR #${prNumber}`,
+          error,
+          details: { pr_number: prNumber }
+        });
+      }
 
       // Run task verification when checks pass successfully
       if (conclusion === 'success' && tasks.length > 0) {
@@ -1135,6 +1164,19 @@ export class GitHubWebhookHandler {
       await this.taskQueue.updatePRStatus(task.id, {
         pr_status: 'pending_checks',
         pr_checks_status: 'pending'
+      });
+    }
+
+    // Evaluate PR conditions after code changes (continuous self-healing)
+    try {
+      await this.prConditionState.evaluateConditions(prNumber, 'pull_request_synchronize');
+    } catch (error) {
+      logger.warn({
+        category: 'pr-workflow',
+        action: 'condition_evaluation_failed',
+        message: `Failed to evaluate PR conditions for PR #${prNumber}`,
+        error,
+        details: { pr_number: prNumber }
       });
     }
   }
