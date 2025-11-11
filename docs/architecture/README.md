@@ -4,6 +4,9 @@ This directory contains comprehensive architecture documentation for the app-mon
 
 ## Core Architecture Documents
 
+### Dev-Monitor Frontend
+- **[dev-monitor-architecture.md](dev-monitor-architecture.md)** - Dev-Monitor system architecture (React + Express + Socket.IO)
+
 ### Dev-Bots System
 - **[dev-bots-overview.md](dev-bots-overview.md)** - High-level architecture overview of the dev-bots system (85% production ready)
 - **[automatic-failure-recovery.md](automatic-failure-recovery.md)** - Two-stage cleanup + follow-up bot recovery system with safety guards

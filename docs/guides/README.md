@@ -2,6 +2,20 @@
 
 Comprehensive guides for using and maintaining app-monitor, including dev-bots automation framework.
 
+## Dev-Monitor Frontend Guides
+
+### Testing
+- **[e2e-testing-guide.md](e2e-testing-guide.md)** - End-to-end testing with Playwright
+- **[frontend-testing-guide.md](frontend-testing-guide.md)** - Frontend testing strategy and examples
+
+### Development
+- **[component-style-guide.md](component-style-guide.md)** - Component architecture and styling conventions
+- **[frontend-safety-guide.md](frontend-safety-guide.md)** - Safety features and startup procedures
+- **[frontend-troubleshooting.md](frontend-troubleshooting.md)** - Common issues and solutions
+
+### Operations
+- **[structured-logging.md](structured-logging.md)** - Structured logging aggregation and cloud forwarding
+
 ## Dev-Bots Guides
 
 ### Getting Started

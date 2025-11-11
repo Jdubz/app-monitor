@@ -390,9 +390,15 @@ dev-monitor/
 │       ├── styles/          # CSS Modules
 │       └── services/        # API client
 └── docs/
-    ├── ARCHITECTURE.md      # This file
-    ├── TESTING_GUIDE.md     # Testing docs
-    └── COMPONENT_STYLE_GUIDE.md
+    ├── architecture/
+    │   └── dev-monitor-architecture.md  # This file
+    └── guides/
+        ├── component-style-guide.md
+        ├── frontend-testing-guide.md
+        ├── e2e-testing-guide.md
+        ├── frontend-safety-guide.md
+        ├── frontend-troubleshooting.md
+        └── structured-logging.md
 ```
 
 ---
@@ -413,9 +419,9 @@ dev-monitor/
 
 - **Source:** `backend/src/`, `frontend/src/`
 - **Tests:** `backend/tests/`
-- **Docs:** `docs/`, `*.md` files
-- **Style Guide:** `frontend/COMPONENT_STYLE_GUIDE.md`
-- **Testing:** `TESTING_GUIDE.md`
+- **Docs:** `docs/architecture/`, `docs/guides/`
+- **Style Guide:** `docs/guides/component-style-guide.md`
+- **Testing:** `docs/guides/frontend-testing-guide.md`, `docs/guides/e2e-testing-guide.md`
 
 ---
 
