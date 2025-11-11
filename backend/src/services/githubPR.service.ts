@@ -141,7 +141,7 @@ export class GitHubPRService {
       // Parse checks
       const checks: PRCheckStatus[] = (prData.statusCheckRollup || []).map((check: { name?: string; context?: string; status?: string; state?: string; conclusion?: string | null; targetUrl?: string | null; detailsUrl?: string | null }) => ({
         name: check.name || check.context || 'unknown',
-        status: this.normalizeCheckStatus(check.status || check.state || 'pending'),
+        status: this.normalizeCheckConclusion(check.conclusion, check.status || check.state),
         conclusion: check.conclusion || null,
         detailsUrl: check.targetUrl || check.detailsUrl || null
       }));
@@ -434,7 +434,7 @@ export class GitHubPRService {
       });
 
       await execWithTimeout(
-        `gh pr merge ${prNumber} --repo ${owner}/${repo} --${method} --auto`,
+        `gh pr merge ${prNumber} --repo ${owner}/${repo} --${method}`,
         30000
       );
 
@@ -660,19 +660,47 @@ export class GitHubPRService {
   }
 
   /**
-   * Normalize check status to standard values
+   * Normalize GitHub check conclusion to our status enum
+   * CRITICAL: Must use conclusion field, NOT status field!
+   * - status = execution state (COMPLETED, IN_PROGRESS)
+   * - conclusion = actual result (SUCCESS, FAILURE)
    */
-  private normalizeCheckStatus(status: string): 'pending' | 'success' | 'failure' | 'error' {
-    const normalized = status.toLowerCase();
-    if (normalized.includes('success') || normalized === 'completed') {
+  private normalizeCheckConclusion(conclusion: string | null | undefined, status?: string): 'pending' | 'success' | 'failure' | 'error' {
+    // If no conclusion yet, check is still running
+    if (!conclusion) {
+      return 'pending';
+    }
+
+    const normalized = conclusion.toLowerCase();
+    
+    // SUCCESS conclusion = passing check
+    if (normalized === 'success') {
       return 'success';
     }
-    if (normalized.includes('fail')) {
+    
+    // FAILURE conclusion = failing check
+    if (normalized === 'failure') {
       return 'failure';
     }
-    if (normalized.includes('error')) {
+    
+    // CANCELLED, SKIPPED, TIMED_OUT = treat as error
+    if (normalized === 'cancelled' || normalized === 'skipped' || normalized === 'timed_out' || normalized === 'action_required') {
       return 'error';
     }
+    
+    // NEUTRAL = treat as success (check ran but didn't fail)
+    if (normalized === 'neutral') {
+      return 'success';
+    }
+    
+    // Unknown conclusion - check status as fallback
+    if (status) {
+      const statusNorm = status.toLowerCase();
+      if (statusNorm.includes('fail') || statusNorm.includes('error')) {
+        return 'failure';
+      }
+    }
+    
     return 'pending';
   }
 }

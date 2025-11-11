@@ -365,37 +365,37 @@ describe('GitHubPRService', () => {
     });
   });
 
-  describe('normalizeCheckStatus', () => {
-    it('should normalize success statuses', () => {
+  describe('normalizeCheckConclusion', () => {
+    it('should normalize success conclusions', () => {
       // Use type assertion to access private method for testing
-      const normalizeCheckStatus = (service as any).normalizeCheckStatus.bind(service);
+      const normalizeCheckConclusion = (service as any).normalizeCheckConclusion.bind(service);
 
-      expect(normalizeCheckStatus('success')).toBe('success');
-      expect(normalizeCheckStatus('SUCCESS')).toBe('success');
-      expect(normalizeCheckStatus('completed')).toBe('success');
+      expect(normalizeCheckConclusion('success')).toBe('success');
+      expect(normalizeCheckConclusion('SUCCESS')).toBe('success');
+      expect(normalizeCheckConclusion('neutral')).toBe('success');
     });
 
-    it('should normalize failure statuses', () => {
-      const normalizeCheckStatus = (service as any).normalizeCheckStatus.bind(service);
+    it('should normalize failure conclusions', () => {
+      const normalizeCheckConclusion = (service as any).normalizeCheckConclusion.bind(service);
 
-      expect(normalizeCheckStatus('failure')).toBe('failure');
-      expect(normalizeCheckStatus('FAILURE')).toBe('failure');
-      expect(normalizeCheckStatus('failed')).toBe('failure');
+      expect(normalizeCheckConclusion('failure')).toBe('failure');
+      expect(normalizeCheckConclusion('FAILURE')).toBe('failure');
     });
 
-    it('should normalize error statuses', () => {
-      const normalizeCheckStatus = (service as any).normalizeCheckStatus.bind(service);
+    it('should normalize error conclusions', () => {
+      const normalizeCheckConclusion = (service as any).normalizeCheckConclusion.bind(service);
 
-      expect(normalizeCheckStatus('error')).toBe('error');
-      expect(normalizeCheckStatus('ERROR')).toBe('error');
+      expect(normalizeCheckConclusion('cancelled')).toBe('error');
+      expect(normalizeCheckConclusion('skipped')).toBe('error');
+      expect(normalizeCheckConclusion('timed_out')).toBe('error');
     });
 
-    it('should default to pending for unknown statuses', () => {
-      const normalizeCheckStatus = (service as any).normalizeCheckStatus.bind(service);
+    it('should default to pending for unknown conclusions', () => {
+      const normalizeCheckConclusion = (service as any).normalizeCheckConclusion.bind(service);
 
-      expect(normalizeCheckStatus('queued')).toBe('pending');
-      expect(normalizeCheckStatus('in_progress')).toBe('pending');
-      expect(normalizeCheckStatus('unknown')).toBe('pending');
+      expect(normalizeCheckConclusion(null)).toBe('pending');
+      expect(normalizeCheckConclusion(undefined)).toBe('pending');
+      expect(normalizeCheckConclusion('unknown')).toBe('pending');
     });
   });
 
