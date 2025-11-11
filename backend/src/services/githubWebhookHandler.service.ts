@@ -729,6 +729,35 @@ export class GitHubWebhookHandler {
         repository.name
       );
 
+      // Auto-update branch if PR is behind base (before evaluating conditions)
+      if (prStatus.mergeable_state === 'behind' && prStatus.state === 'OPEN') {
+        try {
+          logger.info({
+            category: 'pr-workflow',
+            action: 'auto_update_branch_behind',
+            message: `PR #${prNumber} is behind base, attempting automatic branch update`,
+            details: { pr_number: prNumber, mergeable_state: prStatus.mergeable_state }
+          });
+          
+          await githubPR.updateBranch(prNumber, repository.owner.login, repository.name);
+          
+          logger.info({
+            category: 'pr-workflow',
+            action: 'auto_update_branch_success',
+            message: `Successfully updated PR #${prNumber} branch with latest base`,
+            details: { pr_number: prNumber }
+          });
+        } catch (error) {
+          logger.warn({
+            category: 'pr-workflow',
+            action: 'auto_update_branch_failed',
+            message: `Failed to auto-update PR #${prNumber} branch`,
+            error,
+            details: { pr_number: prNumber }
+          });
+        }
+      }
+
       // Evaluate PR conditions for review-related issues (continuous self-healing)
       try {
         await this.prConditionState.evaluateConditions(prNumber, 'pull_request_review');
@@ -918,6 +947,36 @@ export class GitHubWebhookHandler {
       // Get PR status and Copilot analysis
       const prStatus = await githubPR.getPRStatus(prNumber, owner, repo);
       const copilotAnalysis = await githubPR.getCopilotReviewAnalysis(prNumber, owner, repo);
+
+      // Auto-update branch if PR is behind base (before evaluating conditions)
+      if (prStatus.mergeable_state === 'behind' && prStatus.state === 'OPEN') {
+        try {
+          logger.info({
+            category: 'pr-workflow',
+            action: 'auto_update_branch_behind',
+            message: `PR #${prNumber} is behind base, attempting automatic branch update`,
+            details: { pr_number: prNumber, mergeable_state: prStatus.mergeable_state }
+          });
+          
+          await githubPR.updateBranch(prNumber, owner, repo);
+          
+          logger.info({
+            category: 'pr-workflow',
+            action: 'auto_update_branch_success',
+            message: `Successfully updated PR #${prNumber} branch with latest base`,
+            details: { pr_number: prNumber }
+          });
+        } catch (error) {
+          logger.warn({
+            category: 'pr-workflow',
+            action: 'auto_update_branch_failed',
+            message: `Failed to auto-update PR #${prNumber} branch`,
+            error,
+            details: { pr_number: prNumber }
+          });
+          // Continue with normal flow - condition evaluation will create followup task if needed
+        }
+      }
 
       // Evaluate PR conditions and spawn fix tasks if needed (continuous self-healing)
       try {

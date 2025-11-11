@@ -53,6 +53,15 @@ export interface PRComment {
   line: number | null;
 }
 
+export interface PRReviewThread {
+  isResolved: boolean;
+  isOutdated: boolean;
+  comments: Array<{
+    body: string;
+    author: string;
+  }>;
+}
+
 export interface PRStatus {
   number: number;
   url: string;
@@ -346,7 +355,9 @@ export class GitHubPRService {
   }
 
   /**
-   * Check if PR can be auto-merged based on checks, reviews, and comments
+   * Check if PR can be auto-merged (synchronous version - DEPRECATED)
+   * Use canAutoMergeAsync instead which checks unresolved comments
+   * @deprecated Use canAutoMergeAsync for complete validation including comment resolution
    */
   canAutoMerge(status: PRStatus, copilotAnalysis: CopilotReviewAnalysis): {
     canMerge: boolean;
@@ -407,6 +418,144 @@ export class GitHubPRService {
   }
 
   /**
+   * Check if PR can be auto-merged (complete async validation)
+   * Checks all conditions including unresolved review comments from GitHub
+   */
+  async canAutoMergeAsync(prNumber: number, repoOwner?: string, repoName?: string): Promise<{
+    canMerge: boolean;
+    reason: string;
+  }> {
+    // Get PR status and analysis
+    const status = await this.getPRStatus(prNumber, repoOwner, repoName);
+    const copilotAnalysis = await this.getCopilotReviewAnalysis(prNumber, repoOwner, repoName);
+
+    // Run basic checks first
+    const basicCheck = this.canAutoMerge(status, copilotAnalysis);
+    if (!basicCheck.canMerge) {
+      return basicCheck;
+    }
+
+    // Check for unresolved review comments (query GitHub directly)
+    const hasUnresolved = await this.hasUnresolvedComments(prNumber, repoOwner, repoName);
+    if (hasUnresolved) {
+      const unresolvedThreads = await this.getUnresolvedComments(prNumber, repoOwner, repoName);
+      const blockingCount = unresolvedThreads.filter(t => !this.isNitpick(t.comments[0].body)).length;
+      const nitpickCount = unresolvedThreads.length - blockingCount;
+      
+      return {
+        canMerge: false,
+        reason: `${blockingCount} unresolved review comment(s)${nitpickCount > 0 ? ` (${nitpickCount} nitpicks)` : ''}`
+      };
+    }
+
+    return { canMerge: true, reason: 'All checks passed, no blocking issues' };
+  }
+
+  /**
+   * Get review threads with resolution status using GraphQL API
+   * This is the source of truth for unresolved comments
+   */
+  async getReviewThreads(prNumber: number, repoOwner?: string, repoName?: string): Promise<PRReviewThread[]> {
+    const owner = repoOwner || this.repoOwner;
+    const repo = repoName || this.repoName;
+
+    const executeGetReviewThreads = async (): Promise<PRReviewThread[]> => {
+      const query = `
+        query($owner: String!, $repo: String!, $prNumber: Int!) {
+          repository(owner: $owner, name: $repo) {
+            pullRequest(number: $prNumber) {
+              reviewThreads(first: 100) {
+                nodes {
+                  isResolved
+                  isOutdated
+                  comments(first: 10) {
+                    nodes {
+                      body
+                      author {
+                        login
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      `;
+
+      const { stdout } = await execWithTimeout(
+        `gh api graphql -f query='${query.replace(/'/g, "'\\''")}' -F owner='${owner}' -F repo='${repo}' -F prNumber=${prNumber}`,
+        30000
+      );
+
+      const result = JSON.parse(stdout);
+      const threads = result.data?.repository?.pullRequest?.reviewThreads?.nodes || [];
+
+      return threads.map((thread: any) => ({
+        isResolved: thread.isResolved,
+        isOutdated: thread.isOutdated,
+        comments: thread.comments.nodes.map((comment: any) => ({
+          body: comment.body,
+          author: comment.author.login
+        }))
+      }));
+    };
+
+    try {
+      if (this.githubCircuitBreaker) {
+        return await this.githubCircuitBreaker.execute(executeGetReviewThreads);
+      } else {
+        return await executeGetReviewThreads();
+      }
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'get_review_threads_failed',
+        message: `Failed to get review threads for PR #${prNumber}`,
+        error
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Check if PR has unresolved review comments
+   * Filters out outdated comments and [nitpick] comments
+   */
+  async hasUnresolvedComments(prNumber: number, repoOwner?: string, repoName?: string): Promise<boolean> {
+    const threads = await this.getReviewThreads(prNumber, repoOwner, repoName);
+    
+    const unresolvedThreads = threads.filter(thread => 
+      !thread.isResolved && 
+      !thread.isOutdated &&
+      thread.comments.length > 0 &&
+      !this.isNitpick(thread.comments[0].body)
+    );
+
+    return unresolvedThreads.length > 0;
+  }
+
+  /**
+   * Get unresolved review comments for task creation
+   */
+  async getUnresolvedComments(prNumber: number, repoOwner?: string, repoName?: string): Promise<PRReviewThread[]> {
+    const threads = await this.getReviewThreads(prNumber, repoOwner, repoName);
+    
+    return threads.filter(thread => 
+      !thread.isResolved && 
+      !thread.isOutdated &&
+      thread.comments.length > 0
+    );
+  }
+
+  /**
+   * Check if a comment is a nitpick (non-blocking)
+   */
+  private isNitpick(body: string): boolean {
+    return /\[nitpick\]|\[nit\]/i.test(body);
+  }
+
+  /**
    * Get Copilot review analysis for a PR
    * Convenience method that fetches PR status and analyzes Copilot comments
    */
@@ -416,32 +565,53 @@ export class GitHubPRService {
   }
 
   /**
-   * Merge a pull request
+   * Merge a pull request with auto-merge support for branch protection
+   * Uses --auto flag to queue merge after all requirements are met
    * @param prNumber PR number
    * @param method Merge method (merge, squash, rebase)
    * @param repoOwner Optional repo owner (defaults to instance owner)
    * @param repoName Optional repo name (defaults to instance name)
+   * @param useAutoMerge Use --auto flag to respect branch protection (default: true)
    */
-  async mergePR(prNumber: number, method: 'merge' | 'squash' | 'rebase' = 'squash', repoOwner?: string, repoName?: string): Promise<void> {
+  async mergePR(
+    prNumber: number, 
+    method: 'merge' | 'squash' | 'rebase' = 'squash', 
+    repoOwner?: string, 
+    repoName?: string,
+    useAutoMerge: boolean = true
+  ): Promise<void> {
     const owner = repoOwner || this.repoOwner;
     const repo = repoName || this.repoName;
     
     const executeMergePR = async (): Promise<void> => {
+      // Check for unresolved comments before attempting merge
+      const hasUnresolved = await this.hasUnresolvedComments(prNumber, owner, repo);
+      if (hasUnresolved) {
+        const unresolvedThreads = await this.getUnresolvedComments(prNumber, owner, repo);
+        const blockingCount = unresolvedThreads.filter(t => !this.isNitpick(t.comments[0].body)).length;
+        
+        throw new Error(
+          `Cannot merge PR #${prNumber}: ${blockingCount} unresolved review comment(s). ` +
+          `Address comments and mark as resolved before merging.`
+        );
+      }
+
+      const autoFlag = useAutoMerge ? '--auto' : '';
+      const command = `gh pr merge ${prNumber} --repo ${owner}/${repo} --${method} ${autoFlag}`.trim();
+      
       logger.info({
         category: 'pr-workflow',
         action: 'merge_pr',
-        message: `Merging PR #${prNumber} in ${owner}/${repo} using ${method} method`
+        message: `Merging PR #${prNumber} in ${owner}/${repo} using ${method} method${useAutoMerge ? ' (auto-merge)' : ''}`,
+        details: { prNumber, method, useAutoMerge }
       });
 
-      await execWithTimeout(
-        `gh pr merge ${prNumber} --repo ${owner}/${repo} --${method}`,
-        30000
-      );
+      await execWithTimeout(command, 30000);
 
       logger.info({
         category: 'pr-workflow',
         action: 'merge_pr_success',
-        message: `Successfully merged PR #${prNumber} in ${owner}/${repo}`
+        message: `Successfully ${useAutoMerge ? 'queued' : 'merged'} PR #${prNumber} in ${owner}/${repo}`
       });
     };
 
