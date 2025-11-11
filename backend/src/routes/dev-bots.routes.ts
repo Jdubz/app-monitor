@@ -1149,6 +1149,9 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
   /**
    * POST /dev-bots/pr/track
    * Manually submit a PR for tracking in the workflow
+   *
+   * If PR is already tracked, this will re-evaluate all conditions and spawn
+   * fix tasks for any unmet conditions (restarting hung PRs)
    */
   router.post('/pr/track', async (req: Request, res: Response) => {
     try {
@@ -1160,17 +1163,45 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
         });
       }
 
-      // Import PR service
+      // Import services
       const { getGitHubPRService } = await import('../services/githubPR.service.js');
+      const { getTaskQueueService } = await import('../services/taskQueue.factory.js');
+      const { PRConditionStateService } = await import('../services/prConditionState.service.js');
+
       const prService = getGitHubPRService();
+      const taskQueue = getTaskQueueService();
 
       // Track the PR - it will extract task ID from branch name if present
       await prService.trackPR(prNumber);
 
+      // Check if PR is already tracked (has associated tasks)
+      const existingTasks = await taskQueue.findByPRNumber(prNumber);
+      const isAlreadyTracked = existingTasks.length > 0;
+
+      // Trigger full condition evaluation (checks all 8 conditions)
+      // This will spawn fix tasks for any unmet conditions
+      const prConditionState = new PRConditionStateService(taskQueue);
+      await prConditionState.evaluateConditions(prNumber, 'manual_restart');
+
+      logger.info({
+        category: 'pr-workflow',
+        action: 'pr_tracked_and_evaluated',
+        message: `PR #${prNumber} ${isAlreadyTracked ? 'restarted' : 'tracked'} - condition evaluation triggered`,
+        details: {
+          pr_number: prNumber,
+          is_restart: isAlreadyTracked,
+          task_count: existingTasks.length
+        }
+      });
+
       res.json({
         success: true,
-        message: `PR #${prNumber} added to tracking workflow`,
-        prNumber
+        message: isAlreadyTracked
+          ? `PR #${prNumber} conditions re-evaluated - fix tasks will be spawned for any unmet conditions`
+          : `PR #${prNumber} added to tracking workflow - evaluating conditions`,
+        prNumber,
+        isRestart: isAlreadyTracked,
+        associatedTasks: existingTasks.length
       });
     } catch (error) {
       logger.error({

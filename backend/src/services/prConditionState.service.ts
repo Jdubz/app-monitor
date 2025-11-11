@@ -130,6 +130,9 @@ export class PRConditionStateService {
   private readonly reviewTracker: ReviewCommentTracker;
   private readonly taskQueue: TaskQueueService;
 
+  // Evaluation locking to prevent race conditions
+  private readonly evaluationLocks: Map<number, Promise<void>> = new Map();
+
   constructor(taskQueue: TaskQueueService) {
     this.db = getDatabase();
     this.github = getGitHubPRService();
@@ -150,10 +153,58 @@ export class PRConditionStateService {
   /**
    * Evaluate all relevant conditions for a PR based on event type
    * This is the main entry point called from webhook handlers
+   *
+   * Uses locking to prevent concurrent evaluations from corrupting state
    */
   async evaluateConditions(
     prNumber: number,
-    eventType: 'check_suite' | 'pull_request_review' | 'pull_request_synchronize' | 'push' | 'task_completion'
+    eventType: 'check_suite' | 'pull_request_review' | 'pull_request_synchronize' | 'push' | 'task_completion' | 'manual_restart'
+  ): Promise<void> {
+    // Check for existing evaluation in progress
+    const existingLock = this.evaluationLocks.get(prNumber);
+    if (existingLock) {
+      logger.info({
+        category: 'pr-workflow',
+        action: 'evaluation_queued',
+        message: `Evaluation for PR #${prNumber} already in progress - waiting for completion`,
+        details: { prNumber, eventType }
+      });
+
+      // Wait for existing evaluation to complete
+      await existingLock;
+
+      logger.info({
+        category: 'pr-workflow',
+        action: 'evaluation_skipped',
+        message: `Previous evaluation completed for PR #${prNumber} - skipping duplicate`,
+        details: { prNumber, eventType }
+      });
+      return;
+    }
+
+    // Create lock promise
+    let resolveLock: () => void;
+    const lockPromise = new Promise<void>((resolve) => {
+      resolveLock = resolve;
+    });
+    this.evaluationLocks.set(prNumber, lockPromise);
+
+    try {
+      await this._evaluateConditionsInternal(prNumber, eventType);
+    } finally {
+      // Always release lock
+      this.evaluationLocks.delete(prNumber);
+      resolveLock!();
+    }
+  }
+
+  /**
+   * Internal method that performs the actual condition evaluation
+   * Should only be called from evaluateConditions (which handles locking)
+   */
+  private async _evaluateConditionsInternal(
+    prNumber: number,
+    eventType: 'check_suite' | 'pull_request_review' | 'pull_request_synchronize' | 'push' | 'task_completion' | 'manual_restart'
   ): Promise<void> {
     logger.info({
       category: 'pr-workflow',
@@ -197,6 +248,20 @@ export class PRConditionStateService {
         // Re-evaluate the condition that task was fixing
         await this.evaluateAndHandleTaskCompletion(prNumber, state);
         break;
+
+      case 'manual_restart':
+        // FULL RESTART: Evaluate ALL conditions (used when manually restarting hung PRs)
+        logger.info({
+          category: 'pr-workflow',
+          action: 'manual_restart_all_conditions',
+          message: `Full condition restart for PR #${prNumber} - evaluating all 8 conditions`
+        });
+        await this.evaluateAndHandleCIChecks(prNumber, state);
+        await this.evaluateAndHandleReview(prNumber, state);
+        await this.evaluateAndHandleSynchronize(prNumber, state);
+        await this.evaluateAndHandleBranchUpdate(prNumber, state);
+        // Task verification and Copilot review will be checked in checkMergeReadiness
+        break;
     }
 
     // Check if ALL conditions are now met (for final validation/merge)
@@ -237,6 +302,55 @@ export class PRConditionStateService {
 
     // Evaluate conditions to see if issue was fixed
     await this.evaluateConditions(prNumber, 'task_completion');
+  }
+
+  /**
+   * Get all tracked PR numbers
+   * Used for push events to trigger re-evaluation of all tracked PRs
+   */
+  async getAllTrackedPRNumbers(): Promise<number[]> {
+    try {
+      const rows = this.db.getConnection().prepare(
+        'SELECT pr_number FROM pr_condition_states ORDER BY pr_number'
+      ).all() as Array<{ pr_number: number }>;
+
+      return rows.map(row => row.pr_number);
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'get_tracked_prs_failed',
+        message: 'Failed to get tracked PR numbers',
+        error
+      });
+      return [];
+    }
+  }
+
+  /**
+   * Delete PR condition state from database
+   * Called when PR is closed or merged
+   */
+  async deletePRConditionState(prNumber: number): Promise<void> {
+    try {
+      this.db.getConnection().prepare(
+        'DELETE FROM pr_condition_states WHERE pr_number = ?'
+      ).run(prNumber);
+
+      logger.info({
+        category: 'pr-workflow',
+        action: 'pr_state_deleted',
+        message: `Deleted condition state for PR #${prNumber}`,
+        details: { prNumber }
+      });
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'delete_state_failed',
+        message: `Failed to delete condition state for PR #${prNumber}`,
+        error,
+        details: { prNumber }
+      });
+    }
   }
 
   // ==========================================================================
@@ -1320,6 +1434,36 @@ Store validation results in task verification data with score and issues.
    * Check if PR is ready for final validation or merge
    */
   private async checkMergeReadiness(prNumber: number, state: PRConditionState): Promise<void> {
+    // First, check if we need to evaluate and spawn validation task
+    const preValidationConditions = [
+      'ci_checks_passing',
+      'comments_resolved',
+      'no_merge_conflicts',
+      'branch_updated',
+      'no_change_requests',
+      'task_verification',
+      'copilot_review_completed'
+    ] as const;
+
+    const preValidationMet = preValidationConditions.every(
+      conditionId => state.conditions[conditionId]?.status === 'met'
+    );
+
+    // If 7 conditions met but validation not evaluated, evaluate it now
+    if (preValidationMet && state.conditions.final_validation_passed.status !== 'met') {
+      logger.info({
+        category: 'pr-workflow',
+        action: 'pre_validation_conditions_met',
+        message: `All 7 pre-validation conditions met for PR #${prNumber} - evaluating validation`,
+        details: { prNumber }
+      });
+
+      const validationEval = await this.evaluateFinalValidationCondition(prNumber, state);
+
+      // Use handleConditionChange to update state and spawn task if needed
+      await this.handleConditionChange(prNumber, state, 'final_validation_passed', validationEval);
+    }
+
     const allConditionsMet = this.areAllConditionsMet(state);
 
     state.merge_eligible = allConditionsMet;
@@ -1332,8 +1476,37 @@ Store validation results in task verification data with score and issues.
         details: { prNumber }
       });
 
-      // Attempt merge via existing PR monitor
-      // This will be handled by the PR monitor service
+      // Trigger automatic merge
+      try {
+        const tasks = await this.taskQueue.findByPRNumber(prNumber);
+
+        if (tasks.length === 0) {
+          logger.warn({
+            category: 'pr-workflow',
+            action: 'merge_skipped_no_task',
+            message: `Cannot merge PR #${prNumber} - no associated task found`,
+            details: { prNumber }
+          });
+          return;
+        }
+
+        await this.github.mergePR(prNumber, 'squash');
+
+        logger.info({
+          category: 'pr-workflow',
+          action: 'pr_auto_merged',
+          message: `Successfully auto-merged PR #${prNumber}`,
+          details: { prNumber, taskId: tasks[0].id }
+        });
+      } catch (error) {
+        logger.error({
+          category: 'pr-workflow',
+          action: 'auto_merge_failed',
+          message: `Failed to auto-merge PR #${prNumber}: ${error}`,
+          error,
+          details: { prNumber }
+        });
+      }
     }
   }
 
@@ -1458,8 +1631,11 @@ Store validation results in task verification data with score and issues.
 
   /**
    * Save PR condition state to database
+   * Uses transaction for atomicity
    */
   private async savePRConditionState(state: PRConditionState): Promise<void> {
+    const db = this.db.getConnection();
+
     try {
       const stateJson = JSON.stringify(state);
       const now = Date.now();
@@ -1468,63 +1644,75 @@ Store validation results in task verification data with score and issues.
       const activeTaskCount = Object.values(state.active_fix_tasks)
         .reduce((sum, tasks) => sum + tasks.length, 0);
 
-      this.db.getConnection().prepare(`
-        INSERT OR REPLACE INTO pr_condition_states (
-          pr_number,
-          state_json,
-          last_evaluated,
-          last_updated,
-          created_at,
-          updated_at,
-          merge_eligible,
-          ci_checks_passing,
-          comments_resolved,
-          no_merge_conflicts,
-          branch_updated,
-          no_change_requests,
-          task_verification,
-          copilot_review_completed,
-          final_validation_passed,
-          has_active_tasks,
-          active_task_count,
-          validation_attempts,
-          last_validation_score,
-          human_escalation_triggered
-        ) VALUES (?, ?, ?, ?, COALESCE((SELECT created_at FROM pr_condition_states WHERE pr_number = ?), ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        state.pr_number,
-        stateJson,
-        state.last_evaluated,
-        state.last_updated,
-        state.pr_number,
-        now,
-        now,
-        state.merge_eligible ? 1 : 0,
-        state.conditions.ci_checks_passing.status === 'met' ? 1 : 0,
-        state.conditions.comments_resolved.status === 'met' ? 1 : 0,
-        state.conditions.no_merge_conflicts.status === 'met' ? 1 : 0,
-        state.conditions.branch_updated.status === 'met' ? 1 : 0,
-        state.conditions.no_change_requests.status === 'met' ? 1 : 0,
-        state.conditions.task_verification.status === 'met' ? 1 : 0,
-        state.conditions.copilot_review_completed.status === 'met' ? 1 : 0,
-        state.conditions.final_validation_passed.status === 'met' ? 1 : 0,
-        activeTaskCount > 0 ? 1 : 0,
-        activeTaskCount,
-        state.final_validation_state.validation_attempts,
-        state.final_validation_state.last_validation_score || null,
-        state.final_validation_state.human_escalation_triggered ? 1 : 0
-      );
+      // Begin transaction for atomic state update
+      db.prepare('BEGIN IMMEDIATE').run();
 
-      logger.debug({
-        category: 'pr-workflow',
-        action: 'state_saved',
-        message: `Saved condition state for PR #${state.pr_number}`,
-        details: {
-          pr_number: state.pr_number,
-          merge_eligible: state.merge_eligible,
-          active_tasks: activeTaskCount
-        }
-      });
+      try {
+        db.prepare(`
+          INSERT OR REPLACE INTO pr_condition_states (
+            pr_number,
+            state_json,
+            last_evaluated,
+            last_updated,
+            created_at,
+            updated_at,
+            merge_eligible,
+            ci_checks_passing,
+            comments_resolved,
+            no_merge_conflicts,
+            branch_updated,
+            no_change_requests,
+            task_verification,
+            copilot_review_completed,
+            final_validation_passed,
+            has_active_tasks,
+            active_task_count,
+            validation_attempts,
+            last_validation_score,
+            human_escalation_triggered
+          ) VALUES (?, ?, ?, ?, COALESCE((SELECT created_at FROM pr_condition_states WHERE pr_number = ?), ?), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `).run(
+          state.pr_number,
+          stateJson,
+          state.last_evaluated,
+          state.last_updated,
+          state.pr_number,
+          now,
+          now,
+          state.merge_eligible ? 1 : 0,
+          state.conditions.ci_checks_passing.status === 'met' ? 1 : 0,
+          state.conditions.comments_resolved.status === 'met' ? 1 : 0,
+          state.conditions.no_merge_conflicts.status === 'met' ? 1 : 0,
+          state.conditions.branch_updated.status === 'met' ? 1 : 0,
+          state.conditions.no_change_requests.status === 'met' ? 1 : 0,
+          state.conditions.task_verification.status === 'met' ? 1 : 0,
+          state.conditions.copilot_review_completed.status === 'met' ? 1 : 0,
+          state.conditions.final_validation_passed.status === 'met' ? 1 : 0,
+          activeTaskCount > 0 ? 1 : 0,
+          activeTaskCount,
+          state.final_validation_state.validation_attempts,
+          state.final_validation_state.last_validation_score || null,
+          state.final_validation_state.human_escalation_triggered ? 1 : 0
+        );
+
+        // Commit transaction
+        db.prepare('COMMIT').run();
+
+        logger.debug({
+          category: 'pr-workflow',
+          action: 'state_saved',
+          message: `Saved condition state for PR #${state.pr_number}`,
+          details: {
+            pr_number: state.pr_number,
+            merge_eligible: state.merge_eligible,
+            active_tasks: activeTaskCount
+          }
+        });
+      } catch (innerError) {
+        // Rollback on error
+        db.prepare('ROLLBACK').run();
+        throw innerError;
+      }
     } catch (error) {
       logger.error({
         category: 'pr-workflow',

@@ -451,6 +451,7 @@ export class GitHubWebhookHandler {
 
   /**
    * Handle push webhook events
+   * When base branches are updated, re-evaluate branch_updated condition for all tracked PRs
    */
   async handlePush(payload: GitHubPushPayload): Promise<void> {
     this.stats.push_events_received++;
@@ -471,10 +472,83 @@ export class GitHubWebhookHandler {
       }
     });
 
-    // TODO Phase 2: Implement push event handling
-    // - Update task status if commits reference task IDs
-    // - Trigger CI/CD for certain branches
-    // - Monitor for conflicts with open PRs
+    // Only trigger condition evaluation for base branches (most PRs target these)
+    const baseBranches = ['main', 'master', 'staging', 'develop', 'production'];
+    if (!baseBranches.includes(branch)) {
+      logger.debug({
+        category: 'pr-workflow',
+        action: 'push_ignored_non_base_branch',
+        message: `Push to ${branch} ignored - not a base branch`,
+        details: { branch }
+      });
+      return;
+    }
+
+    if (!this.prConditionState) {
+      logger.warn({
+        category: 'pr-workflow',
+        action: 'push_handler_skipped',
+        message: 'PR condition state service not available'
+      });
+      return;
+    }
+
+    try {
+      // Get all tracked PRs
+      const trackedPRs = await this.prConditionState.getAllTrackedPRNumbers();
+
+      if (trackedPRs.length === 0) {
+        logger.debug({
+          category: 'pr-workflow',
+          action: 'push_no_tracked_prs',
+          message: `No tracked PRs to evaluate after push to ${branch}`
+        });
+        return;
+      }
+
+      logger.info({
+        category: 'pr-workflow',
+        action: 'push_evaluating_prs',
+        message: `Push to ${branch} - evaluating ${trackedPRs.length} tracked PRs`,
+        details: {
+          branch,
+          pr_count: trackedPRs.length,
+          pr_numbers: trackedPRs
+        }
+      });
+
+      // Trigger condition evaluation for all tracked PRs
+      // This will check if PRs need to merge the base branch
+      for (const prNumber of trackedPRs) {
+        try {
+          await this.prConditionState.evaluateConditions(prNumber, 'push');
+        } catch (error) {
+          logger.error({
+            category: 'pr-workflow',
+            action: 'push_evaluation_failed',
+            message: `Failed to evaluate PR #${prNumber} after push to ${branch}`,
+            error,
+            details: { prNumber, branch }
+          });
+          // Continue with other PRs
+        }
+      }
+
+      logger.info({
+        category: 'pr-workflow',
+        action: 'push_evaluation_completed',
+        message: `Completed evaluating ${trackedPRs.length} PRs after push to ${branch}`,
+        details: { branch, pr_count: trackedPRs.length }
+      });
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'push_handler_failed',
+        message: `Failed to handle push event for ${branch}`,
+        error,
+        details: { branch }
+      });
+    }
   }
 
   /**
@@ -1204,13 +1278,18 @@ export class GitHubWebhookHandler {
       // Mark task as completed if not already
       if (task.status !== 'completed') {
         const completeStmt = (this.taskQueue as unknown as { db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } } }).db.prepare(`
-          UPDATE tasks 
-          SET status = 'completed', 
+          UPDATE tasks
+          SET status = 'completed',
               completed_at = ?
           WHERE id = ?
         `);
         completeStmt.run(Date.now(), task.id);
       }
+    }
+
+    // Clean up PR condition state
+    if (this.prConditionState) {
+      await this.prConditionState.deletePRConditionState(prNumber);
     }
   }
 
@@ -1232,6 +1311,11 @@ export class GitHubWebhookHandler {
       await this.taskQueue.updatePRStatus(task.id, {
         pr_status: 'closed'
       });
+    }
+
+    // Clean up PR condition state
+    if (this.prConditionState) {
+      await this.prConditionState.deletePRConditionState(prNumber);
     }
   }
 
