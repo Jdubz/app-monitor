@@ -30,6 +30,8 @@ export interface PRMonitorConfig {
 /**
  * Service for PR workflow business logic (webhook-driven)
  */
+const MAX_COMMENT_SNIPPET_LENGTH = 150;
+
 export class PRMonitorService {
   private readonly config: PRMonitorConfig;
   private readonly githubPR: GitHubPRService;
@@ -538,14 +540,12 @@ ${taskChain}
     const resolutionSummary = this.reviewCommentTracker.getResolutionSummary(prNumber);
     if (resolutionSummary.unresolvedBlocking > 0) {
       issues.push(`💬 ${resolutionSummary.unresolvedBlocking} unresolved blocking comment(s)`);
-      // Get actual comment details
-      const comments = prStatus.comments.filter(c =>
-        c.body.toLowerCase().includes('severity:') &&
-        (c.body.toLowerCase().includes('high') || c.body.toLowerCase().includes('medium'))
-      );
-      comments.forEach(comment => {
-        const location = comment.path && comment.line ? `${comment.path}:${comment.line}` : 'General';
-        const snippet = comment.body.substring(0, 150).replace(/\n/g, ' ');
+      // Get actual unresolved comments from the tracker
+      const unresolvedComments = this.reviewCommentTracker.getCommentsForPR(prNumber, false)
+        .filter(c => c.severity === 'blocking');
+      unresolvedComments.forEach(comment => {
+        const location = comment.file_path && comment.line_number ? `${comment.file_path}:${comment.line_number}` : 'General';
+        const snippet = comment.body ? comment.body.substring(0, MAX_COMMENT_SNIPPET_LENGTH).replace(/\n/g, ' ') : '';
         issues.push(`  - [${location}] ${snippet}`);
       });
     }
