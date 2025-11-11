@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import type { TaskCreationContext } from '../types/taskContext.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -579,6 +580,18 @@ export class DevBotsDatabase {
     };
 
     this.storeQualityObservation(observation);
+  }
+
+  // Task Creation Context
+  saveTaskCreationContext(taskId: string, context: TaskCreationContext): void {
+    this.db.prepare(`
+      UPDATE tasks
+      SET context_json = ?
+      WHERE id = ?
+    `).run(
+      this.serializeNullableJson(context),
+      taskId
+    );
   }
 
   // Interactive Sessions
