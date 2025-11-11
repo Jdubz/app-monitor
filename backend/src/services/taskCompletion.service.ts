@@ -169,6 +169,38 @@ export class TaskCompletionService {
     // Create quality observation and generate improvement tasks (if task completed successfully)
     if (finalStatus === 'completed') {
       await this.createQualityObservationAndImprovements(task, taskVerification, qualityValidation);
+
+      // Trigger PR condition evaluation if this is a followup task for a PR (continuous self-healing)
+      if (task.followup_for_pr) {
+        try {
+          const { getTaskQueueService } = await import('./taskQueue.factory.js');
+          const taskQueue = getTaskQueueService();
+          const { PRConditionStateService } = await import('./prConditionState.service.js');
+          const prConditionState = new PRConditionStateService(taskQueue);
+          await prConditionState.evaluateConditions(task.followup_for_pr, 'task_completion');
+
+          logger.info({
+            category: 'pr-workflow',
+            action: 'pr_conditions_evaluated_after_task',
+            message: `Evaluated PR #${task.followup_for_pr} conditions after followup task ${task.id} completed`,
+            details: {
+              pr_number: task.followup_for_pr,
+              task_id: task.id
+            }
+          });
+        } catch (error) {
+          logger.warn({
+            category: 'pr-workflow',
+            action: 'condition_evaluation_failed',
+            message: `Failed to evaluate PR conditions after task ${task.id} completion`,
+            error,
+            details: {
+              pr_number: task.followup_for_pr,
+              task_id: task.id
+            }
+          });
+        }
+      }
     }
 
     await this.ephemeralWorkerService.destroyWorker(worker.id);

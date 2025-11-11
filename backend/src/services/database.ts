@@ -241,6 +241,14 @@ export class DevBotsDatabase {
         'utf-8'
       ));
     });
+
+    // Migration 010: PR Condition States for Self-Healing Workflow
+    this.applyMigration('010_pr_condition_states', () => {
+      this.db.exec(fs.readFileSync(
+        path.join(__dirname, '..', '..', 'migrations', '009_pr_condition_states.sql'),
+        'utf-8'
+      ));
+    });
   }
 
   private applyMigration(name: string, migration: () => void): void {
