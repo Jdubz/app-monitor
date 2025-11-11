@@ -17,6 +17,21 @@ import { logger } from '../utils/logger.js';
 vi.mock('fs');
 vi.mock('../utils/logger.js');
 
+// Mock database module to avoid real database access in tests
+vi.mock('./database.js', () => ({
+  getDatabase: vi.fn(() => ({
+    getConnection: vi.fn(() => ({
+      exec: vi.fn(),
+      prepare: vi.fn(() => ({
+        all: vi.fn(() => []),
+        run: vi.fn(),
+        get: vi.fn()
+      }))
+    })),
+    close: vi.fn()
+  }))
+}));
+
 describe('LogWatcher', () => {
   let logWatcher: LogWatcher;
   let httpServer: any;

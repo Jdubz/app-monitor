@@ -60,3 +60,4 @@ dev-bots/volumes/
 
 # Production deployment infrastructure (kept separate for security)
 ../app-monitor-deployment/
+.pids/

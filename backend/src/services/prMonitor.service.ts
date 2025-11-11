@@ -30,6 +30,8 @@ export interface PRMonitorConfig {
 /**
  * Service for PR workflow business logic (webhook-driven)
  */
+const MAX_COMMENT_SNIPPET_LENGTH = 150;
+
 export class PRMonitorService {
   private readonly config: PRMonitorConfig;
   private readonly githubPR: GitHubPRService;
@@ -247,6 +249,17 @@ ${prData.description || 'No description available'}`,
       return true;
     }
 
+    // Create followup for PR behind base branch (needs update)
+    if (prStatus.mergeable_state === 'behind') {
+      logger.info({
+        category: 'pr-workflow',
+        action: 'followup_needed_behind_base',
+        message: `PR #${prNumber} is behind base branch and needs update`,
+        details: { pr_number: prNumber, mergeable_state: prStatus.mergeable_state }
+      });
+      return true;
+    }
+
     // Create followup for unresolved blocking review comments
     const resolutionSummary = this.reviewCommentTracker.getResolutionSummary(prNumber);
     if (resolutionSummary.unresolvedBlocking > 0) {
@@ -461,6 +474,102 @@ ${taskChain}
   }
 
   /**
+   * Categorize failure type based on issue content using keyword pattern matching
+   */
+  private categorizeFailure(issues: string[]): {
+    category: 'ci_failure' | 'test_failure' | 'lint_failure' | 'merge_conflict' | 'review_feedback' | 'verification_failure' | 'unknown';
+    confidence: 'high' | 'medium' | 'low';
+  } {
+    const issuesText = issues.join(' ').toLowerCase();
+
+    // CI/Build failures - high confidence patterns
+    const ciBuildPatterns = [
+      /build.*fail/i,
+      /compilation.*error/i,
+      /webpack.*error/i,
+      /rollup.*error/i,
+      /vite.*error/i,
+      /tsc.*error/i,
+      /docker.*build.*fail/i,
+      /npm.*build.*fail/i
+    ];
+    if (ciBuildPatterns.some(p => p.test(issuesText))) {
+      return { category: 'ci_failure', confidence: 'high' };
+    }
+
+    // Test failures - high confidence patterns
+    const testPatterns = [
+      /test.*fail/i,
+      /jest.*fail/i,
+      /mocha.*fail/i,
+      /vitest.*fail/i,
+      /cypress.*fail/i,
+      /e2e.*fail/i,
+      /unit.*test.*fail/i,
+      /integration.*test.*fail/i,
+      /\d+.*failing/i,
+      /expected.*received/i
+    ];
+    if (testPatterns.some(p => p.test(issuesText))) {
+      return { category: 'test_failure', confidence: 'high' };
+    }
+
+    // Linting/Type checking failures - high confidence patterns
+    const lintPatterns = [
+      /lint.*fail/i,
+      /eslint.*error/i,
+      /prettier.*error/i,
+      /type.*check.*fail/i,
+      /typescript.*error/i,
+      /type.*error/i,
+      /syntax.*error/i,
+      /formatting.*error/i
+    ];
+    if (lintPatterns.some(p => p.test(issuesText))) {
+      return { category: 'lint_failure', confidence: 'high' };
+    }
+
+    // Merge conflicts - high confidence patterns
+    const mergeConflictPatterns = [
+      /merge.*conflict/i,
+      /conflicting/i,
+      /cannot.*merge/i,
+      /resolve.*conflict/i,
+      /branch.*conflict/i
+    ];
+    if (mergeConflictPatterns.some(p => p.test(issuesText))) {
+      return { category: 'merge_conflict', confidence: 'high' };
+    }
+
+    // Review feedback - medium confidence patterns
+    const reviewPatterns = [
+      /copilot.*found/i,
+      /blocking.*issue/i,
+      /requested.*change/i,
+      /reviewer.*feedback/i,
+      /code.*review/i,
+      /change.*request/i
+    ];
+    if (reviewPatterns.some(p => p.test(issuesText))) {
+      return { category: 'review_feedback', confidence: 'medium' };
+    }
+
+    // Verification failures - medium confidence patterns
+    const verificationPatterns = [
+      /verification.*fail/i,
+      /acceptance.*criteria/i,
+      /criteria.*not.*met/i,
+      /verification.*passed.*false/i
+    ];
+    if (verificationPatterns.some(p => p.test(issuesText))) {
+      return { category: 'verification_failure', confidence: 'medium' };
+    }
+
+    // Default to unknown with low confidence
+    return { category: 'unknown', confidence: 'low' };
+  }
+
+  /**
    * Create a followup task to address PR issues
    */
   async createFollowupTask(
@@ -503,17 +612,43 @@ ${taskChain}
     // Build task description
     const issues: string[] = [];
 
+    // PR behind base branch
+    if (prStatus.mergeable_state === 'behind') {
+      issues.push(`⚠️ PR is behind base branch and needs to be updated`);
+      issues.push(`  Action: Merge latest main into this branch (do NOT rebase/force push)`);
+      issues.push(`  Command: git fetch origin main && git merge origin/main`);
+    }
+
     // Failed checks
     const failedChecks = prStatus.checks.filter(c =>
       c.status === 'failure' || c.status === 'error'
     );
     if (failedChecks.length > 0) {
-      issues.push(`Failed CI checks: ${failedChecks.map(c => c.name).join(', ')}`);
+      issues.push(`❌ Failed CI checks: ${failedChecks.map(c => c.name).join(', ')}`);
+      failedChecks.forEach(check => {
+        if (check.detailsUrl) {
+          issues.push(`  - ${check.name}: ${check.detailsUrl}`);
+        }
+      });
+    }
+
+    // Unresolved blocking review comments
+    const resolutionSummary = this.reviewCommentTracker.getResolutionSummary(prNumber);
+    if (resolutionSummary.unresolvedBlocking > 0) {
+      issues.push(`💬 ${resolutionSummary.unresolvedBlocking} unresolved blocking comment(s)`);
+      // Get actual unresolved comments from the tracker
+      const unresolvedComments = this.reviewCommentTracker.getCommentsForPR(prNumber, false)
+        .filter(c => c.severity === 'blocking');
+      unresolvedComments.forEach(comment => {
+        const location = comment.file_path && comment.line_number ? `${comment.file_path}:${comment.line_number}` : 'General';
+        const snippet = comment.body ? comment.body.substring(0, MAX_COMMENT_SNIPPET_LENGTH).replace(/\n/g, ' ') : '';
+        issues.push(`  - [${location}] ${snippet}`);
+      });
     }
 
     // Copilot blocking issues
     if (copilotAnalysis.blockingIssues.length > 0) {
-      issues.push(`Copilot found ${copilotAnalysis.blockingIssues.length} blocking issue(s)`);
+      issues.push(`🤖 Copilot found ${copilotAnalysis.blockingIssues.length} blocking issue(s)`);
       copilotAnalysis.blockingIssues.forEach(issue => {
         issues.push(`  - ${issue.substring(0, 200)}`);
       });
@@ -524,12 +659,15 @@ ${taskChain}
       r.state === 'CHANGES_REQUESTED' && !r.author.toLowerCase().includes('copilot')
     );
     if (changeRequests.length > 0) {
-      issues.push(`Human reviewer(s) requested changes: ${changeRequests.map(r => r.author).join(', ')}`);
+      issues.push(`👤 Human reviewer(s) requested changes: ${changeRequests.map(r => r.author).join(', ')}`);
     }
+
+    // Categorize the failure type
+    const failureClassification = this.categorizeFailure(issues);
 
     // Check if we've already created a followup for these exact issues
     const issueFingerprint = this.hashIssues(issues);
-    
+
     if (this.taskQueue.hasFollowupFingerprint(prNumber, issueFingerprint)) {
       logger.info({
         category: 'pr-workflow',
@@ -538,7 +676,9 @@ ${taskChain}
         details: {
           prNumber,
           issueFingerprint,
-          issuesCount: issues.length
+          issuesCount: issues.length,
+          failureCategory: failureClassification.category,
+          confidence: failureClassification.confidence
         }
       });
       return null;
@@ -547,7 +687,34 @@ ${taskChain}
     // Track fingerprint in database
     this.taskQueue.addFollowupFingerprint(prNumber, issueFingerprint);
 
-    const taskDescription = `Fix issues found in PR #${prNumber}:\n\n${issues.join('\n')}`;
+    // Build specific acceptance criteria
+    const acceptanceCriteria: string[] = [];
+
+    if (prStatus.mergeable_state === 'behind') {
+      acceptanceCriteria.push(`Branch is up-to-date with main (merged, NOT rebased)`);
+      acceptanceCriteria.push(`All merge conflicts resolved`);
+    }
+
+    if (failedChecks.length > 0) {
+      acceptanceCriteria.push(`All CI checks pass: ${failedChecks.map(c => c.name).join(', ')}`);
+    }
+
+    if (resolutionSummary.unresolvedBlocking > 0) {
+      acceptanceCriteria.push(`All ${resolutionSummary.unresolvedBlocking} blocking comment(s) addressed`);
+    }
+
+    if (copilotAnalysis.blockingIssues.length > 0) {
+      acceptanceCriteria.push(`Address all ${copilotAnalysis.blockingIssues.length} Copilot blocking issue(s)`);
+    }
+
+    if (changeRequests.length > 0) {
+      acceptanceCriteria.push(`Resolve human reviewer feedback from: ${changeRequests.map(r => r.author).join(', ')}`);
+    }
+
+    // Always include: changes pushed to same PR branch (not new PR)
+    acceptanceCriteria.push(`Changes pushed to existing PR #${prNumber} (do NOT create new PR)`);
+
+    const taskDescription = `Fix issues found in PR #${prNumber}:\n\n${issues.join('\n')}\n\n**Failure Category:** ${failureClassification.category} (confidence: ${failureClassification.confidence})\n\n⚠️ IMPORTANT: Work from the existing PR branch "${prBranch}"\n- Checkout: git fetch origin "${prBranch}" && git checkout "${prBranch}"\n- Make fixes\n- Push to same branch: git push origin "${prBranch}"\n- This will update the existing PR #${prNumber}\n- DO NOT create a new PR`;
 
     logger.info({
       category: 'pr-workflow',
@@ -556,7 +723,9 @@ ${taskChain}
       details: {
         prNumber,
         parentTaskId: taskId,
-        issuesCount: issues.length
+        issuesCount: issues.length,
+        failureCategory: failureClassification.category,
+        failureConfidence: failureClassification.confidence
       }
     });
 
@@ -577,11 +746,7 @@ ${taskChain}
       description: taskDescription,
       type: 'fix',
       priority: 8,
-      acceptance_criteria: [
-        `All CI checks pass`,
-        `Address all Copilot blocking issues`,
-        `Resolve human reviewer feedback`
-      ],
+      acceptance_criteria: acceptanceCriteria,
       followup_for_pr: prNumber,
       pr_branch: prBranch,
       assigned_agent: originalTask.assigned_agent || 'backend-specialist'

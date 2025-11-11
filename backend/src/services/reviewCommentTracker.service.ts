@@ -150,8 +150,8 @@ export class ReviewCommentTracker {
         resolved: false,
         resolved_at: undefined
       };
-    } catch (error: any) {
-      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+    } catch (error: unknown) {
+      if (error && typeof error === 'object' && 'code' in error && error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
         logger.debug({
           category: 'pr-workflow',
           action: 'duplicate_comment',
@@ -185,22 +185,37 @@ export class ReviewCommentTracker {
       ? `SELECT * FROM pr_review_comments WHERE pr_number = ? ORDER BY created_at DESC`
       : `SELECT * FROM pr_review_comments WHERE pr_number = ? AND resolved = 0 ORDER BY created_at DESC`;
 
-    const rows = this.db.getConnection().prepare(query).all(prNumber) as any[];
+    const rows = this.db.getConnection().prepare(query).all(prNumber) as Array<{
+      id: number;
+      pr_number: number;
+      comment_id: number;
+      file_path: string | null;
+      line_number: number | null;
+      body: string;
+      fingerprint: string;
+      severity: string;
+      category: string | null;
+      resolved: number;
+      created_at: number;
+      resolved_at: number | null;
+      reviewer: string | null;
+      is_copilot: number;
+    }>;
 
     return rows.map(c => ({
       id: c.id,
       pr_number: c.pr_number,
       comment_id: c.comment_id,
-      file_path: c.file_path,
-      line_number: c.line_number,
+      file_path: c.file_path ?? undefined,
+      line_number: c.line_number ?? undefined,
       body: c.body,
       fingerprint: c.fingerprint,
-      severity: c.severity,
-      category: c.category,
+      severity: c.severity as 'blocking' | 'suggestion' | 'info' | 'nitpick',
+      category: c.category ?? undefined,
       resolved: Boolean(c.resolved),
       created_at: c.created_at,
-      resolved_at: c.resolved_at,
-      reviewer: c.reviewer,
+      resolved_at: c.resolved_at ?? undefined,
+      reviewer: c.reviewer ?? undefined,
       is_copilot: Boolean(c.is_copilot)
     }));
   }

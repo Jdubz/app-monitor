@@ -1268,10 +1268,21 @@ ACCEPTANCE
 🤖 Generated with [Claude Code](https://claude.com/claude-code)
 "
 
-# Create PR with gh CLI
-gh pr create --base main --head "\${BRANCH_NAME}" \\
+# Create PR with error handling - MANDATORY
+echo "Creating PR..."
+if ! gh pr create --base main --head "\${BRANCH_NAME}" \\
   --title "{{task.type}}: {{task.title}}" \\
-  --body "$PR_BODY"`;
+  --body "$PR_BODY"; then
+  echo "❌ ERROR: Failed to create PR"
+  echo "GitHub CLI authentication or network issue"
+  echo "Branch \${BRANCH_NAME} was pushed but PR creation failed"
+  echo ""
+  echo "Debugging info:"
+  gh auth status || echo "gh auth failed"
+  exit 1  # Exit with error to trigger failure recovery
+fi
+
+echo "PR created successfully, capturing metadata..."`;
       }
     });
 
@@ -1279,7 +1290,7 @@ gh pr create --base main --head "\${BRANCH_NAME}" \\
       if (context.task.pr_branch) {
         return 'Output PR Link';
       } else {
-        return 'Output PR Link';
+        return 'Verify and Output PR';
       }
     });
 
@@ -1291,6 +1302,15 @@ gh pr create --base main --head "\${BRANCH_NAME}" \\
 PR_NUMBER=$(gh pr view ${viewTarget} --json number --jq .number)
 PR_URL=$(gh pr view ${viewTarget} --json url --jq .url)
 PR_BRANCH=$(gh pr view ${viewTarget} --json headRefName --jq .headRefName)
+
+# Verify PR metadata was captured
+if [ -z "$PR_NUMBER" ] || [ -z "$PR_URL" ]; then
+  echo "❌ ERROR: Failed to retrieve PR metadata"
+  echo "This usually means PR ${actionVerb} failed or gh CLI cannot access GitHub"
+  gh auth status || echo "gh auth verification failed"
+  exit 1
+fi
+
 echo "✅ PR ${actionVerb}: $PR_URL"
 echo "PR_NUMBER: $PR_NUMBER"
 echo "PR_URL: $PR_URL"

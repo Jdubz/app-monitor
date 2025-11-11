@@ -1,23 +1,21 @@
 /**
  * Task Context Service
  *
- * Provides access to task automation run data and context information.
- * This service queries the task_automation_runs table and related tables
- * from the 004_task_context migration.
+ * Provides comprehensive task context management:
+ * 1. Access to task automation run data (migration 004: task_automation_runs)
+ * 2. CRUD operations for creation/execution context (migration 009: task_creation_context, task_execution_context)
+ *
+ * This service integrates both the automation run tracking and diagnostic context storage.
  */
 
-import Database from 'better-sqlite3';
-import * as path from 'path';
-import * as fs from 'fs';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
+import { getDatabase } from './database.js';
+import type {
+  TaskCreationContext,
+  TaskExecutionContext,
+} from '../types/taskContext.js';
+import { logger } from '../utils/logger.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const DB_PATH = path.join(__dirname, '..', '..', 'data', 'dev-bots.db');
-
-// Types for automation run data
+// Types for automation run data (from migration 004)
 export interface AutomationRun {
   run_id: string;
   task_id: string;
@@ -46,24 +44,19 @@ export interface AutomationRun {
 }
 
 export class TaskContextService {
-  private db: Database.Database;
-
-  constructor(dbPath: string = DB_PATH) {
-    // Ensure data directory exists
-    const dataDir = path.dirname(dbPath);
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
-
-    this.db = new Database(dbPath);
-    this.db.pragma('journal_mode = WAL'); // Better concurrency
-  }
+  // ============================================================================
+  // Automation Run Data (migration 004: task_automation_runs)
+  // Used by dev-bots.routes.ts for API endpoints
+  // ============================================================================
 
   /**
    * Get all automation runs for a specific task
    */
   getTaskAutomationRuns(taskId: string): AutomationRun[] {
-    const stmt = this.db.prepare(`
+    const db = getDatabase();
+    const connection = db.getConnection();
+
+    const stmt = connection.prepare(`
       SELECT * FROM task_automation_runs
       WHERE task_id = ?
       ORDER BY started_at DESC
@@ -76,7 +69,10 @@ export class TaskContextService {
    * Get a specific automation run by run_id
    */
   getAutomationRun(runId: string): AutomationRun | null {
-    const stmt = this.db.prepare(`
+    const db = getDatabase();
+    const connection = db.getConnection();
+
+    const stmt = connection.prepare(`
       SELECT * FROM task_automation_runs
       WHERE run_id = ?
     `);
@@ -92,4 +88,209 @@ export class TaskContextService {
     const runs = this.getTaskAutomationRuns(taskId);
     return runs.length > 0 ? runs[0] : null;
   }
+
+  // ============================================================================
+  // Task Creation Context (migration 009: task_creation_context)
+  // Captures environment, client metadata, and diagnostic breadcrumbs
+  // ============================================================================
+
+  /**
+   * Store task creation context
+   * Captures environment, client metadata, and diagnostic breadcrumbs at task creation time
+   */
+  storeTaskCreationContext(taskId: string, context: TaskCreationContext): void {
+    const db = getDatabase();
+    const connection = db.getConnection();
+
+    try {
+      const stmt = connection.prepare(`
+        INSERT INTO task_creation_context (
+          task_id,
+          context_json,
+          created_at
+        ) VALUES (?, ?, ?)
+      `);
+
+      stmt.run(
+        taskId,
+        JSON.stringify(context),
+        new Date().toISOString()
+      );
+
+      logger.info({
+        category: 'task_context',
+        action: 'creation_context_stored',
+        message: `Stored creation context for task ${taskId}`,
+        details: {
+          taskId,
+          workTarget: context.workTarget,
+          hasAttachments: !!context.attachments?.length,
+          hasLogs: !!context.recentLogs?.length
+        }
+      });
+    } catch (error) {
+      logger.error({
+        category: 'task_context',
+        action: 'store_creation_context_failed',
+        message: `Failed to store creation context for task ${taskId}`,
+        error
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Retrieve task creation context by task ID
+   * Returns the context captured when the task was created
+   */
+  getTaskCreationContext(taskId: string): TaskCreationContext | null {
+    const db = getDatabase();
+    const connection = db.getConnection();
+
+    try {
+      const stmt = connection.prepare(`
+        SELECT context_json
+        FROM task_creation_context
+        WHERE task_id = ?
+      `);
+
+      const row = stmt.get(taskId) as { context_json: string } | undefined;
+
+      if (!row) {
+        logger.debug({
+          category: 'task_context',
+          action: 'creation_context_not_found',
+          message: `No creation context found for task ${taskId}`
+        });
+        return null;
+      }
+
+      const context = JSON.parse(row.context_json) as TaskCreationContext;
+
+      logger.debug({
+        category: 'task_context',
+        action: 'creation_context_retrieved',
+        message: `Retrieved creation context for task ${taskId}`
+      });
+
+      return context;
+    } catch (error) {
+      logger.error({
+        category: 'task_context',
+        action: 'get_creation_context_failed',
+        message: `Failed to retrieve creation context for task ${taskId}`,
+        error
+      });
+      throw error;
+    }
+  }
+
+  // ============================================================================
+  // Task Execution Context (migration 009: task_execution_context)
+  // Captures full execution trail including commands, file operations, and test results
+  // ============================================================================
+
+  /**
+   * Store task execution context
+   * Captures full execution trail including commands, file operations, and test results
+   */
+  storeTaskExecutionContext(runId: string, taskId: string, context: TaskExecutionContext): void {
+    const db = getDatabase();
+    const connection = db.getConnection();
+
+    try {
+      const stmt = connection.prepare(`
+        INSERT INTO task_execution_context (
+          run_id,
+          task_id,
+          context_json,
+          created_at
+        ) VALUES (?, ?, ?, ?)
+      `);
+
+      stmt.run(
+        runId,
+        taskId,
+        JSON.stringify(context),
+        new Date().toISOString()
+      );
+
+      logger.info({
+        category: 'task_context',
+        action: 'execution_context_stored',
+        message: `Stored execution context for task ${taskId}, run ${runId}`,
+        details: {
+          taskId,
+          runId,
+          status: context.status,
+          durationMs: context.durationMs,
+          exitCode: context.exitCode
+        }
+      });
+    } catch (error) {
+      logger.error({
+        category: 'task_context',
+        action: 'store_execution_context_failed',
+        message: `Failed to store execution context for task ${taskId}, run ${runId}`,
+        error
+      });
+      throw error;
+    }
+  }
+
+  /**
+   * Retrieve task execution context by run ID
+   * Returns the context captured during/after task execution
+   */
+  getTaskExecutionContext(runId: string): TaskExecutionContext | null {
+    const db = getDatabase();
+    const connection = db.getConnection();
+
+    try {
+      const stmt = connection.prepare(`
+        SELECT context_json
+        FROM task_execution_context
+        WHERE run_id = ?
+      `);
+
+      const row = stmt.get(runId) as { context_json: string } | undefined;
+
+      if (!row) {
+        logger.debug({
+          category: 'task_context',
+          action: 'execution_context_not_found',
+          message: `No execution context found for run ${runId}`
+        });
+        return null;
+      }
+
+      const context = JSON.parse(row.context_json) as TaskExecutionContext;
+
+      logger.debug({
+        category: 'task_context',
+        action: 'execution_context_retrieved',
+        message: `Retrieved execution context for run ${runId}`
+      });
+
+      return context;
+    } catch (error) {
+      logger.error({
+        category: 'task_context',
+        action: 'get_execution_context_failed',
+        message: `Failed to retrieve execution context for run ${runId}`,
+        error
+      });
+      throw error;
+    }
+  }
+}
+
+// Singleton instance
+let serviceInstance: TaskContextService | null = null;
+
+export function getTaskContextService(): TaskContextService {
+  if (!serviceInstance) {
+    serviceInstance = new TaskContextService();
+  }
+  return serviceInstance;
 }

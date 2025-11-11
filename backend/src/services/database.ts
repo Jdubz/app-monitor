@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import type { TaskCreationContext } from '../types/taskContext.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -230,6 +231,22 @@ export class DevBotsDatabase {
     this.applyMigration('008_pr_review_comments', () => {
       this.db.exec(fs.readFileSync(
         path.join(__dirname, '..', '..', 'migrations', '008_pr_review_comments.sql'),
+        'utf-8'
+      ));
+    });
+
+    // Migration 009: Task Context Storage
+    this.applyMigration('009_task_context_storage', () => {
+      this.db.exec(fs.readFileSync(
+        path.join(__dirname, '..', '..', 'migrations', '009_task_context_storage.sql'),
+        'utf-8'
+      ));
+    });
+
+    // Migration 010: PR Condition States for Self-Healing Workflow
+    this.applyMigration('010_pr_condition_states', () => {
+      this.db.exec(fs.readFileSync(
+        path.join(__dirname, '..', '..', 'migrations', '009_pr_condition_states.sql'),
         'utf-8'
       ));
     });
@@ -563,6 +580,18 @@ export class DevBotsDatabase {
     };
 
     this.storeQualityObservation(observation);
+  }
+
+  // Task Creation Context
+  saveTaskCreationContext(taskId: string, context: TaskCreationContext): void {
+    this.db.prepare(`
+      UPDATE tasks
+      SET context_json = ?
+      WHERE id = ?
+    `).run(
+      this.serializeNullableJson(context),
+      taskId
+    );
   }
 
   // Interactive Sessions

@@ -7,10 +7,11 @@
 
 import { logger } from '../utils/logger.js';
 import { DevBotsDatabase } from './database.js';
+import type { RetryAttempt } from './devBotsManager.js';
 
 export interface ShutdownState {
   timestamp: number;
-  retryHistory: Map<string, any[]>;
+  retryHistory: Map<string, RetryAttempt[]>;
   logFilePositions: Map<string, number>;
   circuitBreakerStates: Map<string, {
     failureCount: number;
@@ -86,7 +87,7 @@ export class ShutdownStateManager {
   /**
    * Save retry history before shutdown
    */
-  public async saveRetryHistory(retryHistory: Map<string, any[]>): Promise<void> {
+  public async saveRetryHistory(retryHistory: Map<string, RetryAttempt[]>): Promise<void> {
     const startTime = Date.now();
     let savedCount = 0;
 
@@ -97,7 +98,7 @@ export class ShutdownStateManager {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
-      const transaction = this.db.getConnection().transaction((entries: [string, any[]][]) => {
+      const transaction = this.db.getConnection().transaction((entries: Array<[string, RetryAttempt[]]>) => {
         for (const [taskId, attempts] of entries) {
           for (const attempt of attempts) {
             stmt.run(
@@ -142,8 +143,8 @@ export class ShutdownStateManager {
   /**
    * Restore retry history after startup
    */
-  public async restoreRetryHistory(): Promise<Map<string, any[]>> {
-    const retryHistory = new Map<string, any[]>();
+  public async restoreRetryHistory(): Promise<Map<string, RetryAttempt[]>> {
+    const retryHistory = new Map<string, RetryAttempt[]>();
 
     try {
       const rows = this.db.getConnection().prepare(`
@@ -153,7 +154,16 @@ export class ShutdownStateManager {
         ORDER BY task_id, attempt_number
       `).all(Date.now() - (7 * 24 * 60 * 60 * 1000));
 
-      for (const row of rows as any[]) {
+      for (const row of rows as Array<{
+        task_id: string;
+        attempt_number: number;
+        timestamp: string;
+        reason: string;
+        error: string | null;
+        exit_code: number | null;
+        worker_id: string | null;
+        agent_id: string | null;
+      }>) {
         if (!retryHistory.has(row.task_id)) {
           retryHistory.set(row.task_id, []);
         }
@@ -162,10 +172,10 @@ export class ShutdownStateManager {
           attemptNumber: row.attempt_number,
           timestamp: row.timestamp,
           reason: row.reason,
-          error: row.error,
-          exitCode: row.exit_code,
-          workerId: row.worker_id,
-          agentId: row.agent_id
+          error: row.error ?? undefined,
+          exitCode: row.exit_code ?? undefined,
+          workerId: row.worker_id ?? undefined,
+          agentId: row.agent_id ?? undefined
         });
       }
 
@@ -238,7 +248,7 @@ export class ShutdownStateManager {
         WHERE updated_at > ? -- Only recent positions (last 24 hours)
       `).all(Date.now() - (24 * 60 * 60 * 1000));
 
-      for (const row of rows as any[]) {
+      for (const row of rows as Array<{ file_path: string; position: number }>) {
         positions.set(row.file_path, row.position);
       }
 
@@ -274,7 +284,7 @@ export class ShutdownStateManager {
         VALUES (?, ?, ?, ?, ?)
       `);
 
-      const transaction = this.db.getConnection().transaction((entries: [string, any][]) => {
+      const transaction = this.db.getConnection().transaction((entries: Array<[string, { failureCount: number; lastFailureTime: number; state: 'closed' | 'open' | 'half-open' }]>) => {
         for (const [serviceName, state] of entries) {
           stmt.run(
             serviceName,
@@ -317,7 +327,12 @@ export class ShutdownStateManager {
         WHERE updated_at > ? -- Only recent states (last hour)
       `).all(Date.now() - (60 * 60 * 1000));
 
-      for (const row of rows as any[]) {
+      for (const row of rows as Array<{
+        service_name: string;
+        failure_count: number;
+        last_failure_time: number;
+        state: 'closed' | 'open' | 'half-open';
+      }>) {
         states.set(row.service_name, {
           failureCount: row.failure_count,
           lastFailureTime: row.last_failure_time,
