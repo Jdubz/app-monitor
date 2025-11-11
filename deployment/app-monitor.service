@@ -1,0 +1,40 @@
+[Unit]
+Description=App Monitor Backend Service
+Documentation=https://github.com/Jdubz/app-monitor
+After=network.target
+
+[Service]
+Type=simple
+User=jdubz
+WorkingDirectory=/opt/app-monitor/current/backend
+Environment="NODE_ENV=production"
+Environment="PORT=3001"
+EnvironmentFile=-/opt/app-monitor/.env
+
+# Use PM2 to manage the process  
+ExecStart=/usr/bin/pm2 start /opt/app-monitor/deployment/ecosystem.config.js --no-daemon
+ExecReload=/usr/bin/pm2 reload /opt/app-monitor/deployment/ecosystem.config.js
+ExecStop=/usr/bin/pm2 stop /opt/app-monitor/deployment/ecosystem.config.js
+
+# Restart policy
+Restart=on-failure
+RestartSec=10s
+KillMode=mixed
+KillSignal=SIGTERM
+TimeoutStopSec=30s
+
+# Security
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Resource limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=app-monitor
+
+[Install]
+WantedBy=multi-user.target
