@@ -347,9 +347,13 @@ export class EphemeralWorkerService {
         `WORKER_ID=${workerId}`,
         `WORKSPACE_BRANCH=${baseBranch}`,
         `WORKSPACE_ID=${workspaceId}`,
-        `GITHUB_TOKEN=${githubToken || ''}`,
         ...(task.is_repair_bot ? [`IS_IMPROVEMENT_TASK=true`, `PARENT_TASK_ID=${task.original_task_id}`] : [])
       ];
+      
+      // Only add GITHUB_TOKEN if it exists to avoid empty env var
+      if (githubToken) {
+        envVars.push(`GITHUB_TOKEN=${githubToken}`);
+      }
 
       for (const key of this.config.envPassthroughKeys) {
         const value = process.env[key];
@@ -499,8 +503,8 @@ export class EphemeralWorkerService {
           cwd: process.cwd()
         }
       });
-      // Throw error so caller knows initialization failed
-      throw error;
+      // Throw error with additional context
+      throw new Error(`Failed to initialize log file for worker ${workerId}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
   }
 
