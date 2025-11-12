@@ -103,42 +103,36 @@
 - task_artifacts table + DB linking  
 - Location: `backend/src/services/taskExecution.service.ts`
 
+**Note**: This is optional and can be done after production deployment is stable.
+
 ---
 
-## 🎯 High Priority (P1)
+## 🎯 Next Week (P2)
 
-### 3. Production Deployment
-
-**What**: Deploy PR self-healing to production
-
-**Prerequisites**:
-- ✅ All tests passing
-- ✅ Event-driven implementation complete
-- ✅ Chain tracking implemented
-- ✅ Auto-merge working
-- ⚠️ Optional: Schema cleanup (can be done later)
-
-**Steps**:
-1. Merge staging → main
-2. Deploy to production
-3. Monitor for 24-48 hours
-4. Collect metrics on self-healing success rates
+### 4. Quarantine System (P2 - 1-2 days)
+- Status: Not started
+- Impact: Prevents runaway task failures
+- Plan: `docs/plans/DEV_BOT_PIPELINE_COMPLETION_PLAN_REVISED.md`
 
 ---
 
 ## 📊 Timeline
 
-**Remaining Work**: 1-3 days to full production deployment
+**IMMEDIATE**: Deploy to production (1 day)
+- Deploy staging → production
+- Monitor for 24-48 hours
+- Collect self-healing metrics
 
-- Day 1: Schema cleanup (optional, can run in parallel) (8 hours)
-- Day 2: Production deployment + monitoring (4-6 hours)  
-- Day 3: Optional artifact system implementation (8 hours)
+**NEXT WEEK**: Optional improvements (3-5 days)
+- Day 1-2: Schema cleanup (optional)
+- Day 3: Artifact system (optional)
+- Day 4-5: Quarantine system (optional)
 
 ---
 
 ## 🎯 Success Metrics
 
-**After Full Implementation**:
+**After Production Deployment**:
 - 90%+ of PRs self-heal without manual intervention
 - Average time PR creation → merge: < 2 hours
 - Fix task spawn latency: < 30 seconds from webhook
@@ -161,6 +155,6 @@
 
 ---
 
-**Updated**: 2025-11-12 07:25 UTC  
+**Updated**: 2025-11-12 (All changes committed and pushed to staging)  
 **Next Review**: After production deployment
 
