@@ -1143,13 +1143,18 @@ Use your specialized knowledge to ensure this implementation follows best practi
     // Conditional git workflow variables based on task type (fix vs new implementation)
     this.variableProcessors.set('task.branchSetupInstructions', (context) => {
       if (context.task.followup_for_pr) {
-        return `# CRITICAL: This is a FIX task for an existing PR #${context.task.followup_for_pr}
+        // Validate PR number to prevent command injection
+        const prNumber = parseInt(String(context.task.followup_for_pr), 10);
+        if (isNaN(prNumber) || prNumber <= 0) {
+          throw new Error(`Invalid PR number: ${context.task.followup_for_pr}`);
+        }
+        return `# CRITICAL: This is a FIX task for an existing PR #${prNumber}
 # Fetch the PR branch name from GitHub
-PR_BRANCH=$(gh pr view ${context.task.followup_for_pr} --json headRefName --jq .headRefName)
+PR_BRANCH=$(gh pr view ${prNumber} --json headRefName --jq .headRefName)
 # Checkout the PR branch to make fixes
-git checkout $PR_BRANCH
+git checkout "$PR_BRANCH"
 # Pull latest changes from the PR branch
-git pull origin $PR_BRANCH`;
+git pull origin "$PR_BRANCH"`;
       } else {
         return `# ALWAYS start from main branch (for PR-based workflow)
 git checkout main
@@ -1202,9 +1207,14 @@ git pull origin main`;
 
     this.variableProcessors.set('task.branchCreationContent', (context) => {
       if (context.task.followup_for_pr) {
+        // Validate PR number to prevent command injection
+        const prNumber = parseInt(String(context.task.followup_for_pr), 10);
+        if (isNaN(prNumber) || prNumber <= 0) {
+          throw new Error(`Invalid PR number: ${context.task.followup_for_pr}`);
+        }
         return `# Verify you're on the correct PR branch
 CURRENT_BRANCH=$(git branch --show-current)
-EXPECTED_BRANCH=$(gh pr view ${context.task.followup_for_pr} --json headRefName --jq .headRefName)
+EXPECTED_BRANCH=$(gh pr view ${prNumber} --json headRefName --jq .headRefName)
 if [ "$CURRENT_BRANCH" != "$EXPECTED_BRANCH" ]; then
   echo "ERROR: Not on correct branch! Expected $EXPECTED_BRANCH, got $CURRENT_BRANCH"
   exit 1

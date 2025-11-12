@@ -197,7 +197,7 @@ export class MigrationManager {
         this.db.prepare(`
           INSERT INTO migrations (id, name, filename, applied_at, duration_ms, checksum, status)
           VALUES (?, ?, ?, ?, ?, ?, 'applied')
-          ON CONFLICT(id) DO UPDATE SET
+          ON CONFLICT(name) DO UPDATE SET
             applied_at = excluded.applied_at,
             duration_ms = excluded.duration_ms,
             status = 'applied'
@@ -240,7 +240,7 @@ export class MigrationManager {
         this.db.prepare(`
           INSERT INTO migrations (id, name, filename, applied_at, duration_ms, status)
           VALUES (?, ?, ?, ?, ?, 'failed')
-          ON CONFLICT(id) DO UPDATE SET
+          ON CONFLICT(name) DO UPDATE SET
             applied_at = excluded.applied_at,
             duration_ms = excluded.duration_ms,
             status = 'failed'

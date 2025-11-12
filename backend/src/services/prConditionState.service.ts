@@ -494,12 +494,24 @@ export class PRConditionStateService {
       }
 
       // Build blocking issues (store only references, not GitHub data)
-      const blocking_issues: BlockingIssue[] = failingChecks.map(check => ({
-        type: 'failing_check',
-        github_ref_type: 'check_run' as const,
-        github_ref_id: check.id || check.name,  // Store check ID or name for reference
-        severity: 'high' as const
-      }));
+      const blocking_issues: BlockingIssue[] = failingChecks.map(check => {
+        // Prefer check.id (if available), fallback to check.name
+        // Log warning when falling back to name for better debugging
+        if (!check.id) {
+          logger.warn({
+            category: 'pr_condition',
+            action: 'check_id_missing',
+            message: `Check "${check.name}" has no ID, using name as reference`,
+            details: { check_name: check.name }
+          });
+        }
+        return {
+          type: 'failing_check',
+          github_ref_type: 'check_run' as const,
+          github_ref_id: check.id || check.name,
+          severity: 'high' as const
+        };
+      });
 
       // Generate fingerprint from failing check names
       const fingerprint = this.generateFingerprintFromList(
@@ -833,10 +845,10 @@ export class PRConditionStateService {
           condition_id: 'task_verification',
           status: 'unmet',
           fingerprint: 'verification-failed',
+          // NOTE: verificationDetails is stored in task.verification_results, not here
           blocking_issues: [{
             type: 'verification_failed',
-            severity: 'high',
-            // NOTE: verificationDetails is stored in task.verification_results, not here
+            severity: 'high'
           }]
         };
       }
@@ -1018,10 +1030,10 @@ export class PRConditionStateService {
           condition_id: 'final_validation_passed',
           status: score >= 80 ? 'met' : 'unmet',
           fingerprint: score >= 80 ? 'validation-passed' : `validation-failed-score-${score}`,
+          // NOTE: Validation score is stored in task.verification_results, not here
           blocking_issues: score >= 80 ? [] : [{
             type: 'validation_failed',
-            severity: 'high',
-            // NOTE: Validation score is stored in task.verification_results, not here
+            severity: 'high'
           }],
           metadata: { score, validation_task_id: latestValidation.id }
         };

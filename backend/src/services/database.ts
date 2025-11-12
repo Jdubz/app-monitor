@@ -263,6 +263,11 @@ export class DevBotsDatabase {
         'utf-8'
       ));
     });
+
+    // Note: Migrations 012-015 are documented but not auto-applied due to SQLite limitations
+    // Migration 012: Staged queue columns added directly in code
+    // Migration 013-015: Empty migrations (soft deprecation of unused columns)
+    // These columns are ignored by the application - see migration files for details
   }
 
   private applyMigration(name: string, migration: () => void): void {

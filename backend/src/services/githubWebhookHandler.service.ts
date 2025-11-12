@@ -1049,7 +1049,7 @@ export class GitHubWebhookHandler {
         blockReasons.forEach(reason => this.trackAutoMergeBlock(reason));
 
         // Get PR branch from GitHub API (on-demand)
-        const prBranch = prStatus.head_ref;
+        const prBranch = prStatus.head_ref || `pr-${prNumber}`;
 
         const followupTask = await prMonitor.createFollowupTask(
           prNumber,

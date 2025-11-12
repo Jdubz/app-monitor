@@ -24,6 +24,7 @@ interface BlockedChain {
 
 const formatRelativeTime = (timestamp: number) => {
   const diff = Date.now() - timestamp;
+  if (diff < 0) return 'in the future';
   const minutes = Math.floor(diff / 60000);
   if (minutes < 1) return 'just now';
   if (minutes < 60) return `${minutes}m ago`;
@@ -102,6 +103,7 @@ export function ChainStatusPanel() {
       }
 
       setUnblockingChain(chain.chain_id);
+      // TODO: Get operator name from auth context once authentication is implemented
       const response = await fetch(`/api/dev-bots/chains/${chain.chain_id}/unblock`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -127,16 +129,21 @@ export function ChainStatusPanel() {
   };
 
   useEffect(() => {
-    fetchStats();
-    fetchBlockedChains();
+    let cancelled = false;
 
-    // Poll every 5 seconds
-    const interval = setInterval(() => {
-      fetchStats();
-      fetchBlockedChains();
-    }, 5000);
+    const poll = async () => {
+      await Promise.all([fetchStats(), fetchBlockedChains()]);
+      if (!cancelled) {
+        setTimeout(poll, 5000);
+      }
+    };
 
-    return () => clearInterval(interval);
+    // Initial fetch
+    poll();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const refresh = async () => {
@@ -151,6 +158,8 @@ export function ChainStatusPanel() {
   const utilizationPercent = stats
     ? Math.round((stats.activeChains / stats.maxConcurrentChains) * 100)
     : 0;
+
+  const isOperatorNameValid = operatorName.trim().length > 0;
 
   return (
     <>
@@ -341,7 +350,7 @@ export function ChainStatusPanel() {
                 </Button>
                 <Button
                   onClick={() => confirmUnblock && handleUnblock(confirmUnblock)}
-                  disabled={unblockingChain !== null || operatorName.trim().length === 0}
+                  disabled={unblockingChain !== null || !isOperatorNameValid}
                 >
                   {unblockingChain ? 'Unblocking...' : 'Yes, Unblock Chain'}
                 </Button>

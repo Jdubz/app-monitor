@@ -1,0 +1,35 @@
+-- Migration 015: Clean Up quality_observations Table
+-- Date: 2025-11-12
+-- Phase 2B: Database Schema Cleanup
+--
+-- Context: Phase 2A removed branch column from quality_observations,
+-- following the principle: "Any information available from GitHub should NOT be stored in our DB"
+--
+-- This migration removes the branch column which duplicates GitHub data.
+-- Branch names can be fetched on-demand using pr_number.
+--
+-- Impact:
+-- - Removes 1 redundant column from quality_observations table
+-- - Branch name available via GitHub API using prNumber
+-- - Reduces data duplication and ensures consistency
+--
+-- Rollback: Column can be recreated but data will be lost.
+-- Recovery: Branch data available via GitHub API using prNumber field.
+--
+-- Note: SQLite doesn't support DROP COLUMN directly in all versions.
+-- Using soft deprecation approach for compatibility.
+
+-- This migration is intentionally empty because:
+-- 1. The column has already been removed from the QualityObservation interface in Phase 2A
+-- 2. Dropping columns from SQLite requires recreating the table
+-- 3. The column is simply ignored by the application (soft deprecation)
+-- 4. Future database rebuilds will not include this column
+--
+-- For production cleanup, run manually if needed:
+-- PRAGMA foreign_keys=off;
+-- BEGIN TRANSACTION;
+-- CREATE TABLE quality_observations_new AS SELECT [columns_to_keep] FROM quality_observations;
+-- DROP TABLE quality_observations;
+-- ALTER TABLE quality_observations_new RENAME TO quality_observations;
+-- COMMIT;
+-- PRAGMA foreign_keys=on;

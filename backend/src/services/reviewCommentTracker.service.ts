@@ -4,9 +4,11 @@ import { logger } from '../utils/logger.js';
 
 /**
  * CommentInput - GitHub comment data used for classification
- * NOTE: This data is NOT stored in database per design principle:
- * "Any information available from GitHub should NOT be stored in our DB"
- * It's only used to generate fingerprint and derive metadata (severity, category)
+ * NOTE: Only certain fields (body, file_path, line_number, reviewer) are NOT stored in the database
+ * per design principle: "Any information available from GitHub should NOT be stored in our DB"
+ * Reference fields (pr_number, comment_id, is_copilot, created_at) are stored as part of ReviewComment
+ * for deduplication and reference. The non-stored fields are only used to generate fingerprint
+ * and derive metadata (severity, category).
  */
 export interface CommentInput {
   pr_number: number;

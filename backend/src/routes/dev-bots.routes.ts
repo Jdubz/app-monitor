@@ -2015,6 +2015,15 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
       const { chainId } = req.params;
       const { unblockedBy } = req.body;
 
+      // Validate chainId
+      if (!chainId || typeof chainId !== 'string' || chainId.trim().length === 0) {
+        return res.status(400).json({
+          error: 'Invalid chain ID',
+          message: 'chainId must be a non-empty string'
+        });
+      }
+
+      // Validate unblockedBy
       if (
         typeof unblockedBy !== 'string' ||
         unblockedBy.trim().length === 0
