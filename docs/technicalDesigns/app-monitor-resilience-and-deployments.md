@@ -8,7 +8,7 @@
 | **Priority** | P1 |
 | **Dependencies** | None (infrastructure foundation) |
 | **Last Updated** | November 12, 2025 |
-| **Implementation Progress** | 40% (systemd cleanup exists, zero-downtime pending) |
+| **Implementation Progress** | 50% (systemd cleanup exists, migration safety added, zero-downtime & websocket state pending) |
 
 ## Quick Reference
 

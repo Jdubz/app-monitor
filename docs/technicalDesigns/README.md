@@ -16,21 +16,22 @@ This directory contains consolidated technical design documents for major app-mo
 
 ## Available Designs
 
-### Priority 0 (Critical Path)
+### Priority 0 (Critical Path) - ✅ COMPLETE
 
 | Document | Status | Progress | Description |
 |----------|--------|----------|-------------|
-| [Staged Task Queue](staged-task-queue.md) | 🟢 **COMPLETE** | **100%** | Chain-aware scheduling with concurrency caps ✅ |
-| [PR Self-Healing & Resilience](pr-self-healing-and-resilience.md) | 🟡 In Progress | 40% | Continuous REVIEW→FIX→COMPLETE flow for PRs |
+| ~~Staged Task Queue~~ | 🟢 **COMPLETE** | **100%** | Chain-aware scheduling with concurrency caps ✅ ARCHIVED |
+| [PR Self-Healing & Resilience](pr-self-healing-and-resilience.md) | 🟢 Core Complete | 65% | Continuous REVIEW→FIX→COMPLETE flow (auto-merge pending) |
 
 ### Priority 1 (High Impact)
 
 | Document | Status | Progress | Description |
 |----------|--------|----------|-------------|
 | [Error Detection & Recovery](error-detection-and-recovery-design.md) | 🟡 Partial | 30% | Structured review chains with escalation |
-| [Dev-Bot Foundational Upgrades](dev-bot-foundational-upgrades.md) | 🟡 Partially Implemented | 85% | Data/analytics backbone and diagnostics |
-| [App-Monitor Resilience](app-monitor-resilience-and-deployments.md) | 🟡 In Progress | 40% | Zero-downtime deploys and monitoring |
-| [DevBotsManager Refactoring](devBotsManager-refactoring-plan.md) | 🟢 **COMPLETE** | **100%** | Modularized into 9 specialized services ✅ |
+| [Dev-Bot Foundational Upgrades](dev-bot-foundational-upgrades.md) | 🟢 Mostly Complete | 90% | Data/analytics backbone and diagnostics |
+| [App-Monitor Resilience](app-monitor-resilience-and-deployments.md) | 🟡 In Progress | 50% | Zero-downtime deploys and monitoring |
+| ~~DevBotsManager Refactoring~~ | 🟢 **COMPLETE** | **100%** | Modularized into 9 specialized services ✅ ARCHIVED |
+| ~~Dev-Bots Routes Modularization~~ | 🟢 **COMPLETE** | **100%** | Split into 6 focused modules ✅ ARCHIVED |
 
 ### Priority 2 (Important)
 
@@ -118,21 +119,30 @@ Use this checklist when creating or updating technical designs:
 
 ### November 12, 2025
 
-**DevBotsManager Refactoring - COMPLETE ✅** (2025-11-12)
-- `devBotsManager-refactoring-plan.md` fully implemented (100%)
-- 1,789 → 683 lines (61.8% reduction)
-- Created 9 specialized services: WorkerHealthMonitor, TaskCreation, StatusAggregation, RetryCoordination, SystemLifecycle, SystemInitialization, InteractiveSessionCoordinator, CleanupCoordinator, InfoQuery
-- All 936 backend tests passing
-- Complete service extraction with zero breaking changes
-- See refactoring plan for full details
+**Major Refactorings Complete ✅**
 
-**Staged Queue System - COMPLETE ✅**
-- `staged-task-queue.md` fully implemented (100%)
-- All phases complete: Schema, Queue Worker Logic, Service Integration, Observability
-- All acceptance criteria met
-- 936 backend tests passing
-- Documentation updated to reflect completed status
-- See `docs/analysis/STAGED_QUEUE_PROGRESS.md` for implementation details
+1. **DevBotsManager Refactoring** - COMPLETE (2025-11-12)
+   - Document moved to archive with COMPLETE status
+   - 1,789 → 683 lines (61.8% reduction)
+   - Created 9 specialized services
+   - All 936 backend tests passing
+
+2. **Dev-Bots Routes Modularization** - COMPLETE (2025-11-12)
+   - Document deleted (fully archived)
+   - 2,075 lines → 6 focused modules
+   - All endpoints working, tests passing
+   - See commit history for details
+
+3. **Staged Queue System** - COMPLETE (2025-11-12)
+   - Document deleted (fully archived)
+   - All phases complete with 100% test coverage
+   - Chain-aware scheduling operational
+   - See `docs/analysis/STAGED_QUEUE_PROGRESS.md`
+
+4. **PR Condition State Modularization** - COMPLETE (2025-11-12)
+   - 1,922 → 1,365 lines (29% reduction)
+   - 15 focused evaluator modules created
+   - All 936 backend tests passing
 
 **Enhanced Design Documents**
 - Enhanced three design documents with structured metadata
