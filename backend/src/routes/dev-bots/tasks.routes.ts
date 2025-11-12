@@ -54,7 +54,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
    * GET /tasks
    * Get all tasks grouped by status
    */
-  router.get('/', async (_req: Request, res: Response) => {
+  router.get('/tasks', async (_req: Request, res: Response) => {
     try {
       const tasks = await devBotsManager.getTasks();
       if (tasks) {
@@ -84,10 +84,10 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   });
 
   /**
-   * GET /completed
+   * GET /tasks/completed
    * Get all completed tasks
    */
-  router.get('/completed', (_req: Request, res: Response) => {
+  router.get('/tasks/completed', (_req: Request, res: Response) => {
     try {
       const tasks = devBotsManager.getTaskQueue().getTasksByStatus('completed');
 
@@ -114,10 +114,10 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   });
 
   /**
-   * GET /:taskId/detail
+   * GET /tasks/:taskId/detail
    * Get single task detail with execution history
    */
-  router.get('/:taskId/detail', (req: Request, res: Response) => {
+  router.get('/tasks/:taskId/detail', (req: Request, res: Response) => {
     try {
       const { taskId } = req.params;
       const task = devBotsManager.getTask(taskId);
@@ -151,14 +151,14 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   });
 
   /**
-   * POST /
+   * POST /tasks
    * Create a new task
    *
    * SECURITY: Dev-bots can only spawn other dev-bots in production environments.
    * In non-production environments, this returns a stubbed response to prevent
    * infinite recursion or uncontrolled task spawning during development/testing.
    */
-  router.post('/', async (req: Request, res: Response) => {
+  router.post('/tasks', async (req: Request, res: Response) => {
     try {
       const {
         type,
@@ -388,10 +388,10 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   });
 
   /**
-   * POST /:taskId/timeout
+   * POST /tasks/:taskId/timeout
    * Manually timeout a task after verification
    */
-  router.post('/:taskId/timeout', (req: Request, res: Response) => {
+  router.post('/tasks/:taskId/timeout', (req: Request, res: Response) => {
     try {
       const { taskId } = req.params;
       const { reason } = req.body;
@@ -533,10 +533,10 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   // ============================================================================
 
   /**
-   * GET /:taskId/logs
+   * GET /tasks/:taskId/logs
    * Get latest stdout/stderr artifacts metadata
    */
-  router.get('/:taskId/logs', async (req: Request, res: Response) => {
+  router.get('/tasks/:taskId/logs', async (req: Request, res: Response) => {
     try {
       const { taskId } = req.params;
       const workTarget = (req.query.workTarget as string) || DEFAULT_WORK_TARGET;
@@ -565,10 +565,10 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   });
 
   /**
-   * GET /:taskId/logs/:stream
+   * GET /tasks/:taskId/logs/:stream
    * Stream log contents via SSE
    */
-  router.get('/:taskId/logs/:stream', async (req: Request, res: Response) => {
+  router.get('/tasks/:taskId/logs/:stream', async (req: Request, res: Response) => {
     try {
       const { taskId, stream } = req.params;
       const normalizedStream = stream as LogStreamType;
@@ -619,10 +619,10 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   // ============================================================================
 
   /**
-   * GET /:id/context
+   * GET /tasks/:id/context
    * Get latest automation run context for task
    */
-  router.get('/:id/context', (req: Request, res: Response) => {
+  router.get('/tasks/:id/context', (req: Request, res: Response) => {
     try {
       const { id: taskId } = req.params;
       const latestRun = getTaskContextService().getLatestAutomationRun(taskId);
@@ -650,10 +650,10 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   });
 
   /**
-   * GET /:id/runs
+   * GET /tasks/:id/runs
    * Get all automation runs for a task
    */
-  router.get('/:id/runs', (req: Request, res: Response) => {
+  router.get('/tasks/:id/runs', (req: Request, res: Response) => {
     try {
       const { id: taskId } = req.params;
       const runs = getTaskContextService().getTaskAutomationRuns(taskId);
@@ -674,10 +674,10 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   });
 
   /**
-   * GET /:id/runs/:runId
+   * GET /tasks/:id/runs/:runId
    * Get specific automation run details
    */
-  router.get('/:id/runs/:runId', (req: Request, res: Response) => {
+  router.get('/tasks/:id/runs/:runId', (req: Request, res: Response) => {
     try {
       const { id: taskId, runId } = req.params;
       const run = getTaskContextService().getAutomationRun(runId);

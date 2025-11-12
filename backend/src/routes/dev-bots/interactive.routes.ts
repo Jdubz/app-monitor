@@ -28,19 +28,19 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
   const router = Router();
 
   /**
-   * GET /session
+   * GET /interactive/session
    * Get current interactive session state
    */
-  router.get('/session', (_req: Request, res: Response) => {
+  router.get('/interactive/session', (_req: Request, res: Response) => {
     const payload: DevBotsInteractiveSessionStateResponse['data'] = buildInteractiveSessionState(devBotsManager);
     res.json({ success: true, data: payload });
   });
 
   /**
-   * POST /session
+   * POST /interactive/session
    * Start new interactive session
    */
-  router.post('/session', async (req: Request, res: Response) => {
+  router.post('/interactive/session', async (req: Request, res: Response) => {
     const payload = req.body as DevBotsInteractiveSessionStartPayload | undefined;
     if (!payload || typeof payload.modelProvider !== 'string' || typeof payload.modelName !== 'string') {
       return res.status(400).json({
@@ -68,10 +68,10 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
   });
 
   /**
-   * DELETE /session
+   * DELETE /interactive/session
    * End current interactive session
    */
-  router.delete('/session', async (req: Request, res: Response) => {
+  router.delete('/interactive/session', async (req: Request, res: Response) => {
     const session = devBotsManager.getActiveInteractiveSession();
     if (!session) {
       return res.status(404).json({ success: false, error: 'not_found', message: 'No active interactive session' });
@@ -82,10 +82,10 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
   });
 
   /**
-   * POST /session/:sessionId/input
+   * POST /interactive/session/:sessionId/input
    * Send input to interactive session
    */
-  router.post('/session/:sessionId/input', (req: Request, res: Response) => {
+  router.post('/interactive/session/:sessionId/input', (req: Request, res: Response) => {
     const { sessionId } = req.params;
     if (!sessionId) {
       return res.status(400).json({ success: false, error: 'invalid_params', message: 'sessionId is required' });
@@ -103,10 +103,10 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
   });
 
   /**
-   * POST /heartbeat
+   * POST /interactive/heartbeat
    * Record heartbeat from client or agent
    */
-  router.post('/heartbeat', (req: Request, res: Response) => {
+  router.post('/interactive/heartbeat', (req: Request, res: Response) => {
     const payload = req.body as DevBotsInteractiveHeartbeatPayload | undefined;
     if (!payload || typeof payload.sessionId !== 'string') {
       return res.status(400).json({ success: false, error: 'invalid_payload', message: 'sessionId is required' });
@@ -121,10 +121,10 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
   });
 
   /**
-   * POST /interrupt
+   * POST /interactive/interrupt
    * Send interrupt signal to interactive session
    */
-  router.post('/interrupt', (req: Request, res: Response) => {
+  router.post('/interactive/interrupt', (req: Request, res: Response) => {
     const payload = req.body as DevBotsInteractiveInterruptPayload | undefined;
     if (!payload || typeof payload.sessionId !== 'string') {
       return res.status(400).json({ success: false, error: 'invalid_payload', message: 'sessionId is required' });
