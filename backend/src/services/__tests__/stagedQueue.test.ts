@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TaskQueueService } from '../taskQueue.sqlite';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -146,9 +146,9 @@ describe('TaskQueueService Staged Queue', () => {
 
     it('should dequeue followup when at capacity', () => {
       // Create 3 implementation tasks (assuming maxWorkers=3)
-      const impl1 = taskQueue.createTask({ title: 'Impl 1', description: 'Feature 1' });
-      const impl2 = taskQueue.createTask({ title: 'Impl 2', description: 'Feature 2' });
-      const impl3 = taskQueue.createTask({ title: 'Impl 3', description: 'Feature 3' });
+      taskQueue.createTask({ title: 'Impl 1', description: 'Feature 1' });
+      taskQueue.createTask({ title: 'Impl 2', description: 'Feature 2' });
+      taskQueue.createTask({ title: 'Impl 3', description: 'Feature 3' });
 
       // Assign all 3 (fills capacity)
       taskQueue.assignNextTask(); // impl1
@@ -176,13 +176,13 @@ describe('TaskQueueService Staged Queue', () => {
       const impl = taskQueue.createTask({ title: 'Impl', description: 'Feature' });
       taskQueue.assignNextTask(); // Start the chain
 
-      const followup1 = taskQueue.createTask({
+      taskQueue.createTask({
         title: 'Followup 1',
         description: 'First followup',
         original_task_id: impl.id,
       });
 
-      const followup2 = taskQueue.createTask({
+      taskQueue.createTask({
         title: 'Followup 2',
         description: 'Second followup',
         original_task_id: impl.id,
@@ -282,7 +282,7 @@ describe('TaskQueueService Staged Queue', () => {
     it('should enforce chain concurrency limit', () => {
       // Assuming maxWorkers = 3
       // Create 5 implementation tasks
-      const tasks = Array.from({ length: 5 }, (_, i) =>
+      Array.from({ length: 5 }, (_, i) =>
         taskQueue.createTask({ title: `Feature ${i + 1}`, description: `Impl ${i + 1}` })
       );
 
