@@ -11,7 +11,13 @@
  * - Partial fix detection
  * - Event-driven re-evaluation
  *
+ * Architecture: Modular evaluator pattern
+ * - Each condition has a dedicated evaluator class
+ * - Service orchestrates evaluation and task spawning
+ * - Evaluators are in prConditions/ directory
+ *
  * See: docs/plans/CONTINUOUS_PR_SELF_HEALING.md
+ * See: docs/technicalDesigns/prConditionState-refactoring-plan.md
  */
 
 import * as crypto from 'crypto';
@@ -21,10 +27,37 @@ import { GitHubPRService, getGitHubPRService, type PRStatus } from './githubPR.s
 import { TaskQueueService } from './taskQueue.sqlite.js';
 import type { Task } from './taskQueue.sqlite.js';
 
+// Import modular evaluators
+import {
+  CIChecksEvaluator,
+  CommentsEvaluator,
+  ConflictsEvaluator,
+  BranchUpdateEvaluator,
+  ChangeRequestsEvaluator,
+  TaskVerificationEvaluator,
+  CopilotReviewEvaluator,
+  FinalValidationEvaluator,
+  type BaseEvaluator
+} from './prConditions/evaluators/index.js';
+
 // ============================================================================
 // Types & Interfaces
 // ============================================================================
 
+// Re-export types from modular prConditions for backward compatibility
+export type {
+  ConditionStatus,
+  ConditionState,
+  BlockingIssue,
+  ActiveFixTask,
+  PRConditionState,
+  ValidationAttempt,
+  ValidationIssue,
+  ConditionChange,
+  ConditionEvaluation
+} from './prConditions/types.js';
+
+// Keep local type alias for backward compatibility
 export type ConditionStatus = 'met' | 'unmet' | 'not_ready';
 
 export interface ConditionState {
@@ -136,10 +169,25 @@ export class PRConditionStateService {
   // Evaluation locking to prevent race conditions
   private readonly evaluationLocks: Map<number, Promise<void>> = new Map();
 
+  // Modular evaluators (new architecture)
+  private readonly evaluators: Map<string, BaseEvaluator>;
+
   constructor(taskQueue: TaskQueueService) {
     this.db = getDatabase();
     this.github = getGitHubPRService();
     this.taskQueue = taskQueue;
+
+    // Initialize modular evaluators
+    this.evaluators = new Map([
+      ['ci_checks_passing', new CIChecksEvaluator(this.github, this.taskQueue)],
+      ['comments_resolved', new CommentsEvaluator(this.github, this.taskQueue)],
+      ['no_merge_conflicts', new ConflictsEvaluator(this.github, this.taskQueue)],
+      ['branch_updated', new BranchUpdateEvaluator(this.github, this.taskQueue)],
+      ['no_change_requests', new ChangeRequestsEvaluator(this.github, this.taskQueue)],
+      ['task_verification', new TaskVerificationEvaluator(this.github, this.taskQueue)],
+      ['copilot_review_completed', new CopilotReviewEvaluator(this.github, this.taskQueue)],
+      ['final_validation_passed', new FinalValidationEvaluator(this.github, this.taskQueue)]
+    ]);
 
     // Cleanup stale evaluation locks every 5 minutes
     setInterval(() => {
@@ -471,78 +519,9 @@ export class PRConditionStateService {
    * Evaluate Condition 1: CI Checks Passing
    */
   private async evaluateCIChecksCondition(prNumber: number, prStatus?: PRStatus): Promise<ConditionEvaluation> {
-    try {
-      // Reuse prStatus if provided, otherwise fetch
-      if (!prStatus) {
-        prStatus = await this.github.getPRStatus(prNumber);
-      }
-      const checks = prStatus.checks;
-
-      // Find failing checks
-      const failingChecks = checks.filter(check =>
-        check.status === 'failure' || check.status === 'error'
-      );
-
-      if (failingChecks.length === 0) {
-        // All checks passing
-        return {
-          condition_id: 'ci_checks_passing',
-          status: 'met',
-          fingerprint: 'all-checks-passing',
-          blocking_issues: []
-        };
-      }
-
-      // Build blocking issues (store only references, not GitHub data)
-      const blocking_issues: BlockingIssue[] = failingChecks.map(check => {
-        // Prefer check.id (if available), fallback to check.name
-        // Log warning when falling back to name for better debugging
-        if (!check.id) {
-          logger.warn({
-            category: 'pr-workflow',
-            action: 'check_id_missing',
-            message: `Check "${check.name}" has no ID, using name as reference`,
-            details: { check_name: check.name }
-          });
-        }
-        return {
-          type: 'failing_check',
-          github_ref_type: 'check_run' as const,
-          github_ref_id: check.id || check.name,
-          severity: 'high' as const
-        };
-      });
-
-      // Generate fingerprint from failing check names
-      const fingerprint = this.generateFingerprintFromList(
-        failingChecks.map(c => c.name).sort()
-      );
-
-      return {
-        condition_id: 'ci_checks_passing',
-        status: 'unmet',
-        fingerprint,
-        blocking_issues,
-        metadata: { failing_checks: failingChecks }
-      };
-    } catch (error) {
-      logger.error({
-        category: 'pr-workflow',
-        action: 'evaluate_ci_checks_failed',
-        message: `Failed to evaluate CI checks for PR #${prNumber}`,
-        error
-      });
-
-      return {
-        condition_id: 'ci_checks_passing',
-        status: 'not_ready',
-        fingerprint: 'evaluation-error',
-        blocking_issues: [{
-          type: 'evaluation_error',
-          severity: 'high'
-        }]
-      };
-    }
+    // Delegate to modular evaluator
+    const evaluator = this.evaluators.get('ci_checks_passing')!;
+    return evaluator.evaluate(prNumber, prStatus);
   }
 
   /**

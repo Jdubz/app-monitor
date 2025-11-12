@@ -55,8 +55,8 @@ This directory contains comprehensive documentation for the Claude Workers syste
 
 ### For Implementation
 1. Follow [Implementation/Implementation Guide](implementation/implementation-guide.md)
-2. Set up [Deployment/Docker Configuration](deployment/docker-configuration.md)
-3. Configure [Learning & Intelligence/Learning System](learning/learning-system.md)
+2. Set up [Deployment/Docker Orchestration](deployment/autonomous-docker-orchestration.md)
+3. Configure [Learning & Intelligence/Learning System](learning/learning-system-analysis.md)
 
 ### For API Usage
 1. Check [API Reference/Endpoints](api/endpoints.md)
@@ -88,7 +88,6 @@ This directory contains comprehensive documentation for the Claude Workers syste
 - **Deprecated**: This system is deprecated in favor of the dev-monitor integration
 - **Reference Only**: Use this documentation for understanding legacy implementations
 - **Active System**: Use the dev-monitor interface for all current operations
-- **Migration**: See [Archive/Migration Notes](archive/migration-notes.md) for migration details
 
 ## 🔗 Related Documentation
 
