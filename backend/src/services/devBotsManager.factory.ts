@@ -286,5 +286,6 @@ export async function createDevBotsManagerDependencies(
     systemLifecycleService,
     systemInitializationService,
     interactiveSessionCoordinator,
+    cleanupCoordinator,
   };
 }

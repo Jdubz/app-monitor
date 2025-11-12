@@ -88,6 +88,7 @@ export class DevBotsManager extends EventEmitter {
   private systemLifecycleService!: import('./systemLifecycle.service.js').SystemLifecycleService;
   private systemInitializationService!: import('./systemInitialization.service.js').SystemInitializationService;
   private interactiveSessionCoordinator!: import('./interactiveSessionCoordinator.service.js').InteractiveSessionCoordinator;
+  private cleanupCoordinator!: import('./cleanupCoordinator.service.js').CleanupCoordinator;
   private taskQueueWorker?: { start: () => Promise<void>; stop: () => Promise<void> };
   private metricsEmitter?: MetricsEmitter;
 
@@ -122,6 +123,7 @@ export class DevBotsManager extends EventEmitter {
     this.systemLifecycleService = dependencies.systemLifecycleService;
     this.systemInitializationService = dependencies.systemInitializationService;
     this.interactiveSessionCoordinator = dependencies.interactiveSessionCoordinator;
+    this.cleanupCoordinator = dependencies.cleanupCoordinator;
 
     // Initialize maxWorkers from config
     this.maxWorkers = config.devBots.maxWorkers;
@@ -151,6 +153,10 @@ export class DevBotsManager extends EventEmitter {
     // Note: SystemInitializationService is injected but needs these callbacks from DevBotsManager
     (this.systemInitializationService as any).emitEvent = this.emit.bind(this);
     (this.systemInitializationService as any).endInteractiveSession = this.endInteractiveSession.bind(this);
+
+    // Update CleanupCoordinator with assignNextTask callback
+    // Note: CleanupCoordinator is injected but needs this callback from DevBotsManager
+    (this.cleanupCoordinator as any).assignNextTask = this.assignNextTask.bind(this);
 
     // Initialize TaskCompletionService with PR workflow orchestrator callback
     // Create no-op implementations for removed dependencies
@@ -492,27 +498,15 @@ export class DevBotsManager extends EventEmitter {
     return this.isCoordinatorHealthy;
   }
 
-  // Additional API methods for scope control and cleanup
+  /**
+   * Scope and cleanup methods - delegated to CleanupCoordinator
+   */
   async getScopeViolations(): Promise<Array<{ taskId: string; violations: Array<{ type: string; severity: string }> }>> {
-    // This would track scope violations - simplified for now
-    return [];
+    return await this.cleanupCoordinator.getScopeViolations();
   }
 
   async triggerEmergencyRecovery(): Promise<Task> {
-    const recoveryTask: Task = {
-      id: `task-recovery-${Date.now()}`,
-      type: 'recovery',
-      title: 'Emergency Recovery Task',
-      description: 'EMERGENCY RECOVERY: Clean up scope creep and restore system to stable state. DO NOT create new files. Only remove unnecessary code.',
-      status: 'pending',
-      created_at: Date.now(),
-      assigned_agent: 'backend-specialist'
-    } as unknown as Task;
-
-    // TaskQueueService doesn't have unshift(), use createTask instead
-    await this.taskQueue.createTask(recoveryTask);
-    await this.assignNextTask();
-    return recoveryTask;
+    return await this.cleanupCoordinator.triggerEmergencyRecovery();
   }
 
   /**
@@ -524,22 +518,11 @@ export class DevBotsManager extends EventEmitter {
   }
 
   async getCleanupStatus(): Promise<{ schedules: string[]; recentTasks: Task[] }> {
-    const completedTasks = this.taskQueue.getTasksByStatus('completed');
-    const recentCleanupTasks = completedTasks
-      .filter(t => t.type === 'cleanup')
-      .slice(-10);
-
-    return {
-      schedules: this.scopeControl.checkCleanupSchedules(),
-      recentTasks: recentCleanupTasks
-    };
+    return await this.cleanupCoordinator.getCleanupStatus();
   }
 
   async triggerCleanup(type: string): Promise<Task> {
-    const cleanupTask = this.scopeControl.createCleanupTask(type, Date.now());
-    await this.taskQueue.createTask(cleanupTask);
-    await this.assignNextTask();
-    return cleanupTask;
+    return await this.cleanupCoordinator.triggerCleanup(type);
   }
 
   /**

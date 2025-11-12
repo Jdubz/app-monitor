@@ -382,6 +382,37 @@ export function createMockInteractiveSessionCoordinator(): InteractiveSessionCoo
 }
 
 /**
+ * Create mock CleanupCoordinator
+ */
+export function createMockCleanupCoordinator(): import('./cleanupCoordinator.service.js').CleanupCoordinator {
+  return {
+    getScopeViolations: vi.fn().mockResolvedValue([]),
+    triggerEmergencyRecovery: vi.fn().mockResolvedValue({
+      id: 'task-recovery-123',
+      type: 'recovery',
+      title: 'Emergency Recovery Task',
+      description: 'Test recovery',
+      status: 'pending',
+      created_at: Date.now(),
+      assigned_agent: 'backend-specialist'
+    }),
+    getCleanupStatus: vi.fn().mockResolvedValue({
+      schedules: [],
+      recentTasks: []
+    }),
+    triggerCleanup: vi.fn().mockResolvedValue({
+      id: 'cleanup-task-123',
+      type: 'cleanup',
+      title: 'Test Cleanup Task',
+      description: 'Test cleanup',
+      status: 'pending',
+      created_at: Date.now(),
+      assigned_agent: 'backend-specialist'
+    })
+  } as unknown as import('./cleanupCoordinator.service.js').CleanupCoordinator;
+}
+
+/**
  * Create mock WorkspaceSyncManager
  */
 export function createMockWorkspaceSyncManager(): WorkspaceSyncManager {
@@ -561,6 +592,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
   const systemLifecycleService = createMockSystemLifecycleService();
   const systemInitializationService = createMockSystemInitializationService();
   const interactiveSessionCoordinator = createMockInteractiveSessionCoordinator();
+  const cleanupCoordinator = createMockCleanupCoordinator();
   const agentManager = createMockAgentManager();
   const templateManager = createMockTemplateManager();
   const guidelinesManager = createMockGuidelinesManager();
@@ -584,6 +616,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     systemLifecycleService,
     systemInitializationService,
     interactiveSessionCoordinator,
+    cleanupCoordinator,
     agentManager,
     templateManager,
     guidelinesManager,
