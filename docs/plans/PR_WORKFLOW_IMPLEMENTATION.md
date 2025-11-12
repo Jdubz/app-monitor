@@ -419,8 +419,8 @@ time_to_merge_seconds: histogram
 
 ### Issue 4: No Resilience for Webhook Failures
 **Root Cause:** Single point of failure, no retry  
-**Fix:** Implement webhook queue with retry logic  
-**Status:** ⏳ Pending
+**Fix:** ~~Webhook queue with retry~~ **CANCELLED** - GitHub has native retry; PRMonitor polls every 5min as fallback. Add metrics first to prove a problem exists.  
+**Status:** ✅ Not needed - over-engineered solution reverted 2025-11-12
 
 ---
 
