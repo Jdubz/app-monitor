@@ -34,6 +34,7 @@ import type { SystemLifecycleService } from './systemLifecycle.service.js';
 import type { SystemInitializationService } from './systemInitialization.service.js';
 import type { InteractiveSessionCoordinator } from './interactiveSessionCoordinator.service.js';
 import type { CleanupCoordinator } from './cleanupCoordinator.service.js';
+import type { InfoQueryService } from './infoQuery.service.js';
 
 /**
  * All dependencies required by DevBotsManager
@@ -93,6 +94,9 @@ export interface DevBotsManagerDependencies {
 
   // Cleanup and scope control coordination
   cleanupCoordinator: CleanupCoordinator;
+
+  // Info and query operations
+  infoQueryService: InfoQueryService;
 }
 
 /**

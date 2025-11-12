@@ -34,6 +34,7 @@ import { SystemLifecycleService } from './systemLifecycle.service.js';
 import { SystemInitializationService } from './systemInitialization.service.js';
 import { InteractiveSessionCoordinator } from './interactiveSessionCoordinator.service.js';
 import { CleanupCoordinator } from './cleanupCoordinator.service.js';
+import { InfoQueryService } from './infoQuery.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
 
 /**
@@ -258,6 +259,15 @@ export async function createDevBotsManagerDependencies(
     async () => {} // assignNextTask placeholder, will be bound by DevBotsManager
   );
 
+  // Create InfoQueryService
+  const infoQueryService = new InfoQueryService(
+    agentManager,
+    templateManager,
+    guidelinesManager,
+    ephemeralWorkerService,
+    2 // maxWorkers from config
+  );
+
   return {
     processManager,
     dockerManager,
@@ -287,5 +297,6 @@ export async function createDevBotsManagerDependencies(
     systemInitializationService,
     interactiveSessionCoordinator,
     cleanupCoordinator,
+    infoQueryService,
   };
 }
