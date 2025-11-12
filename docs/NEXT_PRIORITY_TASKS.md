@@ -1,7 +1,7 @@
 # Next High-Priority Tasks
 
 **Date**: 2025-11-12  
-**Status**: **PR Self-Healing 80% Complete!** - Finishing touches needed  
+**Status**: **PR Self-Healing 95% Complete!** - Final integration needed  
 **Branch**: staging (ready for production merge)
 
 ## ✅ Completed Today
@@ -12,6 +12,11 @@
    - Fingerprinting prevents duplicate fix tasks ✅
    - Condition-specific fix generation (CI, conflicts, comments, branch updates) ✅
    - Partial fix detection and progression tracking ✅
+   - Auto-merge when all conditions met ✅
+   - Chain tracking (chain_id, chain_depth) ✅
+   - Chain depth limiting (max 4 attempts) ✅
+   - Manual intervention task creation on chain limit exceeded ✅
+   - Copilot throttle manager implemented ✅
    - All 907 backend + 128 frontend tests passing ✅
    - Deployed to staging ✅
 
@@ -33,139 +38,13 @@
 
 ## 🔥 Critical Priority (P0)
 
-### 1. Complete PR Self-Healing - Final 20% (1-2 days)
-
-**What**: Add chain tracking, auto-merge, and Copilot throttling
-
-**Why**: **CRITICAL** - Event-driven fix spawning is working, but needs:
-- Chain depth tracking to prevent infinite loops
-- Auto-merge when all conditions met
-- Copilot throttle to avoid API limits
-
-**Current State**: ✅ 80% Complete!
-- ✅ Event-driven condition evaluation
-- ✅ Intelligent fix task spawning
-- ✅ Fingerprinting & duplicate prevention
-- ⚠️ Missing: chain_id, auto-merge, Copilot throttle
-
-**Remaining Work**:
-
-#### A. Add Chain Tracking (3-4 hours)
-
-**Migration**: `backend/migrations/011_add_chain_tracking.sql`
-
-```sql
--- Add chain tracking for PR fix tasks
-ALTER TABLE tasks ADD COLUMN chain_id TEXT;
-ALTER TABLE tasks ADD COLUMN chain_depth INTEGER DEFAULT 0;
-CREATE INDEX IF NOT EXISTS idx_tasks_chain_id ON tasks(chain_id);
-```
-
-**Update Task Creation** in `prConditionState.service.ts`:
-```typescript
-// Get original task's chain_id when spawning fix task
-const parentTask = await this.taskQueue.getTaskByPR(prNumber);
-const chainId = parentTask?.chain_id || crypto.randomUUID();
-
-const fixTask = await this.taskQueue.createTask({
-  ...taskConfig,
-  chain_id: chainId,
-  chain_depth: (parentTask?.chain_depth || 0) + 1
-});
-```
-
-**Add Chain Depth Limit** check before spawning:
-```typescript
-if (parentTask && parentTask.chain_depth >= 4) {
-  await this.blockChain(chainId, 'Max depth exceeded');
-  return; // Don't spawn more fix tasks
-}
-```
-
-#### B. Implement Auto-Merge (4-6 hours)
-
-**Location**: `backend/src/services/prConditionState.service.ts`
-
-Add to `checkMergeReadiness()` method:
-```typescript
-private async checkMergeReadiness(prNumber: number, state: PRConditionState): Promise<void> {
-  const allMet = this.allConditionsMet(state);
-  
-  if (allMet && !state.merge_eligible) {
-    // All conditions newly met - trigger auto-merge
-    await this.autoMergePR(prNumber, state);
-  }
-  
-  state.merge_eligible = allMet;
-}
-
-private async autoMergePR(prNumber: number, state: PRConditionState): Promise<void> {
-  const prStatus = await this.github.getPRStatus(prNumber);
-  
-  if (!prStatus.mergeable) {
-    logger.warn(`PR #${prNumber} not mergeable despite conditions met`);
-    return;
-  }
-  
-  await this.github.mergePR(prNumber, {
-    merge_method: 'squash',
-    commit_title: `Auto-merge PR #${prNumber}`,
-    commit_message: 'All quality gates passed - auto-merged'
-  });
-  
-  // Cleanup
-  await this.deletePRConditionState(prNumber);
-  await this.taskQueue.completeTasksForPR(prNumber);
-}
-```
-
-#### C. Add Copilot Throttle Manager (2-3 hours)
-
-**New File**: `backend/src/services/copilotThrottle.service.ts`
-
-```typescript
-export class CopilotThrottleManager {
-  private readonly MAX_ACTIVE = 3; // Start conservative
-  
-  async canUseCopilot(): Promise<boolean> {
-    const active = await this.taskQueue.getTasksByAgent('copilot', 'running');
-    return active.length < this.MAX_ACTIVE;
-  }
-}
-```
-
-**Integration** in `AgentSelector`:
-```typescript
-async selectAgent(task: Task): Promise<AgentSelection> {
-  if (task.type === 'REVIEW' && await this.copilotThrottle.canUseCopilot()) {
-    return { agent: 'copilot', reason: 'Copilot available for review' };
-  }
-  return this.selectBotAgent(task);
-}
-```
-
-**Testing**:
-```bash
-npm test -- prConditionState
-npm test -- githubWebhookHandler
-npm test -- copilotThrottle
-```
-
-**Success Criteria**:
-- ✅ Chain depth prevents infinite loops
-- ✅ Auto-merge triggers when all 8 conditions met
-- ✅ Copilot throttle prevents API limit issues
-- ✅ All tests passing
-
----
-
-## 🎯 High Priority (P1)
-
-### 2. Schema Cleanup (P2 - 2 days) - Can run in parallel
+### 1. Schema Cleanup (P1 - 1-2 days)
 
 **What**: Remove duplicate PR columns from tasks table
 
 **Why**: Data duplication violates design principles
+
+**Current State**: Migration plan complete, ready for implementation
 
 **Reference**: `docs/investigations/SCHEMA_AUDIT_AND_CLEANUP.md`
 
@@ -173,13 +52,13 @@ npm test -- copilotThrottle
 - pr_url, pr_branch, pr_status, pr_checks_status, pr_review_status, pr_created_at, pr_merged_at
 
 **Steps**:
-1. Update code to stop using duplicate columns
-2. Create migration 011_schema_cleanup.sql  
-3. Test on dev → staging → production
+1. Update code to stop using duplicate columns (2-3 hours)
+2. Create migration 012_schema_cleanup.sql (1 hour)
+3. Test on dev → staging → production (2-3 hours)
 
 ---
 
-### 3. Artifact System (P1 - 1 day)
+### 2. Artifact System (P1 - 1 day)
 
 **What**: Generate session artifacts for debugging and learning
 
@@ -190,13 +69,34 @@ npm test -- copilotThrottle
 
 ---
 
+## 🎯 High Priority (P1)
+
+### 3. Production Deployment
+
+**What**: Deploy PR self-healing to production
+
+**Prerequisites**:
+- ✅ All tests passing
+- ✅ Event-driven implementation complete
+- ✅ Chain tracking implemented
+- ✅ Auto-merge working
+- ⚠️ Optional: Schema cleanup (can be done later)
+
+**Steps**:
+1. Merge staging → main
+2. Deploy to production
+3. Monitor for 24-48 hours
+4. Collect metrics on self-healing success rates
+
+---
+
 ## 📊 Timeline
 
-**Total Remaining**: 2-3 days to full PR autonomy
+**Remaining Work**: 1-3 days to full production deployment
 
-- Day 1: Chain tracking + Auto-merge (8-10 hours)
-- Day 2: Copilot throttle + Testing (4-6 hours)  
-- Day 3: Optional schema cleanup (can run in parallel)
+- Day 1: Schema cleanup (optional, can run in parallel) (8 hours)
+- Day 2: Production deployment + monitoring (4-6 hours)  
+- Day 3: Optional artifact system implementation (8 hours)
 
 ---
 
@@ -207,6 +107,7 @@ npm test -- copilotThrottle
 - Average time PR creation → merge: < 2 hours
 - Fix task spawn latency: < 30 seconds from webhook
 - Auto-merge success rate: > 95%
+- Chain depth limit prevents infinite loops
 
 **Monitoring**:
 - Dashboard showing active PR chains  
@@ -224,6 +125,6 @@ npm test -- copilotThrottle
 
 ---
 
-**Updated**: 2025-11-12 07:20 UTC  
-**Next Review**: After chain tracking + auto-merge completion
+**Updated**: 2025-11-12 07:25 UTC  
+**Next Review**: After production deployment
 
