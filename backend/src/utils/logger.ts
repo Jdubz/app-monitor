@@ -53,7 +53,6 @@ export type LogCategory =
   | 'quality-observation'
   | 'classification' // Task classification for intelligent agent selection
   | 'automation' // Agent selection and automation
-  | 'webhook-queue' // Webhook event queue processing
   | 'delegation' // Copilot delegation
   | 'recovery'
   | 'safety' // Safety mechanisms for git operations

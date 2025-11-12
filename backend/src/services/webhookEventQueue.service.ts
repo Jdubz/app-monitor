@@ -41,13 +41,10 @@ export interface WebhookEventMetrics {
 }
 
 export class WebhookEventQueue {
-  private dbWrapper;
-  private get db() {
-    return this.dbWrapper.getConnection();
-  }
+  private db;
 
   constructor() {
-    this.dbWrapper = getDatabase();
+    this.db = getDatabase();
   }
 
   /**
@@ -154,11 +151,11 @@ export class WebhookEventQueue {
       LIMIT 10
     `);
 
-    const rows = stmt.all() as any[];
-    const events = rows.map((row: any) => this.mapRow(row));
+    const rows = stmt.all();
+    const events = rows.map(row => this.mapRow(row));
 
     // Filter by retry delay
-    return events.filter((event: WebhookEvent) => {
+    return events.filter(event => {
       const delaySeconds = delays[Math.min(event.attempt_count, delays.length - 1)];
       const nextRetryTime = (event.last_attempt_at || event.received_at) + (delaySeconds * 1000);
       return now >= nextRetryTime;
