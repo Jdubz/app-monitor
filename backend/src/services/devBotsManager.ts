@@ -87,6 +87,7 @@ export class DevBotsManager extends EventEmitter {
   private interactiveSessionStreamManager!: InteractiveSessionStreamManager;
   private systemLifecycleService!: import('./systemLifecycle.service.js').SystemLifecycleService;
   private systemInitializationService!: import('./systemInitialization.service.js').SystemInitializationService;
+  private interactiveSessionCoordinator!: import('./interactiveSessionCoordinator.service.js').InteractiveSessionCoordinator;
   private taskQueueWorker?: { start: () => Promise<void>; stop: () => Promise<void> };
   private metricsEmitter?: MetricsEmitter;
 
@@ -120,6 +121,7 @@ export class DevBotsManager extends EventEmitter {
     this.workerHealthMonitor = dependencies.workerHealthMonitor;
     this.systemLifecycleService = dependencies.systemLifecycleService;
     this.systemInitializationService = dependencies.systemInitializationService;
+    this.interactiveSessionCoordinator = dependencies.interactiveSessionCoordinator;
 
     // Initialize maxWorkers from config
     this.maxWorkers = config.devBots.maxWorkers;
@@ -251,65 +253,44 @@ export class DevBotsManager extends EventEmitter {
   // Interactive Sessions
   // ============================================================================
 
+  /**
+   * Interactive session methods - all delegated to InteractiveSessionCoordinator
+   */
   public getActiveInteractiveSession(): InteractiveSessionRecord | null {
-    return this.interactiveSessionService.getActiveSession();
+    return this.interactiveSessionCoordinator.getActiveSession();
   }
 
   public getInteractiveSession(sessionId: string): InteractiveSessionRecord | null {
-    return this.interactiveSessionService.getSessionById(sessionId);
+    return this.interactiveSessionCoordinator.getSession(sessionId);
   }
 
   public listInteractiveSessions(limit = 20): InteractiveSessionRecord[] {
-    return this.interactiveSessionService.listRecentSessions(limit);
+    return this.interactiveSessionCoordinator.listSessions(limit);
   }
 
   public async launchInteractiveSession(
     options: StartInteractiveSessionOptions,
   ): Promise<InteractiveSessionRecord> {
-    const session = this.interactiveSessionService.startSession(options);
-    try {
-      const containerId = await this.interactiveSessionOrchestrator.start(session);
-      this.interactiveSessionService.setStatus(session.id, 'running', { containerId });
-      await this.interactiveSessionStreamManager.attach(session.id, containerId);
-      const updated = this.interactiveSessionService.getSessionById(session.id);
-      if (!updated) {
-        throw new Error('Interactive session missing after launch');
-      }
-      return updated;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Interactive session launch failed';
-      this.interactiveSessionService.endSession(session.id, message, 'error');
-      await this.interactiveSessionStreamManager.detach(session.id).catch(() => {
-        /* noop */
-      });
-      throw error;
-    }
+    return await this.interactiveSessionCoordinator.launchSession(options);
   }
 
   public async endInteractiveSession(sessionId: string, reason?: string): Promise<void> {
-    const session = this.interactiveSessionService.getSessionById(sessionId);
-    if (session?.containerId) {
-      await this.interactiveSessionOrchestrator.stop(session.containerId);
-    }
-    await this.interactiveSessionStreamManager.detach(sessionId);
-    this.interactiveSessionService.endSession(sessionId, reason);
+    await this.interactiveSessionCoordinator.endSession(sessionId, reason);
   }
 
   public sendInteractiveInput(sessionId: string, payload: string): void {
-    this.interactiveSessionStreamManager.sendInput(sessionId, payload);
-    this.interactiveSessionService.recordActivity(sessionId, 'user');
+    this.interactiveSessionCoordinator.sendInput(sessionId, payload);
   }
 
   public sendInteractiveSignal(
     sessionId: string,
     signal: 'interrupt' | 'terminate' = 'interrupt',
   ): void {
-    this.interactiveSessionStreamManager.sendSignal(sessionId, signal);
-    this.interactiveSessionService.recordActivity(sessionId, 'user');
+    this.interactiveSessionCoordinator.sendSignal(sessionId, signal);
   }
 
   public recordInteractiveActivity(sessionId: string, kind: ActivityKind): void {
-    this.interactiveSessionService.recordActivity(sessionId, kind);
+    this.interactiveSessionCoordinator.recordActivity(sessionId, kind);
   }
 
   public updateInteractiveContext(
@@ -317,15 +298,15 @@ export class DevBotsManager extends EventEmitter {
     contextSnapshot?: unknown,
     metadata?: Record<string, unknown>,
   ): void {
-    this.interactiveSessionService.updateContext(sessionId, contextSnapshot, metadata);
+    this.interactiveSessionCoordinator.updateContext(sessionId, contextSnapshot, metadata);
   }
 
   public getInteractiveIdleTimeoutMs(): number {
-    return this.interactiveSessionService.getIdleTimeoutMs();
+    return this.interactiveSessionCoordinator.getIdleTimeoutMs();
   }
 
   public getAllowedInteractiveModels(): AllowedInteractiveModel[] {
-    return this.interactiveSessionService.getAllowedModels();
+    return this.interactiveSessionCoordinator.getAllowedModels();
   }
 
   /**

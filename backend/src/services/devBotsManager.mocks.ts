@@ -32,6 +32,7 @@ import type { StatusAggregationService } from './statusAggregation.service.js';
 import type { RetryCoordinationService } from './retryCoordination.service.js';
 import type { SystemLifecycleService } from './systemLifecycle.service.js';
 import type { SystemInitializationService } from './systemInitialization.service.js';
+import type { InteractiveSessionCoordinator } from './interactiveSessionCoordinator.service.js';
 import { EventEmitter } from 'events';
 
 /**
@@ -355,6 +356,29 @@ export function createMockSystemInitializationService(): SystemInitializationSer
     getTaskQueueWorker: vi.fn().mockReturnValue(undefined),
     getMetricsEmitter: vi.fn().mockReturnValue(undefined)
   } as unknown as SystemInitializationService;
+}
+
+/**
+ * Create mock InteractiveSessionCoordinator
+ */
+export function createMockInteractiveSessionCoordinator(): InteractiveSessionCoordinator {
+  return {
+    getActiveSession: vi.fn().mockReturnValue(null),
+    getSession: vi.fn().mockReturnValue(null),
+    listSessions: vi.fn().mockReturnValue([]),
+    launchSession: vi.fn().mockResolvedValue({
+      id: 'session-1',
+      status: 'active',
+      startedAt: new Date().toISOString()
+    }),
+    endSession: vi.fn().mockResolvedValue(undefined),
+    sendInput: vi.fn(),
+    sendSignal: vi.fn(),
+    recordActivity: vi.fn(),
+    updateContext: vi.fn(),
+    getIdleTimeoutMs: vi.fn().mockReturnValue(300000),
+    getAllowedModels: vi.fn().mockReturnValue([])
+  } as unknown as InteractiveSessionCoordinator;
 }
 
 /**
