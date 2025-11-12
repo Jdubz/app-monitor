@@ -49,6 +49,8 @@ const DEFAULT_ALLOWED_MODELS: AllowedInteractiveModel[] = [
 export class InteractiveSessionService extends EventEmitter {
   private readonly idleTimeoutMs: number;
   private readonly allowedModels: AllowedInteractiveModel[];
+  private idleWatchdogInterval?: NodeJS.Timeout;
+  private onIdleTimeoutCallback?: (sessionId: string, idleDuration: number) => void;
 
   constructor(options: InteractiveSessionServiceOptions = {}) {
     super();
@@ -155,6 +157,71 @@ export class InteractiveSessionService extends EventEmitter {
 
   getAllowedModels(): AllowedInteractiveModel[] {
     return [...this.allowedModels];
+  }
+
+  /**
+   * Start idle timeout watchdog
+   * Monitors active sessions and calls the callback when idle timeout is reached
+   */
+  startIdleWatchdog(onIdleTimeout: (sessionId: string, idleDuration: number) => void): void {
+    this.onIdleTimeoutCallback = onIdleTimeout;
+
+    if (this.idleWatchdogInterval) {
+      clearInterval(this.idleWatchdogInterval);
+    }
+
+    this.idleWatchdogInterval = setInterval(() => {
+      const session = this.getActiveSession();
+      if (!session) {
+        return;
+      }
+
+      const lastActivity = this.getLastActivity(session);
+      if (!lastActivity) {
+        return;
+      }
+
+      const idleDuration = Date.now() - lastActivity;
+      if (idleDuration >= this.idleTimeoutMs) {
+        // Call the callback to handle timeout
+        if (this.onIdleTimeoutCallback) {
+          this.onIdleTimeoutCallback(session.id, idleDuration);
+        }
+        // Emit event for monitoring
+        this.emit('idleTimeout', { sessionId: session.id, idleDuration });
+      }
+    }, 30000); // Check every 30 seconds
+  }
+
+  /**
+   * Stop idle timeout watchdog
+   */
+  stopIdleWatchdog(): void {
+    if (this.idleWatchdogInterval) {
+      clearInterval(this.idleWatchdogInterval);
+      this.idleWatchdogInterval = undefined;
+    }
+    this.onIdleTimeoutCallback = undefined;
+  }
+
+  /**
+   * Get the last activity timestamp for a session
+   * Returns the most recent of: startedAt, lastUserActivityAt, lastAgentActivityAt
+   */
+  getLastActivity(session: InteractiveSessionRecord): number | null {
+    const timestamps = [
+      session.startedAt,
+      session.lastUserActivityAt,
+      session.lastAgentActivityAt
+    ]
+      .map((value) => (value ? Date.parse(value) : Number.NaN))
+      .filter((value) => Number.isFinite(value)) as number[];
+
+    if (!timestamps.length) {
+      return null;
+    }
+
+    return Math.max(...timestamps);
   }
 
   private validateModel(provider: string, name: string): void {

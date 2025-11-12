@@ -315,7 +315,6 @@ New agents can be created with custom skills and specializations:
 ## 📚 Related Documentation
 
 - [API Endpoints](endpoints.md)
-- [Task Creation Guidelines](task-creation-guidelines.md)
 - [Task Prompt Template](task-prompt-template.md)
 - [System Architecture](../architecture/system-overview.md)
 - [Learning System](../learning/learning-system-analysis.md)

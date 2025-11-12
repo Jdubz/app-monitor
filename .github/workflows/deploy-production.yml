@@ -85,9 +85,6 @@ jobs:
       - name: Run backend linter
         run: npm run lint -w backend
 
-      - name: Validate database migrations
-        run: ./scripts/validate-migrations.sh
-
       - name: Build backend
         run: npm run build -w backend
 

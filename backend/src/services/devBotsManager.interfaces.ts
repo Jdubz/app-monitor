@@ -26,6 +26,15 @@ import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js
 import type { InteractiveSessionService } from './interactiveSession.service.js';
 import type { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
 import type { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
+import type { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
+import type { TaskCreationService } from './taskCreation.service.js';
+import type { StatusAggregationService } from './statusAggregation.service.js';
+import type { RetryCoordinationService } from './retryCoordination.service.js';
+import type { SystemLifecycleService } from './systemLifecycle.service.js';
+import type { SystemInitializationService } from './systemInitialization.service.js';
+import type { InteractiveSessionCoordinator } from './interactiveSessionCoordinator.service.js';
+import type { CleanupCoordinator } from './cleanupCoordinator.service.js';
+import type { InfoQueryService } from './infoQuery.service.js';
 
 /**
  * All dependencies required by DevBotsManager
@@ -38,6 +47,9 @@ export interface DevBotsManagerDependencies {
 
   // Core services (initialized in initializeEnhancedServices)
   taskQueue: TaskQueueService;
+  taskCreationService: TaskCreationService;
+  statusAggregationService: StatusAggregationService;
+  retryCoordinationService: RetryCoordinationService;
   agentManager: AgentPersonalityManager;
   templateManager: TaskPromptTemplateManager;
   guidelinesManager: TaskCreationGuidelinesManager;
@@ -67,6 +79,24 @@ export interface DevBotsManagerDependencies {
   interactiveSessionService: InteractiveSessionService;
   interactiveSessionOrchestrator: InteractiveSessionOrchestrator;
   interactiveSessionStreamManager: InteractiveSessionStreamManager;
+
+  // Worker health monitoring
+  workerHealthMonitor: WorkerHealthMonitor;
+
+  // System lifecycle management
+  systemLifecycleService: SystemLifecycleService;
+
+  // System initialization
+  systemInitializationService: SystemInitializationService;
+
+  // Interactive session coordination
+  interactiveSessionCoordinator: InteractiveSessionCoordinator;
+
+  // Cleanup and scope control coordination
+  cleanupCoordinator: CleanupCoordinator;
+
+  // Info and query operations
+  infoQueryService: InfoQueryService;
 }
 
 /**

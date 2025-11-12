@@ -383,7 +383,7 @@ export interface WebhookHandlerStats {
 **Objective**: Create comprehensive documentation for PR workflow quality gates.
 
 **Deliverables**:
-- ✅ `docs/pr-workflow-quality-gates.md` - Complete documentation
+- ✅ `docs/archive/pr-workflow-quality-gates-2025-11.md` - Complete documentation
 - ✅ Flowchart diagrams - ASCII art decision flow diagrams
 - ✅ Troubleshooting guide - Common issues and resolutions
 - ✅ Example scenarios - 5 real-world scenarios with detailed timelines
@@ -408,7 +408,7 @@ export interface WebhookHandlerStats {
    - Unresolved comments
    - Task verification failures
 
-**File**: `docs/pr-workflow-quality-gates.md` (425 lines)
+**File**: `docs/archive/pr-workflow-quality-gates-2025-11.md` (425 lines)
 
 ## Execution Timeline
 
@@ -443,9 +443,8 @@ Each task is independently deployable. If issues arise:
 
 ## Related Documents
 
-- [PR Workflow Current State](./pr-workflow-current-state.md) (to be created)
-- [Quality Gates Documentation](./pr-workflow-quality-gates.md) (Task 7)
-- [Task Verification Service](../backend/src/services/taskVerification.service.ts)
+- [Quality Gates Documentation](./pr-workflow-quality-gates-2025-11.md)
+- [Task Verification Service](../../backend/src/services/taskVerification.service.ts)
 
 ## Changelog
 

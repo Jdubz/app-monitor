@@ -200,7 +200,7 @@ docker run --rm claude-worker:latest which claude
 
 - [OPTIMIZATION_GUIDE.md](./OPTIMIZATION_GUIDE.md) - Detailed optimization analysis
 - [IMPLEMENTATION_SUMMARY.md](./IMPLEMENTATION_SUMMARY.md) - Implementation details
-- [Dev-Monitor Documentation](../../dev-monitor/README.md)
+- [App Monitor Documentation](../../README.md)
 - [Docker Best Practices](https://docs.docker.com/develop/dev-best-practices/)
 
 ## Support

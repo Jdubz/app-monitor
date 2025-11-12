@@ -11,7 +11,13 @@
  * - Partial fix detection
  * - Event-driven re-evaluation
  *
+ * Architecture: Modular evaluator pattern
+ * - Each condition has a dedicated evaluator class
+ * - Service orchestrates evaluation and task spawning
+ * - Evaluators are in prConditions/ directory
+ *
  * See: docs/plans/CONTINUOUS_PR_SELF_HEALING.md
+ * See: docs/technicalDesigns/prConditionState-refactoring-plan.md
  */
 
 import * as crypto from 'crypto';
@@ -21,108 +27,41 @@ import { GitHubPRService, getGitHubPRService, type PRStatus } from './githubPR.s
 import { TaskQueueService } from './taskQueue.sqlite.js';
 import type { Task } from './taskQueue.sqlite.js';
 
+// Import modular evaluators
+import {
+  CIChecksEvaluator,
+  CommentsEvaluator,
+  ConflictsEvaluator,
+  BranchUpdateEvaluator,
+  ChangeRequestsEvaluator,
+  TaskVerificationEvaluator,
+  CopilotReviewEvaluator,
+  FinalValidationEvaluator,
+  type BaseEvaluator
+} from './prConditions/evaluators/index.js';
+
+// Import types used internally in this file
+import type {
+  PRConditionState,
+  ConditionEvaluation
+} from './prConditions/types.js';
+
 // ============================================================================
 // Types & Interfaces
 // ============================================================================
 
-export type ConditionStatus = 'met' | 'unmet' | 'not_ready';
-
-export interface ConditionState {
-  status: ConditionStatus;
-  issue_fingerprint: string;
-  blocking_issues: BlockingIssue[];
-  last_checked: number;
-}
-
-/**
- * BlockingIssue - Reference to a GitHub issue that blocks PR merge
- *
- * NOTE: This structure does NOT store GitHub data directly (per design principle:
- * "Any information available from GitHub should NOT be stored in our DB").
- * Instead, it stores references (IDs) that can be used to fetch data from GitHub on-demand.
- */
-export interface BlockingIssue {
-  type: string;  // e.g., 'unresolved_comment', 'failing_check', 'merge_conflicts'
-  github_ref_type?: 'comment' | 'check_run' | 'review' | 'conflict';  // Type of GitHub entity
-  github_ref_id?: number | string;  // GitHub entity ID (comment_id, check_run_id, etc.)
-  severity?: 'critical' | 'high' | 'medium' | 'low';
-}
-
-export interface ActiveFixTask {
-  task_id: string;
-  created_at: number;
-  issue_fingerprint: string;
-}
-
-export interface PRConditionState {
-  pr_number: number;
-  last_evaluated: number;
-  last_updated: number;
-  merge_eligible: boolean;
-
-  // 8 conditions
-  conditions: {
-    ci_checks_passing: ConditionState;
-    comments_resolved: ConditionState;
-    no_merge_conflicts: ConditionState;
-    branch_updated: ConditionState;
-    no_change_requests: ConditionState;
-    task_verification: ConditionState;
-    copilot_review_completed: ConditionState;
-    final_validation_passed: ConditionState;
-  };
-
-  // Active fix tasks indexed by condition_id
-  active_fix_tasks: {
-    [condition_id: string]: ActiveFixTask[];
-  };
-
-  // Final validation state
-  final_validation_state: {
-    validation_attempts: number;
-    last_validation_score: number; // 0-100
-    validation_history: ValidationAttempt[];
-    human_escalation_triggered: boolean;
-  };
-
-  // Audit trail
-  condition_history: ConditionChange[];
-}
-
-export interface ValidationAttempt {
-  attempt_number: number;
-  timestamp: number;
-  score: number;
-  issues_found: ValidationIssue[];
-  task_id?: string;
-}
-
-export interface ValidationIssue {
-  category: 'accuracy' | 'entropy' | 'redundancy' | 'scope_creep' | 'requirements' | 'code_quality';
-  severity: 'critical' | 'high' | 'medium' | 'low';
-  description: string;
-  file?: string;
-  line?: number;
-  suggestion?: string;
-}
-
-export interface ConditionChange {
-  condition_id: string;
-  timestamp: number;
-  old_status: ConditionStatus;
-  new_status: ConditionStatus;
-  old_fingerprint: string;
-  new_fingerprint: string;
-  reason: string;
-}
-
-export interface ConditionEvaluation {
-  condition_id: string;
-  status: ConditionStatus;
-  fingerprint: string;
-  blocking_issues: BlockingIssue[];
-  metadata?: Record<string, unknown>;
-}
+// Re-export types from modular prConditions for backward compatibility
+export type {
+  ConditionStatus,
+  ConditionState,
+  BlockingIssue,
+  ActiveFixTask,
+  PRConditionState,
+  ValidationAttempt,
+  ValidationIssue,
+  ConditionChange,
+  ConditionEvaluation
+} from './prConditions/types.js';
 
 // ============================================================================
 // PR Condition State Service
@@ -136,10 +75,25 @@ export class PRConditionStateService {
   // Evaluation locking to prevent race conditions
   private readonly evaluationLocks: Map<number, Promise<void>> = new Map();
 
+  // Modular evaluators (new architecture)
+  private readonly evaluators: Map<string, BaseEvaluator>;
+
   constructor(taskQueue: TaskQueueService) {
     this.db = getDatabase();
     this.github = getGitHubPRService();
     this.taskQueue = taskQueue;
+
+    // Initialize modular evaluators
+    this.evaluators = new Map([
+      ['ci_checks_passing', new CIChecksEvaluator(this.github, this.taskQueue)],
+      ['comments_resolved', new CommentsEvaluator(this.github, this.taskQueue)],
+      ['no_merge_conflicts', new ConflictsEvaluator(this.github, this.taskQueue)],
+      ['branch_updated', new BranchUpdateEvaluator(this.github, this.taskQueue)],
+      ['no_change_requests', new ChangeRequestsEvaluator(this.github, this.taskQueue)],
+      ['task_verification', new TaskVerificationEvaluator(this.github, this.taskQueue)],
+      ['copilot_review_completed', new CopilotReviewEvaluator(this.github, this.taskQueue)],
+      ['final_validation_passed', new FinalValidationEvaluator(this.github, this.taskQueue)]
+    ]);
 
     // Cleanup stale evaluation locks every 5 minutes
     setInterval(() => {
@@ -471,78 +425,9 @@ export class PRConditionStateService {
    * Evaluate Condition 1: CI Checks Passing
    */
   private async evaluateCIChecksCondition(prNumber: number, prStatus?: PRStatus): Promise<ConditionEvaluation> {
-    try {
-      // Reuse prStatus if provided, otherwise fetch
-      if (!prStatus) {
-        prStatus = await this.github.getPRStatus(prNumber);
-      }
-      const checks = prStatus.checks;
-
-      // Find failing checks
-      const failingChecks = checks.filter(check =>
-        check.status === 'failure' || check.status === 'error'
-      );
-
-      if (failingChecks.length === 0) {
-        // All checks passing
-        return {
-          condition_id: 'ci_checks_passing',
-          status: 'met',
-          fingerprint: 'all-checks-passing',
-          blocking_issues: []
-        };
-      }
-
-      // Build blocking issues (store only references, not GitHub data)
-      const blocking_issues: BlockingIssue[] = failingChecks.map(check => {
-        // Prefer check.id (if available), fallback to check.name
-        // Log warning when falling back to name for better debugging
-        if (!check.id) {
-          logger.warn({
-            category: 'pr-workflow',
-            action: 'check_id_missing',
-            message: `Check "${check.name}" has no ID, using name as reference`,
-            details: { check_name: check.name }
-          });
-        }
-        return {
-          type: 'failing_check',
-          github_ref_type: 'check_run' as const,
-          github_ref_id: check.id || check.name,
-          severity: 'high' as const
-        };
-      });
-
-      // Generate fingerprint from failing check names
-      const fingerprint = this.generateFingerprintFromList(
-        failingChecks.map(c => c.name).sort()
-      );
-
-      return {
-        condition_id: 'ci_checks_passing',
-        status: 'unmet',
-        fingerprint,
-        blocking_issues,
-        metadata: { failing_checks: failingChecks }
-      };
-    } catch (error) {
-      logger.error({
-        category: 'pr-workflow',
-        action: 'evaluate_ci_checks_failed',
-        message: `Failed to evaluate CI checks for PR #${prNumber}`,
-        error
-      });
-
-      return {
-        condition_id: 'ci_checks_passing',
-        status: 'not_ready',
-        fingerprint: 'evaluation-error',
-        blocking_issues: [{
-          type: 'evaluation_error',
-          severity: 'high'
-        }]
-      };
-    }
+    // Delegate to modular evaluator
+    const evaluator = this.evaluators.get('ci_checks_passing')!;
+    return evaluator.evaluate(prNumber, prStatus);
   }
 
   /**
@@ -550,263 +435,36 @@ export class PRConditionStateService {
    * Uses GitHub GraphQL API as source of truth for comment resolution
    */
   private async evaluateCommentsCondition(prNumber: number): Promise<ConditionEvaluation> {
-    try {
-      // Query GitHub directly for unresolved comments
-      const hasUnresolved = await this.github.hasUnresolvedComments(prNumber);
-      
-      if (!hasUnresolved) {
-        return {
-          condition_id: 'comments_resolved',
-          status: 'met',
-          fingerprint: 'no-unresolved-comments',
-          blocking_issues: []
-        };
-      }
-
-      // Get details of unresolved comments
-      const unresolvedThreads = await this.github.getUnresolvedComments(prNumber);
-      
-      // Filter out nitpicks
-      const blockingThreads = unresolvedThreads.filter(thread => 
-        thread.comments.length > 0 && 
-        !/\[nitpick\]|\[nit\]/i.test(thread.comments[0].body)
-      );
-
-      if (blockingThreads.length === 0) {
-        return {
-          condition_id: 'comments_resolved',
-          status: 'met',
-          fingerprint: 'only-nitpicks',
-          blocking_issues: []
-        };
-      }
-
-      // Build blocking issues from threads (store only references, not GitHub data)
-      const blocking_issues: BlockingIssue[] = blockingThreads.map(thread => {
-        const firstComment = thread.comments[0];
-        return {
-          type: 'unresolved_comment',
-          github_ref_type: 'comment' as const,
-          github_ref_id: firstComment.id,  // Store comment ID, not body
-          severity: 'high' as const
-        };
-      });
-
-      // Generate fingerprint from comment bodies
-      const fingerprint = this.generateFingerprintFromList(
-        blockingThreads.map(t => t.comments[0].body).sort()
-      );
-
-      return {
-        condition_id: 'comments_resolved',
-        status: 'unmet',
-        fingerprint,
-        blocking_issues,
-        metadata: { 
-          comment_count: blockingThreads.length,
-          nitpick_count: unresolvedThreads.length - blockingThreads.length
-        }
-      };
-    } catch (error) {
-      logger.error({
-        category: 'pr-workflow',
-        action: 'evaluate_comments_failed',
-        message: `Failed to evaluate comments for PR #${prNumber}`,
-        error
-      });
-
-      return {
-        condition_id: 'comments_resolved',
-        status: 'not_ready',
-        fingerprint: 'evaluation-error',
-        blocking_issues: []
-      };
-    }
+    // Delegate to modular evaluator
+    const evaluator = this.evaluators.get('comments_resolved')!;
+    return evaluator.evaluate(prNumber);
   }
 
   /**
    * Evaluate Condition 3: No Merge Conflicts
    */
   private async evaluateMergeConflictsCondition(prNumber: number, prStatus?: PRStatus): Promise<ConditionEvaluation> {
-    try {
-      // Reuse prStatus if provided, otherwise fetch
-      if (!prStatus) {
-        prStatus = await this.github.getPRStatus(prNumber);
-      }
-
-      if (prStatus.mergeable === 'MERGEABLE') {
-        return {
-          condition_id: 'no_merge_conflicts',
-          status: 'met',
-          fingerprint: 'mergeable',
-          blocking_issues: []
-        };
-      }
-
-      if (prStatus.mergeable === 'CONFLICTING') {
-        return {
-          condition_id: 'no_merge_conflicts',
-          status: 'unmet',
-          fingerprint: 'has-conflicts',
-          blocking_issues: [{
-            type: 'merge_conflicts',
-            github_ref_type: 'conflict' as const,
-            severity: 'high'
-          }]
-        };
-      }
-
-      // UNKNOWN state
-      return {
-        condition_id: 'no_merge_conflicts',
-        status: 'not_ready',
-        fingerprint: 'unknown-mergeable-state',
-        blocking_issues: []
-      };
-    } catch (error) {
-      logger.error({
-        category: 'pr-workflow',
-        action: 'evaluate_conflicts_failed',
-        message: `Failed to evaluate merge conflicts for PR #${prNumber}`,
-        error
-      });
-
-      return {
-        condition_id: 'no_merge_conflicts',
-        status: 'not_ready',
-        fingerprint: 'evaluation-error',
-        blocking_issues: []
-      };
-    }
+    // Delegate to modular evaluator
+    const evaluator = this.evaluators.get('no_merge_conflicts')!;
+    return evaluator.evaluate(prNumber, prStatus);
   }
 
   /**
    * Evaluate Condition 4: Branch Updated
    */
   private async evaluateBranchUpdateCondition(prNumber: number, prStatus?: PRStatus): Promise<ConditionEvaluation> {
-    try {
-      // Reuse prStatus if provided, otherwise fetch
-      if (!prStatus) {
-        prStatus = await this.github.getPRStatus(prNumber);
-      }
-
-      // GitHub returns mergeStateStatus in UPPERCASE
-      const mergeState = (prStatus.mergeable_state || '').toUpperCase();
-
-      // Check if branch is behind base
-      if (mergeState === 'BEHIND') {
-        return {
-          condition_id: 'branch_updated',
-          status: 'unmet',
-          fingerprint: 'behind-base',
-          blocking_issues: [{
-            type: 'branch_behind',
-            severity: 'medium'
-          }]
-        };
-      }
-
-      // Check for clean/unstable states (up-to-date)
-      if (mergeState === 'CLEAN' || mergeState === 'UNSTABLE') {
-        return {
-          condition_id: 'branch_updated',
-          status: 'met',
-          fingerprint: 'up-to-date',
-          blocking_issues: []
-        };
-      }
-
-      // Unknown or blocked state - not ready yet
-      return {
-        condition_id: 'branch_updated',
-        status: 'not_ready',
-        fingerprint: `state-${mergeState.toLowerCase() || 'unknown'}`,
-        blocking_issues: []
-      };
-    } catch (error) {
-      logger.error({
-        category: 'pr-workflow',
-        action: 'evaluate_branch_update_failed',
-        message: `Failed to evaluate branch update for PR #${prNumber}`,
-        error
-      });
-
-      return {
-        condition_id: 'branch_updated',
-        status: 'not_ready',
-        fingerprint: 'evaluation-error',
-        blocking_issues: []
-      };
-    }
+    // Delegate to modular evaluator
+    const evaluator = this.evaluators.get('branch_updated')!;
+    return evaluator.evaluate(prNumber, prStatus);
   }
 
   /**
    * Evaluate Condition 5: No Change Requests
    */
   private async evaluateChangeRequestsCondition(prNumber: number, prStatus?: PRStatus): Promise<ConditionEvaluation> {
-    try {
-      // Reuse prStatus if provided, otherwise fetch
-      if (!prStatus) {
-        prStatus = await this.github.getPRStatus(prNumber);
-      }
-      const reviews = prStatus.reviews;
-
-      // Find latest review from each reviewer
-      const latestReviews = new Map<string, typeof reviews[0]>();
-      reviews.forEach(review => {
-        const existing = latestReviews.get(review.author);
-        if (!existing || new Date(review.submittedAt) > new Date(existing.submittedAt)) {
-          latestReviews.set(review.author, review);
-        }
-      });
-
-      // Check for change requests
-      const changeRequests = Array.from(latestReviews.values()).filter(
-        r => r.state === 'CHANGES_REQUESTED'
-      );
-
-      if (changeRequests.length === 0) {
-        return {
-          condition_id: 'no_change_requests',
-          status: 'met',
-          fingerprint: 'no-change-requests',
-          blocking_issues: []
-        };
-      }
-
-      // Build blocking issues
-      const blocking_issues: BlockingIssue[] = changeRequests.map(review => ({
-        type: 'change_requested',
-        github_ref_type: 'review' as const,
-        github_ref_id: review.id,  // Store review ID, not author/body
-        severity: 'high' as const
-      }));
-
-      const fingerprint = this.generateFingerprintFromList(
-        changeRequests.map(r => `${r.author}:${r.submittedAt}`).sort()
-      );
-
-      return {
-        condition_id: 'no_change_requests',
-        status: 'unmet',
-        fingerprint,
-        blocking_issues
-      };
-    } catch (error) {
-      logger.error({
-        category: 'pr-workflow',
-        action: 'evaluate_change_requests_failed',
-        message: `Failed to evaluate change requests for PR #${prNumber}`,
-        error
-      });
-
-      return {
-        condition_id: 'no_change_requests',
-        status: 'not_ready',
-        fingerprint: 'evaluation-error',
-        blocking_issues: []
-      };
-    }
+    // Delegate to modular evaluator
+    const evaluator = this.evaluators.get('no_change_requests')!;
+    return evaluator.evaluate(prNumber, prStatus);
   }
 
   /**
@@ -814,163 +472,18 @@ export class PRConditionStateService {
    * Note: Does not use prStatus as it evaluates task data, not PR data
    */
   private async evaluateTaskVerificationCondition(prNumber: number, _prStatus?: PRStatus): Promise<ConditionEvaluation> {
-    try {
-      // Find the task associated with this PR
-      const tasks = await this.taskQueue.findByPRNumber(prNumber);
-      const task = tasks[0] || null;
-
-      if (!task) {
-        // No task found - this might be a manual PR
-        return {
-          condition_id: 'task_verification',
-          status: 'met',
-          fingerprint: 'no-task-manual-pr',
-          blocking_issues: []
-        };
-      }
-
-      // Check if task has verification results
-      if (task.verification_passed === true) {
-        return {
-          condition_id: 'task_verification',
-          status: 'met',
-          fingerprint: 'verification-passed',
-          blocking_issues: []
-        };
-      }
-
-      if (task.verification_passed === false) {
-        // Verification failed - task needs rework
-        // NOTE: verificationDetails is stored in task.verification_results, not here
-        return {
-          condition_id: 'task_verification',
-          status: 'unmet',
-          fingerprint: 'verification-failed',
-          blocking_issues: [{
-            type: 'verification_failed',
-            severity: 'high',
-          }]
-        };
-      }
-
-      // Verification not yet run or pending
-      return {
-        condition_id: 'task_verification',
-        status: 'not_ready',
-        fingerprint: 'verification-pending',
-        blocking_issues: []
-      };
-    } catch (error) {
-      logger.error({
-        category: 'pr-workflow',
-        action: 'evaluate_task_verification_failed',
-        message: `Failed to evaluate task verification for PR #${prNumber}`,
-        error
-      });
-
-      return {
-        condition_id: 'task_verification',
-        status: 'not_ready',
-        fingerprint: 'evaluation-error',
-        blocking_issues: []
-      };
-    }
+    // Delegate to modular evaluator
+    const evaluator = this.evaluators.get('task_verification')!;
+    return evaluator.evaluate(prNumber);
   }
 
   /**
    * Evaluate Condition 7: Copilot Review Completed
    */
   private async evaluateCopilotReviewCondition(prNumber: number, prStatus?: PRStatus): Promise<ConditionEvaluation> {
-    try {
-      // Reuse prStatus if provided, otherwise fetch
-      if (!prStatus) {
-        prStatus = await this.github.getPRStatus(prNumber);
-      }
-      
-      // Check for formal Copilot reviews
-      const copilotReviews = prStatus.reviews.filter(review =>
-        review.author.toLowerCase().includes('copilot') ||
-        review.author.toLowerCase().includes('github-advanced-security')
-      );
-
-      // Check for Copilot review comments (inline code suggestions)
-      const copilotComments = prStatus.comments.filter(comment =>
-        comment.author.toLowerCase().includes('copilot')
-      );
-
-      // If Copilot left comments, check if they're unresolved using GitHub API
-      if (copilotComments.length > 0) {
-        const unresolvedThreads = await this.github.getUnresolvedComments(prNumber);
-        const copilotUnresolved = unresolvedThreads.filter(thread =>
-          thread.comments.length > 0 &&
-          thread.comments[0].author.toLowerCase().includes('copilot')
-        );
-
-        if (copilotUnresolved.length > 0) {
-          return {
-            condition_id: 'copilot_review_completed',
-            status: 'unmet',
-            fingerprint: this.generateFingerprintFromList(copilotUnresolved.map(t => t.comments[0].body)),
-            blocking_issues: copilotUnresolved.map(thread => ({
-              type: 'copilot_review_comment',
-              github_ref_type: 'comment' as const,
-              github_ref_id: thread.comments[0].id,  // Store comment ID, not body
-              severity: 'high' as const
-            }))
-          };
-        }
-      }
-
-      // If Copilot submitted formal review, check its state
-      if (copilotReviews.length > 0) {
-        const latestReview = copilotReviews[copilotReviews.length - 1];
-        if (latestReview.state === 'CHANGES_REQUESTED') {
-          return {
-            condition_id: 'copilot_review_completed',
-            status: 'unmet',
-            fingerprint: 'copilot-requested-changes',
-            blocking_issues: [{
-              type: 'copilot_changes_requested',
-              github_ref_type: 'review' as const,
-              github_ref_id: latestReview.id,  // Store review ID, not body
-              severity: 'high'
-            }]
-          };
-        }
-        
-        return {
-          condition_id: 'copilot_review_completed',
-          status: 'met',
-          fingerprint: 'copilot-reviewed',
-          blocking_issues: []
-        };
-      }
-
-      // No Copilot interaction yet - condition unmet
-      return {
-        condition_id: 'copilot_review_completed',
-        status: 'unmet',
-        fingerprint: 'awaiting-copilot',
-        blocking_issues: [{
-          type: 'copilot_review_pending',
-          severity: 'medium'
-        }]
-      };
-    } catch (error) {
-      logger.error({
-        category: 'pr-workflow',
-        action: 'evaluate_copilot_review_failed',
-        message: `Failed to evaluate Copilot review for PR #${prNumber}`,
-        error
-      });
-
-      return {
-        condition_id: 'copilot_review_completed',
-        status: 'not_ready',
-        fingerprint: 'evaluation-error',
-        blocking_issues: []
-      };
-    }
+    // Delegate to modular evaluator
+    const evaluator = this.evaluators.get('copilot_review_completed')!;
+    return evaluator.evaluate(prNumber, prStatus);
   }
 
   /**
@@ -978,80 +491,9 @@ export class PRConditionStateService {
    * Only evaluated when ALL other conditions are met
    */
   private async evaluateFinalValidationCondition(prNumber: number, state: PRConditionState): Promise<ConditionEvaluation> {
-    // Check if all OTHER conditions are met
-    const otherConditions = [
-      'ci_checks_passing',
-      'comments_resolved',
-      'no_merge_conflicts',
-      'branch_updated',
-      'no_change_requests',
-      'task_verification',
-      'copilot_review_completed'
-    ] as const;
-
-    const allOtherMet = otherConditions.every(
-      conditionId => state.conditions[conditionId].status === 'met'
-    );
-
-    if (!allOtherMet) {
-      return {
-        condition_id: 'final_validation_passed',
-        status: 'not_ready',
-        fingerprint: 'waiting-for-other-conditions',
-        blocking_issues: []
-      };
-    }
-
-    // Check if validation already passed
-    if (state.final_validation_state.human_escalation_triggered) {
-      return {
-        condition_id: 'final_validation_passed',
-        status: 'unmet',
-        fingerprint: 'escalated-to-human',
-        blocking_issues: [{
-          type: 'human_review_required',
-          severity: 'critical'
-        }]
-      };
-    }
-
-    // Check if validation task exists and passed
-    const prTasks = await this.taskQueue.findByPRNumber(prNumber);
-    const validationTasks = prTasks.filter(t => t.type === 'pr-validation');
-    const latestValidation = validationTasks.sort((a, b) => (b.created_at || 0) - (a.created_at || 0))[0];
-
-    if (latestValidation?.status === 'completed' && latestValidation.verification_passed) {
-      // Validation passed
-      try {
-        const results = JSON.parse(latestValidation.verification_results || '{}');
-        const score = results.score || 0;
-
-        // NOTE: Validation score is stored in task.verification_results, not here
-        return {
-          condition_id: 'final_validation_passed',
-          status: score >= 80 ? 'met' : 'unmet',
-          fingerprint: score >= 80 ? 'validation-passed' : `validation-failed-score-${score}`,
-          blocking_issues: score >= 80 ? [] : [{
-            type: 'validation_failed',
-            severity: 'high',
-          }],
-          metadata: { score, validation_task_id: latestValidation.id }
-        };
-      } catch {
-        // Parse error
-      }
-    }
-
-    // Need validation
-    return {
-      condition_id: 'final_validation_passed',
-      status: 'unmet',
-      fingerprint: `validation-needed-attempt-${state.final_validation_state.validation_attempts}`,
-      blocking_issues: [{
-        type: 'needs_comprehensive_review',
-        severity: 'medium'
-      }]
-    };
+    // Delegate to modular evaluator
+    const evaluator = this.evaluators.get('final_validation_passed')!;
+    return evaluator.evaluate(prNumber, undefined, state);
   }
 
   // ==========================================================================

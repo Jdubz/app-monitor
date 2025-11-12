@@ -10,10 +10,10 @@ Complete setup guides for app-monitor.
 
 ## Additional Setup
 
-- [API Authentication](../API_AUTHENTICATION.md) - API key configuration
-- [Cloudflare Tunnel](../CLOUDFLARE_TUNNEL.md) - Tunnel setup for webhooks
-- [GitHub Webhooks](../GITHUB_WEBHOOKS.md) - Webhook configuration
-- [Google Cloud Logging](../GOOGLE_CLOUD_LOGGING_PERMISSIONS.md) - GCP permissions
+- [API Authentication](../guides/API_AUTHENTICATION.md) - API key configuration
+- [Cloudflare Tunnel](../guides/CLOUDFLARE_TUNNEL.md) - Tunnel setup for webhooks
+- [GitHub Webhooks](../guides/GITHUB_WEBHOOKS.md) - Webhook configuration
+- [Google Cloud Logging](../guides/GOOGLE_CLOUD_LOGGING_PERMISSIONS.md) - GCP permissions
 
 ## Quick Start
 

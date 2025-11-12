@@ -448,6 +448,56 @@ export class DockerManager {
   }
 
   /**
+   * Cleanup orphaned Docker resources (volumes and networks)
+   */
+  async cleanupOrphanedResources(): Promise<{
+    volumesCleaned: number;
+    networksCleaned: number;
+  }> {
+    logger.info({
+      category: 'process',
+      action: 'triggering_orphaned_resource_cleanup',
+      message: 'Triggering orphaned resource cleanup...'
+    });
+
+    const volumesCleaned = await this.cleanupOrphanedVolumes();
+    const networksCleaned = await this.cleanupOrphanedNetworks();
+
+    logger.info({
+      category: 'process',
+      action: 'cleanup_complete_volumescleaned_volumes_networkscl',
+      message: `Cleanup complete: ${volumesCleaned} volumes, ${networksCleaned} networks removed`
+    });
+
+    return { volumesCleaned, networksCleaned };
+  }
+
+  /**
+   * Get container health status
+   */
+  async getContainerHealth(containerId: string): Promise<{
+    healthy: boolean;
+    status?: string;
+    logs?: string;
+  }> {
+    try {
+      const container = this.docker.getContainer(containerId);
+      const inspect = await container.inspect();
+
+      return {
+        healthy: inspect.State.Running,
+        status: inspect.State.Status,
+        logs: await this.getContainerLogs(containerId, 20)
+      };
+    } catch (error) {
+      return {
+        healthy: false,
+        status: 'not_found'
+      };
+    }
+  }
+
+  /**
    * List containers with optional filters
    */
   async listContainers(options?: { all?: boolean; filters?: Record<string, string[]> }): Promise<Docker.ContainerInfo[]> {

@@ -67,19 +67,19 @@ describe('Retry Button Functionality', () => {
         timeout_ms: null
       };
 
-      // Mock taskQueue to return the failed task
-      vi.mocked(dependencies.taskQueue.getTask).mockReturnValue(task);
+      // Mock retryCoordinationService to handle retry successfully
+      vi.mocked(dependencies.retryCoordinationService.retryTask).mockResolvedValue({
+        success: true,
+        message: 'Task queued for retry'
+      });
 
       const result = await manager.retryTask(task.id, 'Manual retry');
 
       expect(result.success).toBe(true);
       expect(result.message).toBe('Task queued for retry');
 
-      // Verify taskQueue.getTask was called
-      expect(dependencies.taskQueue.getTask).toHaveBeenCalledWith(task.id);
-
-      // Verify taskQueue.updateTask was called with the retried task
-      expect(dependencies.taskQueue.updateTask).toHaveBeenCalled();
+      // Verify retryCoordinationService.retryTask was called
+      expect(dependencies.retryCoordinationService.retryTask).toHaveBeenCalledWith(task.id, 'Manual retry');
     });
 
     it('should not allow retry of non-failed tasks', async () => {
@@ -99,8 +99,11 @@ describe('Retry Button Functionality', () => {
         timeout_ms: null
       };
 
-      // Mock taskQueue to return the completed task
-      vi.mocked(dependencies.taskQueue.getTask).mockReturnValue(task);
+      // Mock retryCoordinationService to reject non-failed task
+      vi.mocked(dependencies.retryCoordinationService.retryTask).mockResolvedValue({
+        success: false,
+        message: 'Task is not in failed status'
+      });
 
       const result = await manager.retryTask(task.id, 'Manual retry');
 
@@ -109,8 +112,11 @@ describe('Retry Button Functionality', () => {
     });
 
     it('should not allow retry of non-existent tasks', async () => {
-      // Mock taskQueue to return undefined (task not found)
-      vi.mocked(dependencies.taskQueue.getTask).mockReturnValue(null);
+      // Mock retryCoordinationService to reject non-existent task
+      vi.mocked(dependencies.retryCoordinationService.retryTask).mockResolvedValue({
+        success: false,
+        message: 'Task not found'
+      });
 
       const result = await manager.retryTask('non-existent-task', 'Manual retry');
 
@@ -136,11 +142,11 @@ describe('Retry Button Functionality', () => {
         timeout_ms: null
       };
 
-      // Mock taskQueue to return the task
-      vi.mocked(dependencies.taskQueue.getTask).mockReturnValue(task);
-
-      // Mock the retryManager to return false for this specific case
-      vi.mocked(dependencies.retryManager.canRetryTask).mockReturnValueOnce(false);
+      // Mock retryCoordinationService to reject due to max retries
+      vi.mocked(dependencies.retryCoordinationService.retryTask).mockResolvedValue({
+        success: false,
+        message: 'Task cannot be retried'
+      });
 
       const result = await manager.retryTask(task.id, 'Manual retry');
 

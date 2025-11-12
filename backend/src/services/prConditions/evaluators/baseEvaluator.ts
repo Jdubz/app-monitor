@@ -6,7 +6,7 @@
  */
 
 import type { GitHubPRService, PRStatus } from '../../githubPR.service.js';
-import type { TaskQueueService, Task } from '../../taskQueue.sqlite.js';
+import type { TaskQueueService } from '../../taskQueue.sqlite.js';
 import type { ConditionEvaluation, PRConditionState } from '../types.js';
 import { logger } from '../../../utils/logger.js';
 
@@ -33,13 +33,6 @@ export abstract class BaseEvaluator {
    * Get the condition ID this evaluator handles
    */
   abstract getConditionId(): string;
-
-  /**
-   * Helper to get PR tasks from task queue
-   */
-  protected async getPRTasks(prNumber: number): Promise<Task[]> {
-    return this.taskQueue.getTasksByPR(prNumber);
-  }
 
   /**
    * Helper to log evaluation activity

@@ -199,48 +199,26 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
 
   /**
    * POST /export
-   * Export system data to file
+   * DEPRECATED: Export system data to file
+   * Task persistence layer removed in favor of SQLite
    */
-  router.post('/export', async (req: Request, res: Response) => {
-    try {
-      const { path = './task-export.json' } = req.body;
-      devBotsManager.exportTasks(path);
-      res.json({ success: true, message: `Tasks exported to ${path}` });
-    } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'error_exporting_data_error',
-        message: `Error exporting data: ${error}`,
-        error
-      });
-      res.status(500).json({
-        error: 'Failed to export data',
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
+  router.post('/export', async (_req: Request, res: Response) => {
+    res.status(410).json({
+      error: 'Export functionality deprecated',
+      message: 'Task export/import functionality removed - tasks are now stored in SQLite database'
+    });
   });
 
   /**
    * POST /import
-   * Import system data from file
+   * DEPRECATED: Import system data from file
+   * Task persistence layer removed in favor of SQLite
    */
-  router.post('/import', async (req: Request, res: Response) => {
-    try {
-      const { path = './task-export.json' } = req.body;
-      devBotsManager.importTasks(path);
-      res.json({ success: true, message: `Tasks imported from ${path}` });
-    } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'error_importing_data_error',
-        message: `Error importing data: ${error}`,
-        error
-      });
-      res.status(500).json({
-        error: 'Failed to import data',
-        message: error instanceof Error ? error.message : String(error),
-      });
-    }
+  router.post('/import', async (_req: Request, res: Response) => {
+    res.status(410).json({
+      error: 'Import functionality deprecated',
+      message: 'Task export/import functionality removed - tasks are now stored in SQLite database'
+    });
   });
 
   // ============================================================================

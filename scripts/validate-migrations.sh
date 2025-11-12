@@ -79,8 +79,8 @@ check_migration_files() {
             continue
         fi
         
-        # Check for CREATE TABLE without IF NOT EXISTS
-        if perl -ne 'BEGIN{$found=0;} if (/CREATE\s+TABLE(?!\s+IF\s+NOT\s+EXISTS)/i) { print "$.:$_"; $found=1 } END { exit($found ? 0 : 1) }' "$file"; then
+        # Check for CREATE TABLE without IF NOT EXISTS (skip commented lines)
+        if perl -ne 'BEGIN{$found=0;} if (!/^\s*--/ && /CREATE\s+TABLE(?!\s+IF\s+NOT\s+EXISTS)/i) { print "$.:$_"; $found=1 } END { exit($found ? 0 : 1) }' "$file"; then
             log_error "  ✗ $filename contains CREATE TABLE without IF NOT EXISTS"
             log_error "    This can cause deployment failures if migration tracking is reset"
             ((errors++))

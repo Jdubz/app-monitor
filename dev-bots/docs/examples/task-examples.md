@@ -387,7 +387,7 @@ This document provides comprehensive examples of different types of tasks that c
 
 - [API Endpoints](../api/endpoints.md)
 - [Agent Personalities](../api/agent-personalities.md)
-- [Task Creation Guidelines](../api/task-creation-guidelines.md)
+- [Task Prompt Template](../api/task-prompt-template.md)
 - [System Architecture](../architecture/system-overview.md)
 
 ---

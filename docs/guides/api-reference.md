@@ -410,11 +410,11 @@ socket.on('claude:systemStatusChange', (status) => {
 
 ## 📚 Related Documentation
 
-- [Task Creation Guidelines](task-creation-guidelines.md)
+- [Task Examples](task-examples.md)
 - [Agent Personalities](agent-personalities.md)
-- [Task Prompt Template](task-prompt-template.md)
+- [Task Execution Template](task-execution-template.md)
 - [Worker Onboarding](worker-onboarding.md)
-- [System Architecture](../architecture/system-overview.md)
+- [Dev-Bots Architecture](../architecture/dev-bots-overview.md)
 
 ---
 

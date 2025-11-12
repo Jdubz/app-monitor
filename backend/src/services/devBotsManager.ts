@@ -1,23 +1,20 @@
 import { EventEmitter } from 'events';
-import * as crypto from 'crypto';
 import { logger } from '../utils/logger.js';
 import { config } from '../config.js';
 import { ProcessManager, ProcessInfo } from './processManager.js';
 import Docker from 'dockerode';
 import type { TaskPersistence } from './taskPersistence.js';
 import { TaskQueueService, Task, TaskStatus as SQLiteTaskStatus, TaskExecution } from './taskQueue.sqlite.js';
-// Migration completed - SQLite is the only implementation now
 import { AgentPersonalityManager, AgentPersonality } from './agentPersonalities.js';
+import type { DevBotsStatus } from './statusAggregation.service.js';
 import { TaskPromptTemplateManager } from './taskPromptTemplates.js';
 import { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js';
 import { EnhancedTaskData } from './taskMetadataFields.js';
 import { WorkspaceSyncManager, SyncOptions, SyncResult } from './workspaceSyncManager.js';
 import { DockerManager, DockerValidationResult } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
-import { getTokenTrackingService } from './tokenTracking.js';
-// WorkspaceOrchestrator removed - using container isolation instead
 import { MetricsEmitter } from './metricsEmitter.js';
-import { TIME_BASED_GUARDS } from './taskFailureGuards.js';
+
 import { SimpleFailureRecovery } from './failureRecovery.js';
 import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
 import type { ScopeControlService } from './scopeControl.service.js';
@@ -32,8 +29,9 @@ import {
   type AllowedInteractiveModel,
 } from './interactiveSession.service.js';
 import { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
-import { InteractiveSessionStreamManager, InteractiveStreamMessage } from './interactiveSessionStreamManager.js';
+import { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
 import type { InteractiveSessionRecord } from './database.js';
+import type { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
 
 export interface RetryAttempt {
   attemptNumber: number;
@@ -46,16 +44,6 @@ export interface RetryAttempt {
   agentId?: string;
 }
 
-export interface WorkerInfo {
-  id: string;
-  status: 'idle' | 'busy' | 'stopped';
-  lastSeen: number;
-  personality: AgentPersonality;
-  onboardingComplete: boolean;
-  lastOnboardingCheck: number;
-  currentTask?: string;
-}
-
 // TaskStatus and Task interface now imported from taskQueue.sqlite.ts (canonical source per Stabilization Plan)
 // Re-export for compatibility with existing imports
 export type TaskStatus = SQLiteTaskStatus;
@@ -65,32 +53,9 @@ export type { Task } from './taskQueue.sqlite.js';
 // Re-export for backward compatibility
 export type EphemeralWorker = EphemeralWorkerType;
 
-export interface WorkerStatus {
-  id: string;
-  status: 'idle' | 'busy' | 'stopped';
-  currentTask?: string;
-  lastSeen: number;
-  personality?: AgentPersonality; // New: agent personality
-  onboardingComplete?: boolean; // New: onboarding status
-  lastOnboardingCheck?: number; // New: last onboarding check timestamp
-}
-
-export interface DevBotsStatus {
-  systemStatus: 'running' | 'stopped' | 'error';
-  workers: Record<string, WorkerStatus>;
-  queueSize: number;
-  activeTasks: number;
-  uptime: number;
-  workerCount: number;
-  maxWorkers: number;
-  activeWorkerTypes: string[];
-  availableWorkerTypes: string[];
-  tasks: {
-    pending: Task[];
-    active: Task[];
-    completed: Task[];
-  };
-}
+// WorkerStatus and DevBotsStatus moved to statusAggregation.service.ts
+// Re-export for backward compatibility
+export type { WorkerStatus, DevBotsStatus } from './statusAggregation.service.js';
 
 // Scope control classes moved to scopeControl.service.ts
 
@@ -98,33 +63,19 @@ export class DevBotsManager extends EventEmitter {
   private processManager: ProcessManager;
   private docker: Docker;
   private dockerManager: DockerManager;
+  private workerHealthMonitor!: WorkerHealthMonitor;
   private isCoordinatorHealthy: boolean = false;
-  private dockerValidationResult?: DockerValidationResult;
-  private healthCheckInterval?: NodeJS.Timeout;
-  private cleanupInterval?: NodeJS.Timeout;
 
-  // Task management - DEPRECATED (now using SQLite)
-  // private taskQueue: Task[] = [];
-  // private activeTasks = new Map<string, Task>();
-  // private completedTasks: Task[] = [];
-  // private taskIdCounter = 1;
-  // private taskFingerprints = new Map<string, string>();
-  // private fileModificationLocks = new Map<string, string>();
-
-  // Worker management
-  private workers = new Map<string, WorkerInfo>();
-  // ephemeralWorkers now managed by ephemeralWorkerService
-  // Agent selection now handled by AgentSelector (intelligent, task-aware selection)
-
-  // Enhanced services
-  // TaskPersistence removed - using SQLite directly
-  private taskQueue!: TaskQueueService; // SQLite-based queue (replaces in-memory arrays)
+  // Services injected via dependency injection
+  private taskQueue!: TaskQueueService;
+  private taskCreationService!: import('./taskCreation.service.js').TaskCreationService;
+  private statusAggregationService!: import('./statusAggregation.service.js').StatusAggregationService;
+  private retryCoordinationService!: import('./retryCoordination.service.js').RetryCoordinationService;
   private agentManager!: AgentPersonalityManager;
   private templateManager!: TaskPromptTemplateManager;
   private guidelinesManager!: TaskCreationGuidelinesManager;
   private workspaceSyncManager!: WorkspaceSyncManager;
   private retryManager!: RetryManager;
-  // WorkspaceOrchestrator and PushCoordinator removed - using container isolation
   private recovery!: SimpleFailureRecovery;
   private scopeControl!: ScopeControlService;
   private ephemeralWorkerService!: EphemeralWorkerService;
@@ -134,9 +85,13 @@ export class DevBotsManager extends EventEmitter {
   private interactiveSessionService!: InteractiveSessionService;
   private interactiveSessionOrchestrator!: InteractiveSessionOrchestrator;
   private interactiveSessionStreamManager!: InteractiveSessionStreamManager;
-  private taskQueueWorker?: { start: () => void; stop: () => void }; // TaskQueueWorker (imported lazily to avoid circular deps)
+  private systemLifecycleService!: import('./systemLifecycle.service.js').SystemLifecycleService;
+  private systemInitializationService!: import('./systemInitialization.service.js').SystemInitializationService;
+  private interactiveSessionCoordinator!: import('./interactiveSessionCoordinator.service.js').InteractiveSessionCoordinator;
+  private cleanupCoordinator!: import('./cleanupCoordinator.service.js').CleanupCoordinator;
+  private infoQueryService!: import('./infoQuery.service.js').InfoQueryService;
+  private taskQueueWorker?: { start: () => Promise<void>; stop: () => Promise<void> };
   private metricsEmitter?: MetricsEmitter;
-  private interactiveIdleInterval?: NodeJS.Timeout;
 
   // System state
   private startTime = Date.now();
@@ -150,13 +105,14 @@ export class DevBotsManager extends EventEmitter {
     this.dockerManager = dependencies.dockerManager;
     this.docker = dependencies.docker;
     this.taskQueue = dependencies.taskQueue;
+    this.taskCreationService = dependencies.taskCreationService;
+    this.statusAggregationService = dependencies.statusAggregationService;
+    this.retryCoordinationService = dependencies.retryCoordinationService;
     this.agentManager = dependencies.agentManager;
     this.templateManager = dependencies.templateManager;
     this.guidelinesManager = dependencies.guidelinesManager;
     this.workspaceSyncManager = dependencies.workspaceSyncManager;
     this.retryManager = dependencies.retryManager;
-    // WorkspaceOrchestrator removed - using container isolation
-    // TaskPersistence removed - using SQLite directly
     this.scopeControl = dependencies.scopeControl;
     this.ephemeralWorkerService = dependencies.ephemeralWorkerService;
     this.taskExecutionService = dependencies.taskExecutionService;
@@ -164,12 +120,45 @@ export class DevBotsManager extends EventEmitter {
     this.interactiveSessionService = dependencies.interactiveSessionService;
     this.interactiveSessionOrchestrator = dependencies.interactiveSessionOrchestrator;
     this.interactiveSessionStreamManager = dependencies.interactiveSessionStreamManager;
+    this.workerHealthMonitor = dependencies.workerHealthMonitor;
+    this.systemLifecycleService = dependencies.systemLifecycleService;
+    this.systemInitializationService = dependencies.systemInitializationService;
+    this.interactiveSessionCoordinator = dependencies.interactiveSessionCoordinator;
+    this.cleanupCoordinator = dependencies.cleanupCoordinator;
+    this.infoQueryService = dependencies.infoQueryService;
 
     // Initialize maxWorkers from config
     this.maxWorkers = config.devBots.maxWorkers;
 
     // Initialize SimpleFailureRecovery
     this.recovery = new SimpleFailureRecovery(this);
+
+    // Update WorkerHealthMonitor with recovery and emit function
+    // Note: WorkerHealthMonitor is injected but needs recovery instance from DevBotsManager
+    (this.workerHealthMonitor as any).recovery = this.recovery;
+    (this.workerHealthMonitor as any).emit = this.emit.bind(this);
+
+    // Update SystemInitializationService with recovery instance
+    (this.systemInitializationService as any).components.recovery = this.recovery;
+
+    // Update RetryCoordinationService with emit and assignNextTask functions
+    // Note: RetryCoordinationService is injected but needs these callbacks from DevBotsManager
+    (this.retryCoordinationService as any).emitEvent = this.emit.bind(this);
+    (this.retryCoordinationService as any).assignNextTask = this.assignNextTask.bind(this);
+
+    // Update SystemLifecycleService with emit and assignNextTask functions
+    // Note: SystemLifecycleService is injected but needs these callbacks from DevBotsManager
+    (this.systemLifecycleService as any).emitEvent = this.emit.bind(this);
+    (this.systemLifecycleService as any).assignNextTask = this.assignNextTask.bind(this);
+
+    // Update SystemInitializationService with emit and endInteractiveSession callbacks
+    // Note: SystemInitializationService is injected but needs these callbacks from DevBotsManager
+    (this.systemInitializationService as any).emitEvent = this.emit.bind(this);
+    (this.systemInitializationService as any).endInteractiveSession = this.endInteractiveSession.bind(this);
+
+    // Update CleanupCoordinator with assignNextTask callback
+    // Note: CleanupCoordinator is injected but needs this callback from DevBotsManager
+    (this.cleanupCoordinator as any).assignNextTask = this.assignNextTask.bind(this);
 
     // Initialize TaskCompletionService with PR workflow orchestrator callback
     // Create no-op implementations for removed dependencies
@@ -218,544 +207,27 @@ export class DevBotsManager extends EventEmitter {
     // Wire recovery into task execution service
     this.taskExecutionService.setRecovery(this.recovery);
 
-    // Validate Docker environment and initialize
-    this.initializeDockerEnvironment();
+    // Wire interactive stream events (delegated to SystemInitializationService)
+    this.systemInitializationService.wireInteractiveStreamEvents();
 
-    // Run async initialization (orphaned task recovery)
-    void this.initializeAsync();
+    // Validate Docker environment and initialize (delegated to SystemInitializationService)
+    void this.systemInitializationService.initializeDockerEnvironment();
 
-    // Listen for retry events
+    // Run async initialization (orphaned task recovery) (delegated to SystemInitializationService)
+    void this.systemInitializationService.initializeAsync();
+
+    // Listen for retry events (delegate to RetryCoordinationService)
     this.retryManager.on('taskReadyForRetry', (task: Task) => {
-      this.handleTaskRetry(task);
+      this.retryCoordinationService.handleTaskRetry(task);
     });
-
-    // Start monitoring loops
-    this.startHeartbeatMonitor();
-    this.startLongRunningTaskMonitor();
 
     // Listen for process status changes
     this.processManager.on('statusChange', (serviceName: string, status: ProcessInfo) => {
       if (serviceName === 'dev-bots') {
         this.emit('systemStatusChange', status);
-        this.updateWorkerHealth();
       }
     });
   }
-
-  // Migration to SQLite completed - method removed
-
-  /**
-   * Initialize and validate Docker environment
-   */
-  private async initializeDockerEnvironment(): Promise<void> {
-    try {
-      logger.info({
-      category: 'process',
-      action: 'validating_docker_environment',
-      message: 'Validating Docker environment...'
-    });
-      this.dockerValidationResult = await this.dockerManager.validateDockerEnvironment();
-
-      if (!this.dockerValidationResult.isValid) {
-        logger.error({
-          category: 'process',
-          action: 'docker_validation_failed',
-          message: 'Docker validation failed',
-          details: { errors: this.dockerValidationResult.errors }
-        });
-        this.emit('dockerError', {
-          type: 'validation_failed',
-          errors: this.dockerValidationResult.errors,
-          message: 'Docker environment validation failed. Dev-Bots cannot start.'
-        });
-        return;
-      }
-
-      // Log warnings if any
-      if (this.dockerValidationResult.warnings.length > 0) {
-        logger.warn({
-          category: 'process',
-          action: 'docker_validation_warnings',
-          message: 'Docker validation warnings',
-          details: { warnings: this.dockerValidationResult.warnings }
-        });
-        this.emit('dockerWarning', {
-          warnings: this.dockerValidationResult.warnings
-        });
-      }
-
-      // Ensure required images are available
-      logger.info({
-      category: 'process',
-      action: 'checking_required_docker_images',
-      message: 'Checking required Docker images...'
-    });
-      const imageResult = await this.dockerManager.ensureRequiredImages();
-
-      if (!imageResult.success) {
-        logger.error({
-          category: 'process',
-          action: 'required_docker_images_not_available',
-          message: 'Required Docker images not available',
-          details: { errors: imageResult.errors }
-        });
-        this.emit('dockerError', {
-          type: 'images_missing',
-          errors: imageResult.errors,
-          message: 'Required Docker images are not available'
-        });
-        return;
-      }
-
-      logger.info({
-        category: 'process',
-        action: 'docker_environment_validated_successfully',
-        message: 'Docker environment validated successfully',
-        details: { info: this.dockerValidationResult.info }
-      });
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_initialize_docker_environment',
-      message: 'Failed to initialize Docker environment:',
-      error: error
-    });
-      this.emit('dockerError', {
-        type: 'initialization_failed',
-        error: error instanceof Error ? error.message : String(error),
-        message: 'Failed to initialize Docker environment'
-      });
-    }
-  }
-
-  /**
-   * Initialize async components (orphaned task recovery)
-   * Dependencies are now injected, so this only runs startup recovery
-   */
-  private async initializeAsync(): Promise<void> {
-    // Migration to SQLite completed - going straight to recovery
-
-    // Recover orphaned tasks from previous server crash/restart
-    const orphanedTaskIds = this.taskQueue.recoverOrphanedTasks();
-
-    if (orphanedTaskIds.length > 0) {
-      logger.warn({
-        category: 'recovery',
-        action: 'orphaned_tasks_recovered_on_startup',
-        message: `Recovered ${orphanedTaskIds.length} orphaned tasks on startup`,
-        details: {
-          taskIds: orphanedTaskIds,
-          willAttemptRecovery: true
-        }
-      });
-
-      // Attempt recovery for each orphaned task
-      for (const taskId of orphanedTaskIds) {
-        const task = this.taskQueue.getTask(taskId);
-        if (task && task.status === 'failed' && this.recovery) {
-          try {
-            const recoveryResult = await this.recovery.attemptRecovery({
-              task: task as Task & { metadata?: Record<string, unknown> },
-              failurePattern: {
-                name: 'server_restart',
-                description: 'Task was orphaned when server restarted or crashed',
-                patterns: [],
-                immediateFailure: false,
-                category: 'system_error',
-                suggestedFix: 'Task was orphaned due to server restart. Cleanup and retry.'
-              },
-              stderr: task.error || 'Task orphaned due to server restart',
-              stdout: '',
-              exitCode: -1
-            });
-
-            if (recoveryResult.recovered) {
-              logger.info({
-                category: 'recovery',
-                action: 'orphaned_task_recovery_initiated',
-                message: `Initiated recovery for orphaned task ${taskId}`,
-                details: {
-                  taskId,
-                  cleanupTaskId: recoveryResult.cleanupTaskId
-                }
-              });
-            }
-          } catch (error) {
-            logger.error({
-              category: 'recovery',
-              action: 'orphaned_task_recovery_failed',
-              message: `Failed to attempt recovery for orphaned task ${taskId}`,
-              error: error instanceof Error ? error.message : String(error)
-            });
-          }
-        }
-      }
-    }
-
-    logger.info({
-      category: 'process',
-      action: 'async_initialization_complete',
-      message: 'Async initialization complete: orphaned task recovery finished'
-    });
-
-    // Start background task queue worker
-    await this.startTaskQueueWorker();
-
-    // Start metrics emitter
-    this.startMetricsEmitter();
-  }
-
-  /**
-   * Start background task queue worker
-   */
-  private async startTaskQueueWorker(): Promise<void> {
-    try {
-      // Dynamically import to avoid circular dependency
-      const { TaskQueueWorker } = await import('./taskQueueWorker.js');
-
-      this.taskQueueWorker = new TaskQueueWorker(this.taskExecutionService, {
-        pollIntervalMs: 5000, // Poll every 5 seconds
-        enabled: true,
-        maxConsecutiveFailures: 10
-      });
-
-      await this.taskQueueWorker.start();
-
-      logger.info({
-        category: 'process',
-        action: 'task_queue_worker_started',
-        message: 'Background task queue worker started successfully'
-      });
-    } catch (error) {
-      logger.error({
-        category: 'process',
-        action: 'task_queue_worker_start_failed',
-        message: 'Failed to start background task queue worker',
-        error
-      });
-    }
-  }
-
-  private startMetricsEmitter(): void {
-    try {
-      this.metricsEmitter = new MetricsEmitter(
-        this.taskQueue,
-        this.ephemeralWorkerService,
-        60000
-      );
-      this.metricsEmitter.start();
-      logger.info({
-        category: 'process',
-        action: 'metrics_emitter_started',
-        message: 'Background metrics emitter started successfully'
-      });
-    } catch (error) {
-      logger.error({
-        category: 'process',
-        action: 'metrics_emitter_start_failed',
-        message: 'Failed to start metrics emitter',
-        error
-      });
-    }
-  }
-
-  /**
-   * Start heartbeat monitoring to detect stalled workers
-   *
-   * NOTE: Disabled for ephemeral containers (docker run --rm)
-   * Ephemeral containers are monitored via Docker process exit codes instead.
-   * This avoids false positives from containers that don't send heartbeats.
-   *
-   * If persistent workers are added in the future, re-enable this monitor.
-   */
-  private startHeartbeatMonitor(): void {
-    // DISABLED: Ephemeral containers don't send heartbeats
-    // They auto-cleanup on exit (--rm flag) and are monitored via process.on('close')
-
-    logger.info({
-      category: 'process',
-      action: 'heartbeat_monitor_disabled',
-      message: 'Worker heartbeat monitor disabled (using Docker process monitoring for ephemeral containers)'
-    });
-
-    // Uncomment below to enable heartbeat monitoring for persistent workers:
-    /*
-    setInterval(() => {
-      const stalledWorkers = this.taskQueue.detectStalledWorkers();
-      if (stalledWorkers.length > 0) {
-        logger.warn({
-          category: 'process',
-          action: 'stalled_workers_detected',
-          message: `Detected ${stalledWorkers.length} stalled workers (heartbeat timeout)`,
-          details: stalledWorkers
-        });
-
-        for (let i = 0; i < stalledWorkers.length; i++) {
-          this.assignNextTask();
-        }
-      }
-    }, 60000);
-    */
-  }
-
-  /**
-   * Start long-running task monitoring with automatic cleanup for stuck tasks
-   */
-  private startLongRunningTaskMonitor(): void {
-    setInterval(async () => {
-      // Soft timeout warning (30 minutes)
-      const longRunning = this.taskQueue.detectLongRunningTasks(TIME_BASED_GUARDS.SOFT_TIMEOUT_MS);
-      if (longRunning.length > 0) {
-        logger.warn({
-          category: 'process',
-          action: 'long_running_tasks_detected',
-          message: `Found ${longRunning.length} tasks running longer than ${TIME_BASED_GUARDS.SOFT_TIMEOUT_MS / 60000} minutes`,
-          details: longRunning.map(task => ({
-            id: task.id,
-            title: task.title,
-            duration: task.duration_ms,
-            durationMinutes: Math.round(task.duration_ms / 60000)
-          })) as unknown as Record<string, unknown>
-        });
-      }
-
-      // Hard timeout - force cleanup (1 hour)
-      const stuck = this.taskQueue.detectLongRunningTasks(TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS);
-      if (stuck.length > 0) {
-        logger.error({
-          category: 'process',
-          action: 'stuck_tasks_detected_auto_cleanup',
-          message: `Found ${stuck.length} tasks stuck for >${TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS / 60000} minutes. Auto-failing and cleaning up.`,
-          details: stuck.map(task => ({
-            id: task.id,
-            title: task.title,
-            duration: task.duration_ms,
-            durationHours: Math.round(task.duration_ms / 3600000)
-          })) as unknown as Record<string, unknown>
-        });
-
-        // Cleanup each stuck task
-        for (const task of stuck) {
-          try {
-            // Force kill any Docker containers for this task
-            await this.ephemeralWorkerService.cleanupStuckTaskContainers(task.id);
-
-            // Get full task details to check for error
-            const fullTask = this.taskQueue.getTask(task.id);
-            if (!fullTask) {
-              logger.warn({
-                category: 'process',
-                action: 'stuck_task_not_found',
-                message: `Stuck task ${task.id} not found in database`
-              });
-              continue;
-            }
-
-            // Check if task has an existing error that indicates a failure pattern
-            // This handles cases where task failed but got stuck in "running" state
-            const taskError = fullTask.error || '';
-            const { detectFailurePattern } = await import('./taskFailureGuards.js');
-            const failurePattern = detectFailurePattern(taskError, '', 0);
-
-            if (failurePattern) {
-              logger.info({
-                category: 'recovery',
-                action: 'stuck_task_has_failure_pattern',
-                message: `Stuck task ${task.id} has detectable failure pattern: ${failurePattern.name}`,
-                details: {
-                  taskId: task.id,
-                  pattern: failurePattern.name,
-                  category: failurePattern.category
-                }
-              });
-
-              // Attempt recovery if enabled
-              const { config } = await import('../config.js');
-              if (config.recovery.enabled && this.recovery) {
-                if (config.recovery.dryRun) {
-                  logger.info({
-                    category: 'recovery',
-                    action: 'dry_run_would_attempt_recovery_for_stuck_task',
-                    message: `[DRY RUN] Would attempt automatic recovery for stuck task ${task.id}`,
-                    details: {
-                      taskId: task.id,
-                      taskTitle: task.title,
-                      failurePattern: failurePattern.name,
-                      category: failurePattern.category,
-                      suggestedFix: failurePattern.suggestedFix,
-                      stuckDuration_minutes: Math.round(task.duration_ms / 60000)
-                    }
-                  });
-                } else {
-                  // Actually attempt recovery
-                  try {
-                    const recoveryResult = await this.recovery.attemptRecovery({
-                      task: fullTask as Task & { metadata?: Record<string, unknown> },
-                      failurePattern,
-                      stderr: taskError,
-                      stdout: '',
-                      exitCode: 0
-                    });
-
-                    if (recoveryResult.recovered) {
-                      logger.info({
-                        category: 'recovery',
-                        action: 'recovery_initiated_for_stuck_task',
-                        message: `Initiated automatic recovery for stuck task ${task.id}`,
-                        details: {
-                          taskId: task.id,
-                          cleanupTaskId: recoveryResult.cleanupTaskId,
-                          failurePattern: failurePattern.name
-                        }
-                      });
-                    }
-                  } catch (recoveryError) {
-                    logger.error({
-                      category: 'recovery',
-                      action: 'recovery_attempt_failed_for_stuck_task',
-                      message: `Failed to attempt recovery for stuck task ${task.id}: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`,
-                      details: {
-                        taskId: task.id,
-                        error: recoveryError instanceof Error ? recoveryError.message : String(recoveryError)
-                      }
-                    });
-                  }
-                }
-              }
-            }
-
-            // Mark task as failed in database
-            this.taskQueue.failTask(
-              task.id,
-              `Task stuck for ${Math.round(task.duration_ms / 60000)} minutes (exceeded ${TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS / 60000}min timeout). Auto-failed by failure guard.`
-            );
-
-            logger.info({
-              category: 'process',
-              action: 'stuck_task_cleaned_up',
-              message: `Successfully cleaned up stuck task ${task.id}`,
-              details: {
-                taskId: task.id,
-                duration_minutes: Math.round(task.duration_ms / 60000),
-                cleanup_reason: 'ABSOLUTE_MAX_DURATION_EXCEEDED',
-                hadFailurePattern: failurePattern?.name || 'none'
-              }
-            });
-          } catch (error) {
-            logger.error({
-              category: 'process',
-              action: 'stuck_task_cleanup_failed',
-              message: `Failed to cleanup stuck task ${task.id}: ${error instanceof Error ? error.message : String(error)}`,
-              details: {
-                taskId: task.id,
-                error: error instanceof Error ? error.message : String(error)
-              }
-            });
-          }
-        }
-      }
-    }, 300000); // Check every 5 minutes
-
-    logger.info({
-      category: 'process',
-      action: 'long_running_task_monitor_started',
-      message: `Task monitor started - Soft warn: ${TIME_BASED_GUARDS.SOFT_TIMEOUT_MS / 60000}min, Hard fail: ${TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS / 60000}min`,
-      details: {
-        checkInterval_ms: 300000,
-        softTimeout_minutes: TIME_BASED_GUARDS.SOFT_TIMEOUT_MS / 60000,
-      hardTimeout_minutes: TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS / 60000
-      }
-    });
-  }
-
-  private wireInteractiveStreamEvents(): void {
-    this.interactiveSessionStreamManager.on('message', (message: InteractiveStreamMessage) => {
-      if (message.kind === 'stdout' || message.kind === 'stderr') {
-        try {
-          this.interactiveSessionService.recordActivity(message.sessionId, 'agent');
-        } catch (error) {
-          logger.warn({
-            category: 'system',
-            action: 'activity_record_failed',
-            message: `Failed to record agent activity for session ${message.sessionId}`,
-            error,
-          });
-        }
-      }
-    });
-
-    this.interactiveSessionStreamManager.on('error', ({ sessionId, error }) => {
-      logger.error({
-        category: 'system',
-        action: 'stream_error',
-        message: `Interactive stream error for session ${sessionId}`,
-        error,
-      });
-      const session = this.interactiveSessionService.getSessionById(sessionId);
-      if (session && session.status !== 'ended') {
-        this.interactiveSessionService.endSession(sessionId, error.message, 'error');
-      }
-    });
-
-    this.interactiveSessionStreamManager.on('closed', ({ sessionId, reason }) => {
-      const session = this.interactiveSessionService.getSessionById(sessionId);
-      if (session && session.status !== 'ended') {
-        this.interactiveSessionService.setStatus(sessionId, 'disconnecting', {
-          terminationReason: reason,
-        });
-      }
-    });
-  }
-
-  private startInteractiveIdleWatchdog(): void {
-    if (this.interactiveIdleInterval) {
-      clearInterval(this.interactiveIdleInterval);
-    }
-    this.interactiveIdleInterval = setInterval(() => {
-      const session = this.interactiveSessionService.getActiveSession();
-      if (!session) {
-        return;
-      }
-      const lastActivity = this.getInteractiveLastActivity(session);
-      if (!lastActivity) {
-        return;
-      }
-      const idleTimeout = this.interactiveSessionService.getIdleTimeoutMs();
-      const idleDuration = Date.now() - lastActivity;
-      if (idleDuration >= idleTimeout) {
-        logger.warn({
-          category: 'system',
-          action: 'idle_timeout',
-          message: 'Interactive session exceeded idle timeout',
-          details: {
-            sessionId: session.id,
-            idleDurationMs: idleDuration,
-            idleTimeoutMs: idleTimeout,
-          },
-        });
-        void this.endInteractiveSession(session.id, 'Idle timeout (no activity)').catch((error) => {
-          logger.error({
-            category: 'system',
-            action: 'idle_timeout_cleanup_failed',
-            message: `Failed to stop idle interactive session ${session.id}`,
-            error,
-          });
-        });
-      }
-    }, 30000);
-  }
-
-  private getInteractiveLastActivity(session: InteractiveSessionRecord): number | null {
-    const timestamps = [session.startedAt, session.lastUserActivityAt, session.lastAgentActivityAt]
-      .map((value) => (value ? Date.parse(value) : Number.NaN))
-      .filter((value) => Number.isFinite(value)) as number[];
-    if (!timestamps.length) {
-      return null;
-    }
-    return Math.max(...timestamps);
-  }
-
-  // cleanupStuckTaskContainers moved to EphemeralWorkerService
 
   /**
    * Get queue metrics for monitoring
@@ -789,65 +261,44 @@ export class DevBotsManager extends EventEmitter {
   // Interactive Sessions
   // ============================================================================
 
+  /**
+   * Interactive session methods - all delegated to InteractiveSessionCoordinator
+   */
   public getActiveInteractiveSession(): InteractiveSessionRecord | null {
-    return this.interactiveSessionService.getActiveSession();
+    return this.interactiveSessionCoordinator.getActiveSession();
   }
 
   public getInteractiveSession(sessionId: string): InteractiveSessionRecord | null {
-    return this.interactiveSessionService.getSessionById(sessionId);
+    return this.interactiveSessionCoordinator.getSession(sessionId);
   }
 
   public listInteractiveSessions(limit = 20): InteractiveSessionRecord[] {
-    return this.interactiveSessionService.listRecentSessions(limit);
+    return this.interactiveSessionCoordinator.listSessions(limit);
   }
 
   public async launchInteractiveSession(
     options: StartInteractiveSessionOptions,
   ): Promise<InteractiveSessionRecord> {
-    const session = this.interactiveSessionService.startSession(options);
-    try {
-      const containerId = await this.interactiveSessionOrchestrator.start(session);
-      this.interactiveSessionService.setStatus(session.id, 'running', { containerId });
-      await this.interactiveSessionStreamManager.attach(session.id, containerId);
-      const updated = this.interactiveSessionService.getSessionById(session.id);
-      if (!updated) {
-        throw new Error('Interactive session missing after launch');
-      }
-      return updated;
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Interactive session launch failed';
-      this.interactiveSessionService.endSession(session.id, message, 'error');
-      await this.interactiveSessionStreamManager.detach(session.id).catch(() => {
-        /* noop */
-      });
-      throw error;
-    }
+    return await this.interactiveSessionCoordinator.launchSession(options);
   }
 
   public async endInteractiveSession(sessionId: string, reason?: string): Promise<void> {
-    const session = this.interactiveSessionService.getSessionById(sessionId);
-    if (session?.containerId) {
-      await this.interactiveSessionOrchestrator.stop(session.containerId);
-    }
-    await this.interactiveSessionStreamManager.detach(sessionId);
-    this.interactiveSessionService.endSession(sessionId, reason);
+    await this.interactiveSessionCoordinator.endSession(sessionId, reason);
   }
 
   public sendInteractiveInput(sessionId: string, payload: string): void {
-    this.interactiveSessionStreamManager.sendInput(sessionId, payload);
-    this.interactiveSessionService.recordActivity(sessionId, 'user');
+    this.interactiveSessionCoordinator.sendInput(sessionId, payload);
   }
 
   public sendInteractiveSignal(
     sessionId: string,
     signal: 'interrupt' | 'terminate' = 'interrupt',
   ): void {
-    this.interactiveSessionStreamManager.sendSignal(sessionId, signal);
-    this.interactiveSessionService.recordActivity(sessionId, 'user');
+    this.interactiveSessionCoordinator.sendSignal(sessionId, signal);
   }
 
   public recordInteractiveActivity(sessionId: string, kind: ActivityKind): void {
-    this.interactiveSessionService.recordActivity(sessionId, kind);
+    this.interactiveSessionCoordinator.recordActivity(sessionId, kind);
   }
 
   public updateInteractiveContext(
@@ -855,15 +306,15 @@ export class DevBotsManager extends EventEmitter {
     contextSnapshot?: unknown,
     metadata?: Record<string, unknown>,
   ): void {
-    this.interactiveSessionService.updateContext(sessionId, contextSnapshot, metadata);
+    this.interactiveSessionCoordinator.updateContext(sessionId, contextSnapshot, metadata);
   }
 
   public getInteractiveIdleTimeoutMs(): number {
-    return this.interactiveSessionService.getIdleTimeoutMs();
+    return this.interactiveSessionCoordinator.getIdleTimeoutMs();
   }
 
   public getAllowedInteractiveModels(): AllowedInteractiveModel[] {
-    return this.interactiveSessionService.getAllowedModels();
+    return this.interactiveSessionCoordinator.getAllowedModels();
   }
 
   /**
@@ -879,105 +330,11 @@ export class DevBotsManager extends EventEmitter {
     });
   }
 
-  private startHealthCheck(): void {
-    this.healthCheckInterval = setInterval(async () => {
-      await this.checkWorkerHealth();
-    }, 5000); // Check every 5 seconds
-  }
-  
-  private startCleanupScheduler(): void {
-    this.cleanupInterval = setInterval(async () => {
-      await this.checkCleanupSchedules();
-    }, 60000); // Check every minute
-  }
-
-  private async checkWorkerHealth(): Promise<boolean> {
-    try {
-      // Since we're not using Docker, just check if workers are idle or busy
-      // and update their lastSeen timestamp
-      const wasHealthy = this.isCoordinatorHealthy;
-      
-      // Update lastSeen for all workers that are not stopped
-      this.workers.forEach(worker => {
-        if (worker.status !== 'stopped') {
-          worker.lastSeen = Date.now();
-        }
-      });
-      
-      // System health is now managed by startSystem/stopSystem methods
-      // Don't override the isCoordinatorHealthy flag here
-      
-      if (wasHealthy !== this.isCoordinatorHealthy) {
-        this.emit('coordinatorHealthChange', this.isCoordinatorHealthy);
-        logger.info({
-      category: 'process',
-      action: 'worker_health_changed',
-      message: `Worker health changed: ${this.isCoordinatorHealthy ? 'healthy' : 'unhealthy'}`
-    });
-      }
-      
-      return this.isCoordinatorHealthy;
-    } catch (error) {
-      const wasHealthy = this.isCoordinatorHealthy;
-      this.isCoordinatorHealthy = false;
-      
-      // Mark all workers as stopped on error
-      this.workers.forEach(worker => {
-        worker.status = 'stopped';
-        worker.currentTask = undefined;
-      });
-      
-      if (wasHealthy !== this.isCoordinatorHealthy) {
-        this.emit('coordinatorHealthChange', this.isCoordinatorHealthy);
-        logger.warn({
-      category: 'process',
-      action: 'worker_health_check_failed',
-      message: 'Worker health check failed:',
-      details: { error }
-    });
-      }
-      
-      return false;
-    }
-  }
-
-  private async updateWorkerHealth(): Promise<void> {
-    try {
-      const processInfo = await this.processManager.getServiceStatus('dev-bots');
-      if (processInfo?.status !== 'running') {
-        this.isCoordinatorHealthy = false;
-      }
-    } catch (error) {
-      this.isCoordinatorHealthy = false;
-    }
-  }
-  
-  private async checkCleanupSchedules(): Promise<void> {
-    try {
-      const dueTasks = this.scopeControl.checkCleanupSchedules();
-      for (const taskType of dueTasks) {
-        const cleanupTask = this.scopeControl.createCleanupTask(taskType, Date.now());
-        await this.taskQueue.createTask(cleanupTask);
-        logger.info({
-      category: 'process',
-      action: 'cleanup_scheduled_tasktype_cleanup_task_cleanuptas',
-      message: `[CLEANUP] Scheduled ${taskType} cleanup task: ${cleanupTask.id}`
-    });
-      }
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_check_cleanup_schedules',
-      message: 'Failed to check cleanup schedules:',
-      error: error
-    });
-    }
-  }
-
   // Task Management Methods
   /**
    * Add a new task to the queue (unified method with SQLite)
    * Supports both simple and comprehensive task data
+   * Delegated to TaskCreationService
    */
   async addTask(taskData: EnhancedTaskData | {
     type: string;
@@ -1009,143 +366,23 @@ export class DevBotsManager extends EventEmitter {
       suggestions: string[];
     };
   }> {
-    // Normalize task data to EnhancedTaskData format
-    const normalizedData: EnhancedTaskData = {
-      type: taskData.type,
-      title: taskData.title,
-      description: ('description' in taskData && taskData.description) || '',
-      documentation: ('documentation' in taskData && taskData.documentation) || '',
-      notes: ('notes' in taskData && taskData.notes) || '',
-      project: ('project' in taskData && taskData.project) || 'dev-monitor',
-      assignedAgent: ('assignedAgent' in taskData && taskData.assignedAgent) || 'backend-specialist',
-      files: ('files' in taskData && taskData.files) || [],
-      dependencies: ('dependencies' in taskData && taskData.dependencies) || [],
-      acceptanceCriteria: (() => {
-        if ('acceptanceCriteria' in taskData) {
-          if (Array.isArray(taskData.acceptanceCriteria)) {
-            return taskData.acceptanceCriteria;
-          }
-          if (typeof taskData.acceptanceCriteria === 'string') {
-            return [taskData.acceptanceCriteria];
-          }
-        }
-        return [];
-      })(),
-      architectureReferences: ('architectureReferences' in taskData && taskData.architectureReferences) || [],
-      longTermGoals: ('longTermGoals' in taskData && taskData.longTermGoals) || [],
-      estimatedEffort: ('estimatedEffort' in taskData && taskData.estimatedEffort) || { hours: 1, complexity: 'simple' as const, confidence: 'medium' as const },
-      prerequisites: ('prerequisites' in taskData && taskData.prerequisites) || [],
-      contextBoundaries: ('contextBoundaries' in taskData && taskData.contextBoundaries) || { mustNotChange: [], mustNotAffect: [], integrationPoints: [] },
-      validationSteps: ('validationSteps' in taskData && taskData.validationSteps) || [],
-      rollbackPlan: ('rollbackPlan' in taskData && taskData.rollbackPlan) || [],
-      successMetrics: ('successMetrics' in taskData && taskData.successMetrics) || [],
-      testingRequirements: ('testingRequirements' in taskData && taskData.testingRequirements) || [],
-      documentationRequirements: ('documentationRequirements' in taskData && taskData.documentationRequirements) || [],
-      requiredSkills: ('requiredSkills' in taskData && taskData.requiredSkills) || [],
-      relatedTasks: ('relatedTasks' in taskData && taskData.relatedTasks) || [],
-      blockers: ('blockers' in taskData && taskData.blockers) || [],
-      assumptions: ('assumptions' in taskData && taskData.assumptions) || [],
-      risks: ('risks' in taskData && taskData.risks) || [],
-      alternatives: ('alternatives' in taskData && taskData.alternatives) || [],
-      ...(('parentInitiative' in taskData && taskData.parentInitiative) && { parentInitiative: taskData.parentInitiative })
-    };
+    // Delegate to TaskCreationService
+    const result = await this.taskCreationService.createTask(taskData);
 
-    // Check for duplicate task submission
-    const fingerprint = this.calculateTaskFingerprint(normalizedData);
-    const duplicateTask = await this.taskQueue.checkDuplicateTask(fingerprint);
-    if (duplicateTask) {
-      logger.warn({
-        category: 'process',
-        action: 'duplicate_task_detected',
-        message: `Duplicate task detected: "${normalizedData.title}" matches existing task ${duplicateTask.id} (${duplicateTask.status})`
-      });
-      throw new Error(`Duplicate task detected. Task "${duplicateTask.title}" (${duplicateTask.id}) is already ${duplicateTask.status}. Wait for it to complete or modify your task to be unique.`);
-    }
-
-    // Validate task data against guidelines
-    const validation = this.guidelinesManager.validateTaskData(normalizedData, normalizedData.type);
-
-    if (!validation.isValid) {
-      logger.warn({
-        category: 'process',
-        action: 'task_validation_failed',
-        message: `Task validation failed: ${validation.errors.join(', ')}`
-      });
-      throw new Error(`Task validation failed: ${validation.errors.join(', ')}`);
-    }
-
-    // Log warnings and suggestions
-    if (validation.warnings.length > 0) {
-      logger.warn({
-        category: 'process',
-        action: 'task_validation_warnings',
-        message: `Task validation warnings: ${validation.warnings.join(', ')}`
-      });
-    }
-    if (validation.suggestions.length > 0) {
-      logger.info({
-        category: 'process',
-        action: 'task_validation_suggestions',
-        message: `Task validation suggestions: ${validation.suggestions.join(', ')}`
-      });
-    }
-
-    // Create task in SQLite queue
-    const sqliteTask = this.taskQueue.createTask({
-      type: normalizedData.type,
-      title: normalizedData.title,
-      description: normalizedData.description,
-      documentation: normalizedData.documentation,
-      notes: normalizedData.notes,
-      assigned_agent: normalizedData.assignedAgent,
-      priority: ('priority' in taskData && taskData.priority !== undefined) ? taskData.priority : 5,
-      estimated_hours: normalizedData.estimatedEffort?.hours,
-      complexity: normalizedData.estimatedEffort?.complexity,
-      files: normalizedData.files,
-      acceptance_criteria: normalizedData.acceptanceCriteria,
-      architecture_references: normalizedData.architectureReferences,
-      validation_steps: normalizedData.validationSteps,
-      success_metrics: normalizedData.successMetrics,
-      fingerprint,
-      // Recovery metadata fields
-      is_repair_bot: ('metadata' in taskData && taskData.metadata?.isRepairBot) || false,
-      original_task_id: ('metadata' in taskData && taskData.metadata?.originalTaskId) || undefined,
-      repair_stage: ('metadata' in taskData && taskData.metadata?.repairStage) || undefined
-    });
-
-    // Return SQLite task directly (no conversion needed)
-    this.emit('taskAdded', sqliteTask);
-    logger.info({
-      category: 'process',
-      action: 'task_added',
-      message: `Task added: ${sqliteTask.id} - ${normalizedData.title} (Agent: ${normalizedData.assignedAgent || 'auto-assign'}, fingerprint: ${fingerprint.substring(0, 8)}...)`
-    });
+    // Emit event for task added
+    this.emit('taskAdded', result.task);
 
     // Try to assign in background (fire-and-forget to prevent API blocking)
     this.assignNextTask().catch(error => {
       logger.error({
         category: 'process',
         action: 'background_assignment_failed',
-        message: `Background task assignment failed for ${sqliteTask.id}`,
+        message: `Background task assignment failed for ${result.task.id}`,
         error
       });
     });
 
-    return { task: sqliteTask, validation };
-  }
-
-  /**
-   * Calculate task fingerprint for deduplication
-   * Uses title, files, and acceptance criteria to detect duplicate tasks
-   */
-  private calculateTaskFingerprint(taskData: EnhancedTaskData): string {
-    const fingerprintData = {
-      title: taskData.title.toLowerCase().trim(),
-      files: taskData.files?.sort() || [],
-      acceptanceCriteria: taskData.acceptanceCriteria?.slice(0, 3) || [] // First 3 criteria
-    };
-    const fingerprintString = JSON.stringify(fingerprintData);
-    return crypto.createHash('md5').update(fingerprintString).digest('hex');
+    return result;
   }
 
   /**
@@ -1156,296 +393,98 @@ export class DevBotsManager extends EventEmitter {
     await this.taskExecutionService.assignNextTask(() => this.assignNextTask());
   }
 
+  /**
+   * Complete worker onboarding (no-op for ephemeral workers)
+   * Ephemeral workers are created fresh for each task and don't require onboarding
+   * @deprecated Kept for API compatibility but not used with ephemeral workers
+   */
   public completeWorkerOnboarding(workerId: string): void {
-    const worker = this.workers.get(workerId);
-    if (worker) {
-      worker.onboardingComplete = true;
-      worker.lastOnboardingCheck = Date.now();
-      logger.info({
+    logger.info({
       category: 'process',
-      action: 'worker_workerid_onboarding_completed',
-      message: `Worker ${workerId} onboarding completed`
+      action: 'worker_onboarding_noop',
+      message: `Worker onboarding called for ${workerId} (no-op for ephemeral workers)`
     });
-    }
   }
 
+  /**
+   * Info/query methods - delegated to InfoQueryService
+   */
   public getAgentPersonalities(): AgentPersonality[] {
-    return this.agentManager.getAllPersonalities();
+    return this.infoQueryService.getAgentPersonalities();
   }
 
   public getTaskTemplates(): Record<string, unknown>[] {
-    // Return the single universal template as an array for API compatibility
-    return [this.templateManager.getTemplate() as unknown as Record<string, unknown>];
+    return this.infoQueryService.getTaskTemplates();
   }
 
   public getTaskGuidelines(taskType?: string): unknown {
-    if (taskType) {
-      return this.guidelinesManager.getGuidelines(taskType);
-    }
-    return this.guidelinesManager.getAllGuidelines();
+    return this.infoQueryService.getTaskGuidelines(taskType);
   }
 
   public getTaskExample(taskType: string): unknown {
-    return this.guidelinesManager.getExampleTask(taskType);
+    return this.infoQueryService.getTaskExample(taskType);
   }
 
   public getTaskChecklist(taskType: string): string[] {
-    return this.guidelinesManager.generateTaskChecklist(taskType);
+    return this.infoQueryService.getTaskChecklist(taskType);
   }
 
   public validateTaskData(taskData: Record<string, unknown>, taskType: string): unknown {
-    return this.guidelinesManager.validateTaskData(taskData, taskType);
+    return this.infoQueryService.validateTaskData(taskData, taskType);
   }
 
   public getValidProjects(): string[] {
-    return this.guidelinesManager.getValidProjects();
+    return this.infoQueryService.getValidProjects();
   }
 
   public getValidAgents(): string[] {
-    return this.guidelinesManager.getValidAgents();
+    return this.infoQueryService.getValidAgents();
   }
 
-  // DEPRECATED: getCompletedTasks() - use TaskQueueService.getTasksByStatus('completed') instead
-  // public getCompletedTasks(): Task[] {
-  //   return this.taskPersistence.loadCompletedTasks();
-  // }
-
   public getWorkerCount(): number {
-    return this.ephemeralWorkerService.getActiveWorkers().length;
+    return this.infoQueryService.getWorkerCount();
   }
 
   public getMaxWorkers(): number {
-    return 2;
-  }
-
-
-
-  /**
-   * Choose which agent type (CLI tool) to use for the next task
-   * Implements rotation strategy for agent comparison
-   */
-
-  /**
-   * Initialize worker-specific log file
-   */
-  private extractAndRecordTokenUsage(task: Task, output: string): void {
-    try {
-      const tokenTracking = getTokenTrackingService();
-
-      // Try to extract token usage from output
-      // Format: "Input tokens: 1234, Output tokens: 567"
-      const inputMatch = output.match(/Input tokens?:\s*(\d+)/i);
-      const outputMatch = output.match(/Output tokens?:\s*(\d+)/i);
-
-      if (inputMatch && outputMatch) {
-        const inputTokens = parseInt(inputMatch[1], 10);
-        const outputTokens = parseInt(outputMatch[1], 10);
-
-        // Determine provider from task or default to 'claude'
-        const provider = task.assigned_agent?.includes('codex') ? 'codex' : 'claude';
-
-        tokenTracking.recordUsage({
-          provider,
-          model: task.assigned_agent || 'unknown',
-          taskId: task.id,
-          inputTokens,
-          outputTokens
-        });
-
-        logger.info({
-          category: 'token-tracking',
-          action: 'recorded_token_usage',
-          message: `Recorded token usage for task ${task.id}`,
-          details: { provider, inputTokens, outputTokens }
-        });
-      }
-    } catch (error) {
-      logger.error({
-        category: 'token-tracking',
-        action: 'failed_to_extract_tokens',
-        message: 'Failed to extract and record token usage',
-        error
-      });
-    }
+    return this.infoQueryService.getMaxWorkers();
   }
 
   /**
-   * Run quality gate validation on a completed task
-   * This is async and runs in the background - it doesn't block task completion
-   */
-
-  /**
-   * Complete task in ephemeral worker
-   */
-
-  /**
-   * Destroy ephemeral worker container
+   * Start the Dev-Bots system
+   * Delegated to SystemLifecycleService
    */
   public startSystem(): void {
-    if (this.isCoordinatorHealthy) {
-      logger.info({
-      category: 'process',
-      action: 'claude_workers_system_is_already_running',
-      message: 'Dev-Bots system is already running'
-    });
-      return;
-    }
-
-    this.isCoordinatorHealthy = true;
-    
-    // Clear any existing ephemeral workers
-    this.ephemeralWorkerService.clearAllWorkers();
-    
-    this.emit('systemStatusChange', 'running');
-    logger.info({
-      category: 'process',
-      action: 'claude_workers_system_started_ephemeral_workers_wi',
-      message: 'Dev-Bots system started - ephemeral workers will be created for tasks'
-    });
-    
-    // Try to assign pending tasks
-    this.assignNextTask();
+    this.systemLifecycleService.startSystem();
+    this.isCoordinatorHealthy = this.systemLifecycleService.isSystemHealthy();
   }
 
+  /**
+   * Stop the Dev-Bots system
+   * Delegated to SystemLifecycleService
+   */
   public async stopSystem(): Promise<void> {
-    if (!this.isCoordinatorHealthy) {
-      logger.info({
-      category: 'process',
-      action: 'claude_workers_system_is_already_stopped',
-      message: 'Dev-Bots system is already stopped'
-    });
-      return;
-    }
-
-    this.isCoordinatorHealthy = false;
-
-    if (this.interactiveIdleInterval) {
-      clearInterval(this.interactiveIdleInterval);
-      this.interactiveIdleInterval = undefined;
-    }
-
-    // Stop background task queue worker
-    if (this.taskQueueWorker) {
-      try {
-        await this.taskQueueWorker.stop();
-        logger.info({
-          category: 'process',
-          action: 'task_queue_worker_stopped',
-          message: 'Background task queue worker stopped'
-        });
-      } catch (error) {
-        logger.error({
-          category: 'process',
-          action: 'task_queue_worker_stop_failed',
-          message: 'Failed to stop background task queue worker',
-          error
-        });
-      }
-    }
-
-    // Stop metrics emitter
-    if (this.metricsEmitter) {
-      try {
-        this.metricsEmitter.stop();
-        logger.info({
-          category: 'process',
-          action: 'metrics_emitter_stopped',
-          message: 'Metrics emitter stopped'
-        });
-      } catch (error) {
-        logger.error({
-          category: 'process',
-          action: 'metrics_emitter_stop_failed',
-          message: 'Failed to stop metrics emitter',
-          error
-        });
-      }
-    }
-
-    // Stop all active ephemeral workers
-    for (const worker of this.ephemeralWorkerService.getAllWorkers().values()) {
-      if (worker.status !== 'destroyed') {
-        // Mark task as failed and destroy container
-        worker.task.status = 'failed';
-        worker.task.error = 'System stopped';
-        worker.task.completed_at = Date.now();
-        worker.task.can_retry = true;
-        // Task status already updated in SQLite (no in-memory storage needed)
-        // this.taskPersistence.saveCompletedTasks([worker.task]); // DEPRECATED - SQLite is source of truth
-
-        // Destroy container
-        await this.ephemeralWorkerService.destroyWorker(worker.id);
-      }
-    }
-
-    this.ephemeralWorkerService.clearAllWorkers();
-    // activeTasks removed - SQLite is source of truth
-
-    this.emit('systemStatusChange', 'stopped');
-    logger.info({
-      category: 'process',
-      action: 'claude_workers_system_stopped_all_ephemeral_worker',
-      message: 'Dev-Bots system stopped - all ephemeral workers terminated'
-    });
+    await this.systemLifecycleService.stopSystem();
+    this.isCoordinatorHealthy = this.systemLifecycleService.isSystemHealthy();
   }
 
-  public exportTasks(_exportPath: string): void {
-    // DEPRECATED: Export tasks functionality removed with persistence layer
-    throw new Error('exportTasks() is deprecated - persistence layer removed');
-  }
-
-  public async importTasks(_importPath: string): Promise<void> {
-    // DEPRECATED: Import tasks functionality removed with persistence layer
-    throw new Error('importTasks() is deprecated - persistence layer removed');
-  }
-  
-
+  /**
+   * Get comprehensive system status
+   * Delegated to StatusAggregationService
+   */
   async getSystemStatus(): Promise<DevBotsStatus> {
-    // Convert ephemeral workers to worker status format for compatibility
-    const workersRecord: Record<string, WorkerStatus> = {};
-    const activeEphemeralWorkers = Array.from(this.ephemeralWorkerService.getAllWorkers().values()).filter(
-      worker => worker.status !== 'destroyed'
-    );
-    for (const [workerId, ephemeralWorker] of this.ephemeralWorkerService.getAllWorkers().entries()) {
-      workersRecord[workerId] = {
-        id: workerId,
-        status: ephemeralWorker.status === 'starting' ? 'busy' :
-                ephemeralWorker.status === 'running' ? 'busy' :
-                ephemeralWorker.status === 'completing' ? 'busy' : 'stopped',
-        currentTask: ephemeralWorker.task.id,
-        lastSeen: new Date(ephemeralWorker.createdAt).getTime(),
-        personality: ephemeralWorker.agent,
-        onboardingComplete: true
-      };
-    }
-
-    return {
-      systemStatus: this.isCoordinatorHealthy ? 'running' : 'stopped',
-      workers: workersRecord,
-      queueSize: this.taskQueue.getTasksByStatus('pending').length,
-      activeTasks: this.taskQueue.getTasksByStatus('running').length,
-      uptime: Date.now() - this.startTime,
-      workerCount: this.ephemeralWorkerService.getActiveWorkers().length,
-      maxWorkers: this.maxWorkers,
-      activeWorkerTypes: activeEphemeralWorkers.map(w => w.id),
-      availableWorkerTypes: Array.from(
-        { length: Math.max(this.maxWorkers - activeEphemeralWorkers.length, 0) },
-        (_value, index) => `slot-${index + 1}`
-      ),
-      tasks: {
-        pending: this.taskQueue.getTasksByStatus('pending'),
-        active: this.taskQueue.getTasksByStatus('running'),
-        completed: this.taskQueue.getTasksByStatus('completed').slice(-50) // Keep last 50 completed tasks
-      }
-    };
+    return await this.statusAggregationService.getSystemStatus({
+      isHealthy: this.isCoordinatorHealthy,
+      startTime: this.startTime,
+      maxWorkers: this.maxWorkers
+    });
   }
 
+  /**
+   * Get tasks grouped by status
+   * Delegated to StatusAggregationService
+   */
   async getTasks(): Promise<{ pending: Task[]; active: Task[]; completed: Task[] }> {
-    return {
-      pending: this.taskQueue.getTasksByStatus('pending'),
-      active: this.taskQueue.getTasksByStatus('running'),
-      completed: this.taskQueue.getTasksByStatus('completed').slice(-50)
-    };
+    return await this.statusAggregationService.getTasks();
   }
 
   getTask(taskId: string): Task | undefined {
@@ -1460,28 +499,15 @@ export class DevBotsManager extends EventEmitter {
     return this.isCoordinatorHealthy;
   }
 
-  // Additional API methods for scope control and cleanup
+  /**
+   * Scope and cleanup methods - delegated to CleanupCoordinator
+   */
   async getScopeViolations(): Promise<Array<{ taskId: string; violations: Array<{ type: string; severity: string }> }>> {
-    // This would track scope violations - simplified for now
-    return [];
+    return await this.cleanupCoordinator.getScopeViolations();
   }
 
   async triggerEmergencyRecovery(): Promise<Task> {
-    const recoveryTask: Task = {
-      id: `task-recovery-${Date.now()}`,
-      type: 'recovery',
-      title: 'Emergency Recovery Task',
-      description: 'EMERGENCY RECOVERY: Clean up scope creep and restore system to stable state. DO NOT create new files. Only remove unnecessary code.',
-      status: 'pending',
-      created_at: Date.now(),
-      assigned_agent: 'backend-specialist'
-      // scope and isEmergency removed from Task interface
-    } as unknown as Task;
-
-    // TaskQueueService doesn't have unshift(), use createTask instead
-    await this.taskQueue.createTask(recoveryTask);
-    await this.assignNextTask();
-    return recoveryTask;
+    return await this.cleanupCoordinator.triggerEmergencyRecovery();
   }
 
   /**
@@ -1493,22 +519,11 @@ export class DevBotsManager extends EventEmitter {
   }
 
   async getCleanupStatus(): Promise<{ schedules: string[]; recentTasks: Task[] }> {
-    const completedTasks = this.taskQueue.getTasksByStatus('completed');
-    const recentCleanupTasks = completedTasks
-      .filter(t => t.type === 'cleanup')
-      .slice(-10);
-
-    return {
-      schedules: this.scopeControl.checkCleanupSchedules(),
-      recentTasks: recentCleanupTasks
-    };
+    return await this.cleanupCoordinator.getCleanupStatus();
   }
 
   async triggerCleanup(type: string): Promise<Task> {
-    const cleanupTask = this.scopeControl.createCleanupTask(type, Date.now());
-    await this.taskQueue.createTask(cleanupTask);
-    await this.assignNextTask();
-    return cleanupTask;
+    return await this.cleanupCoordinator.triggerCleanup(type);
   }
 
   /**
@@ -1539,15 +554,17 @@ export class DevBotsManager extends EventEmitter {
 
   /**
    * Get Docker validation status
+   * Delegated to SystemInitializationService
    */
   getDockerStatus(): {
     isValid: boolean;
     validation?: DockerValidationResult;
     lastCheck: Date;
   } {
+    const dockerValidation = this.systemInitializationService.getDockerValidationResult();
     return {
-      isValid: this.dockerValidationResult?.isValid || false,
-      validation: this.dockerValidationResult,
+      isValid: dockerValidation?.isValid || false,
+      validation: dockerValidation,
       lastCheck: new Date()
     };
   }
@@ -1561,10 +578,11 @@ export class DevBotsManager extends EventEmitter {
 
   /**
    * Trigger Docker environment re-validation
+   * Delegated to SystemInitializationService
    */
   async revalidateDockerEnvironment(): Promise<DockerValidationResult> {
-    await this.initializeDockerEnvironment();
-    return this.dockerValidationResult || {
+    await this.systemInitializationService.initializeDockerEnvironment();
+    return this.systemInitializationService.getDockerValidationResult() || {
       isValid: false,
       errors: ['Docker validation not available'],
       warnings: [],
@@ -1574,146 +592,46 @@ export class DevBotsManager extends EventEmitter {
 
   /**
    * Trigger orphaned resource cleanup
+   * Delegated to DockerManager
    */
   async cleanupOrphanedResources(): Promise<{
     volumesCleaned: number;
     networksCleaned: number;
   }> {
-    logger.info({
-      category: 'process',
-      action: 'triggering_orphaned_resource_cleanup',
-      message: 'Triggering orphaned resource cleanup...'
-    });
-
-    const volumesCleaned = await this.dockerManager.cleanupOrphanedVolumes();
-    const networksCleaned = await this.dockerManager.cleanupOrphanedNetworks();
-
-    logger.info({
-      category: 'process',
-      action: 'cleanup_complete_volumescleaned_volumes_networkscl',
-      message: `Cleanup complete: ${volumesCleaned} volumes, ${networksCleaned} networks removed`
-    });
-
-    return { volumesCleaned, networksCleaned };
+    return await this.dockerManager.cleanupOrphanedResources();
   }
 
   /**
    * Get container health status
+   * Delegated to DockerManager
    */
   async getContainerHealth(containerId: string): Promise<{
     healthy: boolean;
     status?: string;
     logs?: string;
   }> {
-    try {
-      const container = this.docker.getContainer(containerId);
-      const inspect = await container.inspect();
-
-      return {
-        healthy: inspect.State.Running,
-        status: inspect.State.Status,
-        logs: await this.dockerManager.getContainerLogs(containerId, 20)
-      };
-    } catch (error) {
-      return {
-        healthy: false,
-        status: 'not_found'
-      };
-    }
-  }
-
-  /**
-   * Handle task retry when it becomes ready
-   */
-  private async handleTaskRetry(task: Task): Promise<void> {
-    try {
-      logger.info({
-      category: 'process',
-      action: 'handling_retry_for_task_task_id',
-      message: `Handling retry for task ${task.id}`
-    });
-      
-      // Reset task status for retry
-      task.status = 'pending';
-      task.assigned_worker = undefined;
-      task.assigned_at = undefined;
-      task.error = undefined;
-      // task.exitCode removed from interface
-
-      // Add task back to queue (update in SQLite)
-      await this.taskQueue.updateTask(task.id, task);
-      
-      // Emit retry event
-      this.emit('taskRetrying', task);
-      
-      // Try to assign the retry task
-      await this.assignNextTask();
-      
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_handle_retry_for_task_task_id',
-      message: `Failed to handle retry for task ${task.id}:`,
-      error: error
-    });
-      this.emit('taskRetryFailed', task, error);
-    }
+    return await this.dockerManager.getContainerHealth(containerId);
   }
 
   /**
    * Manually retry a failed task
+   * Delegated to RetryCoordinationService
    */
   public async retryTask(taskId: string, reason?: string): Promise<{ success: boolean; message: string }> {
-    try {
-      // Find the task in SQLite
-      const task = await this.taskQueue.getTask(taskId);
-      if (!task) {
-        return { success: false, message: 'Task not found' };
-      }
-
-      if (task.status !== 'failed') {
-        return { success: false, message: 'Task is not in failed status' };
-      }
-
-      // Check if task can be retried
-      if (!this.retryManager.canRetryTask(task)) {
-        return { success: false, message: 'Task cannot be retried' };
-      }
-
-      // Manual retry - add task back to queue
-      const retryResult = this.retryManager.retryTask(task, reason || 'Manual retry');
-      
-      if (retryResult.success) {
-        // Task already updated in SQLite (no in-memory storage needed)
-
-        // Update retry task in SQLite
-        await this.taskQueue.updateTask(retryResult.task.id, retryResult.task);
-
-        this.emit('taskRetrying', retryResult.task);
-        return { success: true, message: 'Task queued for retry' };
-      } else {
-        return { success: false, message: retryResult.reason || 'Failed to retry task' };
-      }
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_retry_task_taskid',
-      message: `Failed to retry task ${taskId}:`,
-      error: error
-    });
-      return { success: false, message: `Failed to retry task: ${error}` };
-    }
+    return await this.retryCoordinationService.retryTask(taskId, reason);
   }
 
   /**
-   * Cancel a scheduled retry (not needed for manual retry)
+   * Cancel a scheduled retry
+   * Delegated to RetryCoordinationService
    */
-  public cancelRetry(_taskId: string): { success: boolean; message: string } {
-    return { success: false, message: 'Manual retry cannot be cancelled once started' };
+  public cancelRetry(taskId: string): { success: boolean; message: string } {
+    return this.retryCoordinationService.cancelRetry(taskId);
   }
 
   /**
    * Get retry information for a task
+   * Delegated to RetryCoordinationService
    */
   public async getRetryInfo(taskId: string): Promise<{
     canRetry: boolean;
@@ -1722,20 +640,12 @@ export class DevBotsManager extends EventEmitter {
     retryHistory: RetryAttempt[];
     scheduledRetries: Array<{ taskId: string; retryAt: string; retryCount: number }>;
   }> {
-    const task = await this.taskQueue.getTask(taskId);
-    const retryHistory = this.retryManager.getRetryHistory(taskId);
-
-    return {
-      canRetry: task?.can_retry ?? (task?.status === 'failed'),
-      retryCount: task?.retry_count || 0,
-      maxRetries: task?.max_retries || this.retryManager.getConfig().max_retries,
-      retryHistory,
-      scheduledRetries: [] // Manual retry system - no scheduled retries
-    };
+    return await this.retryCoordinationService.getRetryInfo(taskId);
   }
 
   /**
    * Get all retry statistics
+   * Delegated to RetryCoordinationService
    */
   public getRetryStats(): {
     totalRetries: number;
@@ -1744,45 +654,29 @@ export class DevBotsManager extends EventEmitter {
     scheduledRetries: number;
     retryConfig: RetryConfig;
   } {
-    const stats = this.retryManager.getRetryStats();
-    const config = this.retryManager.getConfig();
-
-    return {
-      ...stats,
-      scheduledRetries: 0, // Manual retry system - no scheduled retries
-      retryConfig: config
-    };
+    return this.retryCoordinationService.getRetryStats();
   }
 
   /**
    * Get retry manager instance (for state persistence)
+   * Delegated to RetryCoordinationService
    */
   public getRetryManager(): RetryManager {
-    return this.retryManager;
+    return this.retryCoordinationService.getRetryManager();
   }
 
   /**
    * Update retry configuration
+   * Delegated to RetryCoordinationService
    */
   public updateRetryConfig(config: Partial<RetryConfig>): void {
-    this.retryManager.updateConfig(config);
-    this.emit('retryConfigUpdated', config);
-    logger.info({
-      category: 'process',
-      action: 'retry_configuration_updated',
-      message: 'Retry configuration updated',
-      details: { config }
-    });
+    this.retryCoordinationService.updateRetryConfig(config);
   }
 
   destroy(): void {
-    if (this.healthCheckInterval) {
-      clearInterval(this.healthCheckInterval);
-    }
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-    }
-    
+    // Stop health monitoring
+    this.workerHealthMonitor.stop();
+
     // Clear all scheduled retries
     this.retryManager.clearAllRetries();
   }
