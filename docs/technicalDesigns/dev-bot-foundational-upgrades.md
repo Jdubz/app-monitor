@@ -28,7 +28,7 @@
 
 1. [Objectives](#objectives)
 2. [Plan Snapshot](#plan-snapshot)
-3. [Requirements](#requirements)
+3. [Requirements (Aligned with Master Design Intent)](#requirements-aligned-with-master-design-intent)
 4. [Architecture Considerations](#architecture-considerations)
 5. [Implementation Steps](#implementation-steps)
 6. [Success Criteria](#success-criteria)

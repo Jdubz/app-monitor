@@ -26,7 +26,7 @@
 ## Table of Contents
 
 1. [Objectives](#objectives)
-2. [Requirements](#requirements)
+2. [Requirements (Aligned with Master Design Intent)](#requirements-aligned-with-master-design-intent)
 3. [Architecture Considerations](#architecture-considerations)
 4. [Implementation Steps](#implementation-steps)
 5. [Success Criteria](#success-criteria)

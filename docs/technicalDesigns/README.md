@@ -30,6 +30,7 @@ This directory contains consolidated technical design documents for major app-mo
 | [Error Detection & Recovery](error-detection-and-recovery-design.md) | 🟡 Partial | 30% | Structured review chains with escalation |
 | [Dev-Bot Foundational Upgrades](dev-bot-foundational-upgrades.md) | 🟡 Partially Implemented | 85% | Data/analytics backbone and diagnostics |
 | [App-Monitor Resilience](app-monitor-resilience-and-deployments.md) | 🟡 In Progress | 40% | Zero-downtime deploys and monitoring |
+| [DevBotsManager Refactoring](devBotsManager-refactoring-plan.md) | 🟢 **COMPLETE** | **100%** | Modularized into 9 specialized services ✅ |
 
 ### Priority 2 (Important)
 
@@ -116,6 +117,14 @@ Use this checklist when creating or updating technical designs:
 ## Recent Improvements
 
 ### November 12, 2025
+
+**DevBotsManager Refactoring - COMPLETE ✅** (2025-11-12)
+- `devBotsManager-refactoring-plan.md` fully implemented (100%)
+- 1,789 → 683 lines (61.8% reduction)
+- Created 9 specialized services: WorkerHealthMonitor, TaskCreation, StatusAggregation, RetryCoordination, SystemLifecycle, SystemInitialization, InteractiveSessionCoordinator, CleanupCoordinator, InfoQuery
+- All 936 backend tests passing
+- Complete service extraction with zero breaking changes
+- See refactoring plan for full details
 
 **Staged Queue System - COMPLETE ✅**
 - `staged-task-queue.md` fully implemented (100%)

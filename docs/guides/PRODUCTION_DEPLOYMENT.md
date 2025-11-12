@@ -172,7 +172,7 @@ ls -la ~/.cache/app-monitor-deploy-agent/logs/
 
 ## Full Documentation
 
-See [CI/CD Setup Guide](./CI_CD_SETUP.md) for:
+See [CI/CD Setup Guide](../setup/CI_CD_SETUP.md) for:
 - Complete pull-agent architecture details
 - Initial setup instructions
 - Security benefits
@@ -399,7 +399,7 @@ Production environment variables live in:
 ## Related Documentation
 
 - [Deployment Checklist](./deployment-checklist.md) - Pre/post deployment tasks
-- [CI/CD Setup Guide](./CI_CD_SETUP.md) - Pull-agent architecture
+- [CI/CD Setup Guide](../setup/CI_CD_SETUP.md) - Pull-agent architecture
 - [Self-Healing Deployment](../plans/SELF_HEALING_DEPLOYMENT.md) - Future enhancement
 
 **Scripts:**

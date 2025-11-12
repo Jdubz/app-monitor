@@ -385,10 +385,10 @@ This document provides comprehensive examples of different types of tasks that c
 
 ## 📚 Related Documentation
 
-- [API Endpoints](../api/endpoints.md)
-- [Agent Personalities](../api/agent-personalities.md)
-- [Task Creation Guidelines](../api/task-creation-guidelines.md)
-- [System Architecture](../architecture/system-overview.md)
+- [API Reference](api-reference.md)
+- [Agent Personalities](agent-personalities.md)
+- [Task Execution Template](task-execution-template.md)
+- [Dev-Bots Architecture](../architecture/dev-bots-overview.md)
 
 ---
 

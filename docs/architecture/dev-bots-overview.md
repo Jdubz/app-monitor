@@ -108,7 +108,6 @@ The Claude Workers system is a sophisticated, distributed AI agent coordination 
 ---
 
 **Related Documentation**:
-- [Comprehensive Analysis](../analysis/comprehensive-analysis.md)
-- [Implementation Guide](../implementation/implementation-guide.md)
+- [Backend Analysis](../analysis/BACKEND_COMPREHENSIVE_ANALYSIS.md)
 - [Context Isolation](context-isolation.md)
-- [API Reference](../api/endpoints.md)
+- [API Reference](../guides/api-reference.md)

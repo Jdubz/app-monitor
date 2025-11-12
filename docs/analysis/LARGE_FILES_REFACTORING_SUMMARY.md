@@ -82,7 +82,8 @@ See: `docs/technicalDesigns/taskqueue-metrics-extraction.md`
 **Original Size**: 1,922 lines (monolithic)  
 **Current Size**: 1,365 lines (orchestrator)  
 **Status**: ✅ Fully modularized into evaluator pattern  
-**Completed**: 2025-11-12 (Commits eae6e93, 1b901bf, 18fadb7, 07ab11c)
+**Completed**: 2025-11-12 (Commits eae6e93, 1b901bf, 18fadb7, 07ab11c)  
+**Technical Design**: `docs/archive/prConditionState-refactoring-plan-COMPLETED-2025-11-12.md`
 
 ### What Was Extracted ✅
 
@@ -130,8 +131,7 @@ backend/src/services/prConditions/
 - **Extensibility** - Simple to add new conditions
 - **Type Safety** - Strong typing prevents errors
 
-### Technical Design
-See: `docs/technicalDesigns/prConditionState-refactoring-plan.md`
+
 
 ---
 
@@ -297,7 +297,8 @@ See: `docs/technicalDesigns/dev-bots-routes-modularization.md`
 **Original Size**: 1,448 lines (monolithic)  
 **Current Size**: 742 lines (orchestrator)  
 **Status**: ✅ Fully modularized into handler pattern  
-**Completed**: 2025-11-12 (Commits 52caa0d, 2b3fa6d, 84f943e, 42d22c4, db5e35d)
+**Completed**: 2025-11-12 (Commits 52caa0d, 2b3fa6d, 84f943e, 42d22c4, db5e35d)  
+**Technical Design**: `docs/archive/githubWebhookHandler-refactoring-plan-COMPLETED-2025-11-12.md`
 
 ### What Was Extracted ✅
 
@@ -340,8 +341,7 @@ Total: 1,558 lines
 - **Extensibility** - Simple to add new webhook types
 - **Professional** - Textbook-quality architecture
 
-### Technical Design
-See: `docs/technicalDesigns/githubWebhookHandler-refactoring-plan.md`
+
 
 ---
 

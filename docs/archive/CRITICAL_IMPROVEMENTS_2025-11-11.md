@@ -17,7 +17,7 @@ This document tracks the critical improvements made to the app-monitor documenta
 
 **Status:** ✅ Infrastructure already 80% complete, minor fixes applied  
 **Impact:** Deployment infrastructure mature and working  
-**Documentation:** [Production Deployment Guide](./guides/PRODUCTION_DEPLOYMENT.md)
+**Documentation:** [Production Deployment Guide](../guides/PRODUCTION_DEPLOYMENT.md)
 
 **Key Findings:**
 1. Blue-green deployment already working
@@ -35,7 +35,7 @@ This document tracks the critical improvements made to the app-monitor documenta
 **Previous Misconception:** "Production unstable, needs 5 days of Redis implementation"  
 **Reality:** "80% complete, needed 1.5 hours of polish"
 
-See: [Self-Healing Deployment (Future)](./plans/SELF_HEALING_DEPLOYMENT.md)
+See: [Self-Healing Deployment (Future)](../plans/SELF_HEALING_DEPLOYMENT.md)
 
 ---
 
