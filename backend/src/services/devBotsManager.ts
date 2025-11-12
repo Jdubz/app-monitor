@@ -6,7 +6,6 @@ import { ProcessManager, ProcessInfo } from './processManager.js';
 import Docker from 'dockerode';
 import type { TaskPersistence } from './taskPersistence.js';
 import { TaskQueueService, Task, TaskStatus as SQLiteTaskStatus, TaskExecution } from './taskQueue.sqlite.js';
-// Migration completed - SQLite is the only implementation now
 import { AgentPersonalityManager, AgentPersonality } from './agentPersonalities.js';
 import { TaskPromptTemplateManager } from './taskPromptTemplates.js';
 import { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js';
@@ -15,7 +14,6 @@ import { WorkspaceSyncManager, SyncOptions, SyncResult } from './workspaceSyncMa
 import { DockerManager, DockerValidationResult } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
 import { getTokenTrackingService } from './tokenTracking.js';
-// WorkspaceOrchestrator removed - using container isolation instead
 import { MetricsEmitter } from './metricsEmitter.js';
 import { TIME_BASED_GUARDS } from './taskFailureGuards.js';
 import { SimpleFailureRecovery } from './failureRecovery.js';
@@ -45,20 +43,6 @@ export interface RetryAttempt {
   duration?: number; // milliseconds
   workerId?: string;
   agentId?: string;
-}
-
-/**
- * @deprecated WorkerInfo is no longer used with ephemeral workers
- * Ephemeral workers are tracked by EphemeralWorkerService
- */
-export interface WorkerInfo {
-  id: string;
-  status: 'idle' | 'busy' | 'stopped';
-  lastSeen: number;
-  personality: AgentPersonality;
-  onboardingComplete: boolean;
-  lastOnboardingCheck: number;
-  currentTask?: string;
 }
 
 // TaskStatus and Task interface now imported from taskQueue.sqlite.ts (canonical source per Stabilization Plan)
@@ -107,26 +91,13 @@ export class DevBotsManager extends EventEmitter {
   private isCoordinatorHealthy: boolean = false;
   private dockerValidationResult?: DockerValidationResult;
 
-  // Task management - DEPRECATED (now using SQLite)
-  // private taskQueue: Task[] = [];
-  // private activeTasks = new Map<string, Task>();
-  // private completedTasks: Task[] = [];
-  // private taskIdCounter = 1;
-  // private taskFingerprints = new Map<string, string>();
-  // private fileModificationLocks = new Map<string, string>();
-
-  // Worker management - ephemeralWorkers managed by ephemeralWorkerService
-  // Agent selection handled by AgentSelector (intelligent, task-aware selection)
-
-  // Enhanced services
-  // TaskPersistence removed - using SQLite directly
-  private taskQueue!: TaskQueueService; // SQLite-based queue (replaces in-memory arrays)
+  // Services injected via dependency injection
+  private taskQueue!: TaskQueueService;
   private agentManager!: AgentPersonalityManager;
   private templateManager!: TaskPromptTemplateManager;
   private guidelinesManager!: TaskCreationGuidelinesManager;
   private workspaceSyncManager!: WorkspaceSyncManager;
   private retryManager!: RetryManager;
-  // WorkspaceOrchestrator and PushCoordinator removed - using container isolation
   private recovery!: SimpleFailureRecovery;
   private scopeControl!: ScopeControlService;
   private ephemeralWorkerService!: EphemeralWorkerService;
@@ -136,7 +107,7 @@ export class DevBotsManager extends EventEmitter {
   private interactiveSessionService!: InteractiveSessionService;
   private interactiveSessionOrchestrator!: InteractiveSessionOrchestrator;
   private interactiveSessionStreamManager!: InteractiveSessionStreamManager;
-  private taskQueueWorker?: { start: () => void; stop: () => void }; // TaskQueueWorker (imported lazily to avoid circular deps)
+  private taskQueueWorker?: { start: () => void; stop: () => void };
   private metricsEmitter?: MetricsEmitter;
 
   // System state
@@ -156,8 +127,6 @@ export class DevBotsManager extends EventEmitter {
     this.guidelinesManager = dependencies.guidelinesManager;
     this.workspaceSyncManager = dependencies.workspaceSyncManager;
     this.retryManager = dependencies.retryManager;
-    // WorkspaceOrchestrator removed - using container isolation
-    // TaskPersistence removed - using SQLite directly
     this.scopeControl = dependencies.scopeControl;
     this.ephemeralWorkerService = dependencies.ephemeralWorkerService;
     this.taskExecutionService = dependencies.taskExecutionService;
@@ -236,19 +205,13 @@ export class DevBotsManager extends EventEmitter {
       this.handleTaskRetry(task);
     });
 
-    // Start monitoring loops (delegated to WorkerHealthMonitor)
-    // this.workerHealthMonitor.start() is called in startSystem()
-
     // Listen for process status changes
     this.processManager.on('statusChange', (serviceName: string, status: ProcessInfo) => {
       if (serviceName === 'dev-bots') {
         this.emit('systemStatusChange', status);
-        // Worker health is monitored by WorkerHealthMonitor
       }
     });
   }
-
-  // Migration to SQLite completed - method removed
 
   /**
    * Initialize and validate Docker environment
@@ -336,11 +299,8 @@ export class DevBotsManager extends EventEmitter {
 
   /**
    * Initialize async components (orphaned task recovery)
-   * Dependencies are now injected, so this only runs startup recovery
    */
   private async initializeAsync(): Promise<void> {
-    // Migration to SQLite completed - going straight to recovery
-
     // Recover orphaned tasks from previous server crash/restart
     const orphanedTaskIds = this.taskQueue.recoverOrphanedTasks();
 
@@ -468,17 +428,6 @@ export class DevBotsManager extends EventEmitter {
     }
   }
 
-  /**
-   * Start heartbeat monitoring to detect stalled workers
-   *
-   * NOTE: Disabled for ephemeral containers (docker run --rm)
-   * Ephemeral containers are monitored via Docker process exit codes instead.
-   * This avoids false positives from containers that don't send heartbeats.
-   *
-   * If persistent workers are added in the future, re-enable this monitor.
-   */
-  // Health monitoring methods removed - now handled by WorkerHealthMonitor service
-
   private wireInteractiveStreamEvents(): void {
     this.interactiveSessionStreamManager.on('message', (message: InteractiveStreamMessage) => {
       if (message.kind === 'stdout' || message.kind === 'stderr') {
@@ -546,8 +495,6 @@ export class DevBotsManager extends EventEmitter {
       });
     });
   }
-
-  // cleanupStuckTaskContainers moved to EphemeralWorkerService
 
   /**
    * Get queue metrics for monitoring
@@ -670,8 +617,6 @@ export class DevBotsManager extends EventEmitter {
       details: { reason }
     });
   }
-
-  // Health check methods removed - now handled by WorkerHealthMonitor service
 
   // Task Management Methods
   /**
@@ -904,11 +849,6 @@ export class DevBotsManager extends EventEmitter {
     return this.guidelinesManager.getValidAgents();
   }
 
-  // DEPRECATED: getCompletedTasks() - use TaskQueueService.getTasksByStatus('completed') instead
-  // public getCompletedTasks(): Task[] {
-  //   return this.taskPersistence.loadCompletedTasks();
-  // }
-
   public getWorkerCount(): number {
     return this.ephemeralWorkerService.getActiveWorkers().length;
   }
@@ -917,9 +857,6 @@ export class DevBotsManager extends EventEmitter {
     return 2;
   }
 
-
-
-  // Token extraction moved to TaskCompletionService (already implemented there)
   public startSystem(): void {
     if (this.isCoordinatorHealthy) {
       logger.info({
@@ -1013,8 +950,6 @@ export class DevBotsManager extends EventEmitter {
         worker.task.error = 'System stopped';
         worker.task.completed_at = Date.now();
         worker.task.can_retry = true;
-        // Task status already updated in SQLite (no in-memory storage needed)
-        // this.taskPersistence.saveCompletedTasks([worker.task]); // DEPRECATED - SQLite is source of truth
 
         // Destroy container
         await this.ephemeralWorkerService.destroyWorker(worker.id);
@@ -1022,7 +957,6 @@ export class DevBotsManager extends EventEmitter {
     }
 
     this.ephemeralWorkerService.clearAllWorkers();
-    // activeTasks removed - SQLite is source of truth
 
     this.emit('systemStatusChange', 'stopped');
     logger.info({
@@ -1118,7 +1052,6 @@ export class DevBotsManager extends EventEmitter {
       status: 'pending',
       created_at: Date.now(),
       assigned_agent: 'backend-specialist'
-      // scope and isEmergency removed from Task interface
     } as unknown as Task;
 
     // TaskQueueService doesn't have unshift(), use createTask instead
@@ -1281,9 +1214,8 @@ export class DevBotsManager extends EventEmitter {
       task.assigned_worker = undefined;
       task.assigned_at = undefined;
       task.error = undefined;
-      // task.exitCode removed from interface
 
-      // Add task back to queue (update in SQLite)
+      // Add task back to queue
       await this.taskQueue.updateTask(task.id, task);
       
       // Emit retry event
@@ -1325,11 +1257,9 @@ export class DevBotsManager extends EventEmitter {
 
       // Manual retry - add task back to queue
       const retryResult = this.retryManager.retryTask(task, reason || 'Manual retry');
-      
-      if (retryResult.success) {
-        // Task already updated in SQLite (no in-memory storage needed)
 
-        // Update retry task in SQLite
+      if (retryResult.success) {
+        // Update retry task in queue
         await this.taskQueue.updateTask(retryResult.task.id, retryResult.task);
 
         this.emit('taskRetrying', retryResult.task);

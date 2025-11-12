@@ -489,15 +489,56 @@ Final verification:
 - Records to tokenTracking service for metrics
 - Provider auto-detected from assigned_agent (codex vs claude)
 
-### 🔄 In Progress
-- [ ] Phase 5: Final Cleanup
+### ✅ Completed - Phase 5: Final Cleanup and Code Hygiene (2025-11-12)
 
-### 📋 Remaining
-- [ ] Run backend tests to verify functionality
-- [ ] Commit Phase 4 changes
-- [ ] Complete Phase 5
+**Time Invested**: ~30 minutes
+**Dead Code/Comments Removed**: 70 lines from devBotsManager
+**Service Updated**: `devBotsManager.ts` (1,428 → 1,358 lines, -70 lines)
+
+**Changes**:
+1. ✅ Removed commented-out deprecated code (lines 110-116)
+   - Old in-memory task management structures
+   - 8 lines removed
+2. ✅ Removed deprecated `WorkerInfo` interface
+   - Not imported or used anywhere (verified via grep)
+   - 13 lines removed
+3. ✅ Removed commented-out `getCompletedTasks()` method
+   - 4 lines removed
+4. ✅ Cleaned up 45 lines of redundant inline comments:
+   - "Migration completed - SQLite is the only implementation now"
+   - "WorkspaceOrchestrator removed - using container isolation"
+   - "TaskPersistence removed - using SQLite directly"
+   - "Task status already updated in SQLite" comments
+   - "scope and isEmergency removed from Task interface"
+   - Excessive JSDoc and service comments
+
+**Results**:
+- **devBotsManager.ts**: 1,428 → 1,358 lines (-70 lines, 4.9% reduction)
+- ✅ TypeScript compilation passing
+- ✅ Code cleaner and more maintainable
+- ✅ No functional changes - pure cleanup
+- ✅ Better signal-to-noise ratio
+
+**Phase 5 Benefits**:
+- Improved readability without distracting comments
+- Removed all deprecated/dead code
+- Cleaner codebase without historical cruft
+- Reduced technical debt
+
+### 📋 Remaining Tasks
+- [ ] Run backend tests to verify all phases (936 tests)
+- [ ] Evaluate if more extraction needed to reach ~600 line target
 
 ---
 
-**Current Status**: Phase 4 complete! devBotsManager reduced by 20.2% total (1,789 → 1,428 lines).
-**Next Step**: Begin Phase 5 - Final Cleanup and Optimization
+**Current Status**: Phase 5 complete! devBotsManager reduced by 24.1% total (1,789 → 1,358 lines, -431 lines).
+
+**Progress Summary**:
+- Phase 1: Worker Health Monitor extraction (-280 lines)
+- Phase 2: Interactive Idle Watchdog delegation (-23 lines)
+- Phase 3: Remove redundant worker tracking (technical debt)
+- Phase 4: Remove duplicate token extraction (-60 lines)
+- Phase 5: Dead code and comment cleanup (-70 lines)
+
+**Remaining to Target**: ~758 more lines to reach ~600 line goal.
+**Next Steps**: Evaluate if remaining code is core orchestration or if additional extraction provides value.
