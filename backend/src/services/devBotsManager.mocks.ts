@@ -342,6 +342,7 @@ export function createMockSystemLifecycleService(): SystemLifecycleService {
  */
 export function createMockSystemInitializationService(): SystemInitializationService {
   return {
+    components: {},
     initializeDockerEnvironment: vi.fn().mockResolvedValue(undefined),
     initializeAsync: vi.fn().mockResolvedValue(undefined),
     wireInteractiveStreamEvents: vi.fn(),
