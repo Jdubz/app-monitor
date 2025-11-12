@@ -34,6 +34,13 @@ This directory contains analysis reports, investigations, and verification docum
   - Graceful shutdown fixes
 
 #### Database & Queue Systems
+- **[STAGED_QUEUE_PROGRESS.md](./STAGED_QUEUE_PROGRESS.md)** - ✅ **COMPLETE** - Staged queue implementation summary (Nov 12, 2025)
+  - Full implementation details (100% complete)
+  - Chain-aware task scheduling
+  - All phases delivered (Schema, Queue Worker, UI, API, Tests)
+  - 936 backend tests passing
+  - Related: `docs/technicalDesigns/staged-task-queue.md`
+
 - **[TASK_QUEUE_VERIFICATION_REPORT.md](./TASK_QUEUE_VERIFICATION_REPORT.md)** - Task queue verification and testing (Nov 12, 2025)
   - Queue integrity verification
   - Performance testing results
@@ -236,22 +243,22 @@ Analysis documents should be moved to `/docs/archive/analysis-archived/` when:
 ## Related Documentation
 
 ### Architecture
-- [Architecture Overview](/home/jdubz/Development/app-monitor/docs/architecture/README.md)
-- [Master Design Intent](/home/jdubz/Development/app-monitor/docs/architecture/master-design-intent.md)
-- [Dev-Bots Overview](/home/jdubz/Development/app-monitor/docs/architecture/dev-bots-overview.md)
+- [Architecture Overview](../architecture/README.md)
+- [Master Design Intent](../architecture/master-design-intent.md)
+- [Dev-Bots Overview](../architecture/dev-bots-overview.md)
 
 ### Planning
-- [Stabilization Plan](/home/jdubz/Development/app-monitor/docs/plans/APP_MONITOR_STABILIZATION_PLAN.md)
-- [Implementation Status](/home/jdubz/Development/app-monitor/docs/IMPLEMENTATION_STATUS.md)
-- [Prioritized Roadmap](/home/jdubz/Development/app-monitor/docs/plans/PRIORITIZED_FEATURE_ROADMAP.md)
+- [Stabilization Plan](../plans/APP_MONITOR_STABILIZATION_PLAN.md)
+- [Implementation Status](../IMPLEMENTATION_STATUS.md)
+- [Prioritized Roadmap](../plans/PRIORITIZED_FEATURE_ROADMAP.md)
 
 ### Implementation
-- [Technical Designs](/home/jdubz/Development/app-monitor/docs/technicalDesigns/README.md)
-- [Guides](/home/jdubz/Development/app-monitor/docs/guides/README.md)
+- [Technical Designs](../technicalDesigns/README.md)
+- [Guides](../guides/README.md)
 
 ### Historical Context
-- [Archived Analyses](/home/jdubz/Development/app-monitor/docs/archive/analysis-archived/)
-- [Archive Overview](/home/jdubz/Development/app-monitor/docs/archive/README.md)
+- [Archived Analyses](../archive/analysis-archived/)
+- [Archive Directory](../archive/)
 
 ---
 
@@ -272,7 +279,8 @@ Analysis documents should be moved to `/docs/archive/analysis-archived/` when:
 4. PR tracking state management issues
 5. Database migration safety
 
-**Recent Fixes (Nov 12, 2025):**
+**Recent Completions (Nov 12, 2025):**
+- ✅ **Staged Queue System** - 100% complete with UI, API, and full test coverage
 - Migration safety improvements
 - Health check timeout adjustments
 - Graceful shutdown fixes

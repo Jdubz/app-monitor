@@ -3,12 +3,29 @@
 Comprehensive documentation for the App Monitor developer tool and autonomous development platform.
 
 **Version:** 0.2.0
-**Last Updated:** 2025-11-11
+**Last Updated:** 2025-11-12 17:56 UTC
 **Status:** Pre-POC Stabilization
 
 ---
 
 ## 📋 Recent Updates
+
+**2025-11-12 Staged Queue System - COMPLETE ✅**
+- ✅ Chain-aware task scheduling with concurrency limits (MAX_DEV_BOTS)
+- ✅ Two-stage queues: implementation (new chains) + followup (REVIEW/FIX)
+- ✅ ChainTracker service for full chain lifecycle management
+- ✅ ChainStatusPanel UI with real-time monitoring and manual intervention
+- ✅ API endpoints for stats, blocked chains, and unblocking
+- ✅ Schema migrations 012-015 (staged queue + Phase 2A cleanup)
+- ✅ All 936 backend tests passing
+- 📚 See [Staged Queue Progress](./analysis/STAGED_QUEUE_PROGRESS.md) for details
+- 📚 See [Technical Design](./technicalDesigns/staged-task-queue.md) (now marked complete)
+
+**2025-11-12 Documentation Organized:**
+- ✅ Updated all staged queue documentation to reflect completed status
+- ✅ Archived pre-implementation analysis documents
+- ✅ Updated IMPLEMENTATION_STATUS.md with staged queue entry
+- ✅ Organized docs structure for clarity
 
 **2025-11-12 Deployment Documentation Consolidated:**
 - ✅ Updated [Production Deployment Guide](./guides/PRODUCTION_DEPLOYMENT.md)
@@ -17,22 +34,10 @@ Comprehensive documentation for the App Monitor developer tool and autonomous de
 - ✅ Removed redundant deployment status docs
 
 **2025-11-12 Production Stability:**
-- 🚨 ~~CRITICAL: Zero-downtime deployment plan created~~ RESOLVED
-- Production deployment infrastructure already complete (80%)
-- Minor fixes applied (health endpoint, drain period, systemd timeout)
+- ✅ Zero-downtime deployment infrastructure complete
+- ✅ Blue-green deployment working (ports 5001 ↔ 5002)
+- ✅ Health-gated traffic switching
 - See [Production Deployment Guide](./guides/PRODUCTION_DEPLOYMENT.md)
-
-**2025-11-11 Documentation Review:**
-- ✅ Fixed 15+ broken documentation links
-- ✅ Verified database consolidation complete
-- ✅ Updated plan statuses to reflect reality
-- 📄 See [archived critical improvements](./archive/CRITICAL_IMPROVEMENTS_2025-11-11.md) for technical details
-- 📄 See [archived review](./archive/DOCUMENTATION_REVIEW_SUMMARY-2025-11-11.md) for full audit
-
-**2025-11-12 Quick Wins Completed:**
-- ✅ Automated link checker added to CI
-- ✅ 5 completed plans archived (30 → 25 active)
-- ✅ Legacy databases cleaned up
 
 ---
 
@@ -49,13 +54,11 @@ Comprehensive documentation for the App Monitor developer tool and autonomous de
 
 ### Planning & Strategy
 - [Stabilization Plan](./plans/APP_MONITOR_STABILIZATION_PLAN.md) - Current phase (v0.2.0) details
-- [Capability Roadmap](./plans/APP_MONITOR_CAPABILITY_ROADMAP.md) - Feature swimlanes and autonomy phases
 - [Planning Overview](./plans/README.md) - All planning documents
 
 ### Migration & History
-- [Migration Guide](./MIGRATION_GUIDE.md) - From dev-monitor to app-monitor
-- [Session Summaries](./sessions/) - Historical implementation and fix sessions
-- [Recovery Complete](./sessions/RECOVERY_COMPLETE.md) - System recovery documentation (Oct 25, 2025)
+- [Migration Guide](./guides/MIGRATION_GUIDE.md) - From dev-monitor to app-monitor
+- [Historical Documentation](./archive/) - Archived plans, analyses, and session summaries
 
 ---
 
@@ -92,53 +95,24 @@ Roadmap and task prioritization:
 
 Strategic planning and evolution documents:
 - **APP_MONITOR_STABILIZATION_PLAN.md** - v0.2.0 stabilization workstreams
-- **APP_MONITOR_CAPABILITY_ROADMAP.md** - Feature swimlanes (Stabilize → POC → Autonomy)
 - **BOT_PROMPT_ENGINEERING_V3.md** - Prompt engineering strategy
-- **BOT_EXECUTION_FINDINGS_2025-11-06.md** - Recent execution analysis
 - **DEV_BOT_PIPELINE_ENHANCEMENT_PLAN.md** - Pipeline improvements
-- **CONTEXT_BLOB_PRELOADING.md** - Context management strategy
 - See [plans/README.md](./plans/README.md) for complete list
 
-### Dev-Bots Documentation (`/dev-bots/`)
+### Archived Documentation (`/archive/`)
 
-Autonomous development system documentation:
-- **README.md** - Dev-bots overview and quick start
-- **architecture/** - System design and context isolation
-- **api/** - API endpoints and agent personalities
-- **analysis/** - Comprehensive analysis and quick reference
-- **deployment/** - Deployment checklists and orchestration
-- **examples/** - Task examples and templates
-- **healing/** - Healing system design
-- **learning/** - Learning system analysis
-- **scope-control/** - Scope control system
-- See [dev-bots/docs/README.md](./dev-bots/README.md) for complete structure
-
-### Dev-Monitor Documentation (`/dev-monitor/`)
-
-Original dev-monitor documentation (legacy):
-- **REFACTORING_DOCUMENTATION.md** - Historical refactoring notes
-- **E2E_TESTING_GUIDE.md** - End-to-end testing strategies
-- **STATUS.md** - Historical status tracking
-- Phase completion summaries (Phase 3, 4)
-- Implementation review summaries
-
-### Session Documentation (`/sessions/`)
-
-Historical implementation and fix sessions:
-- **RECOVERY_COMPLETE.md** - System recovery (Oct 25, 2025)
-- **FRONTEND_FIX_SUMMARY.md** - Frontend fixes
-- **GIT_HOOKS_SETUP_SUMMARY.md** - Git hooks implementation
-- **WEBSOCKET_FIX.md** - WebSocket issues resolution
-- **TEST_CONFIG_AUDIT.md** - Test configuration audit
-- Other session summaries and implementation notes
+Historical documentation including:
+- **Completed plans** - Archived implementation plans (capability roadmap, database consolidation, etc.)
+- **Session summaries** - Historical implementation and fix sessions
+- **Analysis archives** - Pre-implementation analyses and investigations
+- Browse [archive/](./archive/) directory for complete archive structure
 
 ### Other Documentation
 
-- **MIGRATION_GUIDE.md** - Migration from dev-monitor/claude-workers
-- **DEVELOPMENT.md** - Detailed development workflows
-- **GOOGLE_CLOUD_LOGGING_PERMISSIONS.md** - GCP IAM setup for logging
-- **PLANNING_SUMMARY.md** - Planning document summary
-- **ANALYSIS_INDEX.md** - Analysis documents index
+- **guides/** - Operational guides (migration, deployment, API reference, testing)
+- **setup/** - Setup and configuration documentation
+- **DATABASE_MIGRATION_SAFETY.md** - Database migration safety mechanisms
+- **database-migrations.md** - Migration management system
 
 ---
 
@@ -192,10 +166,10 @@ Historical implementation and fix sessions:
 4. [architecture/dev-bots-overview.md](./architecture/dev-bots-overview.md) - Deep dive into dev-bots
 
 **Planning & Strategy**
-1. [plans/APP_MONITOR_CAPABILITY_ROADMAP.md](./plans/APP_MONITOR_CAPABILITY_ROADMAP.md) - Long-term vision
-2. [plans/APP_MONITOR_STABILIZATION_PLAN.md](./plans/APP_MONITOR_STABILIZATION_PLAN.md) - Current phase
-3. [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) - Implementation status
-4. [plans/README.md](./plans/README.md) - All planning docs
+1. [plans/APP_MONITOR_STABILIZATION_PLAN.md](./plans/APP_MONITOR_STABILIZATION_PLAN.md) - Current phase
+2. [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) - Implementation status
+3. [plans/README.md](./plans/README.md) - All planning docs
+4. [archive/plans-completed-2025-11/](./archive/plans-completed-2025-11/) - Completed plans (including capability roadmap)
 
 ---
 
@@ -244,7 +218,7 @@ Historical implementation and fix sessions:
 → [setup/ENVIRONMENT_SETUP.md](./setup/ENVIRONMENT_SETUP.md)
 
 **"What's the long-term vision?"**
-→ [plans/APP_MONITOR_CAPABILITY_ROADMAP.md](./plans/APP_MONITOR_CAPABILITY_ROADMAP.md)
+→ [archive/plans-completed-2025-11/APP_MONITOR_CAPABILITY_ROADMAP-completed-2025-11.md](./archive/plans-completed-2025-11/APP_MONITOR_CAPABILITY_ROADMAP-completed-2025-11.md)
 
 ---
 
@@ -309,7 +283,7 @@ All major documents should include:
 - **Weekly**: Update [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) with completed tasks
 - **Monthly**: Review and update [plans/APP_MONITOR_STABILIZATION_PLAN.md](./plans/APP_MONITOR_STABILIZATION_PLAN.md)
 - **Per phase**: Update [architecture/](./architecture/) for major changes
-- **As needed**: Investigation notes in [investigations/](./investigations/)
+- **As needed**: Investigation notes in [analysis/](./analysis/)
 
 ### Deprecation Process
 1. Mark document as deprecated with notice at top

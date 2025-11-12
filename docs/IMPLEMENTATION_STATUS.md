@@ -1,6 +1,6 @@
 # App Monitor Implementation Status
 
-**Last Updated:** 2025-11-12 07:42 UTC  
+**Last Updated:** 2025-11-12 17:56 UTC  
 **Note:** This file tracks high-level status. See individual plan files for details.
 
 ## 🎉 Recent Wins (2025-11-12)
@@ -54,6 +54,21 @@
 - 📝 Commits: 78e6fe9, c9e45fe
 
 **Impact:** PR self-healing is nearly production-ready. Event-driven architecture spawns intelligent fix tasks for CI failures, merge conflicts, review comments, and branch updates. Chain tracking prevents infinite loops. Auto-merge triggers when all 8 conditions are met. System is simple, event-driven, and database-persisted (no Redis needed).
+
+**Staged Queue System Complete! 🎉**
+- ✅ Chain-aware task scheduling with concurrency limits (MAX_DEV_BOTS env var, default 3)
+- ✅ Two-stage queues: implementation queue (new chains) + followup queue (REVIEW/FIX/etc)
+- ✅ ChainTracker service for lifecycle management (activate, block, unblock, close)
+- ✅ Smart dequeue logic prevents pool saturation
+- ✅ Real-time UI (ChainStatusPanel) with manual intervention controls
+- ✅ API endpoints for stats, blocked chains, and unblocking
+- ✅ Schema migrations 012-015 (staged queue + Phase 2A cleanup)
+- ✅ All 936 backend tests passing, including chainTracker and stagedQueue tests
+- 📝 Commits: 2f632e5, 1734914, cc4b0cc, cf163f2, 93835a9, 5ece5f8
+- 🚀 Deployed to staging branch
+- 📚 Docs: `docs/technicalDesigns/staged-task-queue.md` (now marked complete)
+
+**Impact:** Staged queue prevents dev-bot pool saturation by limiting concurrent implementation chains while allowing followup work (reviews, fixes) to progress. This is foundational for PR self-healing and enables better resource management across the autonomous development pipeline.
 
 ## ✅ Production Stability - COMPLETE
 
@@ -110,6 +125,8 @@
 | pr-workflow-quality-gates.md | ✅ Production Ready | Gate logic + metrics run inside `backend/src/services/githubPR.service.ts`. | Keep docs in sync as gates evolve. |
 | README.md (plans index) | ✅ Updated | Points to this status file for single-source tracking. | Keep index + status doc in lockstep. |
 | sqlite-integration.md | Mostly Complete | DevBotsManager + TaskExecutionService now use `TaskQueueService`; only `/dev-bots/tasks/completed` still TODO (`backend/src/routes/dev-bots.routes.ts:1004`). | Finish the completed-tasks endpoint + regression suite. |
+| staged-task-queue.md | ✅ Complete 2025-11-12 | Staged queue fully implemented with chain-aware scheduling, concurrency limits, ChainTracker service, ChainStatusPanel UI, and API endpoints. All 936 backend tests passing. Migrations 012-015 applied. | None - Feature complete and deployed. See `docs/analysis/STAGED_QUEUE_PROGRESS.md` for details. |
+| staged-task-queue-implementation-plan.md | ✅ Complete 2025-11-12 | Implementation plan fully executed. Schema migrations, queue worker logic, ChainTracker service, API endpoints, UI components all delivered. | None - Moved to archive as implementation is complete. |
 | STUCK_PRODUCTION_PRS_AUTOMATION_PLAN.md | Partial | Systemd + cleanup scripts deployed, preventing duplicate processes. **CRITICAL: Production instability - zero-downtime deploys needed.** | Implement blue/green zero-downtime deployment. |
 | WEBSOCKET_RESILIENCE_STRATEGY.md | Partial | Client reconnection/health lives in `frontend/src/services/socketService.ts`; backend `connectionManager.ts` tracks clients but lacks cross-instance state sync. **CRITICAL: State loss during restarts causing production issues.** | Implement state handoff/queue + shared session storage for blue/green deployments. |
 
