@@ -8,19 +8,22 @@
 
 ## Executive Summary
 
-**Current State (2025-11-12 21:37 UTC)**:
+**Current State (2025-11-12 21:44 UTC)**:
 
-3 large files (>1,500 lines) remain for modularization. Combined, these files represent **4,758 lines** of backend code that can be split into smaller, focused modules.
+3 large files (>1,500 lines) remain for modularization. Combined, these files represent **4,474 lines** of backend code that can be split into smaller, focused modules.
 
 **Completed Refactorings** ✅ (3 of 5 - 60%):
 - ~~taskQueue.sqlite.ts~~ - Metrics extracted to `taskQueueMetrics.service.ts` (276 lines) - 2025-11-09
 - ~~dev-bots.routes.ts~~ - Modularized into 6 focused route files - 2025-11-09
-- ~~prConditionState.service.ts~~ - Modularized into 8 evaluators + orchestrator - 2025-11-12 ✨ NEW!
+- ~~prConditionState.service.ts~~ - Modularized into 8 evaluators + orchestrator - 2025-11-12
+
+**In Progress** 🔄:
+- **devBotsManager.ts** - Phase 1 complete: WorkerHealthMonitor extracted (1,789 → 1,505 lines, 15.6% reduction)
 
 **Remaining Priority Order**:
-1. **devBotsManager.ts** (1,789 lines) - P1 High Value
-2. **taskPromptTemplates.ts** (1,521 lines) - P2 Quality
-3. **githubWebhookHandler.service.ts** (1,448 lines) - P2 Quality
+1. **devBotsManager.ts** (1,505 lines) - P1 High Value - 🔄 IN PROGRESS
+2. **taskPromptTemplates.ts** (1,521 lines) - P2 Quality - NEEDS WORK
+3. **githubWebhookHandler.service.ts** (1,448 lines) - P2 Quality - NEEDS WORK
 
 ---
 
@@ -131,11 +134,21 @@ See: `docs/technicalDesigns/prConditionState-refactoring-plan.md`
 
 ---
 
-## 3. devBotsManager.ts (1,789 lines) - REMAINING
+## 3. devBotsManager.ts - IN PROGRESS 🔄
 
+**Original Size**: 1,789 lines  
+**Current Size**: 1,505 lines  
 **Priority**: P1 - High Value  
 **Effort**: Medium (1-2 days)  
-**Status**: Partially extracted (needs completion)
+**Status**: Phase 1 Complete (15.6% reduction) - 2025-11-12
+
+### Progress So Far ✅
+**Phase 1 Completed**: WorkerHealthMonitor extraction
+- Created `workerHealthMonitor.service.ts` (410 lines)
+- Extracted health monitoring logic
+- Reduced main file: 1,789 → 1,505 lines (284 lines removed)
+- Monitors worker health every 5 minutes
+- See: `docs/technicalDesigns/devBotsManager-refactoring-plan.md`
 
 ### Problem
 Core orchestrator doing too much:
@@ -326,14 +339,14 @@ backend/src/services/webhooks/
 ### ✅ Completed (3 of 5 - 60%)
 1. ~~**taskQueue.sqlite.ts** - Metrics extracted~~ (Completed 2025-11-09)
 2. ~~**dev-bots.routes.ts** - Modularized~~ (Completed 2025-11-09)
-3. ~~**prConditionState.service.ts** - Evaluator pattern~~ (Completed 2025-11-12) ✨
+3. ~~**prConditionState.service.ts** - Evaluator pattern~~ (Completed 2025-11-12)
 
-### Next Priority
-1. **devBotsManager.ts** - Complete service migration (2 days)
+### 🔄 In Progress
+1. **devBotsManager.ts** - Complete service migration (2 days) - Phase 1 Done
    - **HIGH PRIORITY** - Core orchestrator refactoring
-   - Leverage existing extracted services (ephemeralWorker, interactiveSession)
-   - Clear migration path
-   - Immediate maintainability gains
+   - ✅ Phase 1: WorkerHealthMonitor extracted (410 lines)
+   - 🔄 Remaining: ephemeralWorker, interactiveSession migrations
+   - Current: 1,505 lines (was 1,789) - 15.6% reduction so far
 
 2. **githubWebhookHandler.service.ts** - Extract event handlers (1-2 days)
    - Extract PR event handlers, push handlers, check suite handlers
@@ -356,17 +369,19 @@ backend/src/services/webhooks/
 - Average file size: 1,616 lines
 - Cognitive load: HIGH
 
-### Current (2025-11-12 21:37 UTC)
+### Current (2025-11-12 21:44 UTC)
 - ✅ **3 files refactored** (taskQueue, dev-bots routes, prConditionState)
-- ✅ **1,828 lines extracted** to dedicated modules
+- 🔄 **1 file in progress** (devBotsManager - Phase 1 complete)
+- ✅ **2,238 lines extracted** to dedicated modules
   - taskQueue → 276 lines (metrics service)
   - dev-bots → ~1,000 lines (6 route modules)
   - prConditionState → 995 lines (8 evaluators)
-  - Main services reduced by 557 lines
+  - devBotsManager → 410 lines (health monitor) 🔄
+- ✅ **Main services reduced by 2,212 lines** total
 - 3 files >1,500 lines remaining
-- Total: 4,758 lines in large files
-- Average remaining file size: 1,586 lines
-- Progress: **3 of 5 completed (60%)** 🎉
+- Total: 4,474 lines in large files
+- Average remaining file size: 1,491 lines
+- Progress: **3 of 5 completed + 1 in progress (60% + partial)** 🎉
 
 ### After (Target)
 - 0 files >1,000 lines
