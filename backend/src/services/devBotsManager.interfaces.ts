@@ -26,6 +26,7 @@ import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js
 import type { InteractiveSessionService } from './interactiveSession.service.js';
 import type { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
 import type { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
+import type { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
 
 /**
  * All dependencies required by DevBotsManager
@@ -67,6 +68,9 @@ export interface DevBotsManagerDependencies {
   interactiveSessionService: InteractiveSessionService;
   interactiveSessionOrchestrator: InteractiveSessionOrchestrator;
   interactiveSessionStreamManager: InteractiveSessionStreamManager;
+
+  // Worker health monitoring
+  workerHealthMonitor: WorkerHealthMonitor;
 }
 
 /**

@@ -26,6 +26,7 @@ import { TaskCompletionService } from './taskCompletion.service.js';
 import { InteractiveSessionService } from './interactiveSession.service.js';
 import { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
 import { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
+import { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
 
 /**
@@ -174,11 +175,22 @@ export async function createDevBotsManagerDependencies(
     shellCommand: ['/bin/bash'],
   });
 
-  // Note: SimpleFailureRecovery and TaskCompletionService require DevBotsManager instance
-  // They will be created after DevBotsManager is instantiated
+  // Note: SimpleFailureRecovery, TaskCompletionService, and WorkerHealthMonitor require DevBotsManager instance
+  // They will be created/initialized after DevBotsManager is instantiated
   // For now, create placeholders that will be replaced
   const recovery = null as unknown as SimpleFailureRecovery; // Will be set by DevBotsManager
   const taskCompletionService = null as unknown as TaskCompletionService; // Will be set by DevBotsManager
+
+  // Create WorkerHealthMonitor (will be given recovery instance by DevBotsManager)
+  const workerHealthMonitor = new WorkerHealthMonitor(
+    ephemeralWorkerService,
+    taskQueue,
+    dockerManager,
+    scopeControl,
+    processManager,
+    null, // recovery will be set by DevBotsManager
+    () => {} // emit function placeholder, will be bound by DevBotsManager
+  );
 
   return {
     processManager,
@@ -201,5 +213,6 @@ export async function createDevBotsManagerDependencies(
     interactiveSessionService,
     interactiveSessionOrchestrator,
     interactiveSessionStreamManager,
+    workerHealthMonitor,
   };
 }

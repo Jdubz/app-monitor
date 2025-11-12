@@ -2,15 +2,8 @@ name: Documentation Check
 
 on:
   pull_request:
-    paths:
-      - '**.md'
-      - '.github/workflows/docs-check.yml'
-  push:
     branches:
       - main
-      - staging
-    paths:
-      - '**.md'
 
 jobs:
   link-check:

@@ -475,5 +475,11 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
       on: vi.fn(),
       removeAllListeners: vi.fn()
     } as unknown as InteractiveSessionStreamManager,
+    workerHealthMonitor: {
+      start: vi.fn(),
+      stop: vi.fn(),
+      checkWorkerHealth: vi.fn().mockResolvedValue(true),
+      isMonitorHealthy: vi.fn().mockReturnValue(true)
+    } as unknown as import('./workerHealthMonitor.service.js').WorkerHealthMonitor,
   };
 }

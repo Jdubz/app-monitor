@@ -34,6 +34,7 @@ import {
 import { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
 import { InteractiveSessionStreamManager, InteractiveStreamMessage } from './interactiveSessionStreamManager.js';
 import type { InteractiveSessionRecord } from './database.js';
+import type { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
 
 export interface RetryAttempt {
   attemptNumber: number;
@@ -98,10 +99,9 @@ export class DevBotsManager extends EventEmitter {
   private processManager: ProcessManager;
   private docker: Docker;
   private dockerManager: DockerManager;
+  private workerHealthMonitor!: WorkerHealthMonitor;
   private isCoordinatorHealthy: boolean = false;
   private dockerValidationResult?: DockerValidationResult;
-  private healthCheckInterval?: NodeJS.Timeout;
-  private cleanupInterval?: NodeJS.Timeout;
 
   // Task management - DEPRECATED (now using SQLite)
   // private taskQueue: Task[] = [];
@@ -164,12 +164,18 @@ export class DevBotsManager extends EventEmitter {
     this.interactiveSessionService = dependencies.interactiveSessionService;
     this.interactiveSessionOrchestrator = dependencies.interactiveSessionOrchestrator;
     this.interactiveSessionStreamManager = dependencies.interactiveSessionStreamManager;
+    this.workerHealthMonitor = dependencies.workerHealthMonitor;
 
     // Initialize maxWorkers from config
     this.maxWorkers = config.devBots.maxWorkers;
 
     // Initialize SimpleFailureRecovery
     this.recovery = new SimpleFailureRecovery(this);
+
+    // Update WorkerHealthMonitor with recovery and emit function
+    // Note: WorkerHealthMonitor is injected but needs recovery instance from DevBotsManager
+    (this.workerHealthMonitor as any).recovery = this.recovery;
+    (this.workerHealthMonitor as any).emit = this.emit.bind(this);
 
     // Initialize TaskCompletionService with PR workflow orchestrator callback
     // Create no-op implementations for removed dependencies
@@ -229,15 +235,14 @@ export class DevBotsManager extends EventEmitter {
       this.handleTaskRetry(task);
     });
 
-    // Start monitoring loops
-    this.startHeartbeatMonitor();
-    this.startLongRunningTaskMonitor();
+    // Start monitoring loops (delegated to WorkerHealthMonitor)
+    // this.workerHealthMonitor.start() is called in startSystem()
 
     // Listen for process status changes
     this.processManager.on('statusChange', (serviceName: string, status: ProcessInfo) => {
       if (serviceName === 'dev-bots') {
         this.emit('systemStatusChange', status);
-        this.updateWorkerHealth();
+        // Worker health is monitored by WorkerHealthMonitor
       }
     });
   }
@@ -468,205 +473,7 @@ export class DevBotsManager extends EventEmitter {
    *
    * If persistent workers are added in the future, re-enable this monitor.
    */
-  private startHeartbeatMonitor(): void {
-    // DISABLED: Ephemeral containers don't send heartbeats
-    // They auto-cleanup on exit (--rm flag) and are monitored via process.on('close')
-
-    logger.info({
-      category: 'process',
-      action: 'heartbeat_monitor_disabled',
-      message: 'Worker heartbeat monitor disabled (using Docker process monitoring for ephemeral containers)'
-    });
-
-    // Uncomment below to enable heartbeat monitoring for persistent workers:
-    /*
-    setInterval(() => {
-      const stalledWorkers = this.taskQueue.detectStalledWorkers();
-      if (stalledWorkers.length > 0) {
-        logger.warn({
-          category: 'process',
-          action: 'stalled_workers_detected',
-          message: `Detected ${stalledWorkers.length} stalled workers (heartbeat timeout)`,
-          details: stalledWorkers
-        });
-
-        for (let i = 0; i < stalledWorkers.length; i++) {
-          this.assignNextTask();
-        }
-      }
-    }, 60000);
-    */
-  }
-
-  /**
-   * Start long-running task monitoring with automatic cleanup for stuck tasks
-   */
-  private startLongRunningTaskMonitor(): void {
-    setInterval(async () => {
-      // Soft timeout warning (30 minutes)
-      const longRunning = this.taskQueue.detectLongRunningTasks(TIME_BASED_GUARDS.SOFT_TIMEOUT_MS);
-      if (longRunning.length > 0) {
-        logger.warn({
-          category: 'process',
-          action: 'long_running_tasks_detected',
-          message: `Found ${longRunning.length} tasks running longer than ${TIME_BASED_GUARDS.SOFT_TIMEOUT_MS / 60000} minutes`,
-          details: longRunning.map(task => ({
-            id: task.id,
-            title: task.title,
-            duration: task.duration_ms,
-            durationMinutes: Math.round(task.duration_ms / 60000)
-          })) as unknown as Record<string, unknown>
-        });
-      }
-
-      // Hard timeout - force cleanup (1 hour)
-      const stuck = this.taskQueue.detectLongRunningTasks(TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS);
-      if (stuck.length > 0) {
-        logger.error({
-          category: 'process',
-          action: 'stuck_tasks_detected_auto_cleanup',
-          message: `Found ${stuck.length} tasks stuck for >${TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS / 60000} minutes. Auto-failing and cleaning up.`,
-          details: stuck.map(task => ({
-            id: task.id,
-            title: task.title,
-            duration: task.duration_ms,
-            durationHours: Math.round(task.duration_ms / 3600000)
-          })) as unknown as Record<string, unknown>
-        });
-
-        // Cleanup each stuck task
-        for (const task of stuck) {
-          try {
-            // Force kill any Docker containers for this task
-            await this.ephemeralWorkerService.cleanupStuckTaskContainers(task.id);
-
-            // Get full task details to check for error
-            const fullTask = this.taskQueue.getTask(task.id);
-            if (!fullTask) {
-              logger.warn({
-                category: 'process',
-                action: 'stuck_task_not_found',
-                message: `Stuck task ${task.id} not found in database`
-              });
-              continue;
-            }
-
-            // Check if task has an existing error that indicates a failure pattern
-            // This handles cases where task failed but got stuck in "running" state
-            const taskError = fullTask.error || '';
-            const { detectFailurePattern } = await import('./taskFailureGuards.js');
-            const failurePattern = detectFailurePattern(taskError, '', 0);
-
-            if (failurePattern) {
-              logger.info({
-                category: 'recovery',
-                action: 'stuck_task_has_failure_pattern',
-                message: `Stuck task ${task.id} has detectable failure pattern: ${failurePattern.name}`,
-                details: {
-                  taskId: task.id,
-                  pattern: failurePattern.name,
-                  category: failurePattern.category
-                }
-              });
-
-              // Attempt recovery if enabled
-              const { config } = await import('../config.js');
-              if (config.recovery.enabled && this.recovery) {
-                if (config.recovery.dryRun) {
-                  logger.info({
-                    category: 'recovery',
-                    action: 'dry_run_would_attempt_recovery_for_stuck_task',
-                    message: `[DRY RUN] Would attempt automatic recovery for stuck task ${task.id}`,
-                    details: {
-                      taskId: task.id,
-                      taskTitle: task.title,
-                      failurePattern: failurePattern.name,
-                      category: failurePattern.category,
-                      suggestedFix: failurePattern.suggestedFix,
-                      stuckDuration_minutes: Math.round(task.duration_ms / 60000)
-                    }
-                  });
-                } else {
-                  // Actually attempt recovery
-                  try {
-                    const recoveryResult = await this.recovery.attemptRecovery({
-                      task: fullTask as Task & { metadata?: Record<string, unknown> },
-                      failurePattern,
-                      stderr: taskError,
-                      stdout: '',
-                      exitCode: 0
-                    });
-
-                    if (recoveryResult.recovered) {
-                      logger.info({
-                        category: 'recovery',
-                        action: 'recovery_initiated_for_stuck_task',
-                        message: `Initiated automatic recovery for stuck task ${task.id}`,
-                        details: {
-                          taskId: task.id,
-                          cleanupTaskId: recoveryResult.cleanupTaskId,
-                          failurePattern: failurePattern.name
-                        }
-                      });
-                    }
-                  } catch (recoveryError) {
-                    logger.error({
-                      category: 'recovery',
-                      action: 'recovery_attempt_failed_for_stuck_task',
-                      message: `Failed to attempt recovery for stuck task ${task.id}: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`,
-                      details: {
-                        taskId: task.id,
-                        error: recoveryError instanceof Error ? recoveryError.message : String(recoveryError)
-                      }
-                    });
-                  }
-                }
-              }
-            }
-
-            // Mark task as failed in database
-            this.taskQueue.failTask(
-              task.id,
-              `Task stuck for ${Math.round(task.duration_ms / 60000)} minutes (exceeded ${TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS / 60000}min timeout). Auto-failed by failure guard.`
-            );
-
-            logger.info({
-              category: 'process',
-              action: 'stuck_task_cleaned_up',
-              message: `Successfully cleaned up stuck task ${task.id}`,
-              details: {
-                taskId: task.id,
-                duration_minutes: Math.round(task.duration_ms / 60000),
-                cleanup_reason: 'ABSOLUTE_MAX_DURATION_EXCEEDED',
-                hadFailurePattern: failurePattern?.name || 'none'
-              }
-            });
-          } catch (error) {
-            logger.error({
-              category: 'process',
-              action: 'stuck_task_cleanup_failed',
-              message: `Failed to cleanup stuck task ${task.id}: ${error instanceof Error ? error.message : String(error)}`,
-              details: {
-                taskId: task.id,
-                error: error instanceof Error ? error.message : String(error)
-              }
-            });
-          }
-        }
-      }
-    }, 300000); // Check every 5 minutes
-
-    logger.info({
-      category: 'process',
-      action: 'long_running_task_monitor_started',
-      message: `Task monitor started - Soft warn: ${TIME_BASED_GUARDS.SOFT_TIMEOUT_MS / 60000}min, Hard fail: ${TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS / 60000}min`,
-      details: {
-        checkInterval_ms: 300000,
-        softTimeout_minutes: TIME_BASED_GUARDS.SOFT_TIMEOUT_MS / 60000,
-      hardTimeout_minutes: TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS / 60000
-      }
-    });
-  }
+  // Health monitoring methods removed - now handled by WorkerHealthMonitor service
 
   private wireInteractiveStreamEvents(): void {
     this.interactiveSessionStreamManager.on('message', (message: InteractiveStreamMessage) => {
@@ -879,100 +686,7 @@ export class DevBotsManager extends EventEmitter {
     });
   }
 
-  private startHealthCheck(): void {
-    this.healthCheckInterval = setInterval(async () => {
-      await this.checkWorkerHealth();
-    }, 5000); // Check every 5 seconds
-  }
-  
-  private startCleanupScheduler(): void {
-    this.cleanupInterval = setInterval(async () => {
-      await this.checkCleanupSchedules();
-    }, 60000); // Check every minute
-  }
-
-  private async checkWorkerHealth(): Promise<boolean> {
-    try {
-      // Since we're not using Docker, just check if workers are idle or busy
-      // and update their lastSeen timestamp
-      const wasHealthy = this.isCoordinatorHealthy;
-      
-      // Update lastSeen for all workers that are not stopped
-      this.workers.forEach(worker => {
-        if (worker.status !== 'stopped') {
-          worker.lastSeen = Date.now();
-        }
-      });
-      
-      // System health is now managed by startSystem/stopSystem methods
-      // Don't override the isCoordinatorHealthy flag here
-      
-      if (wasHealthy !== this.isCoordinatorHealthy) {
-        this.emit('coordinatorHealthChange', this.isCoordinatorHealthy);
-        logger.info({
-      category: 'process',
-      action: 'worker_health_changed',
-      message: `Worker health changed: ${this.isCoordinatorHealthy ? 'healthy' : 'unhealthy'}`
-    });
-      }
-      
-      return this.isCoordinatorHealthy;
-    } catch (error) {
-      const wasHealthy = this.isCoordinatorHealthy;
-      this.isCoordinatorHealthy = false;
-      
-      // Mark all workers as stopped on error
-      this.workers.forEach(worker => {
-        worker.status = 'stopped';
-        worker.currentTask = undefined;
-      });
-      
-      if (wasHealthy !== this.isCoordinatorHealthy) {
-        this.emit('coordinatorHealthChange', this.isCoordinatorHealthy);
-        logger.warn({
-      category: 'process',
-      action: 'worker_health_check_failed',
-      message: 'Worker health check failed:',
-      details: { error }
-    });
-      }
-      
-      return false;
-    }
-  }
-
-  private async updateWorkerHealth(): Promise<void> {
-    try {
-      const processInfo = await this.processManager.getServiceStatus('dev-bots');
-      if (processInfo?.status !== 'running') {
-        this.isCoordinatorHealthy = false;
-      }
-    } catch (error) {
-      this.isCoordinatorHealthy = false;
-    }
-  }
-  
-  private async checkCleanupSchedules(): Promise<void> {
-    try {
-      const dueTasks = this.scopeControl.checkCleanupSchedules();
-      for (const taskType of dueTasks) {
-        const cleanupTask = this.scopeControl.createCleanupTask(taskType, Date.now());
-        await this.taskQueue.createTask(cleanupTask);
-        logger.info({
-      category: 'process',
-      action: 'cleanup_scheduled_tasktype_cleanup_task_cleanuptas',
-      message: `[CLEANUP] Scheduled ${taskType} cleanup task: ${cleanupTask.id}`
-    });
-      }
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_check_cleanup_schedules',
-      message: 'Failed to check cleanup schedules:',
-      error: error
-    });
-    }
-  }
+  // Health check methods removed - now handled by WorkerHealthMonitor service
 
   // Task Management Methods
   /**
@@ -1292,17 +1006,20 @@ export class DevBotsManager extends EventEmitter {
     }
 
     this.isCoordinatorHealthy = true;
-    
+
     // Clear any existing ephemeral workers
     this.ephemeralWorkerService.clearAllWorkers();
-    
+
+    // Start health monitoring
+    this.workerHealthMonitor.start();
+
     this.emit('systemStatusChange', 'running');
     logger.info({
       category: 'process',
       action: 'claude_workers_system_started_ephemeral_workers_wi',
       message: 'Dev-Bots system started - ephemeral workers will be created for tasks'
     });
-    
+
     // Try to assign pending tasks
     this.assignNextTask();
   }
@@ -1318,6 +1035,9 @@ export class DevBotsManager extends EventEmitter {
     }
 
     this.isCoordinatorHealthy = false;
+
+    // Stop health monitoring
+    this.workerHealthMonitor.stop();
 
     if (this.interactiveIdleInterval) {
       clearInterval(this.interactiveIdleInterval);
@@ -1776,13 +1496,9 @@ export class DevBotsManager extends EventEmitter {
   }
 
   destroy(): void {
-    if (this.healthCheckInterval) {
-      clearInterval(this.healthCheckInterval);
-    }
-    if (this.cleanupInterval) {
-      clearInterval(this.cleanupInterval);
-    }
-    
+    // Stop health monitoring
+    this.workerHealthMonitor.stop();
+
     // Clear all scheduled retries
     this.retryManager.clearAllRetries();
   }
