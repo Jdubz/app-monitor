@@ -181,6 +181,12 @@ export interface Task {
   // Chain tracking for fix task depth limiting
   chain_id?: string; // UUID identifying the chain this task belongs to
   chain_depth?: number; // Depth in the fix chain (0 = original, 1+ = fix attempts)
+  // Staged Queue System fields
+  queue_stage?: 'implementation' | 'followup'; // Queue stage for chain-aware scheduling
+  chain_status?: 'pending' | 'active' | 'blocked' | 'closed'; // Chain lifecycle status
+  blocked_reason?: string; // Reason chain was blocked (for manual intervention)
+  blocked_at?: number; // Unix timestamp when chain was blocked
+  blocked_by?: string; // User/system that blocked the chain
   // Task verification fields (PR workflow quality gates)
   verification_passed?: boolean; // True if task verification succeeded (>= 80% criteria met)
   verification_results?: string; // JSON stringified TaskVerificationResult
