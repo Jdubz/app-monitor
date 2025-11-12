@@ -32,7 +32,7 @@ The deployment system uses:
 2. **Pull agent detects** → Downloads artifact within 2 minutes  
 3. **Blue-green deploy** → Deploys to inactive port (e.g., 5002)
 4. **Health checks** → 6 comprehensive checks validate new instance
-5. **Traffic switch** → Nginx routes to new port
+5. **Traffic switch** → Nginx routes to new port **ONLY IF HEALTHY** ✅
 6. **Drain period** → 30s with both instances running
 7. **Graceful shutdown** → Old instance shuts down over 90s
 8. **Cleanup** → Old releases removed (keep last 5)
@@ -40,6 +40,8 @@ The deployment system uses:
 
 **Total Time:** ~150 seconds (2.5 minutes)  
 **Downtime:** ZERO (always one instance serving traffic)
+
+**Health Check Failure:** If new instance fails health checks, deployment automatically rolls back to old instance (zero downtime maintained) ✅
 
 ### Health Checks (Automatic)
 
@@ -52,7 +54,19 @@ Before switching traffic, the system validates:
 5. ✅ **Docker connectivity** (can access Docker socket)
 6. ✅ **WebSocket connectivity** (optional, if tools available)
 
-**If any check fails:** Automatic rollback, old instance continues
+**If any check fails:** Automatic rollback, old instance continues serving traffic (zero downtime) ✅
+
+### Zero-Downtime Guarantees
+
+The deployment script ensures zero downtime through:
+
+1. **Health-gated traffic switching** - Nginx ONLY routes to new instance if ALL health checks pass
+2. **Automatic rollback** - Failed health checks trigger instant rollback to old instance  
+3. **Dual-instance drain** - 30s overlap with both instances running during switch
+4. **Graceful shutdown** - Old instance has 90s to complete in-flight work
+5. **State persistence** - All state saved to database before old instance stops
+
+**Result:** Production traffic NEVER hits an unhealthy instance ✅
 
 ### Graceful Shutdown (90 seconds)
 
@@ -198,6 +212,21 @@ This will:
 
 **Trade-offs Accepted:**
 - WebSocket connections briefly dropped during deploy
+- Clients automatically reconnect (implemented) ✅
+- Task state persists across restarts ✅
+
+### Future Enhancement: Self-Healing Deployments
+
+**Status:** Documented for future implementation (P3 priority)
+
+The system could leverage the existing review/repair bot system to automatically fix failed deployments. This would require:
+- Special "prod-deploy-bot" with access to production folder
+- Ability to update `.env`, deploy scripts, systemd configs
+- Integration with existing review/repair workflow
+
+See [SELF_HEALING_DEPLOYMENT.md](../plans/SELF_HEALING_DEPLOYMENT.md) for full design.
+
+**Current State:** Manual fixes after deployment failure are acceptable. Rollback mechanism ensures zero downtime.
 - Clients must reconnect (happens automatically in <5s)
 - No shared rooms across instances (not needed)
 

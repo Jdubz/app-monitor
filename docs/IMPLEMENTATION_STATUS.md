@@ -81,14 +81,7 @@
 
 ### Immediate (This Week)
 
-**1. Webhook Resilience (P1 - 1-2 days)**
-- Status: Not started
-- Priority: HIGH - Production stability critical
-- Impact: Prevents lost webhooks = stuck PRs
-- Location: `backend/src/services/githubWebhookHandler.service.ts`
-- Plan: Implement retry queue for failed webhook processing
-
-**2. Artifact System (P1 - 1 day)**
+**1. Artifact System (P1 - 1 day)**
 - Status: Not started  
 - Priority: HIGH - Debugging/metrics unlock
 - Components:
@@ -96,7 +89,7 @@
   - task_artifacts table + DB linking (4-6 hours)
 - Location: `backend/src/services/taskExecution.service.ts`
 
-**3. PR Self-Healing Loop (P0 - 3-5 days)**
+**2. PR Self-Healing Loop (P0 - 3-5 days)**
 - Status: Not started
 - Priority: CRITICAL - Blocks full autonomy
 - Components:
@@ -108,19 +101,21 @@
 
 ### Next Week
 
-**4. Auto-Merge Implementation (P1 - 2-3 days)**
+**3. Auto-Merge Implementation (P1 - 2-3 days)**
 - Status: Not started
 - Dependency: Requires self-healing working
 - Impact: Final piece for full PR autonomy
 
-**5. Quarantine System (P2 - 1-2 days)**
+**4. Quarantine System (P2 - 1-2 days)**
 - Status: Not started
 - Impact: Prevents runaway task failures
 - Plan: `docs/plans/DEV_BOT_PIPELINE_COMPLETION_PLAN_REVISED.md`
 
-**6. Stale PR Cleanup (P2 - 2-3 hours)**
-- Status: Not started
-- Impact: Low - manual cleanup viable for now
+**5. Deployment Improvements (P1 - 2-3 days)**
+- Status: In progress
+- Priority: HIGH - Zero-downtime deploys critical
+- Impact: Production stability during updates
+- Plan: Nginx routing improvements, health check enhancements
 
 ---
 
