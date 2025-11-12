@@ -30,7 +30,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
    * GET /status
    * Get overall system status with active tasks
    */
-  router.get('/', async (_req: Request, res: Response) => {
+  router.get('/status', async (_req: Request, res: Response) => {
     try {
       const status = await devBotsManager.getSystemStatus();
       if (status) {

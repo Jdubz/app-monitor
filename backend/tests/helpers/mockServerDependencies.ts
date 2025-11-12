@@ -393,6 +393,13 @@ class MockTaskQueue {
   getTasksWithUnmergedPRs() {
     return [baseTask];
   }
+
+  getTasksByStatus(status: string) {
+    if (status === 'completed') {
+      return [baseTask];
+    }
+    return [];
+  }
 }
 
 class MockPRWorkflowOrchestrator {
