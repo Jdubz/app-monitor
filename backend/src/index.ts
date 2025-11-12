@@ -31,7 +31,8 @@ server.listen(config.port, '0.0.0.0', () => {
 });
 
 // Graceful shutdown handling
-let isShuttingDown = false;
+// Export so health endpoint can check this
+export let isShuttingDown = false;
 
 async function gracefulShutdown(signal: string) {
   if (isShuttingDown) {

@@ -141,7 +141,7 @@ export class GitHubPRService {
 
       // Fetch PR data using gh CLI with timeout protection
       const { stdout } = await execWithTimeout(
-        `gh pr view ${prNumber} --repo ${owner}/${repo} --json number,url,state,mergeable,statusCheckRollup,reviews,comments`,
+        `gh pr view ${prNumber} --repo ${owner}/${repo} --json number,url,state,mergeable,mergeStateStatus,statusCheckRollup,reviews,comments`,
         30000 // 30 second timeout
       );
 
@@ -178,6 +178,7 @@ export class GitHubPRService {
         url: prData.url,
         state: prData.state,
         mergeable: prData.mergeable || 'UNKNOWN',
+        mergeable_state: prData.mergeStateStatus || 'unknown',
         checks,
         reviews,
         comments

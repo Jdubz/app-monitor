@@ -8,7 +8,9 @@ import type { TaskCreationContext } from '../types/taskContext.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const DB_PATH = path.join(__dirname, '..', '..', 'data', 'dev-bots.db');
+// Use app-monitor.db (consolidated database)
+// Support DATABASE_PATH env var for flexibility across environments
+const DB_PATH = process.env.DATABASE_PATH || path.join(__dirname, '..', '..', 'data', 'app-monitor.db');
 
 // Ensure data directory exists
 const dataDir = path.dirname(DB_PATH);

@@ -1361,7 +1361,7 @@ export class GitHubWebhookHandler {
     logger.info({
       category: 'api',
       action: 'pr_closed',
-      message: `PR #${prNumber} closed without merging`,
+      message: `PR #${prNumber} closed without merging - cleaning up ${tasks.length} task(s)`,
       details: { pr_number: prNumber, task_count: tasks.length }
     });
 
@@ -1371,6 +1371,29 @@ export class GitHubWebhookHandler {
       await this.taskQueue.updatePRStatus(task.id, {
         pr_status: 'closed'
       });
+
+      // Cancel/complete task if it's still pending or running
+      if (task.status === 'pending' || task.status === 'running') {
+        const completeStmt = (this.taskQueue as unknown as { db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } } }).db.prepare(`
+          UPDATE tasks
+          SET status = 'cancelled',
+              completed_at = ?,
+              result = ?
+          WHERE id = ?
+        `);
+        completeStmt.run(
+          Date.now(),
+          JSON.stringify({ reason: 'PR closed without merging' }),
+          task.id
+        );
+        
+        logger.info({
+          category: 'pr-workflow',
+          action: 'task_cancelled_pr_closed',
+          message: `Cancelled task ${task.id} because PR #${prNumber} was closed`,
+          details: { task_id: task.id, pr_number: prNumber }
+        });
+      }
     }
 
     // Clean up PR condition state

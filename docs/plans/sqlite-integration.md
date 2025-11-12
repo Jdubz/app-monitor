@@ -7,14 +7,14 @@
 - Migration script (`taskQueue.migration.ts`)
 - Conservative timeout strategy
 - Comprehensive documentation
+- DevBotsManager + task execution flow now delegate to `TaskQueueService` (`backend/src/services/devBotsManager.ts`, `backend/src/services/taskExecution.service.ts`)
 
 🔄 **IN PROGRESS**:
-- DevBotsManager integration
+- Queue-aware `/dev-bots/tasks/completed` response (see TODO in `backend/src/routes/dev-bots.routes.ts:1004`)
 
 ⏳ **PENDING**:
-- Complete DevBotsManager refactoring
-- API route updates
-- Testing and validation
+- Final API regression tests covering the queue-backed routes
+- Integration test harness that exercises the Vitest + TaskQueue happy-path end to end
 
 ---
 

@@ -504,6 +504,11 @@ After deploying the cleanup script:
 
 **Next action:** Deploy cleanup script to production and verify PRs unstuck.
 
+### Closure & Hand-off
+- Operational readiness tasks (service-manager hardening, cleanup script rollout, webhook monitoring) are broken down in `docs/plans/STUCK_PRODUCTION_PRS_AUTOMATION_PLAN.md`.
+- Success criteria for closing this incident: (1) systemd service owns the backend on both blue/green nodes, (2) `cleanup-processes.sh` runs as part of deploy + daily cron, (3) webhook silence alerting is configured in the observability stack.
+- Once those checks pass, record the deployment timestamp in the plan and archive this investigation.
+
 ---
 
 **Commits:**

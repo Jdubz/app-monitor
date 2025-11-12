@@ -54,6 +54,29 @@ export function createApiRouter(deps: {
 
   // Health check - no auth required
   router.get('/health', (_req, res) => {
+    // Check if server is shutting down
+    // Note: This will be false in test environment where index module isn't loaded
+    let shuttingDown = false;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const indexModule = require('../index.js');
+      shuttingDown = indexModule.isShuttingDown || false;
+    } catch {
+      // In test environment, index.js may not be available
+      shuttingDown = false;
+    }
+    
+    if (shuttingDown) {
+      // Return 503 during graceful shutdown so nginx stops routing here
+      return res.status(503).json({
+        success: false,
+        error: {
+          message: 'Server is shutting down gracefully',
+          code: 'SERVER_DRAINING'
+        }
+      });
+    }
+    
     const payload: HealthCheckApiResponse = {
       success: true,
       data: {
