@@ -1,187 +1,154 @@
 # Master Design Intent: App Monitor Automation Platform
 
 **Audience:** feature designers, reviewers, and operators validating that new implementations match the established philosophy across dev-monitor, dev-bots, the task queue, error detection & recovery, and the PR tracking system.
+**Authority:** Only human-directed bots may edit this document. All autonomous agents must adhere to it. Supporting architecture docs may evolve as long as they remain consistent with this intent, and any change to intent must update both this file and the originating sources.
 **Sources Reviewed (Nov 12, 2025):**
 - Architecture docs: `dev-monitor-architecture.md`, `dev-bots-overview.md`, `automatic-failure-recovery.md`, `failure-guards.md`, `recovery-queue-management.md`, `context-isolation.md`, `scope-control-system.md`, `healing-system-design.md`, `retry-mechanisms.md`, `timeout-strategy.md`.
 - Plan docs: `APP_MONITOR_CAPABILITY_ROADMAP.md`, `APP_MONITOR_STABILIZATION_PLAN.md`, `DEV_BOT_PIPELINE_ENHANCEMENT_PLAN.md`, `DEV_BOT_SAFETY_AND_PROMPT_IMPROVEMENTS.md`, `ERROR_DETECTION_AND_RECOVERY_ENHANCEMENT.md`, `PR_TRACKING_CRITICAL_FIX_IMPLEMENTATION.md`, `PR_TRACKING_SYSTEM_RESILIENCE_PLAN.md`, `CONTINUOUS_PR_SELF_HEALING.md`, `sqlite-integration.md`, `IMPLEMENTATION_STATUS.md`.
 - Implementations: `backend/src/services/*`, `frontend/src/*`, `dev-bots/*`.
 
-Use this document as the standing reference when judging whether new work aligns with the intended design. Update both this file and the originating source when intent changes.
+Use this document as the standing reference when judging whether new work aligns with the intended design.
 
 ---
 
-## Dev-Monitor Platform
+## Dev-Monitor Platform (Frontend Control Surface)
 
 ### Philosophy
-- Provide a single-pane operational cockpit for local services, Docker control, and task orchestration with deterministic behavior (React 18 + Express/Socket.IO on Node 18+ per `dev-monitor-architecture.md`).
-- Favor transparency over automation: every backend action emits Socket.IO events and the frontend renders raw state instead of inferred guesses.
-- Treat dev-monitor as the control plane for the rest of the system—task creation, worker health, and PR visibility all originate here.
+- Dev-monitor is the administrative UI for an otherwise automated system. It can expose multiple pages/tabs but must provide a cohesive interface for intervention and situational awareness.
+- Primary goals: surface service health, running versions, deploy outcomes, worker/bot counts, current tasks, and alertable events.
+- It is the human bridge into the automated backend; all orchestration flows from HTTP routes while state changes stream through Socket.IO.
 
 ### Architecture Snapshot
-- **Backend services** (`backend/src/services`): `ProcessManager` (strict port ownership, detached child lifecycles), `DockerManager`, `TaskQueueManager`, `LogStreamer`, `ConnectionManager`, and `TaskQueueWorker` (stand-alone poller to keep HTTP handlers non-blocking).
-- **Frontend** (`frontend/src`): modular React components subscribe directly to Socket.IO channels such as `process:*`, `docker:*`, and `task:*`. Hooks + server truth remove the need for a global store.
-- **Data Flow Guarantees:** HTTP routes perform orchestration; authoritative state lives in services and is pushed to the UI in real time. Task operations (`/api/tasks` family) immediately hand off to the SQLite queue so no in-memory lists linger.
+- Backend services (`backend/src/services`): `ProcessManager`, `DockerManager`, `TaskQueueManager`, `LogStreamer`, `ConnectionManager`, `TaskQueueWorker`, and auxiliary services (metrics, PR orchestration, etc.).
+- Frontend (`frontend/src`): React views subscribe to Socket.IO channels (`process:*`, `docker:*`, `task:*`, `pr:*`) and invoke REST endpoints for control actions.
+- Data flow: routes trigger deterministic backend actions; results are broadcast in real time. The frontend never invents state—UI reflects backend truth.
 
 ### Implementation Requirements & Invariants
-1. **Service Lifecycle Safety** (`backend/src/services/processManager.ts`)
-   - Configurations with `requirePorts=true` MUST fail fast if any required port is occupied. Do not auto-kill conflicting processes; instead bubble the descriptive error (including `getPortInfo()` output) to the UI.
-   - Logs persist under `logs/plain/<service>.log`. In-memory truncation (1,000 lines) is the only pruning permitted.
-2. **Docker Access Discipline** (`backend/src/services/dockerManager.ts`)
-   - All container operations go through Dockerode with circuit-breaker protection. Shelling out to `docker` from routes is prohibited.
-3. **Task Controls**
-   - Backend routes start/stop/restart processes or containers; scheduling belongs exclusively to `TaskQueueWorker`. UI controls must map 1:1 to backend functions to keep audits trustworthy.
-4. **Observability Budget**
-   - Maintain the documented 257 unit + 122 integration tests (≥80% coverage). Features that alter backend flows must extend the Vitest suites alongside code.
-
-### Operations & Telemetry
-- `ConnectionManager` logs every WebSocket join/leave; the frontend must rely on reconnect handlers rather than force-refreshing state.
-- Process state transitions (`stopped → starting → running → stopping → error`) are enforced by `ProcessLifecycle`. Any new states require updating that finite state machine and the frontend renderers together.
-- The service binds to `127.0.0.1` only. Remote exposure requires shipping Basic Auth/API key support first.
-
-### Known Workstreams
-- `APP_MONITOR_STABILIZATION_PLAN.md` still demands a quality-metrics dashboard + prompt template library. New backend metrics/hooks should keep that deliverable in mind.
+1. **Administrative Focus**
+   - Show health/version/deploy/bot telemetry at a glance. Provide controls for manual intervention (restart service, pause queue, block/unblock task chain, etc.).
+2. **Event-Driven Only**
+   - No cron jobs or long-lived timers in dev-monitor. Everything reacts to backend events or explicit user input.
+3. **Process & Docker Safety**
+   - `ProcessManager` with `requirePorts=true` must fail fast on conflicts and report the conflict details to the UI. Docker interactions must flow through `DockerManager` (Dockerode + circuit breaker).
+4. **Task Visibility**
+   - `/api/tasks` endpoints immediately hand off to the SQLite queue; UI lists must be driven by queue state, not local arrays.
+5. **Observability**
+   - Preserve ≥80% test coverage. Every change to lifecycle/transport code requires matching Vitest updates.
 
 ---
 
 ## Dev-Bots Autonomous Execution Layer
 
 ### Philosophy
-- Specialized AI agents run inside isolated, ephemeral Docker containers—never reuse a CLI context or filesystem between tasks (`context-isolation.md`).
-- Human-centric safeguards come before autonomy: scope control, verification, and recovery validate every outcome (`scope-control-system.md`, `automatic-failure-recovery.md`).
-- Automation must degrade gracefully. Failures trigger explicit review tasks instead of silently skipping requirements (`healing-system-design.md`).
+- Each AI agent runs exclusively inside an isolated filesystem within its container. Host worktrees/workspaces are forbidden.
+- Task context is managed per task/target: preloaded onto the container at spin-up, invalidated/rebuilt as needed, and never shared simultaneously between bots. Sequential reuse for speed is allowed when captured accurately (feature in progress).
+- Automation is “trust but verify.” Humans can override, but the automated review pipeline enforces scope control, verification, recovery, and continual improvement. Every task ultimately receives review attention that may spawn follow-up work.
 
 ### Core Components & Responsibilities
-| Component | Intent | Implementation Notes |
-|-----------|--------|----------------------|
-| `DevBotsManager` (`backend/src/services/devBotsManager.ts`) | Master orchestrator across process, Docker, queue, and completion services. | Injects dependencies for testability, initializes `SimpleFailureRecovery`, hooks PR workflows, and emits lifecycle events. New capabilities must follow the same DI pattern so mocks remain viable. |
-| `TaskExecutionService` | Pulls work from the SQLite queue, selects agents, runs Docker containers, and streams logs. | Uses `AgentSelector` + `TaskClassifier`; Docker commands run through a circuit breaker. Every execution records agent attempts for later fallbacks. |
-| `EphemeralWorkerService` | Manages per-task worktrees and container runtime while reporting heartbeats. | Must update queue heartbeats every 15s; missing heartbeats >30s auto-fail the owning task (`taskQueue.sqlite.ts`). |
-| `TaskCompletionService` | Applies quality gates, comprehensive verification, token tracking, and PR registration. | Verification (acceptance criteria, coverage, scope diff) is mandatory; failures flip the task to `failed` and flag it for recovery. |
-| `ScopeControlService` | Detects scope creep, isolates contaminated contexts, and schedules periodic cleanup. | Violation chains ≥3 tasks trigger emergency recovery hooks; downstream features should respect scope metadata when provided. |
-| Interactive session stack (`InteractiveSessionService`, `Gateway`, `Orchestrator`) | Human-in-the-loop terminals surfaced via dev-monitor. | Shares the same isolation and logging guarantees as automated runs; interactive commands cannot bypass audit logging. |
+| Component | Intent | Notes |
+|-----------|--------|-------|
+| `DevBotsManager` | Dependency-injected orchestrator across process, Docker, queue, completion, review, and PR subsystems. | Must expose hooks for review/repair chain events and for human intervention commands from dev-monitor. |
+| `TaskExecutionService` | Pulls work (via shared `TaskQueueService`), selects agents intelligently, provisions containers, streams logs. | Uses `AgentSelector` (Codex planning/analysis, Claude implementation, Copilot GitHub ops). Docker calls run inside a circuit breaker. |
+| `EphemeralWorkerService` | Manages container lifecycle + per-task context FS, emits heartbeats, and logs artifact locations. | Heartbeats every 15s; missing >30s triggers hung-task handling. |
+| `TaskCompletionService` | Enforces quality gates, token tracking, verification, PR registration, and emits structured results for review. | Always records verification output; failed pushes capture patch diffs for salvage. |
+| `ScopeControlService` & Context Manager | Detects scope creep, isolates contaminated contexts, schedules cleanup tasks, and coordinates context snapshots for reuse. | Violation chains ≥3 trigger emergency recovery hooks. |
+| Interactive Session Stack | Allows human-in-the-loop shells without bypassing isolation/logging guarantees. | Shares the same container orchestration + heartbeat rules. |
+| Review/Recovery Pipeline | Chain-aware REVIEW → FIX → COMPLETE orchestration with depth tracking and human escalation. | Detailed below. |
 
 ### Implementation Requirements
-1. **Concurrency & Priority**
-   - Max concurrent tasks default to 3. Cleanup/follow-up bots count toward this cap and jump the queue with priority 100 while respecting the repair-slot ceiling (ceil(max_concurrent/2)) per `recovery-queue-management.md`.
-2. **Metadata Discipline**
-   - Task metadata (agent type, PR info, scope, verification results) lives solely in SQLite. All mutations must use `TaskQueueService` APIs—no reintroduced arrays or maps.
-3. **Artifact Handling**
-   - Because work occurs inside containers, patch files are unavailable post-failure. Bots must log precise diffs and commands so operators can reconstruct context (`taskCompletion.service.ts`).
-4. **Safety Rails**
-   - Forbidden operations (`rm -rf`, `DROP TABLE`, credential edits, etc.) live in `SimpleFailureRecovery` and `FAILURE_GUARDS`. New features executing shell commands must reuse or extend those guard lists.
-5. **Agent Selection**
-   - Never hard-code agent IDs. Supply `task_category`, `file_patterns`, `estimated_complexity`, or `preferred_agent` hints so `AgentSelector` can make auditable decisions (`agentSelector.ts`).
-
-### Backlog Signals
-- `DEV_BOT_PIPELINE_ENHANCEMENT_PLAN.md` and `DEV_BOT_SAFETY_AND_PROMPT_IMPROVEMENTS.md` outline pending context-capture and prompt-hardening tasks. New work must reference the checklist items it satisfies.
-- `ERROR_DETECTION_AND_RECOVERY_ENHANCEMENT.md` mandates REVIEW → FIX → COMPLETE chains for every task. Until implemented, contributors must justify deviations when tasks skip those stages.
+1. **Chain Scheduling & Concurrency**
+   - Max concurrent implementation chains equals the number of available bots (configurable; currently 3). Chains include the original implementation task plus every follow-up (reviews, fixes, delegated tasks, etc.).
+   - New implementation tasks enter the queue FIFO but cannot start until an existing chain fully finishes (PR merged + chain closed). This prevents dozens of simultaneous PRs with unresolved follow-ups.
+2. **Review Chain Rules**
+   - Every failure or verification outcome spawns a REVIEW task that inspects prior attempts before proposing action.
+   - Automated chain depth limit: 4 reviews/fixes. The 5th review stops automated fixes, produces a summary, flags the chain as blocked, and alerts humans via dev-monitor.
+3. **Blocked Chain Handling**
+   - Blocked chains drop out of the “active chain” count, allowing other work to proceed. When a human unblocks/requeues, the chain may temporarily exceed bot count, but the queue worker must not start brand-new implementation tasks until active chains return to within capacity.
+   - Provide UI actions to view blocked chains, acknowledge alerts, and re-enter chains into the queue.
+4. **Hung Task/Container Handling**
+   - Task event logs and artifacts must detect stuck containers. Hung tasks are terminated, their contexts captured, and the failure immediately feeds into the REVIEW chain.
+5. **Patch Diff Salvage**
+   - When no branch/PR exists, follow-up tasks must inspect patch artifacts for reusable code. Salvaged patches can be preloaded into subsequent containers for healing.
+6. **Context & Safety**
+   - No host filesystem writes. Context snapshots are managed artifacts. Destructive operations are governed by the multi-step review pipeline plus telemetry.
 
 ---
 
 ## Task Queue & Dispatch Layer
 
 ### Philosophy
-- SQLite (`backend/src/services/taskQueue.sqlite.ts`) is the single source of truth for tasks, workers, and execution history. ACID guarantees take precedence over convenience.
-- The queue never kills long tasks automatically. Humans decide when “too long” truly is too long, guided by instrumentation (`timeout-strategy.md`).
+- SQLite (`backend/src/services/taskQueue.sqlite.ts`) is the authoritative task/workflow DB. All consumers must use the singleton `TaskQueueService` (via `getTaskQueueService()`) to avoid conflicting handles.
+- Task processing is event-driven and chain-aware. Scheduling honors FIFO submission order but enforces the concurrency rules described above.
+- Monitoring relies on log artifacts + the task event API. Hung tasks/containers are automatically detected, killed, and routed into the review/recovery flow.
 
-### Architecture & Data Model Highlights
-- Tables cover `tasks`, `task_executions`, `task_files`, `task_acceptance_criteria`, `workers`, `worker_heartbeats`, plus PR/verification columns already present.
-- All public APIs (`createTask`, `assignNextTask`, `completeTask`, `failTask`, `updateTask`) run inside transactions to keep state consistent.
-- `detectLongRunningTasks()` (default 30 minutes) and `detectStalledWorkers()` run on timers: the former logs warnings only, the latter auto-fails tasks when heartbeats stop for >30 seconds.
-- Manual timeout flow (`manuallyTimeoutTask`) updates both task rows and the most recent execution record; use it only after human verification.
-
-### Implementation Requirements & Checks
-1. **Singleton Access**
-   - Always obtain the queue via `getTaskQueueService()` (`taskQueue.factory.ts`). Direct instantiation risks duplicate file handles and stale locks.
-2. **Manual Timeouts Only**
-   - No feature may auto-call `manuallyTimeoutTask`. Subscribe to warning logs or metrics instead and involve a human.
-3. **Heartbeat Discipline**
-   - Every worker type (bots, interactive sessions, review agents) must update heartbeats at the cadence described in `sqlite-integration.md`. Missing beats are treated as infrastructure failures and will fail tasks automatically.
-4. **Priority Semantics**
-   - Numeric priorities control FIFO ordering. System-critical work (repair bots, PR follow-ups) uses `priority >= 100` but is still bounded by the repair-slot ceiling to avoid starvation.
-5. **Routes Backed by Queue**
-   - `/dev-bots/tasks/completed` and other API responses must read from SQLite. Do not resurrect array snapshots (identified TODO in `sqlite-integration.md`).
-
-### Integration Obligations
-- Consumers (dashboards, audits, PR evaluators) must use queue APIs so execution history, PR metadata, and verification results stay correlated.
-- Schema changes require updating both the SQLite DDL and the TypeScript interfaces—no ad-hoc JSON fields outside `metadata`.
+### Architecture & Requirements
+1. **Data Model**
+   - Tables for tasks, task executions, acceptance criteria, files, workers/heartbeats, PR metadata, verification results, and chain tracking.
+2. **Transactions & APIs**
+   - `createTask`, `assignNextTask`, `completeTask`, `failTask`, `updateTask`, and hung-task handlers must run within SQLite transactions.
+3. **Heartbeat & Hung Detection**
+   - Workers update heartbeats every 15s. Failure to send within 30s marks the task as failed and triggers the review chain.
+4. **Chain-Aware Scheduler**
+   - Queue worker enforces “chains ≤ bot count” for new implementations. A chain is considered active until its PR merges (or the chain is blocked/aborted).
+   - Blocked chains are excluded from the cap but must be manually resumed through dev-monitor.
+5. **Manual Interventions**
+   - Operators can manually timeout or block chains. Such actions must record reasons and surface in the UI.
 
 ---
 
 ## Error Detection, Verification & Recovery
 
 ### Philosophy
-- Assume tasks misreport success. Verification, failure guards, and recovery loops validate reality before merges or deployments (`ERROR_DETECTION_AND_RECOVERY_ENHANCEMENT.md`).
-- Recovery stays conservative: fix the environment first (cleanup), then target the original goal (follow-up). Only one attempt per stage, no infinite recursion.
+- Never trust reported success. Every task completion flows into a REVIEW → FIX → COMPLETE pipeline that verifies real-world outcomes (branch exists, PR exists, PR tracked, Copilot review done, etc.).
+- Recovery is chain-aware and conservative: cleanup/fix tasks operate within their own isolated containers, referencing prior attempts to avoid repeated mistakes.
+- Automated review depth is limited to four attempts. On the fifth, the system escalates to humans with a comprehensive summary.
 
-### Components & Responsibilities
-| Layer | Purpose | Implementation Expectations |
-|-------|---------|-----------------------------|
-| Failure Guards (`backend/src/services/taskFailureGuards.ts`, `failure-guards.md`) | Regex/exit-code detection for CLI mismatches, missing tools, permissions, OOM, auth, disk, Docker issues. | Guards either force immediate failure or allow retries. Extend with tests and suggested fixes. |
-| Timeout Strategy (`timeout-strategy.md`, queue helpers) | Three-tier approach: warn-only detection, manual operator timeouts, heartbeat-based infra protection. | Do not add automatic kill paths outside heartbeat logic until duration baselines justify them. |
-| SimpleFailureRecovery (`backend/src/services/failureRecovery.ts`, `automatic-failure-recovery.md`) | Two-stage cleanup → follow-up tasks with priority boosts and critical-file protections. | Cleanup limited to ≤5 files/≤100 lines and cannot touch protected paths (package manifests, env files, Dockerfiles, migrations). Repair bots never spawn recovery of their own. |
-| Task Verification Service (`backend/src/services/taskVerification.service.ts`) | Acceptance criteria parsing, coverage enforcement, scope diffing, recommendations. | Runs on every completion via `TaskCompletionService`; results persist in `tasks.verification_results` for downstream REVIEW tasks. |
-| Healing/Learning Systems (`healing-system-design.md`) | Pattern analysis, refined task generation, question detection for failed outputs. | Currently design-stage; implementations must log failures in machine-readable formats so future healers can replay context. |
-| Scope Control (`backend/src/services/scopeControl.service.ts`, `scope-control-system.md`) | Detects scope creep, isolates contaminated contexts, and schedules cleanup tasks. | Violation chains ≥3 trigger emergency recovery hooks. |
-
-### Implementation Requirements
-1. **Universal Verification**
-   - `TaskCompletionService` already invokes `TaskVerificationService`. Do not short-circuit verification—even “simple” tasks must produce acceptance-criteria evidence.
-2. **Safety Guards**
-   - Extending execution or scripting capabilities requires registering new destructive patterns in `FORBIDDEN_OPERATIONS` and keeping `CRITICAL_FILES` lists up to date.
-3. **Recovery Metadata**
-   - Repair bots must set `metadata.isRepairBot`, `repairStage`, and `originalTaskId` so concurrency accounting and duplicate-prevention logic continue to work.
-4. **Scope Hook**
-   - New automation that emits code diffs must feed outputs through `ScopeCreepDetector`; violations should tighten scope or schedule cleanup tasks per the plan.
-5. **Structured Logging**
-   - Detection/recovery flows must log structured events (`category`, `action`, `message`, `details`) so dashboards can alert on spikes in guard activity.
-
-### Roadmap Expectations
-- `ERROR_DETECTION_AND_RECOVERY_ENHANCEMENT.md` requires automated REVIEW → FIX → COMPLETE chains for every task, depth-limited to five hops. Until this orchestration ships, teams must manually create REVIEW tasks for critical work and store findings in `verification_results`.
+### Components
+- **Failure Pattern Detection:** Regex/exit-code classifiers categorize CLI/infra issues and feed the review planning step.
+- **Review/Repair Pipeline:** REVIEW tasks read prior attempts, verification output, and failure context to decide between FIX, CONTINUE, or ESCALATE. FIX tasks apply conservative changes; COMPLETE tasks finish original goals once prerequisites pass.
+- **Hung Task Monitor:** Detects unresponsive containers via heartbeats/logs, terminates them, and immediately spawns a REVIEW.
+- **Task Verification Service:** Mandatory on every completion—checks acceptance criteria, coverage, scope, and logs structured findings for the review chain.
+- **Scope/Context Control:** Ensures each attempt respects defined boundaries. Violation chains trigger emergency cleanup tasks and may block the chain for human review.
+- **Human Intervention Alerts:** Fifth-review escalations, repeated destructive patterns, or policy violations raise alerts in dev-monitor. Blocked chains must present UI actions for resuming or aborting.
 
 ---
 
 ## PR Tracking & Workflow Assurance
 
 ### Philosophy
-- Never trust “PR created” statements from bots—verify via GitHub, monitor continuously, and auto-merge only when all eight conditions pass (`CONTINUOUS_PR_SELF_HEALING.md`).
-- The system is event-driven: every GitHub webhook (PR, push, check_suite, check_run, review) re-evaluates the PR state, fingerprints outstanding issues, and spawns fix tasks as needed.
+- Never trust “task succeeded.” REVIEW must confirm that a branch exists, a PR targeting `main` exists, the PR record is stored in SQLite, and the PR monitor is actively tracking it.
+- Auto-merge only after Copilot review completes, all eight gate conditions pass, and delegated/copilot fix PRs merge back into the task branch.
+- All tasks spawned for a PR (reviews, fixes, validations, delegated work) belong to the originating implementation chain and count toward its completion.
 
-### System Components
-1. **PRWorkflowOrchestrator** (`backend/src/services/prWorkflowOrchestrator.service.ts`)
-   - Extracts PR metadata from task output, updates the originating task, registers PRs for monitoring, and initializes `PRMonitorService` + `PRArtifactRecoveryService` on startup. Configurable auto-merge (default true), 10-minute check timeout, 60-second poll.
-2. **PRMonitorService** (`backend/src/services/prMonitor.service.ts`)
-   - Encodes business logic for auto-merge eligibility, orphaned PR adoption, Copilot feedback ingestion, and follow-up task creation. Uses `ReviewCommentTracker` fingerprints to avoid duplicate fix tasks.
-3. **PRConditionStateService** (`backend/src/services/prConditionState.service.ts`)
-   - Tracks the eight gate conditions (CI checks, comment resolution, merge conflicts, branch freshness, review status, task verification, Copilot review, final validation). Uses per-PR evaluation locks and records `active_fix_tasks` keyed by fingerprints to detect partial fixes.
-4. **GitHub Integration Layer**
-   - `GitHubPRService` wraps `gh pr view` with circuit breaker + timeout safeguards. `GitHubWebhookHandler` routes events, maintains telemetry (auto-merge attempts, follow-ups, orphan adoption), and triggers condition evaluation.
+### System Components & Requirements
+1. **PRWorkflowOrchestrator**
+   - Extracts PR metadata, registers monitoring, and ties every follow-up task back to the original implementation chain.
+2. **PRMonitorService**
+   - Evaluates merge eligibility, adopts orphaned PRs, and spawns follow-up tasks. Must ensure Copilot review completion before attempting merges.
+3. **PRConditionStateService**
+   - Tracks the eight gate conditions plus active fix tasks (fingerprinted). Evaluations are locked per PR to avoid race conditions.
+4. **GitHub Integrations**
+   - `GitHubPRService` (with circuit breaker) + `GitHubWebhookHandler` provide event-driven updates. All webhook-driven tasks feed into the same chain-aware scheduler.
 5. **Review & Artifact Tooling**
-   - `ReviewCommentTracker` stores and classifies comments/resolution state. `PRArtifactRecoveryService` scans worker artifacts/logs to recover PR metadata after crashes and re-register PRs.
-
-### Implementation Requirements
-1. **Branch Currency Enforcement**
-   - `evaluateAndHandleBranchUpdate()` must enqueue branch-update tasks whenever `behind_by > 0` (Critical Bug #2 in `PR_TRACKING_CRITICAL_FIX_IMPLEMENTATION.md`). Regression tests must replay PRs 96–99 payloads.
-2. **Active Fix Task Hygiene**
-   - `active_fix_tasks` requires `updated_at`/status columns and a cleanup job that purges stale entries (>30 minutes) plus completion hooks that delete rows on success/failure.
-3. **Telemetry & Alerting**
-   - Emit metrics such as `pr_tracker.branch_updates`, `pr_tracker.fix_tasks_running`, and webhook heartbeats per `PR_TRACKING_SYSTEM_RESILIENCE_PLAN.md`. New automation must attach structured metrics for dashboards/alerts.
-4. **Data Durability**
-   - Converge on a single authoritative database for PR tracking with <5 minute RPO as mandated by the resilience plan. New state must target the consolidated schema and respect backup/restore scripts.
-5. **Orphan Handling**
-   - Adoption logic depends on branch/task ID patterns. Changes to naming conventions must update detection regexes in `PRMonitorService.detectSystemCreatedPR()`.
-6. **Self-Healing Tasks**
-   - Follow-up tasks created for unmet conditions should set `followup_for_pr`, encode acceptance criteria (CI, conflicts, review items), and run at high priority. Chain depth defaults (max depth 3, total 5) must be honored to avoid runaway automation.
+   - `ReviewCommentTracker` fingerprints comments (including Copilot) and enforces resolution. `PRArtifactRecoveryService` recovers lost PR info. Copilot review completion is a first-class state.
+6. **Copilot Delegation Workflow**
+   - `/delegate` commands or tagged comments may cause Copilot to open fix PRs against the task branch. These delegated tasks:
+     - Do not count toward the bot concurrency limit.
+     - Must merge back into the task branch before the main implementation PR can merge.
+     - Are preferred over spinning up dev-bots when within throttle limits (threshold TBD).
+     - Are considered part of the original task chain; AgentSelector must factor this when deciding whether to run Copilot vs. bot execution.
 
 ### Pending Workstreams
-- `PR_TRACKING_SYSTEM_RESILIENCE_PLAN.md`: choose consolidated storage, add `backup-pr-tracker.sh`/`restore-pr-tracker.sh`, enforce deploy safety gates, and ship heartbeat dashboards.
-- `PR_TRACKING_CRITICAL_FIX_IMPLEMENTATION.md`: finish Bugs #2/#3 (branch update enqueue + active task cleanup) and add fixture-driven regression tests + telemetry.
-- `PR_CREATION_AUTOMATION_RESTORE_PLAN.md`: correct `$HOME` resolution and token fallback inside worker containers before re-enabling unattended PR creation.
-- `CONTINUOUS_PR_SELF_HEALING.md`: implement event-driven REVIEW → FIX spawning with fingerprinted issues and partial-fix handling.
+- Consolidate PR storage + backups per `PR_TRACKING_SYSTEM_RESILIENCE_PLAN.md`.
+- Finish `PR_TRACKING_CRITICAL_FIX_IMPLEMENTATION.md` (branch currency, active task cleanup, fixture-driven tests, telemetry).
+- Complete `PR_CREATION_AUTOMATION_RESTORE_PLAN.md` (HOME resolution, token fallback).
+- Implement continuous review/fix chaining from `CONTINUOUS_PR_SELF_HEALING.md`.
+- Add UI for human intervention alerts, blocked-chain dashboards, and re-entry controls.
 
 ---
 
 ## Using This Document
-- Every proposal or pull request must cite the sections it touches and explain how the change preserves or intentionally alters the listed intent.
-- When intent changes, update this file **and** the originating architecture/plan document so reviewers always have a single source of truth.
-- Reviewers should treat deviations from these requirements as blockers unless explicitly signed off by the architecture owners.
+- Every change proposal or PR must cite the relevant sections here and explain how it preserves or intentionally alters the design intent.
+- Only human-directed efforts may change this master document. Automated agents must align their behavior with it.
+- Supporting architecture/plan documents may evolve, but they must reinforce the assertions made here. Any change to intent requires updating both this file and the originating sources.
+- Reviewers treat deviations as blockers unless explicitly approved by architecture owners.
