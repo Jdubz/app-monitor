@@ -651,8 +651,11 @@ export class PRConditionStateService {
     try {
       const prStatus = await this.github.getPRStatus(prNumber);
 
-      // Check mergeable_state for "behind" indicator
-      if (prStatus.mergeable_state === 'behind') {
+      // GitHub returns mergeStateStatus in UPPERCASE
+      const mergeState = (prStatus.mergeable_state || '').toUpperCase();
+
+      // Check if branch is behind base
+      if (mergeState === 'BEHIND') {
         return {
           condition_id: 'branch_updated',
           status: 'unmet',
@@ -666,7 +669,7 @@ export class PRConditionStateService {
       }
 
       // Check for clean/unstable states (up-to-date)
-      if (prStatus.mergeable_state === 'clean' || prStatus.mergeable_state === 'unstable') {
+      if (mergeState === 'CLEAN' || mergeState === 'UNSTABLE') {
         return {
           condition_id: 'branch_updated',
           status: 'met',
@@ -675,11 +678,11 @@ export class PRConditionStateService {
         };
       }
 
-      // Unknown or blocked state
+      // Unknown or blocked state - not ready yet
       return {
         condition_id: 'branch_updated',
         status: 'not_ready',
-        fingerprint: `state-${prStatus.mergeable_state || 'unknown'}`,
+        fingerprint: `state-${mergeState.toLowerCase() || 'unknown'}`,
         blocking_issues: []
       };
     } catch (error) {
