@@ -34,12 +34,17 @@ export interface ConditionState {
   last_checked: number;
 }
 
+/**
+ * BlockingIssue - Reference to a GitHub issue that blocks PR merge
+ *
+ * NOTE: This structure does NOT store GitHub data directly (per design principle:
+ * "Any information available from GitHub should NOT be stored in our DB").
+ * Instead, it stores references (IDs) that can be used to fetch data from GitHub on-demand.
+ */
 export interface BlockingIssue {
-  type: string;
-  description: string;
-  file?: string;
-  line?: number;
-  url?: string;
+  type: string;  // e.g., 'unresolved_comment', 'failing_check', 'merge_conflicts'
+  github_ref_type?: 'comment' | 'check_run' | 'review' | 'conflict';  // Type of GitHub entity
+  github_ref_id?: number | string;  // GitHub entity ID (comment_id, check_run_id, etc.)
   severity?: 'critical' | 'high' | 'medium' | 'low';
 }
 
@@ -488,11 +493,11 @@ export class PRConditionStateService {
         };
       }
 
-      // Build blocking issues
+      // Build blocking issues (store only references, not GitHub data)
       const blocking_issues: BlockingIssue[] = failingChecks.map(check => ({
         type: 'failing_check',
-        description: `CI check failed: ${check.name}`,
-        url: check.detailsUrl || undefined,
+        github_ref_type: 'check_run' as const,
+        github_ref_id: check.id || check.name,  // Store check ID or name for reference
         severity: 'high' as const
       }));
 
@@ -522,7 +527,6 @@ export class PRConditionStateService {
         fingerprint: 'evaluation-error',
         blocking_issues: [{
           type: 'evaluation_error',
-          description: 'Failed to fetch CI check status',
           severity: 'high'
         }]
       };
@@ -565,12 +569,13 @@ export class PRConditionStateService {
         };
       }
 
-      // Build blocking issues from threads
+      // Build blocking issues from threads (store only references, not GitHub data)
       const blocking_issues: BlockingIssue[] = blockingThreads.map(thread => {
         const firstComment = thread.comments[0];
         return {
           type: 'unresolved_comment',
-          description: firstComment.body.substring(0, 150) + (firstComment.body.length > 150 ? '...' : ''),
+          github_ref_type: 'comment' as const,
+          github_ref_id: firstComment.id,  // Store comment ID, not body
           severity: 'high' as const
         };
       });
@@ -633,7 +638,7 @@ export class PRConditionStateService {
           fingerprint: 'has-conflicts',
           blocking_issues: [{
             type: 'merge_conflicts',
-            description: 'PR has merge conflicts that must be resolved',
+            github_ref_type: 'conflict' as const,
             severity: 'high'
           }]
         };
@@ -684,7 +689,6 @@ export class PRConditionStateService {
           fingerprint: 'behind-base',
           blocking_issues: [{
             type: 'branch_behind',
-            description: 'PR branch is behind base branch and needs to be updated',
             severity: 'medium'
           }]
         };
@@ -761,7 +765,8 @@ export class PRConditionStateService {
       // Build blocking issues
       const blocking_issues: BlockingIssue[] = changeRequests.map(review => ({
         type: 'change_requested',
-        description: `${review.author} requested changes: ${review.body.substring(0, 150)}`,
+        github_ref_type: 'review' as const,
+        github_ref_id: review.id,  // Store review ID, not author/body
         severity: 'high' as const
       }));
 
@@ -823,25 +828,15 @@ export class PRConditionStateService {
       }
 
       if (task.verification_passed === false) {
-        // Parse verification results if available
-        let verificationDetails = 'Task verification failed';
-        if (task.verification_results) {
-          try {
-            const results = JSON.parse(task.verification_results);
-            verificationDetails = results.recommendations?.join('; ') || verificationDetails;
-          } catch {
-            // Ignore parse error
-          }
-        }
-
+        // Verification failed - task needs rework
         return {
           condition_id: 'task_verification',
           status: 'unmet',
           fingerprint: 'verification-failed',
           blocking_issues: [{
             type: 'verification_failed',
-            description: verificationDetails,
             severity: 'high'
+            // NOTE: verificationDetails is stored in task.verification_results, not here
           }]
         };
       }
@@ -906,7 +901,8 @@ export class PRConditionStateService {
             fingerprint: this.generateFingerprintFromList(copilotUnresolved.map(t => t.comments[0].body)),
             blocking_issues: copilotUnresolved.map(thread => ({
               type: 'copilot_review_comment',
-              description: thread.comments[0].body.substring(0, 200),
+              github_ref_type: 'comment' as const,
+              github_ref_id: thread.comments[0].id,  // Store comment ID, not body
               severity: 'high' as const
             }))
           };
@@ -923,7 +919,8 @@ export class PRConditionStateService {
             fingerprint: 'copilot-requested-changes',
             blocking_issues: [{
               type: 'copilot_changes_requested',
-              description: latestReview.body,
+              github_ref_type: 'review' as const,
+              github_ref_id: latestReview.id,  // Store review ID, not body
               severity: 'high'
             }]
           };
@@ -944,7 +941,6 @@ export class PRConditionStateService {
         fingerprint: 'awaiting-copilot',
         blocking_issues: [{
           type: 'copilot_review_pending',
-          description: 'Awaiting Copilot review',
           severity: 'medium'
         }]
       };
@@ -1002,7 +998,6 @@ export class PRConditionStateService {
         fingerprint: 'escalated-to-human',
         blocking_issues: [{
           type: 'human_review_required',
-          description: 'Failed validation twice - manual review required',
           severity: 'critical'
         }]
       };
@@ -1025,8 +1020,8 @@ export class PRConditionStateService {
           fingerprint: score >= 80 ? 'validation-passed' : `validation-failed-score-${score}`,
           blocking_issues: score >= 80 ? [] : [{
             type: 'validation_failed',
-            description: `Validation score ${score}/100 (threshold: 80)`,
             severity: 'high'
+            // NOTE: Validation score is stored in task.verification_results, not here
           }],
           metadata: { score, validation_task_id: latestValidation.id }
         };
@@ -1042,7 +1037,6 @@ export class PRConditionStateService {
       fingerprint: `validation-needed-attempt-${state.final_validation_state.validation_attempts}`,
       blocking_issues: [{
         type: 'needs_comprehensive_review',
-        description: 'All conditions met - needs final validation review',
         severity: 'medium'
       }]
     };
