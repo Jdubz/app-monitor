@@ -18,7 +18,8 @@ export const GIT_ENV_KEYS = [
   'GIT_AUTHOR_EMAIL',
   'GIT_COMMITTER_NAME',
   'GIT_COMMITTER_EMAIL',
-  'GITHUB_TOKEN'
+  'GITHUB_TOKEN',
+  'GH_TOKEN'  // gh CLI uses both GITHUB_TOKEN and GH_TOKEN
 ] as const;
 
 /**
@@ -28,6 +29,9 @@ export function buildGitEnvVars(): string[] {
   const gitEnvVars: string[] = [];
   const providedKeys: string[] = [];
 
+  // Always set HOME for gh CLI to find its config
+  gitEnvVars.push('-e', 'HOME=/home/node');
+
   for (const key of GIT_ENV_KEYS) {
     const value = process.env[key];
     if (value) {
@@ -35,12 +39,18 @@ export function buildGitEnvVars(): string[] {
       providedKeys.push(key);
     }
   }
+  
+  // If GITHUB_TOKEN is set but GH_TOKEN is not, set GH_TOKEN as well
+  if (process.env.GITHUB_TOKEN && !process.env.GH_TOKEN) {
+    gitEnvVars.push('-e', `GH_TOKEN=${process.env.GITHUB_TOKEN}`);
+    providedKeys.push('GH_TOKEN (from GITHUB_TOKEN)');
+  }
 
   logger.debug({
     category: 'docker',
     action: 'git_env_vars_prepared',
     message: `Prepared ${providedKeys.length} git environment variables`,
-    details: { providedKeys }
+    details: { providedKeys, homeSet: true }
   });
 
   return gitEnvVars;
@@ -80,7 +90,7 @@ export function getGitCredentialMounts(): string[] {
   return [
     '-v', `${homeDir}/.gitconfig:/home/node/.gitconfig:ro`,
     '-v', `${homeDir}/.git-credentials:/home/node/.git-credentials:ro`,
-    '-v', `${homeDir}/.config/gh:/home/node/.config/gh:ro`
+    '-v', `${homeDir}/.config/gh:/home/node/.config/gh:rw`  // rw for gh CLI state updates
   ];
 }
 

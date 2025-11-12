@@ -610,11 +610,12 @@ export class TaskExecutionService {
         // Mount git credentials for committing and pushing
         '-v', `${homeDir}/.gitconfig:/home/node/.gitconfig:ro`,  // Git config
         '-v', `${homeDir}/.git-credentials:/home/node/.git-credentials:ro`,  // Git credential store
-        '-v', `${homeDir}/.config/gh:/home/node/.config/gh:ro`,  // GitHub CLI auth
+        '-v', `${homeDir}/.config/gh:/home/node/.config/gh:rw`,  // GitHub CLI auth (rw for state updates)
         this.getAgentDockerImage(agent),
         'sh', '-c',
         // Clone fresh repository, then copy credentials and run Codex
         `set -e && ` +
+        `export HOME=/home/node && ` +  // Set HOME for gh CLI
         `mkdir -p /workspace && cd /workspace && ` +
         `git clone https://github.com/Jdubz/app-monitor.git . && ` +
         `git config --global user.name "DevBot" && ` +
@@ -647,11 +648,12 @@ export class TaskExecutionService {
         // Mount git credentials for committing and pushing
         '-v', `${homeDir}/.gitconfig:/home/node/.gitconfig:ro`,  // Git config
         '-v', `${homeDir}/.git-credentials:/home/node/.git-credentials:ro`,  // Git credential store
-        '-v', `${homeDir}/.config/gh:/home/node/.config/gh:ro`,  // GitHub CLI auth
+        '-v', `${homeDir}/.config/gh:/home/node/.config/gh:rw`,  // GitHub CLI auth (rw for state updates)
         this.getAgentDockerImage(agent),
         'sh', '-c',
         // Clone fresh repository, then copy credentials and run Claude
         `set -e && ` +
+        `export HOME=/home/node && ` +  // Set HOME for gh CLI
         `mkdir -p /workspace && cd /workspace && ` +
         `git clone https://github.com/Jdubz/app-monitor.git . && ` +
         `git config --global user.name "DevBot" && ` +

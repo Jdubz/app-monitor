@@ -279,7 +279,8 @@ export class EphemeralWorkerService {
       const ghConfigExists = fs.existsSync(ghConfigDir);
       
       if (ghConfigExists) {
-        binds.push(`${ghConfigDir}:/home/node/.config/gh:ro`);
+        // Mount as read-write in case gh CLI needs to update state files
+        binds.push(`${ghConfigDir}:/home/node/.config/gh:rw`);
         logger.info({
           category: 'process',
           action: 'gh_config_mounted',
@@ -289,21 +290,22 @@ export class EphemeralWorkerService {
             ghConfigDir,
             hostsFile: fs.existsSync(path.join(ghConfigDir, 'hosts.yml')),
             configFile: fs.existsSync(path.join(ghConfigDir, 'config.yml')),
-            mountBind: `${ghConfigDir}:/home/node/.config/gh:ro`,
+            mountBind: `${ghConfigDir}:/home/node/.config/gh:rw`,
+            containerHome: '/home/node',  // This is set via HOME env var
             hasGithubToken: !!process.env.GITHUB_TOKEN,
             hasGhToken: !!process.env.GH_TOKEN
           }
         });
       } else {
-        logger.warn({
+        logger.error({
           category: 'process',
           action: 'gh_config_not_found',
-          message: 'GitHub CLI config not found, PR creation may fail. Run: gh auth login',
+          message: `GitHub CLI config not found at ${ghConfigDir}. PR creation will fail!`,
           details: {
             homeDir,
             ghConfigDir,
-            hasGithubToken: !!process.env.GITHUB_TOKEN,
-            hasGhToken: !!process.env.GH_TOKEN
+            expectedPath: path.join(homeDir, '.config', 'gh'),
+            hint: 'Run: gh auth login'
           }
         });
       }
@@ -347,12 +349,18 @@ export class EphemeralWorkerService {
         `WORKER_ID=${workerId}`,
         `WORKSPACE_BRANCH=${baseBranch}`,
         `WORKSPACE_ID=${workspaceId}`,
+        `HOME=/home/node`,  // Explicitly set HOME for gh CLI to find config
         ...(task.is_repair_bot ? [`IS_IMPROVEMENT_TASK=true`, `PARENT_TASK_ID=${task.original_task_id}`] : [])
       ];
       
       // Only add GITHUB_TOKEN if it exists to avoid empty env var
       if (githubToken) {
         envVars.push(`GITHUB_TOKEN=${githubToken}`);
+      }
+      
+      // Also add GH_TOKEN for gh CLI fallback authentication
+      if (githubToken) {
+        envVars.push(`GH_TOKEN=${githubToken}`);
       }
 
       for (const key of this.config.envPassthroughKeys) {
