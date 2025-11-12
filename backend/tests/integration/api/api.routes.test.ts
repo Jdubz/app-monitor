@@ -1107,12 +1107,14 @@ describe('API Integration Suite', () => {
         method: 'post',
         url: '/api/dev-bots/export',
         body: { path: '/tmp/export.json' },
+        expectStatus: 410,
       },
       {
         name: 'POST /api/dev-bots/import',
         method: 'post',
         url: '/api/dev-bots/import',
         body: { path: '/tmp/export.json' },
+        expectStatus: 410,
       },
       {
         name: 'POST /api/dev-bots/onboarding/complete',
