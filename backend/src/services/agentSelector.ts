@@ -12,6 +12,7 @@
 
 import { logger } from '../utils/logger.js';
 import { TaskClassifier, type TaskCategory, type TaskComplexity } from './taskClassifier.js';
+import { CopilotThrottleManager } from './copilotThrottle.service.js';
 
 export type AgentType = 'claude' | 'codex' | 'copilot';
 
@@ -44,9 +45,11 @@ export interface AgentSelection {
  */
 export class AgentSelector {
   private readonly classifier: TaskClassifier;
+  private copilotThrottle?: CopilotThrottleManager;
 
-  constructor() {
+  constructor(copilotThrottle?: CopilotThrottleManager) {
     this.classifier = new TaskClassifier();
+    this.copilotThrottle = copilotThrottle;
 
     logger.info({
       category: 'automation',
@@ -54,7 +57,8 @@ export class AgentSelector {
       message: 'Intelligent agent selector initialized (Phase 0.2)',
       details: {
         strategy: 'intelligent_classification',
-        agents: ['claude', 'codex', 'copilot']
+        agents: ['claude', 'codex', 'copilot'],
+        copilotThrottleEnabled: !!copilotThrottle
       }
     });
   }

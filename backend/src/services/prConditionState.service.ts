@@ -1188,12 +1188,39 @@ export class PRConditionStateService {
     prStatus: PRStatus,
     parentTask: Task | null
   ): Partial<Task> {
+    // Chain tracking: maintain chain_id from parent, or create new one
+    const chainId = parentTask?.chain_id || crypto.randomBytes(16).toString('hex');
+    const chainDepth = (parentTask?.chain_depth || 0) + 1;
+
     const baseConfig = {
       followup_for_pr: prNumber,
       pr_branch: parentTask?.pr_branch || `pr-${prNumber}`,
       priority: 9,
-      parent_initiative: parentTask?.id
+      parent_initiative: parentTask?.id,
+      chain_id: chainId,
+      chain_depth: chainDepth
     };
+
+    // Check chain depth limit (block after 4 attempts)
+    if (chainDepth > 4) {
+      logger.warn({
+        category: 'pr-workflow',
+        action: 'chain_depth_exceeded',
+        message: `Chain depth ${chainDepth} exceeds limit for PR #${prNumber}`,
+        details: { prNumber, chainId, chainDepth, conditionId }
+      });
+      // Still create the task but with max priority to alert humans
+      return {
+        ...baseConfig,
+        type: 'manual-intervention',
+        task_category: 'review',
+        title: `Manual intervention needed for PR #${prNumber} - chain depth exceeded`,
+        description: `Fix attempts for ${conditionId} have exceeded the maximum chain depth (${chainDepth} > 4).\n\nThis indicates a systemic issue that requires human intervention.\n\nChain ID: ${chainId}\n\nPlease review and manually fix the issue.`,
+        acceptance_criteria: [`PR #${prNumber} issue resolved manually`],
+        assigned_agent: 'human',
+        priority: 10
+      };
+    }
 
     switch (conditionId) {
       case 'ci_checks_passing':
