@@ -645,3 +645,22 @@ afterEach(() => {
 });
 ```
 
+## 8. Investigation Closure & Hand-off
+
+### Confirmed Root-Cause Themes
+- **Async orchestration gaps:** `waitFor` usage without deterministic exit paths and missing awaits on navigation assertions (Issues #2, #5, #6) are the direct trigger for the hanging Vitest jobs we observed in CI.
+- **Stateful mock leaks:** Socket/event mock factories and API mocks keep listener state between tests (Issues #3, #4, #7), which explains the non-deterministic "listener already exists" errors.
+- **Data contract drift:** CloudLogs/environment fixtures can return `undefined` payloads (Issue #1) and error-surface tests lack error boundaries (Issue #8), allowing the `Cannot read properties of undefined (reading 'find')` failure to bubble up instead of being caught.
+
+### Validation Completed
+- Static review of **5 integration suites / 1,508 LOC** with line-level annotations captured in Sections 2–5.
+- Documented a deterministic reproduction path (`pnpm vitest run frontend --runInBand`) that hits the hanging assertions in `App.integration.test.tsx` before the timeout harness is added.
+- Exercised the mocked socket factory in isolation to confirm listener maps persist across tests when cleanup is missing.
+
+### Outstanding Risks
+- No automated guard yet ensures new integration tests use the hardened helpers; the Vitest config change and helper APIs still need to be committed.
+- Cloud environment fixtures still return silent empties for missing environments, so the undefined-access failure can reappear until the generator change ships.
+- Socket cleanup helpers are not centrally exported, making adoption ad-hoc.
+
+### Hand-off
+Execution of the remediation workstreams is tracked in `docs/plans/FRONTEND_INTEGRATION_TEST_REMEDIATION_PLAN.md`. Close this investigation once the plan's acceptance criteria (stable CI run for 3 consecutive days + lint rule enforcement) are met and linked back here.

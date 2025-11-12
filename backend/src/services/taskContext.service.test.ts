@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { getTaskContextService, resetTaskContextService } from './taskContext.getTaskContextService().js';
+import { getTaskContextService, resetTaskContextService } from './taskContext.service.js';
 import { getDatabase, closeDatabase } from './database.js';
 import type {
   TaskCreationContext,
