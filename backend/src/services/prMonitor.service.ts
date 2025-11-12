@@ -1133,6 +1133,7 @@ gh pr merge ${prNumber} --squash  # Or --merge or --rebase
       message: `Updated task ${taskId}`,
       details: {
         taskId,
+        prStatus: _prStatus,
         notes
       }
     });

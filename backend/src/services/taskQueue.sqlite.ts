@@ -867,87 +867,197 @@ export class TaskQueueService {
   }
 
   /**
-   * Assign next available task atomically
+   * Assign next available task using staged queue logic
+   * 
+   * Chain-aware scheduling:
+   * 1. Close completed chains (PR merged + no pending tasks)
+   * 2. Count active chains (non-blocked)
+   * 3. If under capacity, dequeue implementation task (new chain)
+   * 4. Otherwise, dequeue followup task (existing chain)
+   * 5. Check file conflicts and assign atomically
+   * 
    * Returns null if no tasks available or all have file conflicts
    */
   assignNextTask(): Task | null {
     return this.transaction(() => {
-      // Find next pending task ordered by priority and age
-      const taskStmt = this.db.prepare(`
-        SELECT * FROM tasks
-        WHERE status = 'pending'
-        ORDER BY priority DESC, created_at ASC
-        LIMIT 1
-      `);
+      // Step 1: Close completed chains
+      this.chainTracker.closeCompletedChains();
 
-      const task = taskStmt.get() as Task | undefined;
-      if (!task) return null;
+      // Step 2: Get chain statistics
+      const activeChains = this.chainTracker.countActiveChains();
+      const canStartNewChain = activeChains < this.maxConcurrentChains;
 
-      // Check for file conflicts
-      const conflictStmt = this.db.prepare(`
-        SELECT tf.file_path, t.id as conflicting_task_id
-        FROM task_files tf
-        JOIN tasks t ON tf.task_id = t.id
-        WHERE tf.file_path IN (SELECT file_path FROM task_files WHERE task_id = ?)
-        AND t.status = 'running'
-        AND t.id != ?
-      `);
+      logger.info({
+        category: 'process',
+        action: 'queue_worker_check',
+        message: `Active chains: ${activeChains}/${this.maxConcurrentChains}`,
+        details: { activeChains, maxChains: this.maxConcurrentChains, canStartNewChain }
+      });
 
-      const conflict = conflictStmt.get(task.id, task.id) as { file_path: string; conflicting_task_id: string } | undefined;
-      if (conflict) {
+      // Step 3: Select which queue to dequeue from
+      let task: Task | undefined;
+
+      if (canStartNewChain) {
+        // Try implementation queue first
+        task = this.dequeueImplementationTask();
+        
+        if (task) {
+          // Mark chain as active
+          this.activateChain(task.chain_id!);
+          logger.info({
+            category: 'process',
+            action: 'new_chain_started',
+            message: `Started new chain ${task.chain_id}`,
+            details: { chainId: task.chain_id, taskId: task.id, queueStage: task.queue_stage }
+          });
+        }
+      }
+
+      // Step 4: If no implementation task (or can't start new chain), try followup
+      if (!task) {
+        task = this.dequeueFollowupTask();
+        
+        if (task) {
+          logger.info({
+            category: 'process',
+            action: 'followup_task_dequeued',
+            message: `Dequeued followup task for chain ${task.chain_id}`,
+            details: { chainId: task.chain_id, taskId: task.id, queueStage: task.queue_stage }
+          });
+        }
+      }
+
+      if (!task) {
         logger.info({
           category: 'process',
-          action: 'task_assignment_blocked_by_file_conflict',
-          message: `Task ${task.id} blocked by file conflict with task ${conflict.conflicting_task_id}`
+          action: 'no_task_available',
+          message: 'No tasks available for dequeue',
+          details: { activeChains, canStartNewChain }
         });
         return null;
       }
 
-      // Assign task atomically
-      const now = Date.now();
-      const workerId = `bot-${task.assigned_agent}-${now}`;
+      // Step 5: Check file conflicts and assign
+      return this.assignTaskToWorker(task);
+    });
+  }
 
-      const updateStmt = this.db.prepare(`
-        UPDATE tasks
-        SET status = 'running',
-            assigned_at = ?,
-            started_at = ?,
-            assigned_worker = ?
-        WHERE id = ?
-      `);
+  /**
+   * Dequeue next implementation task (new chain)
+   */
+  private dequeueImplementationTask(): Task | undefined {
+    const stmt = this.db.prepare(`
+      SELECT * FROM tasks
+      WHERE status = 'pending'
+      AND queue_stage = 'implementation'
+      AND chain_status = 'pending'
+      ORDER BY priority DESC, created_at ASC
+      LIMIT 1
+    `);
 
-      updateStmt.run(now, now, workerId, task.id);
+    return stmt.get() as Task | undefined;
+  }
 
-      // Create worker record
-      const workerStmt = this.db.prepare(`
-        INSERT INTO workers (id, agent_id, status, current_task_id, created_at, last_heartbeat)
-        VALUES (?, ?, 'running', ?, ?, ?)
-      `);
+  /**
+   * Dequeue next followup task (existing chain, skip blocked chains)
+   */
+  private dequeueFollowupTask(): Task | undefined {
+    const stmt = this.db.prepare(`
+      SELECT * FROM tasks
+      WHERE status = 'pending'
+      AND queue_stage = 'followup'
+      AND chain_status != 'blocked'
+      ORDER BY priority DESC, created_at ASC
+      LIMIT 1
+    `);
 
-      workerStmt.run(workerId, task.assigned_agent, task.id, now, now);
+    return stmt.get() as Task | undefined;
+  }
 
-      // Record execution attempt
-      const executionStmt = this.db.prepare(`
-        INSERT INTO task_executions (task_id, worker_id, attempt_number, started_at)
-        VALUES (?, ?, ?, ?)
-      `);
+  /**
+   * Mark chain as active
+   */
+  private activateChain(chainId: string): void {
+    const stmt = this.db.prepare(`
+      UPDATE tasks
+      SET chain_status = 'active'
+      WHERE chain_id = ?
+      AND chain_status = 'pending'
+    `);
 
-      executionStmt.run(task.id, workerId, task.retry_count + 1, now);
+    stmt.run(chainId);
+  }
 
+  /**
+   * Assign task to worker after checking file conflicts
+   */
+  private assignTaskToWorker(task: Task): Task | null {
+    // Check for file conflicts
+    const conflictStmt = this.db.prepare(`
+      SELECT tf.file_path, t.id as conflicting_task_id
+      FROM task_files tf
+      JOIN tasks t ON tf.task_id = t.id
+      WHERE tf.file_path IN (SELECT file_path FROM task_files WHERE task_id = ?)
+      AND t.status = 'running'
+      AND t.id != ?
+    `);
+
+    const conflict = conflictStmt.get(task.id, task.id) as { file_path: string; conflicting_task_id: string } | undefined;
+    if (conflict) {
       logger.info({
         category: 'process',
-        action: 'task_assigned',
-        message: `Assigned task ${task.id} to worker ${workerId}`
+        action: 'task_assignment_blocked_by_file_conflict',
+        message: `Task ${task.id} blocked by file conflict with task ${conflict.conflicting_task_id}`,
+        details: { taskId: task.id, conflictingFile: conflict.file_path }
       });
+      return null;
+    }
 
-      return {
-        ...task,
-        status: 'running',
-        assigned_worker: workerId,
-        assigned_at: now,
-        started_at: now
-      };
+    // Assign task atomically
+    const now = Date.now();
+    const workerId = `bot-${task.assigned_agent}-${now}`;
+
+    const updateStmt = this.db.prepare(`
+      UPDATE tasks
+      SET status = 'running',
+          assigned_at = ?,
+          started_at = ?,
+          assigned_worker = ?
+      WHERE id = ?
+    `);
+
+    updateStmt.run(now, now, workerId, task.id);
+
+    // Create worker record
+    const workerStmt = this.db.prepare(`
+      INSERT INTO workers (id, agent_id, status, current_task_id, created_at, last_heartbeat)
+      VALUES (?, ?, 'running', ?, ?, ?)
+    `);
+
+    workerStmt.run(workerId, task.assigned_agent, task.id, now, now);
+
+    // Record execution attempt
+    const executionStmt = this.db.prepare(`
+      INSERT INTO task_executions (task_id, worker_id, attempt_number, started_at)
+      VALUES (?, ?, ?, ?)
+    `);
+
+    executionStmt.run(task.id, workerId, task.retry_count + 1, now);
+
+    logger.info({
+      category: 'process',
+      action: 'task_assigned',
+      message: `Assigned task ${task.id} to worker ${workerId}`,
+      details: { taskId: task.id, workerId, chainId: task.chain_id, queueStage: task.queue_stage }
     });
+
+    return {
+      ...task,
+      status: 'running',
+      assigned_worker: workerId,
+      assigned_at: now,
+      started_at: now
+    };
   }
 
   /**
