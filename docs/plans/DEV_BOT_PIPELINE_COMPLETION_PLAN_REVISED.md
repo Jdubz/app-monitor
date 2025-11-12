@@ -619,3 +619,157 @@ Based on "only critical tasks that need human intervention":
 **Supersedes:** DEV_BOT_PIPELINE_COMPLETION_PLAN.md (initial assessment)  
 **Status:** Accurate based on deep code audit  
 **Owner:** Platform Tooling Team
+
+---
+
+## Additional Enhancements (from DEV_BOT_PIPELINE_ENHANCEMENT_PLAN.md)
+
+### Context-Rich Tasks
+
+**Objective:** Attach diagnostic breadcrumbs to tasks
+
+**Implementation:**
+- Environment snapshots (app version, git SHA, build timestamp)
+- Recent logs / network events (bounded lists)
+- Screenshot or artifact references
+- React utilities for UI-initiated tasks
+
+**Database Schema Extensions:**
+```sql
+ALTER TABLE tasks ADD COLUMN task_context TEXT; -- JSON
+ALTER TABLE tasks ADD COLUMN task_logs TEXT; -- JSON array
+ALTER TABLE tasks ADD COLUMN task_network_events TEXT; -- JSON
+
+CREATE TABLE task_artifacts (
+  id INTEGER PRIMARY KEY,
+  task_id INTEGER,
+  artifact_type TEXT, -- screenshot, patch, log, summary
+  file_path TEXT,
+  created_at TEXT
+);
+```
+
+### Dev-Bot Telemetry
+
+**Track Every Run:**
+```sql
+CREATE TABLE task_automation_runs (
+  id INTEGER PRIMARY KEY,
+  task_id INTEGER,
+  status TEXT, -- running, success, failure
+  log_dir TEXT,
+  summary TEXT,
+  exit_code INTEGER,
+  commit_sha TEXT,
+  started_at TEXT,
+  completed_at TEXT
+);
+```
+
+### Workspace Enhancements
+
+**Improvements:**
+1. Git mirror health checks
+2. Standardized bootstrap commands
+3. Structured summaries for every run
+4. Per-target configuration (image, branch, commands, credentials)
+
+**Bootstrap Scripts:**
+- Configure git identity/remote per target
+- Install work-target dependencies
+- Set up environment variables
+- Validate workspace before task execution
+
+### Isolation & Work-Target Registry
+
+**Per-Target Configuration:**
+```json
+{
+  "work_target": "app-monitor",
+  "dev_bot_config": {
+    "image": "app-monitor-dev-bot:latest",
+    "default_branch": "main",
+    "bootstrap_commands": [
+      "npm ci",
+      "npm run build"
+    ],
+    "environment": {
+      "NODE_ENV": "development"
+    },
+    "credentials": {
+      "github_token": "${GITHUB_TOKEN}"
+    }
+  }
+}
+```
+
+**Benefits:**
+- Multiple work-targets can coexist
+- Each has isolated repos, secrets, automation config
+- Coordinated through App Monitor registry
+
+---
+
+## Combined Implementation Timeline
+
+**Immediate (Week 1):**
+1. ✅ Intelligent agent selection (COMPLETE)
+2. Generate session summaries
+3. Link artifacts in database
+
+**Short-term (Week 2):**
+4. Implement Copilot delegation
+5. Add task context capture
+6. Enhance bootstrap scripts
+
+**Medium-term (Weeks 3-4):**
+7. Dev-bot telemetry system
+8. Workspace health checks
+9. Quarantine system for repeated failures
+
+**Long-term (Month 2):**
+10. Multi-work-target support
+11. Advanced diagnostics UI
+12. Automated remediation workflows
+
+---
+
+## Success Metrics
+
+**Dev-Bot Pipeline Complete When:**
+- ✅ Intelligent agent selection working
+- ✅ Session summaries generated
+- ✅ Artifacts linked in database
+- ✅ Copilot delegation implemented
+- 90% task success rate
+- < 3 retry attempts average
+- Automated diagnostics for 80% of failures
+
+**Enhancement Complete When:**
+- Rich context on all tasks
+- Complete automation telemetry
+- Multi-work-target support
+- Workspace health monitoring
+- Quarantine system operational
+
+---
+
+## Consolidated References
+
+**Core Services:**
+- `backend/src/services/devBotsManager.ts`
+- `backend/src/services/taskExecution.service.ts`
+- `backend/src/services/agentSelector.ts`
+- `backend/src/services/failureRecovery.ts`
+
+**UI Components:**
+- `frontend/src/components/dev-bots/interactive/InteractiveSessionTab.tsx`
+- `frontend/src/components/dev-bots/TaskLogViewer.tsx`
+
+**Database:**
+- `backend/data/app-monitor.db` (consolidated)
+
+**Previous Plans (Now Consolidated):**
+- DEV_BOT_PIPELINE_ENHANCEMENT_PLAN.md → Merged here
+- See `docs/archive/` for historical versions
+
