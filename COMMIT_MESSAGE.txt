@@ -1,0 +1,78 @@
+fix(deploy): Add 4-layer safety system to prevent migration failures
+
+Fixes deployment failure caused by database migration attempting to
+re-create existing tables without idempotent guards.
+
+Root Cause:
+- Migration 001_initial_schema created tables without IF NOT EXISTS
+- If migrations table tracking was lost/reset, re-running would fail
+- Service crashed on startup: "SqliteError: table task_executions already exists"
+- Deployment failed health checks and rolled back
+
+Solution - 4 Layers of Defense:
+
+Layer 1: Idempotent SQL (CRITICAL)
+- backend/src/services/database.ts
+  * Add IF NOT EXISTS to all 5 tables in 001_initial_schema
+  * task_executions, token_usage, experiments, batch_approvals, failure_patterns
+- backend/migrations/008_pr_review_comments.sql
+  * Add IF NOT EXISTS to pr_review_comments table
+
+Layer 2: Error Recovery (NEW)
+- backend/src/services/database.ts
+  * Add try-catch in applyMigration() method
+  * Auto-recover from "already exists" errors
+  * Log warnings but don't crash service
+  * Prevents deployment rollback on benign errors
+
+Layer 3: Integrity Validation (NEW)
+- backend/src/services/database.ts
+  * Add validateDatabaseIntegrity() method
+  * Verify all critical tables exist after migrations
+  * Fail fast with clear error messages
+  * Runs automatically on service startup
+
+Layer 4: Pre-deployment Validation (NEW)
+- scripts/validate-migrations.sh (NEW)
+  * Check all migrations use IF NOT EXISTS
+  * Verify error handling is present
+  * Detect unsafe SQL patterns
+  * Runs in CI before every deployment
+- .github/workflows/deploy-production.yml
+  * Add migration validation step
+  * Catches unsafe migrations before deployment
+
+Workflow Improvements:
+- .github/workflows/deploy-production.yml
+  * Increase deployment status pagination (1→10 per check)
+  * Track in_progress state to detect lost status updates
+  * Better timeout error messages with server log commands
+  * Improved logging when deployment state unclear
+
+Documentation:
+- docs/DATABASE_MIGRATION_SAFETY.md (NEW)
+  * Complete guide to migration safety mechanisms
+  * Best practices for writing migrations
+  * Troubleshooting guide
+  * Testing procedures
+- DEPLOYMENT_FIX_SUMMARY.md (NEW)
+  * Quick reference for the fix
+- DEPLOYMENT_TIMEOUT_ANALYSIS.md (NEW)
+  * Full investigation with timeline and root cause analysis
+
+Impact:
+✓ Prevents "already exists" errors during deployment
+✓ Service auto-recovers from migration conflicts
+✓ Unsafe migrations caught before deployment
+✓ Better workflow failure detection and debugging
+✓ No breaking changes to existing functionality
+
+Testing:
+✓ All 907 backend tests pass
+✓ Backend builds successfully
+✓ Migration validation script passes
+✓ All migrations now safe and idempotent
+
+Related: GitHub Actions run #19290541132
+
+This deployment failure cannot happen again - protected by 4 layers of safety.

@@ -137,7 +137,7 @@
 - Status: Investigation complete, ready for implementation
 - Priority: HIGH - Code quality improvement
 - Impact: Remove data duplication, align with design principles
-- Plan: `docs/investigations/SCHEMA_AUDIT_AND_CLEANUP.md`
+- Plan: `docs/analysis/SCHEMA_AUDIT_AND_CLEANUP.md`
 - Columns to remove: pr_url, pr_branch, pr_status, pr_checks_status, pr_review_status, pr_created_at, pr_merged_at
 
 **3. Artifact System (P1 - 1 day)**

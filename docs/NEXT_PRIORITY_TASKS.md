@@ -80,7 +80,7 @@
 
 **Current State**: Migration plan complete, ready for implementation
 
-**Reference**: `docs/investigations/SCHEMA_AUDIT_AND_CLEANUP.md`
+**Reference**: `docs/analysis/SCHEMA_AUDIT_AND_CLEANUP.md`
 
 **Duplicate Columns to Remove**:
 - pr_url, pr_branch, pr_status, pr_checks_status, pr_review_status, pr_created_at, pr_merged_at

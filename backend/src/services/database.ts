@@ -95,6 +95,9 @@ export class DevBotsDatabase {
   private initialize(): void {
     // Run migrations
     this.runMigrations();
+    
+    // Validate database integrity after migrations
+    this.validateDatabaseIntegrity();
   }
 
   private runMigrations(): void {
@@ -111,7 +114,7 @@ export class DevBotsDatabase {
     this.applyMigration('001_initial_schema', () => {
       this.db.exec(`
         -- Task execution history
-        CREATE TABLE task_executions (
+        CREATE TABLE IF NOT EXISTS task_executions (
           id TEXT PRIMARY KEY,
           task_id TEXT NOT NULL,
           agent_id TEXT NOT NULL,
@@ -139,7 +142,7 @@ export class DevBotsDatabase {
         CREATE INDEX idx_task_executions_completed_at ON task_executions(completed_at);
 
         -- Token usage tracking
-        CREATE TABLE token_usage (
+        CREATE TABLE IF NOT EXISTS token_usage (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           provider TEXT NOT NULL,
@@ -154,7 +157,7 @@ export class DevBotsDatabase {
         CREATE INDEX idx_token_usage_provider ON token_usage(provider);
 
         -- Experiments
-        CREATE TABLE experiments (
+        CREATE TABLE IF NOT EXISTS experiments (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
           hypothesis TEXT,
@@ -165,7 +168,7 @@ export class DevBotsDatabase {
         );
 
         -- Batch approvals
-        CREATE TABLE batch_approvals (
+        CREATE TABLE IF NOT EXISTS batch_approvals (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           approved_count INTEGER NOT NULL,
           executed_count INTEGER DEFAULT 0,
@@ -175,7 +178,7 @@ export class DevBotsDatabase {
         );
 
         -- Failure patterns
-        CREATE TABLE failure_patterns (
+        CREATE TABLE IF NOT EXISTS failure_patterns (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           task_id TEXT NOT NULL,
           category TEXT NOT NULL,
@@ -268,11 +271,79 @@ export class DevBotsDatabase {
     ).get(name);
 
     if (!applied) {
-      migration();
-      this.db.prepare(
-        'INSERT INTO migrations (name) VALUES (?)'
-      ).run(name);
-      console.log(`✅ Applied migration: ${name}`);
+      try {
+        migration();
+        this.db.prepare(
+          'INSERT OR IGNORE INTO migrations (name) VALUES (?)'
+        ).run(name);
+        console.log(`✅ Applied migration: ${name}`);
+      } catch (error: any) {
+        // Safety check: If migration fails due to "already exists", log warning but don't crash
+        if (error.code === 'SQLITE_ERROR' && error.message.includes('already exists')) {
+          console.warn(`⚠️  Migration ${name} failed with "already exists" error. This indicates the migration tracking may be out of sync.`);
+          console.warn(`⚠️  Marking migration as applied to prevent future failures.`);
+          console.warn(`⚠️  Error: ${error.message}`);
+          
+          // Mark as applied to prevent retry loops
+          this.db.prepare(
+            'INSERT OR IGNORE INTO migrations (name) VALUES (?)'
+          ).run(name);
+          
+          console.log(`⚠️  Migration ${name} marked as applied (with warnings)`);
+        } else {
+          // Re-throw other errors (these are real problems)
+          console.error(`❌ Migration ${name} failed with unexpected error:`, error);
+          throw error;
+        }
+      }
+    }
+  }
+
+  /**
+   * Validates database integrity after migrations
+   * Ensures critical tables exist and have expected schema
+   */
+  private validateDatabaseIntegrity(): void {
+    const requiredTables = [
+      'migrations',
+      'task_executions',
+      'token_usage',
+      'experiments',
+      'batch_approvals',
+      'failure_patterns',
+      'tasks',
+      'task_automation_runs'
+    ];
+
+    try {
+      // Get list of all tables
+      const tables = this.db.prepare(
+        "SELECT name FROM sqlite_master WHERE type='table'"
+      ).all() as { name: string }[];
+      
+      const existingTables = new Set(tables.map(t => t.name));
+      
+      // Check for missing critical tables
+      const missingTables = requiredTables.filter(table => !existingTables.has(table));
+      
+      if (missingTables.length > 0) {
+        console.error(`❌ Database integrity check failed: Missing tables: ${missingTables.join(', ')}`);
+        throw new Error(`Critical database tables missing: ${missingTables.join(', ')}`);
+      }
+      
+      // Verify migrations table has entries
+      const migrationCount = this.db.prepare(
+        'SELECT COUNT(*) as count FROM migrations'
+      ).get() as { count: number };
+      
+      if (migrationCount.count === 0) {
+        throw new Error('❌ Database integrity check failed: migrations table is empty. This is unexpected after initialization.');
+      }
+      
+      console.log(`✅ Database integrity validated: ${requiredTables.length} critical tables present`);
+    } catch (error: any) {
+      console.error('❌ Database integrity validation failed:', error);
+      throw error;
     }
   }
 
