@@ -2,8 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { GitHubWebhookHandler } from './githubWebhookHandler.service.js';
 
 describe('GitHubWebhookHandler', () => {
-  const handler = new GitHubWebhookHandler();
-
   describe.skip('Task ID Extraction from PR Titles', () => {
     // NOTE: This method moved to BaseWebhookHandler and is protected
     // These tests are skipped as the method is now internal to the handler architecture

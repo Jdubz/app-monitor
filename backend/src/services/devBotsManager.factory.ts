@@ -32,6 +32,7 @@ import { StatusAggregationService } from './statusAggregation.service.js';
 import { RetryCoordinationService } from './retryCoordination.service.js';
 import { SystemLifecycleService } from './systemLifecycle.service.js';
 import { SystemInitializationService } from './systemInitialization.service.js';
+import { InteractiveSessionCoordinator } from './interactiveSessionCoordinator.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
 
 /**
@@ -242,6 +243,13 @@ export async function createDevBotsManagerDependencies(
     async () => {} // endInteractiveSession placeholder
   );
 
+  // Create InteractiveSessionCoordinator
+  const interactiveSessionCoordinator = new InteractiveSessionCoordinator(
+    interactiveSessionService,
+    interactiveSessionOrchestrator,
+    interactiveSessionStreamManager
+  );
+
   return {
     processManager,
     dockerManager,
@@ -269,5 +277,6 @@ export async function createDevBotsManagerDependencies(
     workerHealthMonitor,
     systemLifecycleService,
     systemInitializationService,
+    interactiveSessionCoordinator,
   };
 }

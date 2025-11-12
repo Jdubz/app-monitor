@@ -32,6 +32,7 @@ import type { StatusAggregationService } from './statusAggregation.service.js';
 import type { RetryCoordinationService } from './retryCoordination.service.js';
 import type { SystemLifecycleService } from './systemLifecycle.service.js';
 import type { SystemInitializationService } from './systemInitialization.service.js';
+import type { InteractiveSessionCoordinator } from './interactiveSessionCoordinator.service.js';
 
 /**
  * All dependencies required by DevBotsManager
@@ -85,6 +86,9 @@ export interface DevBotsManagerDependencies {
 
   // System initialization
   systemInitializationService: SystemInitializationService;
+
+  // Interactive session coordination
+  interactiveSessionCoordinator: InteractiveSessionCoordinator;
 }
 
 /**
