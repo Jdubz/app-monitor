@@ -1,12 +1,39 @@
 # Dev-Bot Foundational Upgrades Design
 
-Source Plans:
-- docs/plans/DEV_BOT_PIPELINE_COMPLETION_PLAN_REVISED.md
-- docs/plans/DEV_BOT_PIPELINE_ENHANCEMENT_PLAN.md
-- docs/plans/DEV_BOT_SAFETY_AND_PROMPT_IMPROVEMENTS.md
-- docs/plans/DEV_BOT_WORK_TARGET_PRODUCTION_PLAN.md
+## Document Metadata
 
-Status: Partially implemented (~85% pipeline completion). Multiple enhancements remain unbuilt and must be aligned with the latest master design intent.
+| Field | Value |
+|-------|-------|
+| **Status** | 🟡 Partially Implemented |
+| **Priority** | P1 |
+| **Dependencies** | Staged Task Queue (P0) |
+| **Last Updated** | November 12, 2025 |
+| **Implementation Progress** | 85% (pipeline core complete, analytics/diagnostics remain) |
+
+## Quick Reference
+
+**What**: Data/analytics backbone delivering session summaries, artifact management, diagnostic capture, safety gates, and work-target abstractions to support review chains and context bundles.
+
+**Why**: Review chains and context management require structured task metadata, artifact tracking, and diagnostic data. Work targets enable multi-environment deployment support.
+
+**Current Status**: Core pipeline 85% complete. Outstanding: session summaries, artifact DB, diagnostics, safety gates, work-target APIs.
+
+## Source Plans
+- `docs/plans/DEV_BOT_PIPELINE_COMPLETION_PLAN_REVISED.md`
+- `docs/plans/DEV_BOT_PIPELINE_ENHANCEMENT_PLAN.md`
+- `docs/plans/DEV_BOT_SAFETY_AND_PROMPT_IMPROVEMENTS.md`
+- `docs/plans/DEV_BOT_WORK_TARGET_PRODUCTION_PLAN.md`
+
+## Table of Contents
+
+1. [Objectives](#objectives)
+2. [Plan Snapshot](#plan-snapshot)
+3. [Requirements](#requirements)
+4. [Architecture Considerations](#architecture-considerations)
+5. [Implementation Steps](#implementation-steps)
+6. [Success Criteria](#success-criteria)
+7. [Testing Strategy](#testing-strategy)
+8. [Related Files](#related-files)
 
 ## Objectives
 1. Finish the data/analytics foundations (session summaries, artifact DB, automation-run history) required for review chains and context bundles.
