@@ -18,7 +18,7 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
    * GET /templates
    * Get all task templates
    */
-  router.get('/', (_req: Request, res: Response) => {
+  router.get('/templates', (_req: Request, res: Response) => {
     try {
       const templates = devBotsManager.getTaskTemplates();
       res.json({ templates });
