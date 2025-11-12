@@ -805,17 +805,14 @@ export class GitHubWebhookHandler {
         });
       }
 
-      // Update task with review status
-      for (const task of tasks) {
-        const reviewStatus = review.state === 'changes_requested' ? 'changes_requested' :
-                            review.state === 'approved' ? 'approved' :
-                            'commented';
-        
-        await this.taskQueue.updateTask(task.id, {
-          pr_review_status: reviewStatus,
-          notes: `${isCopilot ? 'Copilot' : reviewer} review: ${review.state}`
-        });
-      }
+      // NOTE: Review status is now tracked via prConditionState, not on task table
+      // This follows the design principle: "Any information available from GitHub should NOT be stored in our DB"
+      logger.debug({
+        category: 'pr-workflow',
+        action: 'review_state_available_from_github',
+        message: `Review state for PR #${prNumber}: ${review.state} (query from GitHub on-demand)`,
+        details: { pr_number: prNumber, reviewer, state: review.state }
+      });
 
       // If Copilot review completed, check if ready to merge
       if (isCopilot) {
@@ -834,7 +831,7 @@ export class GitHubWebhookHandler {
         // Check if we need followup task or can auto-merge
         const task = tasks[0];
         if (prMonitor.shouldCreateFollowup(prNumber, prStatus, copilotAnalysis, task)) {
-          const prBranch = task.pr_branch || pull_request.head.ref;
+          const prBranch = pull_request.head.ref;  // Always fetch from GitHub on-demand
 
           const followupTask = await prMonitor.createFollowupTask(
             prNumber,
@@ -1053,8 +1050,8 @@ export class GitHubWebhookHandler {
         const blockReasons = this.determineBlockReasons(prNumber, prStatus, copilotAnalysis, task);
         blockReasons.forEach(reason => this.trackAutoMergeBlock(reason));
 
-        // Get PR branch from status
-        const prBranch = task.pr_branch || `pr-${prNumber}`;
+        // Get PR branch from GitHub API (on-demand)
+        const prBranch = prStatus.head_ref;
 
         const followupTask = await prMonitor.createFollowupTask(
           prNumber,
@@ -1227,14 +1224,12 @@ export class GitHubWebhookHandler {
 
     if (!this.taskQueue) return;
 
+    // Set pr_number on tasks if not already set (foreign key reference only)
+    // NOTE: We don't store pr_url, pr_branch, pr_status - these are fetched from GitHub on-demand
     for (const task of tasks) {
-      await this.taskQueue.updatePRStatus(task.id, {
-        pr_number: prNumber,
-        pr_url: pr.html_url,
-        pr_branch: pr.head.ref,
-        pr_status: pr.draft ? 'creating' : 'pending_checks',
-        pr_created_at: Date.now()
-      });
+      if (!task.pr_number) {
+        await this.taskQueue.updatePRNumber(task.id, prNumber);
+      }
     }
   }
 
@@ -1294,12 +1289,8 @@ export class GitHubWebhookHandler {
       }
     }
 
-    for (const task of tasks) {
-      await this.taskQueue.updatePRStatus(task.id, {
-        pr_status: 'pending_checks',
-        pr_checks_status: 'pending'
-      });
-    }
+    // NOTE: PR status (pending_checks, checks_status) is now tracked via prConditionState, not task table
+    // This follows the design principle: "Any information available from GitHub should NOT be stored in our DB"
 
     // Evaluate PR conditions after code changes (continuous self-healing)
     try {
@@ -1329,12 +1320,10 @@ export class GitHubWebhookHandler {
 
     if (!this.taskQueue) return;
 
-    for (const task of tasks) {
-      await this.taskQueue.updatePRStatus(task.id, {
-        pr_status: 'merged',
-        pr_merged_at: Date.now()
-      });
+    // NOTE: PR status (merged) and pr_merged_at are available from GitHub, not stored in task table
+    // This follows the design principle: "Any information available from GitHub should NOT be stored in our DB"
 
+    for (const task of tasks) {
       // Mark task as completed if not already
       if (task.status !== 'completed') {
         const completeStmt = (this.taskQueue as unknown as { db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } } }).db.prepare(`
@@ -1367,11 +1356,10 @@ export class GitHubWebhookHandler {
 
     if (!this.taskQueue) return;
 
-    for (const task of tasks) {
-      await this.taskQueue.updatePRStatus(task.id, {
-        pr_status: 'closed'
-      });
+    // NOTE: PR status (closed) is available from GitHub, not stored in task table
+    // This follows the design principle: "Any information available from GitHub should NOT be stored in our DB"
 
+    for (const task of tasks) {
       // Cancel/complete task if it's still pending or running
       if (task.status === 'pending' || task.status === 'running') {
         const completeStmt = (this.taskQueue as unknown as { db: { prepare: (sql: string) => { run: (...args: unknown[]) => void } } }).db.prepare(`
@@ -1416,9 +1404,17 @@ export class GitHubWebhookHandler {
 
     if (!this.taskQueue) return;
 
-    for (const task of tasks) {
-      await this.taskQueue.updatePRStatus(task.id, {
-        pr_status: 'pending_checks'
+    // NOTE: PR status (pending_checks) is available from GitHub, not stored in task table
+    // Re-evaluate PR conditions when PR is reopened
+    try {
+      await this.prConditionState.evaluateConditions(prNumber, 'pull_request_reopened');
+    } catch (error) {
+      logger.warn({
+        category: 'pr-workflow',
+        action: 'condition_evaluation_failed',
+        message: `Failed to evaluate PR conditions for reopened PR #${prNumber}`,
+        error,
+        details: { pr_number: prNumber }
       });
     }
   }
@@ -1437,9 +1433,17 @@ export class GitHubWebhookHandler {
 
     if (!this.taskQueue) return;
 
-    for (const task of tasks) {
-      await this.taskQueue.updatePRStatus(task.id, {
-        pr_status: 'pending_review'
+    // NOTE: PR status (pending_review) is available from GitHub, not stored in task table
+    // Re-evaluate PR conditions when PR is marked ready for review
+    try {
+      await this.prConditionState.evaluateConditions(prNumber, 'pull_request_ready_for_review');
+    } catch (error) {
+      logger.warn({
+        category: 'pr-workflow',
+        action: 'condition_evaluation_failed',
+        message: `Failed to evaluate PR conditions for ready-for-review PR #${prNumber}`,
+        error,
+        details: { pr_number: prNumber }
       });
     }
   }

@@ -172,14 +172,7 @@ export interface Task {
   original_task_id?: string; // ID of the original failed task (for repair bots)
   repair_stage?: 'cleanup' | 'followup'; // Which stage of recovery this bot represents
   // PR workflow fields
-  pr_number?: number; // GitHub PR number
-  pr_url?: string; // Full PR URL
-  pr_branch?: string; // Feature branch name
-  pr_status?: 'creating' | 'pending_checks' | 'pending_review' | 'ready_to_merge' | 'merged' | 'closed';
-  pr_checks_status?: 'pending' | 'success' | 'failure';
-  pr_review_status?: 'no_reviews' | 'approved' | 'changes_requested' | 'commented';
-  pr_created_at?: number;
-  pr_merged_at?: number;
+  pr_number?: number; // GitHub PR number (foreign key reference only - fetch PR details from GitHub API on-demand)
   // Followup task linking
   followup_for_pr?: number; // If this task fixes issues from a PR
   followup_tasks?: string[]; // Child tasks created to fix PR issues
@@ -338,6 +331,9 @@ export class TaskQueueService {
     }
 
     // Migration 2: Add PR workflow columns
+    // DEPRECATED: Most of these columns (pr_url, pr_branch, pr_status, etc.) violate
+    // the design principle "Any information available from GitHub should NOT be stored in our DB"
+    // and will be removed in migration 013. Only pr_number (foreign key reference) will remain.
     const prColumns = ['pr_number', 'pr_url', 'pr_branch', 'pr_status', 'pr_checks_status', 'pr_review_status', 'pr_created_at', 'pr_merged_at'];
     const missingPrColumns = prColumns.filter(col => !columnNames.has(col));
 
@@ -345,7 +341,7 @@ export class TaskQueueService {
       logger.info({
         category: 'process',
         action: 'adding_pr_workflow_columns',
-        message: `Adding ${missingPrColumns.length} PR workflow columns to tasks table`,
+        message: `Adding ${missingPrColumns.length} PR workflow columns to tasks table (DEPRECATED - will be removed in migration 013)`,
         details: { columns: missingPrColumns }
       });
 
@@ -1280,20 +1276,19 @@ export class TaskQueueService {
   /**
    * Get all tasks with unmerged PRs for monitoring
    * Used to resume PR monitoring on startup
+   *
+   * NOTE: Only returns tasks with pr_number. Use GitHubPRService to fetch current PR status on-demand.
    */
   getTasksWithUnmergedPRs(): Task[] {
     try {
       const stmt = this.db.prepare(`
         SELECT * FROM tasks
         WHERE pr_number IS NOT NULL
-          AND pr_url IS NOT NULL
-          AND pr_branch IS NOT NULL
-          AND (pr_status IS NULL OR pr_status != 'merged')
-        ORDER BY pr_created_at DESC
+        ORDER BY created_at DESC
       `);
       return stmt.all() as Task[];
     } catch (error) {
-      // Gracefully handle missing columns (e.g., pr_number, pr_branch not yet migrated)
+      // Gracefully handle missing columns (e.g., pr_number not yet migrated)
       if (error instanceof Error && error.message.includes('no such column')) {
         logger.warn({
           category: 'process',
@@ -1858,46 +1853,25 @@ export class TaskQueueService {
   }
 
   /**
-   * Update PR status fields for a task
+   * Update PR number for a task (foreign key reference only)
+   *
+   * NOTE: This only stores pr_number as a foreign key. All other PR details
+   * (url, branch, status, checks, reviews) should be fetched from GitHub API on-demand.
    */
-  async updatePRStatus(taskId: string, prStatus: Partial<Task>): Promise<void> {
-    const updates: string[] = [];
-    const values: unknown[] = [];
-
-    // Build dynamic UPDATE statement based on provided fields
-    const prFields = [
-      'pr_number', 'pr_url', 'pr_branch', 'pr_status',
-      'pr_checks_status', 'pr_review_status', 
-      'pr_created_at', 'pr_merged_at'
-    ] as const;
-
-    for (const field of prFields) {
-      if (field in prStatus) {
-        updates.push(`${field} = ?`);
-        values.push(prStatus[field]);
-      }
-    }
-
-    if (updates.length === 0) {
-      return; // Nothing to update
-    }
-
-    values.push(taskId); // Add taskId for WHERE clause
-
-    const sql = `
-      UPDATE tasks 
-      SET ${updates.join(', ')}
+  async updatePRNumber(taskId: string, prNumber: number): Promise<void> {
+    const stmt = this.db.prepare(`
+      UPDATE tasks
+      SET pr_number = ?
       WHERE id = ?
-    `;
+    `);
 
-    const stmt = this.db.prepare(sql);
-    stmt.run(...values);
+    stmt.run(prNumber, taskId);
 
     logger.info({
       category: 'process',
-      action: 'pr_status_updated',
-      message: `Updated PR status for task ${taskId}`,
-      details: { taskId, updates: Object.keys(prStatus) }
+      action: 'pr_number_updated',
+      message: `Updated PR number for task ${taskId}`,
+      details: { taskId, prNumber }
     });
   }
 
