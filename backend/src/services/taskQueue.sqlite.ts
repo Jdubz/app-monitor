@@ -35,6 +35,7 @@ import { logger } from '../utils/logger.js';
 import { config } from '../config.js';
 import { TaskClassifier } from './taskClassifier.js';
 import { ChainTrackerService, type ChainStats, type BlockedChain } from './chainTracker.service.js';
+import { MigrationManager } from './migrationManager.js';
 
 // Re-export chain types for convenience
 export type { ChainStats, BlockedChain };
@@ -303,6 +304,19 @@ export class TaskQueueService {
   }
 
   private runMigrations(): void {
+    // Note: New MigrationManager is available for use via CLI (npm run migrate)
+    // For now, keeping inline migrations for stability during transition
+    // TODO: Switch to MigrationManager once all SQL files are verified
+    
+    // Uncomment to enable automated migration system:
+    // const migrationManager = new MigrationManager(this.db);
+    // const result = await migrationManager.runMigrations();
+    
+    // Keep legacy inline migrations (these work synchronously)
+    this.runLegacyMigrations();
+  }
+
+  private runLegacyMigrations(): void {
     // Get current columns
     const columns = this.db.prepare(`PRAGMA table_info(tasks)`).all() as Array<{name: string}>;
     const columnNames = new Set(columns.map(col => col.name));

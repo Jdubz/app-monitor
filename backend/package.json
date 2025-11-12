@@ -19,7 +19,8 @@
     "check": "node scripts/check-process.js && node scripts/check-port.js",
     "clean": "pkill -f 'nodemon.*app-monitor' 2>/dev/null || true",
     "stop": "pkill -f 'nodemon.*app-monitor' 2>/dev/null || true",
-    "type-check": "tsc --project tsconfig.typecheck.json"
+    "type-check": "tsc --project tsconfig.typecheck.json",
+    "migrate": "node --loader ts-node/esm src/scripts/migrate.ts"
   },
   "keywords": [
     "express",

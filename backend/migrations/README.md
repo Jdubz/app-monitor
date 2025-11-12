@@ -2,6 +2,35 @@
 
 This directory contains SQL migration files for the dev-monitor SQLite database.
 
+## ✨ New Automated Migration System
+
+We now have an elegant migration management system! See [Database Migrations Guide](../../docs/database-migrations.md) for full documentation.
+
+### Quick Start
+
+```bash
+# Check migration status
+npm run migrate status
+
+# List all migrations
+npm run migrate list
+
+# Apply pending migrations
+npm run migrate up
+
+# Create new migration
+npm run migrate create my_feature_name
+```
+
+### Features
+
+- ✅ **Auto-discovery**: Automatically finds and applies migrations
+- ✅ **Error handling**: Graceful failures with detailed logging
+- ✅ **Transaction safety**: Each migration runs in a transaction
+- ✅ **CLI tools**: Easy commands for managing migrations
+- ✅ **Tracking**: Records applied migrations in database
+- ✅ **Validation**: Checksums detect modified migrations
+
 ## Migration Files
 
 ### 001_initial_schema (Applied via database.ts)

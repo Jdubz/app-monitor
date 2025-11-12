@@ -1142,12 +1142,14 @@ Use your specialized knowledge to ensure this implementation follows best practi
 
     // Conditional git workflow variables based on task type (fix vs new implementation)
     this.variableProcessors.set('task.branchSetupInstructions', (context) => {
-      if (context.task.pr_branch) {
-        return `# CRITICAL: This is a FIX task for an existing PR
+      if (context.task.followup_for_pr) {
+        return `# CRITICAL: This is a FIX task for an existing PR #${context.task.followup_for_pr}
+# Fetch the PR branch name from GitHub
+PR_BRANCH=$(gh pr view ${context.task.followup_for_pr} --json headRefName --jq .headRefName)
 # Checkout the PR branch to make fixes
-git checkout ${context.task.pr_branch}
+git checkout $PR_BRANCH
 # Pull latest changes from the PR branch
-git pull origin ${context.task.pr_branch}`;
+git pull origin $PR_BRANCH`;
       } else {
         return `# ALWAYS start from main branch (for PR-based workflow)
 git checkout main
@@ -1157,7 +1159,7 @@ git pull origin main`;
     });
 
     this.variableProcessors.set('task.branchSetupNote', (context) => {
-      if (context.task.pr_branch) {
+      if (context.task.followup_for_pr) {
         return `# You will push fixes to the existing PR branch in Step 4
 # This updates the existing PR automatically`;
       } else {
@@ -1167,15 +1169,15 @@ git pull origin main`;
     });
 
     this.variableProcessors.set('task.branchSetupCritical', (context) => {
-      if (context.task.pr_branch) {
-        return `You are working on PR #${context.task.followup_for_pr || 'N/A'}. Never create a new branch - work directly on ${context.task.pr_branch}!`;
+      if (context.task.followup_for_pr) {
+        return `You are working on PR #${context.task.followup_for_pr}. Never create a new branch - work directly on the PR branch!`;
       } else {
         return `Never skip \`git pull origin main\` - you must have the latest code to avoid duplicate work!`;
       }
     });
 
     this.variableProcessors.set('task.prWorkflowTitle', (context) => {
-      if (context.task.pr_branch) {
+      if (context.task.followup_for_pr) {
         return 'Push Fixes to Existing PR';
       } else {
         return 'Create PR (MANDATORY - DO NOT PUSH DIRECTLY TO STAGING)';
@@ -1183,15 +1185,15 @@ git pull origin main`;
     });
 
     this.variableProcessors.set('task.prWorkflowDescription', (context) => {
-      if (context.task.pr_branch) {
-        return `**CRITICAL: Push to ${context.task.pr_branch} to update PR #${context.task.followup_for_pr || 'N/A'}!**`;
+      if (context.task.followup_for_pr) {
+        return `**CRITICAL: Push to the PR branch to update PR #${context.task.followup_for_pr}!**`;
       } else {
         return '**CRITICAL: You MUST create a Pull Request to main, NOT push to staging!**';
       }
     });
 
     this.variableProcessors.set('task.branchCreationStep', (context) => {
-      if (context.task.pr_branch) {
+      if (context.task.followup_for_pr) {
         return 'Verify PR Branch';
       } else {
         return 'Create Feature Branch';
@@ -1199,15 +1201,16 @@ git pull origin main`;
     });
 
     this.variableProcessors.set('task.branchCreationContent', (context) => {
-      if (context.task.pr_branch) {
+      if (context.task.followup_for_pr) {
         return `# Verify you're on the correct PR branch
 CURRENT_BRANCH=$(git branch --show-current)
-if [ "$CURRENT_BRANCH" != "${context.task.pr_branch}" ]; then
-  echo "ERROR: Not on correct branch! Expected ${context.task.pr_branch}, got $CURRENT_BRANCH"
+EXPECTED_BRANCH=$(gh pr view ${context.task.followup_for_pr} --json headRefName --jq .headRefName)
+if [ "$CURRENT_BRANCH" != "$EXPECTED_BRANCH" ]; then
+  echo "ERROR: Not on correct branch! Expected $EXPECTED_BRANCH, got $CURRENT_BRANCH"
   exit 1
 fi
-echo "✅ Confirmed on PR branch: ${context.task.pr_branch}"
-BRANCH_NAME="${context.task.pr_branch}"`;
+echo "✅ Confirmed on PR branch: $EXPECTED_BRANCH"
+BRANCH_NAME="$EXPECTED_BRANCH"`;
       } else {
         return `# Extract short UUID from task ID
 TASK_ID="{{task.id}}"
@@ -1219,7 +1222,7 @@ git checkout -b "\${BRANCH_NAME}"`;
     });
 
     this.variableProcessors.set('task.pushStep', (context) => {
-      if (context.task.pr_branch) {
+      if (context.task.followup_for_pr) {
         return 'Push to PR Branch';
       } else {
         return 'Push Feature Branch';
@@ -1227,9 +1230,9 @@ git checkout -b "\${BRANCH_NAME}"`;
     });
 
     this.variableProcessors.set('task.pushContent', (context) => {
-      if (context.task.pr_branch) {
+      if (context.task.followup_for_pr) {
         return `# Push to the existing PR branch (this will update the PR)
-git push origin ${context.task.pr_branch}`;
+git push origin "\${BRANCH_NAME}"`;
       } else {
         return `# Push new feature branch
 git push -u origin "\${BRANCH_NAME}"`;
@@ -1237,7 +1240,7 @@ git push -u origin "\${BRANCH_NAME}"`;
     });
 
     this.variableProcessors.set('task.prCreationStep', (context) => {
-      if (context.task.pr_branch) {
+      if (context.task.followup_for_pr) {
         return 'Verify PR Updated';
       } else {
         return 'Create Pull Request';
@@ -1245,9 +1248,9 @@ git push -u origin "\${BRANCH_NAME}"`;
     });
 
     this.variableProcessors.set('task.prCreationContent', (context) => {
-      if (context.task.pr_branch) {
+      if (context.task.followup_for_pr) {
         return `# This is a fix task - outputting existing PR information
-echo "✅ Pushed fixes to existing PR #${context.task.followup_for_pr || 'N/A'}"
+echo "✅ Pushed fixes to existing PR #${context.task.followup_for_pr}"
 echo "The PR has been updated with your fixes"`;
       } else {
         return `# Build PR description with warnings
@@ -1287,7 +1290,7 @@ echo "PR created successfully, capturing metadata..."`;
     });
 
     this.variableProcessors.set('task.prOutputStep', (context) => {
-      if (context.task.pr_branch) {
+      if (context.task.followup_for_pr) {
         return 'Output PR Link';
       } else {
         return 'Verify and Output PR';
@@ -1295,8 +1298,8 @@ echo "PR created successfully, capturing metadata..."`;
     });
 
     this.variableProcessors.set('task.prOutputContent', (context) => {
-      const viewTarget = context.task.pr_branch ? `"${context.task.pr_branch}"` : '"${BRANCH_NAME}"';
-      const actionVerb = context.task.pr_branch ? 'updated' : 'created';
+      const viewTarget = context.task.followup_for_pr ? `${context.task.followup_for_pr}` : '"${BRANCH_NAME}"';
+      const actionVerb = context.task.followup_for_pr ? 'updated' : 'created';
 
       return `# Capture PR metadata for reporting
 PR_NUMBER=$(gh pr view ${viewTarget} --json number --jq .number)
@@ -1318,11 +1321,11 @@ echo "PR_BRANCH: $PR_BRANCH"`;
     });
 
     this.variableProcessors.set('task.prVerificationContent', (context) => {
-      if (context.task.pr_branch) {
+      if (context.task.followup_for_pr) {
         return `
 **VERIFICATION CHECKLIST:**
-- [ ] Pushed to ${context.task.pr_branch}
-- [ ] PR #${context.task.followup_for_pr || 'N/A'} shows your new commits
+- [ ] Pushed to PR branch
+- [ ] PR #${context.task.followup_for_pr} shows your new commits
 - [ ] CI checks are running on the PR`;
       } else {
         return `

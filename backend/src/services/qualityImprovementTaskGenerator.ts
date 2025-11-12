@@ -52,8 +52,8 @@ export class QualityImprovementTaskGenerator {
   ): Promise<GeneratedImprovementTask[]> {
     const generatedTasks: GeneratedImprovementTask[] = [];
 
-    // Get branch context from parent task or observation
-    const branch = observation.branch || parentTask.pr_branch || `task-${parentTask.id}`;
+    // Generate branch identifier from task ID (branch names not stored)
+    const branch = `task-${parentTask.id}`;
     const prNumber = observation.prNumber || parentTask.pr_number;
 
     logger.info({

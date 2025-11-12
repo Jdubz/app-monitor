@@ -186,19 +186,31 @@ export class EphemeralWorkerService {
       // Determine branch to work on
       let baseBranch = 'staging';  // Default to staging
 
-      // For improvement tasks (repair bots), use the parent task's branch
-      if (task.is_repair_bot && task.pr_branch) {
-        baseBranch = task.pr_branch;
-        logger.info({
-          category: 'process',
-          action: 'improvement_task_branch',
-          message: `Improvement task will work on branch: ${baseBranch}`,
-          details: {
-            taskId: task.id,
-            parentTaskId: task.original_task_id,
-            branch: baseBranch
-          }
-        });
+      // For improvement tasks (repair bots) with PR context, fetch branch from GitHub
+      if (task.is_repair_bot && (task.pr_number || task.followup_for_pr)) {
+        const prNum = task.followup_for_pr || task.pr_number;
+        try {
+          const prStatus = await this.githubPR.getPR(prNum);
+          baseBranch = prStatus.head_ref;
+          logger.info({
+            category: 'process',
+            action: 'improvement_task_branch',
+            message: `Improvement task will work on branch: ${baseBranch}`,
+            details: {
+              taskId: task.id,
+              parentTaskId: task.original_task_id,
+              prNumber: prNum,
+              branch: baseBranch
+            }
+          });
+        } catch (error) {
+          logger.warn({
+            category: 'process',
+            action: 'branch_fetch_failed',
+            message: `Failed to fetch PR branch, using default: ${baseBranch}`,
+            details: { prNumber: prNum, error }
+          });
+        }
       }
 
       // Container will clone fresh repository internally
