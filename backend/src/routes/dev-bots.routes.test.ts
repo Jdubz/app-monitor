@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Request, Response } from 'express';
-import { createClaudeWorkersRouter } from './dev-bots.routes.js';
+import { createDevBotsRouter as createClaudeWorkersRouter } from './dev-bots/index.js';
 import { logger } from '../utils/logger.js';
 import type { DevBotsManager } from '../services/devBotsManager.js';
 

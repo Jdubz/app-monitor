@@ -24,7 +24,6 @@ export interface ImprovementTaskContext {
   observation: QualityObservation;
   opportunity: ImprovementOpportunity;
   prNumber?: number;
-  branch: string;
 }
 
 export interface GeneratedImprovementTask {
@@ -52,8 +51,7 @@ export class QualityImprovementTaskGenerator {
   ): Promise<GeneratedImprovementTask[]> {
     const generatedTasks: GeneratedImprovementTask[] = [];
 
-    // Get branch context from parent task or observation
-    const branch = observation.branch || parentTask.pr_branch || `task-${parentTask.id}`;
+    // Get PR number for task generation
     const prNumber = observation.prNumber || parentTask.pr_number;
 
     logger.info({
@@ -63,7 +61,6 @@ export class QualityImprovementTaskGenerator {
       details: {
         parentTaskId: parentTask.id,
         opportunityCount: observation.improvementOpportunities.length,
-        branch,
         prNumber
       }
     });
@@ -75,8 +72,7 @@ export class QualityImprovementTaskGenerator {
           parentTask,
           observation,
           opportunity,
-          prNumber,
-          branch
+          prNumber
         };
 
         const task = await this.generateSingleImprovementTask(context);
@@ -94,8 +90,7 @@ export class QualityImprovementTaskGenerator {
           details: {
             taskId: task.id,
             type: opportunity.type,
-            priority: opportunity.priority,
-            branch
+            priority: opportunity.priority
           }
         });
       } catch (error) {
@@ -118,8 +113,7 @@ export class QualityImprovementTaskGenerator {
       message: `Generated ${generatedTasks.length} improvement tasks for ${parentTask.id}`,
       details: {
         parentTaskId: parentTask.id,
-        tasksGenerated: generatedTasks.length,
-        branch
+        tasksGenerated: generatedTasks.length
       }
     });
 
@@ -132,7 +126,7 @@ export class QualityImprovementTaskGenerator {
   private async generateSingleImprovementTask(
     context: ImprovementTaskContext
   ): Promise<Task> {
-    const { parentTask, opportunity, prNumber, branch } = context;
+    const { parentTask, opportunity, prNumber } = context;
 
     // Create base task data
     const taskData: Partial<Task> = {
@@ -145,7 +139,6 @@ export class QualityImprovementTaskGenerator {
       parent_initiative: `quality-improvement-for-${parentTask.id}`,
       related_tasks: [parentTask.id],
       pr_number: prNumber,
-      pr_branch: branch,
 
       // Mark as improvement task
       is_repair_bot: true,

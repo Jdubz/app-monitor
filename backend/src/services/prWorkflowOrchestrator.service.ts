@@ -192,14 +192,11 @@ export class PRWorkflowOrchestrator {
         }
       });
 
-      // 2. Update task with PR metadata
-      await this.taskQueue.updateTask(task.id, {
-        pr_number: prInfo.number,
-        pr_url: prInfo.url,
-        pr_branch: prInfo.branch,
-        pr_status: 'pending_checks',
-        pr_created_at: Date.now()
-      });
+      // 2. Update task with PR number (foreign key reference only)
+      // NOTE: We only store pr_number. All other PR details (url, branch, status, checks)
+      // are fetched from GitHub API on-demand per design principle:
+      // "Any information available from GitHub should NOT be stored in our DB"
+      await this.taskQueue.updatePRNumber(task.id, prInfo.number);
 
       // Note: PR monitoring now webhook-driven via GitHubWebhookHandler
       logger.info({

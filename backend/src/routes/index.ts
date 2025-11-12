@@ -22,7 +22,7 @@ import { requireApiKey } from '../middleware/auth.js';
 import { createServicesRouter } from './services.routes.js';
 import { createSocketRoutes } from './socket-task.routes.js';
 import { createDockerRouter } from './docker.routes.js';
-import { createClaudeWorkersRouter } from './dev-bots.routes.js';
+import { createDevBotsRouter } from './dev-bots/index.js';
 import { createLogsRoutes } from './logs.routes.js';
 import { createPortsRoutes } from './ports.routes.js';
 import { createEnvironmentsRoutes } from './environments.routes.js';
@@ -98,7 +98,7 @@ export function createApiRouter(deps: {
   router.use('/docker', requireApiKey, createDockerRouter());
 
   if (deps.devBotsManager) {
-    router.use('/dev-bots', requireApiKey, createClaudeWorkersRouter(deps.devBotsManager));
+    router.use('/dev-bots', requireApiKey, createDevBotsRouter(deps.devBotsManager));
   }
 
   if (deps.logRotation && deps.logStreamer) {

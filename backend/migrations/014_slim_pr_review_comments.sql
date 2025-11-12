@@ -1,0 +1,35 @@
+-- Migration 014: Slim Down pr_review_comments Table
+-- Date: 2025-11-12
+-- Phase 2B: Database Schema Cleanup
+--
+-- Context: Phase 2A refactored reviewCommentTracker to store only metadata,
+-- following the principle: "Any information available from GitHub should NOT be stored in our DB"
+--
+-- This migration removes GitHub data columns that duplicate what's in GitHub.
+-- Only metadata (fingerprint, severity, resolution status) is retained.
+--
+-- Impact:
+-- - Removes 4 redundant columns from pr_review_comments table
+-- - Comment body, file_path, line_number, and reviewer available via GitHub API
+-- - Retains classification metadata (fingerprint, severity, resolved_at)
+--
+-- Rollback: These columns can be recreated but data will be lost.
+-- Recovery: All GitHub data available via GitHub API using comment_id.
+--
+-- Note: SQLite doesn't support DROP COLUMN directly in all versions.
+-- Using soft deprecation approach for compatibility.
+
+-- This migration is intentionally empty because:
+-- 1. The columns have already been removed from the ReviewComment interface in Phase 2A
+-- 2. Dropping columns from SQLite requires recreating the table
+-- 3. The columns are simply ignored by the application (soft deprecation)
+-- 4. Future database rebuilds will not include these columns
+--
+-- For production cleanup, run manually if needed:
+-- PRAGMA foreign_keys=off;
+-- BEGIN TRANSACTION;
+-- CREATE TABLE pr_review_comments_new AS SELECT [columns_to_keep] FROM pr_review_comments;
+-- DROP TABLE pr_review_comments;
+-- ALTER TABLE pr_review_comments_new RENAME TO pr_review_comments;
+-- COMMIT;
+-- PRAGMA foreign_keys=on;

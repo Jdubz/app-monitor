@@ -24,6 +24,7 @@ import type { DockerManager } from './dockerManager.js';
 // WorkspaceOrchestrator removed - we use Docker cp for file systems, not git mirrors
 import * as DockerConfig from './dockerConfig.js';
 import { getLogPaths } from './workTargetDocumentation.js';
+import { getGitHubPRService, type GitHubPRService } from './githubPR.service.js';
 
 export interface WorkspaceContext {
   id: string;
@@ -73,6 +74,7 @@ export class EphemeralWorkerService {
   private readonly config: EphemeralWorkerServiceConfig;
   private readonly docker: Docker;
   private readonly dockerManager: DockerManager;
+  private readonly githubPR: GitHubPRService;
   private logStreams = new Map<string, fs.WriteStream>();
   private readonly devBotsLogPath: string;
 
@@ -82,6 +84,7 @@ export class EphemeralWorkerService {
     config: Partial<EphemeralWorkerServiceConfig> = {}
   ) {
     this.docker = docker;
+    this.githubPR = getGitHubPRService();
     this.dockerManager = dockerManager;
 
     this.config = {
@@ -186,19 +189,33 @@ export class EphemeralWorkerService {
       // Determine branch to work on
       let baseBranch = 'staging';  // Default to staging
 
-      // For improvement tasks (repair bots), use the parent task's branch
-      if (task.is_repair_bot && task.pr_branch) {
-        baseBranch = task.pr_branch;
-        logger.info({
-          category: 'process',
-          action: 'improvement_task_branch',
-          message: `Improvement task will work on branch: ${baseBranch}`,
-          details: {
-            taskId: task.id,
-            parentTaskId: task.original_task_id,
-            branch: baseBranch
+      // For improvement tasks (repair bots) with PR context, fetch branch from GitHub
+      if (task.is_repair_bot && (task.pr_number || task.followup_for_pr)) {
+        const prNum = task.followup_for_pr || task.pr_number;
+        if (prNum) {
+          try {
+            const prStatus = await this.githubPR.getPRStatus(prNum);
+            baseBranch = prStatus.head_ref;
+            logger.info({
+              category: 'process',
+              action: 'improvement_task_branch',
+              message: `Improvement task will work on branch: ${baseBranch}`,
+              details: {
+                taskId: task.id,
+                parentTaskId: task.original_task_id,
+                prNumber: prNum,
+                branch: baseBranch
+              }
+            });
+          } catch (error) {
+            logger.warn({
+              category: 'process',
+              action: 'branch_fetch_failed',
+              message: `Failed to fetch PR branch, using default: ${baseBranch}`,
+              details: { prNumber: prNum, error }
+            });
           }
-        });
+        }
       }
 
       // Container will clone fresh repository internally

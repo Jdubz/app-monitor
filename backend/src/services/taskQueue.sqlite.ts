@@ -35,99 +35,24 @@ import { logger } from '../utils/logger.js';
 import { config } from '../config.js';
 import { TaskClassifier } from './taskClassifier.js';
 import { ChainTrackerService, type ChainStats, type BlockedChain } from './chainTracker.service.js';
+import {
+  TaskQueueMetricsService,
+  summarizeAgentComparisonMetrics,
+  type AgentMetrics,
+  type AgentTaskTypeBreakdown,
+  type AgentComparisonMetrics,
+} from './taskQueueMetrics.service.js';
 
 // Re-export chain types for convenience
 export type { ChainStats, BlockedChain };
 
-type AgentStatsRow = {
-  agent_type: 'claude' | 'codex';
-  total: number;
-  completed: number;
-  failed: number;
-  avg_duration_ms: number | null;
+// Re-export metrics types and functions for backward compatibility
+export type {
+  AgentMetrics,
+  AgentTaskTypeBreakdown,
+  AgentComparisonMetrics,
 };
-
-type AgentTaskTypeStatsRow = AgentStatsRow & {
-  task_type: string;
-};
-
-const TRACKED_TASK_TYPES = ['implementation', 'testing', 'documentation'] as const;
-type TaskTypeKey = typeof TRACKED_TASK_TYPES[number];
-
-export type AgentTaskTypeBreakdown = Record<TaskTypeKey, AgentMetrics>;
-
-export type AgentMetrics = {
-  total: number;
-  completed: number;
-  failed: number;
-  avg_duration_ms?: number;
-  success_rate: number;
-};
-
-export type AgentComparisonMetrics = {
-  claude: AgentMetrics;
-  codex: AgentMetrics;
-  task_type_breakdown: {
-    claude: AgentTaskTypeBreakdown;
-    codex: AgentTaskTypeBreakdown;
-  };
-};
-
-const isTrackedTaskType = (value: string | null | undefined): value is TaskTypeKey => {
-  return Boolean(value) && TRACKED_TASK_TYPES.includes(value as TaskTypeKey);
-};
-
-export function summarizeAgentComparisonMetrics(
-  agentStats: AgentStatsRow[],
-  taskTypeStats: AgentTaskTypeStatsRow[] = [],
-): AgentComparisonMetrics {
-  const buildMetrics = (stats?: AgentStatsRow): AgentMetrics => {
-    const completed = stats?.completed ?? 0;
-    const failed = stats?.failed ?? 0;
-    const total = stats?.total ?? 0;
-    const avgDuration = stats?.avg_duration_ms ?? undefined;
-    const attempts = completed + failed;
-    const successRate = attempts > 0 ? (completed / attempts) * 100 : 0;
-
-    return {
-      total,
-      completed,
-      failed,
-      avg_duration_ms: avgDuration,
-      success_rate: successRate,
-    };
-  };
-
-  const claudeStats = agentStats.find((s) => s.agent_type === 'claude');
-  const codexStats = agentStats.find((s) => s.agent_type === 'codex');
-
-  const createEmptyBreakdown = (): AgentTaskTypeBreakdown => {
-    return TRACKED_TASK_TYPES.reduce((acc, taskType) => {
-      acc[taskType] = buildMetrics();
-      return acc;
-    }, {} as AgentTaskTypeBreakdown);
-  };
-
-  const breakdown = {
-    claude: createEmptyBreakdown(),
-    codex: createEmptyBreakdown(),
-  };
-
-  for (const stats of taskTypeStats) {
-    if (!isTrackedTaskType(stats.task_type)) {
-      continue;
-    }
-
-    const agentBucket = stats.agent_type === 'claude' ? breakdown.claude : breakdown.codex;
-    agentBucket[stats.task_type] = buildMetrics(stats);
-  }
-
-  return {
-    claude: buildMetrics(claudeStats),
-    codex: buildMetrics(codexStats),
-    task_type_breakdown: breakdown,
-  };
-}
+export { summarizeAgentComparisonMetrics };
 
 // Task status enum
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timeout';
@@ -172,14 +97,7 @@ export interface Task {
   original_task_id?: string; // ID of the original failed task (for repair bots)
   repair_stage?: 'cleanup' | 'followup'; // Which stage of recovery this bot represents
   // PR workflow fields
-  pr_number?: number; // GitHub PR number
-  pr_url?: string; // Full PR URL
-  pr_branch?: string; // Feature branch name
-  pr_status?: 'creating' | 'pending_checks' | 'pending_review' | 'ready_to_merge' | 'merged' | 'closed';
-  pr_checks_status?: 'pending' | 'success' | 'failure';
-  pr_review_status?: 'no_reviews' | 'approved' | 'changes_requested' | 'commented';
-  pr_created_at?: number;
-  pr_merged_at?: number;
+  pr_number?: number; // GitHub PR number (foreign key reference only - fetch PR details from GitHub API on-demand)
   // Followup task linking
   followup_for_pr?: number; // If this task fixes issues from a PR
   followup_tasks?: string[]; // Child tasks created to fix PR issues
@@ -188,6 +106,12 @@ export interface Task {
   // Chain tracking for fix task depth limiting
   chain_id?: string; // UUID identifying the chain this task belongs to
   chain_depth?: number; // Depth in the fix chain (0 = original, 1+ = fix attempts)
+  // Staged Queue System fields
+  queue_stage?: 'implementation' | 'followup'; // Queue stage for chain-aware scheduling
+  chain_status?: 'pending' | 'active' | 'blocked' | 'closed'; // Chain lifecycle status
+  blocked_reason?: string; // Reason chain was blocked (for manual intervention)
+  blocked_at?: number; // Unix timestamp when chain was blocked
+  blocked_by?: string; // User/system that blocked the chain
   // Task verification fields (PR workflow quality gates)
   verification_passed?: boolean; // True if task verification succeeded (>= 80% criteria met)
   verification_results?: string; // JSON stringified TaskVerificationResult
@@ -262,6 +186,7 @@ export class TaskQueueService {
   private readonly taskClassifier: TaskClassifier; // Auto-classification (Phase 0.3)
   private readonly chainTracker: ChainTrackerService; // Chain lifecycle management (Phase 2)
   private readonly maxConcurrentChains: number; // Chain concurrency limit
+  private readonly metricsService: TaskQueueMetricsService; // Metrics and analytics
 
   constructor(dbPath: string) {
     this.dbPath = dbPath;
@@ -273,7 +198,10 @@ export class TaskQueueService {
     // Initialize chain tracking with configurable concurrency limit
     this.chainTracker = new ChainTrackerService(this.db);
     this.maxConcurrentChains = config.devBots.maxWorkers;
-    
+
+    // Initialize metrics service
+    this.metricsService = new TaskQueueMetricsService(this.db);
+
     logger.info({
       category: 'process',
       action: 'staged_queue_initialized',
@@ -310,6 +238,19 @@ export class TaskQueueService {
   }
 
   private runMigrations(): void {
+    // Note: New MigrationManager is available for use via CLI (npm run migrate)
+    // For now, keeping inline migrations for stability during transition
+    // TODO: Switch to MigrationManager once all SQL files are verified
+    
+    // Uncomment to enable automated migration system:
+    // const migrationManager = new MigrationManager(this.db);
+    // const result = await migrationManager.runMigrations();
+    
+    // Keep legacy inline migrations (these work synchronously)
+    this.runLegacyMigrations();
+  }
+
+  private runLegacyMigrations(): void {
     // Get current columns
     const columns = this.db.prepare(`PRAGMA table_info(tasks)`).all() as Array<{name: string}>;
     const columnNames = new Set(columns.map(col => col.name));
@@ -338,6 +279,9 @@ export class TaskQueueService {
     }
 
     // Migration 2: Add PR workflow columns
+    // DEPRECATED: Most of these columns (pr_url, pr_branch, pr_status, etc.) violate
+    // the design principle "Any information available from GitHub should NOT be stored in our DB"
+    // and will be removed in migration 013. Only pr_number (foreign key reference) will remain.
     const prColumns = ['pr_number', 'pr_url', 'pr_branch', 'pr_status', 'pr_checks_status', 'pr_review_status', 'pr_created_at', 'pr_merged_at'];
     const missingPrColumns = prColumns.filter(col => !columnNames.has(col));
 
@@ -345,7 +289,7 @@ export class TaskQueueService {
       logger.info({
         category: 'process',
         action: 'adding_pr_workflow_columns',
-        message: `Adding ${missingPrColumns.length} PR workflow columns to tasks table`,
+        message: `Adding ${missingPrColumns.length} PR workflow columns to tasks table (DEPRECATED - will be removed in migration 013)`,
         details: { columns: missingPrColumns }
       });
 
@@ -489,6 +433,52 @@ export class TaskQueueService {
         category: 'process',
         action: 'migration_complete',
         message: 'Task verification columns added successfully for PR workflow quality gates'
+      });
+    }
+
+    // Migration 012: Add staged queue / chain tracking columns
+    const stagedQueueColumns = ['queue_stage', 'chain_id', 'chain_status', 'chain_depth', 'blocked_reason', 'blocked_at', 'blocked_by'];
+    const missingStagedQueueColumns = stagedQueueColumns.filter(col => !columnNames.has(col));
+
+    if (missingStagedQueueColumns.length > 0) {
+      logger.info({
+        category: 'process',
+        action: 'adding_staged_queue_columns',
+        message: `Adding ${missingStagedQueueColumns.length} staged queue columns for chain tracking`,
+        details: { columns: missingStagedQueueColumns }
+      });
+
+      if (!columnNames.has('queue_stage')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN queue_stage TEXT CHECK(queue_stage IN ('implementation', 'followup'));`);
+      }
+      if (!columnNames.has('chain_id')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN chain_id TEXT;`);
+      }
+      if (!columnNames.has('chain_status')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN chain_status TEXT CHECK(chain_status IN ('pending', 'active', 'blocked', 'closed'));`);
+      }
+      if (!columnNames.has('chain_depth')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN chain_depth INTEGER DEFAULT 0;`);
+      }
+      if (!columnNames.has('blocked_reason')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN blocked_reason TEXT;`);
+      }
+      if (!columnNames.has('blocked_at')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN blocked_at INTEGER;`);
+      }
+      if (!columnNames.has('blocked_by')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN blocked_by TEXT;`);
+      }
+
+      // Create indexes for chain queries
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_chain_id ON tasks(chain_id) WHERE chain_id IS NOT NULL;`);
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_chain_status ON tasks(chain_status) WHERE chain_status IS NOT NULL;`);
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_queue_stage ON tasks(queue_stage) WHERE queue_stage IS NOT NULL;`);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'Staged queue columns added successfully for chain tracking'
       });
     }
   }
@@ -679,6 +669,24 @@ export class TaskQueueService {
       });
     }
     
+    // Determine queue_stage and chain_id (Staged Queue System)
+    const isImplementation = !taskData.original_task_id && !taskData.is_repair_bot;
+    const queueStage = isImplementation ? 'implementation' : 'followup';
+    
+    // Chain ID determination
+    let chainId = taskData.chain_id;
+    if (!chainId) {
+      if (isImplementation) {
+        // Implementation tasks: chain_id = task id (set after insert)
+        chainId = taskData.id || generatedId;
+      } else if (taskData.original_task_id) {
+        // Follow-up tasks: inherit chain_id from original task
+        const originalStmt = this.db.prepare('SELECT chain_id FROM tasks WHERE id = ?');
+        const original = originalStmt.get(taskData.original_task_id) as { chain_id?: string } | undefined;
+        chainId = original?.chain_id || taskData.original_task_id;
+      }
+    }
+    
     const task: Task = {
       id: taskData.id || generatedId,
       type: taskData.type || 'implementation',
@@ -702,18 +710,24 @@ export class TaskQueueService {
       task_category: taskCategory,
       file_patterns: filePatterns,
       estimated_complexity: estimatedComplexity,
-      preferred_agent: taskData.preferred_agent
+      preferred_agent: taskData.preferred_agent,
+      // Staged Queue fields
+      queue_stage: queueStage,
+      chain_status: 'pending',
+      chain_id: chainId,
+      chain_depth: taskData.chain_depth || 0
     };
 
     return this.transaction(() => {
-      // Insert main task with classification fields
+      // Insert main task with classification and staged queue fields
       const stmt = this.db.prepare(`
         INSERT INTO tasks (
           id, type, title, description, documentation, notes, status, priority,
           created_at, assigned_agent, prompt, can_retry, retry_count, max_retries,
           timeout_ms, fingerprint, estimated_hours, complexity,
-          task_category, file_patterns, estimated_complexity, preferred_agent
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          task_category, file_patterns, estimated_complexity, preferred_agent,
+          queue_stage, chain_status, chain_id, chain_depth
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       stmt.run(
@@ -721,7 +735,8 @@ export class TaskQueueService {
         task.notes, task.status, task.priority, task.created_at, task.assigned_agent,
         task.prompt, task.can_retry ? 1 : 0, task.retry_count, task.max_retries,
         task.timeout_ms, task.fingerprint, task.estimated_hours, task.complexity,
-        task.task_category, task.file_patterns, task.estimated_complexity, task.preferred_agent
+        task.task_category, task.file_patterns, task.estimated_complexity, task.preferred_agent,
+        task.queue_stage, task.chain_status, task.chain_id, task.chain_depth
       );
 
       // Insert related data
@@ -786,87 +801,197 @@ export class TaskQueueService {
   }
 
   /**
-   * Assign next available task atomically
+   * Assign next available task using staged queue logic
+   * 
+   * Chain-aware scheduling:
+   * 1. Close completed chains (PR merged + no pending tasks)
+   * 2. Count active chains (non-blocked)
+   * 3. If under capacity, dequeue implementation task (new chain)
+   * 4. Otherwise, dequeue followup task (existing chain)
+   * 5. Check file conflicts and assign atomically
+   * 
    * Returns null if no tasks available or all have file conflicts
    */
   assignNextTask(): Task | null {
     return this.transaction(() => {
-      // Find next pending task ordered by priority and age
-      const taskStmt = this.db.prepare(`
-        SELECT * FROM tasks
-        WHERE status = 'pending'
-        ORDER BY priority DESC, created_at ASC
-        LIMIT 1
-      `);
+      // Step 1: Close completed chains
+      this.chainTracker.closeCompletedChains();
 
-      const task = taskStmt.get() as Task | undefined;
-      if (!task) return null;
+      // Step 2: Get chain statistics
+      const activeChains = this.chainTracker.countActiveChains();
+      const canStartNewChain = activeChains < this.maxConcurrentChains;
 
-      // Check for file conflicts
-      const conflictStmt = this.db.prepare(`
-        SELECT tf.file_path, t.id as conflicting_task_id
-        FROM task_files tf
-        JOIN tasks t ON tf.task_id = t.id
-        WHERE tf.file_path IN (SELECT file_path FROM task_files WHERE task_id = ?)
-        AND t.status = 'running'
-        AND t.id != ?
-      `);
+      logger.info({
+        category: 'process',
+        action: 'queue_worker_check',
+        message: `Active chains: ${activeChains}/${this.maxConcurrentChains}`,
+        details: { activeChains, maxChains: this.maxConcurrentChains, canStartNewChain }
+      });
 
-      const conflict = conflictStmt.get(task.id, task.id) as { file_path: string; conflicting_task_id: string } | undefined;
-      if (conflict) {
+      // Step 3: Select which queue to dequeue from
+      let task: Task | undefined;
+
+      if (canStartNewChain) {
+        // Try implementation queue first
+        task = this.dequeueImplementationTask();
+        
+        if (task) {
+          // Mark chain as active
+          this.activateChain(task.chain_id!);
+          logger.info({
+            category: 'process',
+            action: 'new_chain_started',
+            message: `Started new chain ${task.chain_id}`,
+            details: { chainId: task.chain_id, taskId: task.id, queueStage: task.queue_stage }
+          });
+        }
+      }
+
+      // Step 4: If no implementation task (or can't start new chain), try followup
+      if (!task) {
+        task = this.dequeueFollowupTask();
+        
+        if (task) {
+          logger.info({
+            category: 'process',
+            action: 'followup_task_dequeued',
+            message: `Dequeued followup task for chain ${task.chain_id}`,
+            details: { chainId: task.chain_id, taskId: task.id, queueStage: task.queue_stage }
+          });
+        }
+      }
+
+      if (!task) {
         logger.info({
           category: 'process',
-          action: 'task_assignment_blocked_by_file_conflict',
-          message: `Task ${task.id} blocked by file conflict with task ${conflict.conflicting_task_id}`
+          action: 'no_task_available',
+          message: 'No tasks available for dequeue',
+          details: { activeChains, canStartNewChain }
         });
         return null;
       }
 
-      // Assign task atomically
-      const now = Date.now();
-      const workerId = `bot-${task.assigned_agent}-${now}`;
+      // Step 5: Check file conflicts and assign
+      return this.assignTaskToWorker(task);
+    });
+  }
 
-      const updateStmt = this.db.prepare(`
-        UPDATE tasks
-        SET status = 'running',
-            assigned_at = ?,
-            started_at = ?,
-            assigned_worker = ?
-        WHERE id = ?
-      `);
+  /**
+   * Dequeue next implementation task (new chain)
+   */
+  private dequeueImplementationTask(): Task | undefined {
+    const stmt = this.db.prepare(`
+      SELECT * FROM tasks
+      WHERE status = 'pending'
+      AND queue_stage = 'implementation'
+      AND chain_status = 'pending'
+      ORDER BY priority DESC, created_at ASC
+      LIMIT 1
+    `);
 
-      updateStmt.run(now, now, workerId, task.id);
+    return stmt.get() as Task | undefined;
+  }
 
-      // Create worker record
-      const workerStmt = this.db.prepare(`
-        INSERT INTO workers (id, agent_id, status, current_task_id, created_at, last_heartbeat)
-        VALUES (?, ?, 'running', ?, ?, ?)
-      `);
+  /**
+   * Dequeue next followup task (existing chain, skip blocked chains)
+   */
+  private dequeueFollowupTask(): Task | undefined {
+    const stmt = this.db.prepare(`
+      SELECT * FROM tasks
+      WHERE status = 'pending'
+      AND queue_stage = 'followup'
+      AND chain_status != 'blocked'
+      ORDER BY priority DESC, created_at ASC
+      LIMIT 1
+    `);
 
-      workerStmt.run(workerId, task.assigned_agent, task.id, now, now);
+    return stmt.get() as Task | undefined;
+  }
 
-      // Record execution attempt
-      const executionStmt = this.db.prepare(`
-        INSERT INTO task_executions (task_id, worker_id, attempt_number, started_at)
-        VALUES (?, ?, ?, ?)
-      `);
+  /**
+   * Mark chain as active
+   */
+  private activateChain(chainId: string): void {
+    const stmt = this.db.prepare(`
+      UPDATE tasks
+      SET chain_status = 'active'
+      WHERE chain_id = ?
+      AND chain_status = 'pending'
+    `);
 
-      executionStmt.run(task.id, workerId, task.retry_count + 1, now);
+    stmt.run(chainId);
+  }
 
+  /**
+   * Assign task to worker after checking file conflicts
+   */
+  private assignTaskToWorker(task: Task): Task | null {
+    // Check for file conflicts
+    const conflictStmt = this.db.prepare(`
+      SELECT tf.file_path, t.id as conflicting_task_id
+      FROM task_files tf
+      JOIN tasks t ON tf.task_id = t.id
+      WHERE tf.file_path IN (SELECT file_path FROM task_files WHERE task_id = ?)
+      AND t.status = 'running'
+      AND t.id != ?
+    `);
+
+    const conflict = conflictStmt.get(task.id, task.id) as { file_path: string; conflicting_task_id: string } | undefined;
+    if (conflict) {
       logger.info({
         category: 'process',
-        action: 'task_assigned',
-        message: `Assigned task ${task.id} to worker ${workerId}`
+        action: 'task_assignment_blocked_by_file_conflict',
+        message: `Task ${task.id} blocked by file conflict with task ${conflict.conflicting_task_id}`,
+        details: { taskId: task.id, conflictingFile: conflict.file_path }
       });
+      return null;
+    }
 
-      return {
-        ...task,
-        status: 'running',
-        assigned_worker: workerId,
-        assigned_at: now,
-        started_at: now
-      };
+    // Assign task atomically
+    const now = Date.now();
+    const workerId = `bot-${task.assigned_agent}-${now}`;
+
+    const updateStmt = this.db.prepare(`
+      UPDATE tasks
+      SET status = 'running',
+          assigned_at = ?,
+          started_at = ?,
+          assigned_worker = ?
+      WHERE id = ?
+    `);
+
+    updateStmt.run(now, now, workerId, task.id);
+
+    // Create worker record
+    const workerStmt = this.db.prepare(`
+      INSERT INTO workers (id, agent_id, status, current_task_id, created_at, last_heartbeat)
+      VALUES (?, ?, 'running', ?, ?, ?)
+    `);
+
+    workerStmt.run(workerId, task.assigned_agent, task.id, now, now);
+
+    // Record execution attempt
+    const executionStmt = this.db.prepare(`
+      INSERT INTO task_executions (task_id, worker_id, attempt_number, started_at)
+      VALUES (?, ?, ?, ?)
+    `);
+
+    executionStmt.run(task.id, workerId, task.retry_count + 1, now);
+
+    logger.info({
+      category: 'process',
+      action: 'task_assigned',
+      message: `Assigned task ${task.id} to worker ${workerId}`,
+      details: { taskId: task.id, workerId, chainId: task.chain_id, queueStage: task.queue_stage }
     });
+
+    return {
+      ...task,
+      status: 'running',
+      assigned_worker: workerId,
+      assigned_at: now,
+      started_at: now
+    };
   }
 
   /**
@@ -1280,20 +1405,19 @@ export class TaskQueueService {
   /**
    * Get all tasks with unmerged PRs for monitoring
    * Used to resume PR monitoring on startup
+   *
+   * NOTE: Only returns tasks with pr_number. Use GitHubPRService to fetch current PR status on-demand.
    */
   getTasksWithUnmergedPRs(): Task[] {
     try {
       const stmt = this.db.prepare(`
         SELECT * FROM tasks
         WHERE pr_number IS NOT NULL
-          AND pr_url IS NOT NULL
-          AND pr_branch IS NOT NULL
-          AND (pr_status IS NULL OR pr_status != 'merged')
-        ORDER BY pr_created_at DESC
+        ORDER BY created_at DESC
       `);
       return stmt.all() as Task[];
     } catch (error) {
-      // Gracefully handle missing columns (e.g., pr_number, pr_branch not yet migrated)
+      // Gracefully handle missing columns (e.g., pr_number not yet migrated)
       if (error instanceof Error && error.message.includes('no such column')) {
         logger.warn({
           category: 'process',
@@ -1420,85 +1544,14 @@ export class TaskQueueService {
     max_minutes: number;
     min_minutes: number;
   }> {
-    const since = Date.now() - (daysBack * 86400000);
-
-    const stmt = this.db.prepare(`
-      SELECT
-        t.type,
-        COALESCE(t.complexity, 'unknown') as complexity,
-        COUNT(*) as completed_count,
-        AVG(te.duration_ms) / 60000.0 as avg_minutes,
-        MAX(te.duration_ms) / 60000.0 as max_minutes,
-        MIN(te.duration_ms) / 60000.0 as min_minutes
-      FROM task_executions te
-      JOIN tasks t ON te.task_id = t.id
-      WHERE te.exit_code = 0
-      AND te.ended_at > ?
-      GROUP BY t.type, t.complexity
-      ORDER BY t.type, t.complexity
-    `);
-
-    return stmt.all(since) as Array<{
-      type: string;
-      complexity: string;
-      completed_count: number;
-      avg_minutes: number;
-      max_minutes: number;
-      min_minutes: number;
-    }>;
+    return this.metricsService.getTaskDurationStats(daysBack);
   }
 
   /**
    * Get queue metrics
    */
   getQueueMetrics(): QueueMetrics {
-    const countStmt = this.db.prepare(`
-      SELECT status, COUNT(*) as count
-      FROM tasks
-      GROUP BY status
-    `);
-
-    const counts = countStmt.all() as { status: TaskStatus; count: number }[];
-    const metrics: QueueMetrics = {
-      pending: 0,
-      running: 0,
-      completed: 0,
-      failed: 0,
-      cancelled: 0,
-      timeout: 0,
-      total: 0
-    };
-
-    for (const { status, count } of counts) {
-      metrics[status] = count;
-      metrics.total += count;
-    }
-
-    // Average completion time
-    const avgStmt = this.db.prepare(`
-      SELECT AVG(duration_ms) as avg_duration
-      FROM task_executions
-      WHERE exit_code = 0
-      AND ended_at > ?
-    `);
-
-    const oneDayAgo = Date.now() - 86400000;
-    const avgResult = avgStmt.get(oneDayAgo) as { avg_duration: number } | undefined;
-    metrics.avg_completion_time_ms = avgResult?.avg_duration;
-
-    // Oldest pending task age
-    const oldestStmt = this.db.prepare(`
-      SELECT MIN(created_at) as oldest
-      FROM tasks
-      WHERE status = 'pending'
-    `);
-
-    const oldestResult = oldestStmt.get() as { oldest: number } | undefined;
-    if (oldestResult?.oldest) {
-      metrics.oldest_pending_age_ms = Date.now() - oldestResult.oldest;
-    }
-
-    return metrics;
+    return this.metricsService.getQueueMetrics();
   }
 
   /**
@@ -1559,43 +1612,7 @@ export class TaskQueueService {
    * Compare performance between Claude and Codex agents
    */
   getAgentComparisonMetrics(): AgentComparisonMetrics {
-    const agentStats = this.db.prepare(`
-      SELECT
-        agent_type,
-        COUNT(*) as total,
-        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
-        AVG(CASE
-          WHEN status = 'completed' AND completed_at IS NOT NULL AND started_at IS NOT NULL
-          THEN completed_at - started_at
-          ELSE NULL
-        END) as avg_duration_ms
-      FROM tasks
-      WHERE agent_type IS NOT NULL AND agent_type IN ('claude', 'codex')
-      GROUP BY agent_type
-    `).all() as AgentStatsRow[];
-
-    const taskTypeStats = this.db.prepare(`
-      SELECT
-        agent_type,
-        LOWER(type) as task_type,
-        COUNT(*) as total,
-        SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed,
-        SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) as failed,
-        AVG(CASE
-          WHEN status = 'completed' AND completed_at IS NOT NULL AND started_at IS NOT NULL
-          THEN completed_at - started_at
-          ELSE NULL
-        END) as avg_duration_ms
-      FROM tasks
-      WHERE agent_type IS NOT NULL
-        AND agent_type IN ('claude', 'codex')
-        AND type IS NOT NULL
-        AND LOWER(type) IN ('implementation', 'testing', 'documentation')
-      GROUP BY agent_type, LOWER(type)
-    `).all() as AgentTaskTypeStatsRow[];
-
-    return summarizeAgentComparisonMetrics(agentStats, taskTypeStats);
+    return this.metricsService.getAgentComparisonMetrics();
   }
 
   /**
@@ -1858,46 +1875,25 @@ export class TaskQueueService {
   }
 
   /**
-   * Update PR status fields for a task
+   * Update PR number for a task (foreign key reference only)
+   *
+   * NOTE: This only stores pr_number as a foreign key. All other PR details
+   * (url, branch, status, checks, reviews) should be fetched from GitHub API on-demand.
    */
-  async updatePRStatus(taskId: string, prStatus: Partial<Task>): Promise<void> {
-    const updates: string[] = [];
-    const values: unknown[] = [];
-
-    // Build dynamic UPDATE statement based on provided fields
-    const prFields = [
-      'pr_number', 'pr_url', 'pr_branch', 'pr_status',
-      'pr_checks_status', 'pr_review_status', 
-      'pr_created_at', 'pr_merged_at'
-    ] as const;
-
-    for (const field of prFields) {
-      if (field in prStatus) {
-        updates.push(`${field} = ?`);
-        values.push(prStatus[field]);
-      }
-    }
-
-    if (updates.length === 0) {
-      return; // Nothing to update
-    }
-
-    values.push(taskId); // Add taskId for WHERE clause
-
-    const sql = `
-      UPDATE tasks 
-      SET ${updates.join(', ')}
+  async updatePRNumber(taskId: string, prNumber: number): Promise<void> {
+    const stmt = this.db.prepare(`
+      UPDATE tasks
+      SET pr_number = ?
       WHERE id = ?
-    `;
+    `);
 
-    const stmt = this.db.prepare(sql);
-    stmt.run(...values);
+    stmt.run(prNumber, taskId);
 
     logger.info({
       category: 'process',
-      action: 'pr_status_updated',
-      message: `Updated PR status for task ${taskId}`,
-      details: { taskId, updates: Object.keys(prStatus) }
+      action: 'pr_number_updated',
+      message: `Updated PR number for task ${taskId}`,
+      details: { taskId, prNumber }
     });
   }
 

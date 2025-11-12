@@ -192,13 +192,9 @@ export class PRArtifactRecoveryService {
    * Update task with recovered PR information
    */
   private async updateTaskWithPRInfo(task: Task, prInfo: PRInfo): Promise<void> {
-    // Update task with recovered PR info
+    // Update task with recovered PR info (only pr_number, PR status not stored)
     await this.taskQueue.updateTask(task.id, {
       pr_number: prInfo.number,
-      pr_url: prInfo.url,
-      pr_branch: prInfo.branch,
-      pr_status: 'pending_checks',
-      pr_created_at: Date.now(),
       // If task was failed due to orphaning, mark as completed
       status: task.status === 'failed' ? 'completed' : task.status
     });

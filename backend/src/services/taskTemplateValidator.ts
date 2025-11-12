@@ -76,9 +76,16 @@ export interface ValidationResult {
   warnings: ValidationError[];
 }
 
-// TODO(templates): introduce minimum length constants for investigation steps,
-// acceptance criteria, and constraint text once usage data shows appropriate
-// guardrail values.
+// Minimum length constants for task template quality enforcement
+const MIN_INVESTIGATION_STEP_LENGTH = 20; // e.g., "READ file.ts lines 1-100"
+// TODO(templates): Use these constants for validation once validation rules are implemented
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const MIN_ACCEPTANCE_CRITERION_LENGTH = 15; // e.g., "EXACTLY 0 errors"
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const MIN_CONSTRAINT_LENGTH = 10; // e.g., "MUST NOT modify X"
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+const MIN_VALIDATION_STEP_LENGTH = 15; // e.g., "RUN npm test"
+
 const DO_NOT_CREATE_ACTIONABLE_KEYWORDS: ReadonlyArray<string> = Object.freeze([
   // Single-word actions capture directives like "reuse the helper"
   'reuse',
@@ -221,6 +228,14 @@ export function validateTaskTemplate(template: Partial<TaskTemplateV3>): Validat
             severity: 'error'
           });
           return;
+        }
+
+        if (step.trim().length < MIN_INVESTIGATION_STEP_LENGTH) {
+          warnings.push({
+            field: `investigation.steps[${index}]`,
+            message: `Investigation step is too brief (${step.trim().length} chars, minimum ${MIN_INVESTIGATION_STEP_LENGTH}). Be specific about what to investigate.`,
+            severity: 'warning'
+          });
         }
 
         if (!containsInvestigationActionVerb(step)) {

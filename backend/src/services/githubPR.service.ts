@@ -31,6 +31,7 @@ async function execWithTimeout(
 }
 
 export interface PRCheckStatus {
+  id?: string;  // GitHub check run ID (for referencing in blocking issues)
   name: string;
   status: 'pending' | 'success' | 'failure' | 'error';
   conclusion: string | null;
@@ -38,6 +39,7 @@ export interface PRCheckStatus {
 }
 
 export interface PRReview {
+  id?: string;  // GitHub review ID (for referencing in blocking issues)
   author: string;
   state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED';
   submittedAt: string;
@@ -57,6 +59,7 @@ export interface PRReviewThread {
   isResolved: boolean;
   isOutdated: boolean;
   comments: Array<{
+    id?: string;  // GitHub comment ID (for referencing in blocking issues)
     body: string;
     author: string;
   }>;
@@ -65,9 +68,12 @@ export interface PRReviewThread {
 export interface PRStatus {
   number: number;
   url: string;
+  html_url: string;  // HTML URL for browser viewing
   state: 'OPEN' | 'CLOSED' | 'MERGED';
   mergeable: 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN';
   mergeable_state?: string; // behind, clean, dirty, unknown, blocked, unstable
+  head_ref: string;  // PR branch name (head ref)
+  base_ref: string;  // Base branch name
   checks: PRCheckStatus[];
   reviews: PRReview[];
   comments: PRComment[];
@@ -141,7 +147,7 @@ export class GitHubPRService {
 
       // Fetch PR data using gh CLI with timeout protection
       const { stdout } = await execWithTimeout(
-        `gh pr view ${prNumber} --repo ${owner}/${repo} --json number,url,state,mergeable,mergeStateStatus,statusCheckRollup,reviews,comments`,
+        `gh pr view ${prNumber} --repo ${owner}/${repo} --json number,url,headRefName,baseRefName,state,mergeable,mergeStateStatus,statusCheckRollup,reviews,comments`,
         30000 // 30 second timeout
       );
 
@@ -176,6 +182,9 @@ export class GitHubPRService {
       return {
         number: prData.number,
         url: prData.url,
+        html_url: prData.url,
+        head_ref: prData.headRefName,
+        base_ref: prData.baseRefName,
         state: prData.state,
         mergeable: prData.mergeable || 'UNKNOWN',
         mergeable_state: prData.mergeStateStatus || 'unknown',
@@ -792,12 +801,8 @@ export class GitHubPRService {
         // Find and update task
         const task = taskQueue.getTask(taskId);
         if (task) {
-          await taskQueue.updatePRStatus(taskId, {
-            pr_number: prNumber,
-            pr_url: prData.url,
-            pr_branch: branchName,
-            pr_status: prData.state === 'MERGED' ? 'merged' :
-                      prData.state === 'CLOSED' ? 'closed' : 'pending_checks'
+          taskQueue.updateTask(taskId, {
+            pr_number: prNumber
           });
           
           logger.info({

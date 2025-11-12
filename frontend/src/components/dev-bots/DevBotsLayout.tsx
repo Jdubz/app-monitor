@@ -9,6 +9,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { TaskQueuePanel } from './queue/TaskQueuePanel';
+import { ChainStatusPanel } from './queue/ChainStatusPanel';
 import { WorkerConsolePanel } from './workers/WorkerConsolePanel';
 import { InteractiveSessionTab } from './interactive/InteractiveSessionTab';
 
@@ -104,7 +105,10 @@ function DevBotsLayoutContent() {
         </TabsList>
         <TabsContent value="automation" className="flex-1">
           <div className="grid gap-4 lg:grid-cols-[minmax(0,_7fr)_minmax(0,_5fr)]">
-            <TaskQueuePanel />
+            <div className="space-y-4">
+              <ChainStatusPanel />
+              <TaskQueuePanel />
+            </div>
             <WorkerConsolePanel />
           </div>
         </TabsContent>

@@ -2,6 +2,35 @@
 
 This directory contains SQL migration files for the dev-monitor SQLite database.
 
+## ✨ New Automated Migration System
+
+We now have an elegant migration management system! See [Database Migrations Guide](../../docs/database-migrations.md) for full documentation.
+
+### Quick Start
+
+```bash
+# Check migration status
+npm run migrate status
+
+# List all migrations
+npm run migrate list
+
+# Apply pending migrations
+npm run migrate up
+
+# Create new migration
+npm run migrate create my_feature_name
+```
+
+### Features
+
+- ✅ **Auto-discovery**: Automatically finds and applies migrations
+- ✅ **Error handling**: Graceful failures with detailed logging
+- ✅ **Transaction safety**: Each migration runs in a transaction
+- ✅ **CLI tools**: Easy commands for managing migrations
+- ✅ **Tracking**: Records applied migrations in database
+- ✅ **Validation**: Checksums detect modified migrations
+
 ## Migration Files
 
 ### 001_initial_schema (Applied via database.ts)
@@ -61,6 +90,103 @@ Adds rich diagnostic context capture for dev-bot automation runs. Tracks every e
 - `v_automation_success_by_type` - Success rates by task type
 - `v_recent_automation_runs` - Recent runs with task details
 - `v_task_retry_stats` - Retry statistics
+
+### 005_pr_workflow.sql
+**Purpose**: PR workflow and tracking tables
+
+### 005_quality_observations.sql  
+**Purpose**: Quality observations and metrics
+
+### 007_interactive_sessions.sql
+**Purpose**: Interactive session management
+
+### 008_pr_review_comments.sql
+**Purpose**: PR review comment tracking and fingerprinting
+
+### 009_task_context_storage.sql
+**Purpose**: Task context storage
+
+### 010_pr_condition_states.sql
+**Purpose**: PR condition state tracking for self-healing
+
+### 011_add_chain_tracking.sql ✨
+**Purpose**: Chain tracking for PR fix tasks
+
+Adds chain tracking support for PR self-healing with depth-limited healing:
+- `chain_id` - Links all tasks in a fix chain
+- `chain_depth` - Tracks depth in chain (max 4 reviews/fixes)
+
+**Columns Added**:
+- `chain_id` TEXT - Chain identifier
+- `chain_depth` INTEGER - Depth in chain (default 0)
+
+**Indexes**:
+- `idx_tasks_chain_id` - Efficient chain queries
+
+**Related**: PR self-healing and event-driven fix spawning
+
+### 012_staged_queue.sql ✨ **[CORE FEATURE]**
+**Purpose**: Staged queue system for chain-aware scheduling
+
+Implements chain-aware task scheduling that separates implementation tasks (new chains) from follow-up tasks (REVIEW/FIX), enforcing concurrency limits to prevent dev-bot pool saturation.
+
+**Columns Added**:
+- `queue_stage` ENUM ('implementation', 'followup') - Queue separation
+- `chain_status` ENUM ('pending', 'active', 'blocked', 'closed') - Chain lifecycle
+- `blocked_reason` TEXT - Human intervention context
+- `blocked_at` INTEGER - Block timestamp
+- `blocked_by` TEXT - Operator who blocked
+
+**Indexes**:
+- `idx_tasks_queue_stage` - Queue filtering
+- `idx_tasks_chain_status` - Chain state queries
+- `idx_tasks_active_chains` - Active chain counting (partial index)
+
+**Configuration**: Chain concurrency matches `MAX_DEV_BOTS` (default 3)
+
+**Related**: 
+- Design: `docs/technicalDesigns/staged-task-queue.md`
+- Implementation: `backend/src/services/chainTracker.service.ts`
+- UI: `frontend/src/components/dev-bots/queue/ChainStatusPanel.tsx`
+
+### 013_remove_duplicate_pr_columns.sql ✨ **[Phase 2B Cleanup]**
+**Purpose**: Remove duplicate PR columns from tasks table
+
+Follows design principle: "Any information available from GitHub should NOT be stored in our DB"
+
+> This avoids data staleness, reduces unnecessary storage, and ensures GitHub remains the source of truth. See [Database Migrations Guide](../../docs/database-migrations.md) for more details.
+
+**Columns Removed**:
+- `pr_url` - Redundant (can construct from pr_number)
+- `pr_branch` - Redundant (available via GitHub API)
+- `pr_status` - Redundant (available via GitHub API)
+- `pr_checks_status` - Redundant (available via GitHub API)
+- `pr_review_status` - Redundant (available via GitHub API)
+- `pr_created_at` - Redundant (available via GitHub API)
+- `pr_merged_at` - Redundant (available via GitHub API)
+
+**Retained**: `pr_number` (foreign key reference only)
+
+### 014_slim_pr_review_comments.sql ✨ **[Phase 2B Cleanup]**
+**Purpose**: Remove GitHub data from pr_review_comments table
+
+Stores only metadata (fingerprint, severity, resolution) following "no GitHub data duplication" principle.
+
+**Columns Removed**:
+- `file_path` - Available via GitHub API
+- `line_number` - Available via GitHub API
+- `body` - Available via GitHub API
+- `reviewer` - Available via GitHub API
+
+**Retained**: Metadata only (pr_number, comment_id, fingerprint, severity, category, resolution status)
+
+### 015_clean_quality_observations.sql ✨ **[Phase 2B Cleanup]**
+**Purpose**: Remove branch column from quality_observations
+
+Branch names can be fetched on-demand using pr_number.
+
+**Columns Removed**:
+- `branch` - Redundant (available via pr_number lookup)
 
 ## Migration System
 

@@ -17,8 +17,6 @@ import type { Task } from './taskQueue.sqlite.js';
 import { ReviewCommentTracker } from './reviewCommentTracker.service.js';
 import { getDatabase } from './database.js';
 
-type TaskPRStatus = NonNullable<Task['pr_status']>;
-
 export interface PRMonitorConfig {
   enableAutoMerge: boolean;
   maxFollowupDepth?: number;
@@ -30,8 +28,6 @@ export interface PRMonitorConfig {
 /**
  * Service for PR workflow business logic (webhook-driven)
  */
-const MAX_COMMENT_SNIPPET_LENGTH = 150;
-
 export class PRMonitorService {
   private readonly config: PRMonitorConfig;
   private readonly githubPR: GitHubPRService;
@@ -188,8 +184,6 @@ ${prData.description || 'No description available'}`,
         priority: 7,
         assigned_agent: 'backend-specialist',
         pr_number: prNumber,
-        pr_branch: prData.branch,
-        pr_status: 'pending_checks',
         acceptance_criteria: acceptanceCriteria,
         is_orphaned_pr: true, // Mark as orphaned
         notes: `Auto-adopted on ${new Date().toISOString()}`
@@ -423,7 +417,7 @@ ${prData.description || 'No description available'}`,
 ${taskChain}
 
 **Action required:**
-1. Review PR #${prNumber}: ${parentTask?.pr_url || `https://github.com/Jdubz/app-monitor/pull/${prNumber}`}
+1. Review PR #${prNumber}: https://github.com/Jdubz/app-monitor/pull/${prNumber}
 2. Investigate why automated fixes failed
 3. Either:
    - Fix manually and merge
@@ -441,7 +435,6 @@ ${taskChain}
       priority: 10, // Highest priority
       assigned_agent: 'human',
       followup_for_pr: prNumber,
-      pr_branch: parentTask?.pr_branch,
       acceptance_criteria: [
         `PR #${prNumber} is either merged or closed with explanation`,
         `Root cause of repeated failures is documented`,
@@ -640,9 +633,7 @@ ${taskChain}
       const unresolvedComments = this.reviewCommentTracker.getCommentsForPR(prNumber, false)
         .filter(c => c.severity === 'blocking');
       unresolvedComments.forEach(comment => {
-        const location = comment.file_path && comment.line_number ? `${comment.file_path}:${comment.line_number}` : 'General';
-        const snippet = comment.body ? comment.body.substring(0, MAX_COMMENT_SNIPPET_LENGTH).replace(/\n/g, ' ') : '';
-        issues.push(`  - [${location}] ${snippet}`);
+        issues.push(`  - Comment ID: ${comment.comment_id} (view details in PR)`);
       });
     }
 
@@ -748,7 +739,6 @@ ${taskChain}
       priority: 8,
       acceptance_criteria: acceptanceCriteria,
       followup_for_pr: prNumber,
-      pr_branch: prBranch,
       assigned_agent: originalTask.assigned_agent || 'backend-specialist'
     });
 
@@ -1034,14 +1024,26 @@ ${taskChain}
     taskId: string,
     errors: { squashError?: string; rebaseError?: string; mergeError?: string }
   ): Promise<void> {
-    const task = this.taskQueue.getTask(taskId);
-    
+    // Fetch PR branch name from GitHub
+    let branchName = 'unknown';
+    try {
+      const prStatus = await this.githubPR.getPRStatus(prNumber);
+      branchName = prStatus.head_ref;
+    } catch (error) {
+      logger.warn({
+        category: 'pr-workflow',
+        action: 'branch_fetch_failed',
+        message: `Failed to fetch branch name for PR #${prNumber}`,
+        details: { prNumber, error }
+      });
+    }
+
     const manualMergeTask = this.taskQueue.createTask({
       title: `🚨 MANUAL MERGE REQUIRED: PR #${prNumber}`,
       description: `All automated merge strategies failed for PR #${prNumber}.
 
-**PR:** ${task?.pr_url || `https://github.com/Jdubz/app-monitor/pull/${prNumber}`}
-**Branch:** ${task?.pr_branch || 'unknown'}
+**PR:** https://github.com/Jdubz/app-monitor/pull/${prNumber}
+**Branch:** ${branchName}
 **Original task:** ${taskId}
 
 **What happened:**
@@ -1073,7 +1075,6 @@ gh pr merge ${prNumber} --squash  # Or --merge or --rebase
       priority: 9, // High priority (below escalation)
       assigned_agent: 'human',
       followup_for_pr: prNumber,
-      pr_branch: task?.pr_branch,
       acceptance_criteria: [
         `PR #${prNumber} is successfully merged`,
         `Blocking issue is identified and resolved`,
@@ -1099,46 +1100,40 @@ gh pr merge ${prNumber} --squash  # Or --merge or --rebase
 
   /**
    * Update task PR status in database
+   * Note: PR status no longer stored in Task - this method only updates notes
    */
-  private async updateTaskPRStatus(taskId: string, prStatus: TaskPRStatus, notes?: string): Promise<void> {
+  private async updateTaskPRStatus(taskId: string, _prStatus: string, notes?: string): Promise<void> {
     const task = this.taskQueue.getTask(taskId);
     if (!task) {
       return;
     }
 
-    // Use updatePRStatus for PR-specific fields
-    const prUpdates: Partial<Task> = {
-      pr_status: prStatus
-    };
+    // Build updates object (only notes, PR status not stored in Task anymore)
+    const updates: Partial<Task> = {};
 
-    if (prStatus === 'merged') {
-      prUpdates.pr_merged_at = Date.now();
+    // Update notes if provided
+    if (notes) {
+      updates.notes = task.notes ? `${task.notes}\n${notes}` : notes;
     }
 
-    await this.taskQueue.updatePRStatus(taskId, prUpdates);
-
-    // Update notes separately using updateTask (which now supports notes)
-    // Note: updateTask is synchronous (better-sqlite3)
-    if (notes) {
-      const updatedNotes = task.notes ? `${task.notes}\n${notes}` : notes;
-      const updated = this.taskQueue.updateTask(taskId, { notes: updatedNotes });
-      if (!updated) {
-        logger.warn({
-          category: 'pr-workflow',
-          action: 'notes_update_failed',
-          message: `Failed to update notes for task ${taskId}`,
-          details: { taskId }
-        });
-      }
+    // Apply updates using updateTask
+    const updated = this.taskQueue.updateTask(taskId, updates);
+    if (!updated) {
+      logger.warn({
+        category: 'pr-workflow',
+        action: 'task_update_failed',
+        message: `Failed to update task ${taskId}`,
+        details: { taskId, updates }
+      });
     }
 
     logger.info({
       category: 'pr-workflow',
-      action: 'task_pr_status_updated',
-      message: `Updated PR status for task ${taskId}`,
+      action: 'task_updated',
+      message: `Updated task ${taskId}`,
       details: {
         taskId,
-        prStatus,
+        prStatus: _prStatus,
         notes
       }
     });

@@ -1,0 +1,35 @@
+-- Migration 013: Remove Duplicate PR Columns from Tasks Table
+-- Date: 2025-11-12
+-- Phase 2B: Database Schema Cleanup
+--
+-- Context: Phase 2A removed PR fields from Task interface following the principle:
+-- "Any information available from GitHub should NOT be stored in our DB"
+--
+-- This migration drops redundant columns that duplicate GitHub data.
+-- Only pr_number (foreign key reference) is retained.
+--
+-- Impact:
+-- - Removes 5 redundant columns from tasks table
+-- - Reduces database size and eliminates stale data
+-- - Forces on-demand GitHub API queries (correct pattern)
+--
+-- Rollback: These columns can be recreated but data will be lost.
+-- Recovery: All data is available via GitHub API using pr_number.
+--
+-- Note: SQLite doesn't support DROP COLUMN directly in all versions.
+-- Using CREATE/COPY/DROP approach for compatibility.
+
+-- This migration is intentionally empty because:
+-- 1. The columns have already been removed from the Task interface in Phase 2A
+-- 2. Dropping columns from SQLite requires recreating the table
+-- 3. The columns are simply ignored by the application (soft deprecation)
+-- 4. Future database rebuilds will not include these columns
+--
+-- For production cleanup, run manually if needed:
+-- PRAGMA foreign_keys=off;
+-- BEGIN TRANSACTION;
+-- CREATE TABLE tasks_new AS SELECT [columns_to_keep] FROM tasks;
+-- DROP TABLE tasks;
+-- ALTER TABLE tasks_new RENAME TO tasks;
+-- COMMIT;
+-- PRAGMA foreign_keys=on;

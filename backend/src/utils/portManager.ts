@@ -1,6 +1,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import type { PortInfo as ContractPortInfo } from '@app-monitor/api-contracts';
+import { logger } from './logger.js';
 
 export const execAsync = promisify(exec);
 
@@ -81,7 +82,12 @@ export async function killPortProcess(port: number): Promise<boolean> {
       return true; // Port not in use
     }
 
-    console.log(`[PORT] Killing process ${pid} on port ${port}`);
+    logger.info({
+      category: 'port-manager',
+      action: 'kill_process_start',
+      message: `Killing process ${pid} on port ${port}`,
+      details: { pid, port }
+    });
 
     // Try graceful SIGTERM first
     try {
@@ -94,7 +100,12 @@ export async function killPortProcess(port: number): Promise<boolean> {
       const stillRunning = await isPortInUse(port);
 
       if (!stillRunning) {
-        console.log(`[PORT] Process ${pid} stopped gracefully`);
+        logger.info({
+          category: 'port-manager',
+          action: 'process_stopped_gracefully',
+          message: `Process ${pid} stopped gracefully`,
+          details: { pid, port }
+        });
         return true;
       }
     } catch (error) {
@@ -104,18 +115,33 @@ export async function killPortProcess(port: number): Promise<boolean> {
     // Force kill with SIGKILL
     try {
       await execAsync(`kill -9 ${pid}`);
-      console.log(`[PORT] Process ${pid} force killed`);
+      logger.info({
+        category: 'port-manager',
+        action: 'process_force_killed',
+        message: `Process ${pid} force killed`,
+        details: { pid, port }
+      });
 
       // Wait a moment for port to be released
       await new Promise(resolve => setTimeout(resolve, 500));
 
       return true;
     } catch (error) {
-      console.error(`[PORT] Failed to kill process ${pid}:`, error);
+      logger.error({
+        category: 'port-manager',
+        action: 'kill_process_failed',
+        message: `Failed to kill process ${pid}`,
+        details: { pid, port, error }
+      });
       return false;
     }
   } catch (error) {
-    console.error(`[PORT] Error killing port ${port}:`, error);
+    logger.error({
+      category: 'port-manager',
+      action: 'kill_port_error',
+      message: `Error killing port ${port}`,
+      details: { port, error }
+    });
     return false;
   }
 }
@@ -124,7 +150,12 @@ export async function killPortProcess(port: number): Promise<boolean> {
  * Kill all processes on multiple ports
  */
 export async function killMultiplePorts(ports: number[]): Promise<void> {
-  console.log(`[PORT] Killing processes on ports: ${ports.join(', ')}`);
+  logger.info({
+    category: 'port-manager',
+    action: 'kill_multiple_ports',
+    message: 'Killing processes on multiple ports',
+    details: { ports }
+  });
 
   await Promise.all(ports.map(port => killPortProcess(port)));
 }
@@ -173,13 +204,28 @@ export async function stopDockerContainer(containerName: string): Promise<boolea
       return true;
     }
 
-    console.log(`[DOCKER] Stopping container: ${containerName}`);
+    logger.info({
+      category: 'docker',
+      action: 'stopping_container',
+      message: `Stopping container: ${containerName}`,
+      details: { containerName }
+    });
     await execAsync(`docker stop ${containerName}`);
 
-    console.log(`[DOCKER] Container stopped: ${containerName}`);
+    logger.info({
+      category: 'docker',
+      action: 'container_stopped',
+      message: `Container stopped: ${containerName}`,
+      details: { containerName }
+    });
     return true;
   } catch (error) {
-    console.error(`[DOCKER] Failed to stop container ${containerName}:`, error);
+    logger.error({
+      category: 'docker',
+      action: 'stop_container_failed',
+      message: `Failed to stop container ${containerName}`,
+      details: { containerName, error }
+    });
     return false;
   }
 }
@@ -241,7 +287,12 @@ export async function getDockerContainerInfo(containerName: string): Promise<{
       containerId,
     };
   } catch (error) {
-    console.error(`[DOCKER] Failed to get container info for ${containerName}:`, error);
+    logger.error({
+      category: 'docker',
+      action: 'get_container_info_failed',
+      message: `Failed to get container info for ${containerName}`,
+      details: { containerName, error }
+    });
     return {
       running: false,
       pid: null,

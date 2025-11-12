@@ -8,6 +8,9 @@
     },
     {
       "pattern": "^https://github.com/.+/pull/\\d+"
+    },
+    {
+      "pattern": "^https?://.*\\.sqlite\\.org"
     }
   ],
   "replacementPatterns": [

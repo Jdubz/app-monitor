@@ -19,6 +19,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
+import { logger } from '../utils/logger.js';
 
 export interface CodexSessionMeta {
   sessionId: string;
@@ -101,7 +102,12 @@ export class CodexLogParser {
           break; // Session meta is typically first line
         }
       } catch (error) {
-        console.warn(`Failed to parse line in ${filePath}:`, error);
+        logger.warn({
+          category: 'codex-log-parser',
+          action: 'parse_line_failed',
+          message: `Failed to parse line in ${filePath}`,
+          details: { filePath, error }
+        });
       }
     }
 
