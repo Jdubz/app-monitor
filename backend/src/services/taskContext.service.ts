@@ -208,3 +208,7 @@ export function getTaskContextService(): TaskContextService {
   }
   return serviceInstance;
 }
+
+export function resetTaskContextService(): void {
+  serviceInstance = null;
+}
