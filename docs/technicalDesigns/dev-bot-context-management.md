@@ -1,8 +1,34 @@
 # Dev-Bot Context Management Design
 
-**Author:** Codex Agent (per architecture owner direction)
-**Date:** November 12, 2025
-**Status:** Draft
+## Document Metadata
+
+| Field | Value |
+|-------|-------|
+| **Author** | Codex Agent (per architecture owner direction) |
+| **Date** | November 12, 2025 |
+| **Status** | 🟡 Draft |
+| **Priority** | P2 |
+| **Dependencies** | Staged Task Queue (P0), Dev-Bot Foundational Upgrades (P1) |
+| **Last Updated** | November 12, 2025 |
+
+## Quick Reference
+
+**What**: Provide dev-bots with accurate, up-to-date context bundles (documentation, operations guides, PR workflows) dynamically generated from repo state and injected into containers at task launch.
+
+**Why**: Eliminates stale context, manual sync work, and improves dev-bot accuracy by ensuring agents always have current system knowledge.
+
+**Implementation Status**: Not started (pending P0/P1 dependencies)
+
+## Table of Contents
+
+1. [Vision](#vision)
+2. [Requirements](#requirements)
+3. [Context Domains](#context-domains)
+4. [Architecture](#architecture)
+5. [Task Flow](#task-flow)
+6. [Success Criteria](#success-criteria)
+7. [Testing Strategy](#testing-strategy)
+8. [Related Files](#related-files)
 
 ## Vision
 Provide every dev-bot task with accurate, up-to-date context (documentation, operational guides, deployment details, PR workflows, failure recovery, self-healing patterns, learning data, dev-monitor UI behavior, etc.) inside the container at task launch—without relying on stale, manually curated snippets.
