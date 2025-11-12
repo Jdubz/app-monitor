@@ -18,10 +18,10 @@ export function createAgentsRoutes(devBotsManager: DevBotsManager): Router {
    * GET /agents
    * Get all agent personalities with their configurations
    */
-  router.get('/', (_req: Request, res: Response) => {
+  router.get('/agents', (_req: Request, res: Response) => {
     try {
       const agents = devBotsManager.getAgentPersonalities();
-      res.json({ agents });
+      res.json({ data: { agents } });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -40,10 +40,10 @@ export function createAgentsRoutes(devBotsManager: DevBotsManager): Router {
    * GET /agents/valid
    * Get list of valid agent IDs (names only)
    */
-  router.get('/valid', (_req: Request, res: Response) => {
+  router.get('/agents/valid', (_req: Request, res: Response) => {
     try {
       const validAgents = devBotsManager.getValidAgents();
-      res.json({ validAgents });
+      res.json({ data: { validAgents } });
     } catch (error) {
       logger.error({
         category: 'api',

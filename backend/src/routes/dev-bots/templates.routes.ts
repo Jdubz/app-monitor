@@ -21,7 +21,7 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/templates', (_req: Request, res: Response) => {
     try {
       const templates = devBotsManager.getTaskTemplates();
-      res.json({ templates });
+      res.json({ data: { templates } });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -43,7 +43,7 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/guidelines', (_req: Request, res: Response) => {
     try {
       const guidelines = devBotsManager.getTaskGuidelines();
-      res.json({ guidelines });
+      res.json({ data: { guidelines } });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -66,7 +66,7 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const { taskType } = req.params;
       const guidelines = devBotsManager.getTaskGuidelines(taskType);
-      res.json({ guidelines });
+      res.json({ data: { guidelines } });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -89,7 +89,7 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const { taskType } = req.params;
       const example = devBotsManager.getTaskExample(taskType);
-      res.json({ examples: [example] });
+      res.json({ data: { examples: [example] } });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -112,7 +112,7 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const { taskType } = req.params;
       const checklist = devBotsManager.getTaskChecklist(taskType);
-      res.json({ checklist });
+      res.json({ data: { checklist } });
     } catch (error) {
       logger.error({
         category: 'api',

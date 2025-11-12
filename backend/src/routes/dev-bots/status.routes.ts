@@ -130,7 +130,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const metrics = devBotsManager.getQueueMetrics();
       const stats = devBotsManager.getTaskDurationStats();
-      res.json({ metrics, stats });
+      res.json({ data: { metrics, stats }});
     } catch (error) {
       logger.error({
         category: 'api',
@@ -152,7 +152,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/agent-comparison', (_req: Request, res: Response) => {
     try {
       const comparison = devBotsManager.getAgentComparisonMetrics();
-      res.json({ comparison });
+      res.json({ data: { comparison }});
     } catch (error) {
       logger.error({
         category: 'api',
@@ -178,7 +178,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/projects', (_req: Request, res: Response) => {
     try {
       const projects = devBotsManager.getValidProjects();
-      res.json({ projects });
+      res.json({ data: { projects }});
     } catch (error) {
       logger.error({
         category: 'api',

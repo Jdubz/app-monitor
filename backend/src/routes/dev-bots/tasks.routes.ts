@@ -98,7 +98,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         details: { count: tasks.length }
       });
 
-      res.json({ tasks });
+      res.json({ data: { tasks }});
     } catch (error) {
       logger.error({
         category: 'api',
@@ -368,11 +368,11 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         });
       }
 
-      res.json({
+      res.json({ data: {
         task: result.task,
         validation: result.validation,
         message: 'Task added successfully'
-      });
+      }});
     } catch (error) {
       logger.error({
         category: 'api',
@@ -658,7 +658,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       const { id: taskId } = req.params;
       const runs = getTaskContextService().getTaskAutomationRuns(taskId);
 
-      res.json({ runs });
+      res.json({ data: { runs }});
     } catch (error) {
       logger.error({
         category: 'api',
