@@ -66,7 +66,9 @@ export type LogCategory =
   | 'token-tracking'
   | 'utility'
   | 'verification'
-  | 'workspace';
+  | 'workspace'
+  | 'port-manager' // Port management operations
+  | 'codex-log-parser'; // Codex log parsing
 
 export interface LogEntry {
   category: LogCategory;
