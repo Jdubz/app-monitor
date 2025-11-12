@@ -27,6 +27,7 @@ import { InteractiveSessionService } from './interactiveSession.service.js';
 import { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
 import { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
 import { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
+import { TaskCreationService } from './taskCreation.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
 
 /**
@@ -66,6 +67,9 @@ export async function createDevBotsManagerDependencies(
 
   // Initialize guidelines manager
   const guidelinesManager = new TaskCreationGuidelinesManager();
+
+  // Initialize task creation service
+  const taskCreationService = new TaskCreationService(taskQueue, guidelinesManager);
 
   // WorkspaceOrchestrator completely removed - using container isolation instead
   // Each bot gets its own fresh repository clone inside the container
@@ -197,6 +201,7 @@ export async function createDevBotsManagerDependencies(
     dockerManager,
     docker,
     taskQueue,
+    taskCreationService,
     agentManager,
     templateManager,
     guidelinesManager,

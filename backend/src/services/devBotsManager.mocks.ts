@@ -27,6 +27,7 @@ import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js
 import type { InteractiveSessionService } from './interactiveSession.service.js';
 import type { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
 import type { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
+import type { TaskCreationService } from './taskCreation.service.js';
 import { EventEmitter } from 'events';
 
 /**
@@ -238,6 +239,30 @@ export function createMockGuidelinesManager(): TaskCreationGuidelinesManager {
 }
 
 /**
+ * Create mock TaskCreationService
+ */
+export function createMockTaskCreationService(): TaskCreationService {
+  return {
+    createTask: vi.fn().mockResolvedValue({
+      task: {
+        id: 'task-1',
+        type: 'feature',
+        title: 'Test Task',
+        status: 'pending',
+        created_at: Date.now()
+      },
+      validation: {
+        isValid: true,
+        warnings: [],
+        suggestions: [],
+        errors: []
+      }
+    }),
+    calculateTaskFingerprint: vi.fn().mockReturnValue('abc123def456')
+  } as unknown as TaskCreationService;
+}
+
+/**
  * Create mock WorkspaceSyncManager
  */
 export function createMockWorkspaceSyncManager(): WorkspaceSyncManager {
@@ -411,6 +436,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
   const dockerManager = createMockDockerManager();
   const docker = createMockDocker();
   const taskQueue = createMockTaskQueue();
+  const taskCreationService = createMockTaskCreationService();
   const agentManager = createMockAgentManager();
   const templateManager = createMockTemplateManager();
   const guidelinesManager = createMockGuidelinesManager();
@@ -428,6 +454,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     dockerManager,
     docker,
     taskQueue,
+    taskCreationService,
     agentManager,
     templateManager,
     guidelinesManager,

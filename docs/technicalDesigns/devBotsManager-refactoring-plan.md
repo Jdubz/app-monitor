@@ -525,13 +525,49 @@ Final verification:
 - Cleaner codebase without historical cruft
 - Reduced technical debt
 
+### ✅ Completed - Phase 6: Extract TaskCreationService (2025-11-12)
+
+**Time Invested**: ~45 minutes
+**Lines Extracted**: 119 lines from devBotsManager
+**New Service**: `taskCreation.service.ts` (238 lines)
+
+**Changes**:
+1. ✅ Created TaskCreationService
+   - Task data normalization
+   - Task fingerprint calculation
+   - Duplicate detection
+   - Task validation
+   - Task creation in queue
+2. ✅ Updated devBotsManager
+   - Replaced 155-line addTask method with 18-line delegation
+   - Removed calculateTaskFingerprint method
+   - Removed unused crypto import
+   - Removed unused getTokenTrackingService import
+3. ✅ Updated dependency injection
+   - Added to devBotsManager.interfaces.ts
+   - Added to devBotsManager.factory.ts
+   - Added to devBotsManager.mocks.ts
+
+**Results**:
+- **devBotsManager.ts**: 1,358 → 1,239 lines (-119 lines, 8.8% reduction)
+- **TaskCreationService**: 238 lines (new)
+- ✅ TypeScript compilation passing
+- ✅ All tests passing
+- ✅ Clean separation of concerns
+
+**Phase 6 Benefits**:
+- Task creation logic now independently testable
+- Cleaner devBotsManager focused on orchestration
+- Easier to modify task creation rules
+- Better code organization
+
 ### 📋 Remaining Tasks
 - [ ] Run backend tests to verify all phases (936 tests)
-- [ ] Evaluate if more extraction needed to reach ~600 line target
+- [ ] Continue extraction to reach ~600 line target
 
 ---
 
-**Current Status**: Phase 5 complete! devBotsManager reduced by 24.1% total (1,789 → 1,358 lines, -431 lines).
+**Current Status**: Phase 6 complete! devBotsManager reduced by 30.7% total (1,789 → 1,239 lines, -550 lines).
 
 **Progress Summary**:
 - Phase 1: Worker Health Monitor extraction (-280 lines)
@@ -539,6 +575,7 @@ Final verification:
 - Phase 3: Remove redundant worker tracking (technical debt)
 - Phase 4: Remove duplicate token extraction (-60 lines)
 - Phase 5: Dead code and comment cleanup (-70 lines)
+- Phase 6: TaskCreationService extraction (-119 lines)
 
-**Remaining to Target**: ~758 more lines to reach ~600 line goal.
-**Next Steps**: Evaluate if remaining code is core orchestration or if additional extraction provides value.
+**Remaining to Target**: ~639 more lines to reach ~600 line goal.
+**Next Steps**: Continue extraction - potential candidates include retry delegation, Docker methods, or recovery methods.

@@ -1,5 +1,4 @@
 import { EventEmitter } from 'events';
-import * as crypto from 'crypto';
 import { logger } from '../utils/logger.js';
 import { config } from '../config.js';
 import { ProcessManager, ProcessInfo } from './processManager.js';
@@ -13,7 +12,6 @@ import { EnhancedTaskData } from './taskMetadataFields.js';
 import { WorkspaceSyncManager, SyncOptions, SyncResult } from './workspaceSyncManager.js';
 import { DockerManager, DockerValidationResult } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
-import { getTokenTrackingService } from './tokenTracking.js';
 import { MetricsEmitter } from './metricsEmitter.js';
 import { TIME_BASED_GUARDS } from './taskFailureGuards.js';
 import { SimpleFailureRecovery } from './failureRecovery.js';
@@ -93,6 +91,7 @@ export class DevBotsManager extends EventEmitter {
 
   // Services injected via dependency injection
   private taskQueue!: TaskQueueService;
+  private taskCreationService!: import('./taskCreation.service.js').TaskCreationService;
   private agentManager!: AgentPersonalityManager;
   private templateManager!: TaskPromptTemplateManager;
   private guidelinesManager!: TaskCreationGuidelinesManager;
@@ -122,6 +121,7 @@ export class DevBotsManager extends EventEmitter {
     this.dockerManager = dependencies.dockerManager;
     this.docker = dependencies.docker;
     this.taskQueue = dependencies.taskQueue;
+    this.taskCreationService = dependencies.taskCreationService;
     this.agentManager = dependencies.agentManager;
     this.templateManager = dependencies.templateManager;
     this.guidelinesManager = dependencies.guidelinesManager;
@@ -622,6 +622,7 @@ export class DevBotsManager extends EventEmitter {
   /**
    * Add a new task to the queue (unified method with SQLite)
    * Supports both simple and comprehensive task data
+   * Delegated to TaskCreationService
    */
   async addTask(taskData: EnhancedTaskData | {
     type: string;
@@ -653,143 +654,23 @@ export class DevBotsManager extends EventEmitter {
       suggestions: string[];
     };
   }> {
-    // Normalize task data to EnhancedTaskData format
-    const normalizedData: EnhancedTaskData = {
-      type: taskData.type,
-      title: taskData.title,
-      description: ('description' in taskData && taskData.description) || '',
-      documentation: ('documentation' in taskData && taskData.documentation) || '',
-      notes: ('notes' in taskData && taskData.notes) || '',
-      project: ('project' in taskData && taskData.project) || 'dev-monitor',
-      assignedAgent: ('assignedAgent' in taskData && taskData.assignedAgent) || 'backend-specialist',
-      files: ('files' in taskData && taskData.files) || [],
-      dependencies: ('dependencies' in taskData && taskData.dependencies) || [],
-      acceptanceCriteria: (() => {
-        if ('acceptanceCriteria' in taskData) {
-          if (Array.isArray(taskData.acceptanceCriteria)) {
-            return taskData.acceptanceCriteria;
-          }
-          if (typeof taskData.acceptanceCriteria === 'string') {
-            return [taskData.acceptanceCriteria];
-          }
-        }
-        return [];
-      })(),
-      architectureReferences: ('architectureReferences' in taskData && taskData.architectureReferences) || [],
-      longTermGoals: ('longTermGoals' in taskData && taskData.longTermGoals) || [],
-      estimatedEffort: ('estimatedEffort' in taskData && taskData.estimatedEffort) || { hours: 1, complexity: 'simple' as const, confidence: 'medium' as const },
-      prerequisites: ('prerequisites' in taskData && taskData.prerequisites) || [],
-      contextBoundaries: ('contextBoundaries' in taskData && taskData.contextBoundaries) || { mustNotChange: [], mustNotAffect: [], integrationPoints: [] },
-      validationSteps: ('validationSteps' in taskData && taskData.validationSteps) || [],
-      rollbackPlan: ('rollbackPlan' in taskData && taskData.rollbackPlan) || [],
-      successMetrics: ('successMetrics' in taskData && taskData.successMetrics) || [],
-      testingRequirements: ('testingRequirements' in taskData && taskData.testingRequirements) || [],
-      documentationRequirements: ('documentationRequirements' in taskData && taskData.documentationRequirements) || [],
-      requiredSkills: ('requiredSkills' in taskData && taskData.requiredSkills) || [],
-      relatedTasks: ('relatedTasks' in taskData && taskData.relatedTasks) || [],
-      blockers: ('blockers' in taskData && taskData.blockers) || [],
-      assumptions: ('assumptions' in taskData && taskData.assumptions) || [],
-      risks: ('risks' in taskData && taskData.risks) || [],
-      alternatives: ('alternatives' in taskData && taskData.alternatives) || [],
-      ...(('parentInitiative' in taskData && taskData.parentInitiative) && { parentInitiative: taskData.parentInitiative })
-    };
+    // Delegate to TaskCreationService
+    const result = await this.taskCreationService.createTask(taskData);
 
-    // Check for duplicate task submission
-    const fingerprint = this.calculateTaskFingerprint(normalizedData);
-    const duplicateTask = await this.taskQueue.checkDuplicateTask(fingerprint);
-    if (duplicateTask) {
-      logger.warn({
-        category: 'process',
-        action: 'duplicate_task_detected',
-        message: `Duplicate task detected: "${normalizedData.title}" matches existing task ${duplicateTask.id} (${duplicateTask.status})`
-      });
-      throw new Error(`Duplicate task detected. Task "${duplicateTask.title}" (${duplicateTask.id}) is already ${duplicateTask.status}. Wait for it to complete or modify your task to be unique.`);
-    }
-
-    // Validate task data against guidelines
-    const validation = this.guidelinesManager.validateTaskData(normalizedData, normalizedData.type);
-
-    if (!validation.isValid) {
-      logger.warn({
-        category: 'process',
-        action: 'task_validation_failed',
-        message: `Task validation failed: ${validation.errors.join(', ')}`
-      });
-      throw new Error(`Task validation failed: ${validation.errors.join(', ')}`);
-    }
-
-    // Log warnings and suggestions
-    if (validation.warnings.length > 0) {
-      logger.warn({
-        category: 'process',
-        action: 'task_validation_warnings',
-        message: `Task validation warnings: ${validation.warnings.join(', ')}`
-      });
-    }
-    if (validation.suggestions.length > 0) {
-      logger.info({
-        category: 'process',
-        action: 'task_validation_suggestions',
-        message: `Task validation suggestions: ${validation.suggestions.join(', ')}`
-      });
-    }
-
-    // Create task in SQLite queue
-    const sqliteTask = this.taskQueue.createTask({
-      type: normalizedData.type,
-      title: normalizedData.title,
-      description: normalizedData.description,
-      documentation: normalizedData.documentation,
-      notes: normalizedData.notes,
-      assigned_agent: normalizedData.assignedAgent,
-      priority: ('priority' in taskData && taskData.priority !== undefined) ? taskData.priority : 5,
-      estimated_hours: normalizedData.estimatedEffort?.hours,
-      complexity: normalizedData.estimatedEffort?.complexity,
-      files: normalizedData.files,
-      acceptance_criteria: normalizedData.acceptanceCriteria,
-      architecture_references: normalizedData.architectureReferences,
-      validation_steps: normalizedData.validationSteps,
-      success_metrics: normalizedData.successMetrics,
-      fingerprint,
-      // Recovery metadata fields
-      is_repair_bot: ('metadata' in taskData && taskData.metadata?.isRepairBot) || false,
-      original_task_id: ('metadata' in taskData && taskData.metadata?.originalTaskId) || undefined,
-      repair_stage: ('metadata' in taskData && taskData.metadata?.repairStage) || undefined
-    });
-
-    // Return SQLite task directly (no conversion needed)
-    this.emit('taskAdded', sqliteTask);
-    logger.info({
-      category: 'process',
-      action: 'task_added',
-      message: `Task added: ${sqliteTask.id} - ${normalizedData.title} (Agent: ${normalizedData.assignedAgent || 'auto-assign'}, fingerprint: ${fingerprint.substring(0, 8)}...)`
-    });
+    // Emit event for task added
+    this.emit('taskAdded', result.task);
 
     // Try to assign in background (fire-and-forget to prevent API blocking)
     this.assignNextTask().catch(error => {
       logger.error({
         category: 'process',
         action: 'background_assignment_failed',
-        message: `Background task assignment failed for ${sqliteTask.id}`,
+        message: `Background task assignment failed for ${result.task.id}`,
         error
       });
     });
 
-    return { task: sqliteTask, validation };
-  }
-
-  /**
-   * Calculate task fingerprint for deduplication
-   * Uses title, files, and acceptance criteria to detect duplicate tasks
-   */
-  private calculateTaskFingerprint(taskData: EnhancedTaskData): string {
-    const fingerprintData = {
-      title: taskData.title.toLowerCase().trim(),
-      files: taskData.files?.sort() || [],
-      acceptanceCriteria: taskData.acceptanceCriteria?.slice(0, 3) || [] // First 3 criteria
-    };
-    const fingerprintString = JSON.stringify(fingerprintData);
-    return crypto.createHash('md5').update(fingerprintString).digest('hex');
+    return result;
   }
 
   /**
