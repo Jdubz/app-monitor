@@ -20,8 +20,8 @@ This directory contains consolidated technical design documents for major app-mo
 
 | Document | Status | Progress | Description |
 |----------|--------|----------|-------------|
-| [Staged Task Queue](staged-task-queue.md) | 🔴 Not Started | 0% | Chain-aware scheduling with concurrency caps |
-| [PR Self-Healing & Resilience](pr-self-healing-and-resilience.md) | 🟡 In Progress | 40% | Continuous REVIEW→FIX→COMPLETE flow for PRs |
+| [Staged Task Queue](staged-task-queue.md) | 🟢 **COMPLETE** | **100%** | Chain-aware scheduling with concurrency caps ✅ |
+| [PR Self-Healing & Resilience](pr-self-healing-and-resilience.md) | 🟡 In Progress | 85% | Continuous REVIEW→FIX→COMPLETE flow for PRs |
 
 ### Priority 1 (High Impact)
 
@@ -116,6 +116,16 @@ Use this checklist when creating or updating technical designs:
 ## Recent Improvements
 
 ### November 12, 2025
+
+**Staged Queue System - COMPLETE ✅**
+- `staged-task-queue.md` fully implemented (100%)
+- All phases complete: Schema, Queue Worker Logic, Service Integration, Observability
+- All acceptance criteria met
+- 936 backend tests passing
+- Documentation updated to reflect completed status
+- See `docs/analysis/STAGED_QUEUE_PROGRESS.md` for implementation details
+
+**Enhanced Design Documents**
 - Enhanced three design documents with structured metadata
 - Added comprehensive success criteria sections
 - Defined testing strategies with coverage targets
@@ -123,6 +133,7 @@ Use this checklist when creating or updating technical designs:
 - Added version history for change tracking
 
 Improved documents:
+- `staged-task-queue.md` (v1.0 → v2.0 COMPLETE)
 - `dev-bot-context-management.md` (v1.1)
 - `pr-self-healing-and-resilience.md` (v1.1)
 - `error-detection-and-recovery-design.md` (v1.1)
