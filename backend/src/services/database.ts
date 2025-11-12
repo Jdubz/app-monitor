@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import type { TaskCreationContext } from '../types/taskContext.js';
+import { logger } from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -219,7 +220,7 @@ export class DevBotsDatabase {
     // Migration 006: Quality Observations
     this.applyMigration('006_quality_observations', () => {
       this.db.exec(fs.readFileSync(
-        path.join(__dirname, '..', '..', 'migrations', '005_quality_observations.sql'),
+        path.join(__dirname, '..', '..', 'migrations', '006_quality_observations.sql'),
         'utf-8'
       ));
     });
@@ -281,23 +282,47 @@ export class DevBotsDatabase {
         this.db.prepare(
           'INSERT OR IGNORE INTO migrations (name) VALUES (?)'
         ).run(name);
-        console.log(`✅ Applied migration: ${name}`);
+        logger.info({
+          category: 'database',
+          action: 'migration_applied',
+          message: `Applied migration: ${name}`,
+          details: { migrationName: name }
+        });
       } catch (error: any) {
         // Safety check: If migration fails due to "already exists", log warning but don't crash
         if (error.code === 'SQLITE_ERROR' && error.message.includes('already exists')) {
-          console.warn(`⚠️  Migration ${name} failed with "already exists" error. This indicates the migration tracking may be out of sync.`);
-          console.warn(`⚠️  Marking migration as applied to prevent future failures.`);
-          console.warn(`⚠️  Error: ${error.message}`);
-          
+          logger.warn({
+            category: 'database',
+            action: 'migration_already_exists',
+            message: `Migration ${name} failed with "already exists" error. This indicates the migration tracking may be out of sync.`,
+            details: { migrationName: name, errorMessage: error.message }
+          });
+          logger.warn({
+            category: 'database',
+            action: 'migration_marking_applied',
+            message: `Marking migration as applied to prevent future failures: ${name}`,
+            details: { migrationName: name }
+          });
+
           // Mark as applied to prevent retry loops
           this.db.prepare(
             'INSERT OR IGNORE INTO migrations (name) VALUES (?)'
           ).run(name);
-          
-          console.log(`⚠️  Migration ${name} marked as applied (with warnings)`);
+
+          logger.info({
+            category: 'database',
+            action: 'migration_marked_applied',
+            message: `Migration ${name} marked as applied (with warnings)`,
+            details: { migrationName: name }
+          });
         } else {
           // Re-throw other errors (these are real problems)
-          console.error(`❌ Migration ${name} failed with unexpected error:`, error);
+          logger.error({
+            category: 'database',
+            action: 'migration_failed',
+            message: `Migration ${name} failed with unexpected error`,
+            details: { migrationName: name, error }
+          });
           throw error;
         }
       }
@@ -332,22 +357,43 @@ export class DevBotsDatabase {
       const missingTables = requiredTables.filter(table => !existingTables.has(table));
       
       if (missingTables.length > 0) {
-        console.error(`❌ Database integrity check failed: Missing tables: ${missingTables.join(', ')}`);
+        logger.error({
+          category: 'database',
+          action: 'integrity_check_failed',
+          message: 'Database integrity check failed: Missing critical tables',
+          details: { missingTables }
+        });
         throw new Error(`Critical database tables missing: ${missingTables.join(', ')}`);
       }
-      
+
       // Verify migrations table has entries
       const migrationCount = this.db.prepare(
         'SELECT COUNT(*) as count FROM migrations'
       ).get() as { count: number };
-      
+
       if (migrationCount.count === 0) {
-        throw new Error('❌ Database integrity check failed: migrations table is empty. This is unexpected after initialization.');
+        logger.error({
+          category: 'database',
+          action: 'integrity_check_failed',
+          message: 'Database integrity check failed: migrations table is empty',
+          details: { migrationCount: migrationCount.count }
+        });
+        throw new Error('Database integrity check failed: migrations table is empty. This is unexpected after initialization.');
       }
-      
-      console.log(`✅ Database integrity validated: ${requiredTables.length} critical tables present`);
+
+      logger.info({
+        category: 'database',
+        action: 'integrity_validated',
+        message: 'Database integrity validated',
+        details: { tableCount: requiredTables.length, tables: requiredTables }
+      });
     } catch (error: any) {
-      console.error('❌ Database integrity validation failed:', error);
+      logger.error({
+        category: 'database',
+        action: 'integrity_validation_failed',
+        message: 'Database integrity validation failed',
+        details: { error }
+      });
       throw error;
     }
   }

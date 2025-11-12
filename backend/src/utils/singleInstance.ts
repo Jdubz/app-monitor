@@ -40,47 +40,20 @@ export async function ensureSingleInstance(port: number): Promise<void> {
       // Check if process is still running
       try {
         process.kill(oldPid, 0); // Signal 0 just checks if process exists
-        
+
         // Process exists - this is a duplicate!
-        const errorMessage = 
-          `╔════════════════════════════════════════════════════════════╗\n` +
-          `║  ERROR: Duplicate Instance Detected                        ║\n` +
-          `╚════════════════════════════════════════════════════════════╝\n` +
-          `\n` +
-          `Another app-monitor backend is already running on port ${port}.\n` +
-          `Existing process: PID ${oldPid}\n` +
-          `Current process:  PID ${process.pid}\n` +
-          `\n` +
-          `This prevents port binding and breaks webhook processing.\n` +
-          `\n` +
-          `To fix:\n` +
-          `1. Stop the existing service:\n` +
-          `   sudo systemctl stop app-monitor-backend@${port}.service\n` +
-          `\n` +
-          `2. Clean up any manual processes:\n` +
-          `   pkill -f "node.*dist/index.js"\n` +
-          `\n` +
-          `3. Restart the service:\n` +
-          `   sudo systemctl start app-monitor-backend@${port}.service\n` +
-          `\n` +
-          `⚠️  NEVER use 'npm start' in production!\n` +
-          `   Always use systemd services for proper process management.\n`;
-        
         logger.error({
           category: 'system',
           action: 'duplicate_instance_detected',
-          message: `Another instance is already running on port ${port}`,
-          details: { 
-            oldPid, 
-            currentPid: process.pid, 
+          message: `Another instance is already running on port ${port}. Stop existing service: sudo systemctl stop app-monitor-backend@${port}.service`,
+          details: {
+            oldPid,
+            currentPid: process.pid,
             port,
-            pidFile 
+            pidFile
           }
         });
-        
-        // Print to stderr for visibility
-        console.error(errorMessage);
-        
+
         throw new Error(`Duplicate instance detected on port ${port} (existing PID: ${oldPid})`);
       } catch (err) {
         const nodeErr = err as NodeJS.ErrnoException;
