@@ -26,7 +26,7 @@ Comprehensive documentation for the App Monitor developer tool and autonomous de
 - ✅ Fixed 15+ broken documentation links
 - ✅ Verified database consolidation complete
 - ✅ Updated plan statuses to reflect reality
-- 📄 See [Critical Improvements Report](./CRITICAL_IMPROVEMENTS_2025-11-11.md) for technical details
+- 📄 See [archived critical improvements](./archive/CRITICAL_IMPROVEMENTS_2025-11-11.md) for technical details
 - 📄 See [archived review](./archive/DOCUMENTATION_REVIEW_SUMMARY-2025-11-11.md) for full audit
 
 **2025-11-12 Quick Wins Completed:**
