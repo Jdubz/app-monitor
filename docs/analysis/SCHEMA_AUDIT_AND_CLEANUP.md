@@ -511,6 +511,28 @@ const prDetails = await github.getPR(task.pr_number); // Cached
 
 **Verdict**: Acceptable tradeoff - correctness over speed. Cache mitigates performance impact.
 
+## Additional Recommendations (Nov 12, 2025)
+
+### 1. Finish PR Column Removal + Consumer Refactor
+- Drop `pr_url`, `pr_branch`, `pr_status`, `pr_checks_status`, `pr_review_status`, `pr_created_at`, and `pr_merged_at` from `tasks` when running the pending migration (see `docs/NEXT_PRIORITY_TASKS.md:73-93`).  
+- Before executing that migration, refactor every call site (`backend/src/services/prMonitor.service.ts`, `prWorkflowOrchestrator.service.ts`, `taskCompletion.service.ts`, `githubWebhookHandler.service.ts`, `backend/src/services/taskQueue.sqlite.ts`, `adopt-orphaned-prs.js`, relevant frontend components, etc.) so they fetch live data from `GitHubPRService` or `pr_condition_states` rather than reading/writing the soon-to-be-removed columns.  
+- Replace `taskQueue.updatePRStatus` with helpers that either (a) fetch GitHub state on demand or (b) read the normalized booleans in `pr_condition_states`.
+
+### 2. Slim Down `pr_review_comments`
+- Migration `008_pr_review_comments.sql` and `ReviewCommentTracker` currently persist full GitHub comment bodies, reviewers, and file paths. Store only our derived metadata: `pr_number`, `comment_id`, fingerprint, severity, category, resolution flags, timestamps, and `is_copilot`.  
+- When dev-monitor or condition-state evaluators need the body/path, fetch it via `GitHubPRService` or GraphQL at render time so we never hold GitHub-authored text in SQLite.
+
+### 3. Clean `pr_condition_states.state_json`
+- `state_json` embeds snippets of GitHub comment text inside `blocking_issues` (see `backend/src/services/prConditionState.service.ts:532-606`). Replace those strings with structured references (`issue_fingerprint`, `github_ref_type`, `github_ref_id`).  
+- Any service or UI that needs the human-readable text should resolve the reference through GitHub before displaying it.
+
+### 4. Remove GitHub Branch Names from Quality Tables
+- `quality_observations.branch` and `pr_quality_history.branch` (defined in `backend/migrations/005_quality_observations.sql` and populated via `backend/src/services/database.ts:522-566`) mirror GitHub’s head ref. Drop these columns in the same cleanup migration and adjust writers/readers to rely on `pr_number`; fetch branch names from GitHub only when needed.
+
+### 5. Add Schema/Test Guard Rails
+- Add a lightweight unit test (e.g., `backend/src/services/__tests__/schemaIntegrity.test.ts`) that fails if new task columns named `pr_*` (other than `pr_number`) are introduced without an explicit exemption.  
+- Extend CI linting or `DATABASE_MIGRATION_SAFETY.md` guidelines to require justification whenever a migration proposes storing GitHub-derived fields, giving reviewers an explicit hook to reject future violations.
+
 ## Summary
 
 ### Key Findings

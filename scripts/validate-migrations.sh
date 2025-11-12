@@ -43,7 +43,7 @@ check_inline_migrations() {
     # This is tricky because we need to find CREATE TABLE statements within migration callbacks
     
     # Extract migration blocks and check each one
-    if grep -n "CREATE TABLE [^I]" "$db_file" | grep -v "IF NOT EXISTS"; then
+    if perl -ne 'BEGIN{$found=0;} if (/CREATE\s+TABLE(?!\s+IF\s+NOT\s+EXISTS)/i) { print "$.:$_"; $found=1 } END { exit($found ? 0 : 1) }' "$db_file"; then
         log_error "Found CREATE TABLE without IF NOT EXISTS in database.ts"
         log_error "All inline migrations must use: CREATE TABLE IF NOT EXISTS"
         ((errors++))
@@ -80,7 +80,7 @@ check_migration_files() {
         fi
         
         # Check for CREATE TABLE without IF NOT EXISTS
-        if grep -i "CREATE TABLE " "$file" | grep -v "IF NOT EXISTS" | grep -q "CREATE TABLE"; then
+        if perl -ne 'BEGIN{$found=0;} if (/CREATE\s+TABLE(?!\s+IF\s+NOT\s+EXISTS)/i) { print "$.:$_"; $found=1 } END { exit($found ? 0 : 1) }' "$file"; then
             log_error "  ✗ $filename contains CREATE TABLE without IF NOT EXISTS"
             log_error "    This can cause deployment failures if migration tracking is reset"
             ((errors++))
@@ -96,7 +96,7 @@ check_migration_files() {
         fi
         
         # Check for CREATE INDEX without IF NOT EXISTS
-        if grep -i "CREATE INDEX " "$file" | grep -v "IF NOT EXISTS" | grep -q "CREATE INDEX"; then
+        if perl -ne 'BEGIN{$found=0;} if (/CREATE\s+(?:UNIQUE\s+)?INDEX(?!\s+IF\s+NOT\s+EXISTS)/i) { print "$.:$_"; $found=1 } END { exit($found ? 0 : 1) }' "$file"; then
             log_warn "  ⚠ $filename contains CREATE INDEX without IF NOT EXISTS"
             log_warn "    Consider using: CREATE INDEX IF NOT EXISTS"
             ((warnings++))

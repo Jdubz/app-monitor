@@ -274,7 +274,7 @@ export class DevBotsDatabase {
       try {
         migration();
         this.db.prepare(
-          'INSERT INTO migrations (name) VALUES (?)'
+          'INSERT OR IGNORE INTO migrations (name) VALUES (?)'
         ).run(name);
         console.log(`✅ Applied migration: ${name}`);
       } catch (error: any) {
@@ -286,7 +286,7 @@ export class DevBotsDatabase {
           
           // Mark as applied to prevent retry loops
           this.db.prepare(
-            'INSERT INTO migrations (name) VALUES (?)'
+            'INSERT OR IGNORE INTO migrations (name) VALUES (?)'
           ).run(name);
           
           console.log(`⚠️  Migration ${name} marked as applied (with warnings)`);
@@ -337,7 +337,7 @@ export class DevBotsDatabase {
       ).get() as { count: number };
       
       if (migrationCount.count === 0) {
-        console.warn('⚠️  Warning: migrations table is empty. This is unexpected after initialization.');
+        throw new Error('❌ Database integrity check failed: migrations table is empty. This is unexpected after initialization.');
       }
       
       console.log(`✅ Database integrity validated: ${requiredTables.length} critical tables present`);
