@@ -442,4 +442,4 @@ Migration manager logs to structured logging:
 - [SQLite ALTER TABLE](https://www.sqlite.org/lang_altertable.html)
 - [SQLite Transactions](https://www.sqlite.org/lang_transaction.html)
 - [SQLite Pragma Statements](https://www.sqlite.org/pragma.html)
-- [Migration Best Practices](https://www.sqlite.org/bestpractice.html)
+- [SQLite How To Corrupt Your Database Files](https://www.sqlite.org/howtocorrupt.html)
