@@ -566,7 +566,8 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
       endSession: vi.fn(),
       recordActivity: vi.fn(),
       getIdleTimeoutMs: vi.fn().mockReturnValue(300000),
-      listActiveSessions: vi.fn().mockReturnValue([])
+      listActiveSessions: vi.fn().mockReturnValue([]),
+      startIdleWatchdog: vi.fn()
     } as unknown as InteractiveSessionService,
     interactiveSessionOrchestrator: {
       start: vi.fn().mockResolvedValue('container-id'),

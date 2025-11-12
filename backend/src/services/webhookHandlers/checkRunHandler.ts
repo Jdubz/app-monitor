@@ -75,9 +75,6 @@ export class CheckRunHandler extends BaseWebhookHandler {
       return;
     }
 
-    const owner = repository.owner.login;
-    const repo = repository.name;
-    
     logger.info({
       category: 'pr-workflow',
       action: 'check_run_processed',

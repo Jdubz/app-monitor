@@ -205,7 +205,7 @@ export class TaskCreationService {
   private createTaskInQueue(
     originalData: EnhancedTaskData | SimpleTaskData,
     normalizedData: EnhancedTaskData,
-    validation: { isValid: boolean; errors: string[]; warnings: string[]; suggestions: string[] }
+    _validation: { isValid: boolean; errors: string[]; warnings: string[]; suggestions: string[] }
   ): Task {
     const fingerprint = this.calculateTaskFingerprint(normalizedData);
 

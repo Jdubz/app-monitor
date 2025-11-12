@@ -42,7 +42,6 @@ import {
 
 // Import types used internally in this file
 import type {
-  BlockingIssue,
   PRConditionState,
   ConditionEvaluation
 } from './prConditions/types.js';

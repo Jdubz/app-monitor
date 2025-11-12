@@ -31,6 +31,7 @@ import { TaskCreationService } from './taskCreation.service.js';
 import { StatusAggregationService } from './statusAggregation.service.js';
 import { RetryCoordinationService } from './retryCoordination.service.js';
 import { SystemLifecycleService } from './systemLifecycle.service.js';
+import { SystemInitializationService } from './systemInitialization.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
 
 /**
@@ -224,6 +225,23 @@ export async function createDevBotsManagerDependencies(
     () => {} // assignNextTask placeholder
   );
 
+  // Create SystemInitializationService (callbacks will be bound by DevBotsManager)
+  // Note: recovery will be set by DevBotsManager after instantiation
+  const systemInitializationService = new SystemInitializationService(
+    {
+      dockerManager,
+      taskQueue,
+      recovery: null as unknown as SimpleFailureRecovery, // Will be set by DevBotsManager
+      taskExecutionService,
+      ephemeralWorkerService,
+      interactiveSessionService,
+      interactiveSessionStreamManager,
+      systemLifecycleService
+    },
+    () => {}, // emit function placeholder
+    async () => {} // endInteractiveSession placeholder
+  );
+
   return {
     processManager,
     dockerManager,
@@ -250,5 +268,6 @@ export async function createDevBotsManagerDependencies(
     interactiveSessionStreamManager,
     workerHealthMonitor,
     systemLifecycleService,
+    systemInitializationService,
   };
 }

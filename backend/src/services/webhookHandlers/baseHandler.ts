@@ -78,7 +78,7 @@ export abstract class BaseWebhookHandler {
     
     // PRIORITY 2: Check title if branch didn't match
     // Pattern: "Task: task-abc123" or "[task-abc123]" or "task-abc123:" or "(task-abc123)"
-    match = title.match(/(?:task:\s*|[\[\(])(task-[a-z]+-[a-f0-9-]{8,})(?:[\]\)]|:)?/i);
+    match = title.match(/(?:task:\s*|[[(])(task-[a-z]+-[a-f0-9-]{8,})(?:[\])]|:)?/i);
     if (match) return match[1];
     
     // Pattern: task-{uuid} in title

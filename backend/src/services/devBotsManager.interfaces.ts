@@ -31,6 +31,7 @@ import type { TaskCreationService } from './taskCreation.service.js';
 import type { StatusAggregationService } from './statusAggregation.service.js';
 import type { RetryCoordinationService } from './retryCoordination.service.js';
 import type { SystemLifecycleService } from './systemLifecycle.service.js';
+import type { SystemInitializationService } from './systemInitialization.service.js';
 
 /**
  * All dependencies required by DevBotsManager
@@ -81,6 +82,9 @@ export interface DevBotsManagerDependencies {
 
   // System lifecycle management
   systemLifecycleService: SystemLifecycleService;
+
+  // System initialization
+  systemInitializationService: SystemInitializationService;
 }
 
 /**

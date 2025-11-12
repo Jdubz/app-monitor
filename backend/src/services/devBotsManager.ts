@@ -6,7 +6,7 @@ import Docker from 'dockerode';
 import type { TaskPersistence } from './taskPersistence.js';
 import { TaskQueueService, Task, TaskStatus as SQLiteTaskStatus, TaskExecution } from './taskQueue.sqlite.js';
 import { AgentPersonalityManager, AgentPersonality } from './agentPersonalities.js';
-import type { DevBotsStatus, WorkerStatus } from './statusAggregation.service.js';
+import type { DevBotsStatus } from './statusAggregation.service.js';
 import { TaskPromptTemplateManager } from './taskPromptTemplates.js';
 import { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js';
 import { EnhancedTaskData } from './taskMetadataFields.js';
@@ -14,7 +14,7 @@ import { WorkspaceSyncManager, SyncOptions, SyncResult } from './workspaceSyncMa
 import { DockerManager, DockerValidationResult } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
 import { MetricsEmitter } from './metricsEmitter.js';
-import { TIME_BASED_GUARDS } from './taskFailureGuards.js';
+
 import { SimpleFailureRecovery } from './failureRecovery.js';
 import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
 import type { ScopeControlService } from './scopeControl.service.js';
@@ -87,6 +87,7 @@ export class DevBotsManager extends EventEmitter {
   private interactiveSessionOrchestrator!: InteractiveSessionOrchestrator;
   private interactiveSessionStreamManager!: InteractiveSessionStreamManager;
   private systemLifecycleService!: import('./systemLifecycle.service.js').SystemLifecycleService;
+  private systemInitializationService!: import('./systemInitialization.service.js').SystemInitializationService;
   private taskQueueWorker?: { start: () => Promise<void>; stop: () => Promise<void> };
   private metricsEmitter?: MetricsEmitter;
 
@@ -119,6 +120,7 @@ export class DevBotsManager extends EventEmitter {
     this.interactiveSessionStreamManager = dependencies.interactiveSessionStreamManager;
     this.workerHealthMonitor = dependencies.workerHealthMonitor;
     this.systemLifecycleService = dependencies.systemLifecycleService;
+    this.systemInitializationService = dependencies.systemInitializationService;
 
     // Initialize maxWorkers from config
     this.maxWorkers = config.devBots.maxWorkers;
@@ -131,6 +133,9 @@ export class DevBotsManager extends EventEmitter {
     (this.workerHealthMonitor as any).recovery = this.recovery;
     (this.workerHealthMonitor as any).emit = this.emit.bind(this);
 
+    // Update SystemInitializationService with recovery instance
+    (this.systemInitializationService as any).components.recovery = this.recovery;
+
     // Update RetryCoordinationService with emit and assignNextTask functions
     // Note: RetryCoordinationService is injected but needs these callbacks from DevBotsManager
     (this.retryCoordinationService as any).emitEvent = this.emit.bind(this);
@@ -140,6 +145,11 @@ export class DevBotsManager extends EventEmitter {
     // Note: SystemLifecycleService is injected but needs these callbacks from DevBotsManager
     (this.systemLifecycleService as any).emitEvent = this.emit.bind(this);
     (this.systemLifecycleService as any).assignNextTask = this.assignNextTask.bind(this);
+
+    // Update SystemInitializationService with emit and endInteractiveSession callbacks
+    // Note: SystemInitializationService is injected but needs these callbacks from DevBotsManager
+    (this.systemInitializationService as any).emitEvent = this.emit.bind(this);
+    (this.systemInitializationService as any).endInteractiveSession = this.endInteractiveSession.bind(this);
 
     // Initialize TaskCompletionService with PR workflow orchestrator callback
     // Create no-op implementations for removed dependencies
@@ -188,11 +198,14 @@ export class DevBotsManager extends EventEmitter {
     // Wire recovery into task execution service
     this.taskExecutionService.setRecovery(this.recovery);
 
-    // Validate Docker environment and initialize
-    this.initializeDockerEnvironment();
+    // Wire interactive stream events (delegated to SystemInitializationService)
+    this.systemInitializationService.wireInteractiveStreamEvents();
 
-    // Run async initialization (orphaned task recovery)
-    void this.initializeAsync();
+    // Validate Docker environment and initialize (delegated to SystemInitializationService)
+    void this.systemInitializationService.initializeDockerEnvironment();
+
+    // Run async initialization (orphaned task recovery) (delegated to SystemInitializationService)
+    void this.systemInitializationService.initializeAsync();
 
     // Listen for retry events (delegate to RetryCoordinationService)
     this.retryManager.on('taskReadyForRetry', (task: Task) => {
