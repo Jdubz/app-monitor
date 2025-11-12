@@ -765,13 +765,46 @@ Final verification:
 - Better code organization
 - All interactive session operations in one place
 
+### ✅ Completed - Phase 12: Move Docker Operations to DockerManager (2025-11-12)
+
+**Time Invested**: ~30 minutes
+**Lines Moved**: 27 lines from devBotsManager
+**Service Updated**: `dockerManager.ts` (708 → 758 lines, +50 lines)
+
+**Changes**:
+1. ✅ Added cleanupOrphanedResources() to DockerManager
+   - Orchestrates cleanup of both volumes and networks
+   - Consolidates logging and result aggregation
+   - Single method for complete orphaned resource cleanup
+2. ✅ Added getContainerHealth() to DockerManager
+   - Gets health status of specific container
+   - Includes container state, status, and recent logs
+   - Centralizes container health checks
+3. ✅ Updated devBotsManager
+   - Both methods now simple delegations to DockerManager
+   - Removed 27 lines of Docker-specific implementation
+   - All Docker operations now in one place
+
+**Results**:
+- **devBotsManager.ts**: 726 → 699 lines (-27 lines, 3.7% reduction)
+- **dockerManager.ts**: 708 → 758 lines (+50 lines with new methods)
+- ✅ TypeScript compilation passing
+- ✅ All Docker operations centralized
+- ✅ Better separation of concerns
+
+**Phase 12 Benefits**:
+- Docker operations now fully encapsulated in DockerManager
+- Cleaner devBotsManager with less Docker-specific code
+- Easier to test Docker operations independently
+- Single source of truth for all Docker interactions
+
 ### 📋 Remaining Tasks
 - [ ] Run backend tests to verify all phases (936 tests)
 - [ ] Continue extraction to reach ~600 line target
 
 ---
 
-**Current Status**: Phase 11 complete! devBotsManager reduced by 59.4% total (1,789 → 726 lines, -1,063 lines).
+**Current Status**: Phase 12 complete! devBotsManager reduced by 60.9% total (1,789 → 699 lines, -1,090 lines).
 
 **Progress Summary**:
 - Phase 1: Worker Health Monitor extraction (-280 lines)
@@ -785,6 +818,7 @@ Final verification:
 - Phase 9: SystemLifecycleService extraction (-77 lines)
 - Phase 10: SystemInitializationService extraction (-275 lines) ⭐
 - Phase 11: InteractiveSessionCoordinator extraction (-19 lines)
+- Phase 12: Docker operations moved to DockerManager (-27 lines)
 
-**Remaining to Target**: ~126 more lines to reach ~600 line goal (79% complete).
-**Next Steps**: Continue extraction to reach target - potential candidates include additional method consolidation or utility extraction.
+**Remaining to Target**: ~99 more lines to reach ~600 line goal (83.5% complete).
+**Next Steps**: Continue extraction - candidates include query/info methods consolidation (~50 lines) or workspace coordination (~11 lines).
