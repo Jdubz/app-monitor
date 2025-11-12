@@ -135,13 +135,20 @@ describe('ChainTrackerService', () => {
         chain_status: 'active',
         chain_id: 'chain-1',
       });
+      
+      // Update task to set assigned_agent (done after insert since it's not in constructor)
+      db.prepare('UPDATE tasks SET assigned_agent = ? WHERE id = ?').run(null, 'task-1');
+      
       insertTask(db, {
         id: 'task-copilot-123',
         status: 'pending',
         queue_stage: 'implementation',
         chain_status: 'active',
-        chain_id: 'copilot-task-123', // Chain ID must contain "copilot" to be excluded
+        chain_id: 'chain-2',
       });
+      
+      // Set as Copilot task
+      db.prepare('UPDATE tasks SET assigned_agent = ? WHERE id = ?').run('copilot', 'task-copilot-123');
 
       const count = chainTracker.countActiveChains();
       expect(count).toBe(1);
@@ -219,8 +226,11 @@ describe('ChainTrackerService', () => {
         id: 'task-copilot-123',
         status: 'pending',
         chain_status: 'blocked',
-        chain_id: 'copilot-task-123', // Chain ID must contain "copilot" to be excluded
+        chain_id: 'chain-2',
       });
+      
+      // Set as Copilot task
+      db.prepare('UPDATE tasks SET assigned_agent = ? WHERE id = ?').run('copilot', 'task-copilot-123');
 
       const count = chainTracker.countBlockedChains();
       expect(count).toBe(1);
@@ -438,11 +448,14 @@ describe('ChainTrackerService', () => {
         id: 'task-copilot-123',
         status: 'pending',
         chain_status: 'blocked',
-        chain_id: 'copilot-task-123', // Chain ID must contain "copilot" to be excluded
+        chain_id: 'chain-2',
       });
+      
+      // Set as Copilot task
+      db.prepare('UPDATE tasks SET assigned_agent = ? WHERE id = ?').run('copilot', 'task-copilot-123');
 
       chainTracker.blockChain('chain-1', 'CI failed', 'system:ci-monitor');
-      chainTracker.blockChain('copilot-task-123', 'Test', 'system:test');
+      chainTracker.blockChain('chain-2', 'Test', 'system:test');
 
       const blocked = chainTracker.getBlockedChains();
       expect(blocked).toHaveLength(1);
@@ -481,17 +494,21 @@ describe('ChainTrackerService', () => {
     it('should return complete statistics', () => {
       insertTask(db, {
         id: 'task-1',
-        status: 'pending',
+        status: 'running', // Active task shouldn't count in queue depth
         queue_stage: 'implementation',
         chain_status: 'active',
         chain_id: 'chain-1',
       });
+      db.prepare('UPDATE tasks SET assigned_agent = ? WHERE id = ?').run(null, 'task-1');
+      
       insertTask(db, {
         id: 'task-2',
         status: 'pending',
         queue_stage: 'implementation',
         chain_status: 'pending',
       });
+      db.prepare('UPDATE tasks SET assigned_agent = ? WHERE id = ?').run(null, 'task-2');
+      
       insertTask(db, {
         id: 'task-3',
         status: 'pending',
@@ -499,12 +516,15 @@ describe('ChainTrackerService', () => {
         chain_status: 'active',
         chain_id: 'chain-1',
       });
+      db.prepare('UPDATE tasks SET assigned_agent = ? WHERE id = ?').run(null, 'task-3');
+      
       insertTask(db, {
         id: 'task-4',
         status: 'pending',
         chain_status: 'blocked',
         chain_id: 'chain-2',
       });
+      db.prepare('UPDATE tasks SET assigned_agent = ? WHERE id = ?').run(null, 'task-4');
 
       chainTracker.blockChain('chain-2', 'Test', 'system:test');
 

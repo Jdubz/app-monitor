@@ -487,6 +487,52 @@ export class TaskQueueService {
         message: 'Task verification columns added successfully for PR workflow quality gates'
       });
     }
+
+    // Migration 012: Add staged queue / chain tracking columns
+    const stagedQueueColumns = ['queue_stage', 'chain_id', 'chain_status', 'chain_depth', 'blocked_reason', 'blocked_at', 'blocked_by'];
+    const missingStagedQueueColumns = stagedQueueColumns.filter(col => !columnNames.has(col));
+
+    if (missingStagedQueueColumns.length > 0) {
+      logger.info({
+        category: 'process',
+        action: 'adding_staged_queue_columns',
+        message: `Adding ${missingStagedQueueColumns.length} staged queue columns for chain tracking`,
+        details: { columns: missingStagedQueueColumns }
+      });
+
+      if (!columnNames.has('queue_stage')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN queue_stage TEXT CHECK(queue_stage IN ('implementation', 'followup'));`);
+      }
+      if (!columnNames.has('chain_id')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN chain_id TEXT;`);
+      }
+      if (!columnNames.has('chain_status')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN chain_status TEXT CHECK(chain_status IN ('pending', 'active', 'blocked', 'closed'));`);
+      }
+      if (!columnNames.has('chain_depth')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN chain_depth INTEGER DEFAULT 0;`);
+      }
+      if (!columnNames.has('blocked_reason')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN blocked_reason TEXT;`);
+      }
+      if (!columnNames.has('blocked_at')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN blocked_at INTEGER;`);
+      }
+      if (!columnNames.has('blocked_by')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN blocked_by TEXT;`);
+      }
+
+      // Create indexes for chain queries
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_chain_id ON tasks(chain_id) WHERE chain_id IS NOT NULL;`);
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_chain_status ON tasks(chain_status) WHERE chain_status IS NOT NULL;`);
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_queue_stage ON tasks(queue_stage) WHERE queue_stage IS NOT NULL;`);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'Staged queue columns added successfully for chain tracking'
+      });
+    }
   }
 
   private createSchema(): void {

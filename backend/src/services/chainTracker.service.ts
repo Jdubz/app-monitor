@@ -55,7 +55,7 @@ export class ChainTrackerService {
   }
 
   /**
-   * Count blocked chains
+   * Count blocked chains (excludes Copilot per master intent)
    */
   countBlockedChains(): number {
     const result = this.db.prepare(`
@@ -63,6 +63,7 @@ export class ChainTrackerService {
       FROM tasks
       WHERE chain_status = 'blocked'
       AND chain_id IS NOT NULL
+      AND (assigned_agent IS NULL OR assigned_agent != 'copilot')
     `).get() as { count: number };
     
     return result.count;
@@ -184,7 +185,7 @@ export class ChainTrackerService {
   }
 
   /**
-   * Get all blocked chains with details
+   * Get all blocked chains with details (excludes Copilot per master intent)
    */
   getBlockedChains(): BlockedChain[] {
     const stmt = this.db.prepare(`
@@ -197,6 +198,7 @@ export class ChainTrackerService {
       FROM tasks
       WHERE chain_status = 'blocked'
       AND chain_id IS NOT NULL
+      AND (assigned_agent IS NULL OR assigned_agent != 'copilot')
       GROUP BY chain_id, blocked_reason, blocked_at, blocked_by
       ORDER BY blocked_at DESC
     `);

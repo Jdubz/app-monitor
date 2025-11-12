@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { AlertCircle, RefreshCw, Unlock, X } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 
 interface ChainStats {
@@ -39,6 +41,34 @@ export function ChainStatusPanel() {
   const [unblockingChain, setUnblockingChain] = useState<string | null>(null);
   const [confirmUnblock, setConfirmUnblock] = useState<BlockedChain | null>(null);
   const [showConfirm, setShowConfirm] = useState(false);
+  const [operatorName, setOperatorName] = useState('');
+
+  const OPERATOR_NAME_STORAGE_KEY = 'dev-bots.operator-name';
+
+  useEffect(() => {
+    if (typeof window === 'undefined') {
+      return;
+    }
+    try {
+      const storedName = window.localStorage.getItem(OPERATOR_NAME_STORAGE_KEY);
+      if (storedName) {
+        setOperatorName(storedName);
+      }
+    } catch (err) {
+      console.error('Failed to load operator name from storage', err);
+    }
+  }, []);
+
+  const updateOperatorName = (value: string) => {
+    setOperatorName(value);
+    if (typeof window !== 'undefined') {
+      try {
+        window.localStorage.setItem(OPERATOR_NAME_STORAGE_KEY, value);
+      } catch (err) {
+        console.error('Failed to persist operator name', err);
+      }
+    }
+  };
 
   const fetchStats = async () => {
     try {
@@ -65,11 +95,17 @@ export function ChainStatusPanel() {
 
   const handleUnblock = async (chain: BlockedChain) => {
     try {
+      const operator = operatorName.trim();
+      if (!operator) {
+        setError('Please enter your name before unblocking a chain.');
+        return;
+      }
+
       setUnblockingChain(chain.chain_id);
       const response = await fetch(`/api/dev-bots/chains/${chain.chain_id}/unblock`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ unblockedBy: 'user' }) // TODO: Get from auth context
+        body: JSON.stringify({ unblockedBy: operator })
       });
 
       if (!response.ok) throw new Error('Failed to unblock chain');
@@ -278,6 +314,20 @@ export function ChainStatusPanel() {
                   <AlertCircle className="h-4 w-4 inline-block mr-2 text-amber-500" />
                   <span className="font-medium">Have you fixed the underlying issue?</span>
                 </div>
+                <div className="space-y-1">
+                  <Label htmlFor="operator-name" className="text-xs font-medium text-muted-foreground">
+                    Your name (for audit trail)
+                  </Label>
+                  <Input
+                    id="operator-name"
+                    value={operatorName}
+                    onChange={(event) => updateOperatorName(event.target.value)}
+                    placeholder="e.g. Jane Operator"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Stored locally so you only need to enter it once.
+                  </p>
+                </div>
               </div>
               <div className="flex justify-end gap-2">
                 <Button
@@ -291,7 +341,7 @@ export function ChainStatusPanel() {
                 </Button>
                 <Button
                   onClick={() => confirmUnblock && handleUnblock(confirmUnblock)}
-                  disabled={unblockingChain !== null}
+                  disabled={unblockingChain !== null || operatorName.trim().length === 0}
                 >
                   {unblockingChain ? 'Unblocking...' : 'Yes, Unblock Chain'}
                 </Button>

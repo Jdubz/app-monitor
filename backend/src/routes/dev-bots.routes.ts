@@ -2015,26 +2015,31 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
       const { chainId } = req.params;
       const { unblockedBy } = req.body;
 
-      if (!unblockedBy) {
+      if (
+        typeof unblockedBy !== 'string' ||
+        unblockedBy.trim().length === 0
+      ) {
         return res.status(400).json({
-          error: 'Missing required field',
-          message: 'unblockedBy is required'
+          error: 'Invalid or missing required field',
+          message: 'unblockedBy is required and must be a non-empty string'
         });
       }
 
-      devBotsManager.getTaskQueue().unblockChain(chainId, unblockedBy);
+      const normalizedUnblockedBy = unblockedBy.trim();
+
+      devBotsManager.getTaskQueue().unblockChain(chainId, normalizedUnblockedBy);
 
       logger.info({
         category: 'api',
         action: 'chain_unblocked',
-        message: `Chain ${chainId} unblocked by ${unblockedBy}`,
-        details: { chainId, unblockedBy }
+        message: `Chain ${chainId} unblocked by ${normalizedUnblockedBy}`,
+        details: { chainId, unblockedBy: normalizedUnblockedBy }
       });
 
       res.json({
         success: true,
         chainId,
-        unblockedBy
+        unblockedBy: normalizedUnblockedBy
       });
     } catch (error) {
       logger.error({

@@ -172,7 +172,7 @@ export class PRConditionStateService {
    */
   async evaluateConditions(
     prNumber: number,
-    eventType: 'check_suite' | 'pull_request_review' | 'pull_request_synchronize' | 'push' | 'task_completion' | 'manual_restart'
+    eventType: 'check_suite' | 'pull_request_review' | 'pull_request_synchronize' | 'push' | 'task_completion' | 'manual_restart' | 'pull_request_reopened' | 'pull_request_ready_for_review'
   ): Promise<void> {
     // Check for existing evaluation in progress
     const existingLock = this.evaluationLocks.get(prNumber);
@@ -835,7 +835,7 @@ export class PRConditionStateService {
           fingerprint: 'verification-failed',
           blocking_issues: [{
             type: 'verification_failed',
-            severity: 'high'
+            severity: 'high',
             // NOTE: verificationDetails is stored in task.verification_results, not here
           }]
         };
@@ -1020,7 +1020,7 @@ export class PRConditionStateService {
           fingerprint: score >= 80 ? 'validation-passed' : `validation-failed-score-${score}`,
           blocking_issues: score >= 80 ? [] : [{
             type: 'validation_failed',
-            severity: 'high'
+            severity: 'high',
             // NOTE: Validation score is stored in task.verification_results, not here
           }],
           metadata: { score, validation_task_id: latestValidation.id }
@@ -1089,7 +1089,7 @@ export class PRConditionStateService {
         new_status: evaluation.status,
         old_fingerprint: previousFingerprint,
         new_fingerprint: currentFingerprint,
-        reason: evaluation.blocking_issues[0]?.description || 'Condition re-evaluated'
+        reason: evaluation.blocking_issues[0]?.type || 'Condition re-evaluated'
       });
     }
 
@@ -1255,7 +1255,7 @@ export class PRConditionStateService {
           description: this.buildCICheckFixDescription(prNumber, evaluation, prStatus),
           acceptance_criteria: [
             'All CI checks pass',
-            ...evaluation.blocking_issues.map(issue => `Fix: ${issue.description}`)
+            ...evaluation.blocking_issues.map(issue => `Resolve ${issue.type}`)
           ]
         };
 
@@ -1366,18 +1366,19 @@ export class PRConditionStateService {
     return `
 Fix failing CI checks in PR #${prNumber}
 
-**Failing Checks**:
-${failingChecks.map(check => `- ${check.description}${check.url ? `\n  Log: ${check.url}` : ''}`).join('\n')}
+**Failing Checks** (${failingChecks.length}):
+${failingChecks.map((check, i) => `${i + 1}. Check type: ${check.type}${check.github_ref_id ? ` (ID: ${check.github_ref_id})` : ''}`).join('\n')}
 
 **Actions**:
-1. Review failure logs at URLs above
+1. Review check failures in GitHub PR #${prNumber} checks tab
 2. Fix identified issues
 3. Push changes to PR branch
 4. Wait for CI checks to re-run
 
-**Important**: Work from existing PR branch ${prStatus.number}
+**Important**: Work from existing PR branch (PR #${prStatus.number})
 - Do NOT create a new PR
 - Push changes will automatically update this PR
+- Check details available at: ${prStatus.html_url}/checks
     `.trim();
   }
 
@@ -1389,16 +1390,17 @@ Address review comments in PR #${prNumber}
 
 **Unresolved Comments** (${comments.length}):
 ${comments.map((comment, i) =>
-  `${i + 1}. ${comment.file ? `[${comment.file}:${comment.line || '?'}]` : '[General]'} ${comment.description}`
+  `${i + 1}. Comment type: ${comment.type}${comment.github_ref_id ? ` (Comment ID: ${comment.github_ref_id})` : ''}`
 ).join('\n')}
 
 **Actions**:
-1. Review each comment above
+1. Review comments in GitHub PR #${prNumber} conversation tab
 2. Make necessary code changes
 3. Reply to comments explaining changes
 4. Push updates to PR branch
 
 **Important**: Work from existing PR branch, do NOT create new PR
+- Comment details available in PR conversation at GitHub
     `.trim();
   }
 
@@ -1450,17 +1452,18 @@ Update PR #${prNumber} with latest main branch
     return `
 Address change requests in PR #${prNumber}
 
-**Change Requests**:
-${requests.map(req => `- ${req.description}`).join('\n')}
+**Change Requests** (${requests.length}):
+${requests.map((req, i) => `${i + 1}. Type: ${req.type}${req.github_ref_id ? ` (Review ID: ${req.github_ref_id})` : ''}`).join('\n')}
 
 **Actions**:
-1. Review each requested change
+1. Review each requested change in GitHub PR #${prNumber} reviews tab
 2. Implement requested modifications
 3. Update tests if needed
 4. Push changes to PR branch
 5. Request re-review from reviewers
 
 **Important**: Work from existing PR branch, do NOT create new PR
+- Review details available in PR conversation at GitHub
     `.trim();
   }
 
@@ -1470,11 +1473,11 @@ Fix task verification failures in PR #${prNumber}
 
 **Verification Status**: Failed
 
-**Issues**:
-${evaluation.blocking_issues.map(issue => `- ${issue.description}`).join('\n')}
+**Issues** (${evaluation.blocking_issues.length}):
+${evaluation.blocking_issues.map((issue, i) => `${i + 1}. Type: ${issue.type}`).join('\n')}
 
 **Actions**:
-1. Review verification failures above
+1. Review verification failures in task verification results
 2. Ensure all acceptance criteria are met
 3. Fix any scope violations or missing requirements
 4. Update tests/documentation as needed
