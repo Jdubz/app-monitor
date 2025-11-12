@@ -183,4 +183,4 @@ For questions about technical designs:
 - **Architecture**: `docs/architecture/` - System architecture documents
 - **Plans**: `docs/plans/` - Detailed implementation plans
 - **Guides**: `docs/guides/` - How-to guides and references
-- **Investigations**: `docs/investigations/` - Analysis and research
+- **Analysis**: `docs/analysis/` - Analysis, investigations, and reports

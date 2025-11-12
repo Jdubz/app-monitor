@@ -171,6 +171,12 @@ Historical implementation and fix sessions:
 - [guides/api-reference.md](./guides/api-reference.md) - API reference
 - [guides/task-examples.md](./guides/task-examples.md) - Task examples
 
+**Analysis & Investigations**
+- [analysis/](./analysis/README.md) - Analysis reports and investigations
+- [analysis/BACKEND_COMPREHENSIVE_ANALYSIS.md](./analysis/BACKEND_COMPREHENSIVE_ANALYSIS.md) - Backend analysis
+- [analysis/DEV_BOTS_ARCHITECTURE_ANALYSIS.md](./analysis/DEV_BOTS_ARCHITECTURE_ANALYSIS.md) - Dev-bots architecture analysis
+- [archive/analysis-archived/](./archive/analysis-archived/) - Historical analyses
+
 ### By Audience
 
 **New Contributors**
@@ -250,7 +256,7 @@ Historical implementation and fix sessions:
 - **docs/setup/** - Setup and configuration guides
 - **docs/guides/** - Operational guides and tutorials
 - **docs/plans/** - Strategic planning documents
-- **docs/investigations/** - Investigation and analysis documents
+- **docs/analysis/** - Analysis, investigation, and verification documents
 - **docs/archive/** - Historical documentation
 
 ### Naming Conventions

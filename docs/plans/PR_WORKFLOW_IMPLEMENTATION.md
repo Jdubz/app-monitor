@@ -476,9 +476,9 @@ time_to_merge_seconds: histogram
 - `docs/plans/SELF_HEALING_DEPLOYMENT.md` - Related deployment healing
 
 **Investigations:**
-- `docs/investigations/PR_TRACKING_INVESTIGATION_REPORT.md`
-- `docs/investigations/STUCK_PRS_RESOLUTION.md`
-- `docs/investigations/PR_CREATION_FAILURE_INVESTIGATION.md`
+- `docs/analysis/PR_TRACKING_INVESTIGATION_REPORT.md`
+- `docs/archive/analysis-archived/STUCK_PRS_RESOLUTION-2025-11.md` (archived)
+- `docs/archive/analysis-archived/PR_CREATION_FAILURE_INVESTIGATION-2025-11.md` (archived)
 
 **Archived Plans (Consolidated):**
 - See `docs/archive/` for individual plan history
