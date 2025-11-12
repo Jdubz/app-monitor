@@ -841,14 +841,14 @@ export class PRConditionStateService {
 
       if (task.verification_passed === false) {
         // Verification failed - task needs rework
+        // NOTE: verificationDetails is stored in task.verification_results, not here
         return {
           condition_id: 'task_verification',
           status: 'unmet',
           fingerprint: 'verification-failed',
-          // NOTE: verificationDetails is stored in task.verification_results, not here
           blocking_issues: [{
             type: 'verification_failed',
-            severity: 'high'
+            severity: 'high',
           }]
         };
       }
@@ -1026,14 +1026,14 @@ export class PRConditionStateService {
         const results = JSON.parse(latestValidation.verification_results || '{}');
         const score = results.score || 0;
 
+        // NOTE: Validation score is stored in task.verification_results, not here
         return {
           condition_id: 'final_validation_passed',
           status: score >= 80 ? 'met' : 'unmet',
           fingerprint: score >= 80 ? 'validation-passed' : `validation-failed-score-${score}`,
-          // NOTE: Validation score is stored in task.verification_results, not here
           blocking_issues: score >= 80 ? [] : [{
             type: 'validation_failed',
-            severity: 'high'
+            severity: 'high',
           }],
           metadata: { score, validation_task_id: latestValidation.id }
         };
