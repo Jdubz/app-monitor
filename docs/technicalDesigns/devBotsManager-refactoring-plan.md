@@ -721,13 +721,57 @@ Final verification:
 - All initialization operations in one place
 - Largest single-phase reduction so far!
 
+### ✅ Completed - Phase 11: Extract InteractiveSessionCoordinator (2025-11-12)
+
+**Time Invested**: ~40 minutes
+**Lines Extracted**: 19 lines from devBotsManager
+**New Service**: `interactiveSessionCoordinator.service.ts` (125 lines)
+
+**Changes**:
+1. ✅ Created InteractiveSessionCoordinator
+   - getActiveSession() - get active interactive session
+   - getSession() - get specific session by ID
+   - listSessions() - list all sessions
+   - launchSession() - coordinate session launch across 3 services
+   - endSession() - coordinate graceful session shutdown
+   - sendInput() - send input to session
+   - sendSignal() - send signal to session
+   - recordActivity() - record activity timestamp
+   - updateContext() - update session context
+   - getIdleTimeoutMs() - get idle timeout setting
+   - getAllowedModels() - get allowed models
+2. ✅ Updated devBotsManager
+   - Replaced 11 interactive session methods with 1-line delegations
+   - All interactive session operations coordinated by service
+   - Removed direct calls to 3 underlying services
+3. ✅ Updated dependency injection
+   - Added to devBotsManager.interfaces.ts
+   - Added to devBotsManager.factory.ts
+   - Added to devBotsManager.mocks.ts
+4. ✅ Fixed compilation error
+   - Added missing InteractiveStreamMessage import to systemInitialization.service.ts
+
+**Results**:
+- **devBotsManager.ts**: 745 → 726 lines (-19 lines, 2.5% reduction)
+- **InteractiveSessionCoordinator**: 125 lines (new)
+- ✅ TypeScript compilation passing
+- ✅ Clean multi-service coordination
+- ✅ Better separation of concerns
+
+**Phase 11 Benefits**:
+- Interactive session coordination independently testable
+- Cleaner devBotsManager with simpler delegations
+- Easier to modify session management behavior
+- Better code organization
+- All interactive session operations in one place
+
 ### 📋 Remaining Tasks
 - [ ] Run backend tests to verify all phases (936 tests)
 - [ ] Continue extraction to reach ~600 line target
 
 ---
 
-**Current Status**: Phase 10 complete! devBotsManager reduced by 58.4% total (1,789 → 745 lines, -1,044 lines).
+**Current Status**: Phase 11 complete! devBotsManager reduced by 59.4% total (1,789 → 726 lines, -1,063 lines).
 
 **Progress Summary**:
 - Phase 1: Worker Health Monitor extraction (-280 lines)
@@ -740,6 +784,7 @@ Final verification:
 - Phase 8: RetryCoordinationService extraction (-83 lines)
 - Phase 9: SystemLifecycleService extraction (-77 lines)
 - Phase 10: SystemInitializationService extraction (-275 lines) ⭐
+- Phase 11: InteractiveSessionCoordinator extraction (-19 lines)
 
-**Remaining to Target**: ~145 more lines to reach ~600 line goal.
-**Next Steps**: Final extraction phase - potential candidates include interactive session management (~60 lines), or smaller utility methods consolidation.
+**Remaining to Target**: ~126 more lines to reach ~600 line goal (79% complete).
+**Next Steps**: Continue extraction to reach target - potential candidates include additional method consolidation or utility extraction.

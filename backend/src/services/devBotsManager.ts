@@ -29,7 +29,7 @@ import {
   type AllowedInteractiveModel,
 } from './interactiveSession.service.js';
 import { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
-import { InteractiveSessionStreamManager, InteractiveStreamMessage } from './interactiveSessionStreamManager.js';
+import { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
 import type { InteractiveSessionRecord } from './database.js';
 import type { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
 

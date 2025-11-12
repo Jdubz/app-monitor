@@ -5,7 +5,7 @@ import type { SimpleFailureRecovery } from './failureRecovery.js';
 import type { TaskExecutionService } from './taskExecution.service.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { InteractiveSessionService } from './interactiveSession.service.js';
-import type { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
+import type { InteractiveSessionStreamManager, InteractiveStreamMessage } from './interactiveSessionStreamManager.js';
 import type { SystemLifecycleService } from './systemLifecycle.service.js';
 import { MetricsEmitter } from './metricsEmitter.js';
 

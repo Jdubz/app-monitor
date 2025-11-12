@@ -560,6 +560,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
   const retryCoordinationService = createMockRetryCoordinationService();
   const systemLifecycleService = createMockSystemLifecycleService();
   const systemInitializationService = createMockSystemInitializationService();
+  const interactiveSessionCoordinator = createMockInteractiveSessionCoordinator();
   const agentManager = createMockAgentManager();
   const templateManager = createMockTemplateManager();
   const guidelinesManager = createMockGuidelinesManager();
@@ -582,6 +583,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     retryCoordinationService,
     systemLifecycleService,
     systemInitializationService,
+    interactiveSessionCoordinator,
     agentManager,
     templateManager,
     guidelinesManager,
