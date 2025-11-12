@@ -33,6 +33,7 @@ import { RetryCoordinationService } from './retryCoordination.service.js';
 import { SystemLifecycleService } from './systemLifecycle.service.js';
 import { SystemInitializationService } from './systemInitialization.service.js';
 import { InteractiveSessionCoordinator } from './interactiveSessionCoordinator.service.js';
+import { CleanupCoordinator } from './cleanupCoordinator.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
 
 /**
@@ -248,6 +249,13 @@ export async function createDevBotsManagerDependencies(
     interactiveSessionService,
     interactiveSessionOrchestrator,
     interactiveSessionStreamManager
+  );
+
+  // Create CleanupCoordinator
+  const cleanupCoordinator = new CleanupCoordinator(
+    taskQueue,
+    scopeControl,
+    async () => {} // assignNextTask placeholder, will be bound by DevBotsManager
   );
 
   return {

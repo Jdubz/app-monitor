@@ -1,56 +1,61 @@
 import { describe, it, expect } from 'vitest';
 import { GitHubWebhookHandler } from './githubWebhookHandler.service.js';
+import { BaseWebhookHandler } from './webhookHandlers/baseHandler.js';
+
+// Test wrapper to access protected method
+class TestableBaseHandler extends BaseWebhookHandler {
+  public testExtractTaskId(branchName: string, title: string): string | null {
+    return this.extractTaskIdFromBranchOrTitle(branchName, title);
+  }
+}
 
 describe('GitHubWebhookHandler', () => {
-  describe.skip('Task ID Extraction from PR Titles', () => {
-    // NOTE: This method moved to BaseWebhookHandler and is protected
-    // These tests are skipped as the method is now internal to the handler architecture
-    const extractTaskId = (_branchName: string, _title: string): string | null => {
-      return null; // Method no longer accessible from main service
-    };
-
-    it('should extract task ID from "Task: task-id" format', () => {
-      expect(extractTaskId('', 'Task: abc12345-1234')).toBe('abc12345-1234');
-      expect(extractTaskId('', 'Task abc12345-1234')).toBe('abc12345-1234');
-    });
-
-    it('should extract task ID from [task-id] format', () => {
-      expect(extractTaskId('', '[abc12345-1234] Fix authentication bug')).toBe('abc12345-1234');
-      expect(extractTaskId('', 'Fix auth [abc12345-1234]')).toBe('abc12345-1234');
-    });
-
-    it('should extract task ID from task-id: format at start', () => {
-      expect(extractTaskId('', 'abc12345-1234: Update dependencies')).toBe('abc12345-1234');
-    });
-
-    it('should extract task ID from (task-id) format', () => {
-      expect(extractTaskId('', '(abc12345-1234) Add logging')).toBe('abc12345-1234');
-      expect(extractTaskId('', 'Add logging (abc12345-1234)')).toBe('abc12345-1234');
-    });
-
-    it('should extract full UUID format task IDs', () => {
+  describe('Task ID Extraction from PR Titles', () => {
+    const handler = new TestableBaseHandler();
+    
+    it('should extract task ID from branch name with full format', () => {
       const uuid = '550e8400-e29b-41d4-a716-446655440000';
-      expect(extractTaskId('', `Task: ${uuid}`)).toBe(uuid);
-      expect(extractTaskId('', `[${uuid}] Fix bug`)).toBe(uuid);
-      expect(extractTaskId('', `Fix bug (${uuid})`)).toBe(uuid);
+      expect(handler.testExtractTaskId(`task-implementation-${uuid}`, '')).toBe(`task-implementation-${uuid}`);
+      expect(handler.testExtractTaskId(`task-bugfix-${uuid}`, '')).toBe(`task-bugfix-${uuid}`);
+    });
+
+    it('should extract task ID from branch name with UUID format', () => {
+      const uuid = '550e8400-e29b-41d4-a716-446655440000';
+      expect(handler.testExtractTaskId(`task-${uuid}`, '')).toBe(`task-${uuid}`);
+    });
+
+    it('should extract task ID from branch name with short ID', () => {
+      expect(handler.testExtractTaskId('task-feature-abcd1234', '')).toBe('task-feature-abcd1234');
+      expect(handler.testExtractTaskId('task-bugfix-12345678', '')).toBe('task-bugfix-12345678');
+    });
+
+    it('should extract task ID from title when branch has no match', () => {
+      expect(handler.testExtractTaskId('feature-branch', 'Task: task-impl-abcd1234')).toBe('task-impl-abcd1234');
+      expect(handler.testExtractTaskId('', '[task-bugfix-12345678] Fix bug')).toBe('task-bugfix-12345678');
+      expect(handler.testExtractTaskId('', '(task-feature-abcdef01) Add feature')).toBe('task-feature-abcdef01');
+    });
+
+    it('should extract full UUID format task IDs from title', () => {
+      const uuid = '550e8400-e29b-41d4-a716-446655440000';
+      expect(handler.testExtractTaskId('', `Task: task-${uuid}`)).toBe(`task-${uuid}`);
+      expect(handler.testExtractTaskId('', `[task-${uuid}] Fix bug`)).toBe(`task-${uuid}`);
+      expect(handler.testExtractTaskId('', `Fix bug (task-${uuid})`)).toBe(`task-${uuid}`);
     });
 
     it('should return null when no task ID is found', () => {
-      expect(extractTaskId('', 'Just a regular PR title')).toBeNull();
-      expect(extractTaskId('', 'Fix: authentication issue')).toBeNull();
-      expect(extractTaskId('', '[feature] Add new capability')).toBeNull();
+      expect(handler.testExtractTaskId('', 'Just a regular PR title')).toBeNull();
+      expect(handler.testExtractTaskId('feature-branch', 'Fix: authentication issue')).toBeNull();
+      expect(handler.testExtractTaskId('', '[feature] Add new capability')).toBeNull();
     });
 
-    it('should handle real-world PR title formats', () => {
-      expect(extractTaskId('', 'Task abc12345: Implement user authentication')).toBe('abc12345');
-      expect(extractTaskId('', '[abc12345] feat: add OAuth support')).toBe('abc12345');
-      expect(extractTaskId('', 'abc12345: fix: resolve memory leak')).toBe('abc12345');
-      expect(extractTaskId('', 'feat(auth): add 2FA (abc12345)')).toBe('abc12345');
+    it('should prioritize branch name over title', () => {
+      expect(handler.testExtractTaskId('task-impl-aaaaaaaa', 'Task: task-bugfix-bbbbbbbb'))
+        .toBe('task-impl-aaaaaaaa');
     });
 
-    it('should extract shortest valid task ID (8+ characters)', () => {
-      expect(extractTaskId('', 'Task: abcd1234')).toBe('abcd1234');
-      expect(extractTaskId('', 'Task: abc123')).toBeNull(); // Too short
+    it('should handle task IDs with minimum 8 character hex', () => {
+      expect(handler.testExtractTaskId('task-feature-abcd1234', '')).toBe('task-feature-abcd1234');
+      expect(handler.testExtractTaskId('task-feature-abc123', '')).toBeNull(); // Too short
     });
   });
 

@@ -49,7 +49,7 @@ describe('Retry Button Functionality', () => {
       expect(task.can_retry).toBe(true);
     });
 
-    it.skip('should allow retry of failed tasks', async () => {
+    it('should allow retry of failed tasks', async () => {
       const task: Task = {
         id: 'test-task-1',
         type: 'test',
@@ -67,24 +67,22 @@ describe('Retry Button Functionality', () => {
         timeout_ms: null
       };
 
-      // Mock taskQueue to return the failed task
-      vi.mocked(dependencies.taskQueue.getTask).mockReturnValue(task);
+      // Mock retryCoordinationService to handle retry successfully
+      vi.mocked(dependencies.retryCoordinationService.retryTask).mockResolvedValue({
+        success: true,
+        message: 'Task queued for retry'
+      });
 
       const result = await manager.retryTask(task.id, 'Manual retry');
 
       expect(result.success).toBe(true);
       expect(result.message).toBe('Task queued for retry');
 
-      // Verify taskQueue.getTask was called
-      expect(dependencies.taskQueue.getTask).toHaveBeenCalledWith(task.id);
-
-      // Verify taskQueue.updateTask was called with the retried task
-      expect(dependencies.taskQueue.updateTask).toHaveBeenCalled();
+      // Verify retryCoordinationService.retryTask was called
+      expect(dependencies.retryCoordinationService.retryTask).toHaveBeenCalledWith(task.id, 'Manual retry');
     });
 
-    // NOTE: These tests skipped after retry logic refactoring to RetryCoordinationService
-    // Retry validation behavior changed - tests need rewriting for new architecture
-    it.skip('should not allow retry of non-failed tasks', async () => {
+    it('should not allow retry of non-failed tasks', async () => {
       const task: Task = {
         id: 'test-task-1',
         type: 'test',
@@ -101,8 +99,11 @@ describe('Retry Button Functionality', () => {
         timeout_ms: null
       };
 
-      // Mock taskQueue to return the completed task
-      vi.mocked(dependencies.taskQueue.getTask).mockReturnValue(task);
+      // Mock retryCoordinationService to reject non-failed task
+      vi.mocked(dependencies.retryCoordinationService.retryTask).mockResolvedValue({
+        success: false,
+        message: 'Task is not in failed status'
+      });
 
       const result = await manager.retryTask(task.id, 'Manual retry');
 
@@ -110,9 +111,12 @@ describe('Retry Button Functionality', () => {
       expect(result.message).toBe('Task is not in failed status');
     });
 
-    it.skip('should not allow retry of non-existent tasks', async () => {
-      // Mock taskQueue to return undefined (task not found)
-      vi.mocked(dependencies.taskQueue.getTask).mockReturnValue(null);
+    it('should not allow retry of non-existent tasks', async () => {
+      // Mock retryCoordinationService to reject non-existent task
+      vi.mocked(dependencies.retryCoordinationService.retryTask).mockResolvedValue({
+        success: false,
+        message: 'Task not found'
+      });
 
       const result = await manager.retryTask('non-existent-task', 'Manual retry');
 
@@ -120,7 +124,7 @@ describe('Retry Button Functionality', () => {
       expect(result.message).toBe('Task not found');
     });
 
-    it.skip('should handle retry when max retries exceeded', async () => {
+    it('should handle retry when max retries exceeded', async () => {
       const task: Task = {
         id: 'test-task-1',
         type: 'test',
@@ -138,11 +142,11 @@ describe('Retry Button Functionality', () => {
         timeout_ms: null
       };
 
-      // Mock taskQueue to return the task
-      vi.mocked(dependencies.taskQueue.getTask).mockReturnValue(task);
-
-      // Mock the retryManager to return false for this specific case
-      vi.mocked(dependencies.retryManager.canRetryTask).mockReturnValueOnce(false);
+      // Mock retryCoordinationService to reject due to max retries
+      vi.mocked(dependencies.retryCoordinationService.retryTask).mockResolvedValue({
+        success: false,
+        message: 'Task cannot be retried'
+      });
 
       const result = await manager.retryTask(task.id, 'Manual retry');
 

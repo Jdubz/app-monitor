@@ -33,6 +33,7 @@ import type { RetryCoordinationService } from './retryCoordination.service.js';
 import type { SystemLifecycleService } from './systemLifecycle.service.js';
 import type { SystemInitializationService } from './systemInitialization.service.js';
 import type { InteractiveSessionCoordinator } from './interactiveSessionCoordinator.service.js';
+import type { CleanupCoordinator } from './cleanupCoordinator.service.js';
 
 /**
  * All dependencies required by DevBotsManager
@@ -89,6 +90,9 @@ export interface DevBotsManagerDependencies {
 
   // Interactive session coordination
   interactiveSessionCoordinator: InteractiveSessionCoordinator;
+
+  // Cleanup and scope control coordination
+  cleanupCoordinator: CleanupCoordinator;
 }
 
 /**
