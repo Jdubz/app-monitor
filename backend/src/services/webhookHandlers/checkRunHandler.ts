@@ -93,11 +93,8 @@ export class CheckRunHandler extends BaseWebhookHandler {
       // Evaluate PR conditions using check_suite trigger (same workflow)
       await this.prConditionState.evaluateConditions(prNumber, 'check_suite');
 
-      // Attempt auto-merge if orchestrator available
-      if (this.prOrchestrator) {
-        const prMonitor = this.prOrchestrator.getPRMonitor();
-        await prMonitor.evaluateAndAttemptMerge(prNumber, owner, repo);
-      }
+      // Note: Auto-merge logic handled by check_suite events
+      // Check runs are supplementary and don't trigger merge
     } catch (error) {
       this.logError('check_run', 'process', error, {
         pr_number: prNumber,

@@ -121,7 +121,10 @@ export class CheckSuiteHandler extends BaseWebhookHandler {
       }
 
       // Check if we should attempt auto-merge
-      await prMonitor.evaluateAndAttemptMerge(prNumber, owner, repo);
+      if (tasks.length > 0) {
+        const task = tasks[0];
+        await prMonitor.mergePR(prNumber, task.id);
+      }
 
     } catch (error) {
       this.logError('check_suite', 'process', error, {
