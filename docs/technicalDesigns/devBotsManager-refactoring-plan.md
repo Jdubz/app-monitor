@@ -561,13 +561,50 @@ Final verification:
 - Easier to modify task creation rules
 - Better code organization
 
+### ✅ Completed - Phase 7: Extract StatusAggregationService (2025-11-12)
+
+**Time Invested**: ~40 minutes
+**Lines Extracted**: 59 lines from devBotsManager
+**New Service**: `statusAggregation.service.ts` (107 lines)
+
+**Changes**:
+1. ✅ Created StatusAggregationService
+   - System status aggregation from multiple services
+   - Worker status conversion
+   - Task aggregation by status
+   - Accepts system state snapshot for flexibility
+2. ✅ Updated devBotsManager
+   - Replaced 38-line getSystemStatus() with 7-line delegation
+   - Replaced 6-line getTasks() with 2-line delegation
+   - Removed deprecated exportTasks/importTasks methods (14 lines)
+   - Moved WorkerStatus and DevBotsStatus interfaces to service
+3. ✅ Updated routes
+   - Deprecated export/import routes now return HTTP 410 Gone
+4. ✅ Updated dependency injection
+   - Added to devBotsManager.interfaces.ts
+   - Added to devBotsManager.factory.ts
+   - Added to devBotsManager.mocks.ts
+
+**Results**:
+- **devBotsManager.ts**: 1,239 → 1,180 lines (-59 lines, 4.8% reduction)
+- **StatusAggregationService**: 107 lines (new)
+- ✅ TypeScript compilation passing
+- ✅ Clean status aggregation logic
+- ✅ Better separation of concerns
+
+**Phase 7 Benefits**:
+- Status aggregation independently testable
+- Cleaner devBotsManager with less data transformation
+- Easier to modify status reporting format
+- Better code organization
+
 ### 📋 Remaining Tasks
 - [ ] Run backend tests to verify all phases (936 tests)
 - [ ] Continue extraction to reach ~600 line target
 
 ---
 
-**Current Status**: Phase 6 complete! devBotsManager reduced by 30.7% total (1,789 → 1,239 lines, -550 lines).
+**Current Status**: Phase 7 complete! devBotsManager reduced by 34.0% total (1,789 → 1,180 lines, -609 lines).
 
 **Progress Summary**:
 - Phase 1: Worker Health Monitor extraction (-280 lines)
@@ -576,6 +613,7 @@ Final verification:
 - Phase 4: Remove duplicate token extraction (-60 lines)
 - Phase 5: Dead code and comment cleanup (-70 lines)
 - Phase 6: TaskCreationService extraction (-119 lines)
+- Phase 7: StatusAggregationService extraction (-59 lines)
 
-**Remaining to Target**: ~639 more lines to reach ~600 line goal.
-**Next Steps**: Continue extraction - potential candidates include retry delegation, Docker methods, or recovery methods.
+**Remaining to Target**: ~580 more lines to reach ~600 line goal.
+**Next Steps**: Continue extraction - potential candidates include retry coordination, Docker health methods, or initialization logic.

@@ -28,6 +28,7 @@ import type { InteractiveSessionService } from './interactiveSession.service.js'
 import type { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
 import type { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
 import type { TaskCreationService } from './taskCreation.service.js';
+import type { StatusAggregationService } from './statusAggregation.service.js';
 import { EventEmitter } from 'events';
 
 /**
@@ -263,6 +264,31 @@ export function createMockTaskCreationService(): TaskCreationService {
 }
 
 /**
+ * Create mock StatusAggregationService
+ */
+export function createMockStatusAggregationService(): StatusAggregationService {
+  return {
+    getSystemStatus: vi.fn().mockResolvedValue({
+      systemStatus: 'running',
+      workers: {},
+      queueSize: 0,
+      activeTasks: 0,
+      uptime: 1000,
+      workerCount: 0,
+      maxWorkers: 2,
+      activeWorkerTypes: [],
+      availableWorkerTypes: ['slot-1', 'slot-2'],
+      tasks: { pending: [], active: [], completed: [] }
+    }),
+    getTasks: vi.fn().mockResolvedValue({
+      pending: [],
+      active: [],
+      completed: []
+    })
+  } as unknown as StatusAggregationService;
+}
+
+/**
  * Create mock WorkspaceSyncManager
  */
 export function createMockWorkspaceSyncManager(): WorkspaceSyncManager {
@@ -437,6 +463,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
   const docker = createMockDocker();
   const taskQueue = createMockTaskQueue();
   const taskCreationService = createMockTaskCreationService();
+  const statusAggregationService = createMockStatusAggregationService();
   const agentManager = createMockAgentManager();
   const templateManager = createMockTemplateManager();
   const guidelinesManager = createMockGuidelinesManager();
@@ -455,6 +482,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     docker,
     taskQueue,
     taskCreationService,
+    statusAggregationService,
     agentManager,
     templateManager,
     guidelinesManager,

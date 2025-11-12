@@ -6,6 +6,7 @@ import Docker from 'dockerode';
 import type { TaskPersistence } from './taskPersistence.js';
 import { TaskQueueService, Task, TaskStatus as SQLiteTaskStatus, TaskExecution } from './taskQueue.sqlite.js';
 import { AgentPersonalityManager, AgentPersonality } from './agentPersonalities.js';
+import type { DevBotsStatus, WorkerStatus } from './statusAggregation.service.js';
 import { TaskPromptTemplateManager } from './taskPromptTemplates.js';
 import { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js';
 import { EnhancedTaskData } from './taskMetadataFields.js';
@@ -52,32 +53,9 @@ export type { Task } from './taskQueue.sqlite.js';
 // Re-export for backward compatibility
 export type EphemeralWorker = EphemeralWorkerType;
 
-export interface WorkerStatus {
-  id: string;
-  status: 'idle' | 'busy' | 'stopped';
-  currentTask?: string;
-  lastSeen: number;
-  personality?: AgentPersonality; // New: agent personality
-  onboardingComplete?: boolean; // New: onboarding status
-  lastOnboardingCheck?: number; // New: last onboarding check timestamp
-}
-
-export interface DevBotsStatus {
-  systemStatus: 'running' | 'stopped' | 'error';
-  workers: Record<string, WorkerStatus>;
-  queueSize: number;
-  activeTasks: number;
-  uptime: number;
-  workerCount: number;
-  maxWorkers: number;
-  activeWorkerTypes: string[];
-  availableWorkerTypes: string[];
-  tasks: {
-    pending: Task[];
-    active: Task[];
-    completed: Task[];
-  };
-}
+// WorkerStatus and DevBotsStatus moved to statusAggregation.service.ts
+// Re-export for backward compatibility
+export type { WorkerStatus, DevBotsStatus } from './statusAggregation.service.js';
 
 // Scope control classes moved to scopeControl.service.ts
 
@@ -92,6 +70,7 @@ export class DevBotsManager extends EventEmitter {
   // Services injected via dependency injection
   private taskQueue!: TaskQueueService;
   private taskCreationService!: import('./taskCreation.service.js').TaskCreationService;
+  private statusAggregationService!: import('./statusAggregation.service.js').StatusAggregationService;
   private agentManager!: AgentPersonalityManager;
   private templateManager!: TaskPromptTemplateManager;
   private guidelinesManager!: TaskCreationGuidelinesManager;
@@ -122,6 +101,7 @@ export class DevBotsManager extends EventEmitter {
     this.docker = dependencies.docker;
     this.taskQueue = dependencies.taskQueue;
     this.taskCreationService = dependencies.taskCreationService;
+    this.statusAggregationService = dependencies.statusAggregationService;
     this.agentManager = dependencies.agentManager;
     this.templateManager = dependencies.templateManager;
     this.guidelinesManager = dependencies.guidelinesManager;
@@ -847,63 +827,24 @@ export class DevBotsManager extends EventEmitter {
     });
   }
 
-  public exportTasks(_exportPath: string): void {
-    // DEPRECATED: Export tasks functionality removed with persistence layer
-    throw new Error('exportTasks() is deprecated - persistence layer removed');
-  }
-
-  public async importTasks(_importPath: string): Promise<void> {
-    // DEPRECATED: Import tasks functionality removed with persistence layer
-    throw new Error('importTasks() is deprecated - persistence layer removed');
-  }
-  
-
+  /**
+   * Get comprehensive system status
+   * Delegated to StatusAggregationService
+   */
   async getSystemStatus(): Promise<DevBotsStatus> {
-    // Convert ephemeral workers to worker status format for compatibility
-    const workersRecord: Record<string, WorkerStatus> = {};
-    const activeEphemeralWorkers = Array.from(this.ephemeralWorkerService.getAllWorkers().values()).filter(
-      worker => worker.status !== 'destroyed'
-    );
-    for (const [workerId, ephemeralWorker] of this.ephemeralWorkerService.getAllWorkers().entries()) {
-      workersRecord[workerId] = {
-        id: workerId,
-        status: ephemeralWorker.status === 'starting' ? 'busy' :
-                ephemeralWorker.status === 'running' ? 'busy' :
-                ephemeralWorker.status === 'completing' ? 'busy' : 'stopped',
-        currentTask: ephemeralWorker.task.id,
-        lastSeen: new Date(ephemeralWorker.createdAt).getTime(),
-        personality: ephemeralWorker.agent,
-        onboardingComplete: true
-      };
-    }
-
-    return {
-      systemStatus: this.isCoordinatorHealthy ? 'running' : 'stopped',
-      workers: workersRecord,
-      queueSize: this.taskQueue.getTasksByStatus('pending').length,
-      activeTasks: this.taskQueue.getTasksByStatus('running').length,
-      uptime: Date.now() - this.startTime,
-      workerCount: this.ephemeralWorkerService.getActiveWorkers().length,
-      maxWorkers: this.maxWorkers,
-      activeWorkerTypes: activeEphemeralWorkers.map(w => w.id),
-      availableWorkerTypes: Array.from(
-        { length: Math.max(this.maxWorkers - activeEphemeralWorkers.length, 0) },
-        (_value, index) => `slot-${index + 1}`
-      ),
-      tasks: {
-        pending: this.taskQueue.getTasksByStatus('pending'),
-        active: this.taskQueue.getTasksByStatus('running'),
-        completed: this.taskQueue.getTasksByStatus('completed').slice(-50) // Keep last 50 completed tasks
-      }
-    };
+    return await this.statusAggregationService.getSystemStatus({
+      isHealthy: this.isCoordinatorHealthy,
+      startTime: this.startTime,
+      maxWorkers: this.maxWorkers
+    });
   }
 
+  /**
+   * Get tasks grouped by status
+   * Delegated to StatusAggregationService
+   */
   async getTasks(): Promise<{ pending: Task[]; active: Task[]; completed: Task[] }> {
-    return {
-      pending: this.taskQueue.getTasksByStatus('pending'),
-      active: this.taskQueue.getTasksByStatus('running'),
-      completed: this.taskQueue.getTasksByStatus('completed').slice(-50)
-    };
+    return await this.statusAggregationService.getTasks();
   }
 
   getTask(taskId: string): Task | undefined {

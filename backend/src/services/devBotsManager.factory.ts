@@ -28,6 +28,7 @@ import { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator
 import { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
 import { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
 import { TaskCreationService } from './taskCreation.service.js';
+import { StatusAggregationService } from './statusAggregation.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
 
 /**
@@ -72,6 +73,8 @@ export async function createDevBotsManagerDependencies(
   const taskCreationService = new TaskCreationService(taskQueue, guidelinesManager);
 
   // WorkspaceOrchestrator completely removed - using container isolation instead
+
+  // Note: StatusAggregationService created after ephemeralWorkerService
   // Each bot gets its own fresh repository clone inside the container
 
   // Initialize workspace sync manager
@@ -118,6 +121,9 @@ export async function createDevBotsManagerDependencies(
       ]
     }
   );
+
+  // Initialize status aggregation service
+  const statusAggregationService = new StatusAggregationService(taskQueue, ephemeralWorkerService);
 
   // Initialize task execution service
   const taskExecutionService = new TaskExecutionService(
@@ -202,6 +208,7 @@ export async function createDevBotsManagerDependencies(
     docker,
     taskQueue,
     taskCreationService,
+    statusAggregationService,
     agentManager,
     templateManager,
     guidelinesManager,
