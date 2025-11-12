@@ -59,7 +59,6 @@ async function adoptPR(prNumber) {
   // Determine task status
   const taskStatus = prData.state === 'closed' ? 'completed' : 'active';
   
-  const now = Date.now();
   const createdAt = new Date(prData.created_at).getTime();
   
   // Create task record
