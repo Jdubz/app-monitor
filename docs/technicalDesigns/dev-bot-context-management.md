@@ -17,7 +17,24 @@ Provide every dev-bot task with accurate, up-to-date context (documentation, ope
 7. **API Support:** Extend task creation/update APIs to accept optional context payloads, matching the task-context submission schema defined in `APP_MONITOR_STABILIZATION_PLAN.md` (environment snapshots, logs, network events, artifact references).
 
 ## Context Domains
+## Context Domains
 | Domain | Source Examples | Notes |
+|--------|-----------------|-------|
+| Documentation & Architecture | `docs/architecture/*`, `docs/technicalDesigns/*` | Convert key sections to structured snippets (e.g., JSON or markdown segments).|
+| Deployment & Operations | `docs/plans/APP_MONITOR_PRODUCTION_SUPPORT_PLAN.md`, scripts under `scripts/` | Include commands, environment variables, runbooks.|
+| PR Tracking & Workflow | `docs/plans/PR_*`, `backend/src/services/pr*` | Summaries of condition gates, Copilot delegation rules, chain tracking.|
+| Failure Recovery & Self-Healing | `docs/architecture/automatic-failure-recovery.md`, `failure-guards.md`, healing plans | Provide cleanup/follow-up rules, forbidden ops, chain depth limits.|
+| Learning & Process Improvements | `docs/plans/DEV_BOT_PIPELINE_*`, `ERROR_DETECTION_AND_RECOVERY_ENHANCEMENT.md` | Outline review/fix chain, REVIEW payload requirements.|
+| Dev-Monitor Frontend | `docs/architecture/dev-monitor-architecture.md`, `frontend/src` docs | Describe UI expectations, Socket.IO events, admin workflows.|
+| Deployment Targets & Work Targets | `docs/plans/DEV_BOT_WORK_TARGET_PRODUCTION_PLAN.md` | Future versions must tailor context per work-target.|
+
+## Alignment with Existing Plans
+- **DEV_BOT_PIPELINE_COMPLETION_PLAN_REVISED.md:** Defines persistence requirements (`task_context`, `task_artifacts`, `task_automation_runs`) and artifact summaries—this design adopts those schema changes and extends them to dynamic generation.
+- **PRIORITIZED_FEATURE_ROADMAP.md:** Calls for task-context capture APIs, validation, and dashboard display; the context builder + SQLite persistence fulfills those acceptance criteria.
+- **APP_MONITOR_STABILIZATION_PLAN.md:** Introduces task-context submission schemas (environment snapshot, logs, artifacts); API support and recipes must honor that schema.
+- **ERROR_DETECTION_AND_RECOVERY_ENHANCEMENT.md:** Needs REVIEW chain history; chain-context persistence ensures each follow-up task sees prior attempts.
+- **DEV_BOT_WORK_TARGET_PRODUCTION_PLAN.md:** Specifies work-target metadata; v2 of this system will plug context recipes into those abstractions to scope content per target.
+
 |--------|-----------------|-------|
 | Documentation & Architecture | `docs/architecture/*`, `docs/technicalDesigns/*` | Convert key sections to structured snippets (e.g., JSON or markdown segments).|
 | Deployment & Operations | `docs/plans/APP_MONITOR_PRODUCTION_SUPPORT_PLAN.md`, scripts under `scripts/` | Include commands, environment variables, runbooks.|
