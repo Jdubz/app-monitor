@@ -9,9 +9,31 @@
 
 ## Summary of Improvements
 
-This document tracks the critical improvements made to the app-monitor documentation based on a comprehensive review on 2025-11-11.
+This document tracks the critical improvements made to the app-monitor documentation based on comprehensive reviews.
 
-### ✅ Completed Improvements
+**Latest Update:** 2025-11-12
+
+### 🚨 Production Stability - NEW CRITICAL PRIORITY
+
+**Status:** Production unstable with downtime during deploys  
+**Impact:** Blocks autonomous operation  
+**Plan:** ZERO_DOWNTIME_DEPLOYMENT_PLAN.md created  
+
+**Root Causes:**
+1. Duplicate processes causing port conflicts
+2. WebSocket state loss during restarts
+3. No graceful shutdown period
+4. PR automation breaks when webhooks fail
+
+**Solution:** 5-day implementation
+- Redis-based state sharing
+- Graceful shutdown with 30s drain
+- Blue-green deployment automation
+- Process management hardening
+
+---
+
+### ✅ Completed Improvements (2025-11-12)
 
 #### 1. Fixed Broken Documentation Links (CRITICAL) ✅
 **Issue:** 24 broken references in docs/README.md pointing to non-existent files  

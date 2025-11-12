@@ -10,12 +10,23 @@ Comprehensive documentation for the App Monitor developer tool and autonomous de
 
 ## 📋 Recent Updates
 
+**2025-11-12 Production Stability:**
+- 🚨 **CRITICAL:** Zero-downtime deployment plan created
+- Production unstable during deploys/restarts
+- See [Zero-Downtime Deployment Plan](./plans/ZERO_DOWNTIME_DEPLOYMENT_PLAN.md)
+- Redis-based state sharing + graceful shutdown required
+
 **2025-11-11 Documentation Review:**
 - ✅ Fixed 15+ broken documentation links
 - ✅ Verified database consolidation complete
 - ✅ Updated plan statuses to reflect reality
 - 📄 See [Documentation Review Summary](./DOCUMENTATION_REVIEW_SUMMARY.md) for details
 - 📄 See [Critical Improvements Report](./CRITICAL_IMPROVEMENTS_2025-11-11.md) for technical details
+
+**2025-11-12 Quick Wins Completed:**
+- ✅ Automated link checker added to CI
+- ✅ 5 completed plans archived (30 → 25 active)
+- ✅ Legacy databases cleaned up
 
 ---
 
