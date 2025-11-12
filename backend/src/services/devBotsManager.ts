@@ -919,67 +919,7 @@ export class DevBotsManager extends EventEmitter {
 
 
 
-  /**
-   * Choose which agent type (CLI tool) to use for the next task
-   * Implements rotation strategy for agent comparison
-   */
-
-  /**
-   * Initialize worker-specific log file
-   */
-  private extractAndRecordTokenUsage(task: Task, output: string): void {
-    try {
-      const tokenTracking = getTokenTrackingService();
-
-      // Try to extract token usage from output
-      // Format: "Input tokens: 1234, Output tokens: 567"
-      const inputMatch = output.match(/Input tokens?:\s*(\d+)/i);
-      const outputMatch = output.match(/Output tokens?:\s*(\d+)/i);
-
-      if (inputMatch && outputMatch) {
-        const inputTokens = parseInt(inputMatch[1], 10);
-        const outputTokens = parseInt(outputMatch[1], 10);
-
-        // Determine provider from task or default to 'claude'
-        const provider = task.assigned_agent?.includes('codex') ? 'codex' : 'claude';
-
-        tokenTracking.recordUsage({
-          provider,
-          model: task.assigned_agent || 'unknown',
-          taskId: task.id,
-          inputTokens,
-          outputTokens
-        });
-
-        logger.info({
-          category: 'token-tracking',
-          action: 'recorded_token_usage',
-          message: `Recorded token usage for task ${task.id}`,
-          details: { provider, inputTokens, outputTokens }
-        });
-      }
-    } catch (error) {
-      logger.error({
-        category: 'token-tracking',
-        action: 'failed_to_extract_tokens',
-        message: 'Failed to extract and record token usage',
-        error
-      });
-    }
-  }
-
-  /**
-   * Run quality gate validation on a completed task
-   * This is async and runs in the background - it doesn't block task completion
-   */
-
-  /**
-   * Complete task in ephemeral worker
-   */
-
-  /**
-   * Destroy ephemeral worker container
-   */
+  // Token extraction moved to TaskCompletionService (already implemented there)
   public startSystem(): void {
     if (this.isCoordinatorHealthy) {
       logger.info({

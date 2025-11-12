@@ -459,16 +459,45 @@ Final verification:
 
 **Note**: Line count slightly increased due to deprecation comments, but reduced complexity and removed redundant data structures.
 
+### ✅ Completed - Phase 4: Remove Duplicate Token Extraction (2025-11-12)
+
+**Time Invested**: ~15 minutes
+**Dead Code Removed**: 60 lines from devBotsManager
+**Service Updated**: `devBotsManager.ts` (1,488 → 1,428 lines, -60 lines)
+
+**Changes Made**:
+1. ✅ Discovered duplicate `extractAndRecordTokenUsage()` method
+   - Already implemented and actively used in TaskCompletionService
+   - DevBotsManager version was dead code (never called)
+   - Identical implementation in both places
+
+2. ✅ Removed duplicate method from devBotsManager
+   - 60 lines of dead code removed
+   - Added comment noting location in TaskCompletionService
+   - Token tracking fully handled by TaskCompletionService
+
+**Results**:
+- **devBotsManager.ts**: 1,488 → 1,428 lines (-60 lines, 4% reduction)
+- ✅ TypeScript compilation passing
+- ✅ Removed duplicate/dead code
+- ✅ Single source of truth (TaskCompletionService)
+- ✅ No functionality lost (method never called in devBotsManager)
+
+**Technical Details**:
+- TaskCompletionService calls extractAndRecordTokenUsage() on line 80
+- Parses token usage from task output: "Input tokens: 1234, Output tokens: 567"
+- Records to tokenTracking service for metrics
+- Provider auto-detected from assigned_agent (codex vs claude)
+
 ### 🔄 In Progress
-- [ ] Phase 4: Move Token Extraction
 - [ ] Phase 5: Final Cleanup
 
 ### 📋 Remaining
 - [ ] Run backend tests to verify functionality
-- [ ] Commit Phase 3 changes
-- [ ] Continue with remaining phases
+- [ ] Commit Phase 4 changes
+- [ ] Complete Phase 5
 
 ---
 
-**Current Status**: Phase 3 complete! Removed redundant worker tracking. Ready for Phase 4.
-**Next Step**: Begin Phase 4 - Move Token Extraction to TaskCompletionService
+**Current Status**: Phase 4 complete! devBotsManager reduced by 20.2% total (1,789 → 1,428 lines).
+**Next Step**: Begin Phase 5 - Final Cleanup and Optimization
