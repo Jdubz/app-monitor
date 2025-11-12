@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import * as crypto from 'crypto';
 import { logger } from '../utils/logger.js';
+import { config } from '../config.js';
 import { ProcessManager, ProcessInfo } from './processManager.js';
 import Docker from 'dockerode';
 import type { TaskPersistence } from './taskPersistence.js';
@@ -139,6 +140,7 @@ export class DevBotsManager extends EventEmitter {
 
   // System state
   private startTime = Date.now();
+  private maxWorkers: number;
 
   constructor(dependencies: DevBotsManagerDependencies) {
     super();
@@ -162,6 +164,9 @@ export class DevBotsManager extends EventEmitter {
     this.interactiveSessionService = dependencies.interactiveSessionService;
     this.interactiveSessionOrchestrator = dependencies.interactiveSessionOrchestrator;
     this.interactiveSessionStreamManager = dependencies.interactiveSessionStreamManager;
+
+    // Initialize maxWorkers from config
+    this.maxWorkers = config.devBots.maxWorkers;
 
     // Initialize SimpleFailureRecovery
     this.recovery = new SimpleFailureRecovery(this);
@@ -1421,10 +1426,10 @@ export class DevBotsManager extends EventEmitter {
       activeTasks: this.taskQueue.getTasksByStatus('running').length,
       uptime: Date.now() - this.startTime,
       workerCount: this.ephemeralWorkerService.getActiveWorkers().length,
-      maxWorkers: 2,
+      maxWorkers: this.maxWorkers,
       activeWorkerTypes: activeEphemeralWorkers.map(w => w.id),
       availableWorkerTypes: Array.from(
-        { length: Math.max(2 - activeEphemeralWorkers.length, 0) },
+        { length: Math.max(this.maxWorkers - activeEphemeralWorkers.length, 0) },
         (_value, index) => `slot-${index + 1}`
       ),
       tasks: {
