@@ -47,6 +47,10 @@ export interface RetryAttempt {
   agentId?: string;
 }
 
+/**
+ * @deprecated WorkerInfo is no longer used with ephemeral workers
+ * Ephemeral workers are tracked by EphemeralWorkerService
+ */
 export interface WorkerInfo {
   id: string;
   status: 'idle' | 'busy' | 'stopped';
@@ -111,10 +115,8 @@ export class DevBotsManager extends EventEmitter {
   // private taskFingerprints = new Map<string, string>();
   // private fileModificationLocks = new Map<string, string>();
 
-  // Worker management
-  private workers = new Map<string, WorkerInfo>();
-  // ephemeralWorkers now managed by ephemeralWorkerService
-  // Agent selection now handled by AgentSelector (intelligent, task-aware selection)
+  // Worker management - ephemeralWorkers managed by ephemeralWorkerService
+  // Agent selection handled by AgentSelector (intelligent, task-aware selection)
 
   // Enhanced services
   // TaskPersistence removed - using SQLite directly
@@ -853,17 +855,17 @@ export class DevBotsManager extends EventEmitter {
     await this.taskExecutionService.assignNextTask(() => this.assignNextTask());
   }
 
+  /**
+   * Complete worker onboarding (no-op for ephemeral workers)
+   * Ephemeral workers are created fresh for each task and don't require onboarding
+   * @deprecated Kept for API compatibility but not used with ephemeral workers
+   */
   public completeWorkerOnboarding(workerId: string): void {
-    const worker = this.workers.get(workerId);
-    if (worker) {
-      worker.onboardingComplete = true;
-      worker.lastOnboardingCheck = Date.now();
-      logger.info({
+    logger.info({
       category: 'process',
-      action: 'worker_workerid_onboarding_completed',
-      message: `Worker ${workerId} onboarding completed`
+      action: 'worker_onboarding_noop',
+      message: `Worker onboarding called for ${workerId} (no-op for ephemeral workers)`
     });
-    }
   }
 
   public getAgentPersonalities(): AgentPersonality[] {

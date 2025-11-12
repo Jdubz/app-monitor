@@ -430,17 +430,45 @@ Final verification:
 - ✅ Interactive session service now self-contained
 - ✅ Better separation of concerns
 
+### ✅ Completed - Phase 3: Consolidate Worker Tracking (2025-11-12)
+
+**Time Invested**: ~20 minutes
+**Technical Debt Removed**: Workers Map and onboarding tracking
+**Service Updated**: `devBotsManager.ts` (1,486 → 1,488 lines, +2 lines with deprecations)
+
+**Changes Made**:
+1. ✅ Removed redundant `workers` Map
+   - Ephemeral workers are already tracked by EphemeralWorkerService
+   - Persistent worker tracking no longer needed
+
+2. ✅ Simplified `completeWorkerOnboarding()`
+   - Converted to no-op for ephemeral workers
+   - Added @deprecated tag for API compatibility
+   - Ephemeral workers don't require onboarding (created fresh per task)
+
+3. ✅ Deprecated `WorkerInfo` interface
+   - Marked as @deprecated
+   - Kept for API compatibility but not actively used
+
+**Results**:
+- **devBotsManager.ts**: 1,486 → 1,488 lines (+2 lines for deprecation comments)
+- ✅ TypeScript compilation passing
+- ✅ Removed technical debt (redundant worker tracking)
+- ✅ Clearer architecture (single source of truth for worker state)
+- ✅ API compatibility maintained
+
+**Note**: Line count slightly increased due to deprecation comments, but reduced complexity and removed redundant data structures.
+
 ### 🔄 In Progress
-- [ ] Phase 3: Consolidate Worker Tracking
 - [ ] Phase 4: Move Token Extraction
 - [ ] Phase 5: Final Cleanup
 
 ### 📋 Remaining
 - [ ] Run backend tests to verify functionality
-- [ ] Commit Phase 2 changes
+- [ ] Commit Phase 3 changes
 - [ ] Continue with remaining phases
 
 ---
 
-**Current Status**: Phase 2 complete! devBotsManager reduced by 17% total (1,789 → 1,486 lines).
-**Next Step**: Begin Phase 3 - Consolidate Worker Tracking
+**Current Status**: Phase 3 complete! Removed redundant worker tracking. Ready for Phase 4.
+**Next Step**: Begin Phase 4 - Move Token Extraction to TaskCompletionService
