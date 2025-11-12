@@ -608,52 +608,25 @@ export class DevBotsManager extends EventEmitter {
 
   /**
    * Trigger orphaned resource cleanup
+   * Delegated to DockerManager
    */
   async cleanupOrphanedResources(): Promise<{
     volumesCleaned: number;
     networksCleaned: number;
   }> {
-    logger.info({
-      category: 'process',
-      action: 'triggering_orphaned_resource_cleanup',
-      message: 'Triggering orphaned resource cleanup...'
-    });
-
-    const volumesCleaned = await this.dockerManager.cleanupOrphanedVolumes();
-    const networksCleaned = await this.dockerManager.cleanupOrphanedNetworks();
-
-    logger.info({
-      category: 'process',
-      action: 'cleanup_complete_volumescleaned_volumes_networkscl',
-      message: `Cleanup complete: ${volumesCleaned} volumes, ${networksCleaned} networks removed`
-    });
-
-    return { volumesCleaned, networksCleaned };
+    return await this.dockerManager.cleanupOrphanedResources();
   }
 
   /**
    * Get container health status
+   * Delegated to DockerManager
    */
   async getContainerHealth(containerId: string): Promise<{
     healthy: boolean;
     status?: string;
     logs?: string;
   }> {
-    try {
-      const container = this.docker.getContainer(containerId);
-      const inspect = await container.inspect();
-
-      return {
-        healthy: inspect.State.Running,
-        status: inspect.State.Status,
-        logs: await this.dockerManager.getContainerLogs(containerId, 20)
-      };
-    } catch (error) {
-      return {
-        healthy: false,
-        status: 'not_found'
-      };
-    }
+    return await this.dockerManager.getContainerHealth(containerId);
   }
 
   /**
