@@ -2,20 +2,37 @@ import crypto from 'crypto';
 import { DevBotsDatabase } from './database.js';
 import { logger } from '../utils/logger.js';
 
+/**
+ * CommentInput - GitHub comment data used for classification
+ * NOTE: This data is NOT stored in database per design principle:
+ * "Any information available from GitHub should NOT be stored in our DB"
+ * It's only used to generate fingerprint and derive metadata (severity, category)
+ */
+export interface CommentInput {
+  pr_number: number;
+  comment_id: number;
+  file_path?: string;      // Used only for fingerprint generation, not stored
+  line_number?: number;    // Used only for fingerprint generation, not stored
+  body: string;            // Used only for classification, not stored
+  reviewer?: string;       // Used only for logging, not stored
+  is_copilot: boolean;
+  created_at: number;
+}
+
+/**
+ * ReviewComment - Our derived metadata stored in database
+ * Contains only our evaluations and references, no GitHub data
+ */
 export interface ReviewComment {
   id?: number;
   pr_number: number;
-  comment_id: number;
-  file_path?: string;
-  line_number?: number;
-  body: string;
-  fingerprint: string;
-  severity: 'blocking' | 'suggestion' | 'info' | 'nitpick';
-  category?: string;
-  resolved: boolean;
+  comment_id: number;      // GitHub reference for fetching details on-demand
+  fingerprint: string;     // Our deduplication hash
+  severity: 'blocking' | 'suggestion' | 'info' | 'nitpick';  // Our classification
+  category?: string;       // Our categorization
+  resolved: boolean;       // Our resolution tracking
   created_at: number;
   resolved_at?: number;
-  reviewer?: string;
   is_copilot: boolean;
 }
 
@@ -116,39 +133,45 @@ export class ReviewCommentTracker {
 
   /**
    * Store a review comment
+   *
+   * NOTE: Accepts CommentInput with GitHub data for classification,
+   * but only stores our derived metadata (fingerprint, severity, category).
+   * GitHub data (body, file_path, reviewer) is NOT persisted per design principle:
+   * "Any information available from GitHub should NOT be stored in our DB"
    */
-  storeComment(comment: Omit<ReviewComment, 'id' | 'resolved' | 'resolved_at'>): ReviewComment | null {
+  storeComment(input: CommentInput): ReviewComment | null {
     try {
-      const fingerprint = this.generateFingerprint(comment.file_path, comment.line_number, comment.body);
-      const severity = this.classifySeverity(comment.body);
-      const category = this.extractCategory(comment.body);
+      // Generate fingerprint and classify using GitHub data (not stored)
+      const fingerprint = this.generateFingerprint(input.file_path, input.line_number, input.body);
+      const severity = this.classifySeverity(input.body);
+      const category = this.extractCategory(input.body);
 
+      // Store only our metadata, not GitHub data
       const result = this.db.getConnection().prepare(`
         INSERT INTO pr_review_comments
-        (pr_number, comment_id, file_path, line_number, body, fingerprint, severity, category, resolved, created_at, reviewer, is_copilot)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?)
+        (pr_number, comment_id, fingerprint, severity, category, resolved, created_at, is_copilot)
+        VALUES (?, ?, ?, ?, ?, 0, ?, ?)
       `).run(
-        comment.pr_number,
-        comment.comment_id,
-        comment.file_path || null,
-        comment.line_number || null,
-        comment.body,
+        input.pr_number,
+        input.comment_id,
         fingerprint,
         severity,
         category || null,
-        comment.created_at,
-        comment.reviewer || null,
-        comment.is_copilot ? 1 : 0
+        input.created_at,
+        input.is_copilot ? 1 : 0
       );
 
       return {
-        ...comment,
         id: result.lastInsertRowid as number,
+        pr_number: input.pr_number,
+        comment_id: input.comment_id,
         fingerprint,
         severity,
         category,
         resolved: false,
-        resolved_at: undefined
+        resolved_at: undefined,
+        created_at: input.created_at,
+        is_copilot: input.is_copilot
       };
     } catch (error: unknown) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
@@ -156,7 +179,7 @@ export class ReviewCommentTracker {
           category: 'pr-workflow',
           action: 'duplicate_comment',
           message: 'Comment already stored (duplicate fingerprint)',
-          details: { pr_number: comment.pr_number, comment_id: comment.comment_id }
+          details: { pr_number: input.pr_number, comment_id: input.comment_id }
         });
         return null;
       }
@@ -189,16 +212,12 @@ export class ReviewCommentTracker {
       id: number;
       pr_number: number;
       comment_id: number;
-      file_path: string | null;
-      line_number: number | null;
-      body: string;
       fingerprint: string;
       severity: string;
       category: string | null;
       resolved: number;
       created_at: number;
       resolved_at: number | null;
-      reviewer: string | null;
       is_copilot: number;
     }>;
 
@@ -206,16 +225,12 @@ export class ReviewCommentTracker {
       id: c.id,
       pr_number: c.pr_number,
       comment_id: c.comment_id,
-      file_path: c.file_path ?? undefined,
-      line_number: c.line_number ?? undefined,
-      body: c.body,
       fingerprint: c.fingerprint,
       severity: c.severity as 'blocking' | 'suggestion' | 'info' | 'nitpick',
       category: c.category ?? undefined,
       resolved: Boolean(c.resolved),
       created_at: c.created_at,
       resolved_at: c.resolved_at ?? undefined,
-      reviewer: c.reviewer ?? undefined,
       is_copilot: Boolean(c.is_copilot)
     }));
   }
