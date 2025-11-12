@@ -31,6 +31,7 @@ async function execWithTimeout(
 }
 
 export interface PRCheckStatus {
+  id?: string;  // GitHub check run ID (for referencing in blocking issues)
   name: string;
   status: 'pending' | 'success' | 'failure' | 'error';
   conclusion: string | null;
@@ -38,6 +39,7 @@ export interface PRCheckStatus {
 }
 
 export interface PRReview {
+  id?: string;  // GitHub review ID (for referencing in blocking issues)
   author: string;
   state: 'APPROVED' | 'CHANGES_REQUESTED' | 'COMMENTED' | 'DISMISSED';
   submittedAt: string;
@@ -57,6 +59,7 @@ export interface PRReviewThread {
   isResolved: boolean;
   isOutdated: boolean;
   comments: Array<{
+    id?: string;  // GitHub comment ID (for referencing in blocking issues)
     body: string;
     author: string;
   }>;

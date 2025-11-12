@@ -90,8 +90,7 @@ export class QualityImprovementTaskGenerator {
           details: {
             taskId: task.id,
             type: opportunity.type,
-            priority: opportunity.priority,
-            branch
+            priority: opportunity.priority
           }
         });
       } catch (error) {
@@ -114,8 +113,7 @@ export class QualityImprovementTaskGenerator {
       message: `Generated ${generatedTasks.length} improvement tasks for ${parentTask.id}`,
       details: {
         parentTaskId: parentTask.id,
-        tasksGenerated: generatedTasks.length,
-        branch
+        tasksGenerated: generatedTasks.length
       }
     });
 

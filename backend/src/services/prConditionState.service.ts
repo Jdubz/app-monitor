@@ -218,7 +218,7 @@ export class PRConditionStateService {
    */
   private async _evaluateConditionsInternal(
     prNumber: number,
-    eventType: 'check_suite' | 'pull_request_review' | 'pull_request_synchronize' | 'push' | 'task_completion' | 'manual_restart'
+    eventType: 'check_suite' | 'pull_request_review' | 'pull_request_synchronize' | 'push' | 'task_completion' | 'manual_restart' | 'pull_request_reopened' | 'pull_request_ready_for_review'
   ): Promise<void> {
     logger.info({
       category: 'pr-workflow',
@@ -1217,7 +1217,6 @@ export class PRConditionStateService {
 
     const baseConfig = {
       followup_for_pr: prNumber,
-      pr_branch: parentTask?.pr_branch || `pr-${prNumber}`,
       priority: 9,
       parent_initiative: parentTask?.id,
       chain_id: chainId,
