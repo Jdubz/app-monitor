@@ -266,9 +266,10 @@ main() {
         # - Existing WebSocket connections to complete naturally
         # - Active tasks to finish
         # - Clients to reconnect to new instance
-        log_info "Connection drain period: keeping old service running for 60 seconds..."
+        # Reduced from 60s to 30s - graceful shutdown provides additional 90s drain
+        log_info "Connection drain period: keeping old service running for 30 seconds..."
         log_info "New connections → ${TARGET_PORT}, existing connections → ${ACTIVE_PORT}"
-        sleep 60
+        sleep 30
 
         # Now gracefully stop old service
         log_info "Gracefully stopping old service on port ${ACTIVE_PORT}..."
