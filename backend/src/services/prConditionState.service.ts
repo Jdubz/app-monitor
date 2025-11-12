@@ -18,7 +18,6 @@ import * as crypto from 'crypto';
 import { logger } from '../utils/logger.js';
 import { getDatabase, type DevBotsDatabase } from './database.js';
 import { GitHubPRService, getGitHubPRService, type PRStatus } from './githubPR.service.js';
-import { ReviewCommentTracker, type ReviewComment } from './reviewCommentTracker.service.js';
 import { TaskQueueService } from './taskQueue.sqlite.js';
 import type { Task } from './taskQueue.sqlite.js';
 
@@ -127,7 +126,6 @@ export interface ConditionEvaluation {
 export class PRConditionStateService {
   private readonly db: DevBotsDatabase;
   private readonly github: GitHubPRService;
-  private readonly reviewTracker: ReviewCommentTracker;
   private readonly taskQueue: TaskQueueService;
 
   // Evaluation locking to prevent race conditions
@@ -136,7 +134,6 @@ export class PRConditionStateService {
   constructor(taskQueue: TaskQueueService) {
     this.db = getDatabase();
     this.github = getGitHubPRService();
-    this.reviewTracker = new ReviewCommentTracker(this.db);
     this.taskQueue = taskQueue;
 
     // Cleanup stale evaluation locks every 5 minutes
@@ -518,34 +515,53 @@ export class PRConditionStateService {
 
   /**
    * Evaluate Condition 2: Comments Resolved
+   * Uses GitHub GraphQL API as source of truth for comment resolution
    */
   private async evaluateCommentsCondition(prNumber: number): Promise<ConditionEvaluation> {
     try {
-      // Get unresolved comments from tracker
-      const comments = this.reviewTracker.getCommentsForPR(prNumber, false); // false = unresolved only
-      const blockingComments = comments.filter(c => c.severity === 'blocking');
-
-      if (blockingComments.length === 0) {
+      // Query GitHub directly for unresolved comments
+      const hasUnresolved = await this.github.hasUnresolvedComments(prNumber);
+      
+      if (!hasUnresolved) {
         return {
           condition_id: 'comments_resolved',
           status: 'met',
-          fingerprint: 'no-blocking-comments',
+          fingerprint: 'no-unresolved-comments',
           blocking_issues: []
         };
       }
 
-      // Build blocking issues
-      const blocking_issues: BlockingIssue[] = blockingComments.map(comment => ({
-        type: 'unresolved_comment',
-        description: comment.body.substring(0, 150) + (comment.body.length > 150 ? '...' : ''),
-        file: comment.file_path || undefined,
-        line: comment.line_number || undefined,
-        severity: 'high' as const
-      }));
+      // Get details of unresolved comments
+      const unresolvedThreads = await this.github.getUnresolvedComments(prNumber);
+      
+      // Filter out nitpicks
+      const blockingThreads = unresolvedThreads.filter(thread => 
+        thread.comments.length > 0 && 
+        !/\[nitpick\]|\[nit\]/i.test(thread.comments[0].body)
+      );
 
-      // Generate fingerprint from comment fingerprints
+      if (blockingThreads.length === 0) {
+        return {
+          condition_id: 'comments_resolved',
+          status: 'met',
+          fingerprint: 'only-nitpicks',
+          blocking_issues: []
+        };
+      }
+
+      // Build blocking issues from threads
+      const blocking_issues: BlockingIssue[] = blockingThreads.map(thread => {
+        const firstComment = thread.comments[0];
+        return {
+          type: 'unresolved_comment',
+          description: firstComment.body.substring(0, 150) + (firstComment.body.length > 150 ? '...' : ''),
+          severity: 'high' as const
+        };
+      });
+
+      // Generate fingerprint from comment bodies
       const fingerprint = this.generateFingerprintFromList(
-        blockingComments.map(c => c.fingerprint).sort()
+        blockingThreads.map(t => t.comments[0].body).sort()
       );
 
       return {
@@ -553,7 +569,10 @@ export class PRConditionStateService {
         status: 'unmet',
         fingerprint,
         blocking_issues,
-        metadata: { comment_count: blockingComments.length }
+        metadata: { 
+          comment_count: blockingThreads.length,
+          nitpick_count: unresolvedThreads.length - blockingThreads.length
+        }
       };
     } catch (error) {
       logger.error({
@@ -840,23 +859,22 @@ export class PRConditionStateService {
         comment.author.toLowerCase().includes('copilot')
       );
 
-      // If Copilot left comments, check if they're resolved
+      // If Copilot left comments, check if they're unresolved using GitHub API
       if (copilotComments.length > 0) {
-        const allComments = this.reviewTracker.getCommentsForPR(prNumber, true);
-        const copilotUnresolved = allComments.filter((c: ReviewComment) =>
-          c.is_copilot && !c.resolved
+        const unresolvedThreads = await this.github.getUnresolvedComments(prNumber);
+        const copilotUnresolved = unresolvedThreads.filter(thread =>
+          thread.comments.length > 0 &&
+          thread.comments[0].author.toLowerCase().includes('copilot')
         );
 
         if (copilotUnresolved.length > 0) {
           return {
             condition_id: 'copilot_review_completed',
             status: 'unmet',
-            fingerprint: this.generateFingerprintFromList(copilotUnresolved.map((c: { body: string }) => c.body)),
-            blocking_issues: copilotUnresolved.map((c: { body: string; file_path?: string; line_number?: number }) => ({
+            fingerprint: this.generateFingerprintFromList(copilotUnresolved.map(t => t.comments[0].body)),
+            blocking_issues: copilotUnresolved.map(thread => ({
               type: 'copilot_review_comment',
-              description: c.body.substring(0, 200),
-              file: c.file_path,
-              line: c.line_number,
+              description: thread.comments[0].body.substring(0, 200),
               severity: 'high' as const
             }))
           };

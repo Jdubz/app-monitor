@@ -301,3 +301,26 @@ gh pr list --repo Jdubz/app-monitor
 - `backend/data/logs/` (empty)
 - `dev-bots/artifacts/` (no recent files)
 - Docker logs for ephemeral workers (containers removed)
+
+---
+
+## Investigation Closure & Handoff
+
+### Confirmed Findings
+- **Primary root cause:** `os.homedir()` resolves to `/root` inside the task container while the GitHub CLI credentials are bind-mounted under `/home/node/.config/gh`, so `gh` never sees the host token files.
+- **Amplifying factors:** the mount is read-only (preventing credential refresh), and production relies on keyring-backed tokens that containers cannot read; the lack of a `GITHUB_TOKEN` environment variable means there is no fallback.
+- **Operational impact:** three completed tasks shipped code to GitHub without PRs, blocking downstream PR tracking and post-merge automation.
+
+### Validation Work
+- Documented the failure path by running `gh auth status` inside the worker container with the current mount layout—CLI reports "not logged in" even though the host machine is authenticated.
+- Added instrumentation examples for `ephemeralWorker.service.ts` to log the computed `homeDir`, mount targets, and gh command exit codes; sample output shows the worker resolves `/root` regardless of the mounted `/home/node` path.
+- Manual PR creation via `gh pr create --repo Jdubz/app-monitor --head <task branch>` continues to succeed from the host, proving repository permissions are not the blocker.
+
+### Remaining Risks
+- The CLI will regress again if a future deployment changes container users because the current fix is not yet codified.
+- Failure notifications rely on humans spotting the log line; there is no alert when PR creation silently fails.
+- Keyring-backed tokens on the host are still the default, so rotating credentials can break automation until the file-based storage migration finishes.
+
+### Hand-off
+- Implementation is tracked in `docs/plans/PR_CREATION_AUTOMATION_RESTORE_PLAN.md`.
+- Close this investigation once (1) the worker resolves the correct HOME directory, (2) a non-interactive token source is configured, (3) automated post-task verification asserts `gh pr create` exit code 0, and (4) alerting is wired to notify on failure.

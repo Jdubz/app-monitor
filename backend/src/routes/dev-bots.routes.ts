@@ -50,6 +50,7 @@ import type { Task, TaskExecution } from '../services/taskQueue.sqlite.js';
 import type { InteractiveSessionRecord } from '../services/database.js';
 import { WorkerLogLocator } from '../services/taskLogLocator.js';
 import { LogStreamAccessTracker } from '../services/logStreamAccessTracker.js';
+import { getTaskContextService } from '../services/taskContext.service.js';
 
 const TECHNICAL_TASK_TYPES = new Set(['refactor', 'implementation', 'bug', 'feature']);
 const MIN_DOCUMENTATION_LENGTH = 50;
@@ -1815,6 +1816,104 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
     }
     devBotsManager.sendInteractiveSignal(payload.sessionId, 'interrupt');
     res.json({ success: true, data: { message: 'Interrupt signal sent' } });
+  });
+
+  // ============================================================================
+  // Task Context API Endpoints
+  // ============================================================================
+
+  /**
+   * GET /dev-bots/tasks/:id/context
+   * Get task context (latest automation run)
+   */
+  router.get('/tasks/:id/context', (req: Request, res: Response) => {
+    try {
+      const { id: taskId } = req.params;
+      const latestRun = getTaskContextService().getLatestAutomationRun(taskId);
+
+      if (!latestRun) {
+        return res.status(404).json({
+          error: 'No context found',
+          message: `No automation runs found for task ${taskId}`
+        });
+      }
+
+      res.json(latestRun);
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_task_context',
+        message: `Error getting task context: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to get task context',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  /**
+   * GET /dev-bots/tasks/:id/runs
+   * Get all automation runs for a task
+   */
+  router.get('/tasks/:id/runs', (req: Request, res: Response) => {
+    try {
+      const { id: taskId } = req.params;
+      const runs = getTaskContextService().getTaskAutomationRuns(taskId);
+
+      res.json({ runs });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_task_runs',
+        message: `Error getting task runs: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to get task runs',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  /**
+   * GET /dev-bots/tasks/:id/runs/:runId
+   * Get specific automation run details
+   */
+  router.get('/tasks/:id/runs/:runId', (req: Request, res: Response) => {
+    try {
+      const { id: taskId, runId } = req.params;
+      const run = getTaskContextService().getAutomationRun(runId);
+
+      if (!run) {
+        return res.status(404).json({
+          error: 'Run not found',
+          message: `Automation run ${runId} not found`
+        });
+      }
+
+      // Verify the run belongs to the specified task
+      if (run.task_id !== taskId) {
+        return res.status(404).json({
+          error: 'Run not found',
+          message: `Automation run ${runId} does not belong to task ${taskId}`
+        });
+      }
+
+      res.json(run);
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_automation_run',
+        message: `Error getting automation run: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to get automation run',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
   });
 
   return router;

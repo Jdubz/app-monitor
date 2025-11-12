@@ -1,8 +1,11 @@
 /**
  * Task Context Service
  *
- * Provides CRUD operations for task context data (creation and execution context).
- * Stores rich diagnostic information for task automation and debugging.
+ * Provides comprehensive task context management:
+ * 1. Access to task automation run data (migration 004: task_automation_runs)
+ * 2. CRUD operations for creation/execution context (migration 009: task_creation_context, task_execution_context)
+ *
+ * This service integrates both the automation run tracking and diagnostic context storage.
  */
 
 import { getDatabase } from './database.js';
@@ -12,7 +15,85 @@ import type {
 } from '../types/taskContext.js';
 import { logger } from '../utils/logger.js';
 
+// Types for automation run data (from migration 004)
+export interface AutomationRun {
+  run_id: string;
+  task_id: string;
+  worker_id: string | null;
+  container_id: string | null;
+  started_at: string;
+  completed_at: string | null;
+  duration_ms: number | null;
+  exit_code: number | null;
+  status: 'success' | 'failed' | 'noop';
+  failure_reason: string | null;
+  commit_sha: string | null;
+  branch: string | null;
+  quality_passed: number | null;
+  quality_validation_json: string | null;
+  resource_usage_json: string | null;
+  token_usage_json: string | null;
+  container_meta_json: string | null;
+  build_exit_code: number | null;
+  test_passed: number | null;
+  test_failed: number | null;
+  test_skipped: number | null;
+  lint_errors: number | null;
+  lint_warnings: number | null;
+  created_at: string;
+}
+
 export class TaskContextService {
+  // ============================================================================
+  // Automation Run Data (migration 004: task_automation_runs)
+  // Used by dev-bots.routes.ts for API endpoints
+  // ============================================================================
+
+  /**
+   * Get all automation runs for a specific task
+   */
+  getTaskAutomationRuns(taskId: string): AutomationRun[] {
+    const db = getDatabase();
+    const connection = db.getConnection();
+
+    const stmt = connection.prepare(`
+      SELECT * FROM task_automation_runs
+      WHERE task_id = ?
+      ORDER BY started_at DESC
+    `);
+
+    return stmt.all(taskId) as AutomationRun[];
+  }
+
+  /**
+   * Get a specific automation run by run_id
+   */
+  getAutomationRun(runId: string): AutomationRun | null {
+    const db = getDatabase();
+    const connection = db.getConnection();
+
+    const stmt = connection.prepare(`
+      SELECT * FROM task_automation_runs
+      WHERE run_id = ?
+    `);
+
+    const result = stmt.get(runId);
+    return result ? (result as AutomationRun) : null;
+  }
+
+  /**
+   * Get the most recent automation run for a task
+   */
+  getLatestAutomationRun(taskId: string): AutomationRun | null {
+    const runs = this.getTaskAutomationRuns(taskId);
+    return runs.length > 0 ? runs[0] : null;
+  }
+
+  // ============================================================================
+  // Task Creation/Execution Context (migration 009)
+  // ============================================================================
+
+
   /**
    * Store task creation context
    * Captures environment, client metadata, and diagnostic breadcrumbs at task creation time
@@ -207,4 +288,8 @@ export function getTaskContextService(): TaskContextService {
     serviceInstance = new TaskContextService();
   }
   return serviceInstance;
+}
+
+export function resetTaskContextService(): void {
+  serviceInstance = null;
 }

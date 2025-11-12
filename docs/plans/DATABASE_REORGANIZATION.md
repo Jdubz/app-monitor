@@ -82,13 +82,20 @@ This database contains ALL tables:
 7. Update config to point to new database
 ```
 
-### Phase 3: Cleanup
+### Phase 3: Cleanup - ⚠️ PARTIAL (Updated 2025-11-11)
 
 1. **Remove unused files**
-   - Delete `app-monitor.db` (empty)
-   - Delete `task-queue.db` (empty)
-   - Delete `tasks.db` (empty)
-   - Delete `./dev-bots.db` (root, duplicate)
+   - ~~Delete `app-monitor.db` (empty)~~ - NOW ACTIVE (1.4MB) - Contains task queue
+   - [x] ✅ Delete `task-queue.db` (empty) - DONE 2025-11-11
+   - [x] ✅ Delete `tasks.db` (empty) - DONE 2025-11-11
+   - [x] ✅ Delete `./dev-bots.db` (root, duplicate) - VERIFIED NOT PRESENT
+
+**Current State**:
+   - `app-monitor.db` (1.4MB) - Active task queue
+   - `dev-bots.db` (484KB) - Active legacy metrics
+   - `tasks/queue.db` (1.2MB) - Active task queue (duplicate schema)
+
+**Remaining Work**: Consolidate `dev-bots.db` and `tasks/queue.db` into `app-monitor.db`
 
 2. **Update .gitignore**
    - Keep `*.db` pattern (all databases git-ignored)
