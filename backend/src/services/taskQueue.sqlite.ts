@@ -32,7 +32,12 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { randomUUID } from 'node:crypto';
 import { logger } from '../utils/logger.js';
+import { config } from '../config.js';
 import { TaskClassifier } from './taskClassifier.js';
+import { ChainTrackerService, type ChainStats, type BlockedChain } from './chainTracker.service.js';
+
+// Re-export chain types for convenience
+export type { ChainStats, BlockedChain };
 
 type AgentStatsRow = {
   agent_type: 'claude' | 'codex';
@@ -255,6 +260,8 @@ export class TaskQueueService {
   private db: Database.Database;
   private dbPath: string;
   private readonly taskClassifier: TaskClassifier; // Auto-classification (Phase 0.3)
+  private readonly chainTracker: ChainTrackerService; // Chain lifecycle management (Phase 2)
+  private readonly maxConcurrentChains: number; // Chain concurrency limit
 
   constructor(dbPath: string) {
     this.dbPath = dbPath;
@@ -262,6 +269,17 @@ export class TaskQueueService {
     this.ensureDirectory();
     this.db = new Database(dbPath);
     this.initialize();
+    
+    // Initialize chain tracking with configurable concurrency limit
+    this.chainTracker = new ChainTrackerService(this.db);
+    this.maxConcurrentChains = config.devBots.maxWorkers;
+    
+    logger.info({
+      category: 'process',
+      action: 'staged_queue_initialized',
+      message: `Staged queue initialized with ${this.maxConcurrentChains} max concurrent chains`,
+      details: { maxConcurrentChains: this.maxConcurrentChains }
+    });
   }
 
   private ensureDirectory(): void {
@@ -1925,5 +1943,33 @@ export class TaskQueueService {
       DELETE FROM pr_followup_fingerprints WHERE pr_number = ?
     `);
     stmt.run(prNumber);
+  }
+
+  /**
+   * Get chain statistics (Phase 2: Staged Queue)
+   */
+  getChainStats() {
+    return this.chainTracker.getChainStats(this.maxConcurrentChains);
+  }
+
+  /**
+   * Block a chain manually (Phase 2: Staged Queue)
+   */
+  blockChain(chainId: string, reason: string, blockedBy: string): void {
+    return this.chainTracker.blockChain(chainId, reason, blockedBy);
+  }
+
+  /**
+   * Unblock a chain manually (Phase 2: Staged Queue)
+   */
+  unblockChain(chainId: string, unblockedBy: string): void {
+    return this.chainTracker.unblockChain(chainId, unblockedBy);
+  }
+
+  /**
+   * Get all blocked chains (Phase 2: Staged Queue)
+   */
+  getBlockedChains() {
+    return this.chainTracker.getBlockedChains();
   }
 }
