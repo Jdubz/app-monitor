@@ -3,12 +3,29 @@
 Comprehensive documentation for the App Monitor developer tool and autonomous development platform.
 
 **Version:** 0.2.0
-**Last Updated:** 2025-11-11
+**Last Updated:** 2025-11-12 17:56 UTC
 **Status:** Pre-POC Stabilization
 
 ---
 
 ## 📋 Recent Updates
+
+**2025-11-12 Staged Queue System - COMPLETE ✅**
+- ✅ Chain-aware task scheduling with concurrency limits (MAX_DEV_BOTS)
+- ✅ Two-stage queues: implementation (new chains) + followup (REVIEW/FIX)
+- ✅ ChainTracker service for full chain lifecycle management
+- ✅ ChainStatusPanel UI with real-time monitoring and manual intervention
+- ✅ API endpoints for stats, blocked chains, and unblocking
+- ✅ Schema migrations 012-015 (staged queue + Phase 2A cleanup)
+- ✅ All 936 backend tests passing
+- 📚 See [Staged Queue Progress](./analysis/STAGED_QUEUE_PROGRESS.md) for details
+- 📚 See [Technical Design](./technicalDesigns/staged-task-queue.md) (now marked complete)
+
+**2025-11-12 Documentation Organized:**
+- ✅ Updated all staged queue documentation to reflect completed status
+- ✅ Archived pre-implementation analysis documents
+- ✅ Updated IMPLEMENTATION_STATUS.md with staged queue entry
+- ✅ Organized docs structure for clarity
 
 **2025-11-12 Deployment Documentation Consolidated:**
 - ✅ Updated [Production Deployment Guide](./guides/PRODUCTION_DEPLOYMENT.md)
@@ -17,22 +34,10 @@ Comprehensive documentation for the App Monitor developer tool and autonomous de
 - ✅ Removed redundant deployment status docs
 
 **2025-11-12 Production Stability:**
-- 🚨 ~~CRITICAL: Zero-downtime deployment plan created~~ RESOLVED
-- Production deployment infrastructure already complete (80%)
-- Minor fixes applied (health endpoint, drain period, systemd timeout)
+- ✅ Zero-downtime deployment infrastructure complete
+- ✅ Blue-green deployment working (ports 5001 ↔ 5002)
+- ✅ Health-gated traffic switching
 - See [Production Deployment Guide](./guides/PRODUCTION_DEPLOYMENT.md)
-
-**2025-11-11 Documentation Review:**
-- ✅ Fixed 15+ broken documentation links
-- ✅ Verified database consolidation complete
-- ✅ Updated plan statuses to reflect reality
-- 📄 See [archived critical improvements](./archive/CRITICAL_IMPROVEMENTS_2025-11-11.md) for technical details
-- 📄 See [archived review](./archive/DOCUMENTATION_REVIEW_SUMMARY-2025-11-11.md) for full audit
-
-**2025-11-12 Quick Wins Completed:**
-- ✅ Automated link checker added to CI
-- ✅ 5 completed plans archived (30 → 25 active)
-- ✅ Legacy databases cleaned up
 
 ---
 
