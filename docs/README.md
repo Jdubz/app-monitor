@@ -3,20 +3,31 @@
 Comprehensive documentation for the App Monitor developer tool and autonomous development platform.
 
 **Version:** 0.2.0
-**Last Updated:** November 7, 2025
+**Last Updated:** 2025-11-11
 **Status:** Pre-POC Stabilization
+
+---
+
+## 📋 Recent Updates
+
+**2025-11-11 Documentation Review:**
+- ✅ Fixed 15+ broken documentation links
+- ✅ Verified database consolidation complete
+- ✅ Updated plan statuses to reflect reality
+- 📄 See [Documentation Review Summary](./DOCUMENTATION_REVIEW_SUMMARY.md) for details
+- 📄 See [Critical Improvements Report](./CRITICAL_IMPROVEMENTS_2025-11-11.md) for technical details
 
 ---
 
 ## Quick Navigation
 
 ### Essential Documentation
-- [Architecture Overview](./architecture.md) - Complete system design and components
-- [Setup Guide](./setup.md) - Detailed installation, configuration, and troubleshooting
-- [Next Steps & Roadmap](./next-steps.md) - Prioritized tasks and long-term vision
+- [Architecture Overview](./architecture/README.md) - Complete system design and components
+- [Setup Guide](./setup/README.md) - Detailed installation, configuration, and troubleshooting
+- [Planning & Roadmap](./plans/PRIORITIZED_FEATURE_ROADMAP.md) - Prioritized tasks and long-term vision
 
 ### Development
-- [Development Guide](./DEVELOPMENT.md) - Developer workflows and best practices
+- [Development Guide](../CONTRIBUTING.md) - Developer workflows and best practices
 - [Contributing Guide](../CONTRIBUTING.md) - Git hooks, CI/CD, contribution guidelines
 
 ### Planning & Strategy
@@ -119,48 +130,48 @@ Historical implementation and fix sessions:
 ### By Topic
 
 **Architecture & Design**
-- [architecture.md](./architecture.md) - System architecture
-- [dev-bots/architecture/](./dev-bots/architecture/) - Dev-bots architecture
-- [dev-monitor/ARCHITECTURE.md](./dev-monitor/ARCHITECTURE.md) - Legacy architecture
+- [architecture/](./architecture/README.md) - System architecture
+- [master-design-intent.md](./architecture/master-design-intent.md) - Master design document
+- [dev-bots-overview.md](./architecture/dev-bots-overview.md) - Dev-bots architecture
 
 **Setup & Configuration**
-- [setup.md](./setup.md) - Complete setup guide
-- [MIGRATION_GUIDE.md](./MIGRATION_GUIDE.md) - Migration instructions
+- [setup/](./setup/README.md) - Complete setup guide
+- [guides/MIGRATION_GUIDE.md](./guides/MIGRATION_GUIDE.md) - Migration instructions
 - Backend config in `../backend/config/log-sources.json`
 
 **Development & Contributing**
-- [DEVELOPMENT.md](./DEVELOPMENT.md) - Development guide
+- [../CONTRIBUTING.md](../CONTRIBUTING.md) - Development guide
 - [../CONTRIBUTING.md](../CONTRIBUTING.md) - Contributing guidelines
-- [dev-monitor/E2E_TESTING_GUIDE.md](./dev-monitor/E2E_TESTING_GUIDE.md) - E2E testing
+- [guides/e2e-testing-guide.md](./guides/e2e-testing-guide.md) - E2E testing
 
 **Planning & Roadmap**
-- [next-steps.md](./next-steps.md) - Prioritized roadmap
+- [plans/PRIORITIZED_FEATURE_ROADMAP.md](./plans/PRIORITIZED_FEATURE_ROADMAP.md) - Prioritized roadmap
 - [plans/](./plans/) - All planning documents
-- [PLANNING_SUMMARY.md](./PLANNING_SUMMARY.md) - Planning overview
+- [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) - Implementation status overview
 
 **Dev-Bots & Automation**
-- [dev-bots/](./dev-bots/) - Complete dev-bots documentation
-- [dev-bots/api/](./dev-bots/api/) - API and agent personalities
-- [dev-bots/examples/](./dev-bots/examples/) - Task examples
+- [architecture/dev-bots-overview.md](./architecture/dev-bots-overview.md) - Dev-bots documentation
+- [guides/api-reference.md](./guides/api-reference.md) - API reference
+- [guides/task-examples.md](./guides/task-examples.md) - Task examples
 
 ### By Audience
 
 **New Contributors**
 1. Start with [../README.md](../README.md) - Project overview
-2. Read [setup.md](./setup.md) - Get system running
-3. Review [DEVELOPMENT.md](./DEVELOPMENT.md) - Learn workflows
-4. Check [next-steps.md](./next-steps.md) - Pick a task
+2. Read [setup/README.md](./setup/README.md) - Get system running
+3. Review [../CONTRIBUTING.md](../CONTRIBUTING.md) - Learn workflows
+4. Check [plans/PRIORITIZED_FEATURE_ROADMAP.md](./plans/PRIORITIZED_FEATURE_ROADMAP.md) - Pick a task
 
 **Experienced Developers**
-1. [architecture.md](./architecture.md) - Understand system design
+1. [architecture/README.md](./architecture/README.md) - Understand system design
 2. [plans/APP_MONITOR_STABILIZATION_PLAN.md](./plans/APP_MONITOR_STABILIZATION_PLAN.md) - Current work
-3. [next-steps.md](./next-steps.md) - Prioritized tasks
-4. [dev-bots/](./dev-bots/) - Deep dive into dev-bots
+3. [plans/PRIORITIZED_FEATURE_ROADMAP.md](./plans/PRIORITIZED_FEATURE_ROADMAP.md) - Prioritized tasks
+4. [architecture/dev-bots-overview.md](./architecture/dev-bots-overview.md) - Deep dive into dev-bots
 
 **Planning & Strategy**
 1. [plans/APP_MONITOR_CAPABILITY_ROADMAP.md](./plans/APP_MONITOR_CAPABILITY_ROADMAP.md) - Long-term vision
 2. [plans/APP_MONITOR_STABILIZATION_PLAN.md](./plans/APP_MONITOR_STABILIZATION_PLAN.md) - Current phase
-3. [PLANNING_SUMMARY.md](./PLANNING_SUMMARY.md) - Planning overview
+3. [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) - Implementation status
 4. [plans/README.md](./plans/README.md) - All planning docs
 
 ---
@@ -192,22 +203,22 @@ Historical implementation and fix sessions:
 ### Common Questions
 
 **"How do I set up the system?"**
-→ [setup.md](./setup.md)
+→ [setup/README.md](./setup/README.md)
 
 **"What's the architecture?"**
-→ [architecture.md](./architecture.md)
+→ [architecture/README.md](./architecture/README.md)
 
 **"What should I work on next?"**
-→ [next-steps.md](./next-steps.md) or [plans/APP_MONITOR_STABILIZATION_PLAN.md](./plans/APP_MONITOR_STABILIZATION_PLAN.md)
+→ [plans/PRIORITIZED_FEATURE_ROADMAP.md](./plans/PRIORITIZED_FEATURE_ROADMAP.md) or [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md)
 
 **"How do I contribute?"**
-→ [../CONTRIBUTING.md](../CONTRIBUTING.md) and [DEVELOPMENT.md](./DEVELOPMENT.md)
+→ [../CONTRIBUTING.md](../CONTRIBUTING.md)
 
 **"What are dev-bots?"**
-→ [dev-bots/README.md](./dev-bots/README.md) and [dev-bots/docs/analysis/START_HERE.md](./dev-bots/docs/analysis/START_HERE.md)
+→ [architecture/dev-bots-overview.md](./architecture/dev-bots-overview.md)
 
 **"How do I troubleshoot issues?"**
-→ [setup.md#troubleshooting](./setup.md#troubleshooting)
+→ [setup/ENVIRONMENT_SETUP.md](./setup/ENVIRONMENT_SETUP.md)
 
 **"What's the long-term vision?"**
 → [plans/APP_MONITOR_CAPABILITY_ROADMAP.md](./plans/APP_MONITOR_CAPABILITY_ROADMAP.md)
@@ -217,11 +228,13 @@ Historical implementation and fix sessions:
 ## Documentation Standards
 
 ### File Organization
-- **Root docs/** - Essential documentation (architecture, setup, next-steps)
+- **Root docs/** - Essential documentation (README, implementation status)
+- **docs/architecture/** - System architecture and design documents
+- **docs/setup/** - Setup and configuration guides
+- **docs/guides/** - Operational guides and tutorials
 - **docs/plans/** - Strategic planning documents
-- **docs/dev-bots/** - Dev-bots system documentation
-- **docs/dev-monitor/** - Legacy dev-monitor documentation
-- **docs/sessions/** - Historical session notes
+- **docs/investigations/** - Investigation and analysis documents
+- **docs/archive/** - Historical documentation
 
 ### Naming Conventions
 - `*.md` - All documentation in Markdown
@@ -270,10 +283,10 @@ All major documents should include:
 ## Document Maintenance
 
 ### Regular Updates
-- **Weekly**: Update [next-steps.md](./next-steps.md) with completed tasks
+- **Weekly**: Update [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) with completed tasks
 - **Monthly**: Review and update [plans/APP_MONITOR_STABILIZATION_PLAN.md](./plans/APP_MONITOR_STABILIZATION_PLAN.md)
-- **Per phase**: Update [architecture.md](./architecture.md) for major changes
-- **As needed**: Session notes in [sessions/](./sessions/)
+- **Per phase**: Update [architecture/](./architecture/) for major changes
+- **As needed**: Investigation notes in [investigations/](./investigations/)
 
 ### Deprecation Process
 1. Mark document as deprecated with notice at top
@@ -282,9 +295,7 @@ All major documents should include:
 4. Update all cross-references
 
 ### Archive Structure
-- **docs/dev-monitor/archive/** - Archived dev-monitor docs
-- **docs/dev-bots/archive/** - Archived dev-bots docs
-- **docs/plans/archive/** - Archived planning docs
+- **docs/archive/** - Archived documentation organized by topic
 
 ---
 
@@ -302,6 +313,6 @@ All major documents should include:
 
 ---
 
-**Version:** 1.0
-**Last Updated:** November 7, 2025
+**Version:** 2.0
+**Last Updated:** 2025-11-11
 **Maintained by:** Platform Tooling

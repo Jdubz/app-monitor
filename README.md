@@ -55,7 +55,7 @@ This project is currently in **pre-POC stabilization** phase, preparing the foun
 - **Services**: `app-monitor-backend@5001.service`, `app-monitor-backend@5002.service`, `nginx`
 - **Deployment**: Automatic via GitHub Actions on push to `main`
 
-📖 See [Production Setup Guide](./docs/production/PRODUCTION_SETUP.md) for production details.
+📖 See [Production Setup Guide](./docs/setup/PRODUCTION_SETUP_QUICKSTART.md) for production details.
 
 ---
 
