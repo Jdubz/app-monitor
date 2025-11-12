@@ -85,6 +85,9 @@ jobs:
       - name: Run backend linter
         run: npm run lint -w backend
 
+      - name: Validate database migrations
+        run: ./scripts/validate-migrations.sh
+
       - name: Build backend
         run: npm run build -w backend
 
@@ -229,24 +232,43 @@ jobs:
             console.log(`⏳ Monitoring deployment ${deploymentId}...`);
             console.log(`Will check every ${checkIntervalSeconds}s for up to ${maxWaitMinutes} minutes`);
             
+            let seenInProgress = false;
+            
             for (let i = 0; i < maxChecks; i++) {
+              // Get more statuses to avoid missing failures due to pagination
               const statuses = await github.rest.repos.listDeploymentStatuses({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 deployment_id: deploymentId,
-                per_page: 1
+                per_page: 10
               });
               
               if (statuses.data.length > 0) {
                 const latestStatus = statuses.data[0];
-                console.log(`Status: ${latestStatus.state} - ${latestStatus.description || 'No description'}`);
+                const state = latestStatus.state;
+                const description = latestStatus.description || 'No description';
                 
-                if (latestStatus.state === 'success') {
+                console.log(`Status: ${state} - ${description}`);
+                
+                if (state === 'in_progress') {
+                  seenInProgress = true;
+                }
+                
+                if (state === 'success') {
                   console.log('✅ Deployment completed successfully!');
                   return;
-                } else if (latestStatus.state === 'failure' || latestStatus.state === 'error') {
-                  core.setFailed(`❌ Deployment failed: ${latestStatus.description}`);
+                } else if (state === 'failure' || state === 'error') {
+                  core.setFailed(`❌ Deployment failed: ${description}`);
                   return;
+                }
+              } else {
+                // No statuses found - this is suspicious if we've seen in_progress before
+                if (seenInProgress) {
+                  console.log('⚠️  Warning: No deployment statuses found after seeing in_progress');
+                  console.log('This might indicate the deployment failed but status update was lost');
+                  // Don't fail immediately, keep checking in case it's a temporary API issue
+                } else {
+                  console.log('No deployment statuses yet, waiting...');
                 }
               }
               
@@ -255,7 +277,7 @@ jobs:
               }
             }
             
-            core.setFailed(`⏰ Deployment monitoring timed out after ${maxWaitMinutes} minutes. Check server logs.`);
+            core.setFailed(`⏰ Deployment monitoring timed out after ${maxWaitMinutes} minutes. Check server logs: journalctl -u app-monitor-deploy-agent.service -n 100`);
 
       - name: Deployment complete
         if: success()
