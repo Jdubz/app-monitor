@@ -562,7 +562,7 @@ See `.env.example` for complete list. Key variables:
 - `GOOGLE_APPLICATION_CREDENTIALS` - GCP service account
 - `INTERACTIVE_SESSION_OWNER` - Email for interactive sessions
 
-See [.env.example](../.env.example) for complete documentation.
+See the Environment Setup Guide in the project documentation for complete details.
 
 ---
 
@@ -698,7 +698,7 @@ export function getMyService(): MyService {
 ## Related Documentation
 
 - [IMPLEMENTATION_STATUS.md](../docs/IMPLEMENTATION_STATUS.md) - Overall project status
-- [OUTSTANDING_CLEANUP_IMPROVEMENTS.md](../docs/OUTSTANDING_CLEANUP_IMPROVEMENTS.md) - Feature roadmap
+- [OUTSTANDING_CLEANUP_IMPROVEMENTS.md](../docs/analysis/OUTSTANDING_CLEANUP_IMPROVEMENTS.md) - Feature roadmap
 - [CODE_HYGIENE_AND_MAINTAINABILITY_ANALYSIS.md](../docs/analysis/CODE_HYGIENE_AND_MAINTAINABILITY_ANALYSIS.md) - Code quality review
 - [DATABASE_MIGRATION_SAFETY.md](../docs/DATABASE_MIGRATION_SAFETY.md) - Migration guide
 - [DEV_BOTS_ARCHITECTURE_ANALYSIS.md](../docs/analysis/DEV_BOTS_ARCHITECTURE_ANALYSIS.md) - Architecture details
@@ -712,7 +712,7 @@ Proprietary - Internal use only
 ## Support
 
 For issues or questions:
-- GitHub Issues: [app-monitor/issues](https://github.com/Jdubz/app-monitor/issues)
+- Create a GitHub issue in the repository
 - Email: contact@joshwentworth.com
 
 ---
