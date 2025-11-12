@@ -28,6 +28,12 @@ export const config = {
   // GitHub Webhook Secret for HMAC signature verification
   githubWebhookSecret: process.env.GITHUB_WEBHOOK_SECRET || '',
 
+  // Dev-bot worker configuration
+  devBots: {
+    // Maximum concurrent dev-bot workers (implementation chains)
+    maxWorkers: parseInt(process.env.MAX_DEV_BOTS || '3', 10),
+  },
+
   // Automatic Failure Recovery Feature Flags
   recovery: {
     // Enable automatic recovery system (default: disabled for safety)

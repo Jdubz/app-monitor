@@ -160,8 +160,18 @@ export interface ChainStats {
 
 Add to `backend/.env`:
 ```env
-MAX_CONCURRENT_CHAINS=3  # Number of concurrent implementation chains
+MAX_DEV_BOTS=3  # Maximum concurrent dev-bot workers (matches chain concurrency limit)
 ```
+
+Add to `backend/src/config.ts`:
+```typescript
+devBots: {
+  // Maximum concurrent dev-bot workers (implementation chains)
+  maxWorkers: parseInt(process.env.MAX_DEV_BOTS || '3', 10),
+},
+```
+
+**Note**: Chain concurrency limit = MAX_DEV_BOTS (not a separate config)
 
 ### Phase 2: Chain Tracker Service (Week 1-2)
 

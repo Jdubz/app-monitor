@@ -1,5 +1,6 @@
 -- Migration 012: Staged Queue System
 -- Adds queue_stage and chain_status for chain-aware scheduling
+-- Chain concurrency limit matches MAX_DEV_BOTS configuration
 -- See: docs/technicalDesigns/staged-task-queue-implementation-plan.md
 
 -- Add queue_stage enum
