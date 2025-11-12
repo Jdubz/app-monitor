@@ -14,6 +14,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { promisify } from 'util';
+import { exec } from 'child_process';
 import { logger } from '../utils/logger.js';
 import type { Task } from './taskQueue.sqlite.js';
 import type { TaskQueueService } from './taskQueue.sqlite.js';
@@ -28,6 +30,8 @@ import { resolveArtifactsDir } from '../utils/repoPaths.js';
 import { AgentSelector, type AgentSelectionCriteria, type AgentAttempt } from './agentSelector.js';
 import { TaskClassifier } from './taskClassifier.js';
 import * as DockerConfig from './dockerConfig.js';
+
+const execAsync = promisify(exec);
 
 // ============================================================================
 // Types & Interfaces
@@ -817,6 +821,39 @@ export class TaskExecutionService {
         // Add a small delay to ensure git operations are fully flushed to disk
         await this.waitForGitFlush();
 
+        // SAFETY CHECK 1: Capture uncommitted changes
+        await this.captureUncommittedChanges(task.id, repoRoot);
+
+        // SAFETY CHECK 2: Verify bot committed changes
+        const commitStatus = await this.verifyBotCommitted(
+          task.id,
+          repoRoot,
+          task.assigned_at || task.created_at
+        );
+
+        if (!commitStatus.committed) {
+          logger.warn({
+            category: 'safety',
+            action: 'bot_did_not_commit',
+            message: `Bot completed task ${task.id} but did not commit changes`,
+            details: { taskId: task.id }
+          });
+
+          // SAFETY CHECK 3: Auto-stash if uncommitted changes exist
+          await this.autoStashChanges(task.id, repoRoot);
+        } else {
+          logger.info({
+            category: 'safety',
+            action: 'bot_committed_successfully',
+            message: `Bot successfully committed and pushed for ${task.id}`,
+            details: {
+              taskId: task.id,
+              commit: commitStatus.commitHash,
+              pushed: commitStatus.pushed
+            }
+          });
+        }
+
         // Complete task in SQLite with agent type for comparison tracking
         this.taskQueue.completeTask(task.id, JSON.stringify(cliOutput), chosenAgentType);
 
@@ -829,6 +866,7 @@ export class TaskExecutionService {
             taskTitle: task.title,
             executionDuration_ms: executionDuration,
             outputSize: JSON.stringify(cliOutput).length,
+            committed: commitStatus.committed,
             recommendation: executionDuration > 600000
               ? 'Task took >10min - consider breaking into smaller tasks'
               : executionDuration > 300000
@@ -848,6 +886,9 @@ export class TaskExecutionService {
 
         // Add a small delay to ensure git operations are fully flushed to disk
         await this.waitForGitFlush();
+
+        // SAFETY CHECK: Capture uncommitted changes even on parse error
+        await this.captureUncommittedChanges(task.id, repoRoot);
 
         // Still complete task even if output parsing fails
         this.taskQueue.completeTask(task.id, stdout, chosenAgentType);
@@ -957,5 +998,172 @@ export class TaskExecutionService {
       return;
     }
     await new Promise(resolve => setTimeout(resolve, delayMs));
+  }
+
+  // ==========================================================================
+  // Safety Mechanisms - Git Change Tracking
+  // ==========================================================================
+
+  /**
+   * Capture uncommitted changes as a safety backup
+   * Creates patch file if task completed but didn't commit changes
+   */
+  private async captureUncommittedChanges(taskId: string, repoRoot: string): Promise<void> {
+    try {
+      // Check for uncommitted changes
+      const { stdout: status } = await execAsync('git status --porcelain', { cwd: repoRoot });
+
+      if (status.trim()) {
+        const changeCount = status.split('\n').filter(line => line.trim()).length;
+        
+        logger.warn({
+          category: 'safety',
+          action: 'uncommitted_changes_detected',
+          message: `Task ${taskId} has ${changeCount} uncommitted changes`,
+          details: { taskId, changeCount }
+        });
+
+        // Create patch file as backup
+        const timestamp = Date.now();
+        const patchFile = path.join(this.config.artifactsDir, `${taskId}-uncommitted-${timestamp}.patch`);
+
+        // Generate diff
+        const { stdout: diff } = await execAsync('git diff HEAD', { cwd: repoRoot });
+
+        // Also get untracked files
+        const { stdout: untrackedDiff } = await execAsync(
+          'git ls-files --others --exclude-standard | xargs -r git diff /dev/null',
+          { cwd: repoRoot }
+        ).catch(() => ({ stdout: '' }));
+
+        // Combine diffs
+        const fullDiff = diff + (untrackedDiff ? '\n\n# Untracked files:\n' + untrackedDiff : '');
+
+        // Save patch
+        fs.writeFileSync(patchFile, fullDiff, 'utf-8');
+
+        // Save git status for context
+        fs.writeFileSync(
+          patchFile.replace('.patch', '-status.txt'),
+          status,
+          'utf-8'
+        );
+
+        logger.info({
+          category: 'safety',
+          action: 'saved_uncommitted_changes',
+          message: `Saved uncommitted changes to ${path.basename(patchFile)}`,
+          details: { taskId, patchFile, diffSize: fullDiff.length }
+        });
+      }
+    } catch (error) {
+      logger.error({
+        category: 'safety',
+        action: 'failed_to_capture_changes',
+        message: `Failed to capture uncommitted changes for ${taskId}`,
+        details: { error: error instanceof Error ? error.message : String(error) }
+      });
+    }
+  }
+
+  /**
+   * Verify that bot actually committed and pushed changes
+   * Returns commit info if found, null if no commit detected
+   */
+  private async verifyBotCommitted(
+    taskId: string,
+    repoRoot: string,
+    taskStartedAt: string
+  ): Promise<{
+    committed: boolean;
+    commitHash?: string;
+    commitMessage?: string;
+    pushed?: boolean;
+  }> {
+    try {
+      const sinceTime = new Date(taskStartedAt).toISOString();
+
+      // Get commits since task started on staging branch
+      const { stdout: commits } = await execAsync(
+        `git log --since="${sinceTime}" --format="%H|%s" origin/staging`,
+        { cwd: repoRoot }
+      ).catch(() => ({ stdout: '' }));
+
+      if (!commits) {
+        return { committed: false };
+      }
+
+      const recentCommits = commits.split('\n').filter(Boolean);
+
+      // Check if any commit mentions this task or was made by bot
+      const botCommit = recentCommits.find(line =>
+        line.includes(taskId) ||
+        line.includes('🤖 Generated with') ||
+        line.includes('Co-Authored-By: Claude') ||
+        line.includes('Co-Authored-By: Codex')
+      );
+
+      if (botCommit) {
+        const [hash, message] = botCommit.split('|');
+        logger.info({
+          category: 'safety',
+          action: 'bot_commit_verified',
+          message: `Verified bot committed for task ${taskId}`,
+          details: { taskId, commitHash: hash, commitMessage: message }
+        });
+        return {
+          committed: true,
+          commitHash: hash,
+          commitMessage: message,
+          pushed: true
+        };
+      }
+
+      return { committed: false };
+    } catch (error) {
+      logger.error({
+        category: 'safety',
+        action: 'failed_commit_verification',
+        message: `Failed to verify commit for task ${taskId}`,
+        details: { error: error instanceof Error ? error.message : String(error) }
+      });
+      return { committed: false };
+    }
+  }
+
+  /**
+   * Automatically stash uncommitted changes for later recovery
+   * Used when bot completed task but didn't commit
+   */
+  private async autoStashChanges(taskId: string, repoRoot: string): Promise<void> {
+    try {
+      const stashMessage = `[AUTO-STASH] Task ${taskId} - Uncommitted changes at ${new Date().toISOString()}`;
+
+      await execAsync(`git stash push -m "${stashMessage}"`, { cwd: repoRoot });
+
+      logger.info({
+        category: 'safety',
+        action: 'auto_stashed_changes',
+        message: `Auto-stashed uncommitted changes for task ${taskId}`,
+        details: { taskId, stashMessage }
+      });
+
+      // List current stashes for recovery reference
+      const { stdout: stashes } = await execAsync('git stash list', { cwd: repoRoot });
+
+      logger.info({
+        category: 'safety',
+        action: 'stash_list',
+        message: 'Current git stashes available for recovery',
+        details: { stashes: stashes.split('\n').filter(Boolean) }
+      });
+    } catch (error) {
+      logger.error({
+        category: 'safety',
+        action: 'auto_stash_failed',
+        message: `Failed to auto-stash changes for task ${taskId}`,
+        details: { error: error instanceof Error ? error.message : String(error) }
+      });
+    }
   }
 }
