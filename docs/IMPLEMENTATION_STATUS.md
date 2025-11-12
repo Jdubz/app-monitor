@@ -1,6 +1,6 @@
 # App Monitor Implementation Status
 
-**Last Updated:** 2025-11-12 05:20 UTC  
+**Last Updated:** 2025-11-12 05:48 UTC  
 **Note:** This file tracks high-level status. See individual plan files for details.
 
 ## 🎉 Recent Wins (2025-11-12)
@@ -17,7 +17,13 @@
 - ✅ Issue #4 (webhook resilience) - Over-engineered, reverted to simpler solution
 - ✅ All webhook queue infrastructure removed from codebase
 
-**Impact:** PR workflow can now properly detect behind branches and spawn fix tasks. PRs closed without merge now properly cancel associated tasks (no more database bloat). System simplified by removing unnecessary complexity.
+**Documentation Updates ✅**
+- ✅ Deployment guarantees clarified (zero-downtime, health-gated traffic)
+- ✅ Self-healing deployment documented as P3 future enhancement
+- ✅ Priority list updated to reflect actual needs
+- 📝 Commits: 78e6fe9, c9e45fe
+
+**Impact:** PR workflow can now properly detect behind branches and spawn fix tasks. PRs closed without merge now properly cancel associated tasks (no more database bloat). System simplified by removing unnecessary complexity. Production deployment guarantees clearly documented.
 
 ## ✅ Production Stability - RESOLVED
 
@@ -33,8 +39,10 @@
 - ✅ Blue-green deployment working (ports 5001 ↔ 5002)
 - ✅ Graceful shutdown implemented (90s: 60s tasks + 30s WebSocket)
 - ✅ Comprehensive health checks (6 different checks)
-- ✅ Automatic rollback on failure
+- ✅ Health-gated traffic switching (nginx routes to new instance ONLY if healthy)
+- ✅ Automatic rollback on failure (zero downtime maintained)
 - ✅ State persistence to database (no Redis by design)
+- ✅ Zero-downtime guarantee verified and documented
 
 **Documentation:** See [guides/PRODUCTION_DEPLOYMENT.md](./guides/PRODUCTION_DEPLOYMENT.md)
 
@@ -45,7 +53,7 @@
 | Plan | Status | Evidence Snapshot | Outstanding Work |
 | --- | --- | --- | --- |
 | APP_MONITOR_CAPABILITY_ROADMAP.md | Ongoing (strategic lanes) | Stage-2 automation items (task decomposition, code injection) have no references outside planning docs (no matches for `decomposition` in `backend/src`). | Build Stage-2/3 capabilities before unlocking Autonomy lane. |
-| APP_MONITOR_PRODUCTION_SUPPORT_PLAN.md | Partial | Systemd unit + cleanup workflow (`scripts/systemd/app-monitor-backend@.service`, `scripts/production/cleanup-processes.sh`) now control prod processes. | Define/enforce `APP_MONITOR_ROOT/DEPLOY_ROOT/ARTIFACT_ROOT` env contracts and multi-root registry entries. **CRITICAL: Zero-downtime deploys needed for production stability.** |
+| APP_MONITOR_PRODUCTION_SUPPORT_PLAN.md | Partial | Systemd unit + cleanup workflow (`scripts/systemd/app-monitor-backend@.service`, `scripts/production/cleanup-processes.sh`) now control prod processes. | Define/enforce `APP_MONITOR_ROOT/DEPLOY_ROOT/ARTIFACT_ROOT` env contracts and multi-root registry entries. ✅ Zero-downtime deployment COMPLETE with health-gated traffic switching. |
 | APP_MONITOR_STABILIZATION_PLAN.md | Partial | Failure recovery + timeout enforcement live in `backend/src/services/failureRecovery.ts` and `backend/src/services/taskExecution.service.ts`. | Deliver quality-metrics dashboard + template library noted in the plan. |
 | BETTER_PROCESS_MANAGEMENT.md | ✅ Archived 2025-11-12 | `backend/src/utils/singleInstance.ts` blocks duplicate processes; `scripts/production/cleanup-processes.sh` handles blue/green cleanup. | None - Moved to archive. |
 | BOT_PROMPT_ENGINEERING_V3.md | ✅ Active | Task prompts now flow through `backend/src/services/taskPromptTemplates.ts` / `taskTypeGuidelines.ts`. | Keep guidelines updated as new domains arrive. |
