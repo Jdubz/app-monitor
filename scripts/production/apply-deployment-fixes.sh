@@ -37,7 +37,8 @@ sudo mkdir -p /etc/systemd/system/app-monitor-backend@.service.d/
 echo "Creating timeout.conf..."
 sudo tee /etc/systemd/system/app-monitor-backend@.service.d/timeout.conf > /dev/null <<'EOF'
 [Service]
-# Graceful shutdown needs 120s (60s tasks + 30s WebSocket + 30s buffer)
+# Graceful shutdown needs 120s to complete all cleanup tasks
+# This allows sufficient time for task completion, WebSocket draining, and cleanup
 TimeoutStopSec=120
 EOF
 

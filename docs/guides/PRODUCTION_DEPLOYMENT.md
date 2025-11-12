@@ -303,7 +303,7 @@ RestartSec=10
 | Database locked | Stop all services, verify WAL mode enabled |
 | Orphaned processes | Run: `/opt/app-monitor/scripts/cleanup-processes.sh` |
 | Port conflict | Check: `lsof -i :5001` and `lsof -i :5002` |
-| Graceful shutdown timeout | Verify systemd timeout: `systemctl show app-monitor-backend@5001 \| grep TimeoutStopSec` |
+| Graceful shutdown timeout | Verify systemd timeout: `systemctl show app-monitor-backend@5001 | grep TimeoutStopSec` |
 | Health endpoint returns 503 | Instance is draining, wait ~30s or check if deployment failed |
 
 ### Debug Commands

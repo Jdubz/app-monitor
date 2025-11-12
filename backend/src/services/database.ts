@@ -9,7 +9,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // Use app-monitor.db (consolidated database)
-const DB_PATH = path.join(__dirname, '..', '..', 'data', 'app-monitor.db');
+// Support DATABASE_PATH env var for flexibility across environments
+const DB_PATH = process.env.DATABASE_PATH || path.join(__dirname, '..', '..', 'data', 'app-monitor.db');
 
 // Ensure data directory exists
 const dataDir = path.dirname(DB_PATH);

@@ -610,7 +610,10 @@ export class TaskExecutionService {
         // Mount git credentials for committing and pushing
         '-v', `${homeDir}/.gitconfig:/home/node/.gitconfig:ro`,  // Git config
         '-v', `${homeDir}/.git-credentials:/home/node/.git-credentials:ro`,  // Git credential store
-        '-v', `${homeDir}/.config/gh:/home/node/.config/gh:rw`,  // GitHub CLI auth (rw for state updates)
+        // TODO: Security improvement - consider using GITHUB_TOKEN env var with :ro mount instead
+        // Current: :rw needed for gh CLI state updates (caching, request metadata)
+        // Trade-off: Allows potential credential tampering if container compromised
+        '-v', `${homeDir}/.config/gh:/home/node/.config/gh:rw`,  // GitHub CLI auth
         this.getAgentDockerImage(agent),
         'sh', '-c',
         // Clone fresh repository, then copy credentials and run Codex
