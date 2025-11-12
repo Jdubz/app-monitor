@@ -460,36 +460,31 @@ describe('PR Workflow Integration', () => {
 
 ### GitHub API Query Frequency
 
-**Concern**: Querying GitHub for every PR detail increases API calls
+**Approach**: Query GitHub on-demand, no caching (aligns with design principle: "NEVER use in-memory storage")
 
-**Mitigation**:
-1. **Caching**: Use short-lived cache (1-5 minutes) for PR details
-2. **Batching**: Fetch multiple PRs in single GraphQL query
-3. **Webhooks**: Use webhook events to invalidate cache
-4. **Condition States**: Query conditions from DB, only fetch GitHub when needed
+**Design Decision**:
+- Query GitHub API directly when PR data is needed
+- No in-memory caching (violates design principles)
+- No SQLite caching initially (see analysis below)
+- Rely on pr_condition_states for boolean checks (no API call needed)
 
-**Example Caching**:
+**Mitigation Strategies**:
+1. **Batching**: Fetch multiple PRs in single GraphQL query when possible
+2. **Condition States**: Use pr_condition_states for boolean checks (ci_checks_passing, merge_eligible, etc.)
+3. **Smart Fetching**: Only fetch PR details when actually displaying to user
+4. **Webhook-Driven Updates**: pr_condition_states updated via webhooks, reducing need for polling
+
+**Implementation**:
 ```typescript
+// ✅ CORRECT - Query GitHub on-demand
 class GitHubPRService {
-  private cache = new Map<number, { data: PRStatus, expiresAt: number }>();
-  
-  async getPRStatus(prNumber: number, maxAge = 60000): Promise<PRStatus> {
-    const cached = this.cache.get(prNumber);
-    if (cached && cached.expiresAt > Date.now()) {
-      return cached.data;
-    }
-    
-    const data = await this.fetchPRStatusFromGitHub(prNumber);
-    this.cache.set(prNumber, {
-      data,
-      expiresAt: Date.now() + maxAge
+  async getPRStatus(prNumber: number): Promise<PRStatus> {
+    // Direct GitHub API call, no caching
+    return await this.octokit.pulls.get({
+      owner: this.owner,
+      repo: this.repo,
+      pull_number: prNumber
     });
-    
-    return data;
-  }
-  
-  invalidateCache(prNumber: number): void {
-    this.cache.delete(prNumber);
   }
 }
 ```
@@ -504,12 +499,144 @@ SELECT pr_url, pr_branch, pr_status FROM tasks WHERE id = ?;
 
 **After (Current but Requires API Call)**:
 ```typescript
-// 1 DB query + 1 GitHub API call
+// 1 DB query + 1 GitHub API call (no caching)
 const task = await db.query('SELECT pr_number FROM tasks WHERE id = ?', [taskId]);
-const prDetails = await github.getPR(task.pr_number); // Cached
+const prDetails = await github.getPR(task.pr_number); // Direct API call
 ```
 
-**Verdict**: Acceptable tradeoff - correctness over speed. Cache mitigates performance impact.
+**Verdict**: Acceptable tradeoff - correctness over speed. Simple implementation aligns with design principles.
+
+### SQLite Caching Analysis
+
+**Question**: Should we add a SQLite-based cache table for GitHub API responses?
+
+#### Option A: No Caching (Recommended)
+
+**Implementation**:
+```typescript
+// Query GitHub directly when needed
+async getPRDetails(prNumber: number) {
+  return await octokit.pulls.get({ pull_number: prNumber });
+}
+```
+
+**Pros**:
+- ✅ Simplest implementation (no cache management)
+- ✅ Always current data (no stale data issues)
+- ✅ Aligns with design principle (query source of truth)
+- ✅ No cache invalidation logic needed
+- ✅ No additional database table/schema
+- ✅ Lower code complexity
+
+**Cons**:
+- ❌ GitHub API call on every access
+- ❌ ~200-500ms latency per PR fetch
+
+**GitHub API Budget**:
+- Rate limit: 5000 calls/hour
+- Expected usage: 10-50 PR detail fetches/hour
+- Buffer: 99% of rate limit available
+- **Verdict**: Rate limit is NOT a concern
+
+#### Option B: SQLite Short-Lived Cache
+
+**Schema**:
+```sql
+CREATE TABLE github_api_cache (
+  cache_key TEXT PRIMARY KEY,  -- e.g., "pr:123" or "pr:123:comments"
+  response_json TEXT NOT NULL,
+  cached_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL  -- TTL: 30-60 seconds
+);
+
+CREATE INDEX idx_github_cache_expires ON github_api_cache(expires_at);
+```
+
+**Implementation**:
+```typescript
+async getPRDetails(prNumber: number, ttl = 60000) {
+  const cacheKey = `pr:${prNumber}`;
+  const now = Date.now();
+
+  // Check cache
+  const cached = db.query(
+    'SELECT response_json FROM github_api_cache WHERE cache_key = ? AND expires_at > ?',
+    [cacheKey, now]
+  );
+
+  if (cached) {
+    return JSON.parse(cached.response_json);
+  }
+
+  // Fetch from GitHub
+  const response = await octokit.pulls.get({ pull_number: prNumber });
+
+  // Store in cache
+  db.query(
+    'INSERT OR REPLACE INTO github_api_cache (cache_key, response_json, cached_at, expires_at) VALUES (?, ?, ?, ?)',
+    [cacheKey, JSON.stringify(response), now, now + ttl]
+  );
+
+  return response;
+}
+```
+
+**Pros**:
+- ✅ Reduces GitHub API calls by ~80-90% (for repeated accesses)
+- ✅ Faster response time for cached data (~5-10ms vs 200-500ms)
+- ✅ Respects design principle (SQLite, not in-memory)
+- ✅ Automatic expiration via TTL
+
+**Cons**:
+- ❌ Additional complexity: cache table, TTL management, cleanup
+- ❌ Stale data for TTL duration (30-60s)
+- ❌ Cache invalidation logic needed for webhook events
+- ❌ More code to test and maintain
+- ❌ Potential cache poisoning if GitHub data corrupted
+- ❌ Background cleanup job needed for expired entries
+
+**Cache Cleanup Required**:
+```typescript
+// Periodic cleanup of expired entries (every 5 minutes)
+setInterval(() => {
+  db.query('DELETE FROM github_api_cache WHERE expires_at < ?', [Date.now()]);
+}, 5 * 60 * 1000);
+```
+
+#### Complexity Analysis
+
+**What We'd Gain from SQLite Caching**:
+1. **Performance**: 80-90% reduction in GitHub API calls (for repeated views)
+   - Benefit: ~300ms faster for cached responses
+   - Reality: Most PR views are one-time, not repeated within 60s
+
+2. **API Rate Limit Buffer**: More headroom for bursts
+   - Current buffer: 99% (4950/5000 calls available)
+   - With cache: 99.8% (4990/5000 calls available)
+   - Gain: Negligible
+
+**What It Would Cost**:
+1. **Schema**: +1 table, +1 index, +1 migration
+2. **Code**: +50-100 lines cache management logic
+3. **Testing**: +5-10 test cases for cache behavior
+4. **Maintenance**: Cache invalidation on webhooks, cleanup jobs
+5. **Debugging**: Cache-related bugs harder to trace
+
+#### Recommendation: No SQLite Caching
+
+**Rationale**:
+1. **GitHub API rate limit is not a bottleneck** (99% headroom)
+2. **Most PR views are one-time** (user checks task, sees PR details, moves on)
+3. **Complexity cost outweighs benefit** (50-100 lines of code for minimal gain)
+4. **Webhook-driven pr_condition_states already reduces API calls** for boolean checks
+5. **Correctness > Speed** - Always current data is more valuable than 300ms savings
+
+**When to Revisit**:
+- If GitHub API rate limit becomes an issue (>4000 calls/hour sustained)
+- If users report slow PR detail loading (>1s latency)
+- If we add features that poll PR data frequently (e.g., real-time dashboard)
+
+**Current Decision**: Start with no caching, monitor GitHub API usage, add SQLite cache only if needed.
 
 ## Additional Recommendations (Nov 12, 2025)
 
@@ -804,15 +931,15 @@ const branch = prStatus.head.ref;  // Current
 
 **Impact Analysis**:
 - Additional GitHub API calls per task view: +1
-- Cache hit ratio (60s TTL): ~80% estimated
-- Net additional API calls: ~20% of task views
 - GitHub rate limit: 5000/hour (plenty of headroom)
+- Expected usage: ~10-50 task views per hour = 10-50 API calls/hour
+- Headroom: 99% of rate limit available
 
 **Mitigation Strategy**:
-1. Implement 60-second cache in GitHubPRService
-2. Use GraphQL batching for multiple PRs
-3. Invalidate cache on webhook events
-4. Rely on pr_condition_states for boolean checks (no API call)
+1. Use GraphQL batching for multiple PRs when needed
+2. Rely on pr_condition_states for boolean checks (no API call needed)
+3. Only fetch PR details when displaying to user (not on background tasks)
+4. Webhook-driven updates to pr_condition_states reduce polling needs
 
 ### Code Refactoring Estimates
 
@@ -834,13 +961,13 @@ const branch = prStatus.head.ref;  // Current
 ### Next Steps for Phase 2
 
 **Phase 2A: Core Backend Refactoring** (2-3 days)
-1. ✅ Add caching to GitHubPRService
-2. ✅ Update Task interface in taskQueue.sqlite.ts
-3. ✅ Refactor prWorkflowOrchestrator to only set pr_number
-4. ✅ Update githubWebhookHandler to use prConditionState
-5. ✅ Refactor BlockingIssue structure in prConditionState.service
-6. ✅ Update reviewCommentTracker to store only metadata
-7. ✅ Update qualityObservation.service to remove branch refs
+1. ✅ Update Task interface in taskQueue.sqlite.ts (remove 7 PR columns)
+2. ✅ Refactor prWorkflowOrchestrator to only set pr_number
+3. ✅ Update githubWebhookHandler to use prConditionState
+4. ✅ Refactor BlockingIssue structure in prConditionState.service (remove embedded GitHub data)
+5. ✅ Update reviewCommentTracker to store only metadata (remove body, file_path, reviewer)
+6. ✅ Update qualityObservation.service to remove branch refs
+7. ✅ Add on-demand GitHub query helpers to GitHubPRService
 8. ✅ Run tests to identify remaining references
 
 **Phase 2B: Migration Creation** (0.5-1 day)
