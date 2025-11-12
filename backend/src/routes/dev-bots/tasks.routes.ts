@@ -58,11 +58,11 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const tasks = await devBotsManager.getTasks();
       if (tasks) {
-        res.json({
+        res.json({ data: {
           pending: mapTasksToContract(tasks.pending),
           active: mapTasksToContract(tasks.active),
           completed: mapTasksToContract(tasks.completed),
-        });
+        }});
       } else {
         res.status(503).json({
           error: 'Dev-Bots coordinator is not available',
@@ -135,7 +135,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         history: buildTaskHistoryEvents(executions),
       };
 
-      res.json(detail);
+      res.json({ data: detail });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -213,7 +213,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         });
 
         // Return stubbed success response
-        return res.json({
+        return res.json({ data: {
           task: {
             id: `stub-${Date.now()}-${Math.random().toString(36).substring(7)}`,
             type,
@@ -230,7 +230,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
             suggestions: []
           },
           message: 'Task creation stubbed (non-production environment)'
-        });
+        }});
       }
 
       // V3 Template Validation (PE-API-VALIDATION-001)
@@ -437,7 +437,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         devBotsManager.getQueueMetrics(),
       ]);
       const summary = buildQueueSummary(tasks, metrics);
-      res.json(summary);
+      res.json({ data: summary });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -486,7 +486,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const { type, ...taskData } = req.body;
       const result = devBotsManager.validateTaskData(taskData, type || 'general');
-      res.json(result);
+      res.json({ data: result });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -549,7 +549,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         stdout: stdoutDescriptor,
         stderr: stderrDescriptor,
       };
-      res.json(response);
+      res.json({ data: response });
     } catch (error) {
       logger.error({
         category: 'api',

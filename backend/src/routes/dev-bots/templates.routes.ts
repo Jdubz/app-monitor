@@ -43,7 +43,7 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/guidelines', (_req: Request, res: Response) => {
     try {
       const guidelines = devBotsManager.getTaskGuidelines();
-      res.json({ data: { guidelines } });
+      res.json({ success: true, data: { guidelines } });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -66,7 +66,7 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const { taskType } = req.params;
       const guidelines = devBotsManager.getTaskGuidelines(taskType);
-      res.json({ data: { guidelines } });
+      res.json({ success: true, data: { guidelines } });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -89,7 +89,7 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const { taskType } = req.params;
       const example = devBotsManager.getTaskExample(taskType);
-      res.json({ data: { examples: [example] } });
+      res.json({ success: true, data: { examples: [example] } });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -112,7 +112,7 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const { taskType } = req.params;
       const checklist = devBotsManager.getTaskChecklist(taskType);
-      res.json({ data: { checklist } });
+      res.json({ success: true, data: { checklist } });
     } catch (error) {
       logger.error({
         category: 'api',

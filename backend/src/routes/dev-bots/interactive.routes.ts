@@ -33,7 +33,7 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
    */
   router.get('/interactive/session', (_req: Request, res: Response) => {
     const payload: DevBotsInteractiveSessionStateResponse['data'] = buildInteractiveSessionState(devBotsManager);
-    res.json({ data: { success: true, data: payload }});
+    res.json({ data: payload });
   });
 
   /**

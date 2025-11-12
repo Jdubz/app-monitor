@@ -42,7 +42,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
             completed: mapTasksToContract(status.tasks.completed),
           },
         };
-        res.json(normalizedStatus);
+        res.json({ data: normalizedStatus });
       } else {
         res.status(503).json({
           error: 'Dev-Bots coordinator is not available',
@@ -68,10 +68,10 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
    * Get health check status
    */
   router.get('/health', (_req: Request, res: Response) => {
-    res.json({
+    res.json({ data: {
       healthy: devBotsManager.isHealthy(),
       status: devBotsManager.isHealthy() ? 'healthy' : 'unhealthy'
-    });
+    }});
   });
 
   /**
