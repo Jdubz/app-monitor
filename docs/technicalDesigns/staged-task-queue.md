@@ -17,7 +17,7 @@
 
 **What**: Chain-aware task scheduling that separates implementation tasks (new chains) from follow-up tasks (REVIEW/FIX/etc), enforcing concurrency limits to prevent dev-bot pool saturation.
 
-**Why**: Prevents FIFO queue from allowing multiple implementations to start simultaneously, which would create too many parallel PRs and overwhelm the review pipeline.
+**Why**: Current FIFO queue allows multiple implementations to start simultaneously, creating too many parallel PRs and overwhelming the review pipeline. This system prevents that by enforcing concurrency limits.
 
 **Current Status**: ✅ **FULLY IMPLEMENTED AND DEPLOYED**. All phases complete:
 - ✅ Schema & migrations (012_staged_queue.sql, 013-015 cleanup)

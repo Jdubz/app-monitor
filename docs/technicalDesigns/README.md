@@ -21,7 +21,7 @@ This directory contains consolidated technical design documents for major app-mo
 | Document | Status | Progress | Description |
 |----------|--------|----------|-------------|
 | [Staged Task Queue](staged-task-queue.md) | 🟢 **COMPLETE** | **100%** | Chain-aware scheduling with concurrency caps ✅ |
-| [PR Self-Healing & Resilience](pr-self-healing-and-resilience.md) | 🟡 In Progress | 85% | Continuous REVIEW→FIX→COMPLETE flow for PRs |
+| [PR Self-Healing & Resilience](pr-self-healing-and-resilience.md) | 🟡 In Progress | 40% | Continuous REVIEW→FIX→COMPLETE flow for PRs |
 
 ### Priority 1 (High Impact)
 

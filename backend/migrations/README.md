@@ -154,6 +154,8 @@ Implements chain-aware task scheduling that separates implementation tasks (new 
 
 Follows design principle: "Any information available from GitHub should NOT be stored in our DB"
 
+> This avoids data staleness, reduces unnecessary storage, and ensures GitHub remains the source of truth. See [Database Migrations Guide](../../docs/database-migrations.md) for more details.
+
 **Columns Removed**:
 - `pr_url` - Redundant (can construct from pr_number)
 - `pr_branch` - Redundant (available via GitHub API)
