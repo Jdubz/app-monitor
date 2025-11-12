@@ -7,7 +7,7 @@
 
 import { BaseEvaluator } from './baseEvaluator.js';
 import type { PRStatus } from '../../githubPR.service.js';
-import type { ConditionEvaluation, BlockingIssue } from '../types.js';
+import type { ConditionEvaluation } from '../types.js';
 import { generateFingerprintFromList } from '../utils.js';
 import { logger } from '../../../utils/logger.js';
 
