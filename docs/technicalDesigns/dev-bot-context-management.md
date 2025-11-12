@@ -1,8 +1,34 @@
 # Dev-Bot Context Management Design
 
-**Author:** Codex Agent (per architecture owner direction)
-**Date:** November 12, 2025
-**Status:** Draft
+## Document Metadata
+
+| Field | Value |
+|-------|-------|
+| **Author** | Codex Agent (per architecture owner direction) |
+| **Date** | November 12, 2025 |
+| **Status** | 🟡 Draft |
+| **Priority** | P2 |
+| **Dependencies** | Staged Task Queue (P0), Dev-Bot Foundational Upgrades (P1) |
+| **Last Updated** | November 12, 2025 |
+
+## Quick Reference
+
+**What**: Provide dev-bots with accurate, up-to-date context bundles (documentation, operations guides, PR workflows) dynamically generated from repo state and injected into containers at task launch.
+
+**Why**: Eliminates stale context, manual sync work, and improves dev-bot accuracy by ensuring agents always have current system knowledge.
+
+**Implementation Status**: Not started (pending P0/P1 dependencies)
+
+## Table of Contents
+
+1. [Vision](#vision)
+2. [Requirements](#requirements)
+3. [Context Domains](#context-domains)
+4. [Architecture](#architecture)
+5. [Task Flow](#task-flow)
+6. [Success Criteria](#success-criteria)
+7. [Testing Strategy](#testing-strategy)
+8. [Related Files](#related-files)
 
 ## Vision
 Provide every dev-bot task with accurate, up-to-date context (documentation, operational guides, deployment details, PR workflows, failure recovery, self-healing patterns, learning data, dev-monitor UI behavior, etc.) inside the container at task launch—without relying on stale, manually curated snippets.
@@ -69,9 +95,113 @@ Provide every dev-bot task with accurate, up-to-date context (documentation, ope
 4. How will work-target awareness integrate in v2 (different repos, envs)?
 5. Should dev-monitor expose raw stored context via the task detail view or only summarized snippets?
 
+## Success Criteria
+
+### Phase 1: Foundation (MVP)
+- ✅ Context builder CLI implemented and runnable
+- ✅ At least 3 domain recipes defined (deployment, PR workflow, failure recovery)
+- ✅ Context bundles generated and cached per git commit hash
+- ✅ TaskExecutionService mounts context bundles into containers
+- ✅ SQLite schema updated with `task_context` and `task_artifacts` tables
+
+### Phase 2: Integration
+- ✅ REVIEW tasks inherit context from previous attempts
+- ✅ Dev-monitor displays context sources per task
+- ✅ API endpoints accept context payloads per APP_MONITOR_STABILIZATION_PLAN schema
+- ✅ Context invalidation works correctly when source files change
+
+### Phase 3: Optimization
+- ✅ Context bundle size stays under 100KB per domain
+- ✅ Generation time < 5 seconds for full rebuild
+- ✅ Cache hit rate > 80% for repeated task types
+- ✅ Work-target awareness implemented for multi-repo support
+
+### Acceptance Criteria
+1. Dev-bots can reference context files at `/workspace/context/<domain>.json`
+2. Context accuracy measured: 0 stale reference reports in first month
+3. Manual context sync work eliminated (measured by git commits to docs)
+4. Agent prompt effectiveness improves (measured by task success rate)
+
+## Testing Strategy
+
+### Unit Tests
+- Context builder CLI
+  - Recipe parsing and validation
+  - Content extraction from markdown/code
+  - Transform functions (markdown → JSON, code snippet extraction)
+  - Cache invalidation logic
+
+- Context Bundle Validation
+  - Schema validation for generated bundles
+  - Size limit enforcement
+  - Required field presence checks
+
+### Integration Tests
+- End-to-end context flow
+  - Task creation → context generation → container mount
+  - Context persistence to SQLite
+  - Context retrieval in REVIEW chains
+
+- Cache Behavior
+  - Cache hit/miss scenarios
+  - Git commit hash-based invalidation
+  - Concurrent access handling
+
+### System Tests
+- Performance benchmarks
+  - Generation time for all domains
+  - Bundle size measurements
+  - Cache performance metrics
+
+- Dev-monitor integration
+  - Context display in task detail view
+  - Chain context visualization
+  - Context source debugging tools
+
+### Test Coverage Targets
+- Context builder: 90%+ coverage
+- TaskExecutionService context injection: 85%+ coverage
+- API context acceptance: 80%+ coverage
+
+## Related Files
+
+### Implementation Files
+- `scripts/build-context.ts` - Context builder CLI (to be created)
+- `backend/src/services/taskExecution.service.ts` - Container context injection
+- `backend/src/services/contextBuilder.ts` - Core context generation logic (to be created)
+- `backend/src/services/database.ts` - SQLite schema for task_context
+
+### Configuration Files
+- `config/context-recipes/*.yaml` - Domain recipe definitions (to be created)
+- `backend/tsconfig.json` - TypeScript configuration
+
+### Test Files
+- `backend/src/services/__tests__/contextBuilder.test.ts` (to be created)
+- `backend/src/services/__tests__/taskExecution.context.test.ts` (to be created)
+
+### Documentation Dependencies
+- `docs/plans/DEV_BOT_PIPELINE_COMPLETION_PLAN_REVISED.md` - Storage schema requirements
+- `docs/plans/PRIORITIZED_FEATURE_ROADMAP.md` - API requirements
+- `docs/plans/APP_MONITOR_STABILIZATION_PLAN.md` - Context submission schema
+- `docs/plans/ERROR_DETECTION_AND_RECOVERY_ENHANCEMENT.md` - REVIEW chain requirements
+- `docs/plans/DEV_BOT_WORK_TARGET_PRODUCTION_PLAN.md` - Work-target requirements
+- `docs/architecture/dev-bots-overview.md` - Agent architecture overview
+
+### Related Designs
+- `docs/technicalDesigns/dev-bot-foundational-upgrades.md` - Storage infrastructure
+- `docs/technicalDesigns/error-detection-and-recovery-design.md` - REVIEW chain integration
+- `docs/technicalDesigns/staged-task-queue.md` - Task metadata requirements
+
 ## Next Steps
 1. Define initial recipes covering critical domains (deployment, PR workflow, failure recovery, dev-monitor).
 2. Implement context builder CLI + caching.
 3. Update TaskExecutionService to invoke builder and mount context bundles.
 4. Extend REVIEW pipeline to record chain context artifacts.
 5. Instrument dev-monitor to display context sources per task/chain.
+
+## Version History
+
+| Version | Date | Author | Changes |
+|---------|------|--------|---------|
+| 1.1 | 2025-11-12 | Claude Code | Added metadata, success criteria, testing strategy, related files |
+| 1.0 | 2025-11-12 | Codex Agent | Initial design document |

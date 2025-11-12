@@ -252,6 +252,14 @@ export class DevBotsDatabase {
         'utf-8'
       ));
     });
+
+    // Migration 011: Add Chain Tracking for PR Fix Tasks
+    this.applyMigration('011_add_chain_tracking', () => {
+      this.db.exec(fs.readFileSync(
+        path.join(__dirname, '..', '..', 'migrations', '011_add_chain_tracking.sql'),
+        'utf-8'
+      ));
+    });
   }
 
   private applyMigration(name: string, migration: () => void): void {

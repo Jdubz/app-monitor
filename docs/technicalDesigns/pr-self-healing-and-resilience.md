@@ -1,13 +1,39 @@
 # PR Self-Healing & Resilience Design
 
-Source Plans:
-- docs/plans/CONTINUOUS_PR_IMPLEMENTATION_ROADMAP.md
-- docs/plans/CONTINUOUS_PR_SELF_HEALING.md
-- docs/plans/PR_WORKFLOW_IMPLEMENTATION.md
-- docs/plans/PR_TRACKING_SYSTEM_RESILIENCE_PLAN.md
-- docs/plans/STUCK_PRODUCTION_PRS_AUTOMATION_PLAN.md
+## Document Metadata
 
-Status: Phase 1-2 complete (quality gates, webhook ingestion). Self-healing, auto-merge, heartbeat/backup workstreams remain outstanding.
+| Field | Value |
+|-------|-------|
+| **Status** | 🟢 Phase 1-2 Complete, 🟡 Phase 3-5 In Progress |
+| **Priority** | P0 |
+| **Dependencies** | Staged Task Queue (must complete first) |
+| **Last Updated** | November 12, 2025 |
+| **Implementation Progress** | 40% (2 of 5 phases) |
+
+## Quick Reference
+
+**What**: Continuous REVIEW→FIX→COMPLETE flow for every PR with auto-merge, Copilot gating, and infrastructure resilience (webhook heartbeat, backups, zero-downtime deploys).
+
+**Why**: Ensures PRs automatically heal themselves by detecting issues (conflicts, failed checks, Copilot feedback, stale branches) and spawning fix tasks, enabling autonomous development workflow.
+
+**Current Status**: Quality gates and webhook ingestion working. Self-healing engine, auto-merge, and infrastructure hardening in progress.
+
+## Source Plans
+- `docs/plans/CONTINUOUS_PR_IMPLEMENTATION_ROADMAP.md`
+- `docs/plans/CONTINUOUS_PR_SELF_HEALING.md`
+- `docs/plans/PR_WORKFLOW_IMPLEMENTATION.md`
+- `docs/plans/PR_TRACKING_SYSTEM_RESILIENCE_PLAN.md`
+- `docs/plans/STUCK_PRODUCTION_PRS_AUTOMATION_PLAN.md`
+
+## Table of Contents
+
+1. [Objectives](#objectives)
+2. [Requirements](#requirements)
+3. [Architecture Considerations](#architecture-considerations)
+4. [Implementation Steps](#implementation-steps)
+5. [Success Criteria](#success-criteria)
+6. [Testing Strategy](#testing-strategy)
+7. [Related Files](#related-files)
 
 ## Objectives
 1. Implement the continuous REVIEW → FIX → COMPLETE flow for every PR, honoring the master design intent (review depth, Copilot involvement, blocked chains, human alerts).
@@ -45,7 +71,136 @@ Outstanding items from the source plans:
 - How aggressively should delegated tasks be throttled in parallel?
 - What additional manual overrides are required in dev-monitor (force merge, cancel chain, escalate)?
 
+## Success Criteria
+
+### Phase 1: Quality Gates (✅ Complete)
+- ✅ PR condition state tracking (conflicts, CI checks, reviews, branch currency)
+- ✅ Webhook ingestion for PR events
+- ✅ Database schema for PR tracking
+
+### Phase 2: Self-Healing Engine (🟡 In Progress)
+- ⏳ Issue fingerprinting detects PR problems automatically
+- ⏳ REVIEW tasks spawned with structured context per issue type
+- ⏳ FIX tasks created with chain depth tracking
+- ⏳ Maximum 4 automated fix attempts before escalation
+
+### Phase 3: Auto-Merge Orchestration (⏳ Pending)
+- ⏳ Gate enforcement (all conditions pass, Copilot approved, delegated PRs merged)
+- ⏳ Automatic merge to main when gates satisfied
+- ⏳ Post-merge cleanup (close tasks, archive metrics)
+- ⏳ Retry logic with exponential backoff
+
+### Phase 4: Infrastructure Resilience (⏳ Pending)
+- ⏳ Webhook heartbeat metrics tracked
+- ⏳ Backup automation running every 5 minutes
+- ⏳ Restore scripts tested and verified
+- ⏳ Zero-downtime deployment working in production
+
+### Phase 5: Observability & Controls (⏳ Pending)
+- ⏳ Dev-monitor visualizes PR chains
+- ⏳ Manual controls for stuck PRs
+- ⏳ Alerting for blocked chains
+- ⏳ Delegated task monitoring
+
+### Acceptance Criteria
+1. **Autonomy**: 80%+ of PRs auto-merge without human intervention
+2. **Reliability**: < 1% of PRs stuck in broken state for > 1 hour
+3. **Visibility**: All PR issues surfaced in dev-monitor within 5 minutes
+4. **Resilience**: 0 webhook data loss, RPO < 5 minutes
+5. **Performance**: Auto-merge latency < 10 minutes after final condition passes
+
+## Testing Strategy
+
+### Unit Tests
+- **PRConditionStateService**
+  - Condition evaluation logic (conflicts, CI checks, reviews)
+  - State transitions (pending → passing → failing)
+  - Issue fingerprinting accuracy
+
+- **PRSelfHealingEngine** (to be created)
+  - Issue detection algorithms
+  - Task spawning logic
+  - Chain depth tracking
+
+- **AutoMergeController** (to be created)
+  - Gate validation logic
+  - Merge execution with retries
+  - Cleanup procedures
+
+### Integration Tests
+- End-to-end PR flow
+  - Create PR → detect issue → spawn fix → verify → auto-merge
+  - Copilot review integration
+  - Delegated PR workflow
+
+- Webhook reliability
+  - Webhook ingestion with retries
+  - Heartbeat monitoring
+  - Backup/restore cycle
+
+### System Tests
+- Production simulation
+  - Multiple concurrent PRs
+  - Various failure modes (conflicts, CI failures, stale branches)
+  - Resource limits (max concurrent chains)
+
+- Resilience testing
+  - Webhook service downtime
+  - Database recovery from backup
+  - Zero-downtime deployment validation
+
+### Test Coverage Targets
+- PRConditionStateService: 85%+ (current)
+- PRSelfHealingEngine: 90%+ (target)
+- AutoMergeController: 90%+ (target)
+- Webhook reliability: 95%+ (target)
+
+## Related Files
+
+### Implementation Files (Existing)
+- `backend/src/services/prConditionState.service.ts` - PR condition tracking
+- `backend/src/services/prMonitor.service.ts` - PR monitoring
+- `backend/src/services/github.service.ts` - GitHub API integration
+- `backend/src/routes/github-webhooks.routes.ts` - Webhook ingestion
+- `backend/src/services/database.ts` - PR storage schema
+
+### Implementation Files (To Be Created)
+- `backend/src/services/prSelfHealing.service.ts` - Self-healing engine
+- `backend/src/services/autoMerge.service.ts` - Auto-merge orchestration
+- `backend/src/services/webhookHeartbeat.service.ts` - Heartbeat monitoring
+- `scripts/production/backup-pr-state.sh` - Backup automation
+- `scripts/production/restore-pr-state.sh` - Restore procedures
+
+### Test Files
+- `backend/src/services/prConditionState.service.test.ts` - Existing tests
+- `backend/src/services/prSelfHealing.service.test.ts` (to be created)
+- `backend/src/services/autoMerge.service.test.ts` (to be created)
+- `tests/integration/pr-workflow.test.ts` (to be created)
+
+### Configuration Files
+- `backend/.env` - Environment configuration
+- `scripts/production/systemd/app-monitor-pr-worker.service` - PR worker service
+- `config/pr-healing-rules.yaml` (to be created) - Self-healing rule definitions
+
+### Documentation Dependencies
+- `docs/architecture/automatic-failure-recovery.md` - Recovery architecture
+- `docs/plans/CONTINUOUS_PR_IMPLEMENTATION_ROADMAP.md` - Implementation roadmap
+- `docs/guides/GITHUB_WEBHOOKS.md` - Webhook setup guide
+- `docs/guides/PRODUCTION_DEPLOYMENT.md` - Deployment procedures
+
+### Related Designs
+- `docs/technicalDesigns/staged-task-queue.md` - Task scheduling dependency
+- `docs/technicalDesigns/error-detection-and-recovery-design.md` - REVIEW chain patterns
+- `docs/technicalDesigns/app-monitor-resilience-and-deployments.md` - Zero-downtime deploys
+
 ## Next Actions
 - Review this consolidated design with the architecture owner responsible for PR workflow.
 - Create execution tickets for each step above, ensuring dependencies (staged queue, context bundles) are satisfied.
 - Retire or archive redundant plan docs once implementation begins under this design.
+
+## Version History
+
+| Version | Date | Author | Changes |
+|---------|------|--------|---------|
+| 1.1 | 2025-11-12 | Claude Code | Added metadata, success criteria, testing strategy, related files |
+| 1.0 | 2025-11-12 | Original Author | Initial consolidated design |

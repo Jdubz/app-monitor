@@ -11,6 +11,15 @@ import { createClaudeWorkersRouter } from './dev-bots.routes.js';
 import { logger } from '../utils/logger.js';
 import type { DevBotsManager } from '../services/devBotsManager.js';
 
+// Mock the config module - default to production to allow tasks to be created
+vi.mock('../config.js', () => ({
+  config: {
+    nodeEnv: 'production',
+    port: 5000,
+    corsOrigin: 'http://localhost:5174',
+  }
+}));
+
 // Mock the logger
 vi.mock('../utils/logger.js', () => ({
   logger: {
@@ -593,6 +602,650 @@ describe('Dev-Bots Routes - Task Quality Validation', () => {
         expect(paths).toContain('/tasks/:id/context');
         expect(paths).toContain('/tasks/:id/runs');
         expect(paths).toContain('/tasks/:id/runs/:runId');
+      });
+    });
+  });
+});
+
+describe('Dev-Bots Routes - Environment-Based Task Creation Blocking', () => {
+  let mockDevBotsManager: DevBotsManager;
+  let router: any;
+  let mockRequest: Partial<Request>;
+  let mockResponse: Partial<Response>;
+  let responseJson: any;
+
+  describe('Non-Production Environment', () => {
+    beforeEach(async () => {
+      // Reset all mocks
+      vi.clearAllMocks();
+      responseJson = {};
+
+      // Mock config as development environment
+      vi.doMock('../config.js', () => ({
+        config: {
+          nodeEnv: 'development',
+          port: 5000,
+          corsOrigin: 'http://localhost:5174',
+        }
+      }));
+
+      // Re-import to get the mocked config
+      const { createClaudeWorkersRouter: createRouter } = await import('./dev-bots.routes.js');
+
+      // Mock DevBotsManager
+      mockDevBotsManager = {
+        addTask: vi.fn().mockResolvedValue({
+          task: {
+            id: 'task-123',
+            type: 'implementation',
+            title: 'Test Task',
+            status: 'pending',
+          },
+          validation: { isValid: true, warnings: [], suggestions: [] }
+        }),
+        getValidAgents: vi.fn().mockReturnValue(['backend', 'frontend', 'fullstack'])
+      } as any;
+
+      // Create router with mocked manager
+      router = createRouter(mockDevBotsManager);
+
+      // Mock response
+      mockResponse = {
+        status: vi.fn().mockReturnThis(),
+        json: vi.fn().mockImplementation((data) => {
+          responseJson = data;
+          return mockResponse;
+        })
+      };
+    });
+
+    it('should block task creation and return stubbed response', async () => {
+      mockRequest = {
+        body: {
+          type: 'implementation',
+          title: 'Test Task from Dev-Bot',
+          description: 'This task should be blocked in development',
+          acceptanceCriteria: ['Task should work correctly'],
+        }
+      };
+
+      const postTasksRoute = router.stack.find((layer: any) =>
+        layer.route?.path === '/tasks' && layer.route.methods.post
+      );
+
+      if (postTasksRoute) {
+        await postTasksRoute.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
+      }
+
+      // Verify warning was logged
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          category: 'api',
+          action: 'task_creation_blocked_non_production',
+          message: expect.stringContaining('development'),
+        })
+      );
+
+      // Verify addTask was NOT called
+      expect(mockDevBotsManager.addTask).not.toHaveBeenCalled();
+
+      // Verify stubbed response structure
+      expect(responseJson.success).toBe(true);
+      expect(responseJson.data.task).toBeDefined();
+      expect(responseJson.data.task.stubbed).toBe(true);
+      expect(responseJson.data.task.id).toMatch(/^stub-/);
+      expect(responseJson.data.task.reason).toContain('non-production');
+      expect(responseJson.data.message).toContain('stubbed');
+    });
+
+    it('should include warning in validation response', async () => {
+      mockRequest = {
+        body: {
+          type: 'bug',
+          title: 'Critical Bug Fix',
+          description: 'Fix production bug',
+          acceptanceCriteria: ['Bug is fixed'],
+        }
+      };
+
+      const postTasksRoute = router.stack.find((layer: any) =>
+        layer.route?.path === '/tasks' && layer.route.methods.post
+      );
+
+      if (postTasksRoute) {
+        await postTasksRoute.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
+      }
+
+      // Verify validation warnings
+      expect(responseJson.data.validation.warnings).toBeDefined();
+      expect(responseJson.data.validation.warnings.length).toBeGreaterThan(0);
+      expect(responseJson.data.validation.warnings[0]).toContain('disabled');
+    });
+
+    it('should still validate required fields before blocking', async () => {
+      mockRequest = {
+        body: {
+          type: 'implementation',
+          // Missing title, description, and acceptanceCriteria
+        }
+      };
+
+      const postTasksRoute = router.stack.find((layer: any) =>
+        layer.route?.path === '/tasks' && layer.route.methods.post
+      );
+
+      if (postTasksRoute) {
+        await postTasksRoute.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
+      }
+
+      // Should fail validation before reaching environment check
+      expect(mockResponse.status).toHaveBeenCalledWith(400);
+      expect(mockDevBotsManager.addTask).not.toHaveBeenCalled();
+    });
+
+    it('should still validate agent before blocking', async () => {
+      mockRequest = {
+        body: {
+          type: 'implementation',
+          title: 'Test Task',
+          description: 'Test description',
+          acceptanceCriteria: ['Should work'],
+          assignedAgent: 'non-existent-agent',
+        }
+      };
+
+      const postTasksRoute = router.stack.find((layer: any) =>
+        layer.route?.path === '/tasks' && layer.route.methods.post
+      );
+
+      if (postTasksRoute) {
+        await postTasksRoute.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
+      }
+
+      // Should fail agent validation before reaching environment check
+      expect(mockResponse.status).toHaveBeenCalledWith(400);
+      expect(mockDevBotsManager.addTask).not.toHaveBeenCalled();
+    });
+
+    it('should block with correct task details in stubbed response', async () => {
+      mockRequest = {
+        body: {
+          type: 'refactor',
+          title: 'Code Refactoring',
+          description: 'Refactor legacy code',
+          acceptanceCriteria: ['Code is cleaner', 'Tests still pass'],
+        }
+      };
+
+      const postTasksRoute = router.stack.find((layer: any) =>
+        layer.route?.path === '/tasks' && layer.route.methods.post
+      );
+
+      if (postTasksRoute) {
+        await postTasksRoute.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
+      }
+
+      // Verify task details are preserved in stub
+      const { task } = responseJson.data;
+      expect(task.type).toBe('refactor');
+      expect(task.title).toBe('Code Refactoring');
+      expect(task.description).toBe('Refactor legacy code');
+      expect(task.status).toBe('pending');
+      expect(task.createdAt).toBeDefined();
+    });
+
+    it('should return HTTP 200 status for stubbed response', async () => {
+      mockRequest = {
+        body: {
+          type: 'feature',
+          title: 'New Feature',
+          description: 'Add new feature',
+          acceptanceCriteria: ['Feature works'],
+        }
+      };
+
+      const postTasksRoute = router.stack.find((layer: any) =>
+        layer.route?.path === '/tasks' && layer.route.methods.post
+      );
+
+      if (postTasksRoute) {
+        await postTasksRoute.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
+      }
+
+      // Should return 200, not 400 or 500
+      expect(mockResponse.status).not.toHaveBeenCalled();
+      expect(responseJson.success).toBe(true);
+    });
+
+    it('should generate unique stub IDs', async () => {
+      const stubIds: string[] = [];
+
+      for (let i = 0; i < 3; i++) {
+        mockRequest = {
+          body: {
+            type: 'implementation',
+            title: `Test Task ${i}`,
+            description: 'Test description',
+            acceptanceCriteria: ['Works'],
+          }
+        };
+
+        const postTasksRoute = router.stack.find((layer: any) =>
+          layer.route?.path === '/tasks' && layer.route.methods.post
+        );
+
+        if (postTasksRoute) {
+          await postTasksRoute.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
+        }
+
+        stubIds.push(responseJson.data.task.id);
+      }
+
+      // All IDs should be unique
+      const uniqueIds = new Set(stubIds);
+      expect(uniqueIds.size).toBe(3);
+
+      // All should match stub pattern
+      stubIds.forEach(id => {
+        expect(id).toMatch(/^stub-\d+-[a-z0-9]+$/);
+      });
+    });
+
+    it('should log complete warning structure with all details', async () => {
+      mockRequest = {
+        body: {
+          type: 'bug',
+          title: 'Critical Bug',
+          description: 'Fix critical issue',
+          acceptanceCriteria: ['Bug resolved'],
+        }
+      };
+
+      const postTasksRoute = router.stack.find((layer: any) =>
+        layer.route?.path === '/tasks' && layer.route.methods.post
+      );
+
+      if (postTasksRoute) {
+        await postTasksRoute.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
+      }
+
+      // Verify complete logger structure
+      expect(logger.warn).toHaveBeenCalledWith({
+        category: 'api',
+        action: 'task_creation_blocked_non_production',
+        message: 'Task creation blocked in development environment',
+        details: {
+          environment: 'development',
+          taskType: 'bug',
+          taskTitle: 'Critical Bug',
+          note: 'Dev-bots can only create tasks in production to prevent recursive spawning'
+        }
+      });
+    });
+
+    it('should block all task types consistently', async () => {
+      const taskTypes = ['implementation', 'bug', 'feature', 'refactor', 'documentation'];
+
+      for (const type of taskTypes) {
+        vi.clearAllMocks();
+
+        mockRequest = {
+          body: {
+            type,
+            title: `${type} task`,
+            description: `Description for ${type}`,
+            acceptanceCriteria: ['Completed'],
+          }
+        };
+
+        const postTasksRoute = router.stack.find((layer: any) =>
+          layer.route?.path === '/tasks' && layer.route.methods.post
+        );
+
+        if (postTasksRoute) {
+          await postTasksRoute.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
+        }
+
+        // All task types should be blocked
+        expect(mockDevBotsManager.addTask).not.toHaveBeenCalled();
+        expect(responseJson.data.task.stubbed).toBe(true);
+      }
+    });
+
+    it('should include API response wrapper format', async () => {
+      mockRequest = {
+        body: {
+          type: 'implementation',
+          title: 'Test',
+          description: 'Test task',
+          acceptanceCriteria: ['Done'],
+        }
+      };
+
+      const postTasksRoute = router.stack.find((layer: any) =>
+        layer.route?.path === '/tasks' && layer.route.methods.post
+      );
+
+      if (postTasksRoute) {
+        await postTasksRoute.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
+      }
+
+      // Verify standard API wrapper format
+      expect(responseJson).toHaveProperty('success', true);
+      expect(responseJson).toHaveProperty('data');
+      expect(responseJson.data).toHaveProperty('task');
+      expect(responseJson.data).toHaveProperty('validation');
+      expect(responseJson.data).toHaveProperty('message');
+    });
+  });
+
+  describe('Staging Environment', () => {
+    beforeEach(async () => {
+      vi.clearAllMocks();
+      responseJson = {};
+
+      // Mock config as staging environment
+      vi.doMock('../config.js', () => ({
+        config: {
+          nodeEnv: 'staging',
+          port: 5000,
+          corsOrigin: 'http://localhost:5174',
+        }
+      }));
+
+      const { createClaudeWorkersRouter: createRouter } = await import('./dev-bots.routes.js');
+
+      mockDevBotsManager = {
+        addTask: vi.fn().mockResolvedValue({
+          task: { id: 'task-123', type: 'test', title: 'Test' },
+          validation: { isValid: true, warnings: [], suggestions: [] }
+        }),
+        getValidAgents: vi.fn().mockReturnValue(['backend'])
+      } as any;
+
+      router = createRouter(mockDevBotsManager);
+
+      mockResponse = {
+        status: vi.fn().mockReturnThis(),
+        json: vi.fn().mockImplementation((data) => {
+          responseJson = data;
+          return mockResponse;
+        })
+      };
+    });
+
+    it('should block task creation in staging environment', async () => {
+      mockRequest = {
+        body: {
+          type: 'implementation',
+          title: 'Staging Test',
+          description: 'Test in staging',
+          acceptanceCriteria: ['Works'],
+        }
+      };
+
+      const postTasksRoute = router.stack.find((layer: any) =>
+        layer.route?.path === '/tasks' && layer.route.methods.post
+      );
+
+      if (postTasksRoute) {
+        await postTasksRoute.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
+      }
+
+      // Verify blocking in staging
+      expect(mockDevBotsManager.addTask).not.toHaveBeenCalled();
+      expect(responseJson.data.task.stubbed).toBe(true);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('staging')
+        })
+      );
+    });
+  });
+
+  describe('Test Environment', () => {
+    beforeEach(async () => {
+      vi.clearAllMocks();
+      responseJson = {};
+
+      // Mock config as test environment
+      vi.doMock('../config.js', () => ({
+        config: {
+          nodeEnv: 'test',
+          port: 5000,
+          corsOrigin: 'http://localhost:5174',
+        }
+      }));
+
+      const { createClaudeWorkersRouter: createRouter } = await import('./dev-bots.routes.js');
+
+      mockDevBotsManager = {
+        addTask: vi.fn().mockResolvedValue({
+          task: { id: 'task-123', type: 'test', title: 'Test' },
+          validation: { isValid: true, warnings: [], suggestions: [] }
+        }),
+        getValidAgents: vi.fn().mockReturnValue(['backend'])
+      } as any;
+
+      router = createRouter(mockDevBotsManager);
+
+      mockResponse = {
+        status: vi.fn().mockReturnThis(),
+        json: vi.fn().mockImplementation((data) => {
+          responseJson = data;
+          return mockResponse;
+        })
+      };
+    });
+
+    it('should block task creation in test environment', async () => {
+      mockRequest = {
+        body: {
+          type: 'implementation',
+          title: 'Test Environment Task',
+          description: 'Test in test env',
+          acceptanceCriteria: ['Works'],
+        }
+      };
+
+      const postTasksRoute = router.stack.find((layer: any) =>
+        layer.route?.path === '/tasks' && layer.route.methods.post
+      );
+
+      if (postTasksRoute) {
+        await postTasksRoute.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
+      }
+
+      // Verify blocking in test
+      expect(mockDevBotsManager.addTask).not.toHaveBeenCalled();
+      expect(responseJson.data.task.stubbed).toBe(true);
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          message: expect.stringContaining('test')
+        })
+      );
+    });
+  });
+
+  describe('Production Environment', () => {
+    beforeEach(async () => {
+      vi.clearAllMocks();
+      responseJson = {};
+
+      // Mock config as production environment (default mock)
+      vi.doMock('../config.js', () => ({
+        config: {
+          nodeEnv: 'production',
+          port: 5000,
+          corsOrigin: 'http://localhost:5174',
+        }
+      }));
+
+      // Re-import to get production config
+      const { createClaudeWorkersRouter: createRouter } = await import('./dev-bots.routes.js');
+
+      mockDevBotsManager = {
+        addTask: vi.fn().mockResolvedValue({
+          task: {
+            id: 'real-task-123',
+            type: 'implementation',
+            title: 'Production Task',
+            status: 'pending',
+            createdAt: new Date().toISOString()
+          },
+          validation: { isValid: true, warnings: [], suggestions: [] }
+        }),
+        getValidAgents: vi.fn().mockReturnValue(['backend', 'frontend', 'fullstack']),
+        validateTaskData: vi.fn().mockReturnValue({
+          isValid: true,
+          errors: [],
+          warnings: [],
+          suggestions: []
+        }),
+      } as any;
+
+      router = createRouter(mockDevBotsManager);
+
+      mockResponse = {
+        status: vi.fn().mockReturnThis(),
+        json: vi.fn().mockImplementation((data) => {
+          responseJson = data;
+          return mockResponse;
+        })
+      };
+    });
+
+    it('should allow task creation in production', async () => {
+      mockRequest = {
+        body: {
+          type: 'implementation',
+          title: 'Production Feature',
+          description: 'Implement new feature for production',
+          acceptanceCriteria: ['Feature works correctly', 'Tests pass'],
+        }
+      };
+
+      const postTasksRoute = router.stack.find((layer: any) =>
+        layer.route?.path === '/tasks' && layer.route.methods.post
+      );
+
+      if (postTasksRoute) {
+        await postTasksRoute.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
+      }
+
+      // In production, should call addTask
+      expect(mockDevBotsManager.addTask).toHaveBeenCalled();
+
+      // Should not have stubbed flag
+      expect(responseJson.data?.task?.stubbed).toBeUndefined();
+
+      // Should not log blocking warning
+      expect(logger.warn).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: 'task_creation_blocked_non_production'
+        })
+      );
+    });
+
+    it('should return real task from addTask in production', async () => {
+      mockRequest = {
+        body: {
+          type: 'bug',
+          title: 'Production Bug Fix',
+          description: 'Fix critical production issue',
+          acceptanceCriteria: ['Bug is resolved', 'No regressions'],
+        }
+      };
+
+      const postTasksRoute = router.stack.find((layer: any) =>
+        layer.route?.path === '/tasks' && layer.route.methods.post
+      );
+
+      if (postTasksRoute) {
+        await postTasksRoute.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
+      }
+
+      // Verify real task returned
+      expect(responseJson.data.task.id).toBe('real-task-123');
+      expect(responseJson.data.task.id).not.toMatch(/^stub-/);
+      expect(responseJson.data.message).toBe('Task added successfully');
+    });
+
+    it('should not log any blocking warnings in production', async () => {
+      mockRequest = {
+        body: {
+          type: 'feature',
+          title: 'New Feature',
+          description: 'Add new production feature',
+          acceptanceCriteria: ['Feature implemented'],
+        }
+      };
+
+      const postTasksRoute = router.stack.find((layer: any) =>
+        layer.route?.path === '/tasks' && layer.route.methods.post
+      );
+
+      if (postTasksRoute) {
+        await postTasksRoute.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
+      }
+
+      // Verify NO warning logs about blocking
+      const warnCalls = (logger.warn as any).mock.calls;
+      const blockingWarnings = warnCalls.filter((call: any) =>
+        call[0]?.action === 'task_creation_blocked_non_production'
+      );
+      expect(blockingWarnings.length).toBe(0);
+    });
+
+    it('should return HTTP 200 status in production (default)', async () => {
+      mockRequest = {
+        body: {
+          type: 'implementation',
+          title: 'Production Implementation',
+          description: 'Implement feature in production',
+          acceptanceCriteria: ['Feature works'],
+        }
+      };
+
+      const postTasksRoute = router.stack.find((layer: any) =>
+        layer.route?.path === '/tasks' && layer.route.methods.post
+      );
+
+      if (postTasksRoute) {
+        await postTasksRoute.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
+      }
+
+      // Should not explicitly call status (uses default 200)
+      expect(mockResponse.status).not.toHaveBeenCalled();
+    });
+
+    it('should invoke addTask with correct parameters in production', async () => {
+      const taskPayload = {
+        type: 'refactor',
+        title: 'Refactor Code',
+        description: 'Refactor legacy code',
+        acceptanceCriteria: ['Code is cleaner', 'Tests pass'],
+        files: ['src/legacy.ts'],
+        assignedAgent: 'backend'
+      };
+
+      mockRequest = { body: taskPayload };
+
+      const postTasksRoute = router.stack.find((layer: any) =>
+        layer.route?.path === '/tasks' && layer.route.methods.post
+      );
+
+      if (postTasksRoute) {
+        await postTasksRoute.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
+      }
+
+      // Verify addTask was called with task data
+      expect(mockDevBotsManager.addTask).toHaveBeenCalledTimes(1);
+      const callArgs = (mockDevBotsManager.addTask as any).mock.calls[0][0];
+      expect(callArgs).toMatchObject({
+        type: 'refactor',
+        title: 'Refactor Code',
+        description: 'Refactor legacy code'
       });
     });
   });

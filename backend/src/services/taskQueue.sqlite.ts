@@ -180,6 +180,9 @@ export interface Task {
   followup_tasks?: string[]; // Child tasks created to fix PR issues
   // Orphaned PR handling
   is_orphaned_pr?: boolean; // True if this task was auto-adopted from orphaned system PR
+  // Chain tracking for fix task depth limiting
+  chain_id?: string; // UUID identifying the chain this task belongs to
+  chain_depth?: number; // Depth in the fix chain (0 = original, 1+ = fix attempts)
   // Task verification fields (PR workflow quality gates)
   verification_passed?: boolean; // True if task verification succeeded (>= 80% criteria met)
   verification_results?: string; // JSON stringified TaskVerificationResult
@@ -1338,6 +1341,31 @@ export class TaskQueueService {
       LIMIT 20
     `);
     return stmt.all(cutoffTime) as Task[];
+  }
+
+  /**
+   * Get currently active Copilot tasks (synchronous)
+   * Used by Copilot throttle manager to enforce concurrency limits
+   * Note: Returns synchronously as SQLite operations are synchronous
+   */
+  getActiveCopilotTasks(): Task[] {
+    try {
+      const stmt = this.db.prepare(`
+        SELECT * FROM tasks
+        WHERE status IN ('pending', 'running')
+          AND preferred_agent = 'copilot'
+        ORDER BY created_at ASC
+      `);
+      return stmt.all() as Task[];
+    } catch (error) {
+      logger.error({
+        category: 'copilot-throttle',
+        action: 'get_active_tasks_failed',
+        message: 'Failed to get active Copilot tasks',
+        error
+      });
+      return [];
+    }
   }
 
   /**

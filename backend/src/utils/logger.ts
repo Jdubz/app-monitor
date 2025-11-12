@@ -37,6 +37,7 @@ export type LogCategory =
   | 'build'
   | 'circuit-breaker'
   | 'cloud'
+  | 'copilot-throttle' // Copilot throttle management
   | 'database'
   | 'docker'
   | 'lint_error'

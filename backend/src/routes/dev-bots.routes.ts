@@ -27,6 +27,7 @@ import type {
   ApiError,
   ApiSuccess,
 } from '@app-monitor/api-contracts';
+import { config } from '../config.js';
 
 // Temporary types until API contracts are updated
 type DevBotsQueueSummary = {
@@ -797,6 +798,10 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
   /**
    * POST /dev-bots/tasks
    * Create a new task
+   *
+   * SECURITY: Dev-bots can only spawn other dev-bots in production environments.
+   * In non-production environments, this returns a stubbed response to prevent
+   * infinite recursion or uncontrolled task spawning during development/testing.
    */
   router.post('/tasks', async (req: Request, res: Response) => {
     try {
@@ -835,6 +840,42 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
             error: `Invalid agent: ${assignedAgent}. Valid agents: ${validAgents.join(', ')}`
           });
         }
+      }
+
+      // SECURITY: Prevent dev-bots from spawning other dev-bots in non-production environments
+      // This prevents infinite recursion and uncontrolled task spawning during development/testing
+      if (config.nodeEnv !== 'production') {
+        logger.warn({
+          category: 'api',
+          action: 'task_creation_blocked_non_production',
+          message: `Task creation blocked in ${config.nodeEnv} environment`,
+          details: {
+            environment: config.nodeEnv,
+            taskType: type,
+            taskTitle: title,
+            note: 'Dev-bots can only create tasks in production to prevent recursive spawning'
+          }
+        });
+
+        // Return stubbed success response
+        return res.json({
+          task: {
+            id: `stub-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+            type,
+            title,
+            description: taskDescription,
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+            stubbed: true,
+            reason: 'Task creation is disabled in non-production environments'
+          },
+          validation: {
+            isValid: true,
+            warnings: ['Task not created - dev-bot task spawning is disabled in non-production environments'],
+            suggestions: []
+          },
+          message: 'Task creation stubbed (non-production environment)'
+        });
       }
 
       // V3 Template Validation (PE-API-VALIDATION-001)
