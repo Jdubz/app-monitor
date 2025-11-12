@@ -414,6 +414,24 @@ export function createMockCleanupCoordinator(): import('./cleanupCoordinator.ser
 }
 
 /**
+ * Create mock InfoQueryService
+ */
+export function createMockInfoQueryService(): InfoQueryService {
+  return {
+    getAgentPersonalities: vi.fn().mockReturnValue([]),
+    getTaskTemplates: vi.fn().mockReturnValue([]),
+    getTaskGuidelines: vi.fn().mockReturnValue({}),
+    getTaskExample: vi.fn().mockReturnValue({}),
+    getTaskChecklist: vi.fn().mockReturnValue([]),
+    validateTaskData: vi.fn().mockReturnValue({ isValid: true, errors: [] }),
+    getValidProjects: vi.fn().mockReturnValue([]),
+    getValidAgents: vi.fn().mockReturnValue([]),
+    getWorkerCount: vi.fn().mockReturnValue(0),
+    getMaxWorkers: vi.fn().mockReturnValue(2)
+  } as unknown as InfoQueryService;
+}
+
+/**
  * Create mock WorkspaceSyncManager
  */
 export function createMockWorkspaceSyncManager(): WorkspaceSyncManager {
