@@ -86,7 +86,8 @@ export class DevBotsManager extends EventEmitter {
   private interactiveSessionService!: InteractiveSessionService;
   private interactiveSessionOrchestrator!: InteractiveSessionOrchestrator;
   private interactiveSessionStreamManager!: InteractiveSessionStreamManager;
-  private taskQueueWorker?: { start: () => void; stop: () => void };
+  private systemLifecycleService!: import('./systemLifecycle.service.js').SystemLifecycleService;
+  private taskQueueWorker?: { start: () => Promise<void>; stop: () => Promise<void> };
   private metricsEmitter?: MetricsEmitter;
 
   // System state
@@ -117,6 +118,7 @@ export class DevBotsManager extends EventEmitter {
     this.interactiveSessionOrchestrator = dependencies.interactiveSessionOrchestrator;
     this.interactiveSessionStreamManager = dependencies.interactiveSessionStreamManager;
     this.workerHealthMonitor = dependencies.workerHealthMonitor;
+    this.systemLifecycleService = dependencies.systemLifecycleService;
 
     // Initialize maxWorkers from config
     this.maxWorkers = config.devBots.maxWorkers;
@@ -133,6 +135,11 @@ export class DevBotsManager extends EventEmitter {
     // Note: RetryCoordinationService is injected but needs these callbacks from DevBotsManager
     (this.retryCoordinationService as any).emitEvent = this.emit.bind(this);
     (this.retryCoordinationService as any).assignNextTask = this.assignNextTask.bind(this);
+
+    // Update SystemLifecycleService with emit and assignNextTask functions
+    // Note: SystemLifecycleService is injected but needs these callbacks from DevBotsManager
+    (this.systemLifecycleService as any).emitEvent = this.emit.bind(this);
+    (this.systemLifecycleService as any).assignNextTask = this.assignNextTask.bind(this);
 
     // Initialize TaskCompletionService with PR workflow orchestrator callback
     // Create no-op implementations for removed dependencies
@@ -377,6 +384,9 @@ export class DevBotsManager extends EventEmitter {
 
       await this.taskQueueWorker.start();
 
+      // Update SystemLifecycleService with taskQueueWorker reference
+      this.systemLifecycleService.updateComponents({ taskQueueWorker: this.taskQueueWorker });
+
       logger.info({
         category: 'process',
         action: 'task_queue_worker_started',
@@ -400,6 +410,10 @@ export class DevBotsManager extends EventEmitter {
         60000
       );
       this.metricsEmitter.start();
+
+      // Update SystemLifecycleService with metricsEmitter reference
+      this.systemLifecycleService.updateComponents({ metricsEmitter: this.metricsEmitter });
+
       logger.info({
         category: 'process',
         action: 'metrics_emitter_started',
@@ -725,113 +739,22 @@ export class DevBotsManager extends EventEmitter {
     return 2;
   }
 
+  /**
+   * Start the Dev-Bots system
+   * Delegated to SystemLifecycleService
+   */
   public startSystem(): void {
-    if (this.isCoordinatorHealthy) {
-      logger.info({
-      category: 'process',
-      action: 'claude_workers_system_is_already_running',
-      message: 'Dev-Bots system is already running'
-    });
-      return;
-    }
-
-    this.isCoordinatorHealthy = true;
-
-    // Clear any existing ephemeral workers
-    this.ephemeralWorkerService.clearAllWorkers();
-
-    // Start health monitoring
-    this.workerHealthMonitor.start();
-
-    this.emit('systemStatusChange', 'running');
-    logger.info({
-      category: 'process',
-      action: 'claude_workers_system_started_ephemeral_workers_wi',
-      message: 'Dev-Bots system started - ephemeral workers will be created for tasks'
-    });
-
-    // Try to assign pending tasks
-    this.assignNextTask();
+    this.systemLifecycleService.startSystem();
+    this.isCoordinatorHealthy = this.systemLifecycleService.isSystemHealthy();
   }
 
+  /**
+   * Stop the Dev-Bots system
+   * Delegated to SystemLifecycleService
+   */
   public async stopSystem(): Promise<void> {
-    if (!this.isCoordinatorHealthy) {
-      logger.info({
-      category: 'process',
-      action: 'claude_workers_system_is_already_stopped',
-      message: 'Dev-Bots system is already stopped'
-    });
-      return;
-    }
-
-    this.isCoordinatorHealthy = false;
-
-    // Stop health monitoring
-    this.workerHealthMonitor.stop();
-
-    // Stop interactive session idle watchdog
-    this.interactiveSessionService.stopIdleWatchdog();
-
-    // Stop background task queue worker
-    if (this.taskQueueWorker) {
-      try {
-        await this.taskQueueWorker.stop();
-        logger.info({
-          category: 'process',
-          action: 'task_queue_worker_stopped',
-          message: 'Background task queue worker stopped'
-        });
-      } catch (error) {
-        logger.error({
-          category: 'process',
-          action: 'task_queue_worker_stop_failed',
-          message: 'Failed to stop background task queue worker',
-          error
-        });
-      }
-    }
-
-    // Stop metrics emitter
-    if (this.metricsEmitter) {
-      try {
-        this.metricsEmitter.stop();
-        logger.info({
-          category: 'process',
-          action: 'metrics_emitter_stopped',
-          message: 'Metrics emitter stopped'
-        });
-      } catch (error) {
-        logger.error({
-          category: 'process',
-          action: 'metrics_emitter_stop_failed',
-          message: 'Failed to stop metrics emitter',
-          error
-        });
-      }
-    }
-
-    // Stop all active ephemeral workers
-    for (const worker of this.ephemeralWorkerService.getAllWorkers().values()) {
-      if (worker.status !== 'destroyed') {
-        // Mark task as failed and destroy container
-        worker.task.status = 'failed';
-        worker.task.error = 'System stopped';
-        worker.task.completed_at = Date.now();
-        worker.task.can_retry = true;
-
-        // Destroy container
-        await this.ephemeralWorkerService.destroyWorker(worker.id);
-      }
-    }
-
-    this.ephemeralWorkerService.clearAllWorkers();
-
-    this.emit('systemStatusChange', 'stopped');
-    logger.info({
-      category: 'process',
-      action: 'claude_workers_system_stopped_all_ephemeral_worker',
-      message: 'Dev-Bots system stopped - all ephemeral workers terminated'
-    });
+    await this.systemLifecycleService.stopSystem();
+    this.isCoordinatorHealthy = this.systemLifecycleService.isSystemHealthy();
   }
 
   /**

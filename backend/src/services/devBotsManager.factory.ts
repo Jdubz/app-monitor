@@ -30,6 +30,7 @@ import { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
 import { TaskCreationService } from './taskCreation.service.js';
 import { StatusAggregationService } from './statusAggregation.service.js';
 import { RetryCoordinationService } from './retryCoordination.service.js';
+import { SystemLifecycleService } from './systemLifecycle.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
 
 /**
@@ -211,6 +212,18 @@ export async function createDevBotsManagerDependencies(
     () => {} // emit function placeholder, will be bound by DevBotsManager
   );
 
+  // Create SystemLifecycleService (callbacks will be bound by DevBotsManager)
+  const systemLifecycleService = new SystemLifecycleService(
+    {
+      ephemeralWorkerService,
+      workerHealthMonitor,
+      interactiveSessionService,
+      // taskQueueWorker and metricsEmitter will be set dynamically by DevBotsManager
+    },
+    () => {}, // emit function placeholder
+    () => {} // assignNextTask placeholder
+  );
+
   return {
     processManager,
     dockerManager,
@@ -236,5 +249,6 @@ export async function createDevBotsManagerDependencies(
     interactiveSessionOrchestrator,
     interactiveSessionStreamManager,
     workerHealthMonitor,
+    systemLifecycleService,
   };
 }

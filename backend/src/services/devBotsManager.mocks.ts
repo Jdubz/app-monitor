@@ -30,6 +30,7 @@ import type { InteractiveSessionStreamManager } from './interactiveSessionStream
 import type { TaskCreationService } from './taskCreation.service.js';
 import type { StatusAggregationService } from './statusAggregation.service.js';
 import type { RetryCoordinationService } from './retryCoordination.service.js';
+import type { SystemLifecycleService } from './systemLifecycle.service.js';
 import { EventEmitter } from 'events';
 
 /**
@@ -323,6 +324,19 @@ export function createMockRetryCoordinationService(): RetryCoordinationService {
 }
 
 /**
+ * Create mock SystemLifecycleService
+ */
+export function createMockSystemLifecycleService(): SystemLifecycleService {
+  return {
+    startSystem: vi.fn(),
+    stopSystem: vi.fn().mockResolvedValue(undefined),
+    isSystemHealthy: vi.fn().mockReturnValue(false),
+    setSystemHealth: vi.fn(),
+    updateComponents: vi.fn()
+  } as unknown as SystemLifecycleService;
+}
+
+/**
  * Create mock WorkspaceSyncManager
  */
 export function createMockWorkspaceSyncManager(): WorkspaceSyncManager {
@@ -499,6 +513,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
   const taskCreationService = createMockTaskCreationService();
   const statusAggregationService = createMockStatusAggregationService();
   const retryCoordinationService = createMockRetryCoordinationService();
+  const systemLifecycleService = createMockSystemLifecycleService();
   const agentManager = createMockAgentManager();
   const templateManager = createMockTemplateManager();
   const guidelinesManager = createMockGuidelinesManager();
@@ -519,6 +534,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     taskCreationService,
     statusAggregationService,
     retryCoordinationService,
+    systemLifecycleService,
     agentManager,
     templateManager,
     guidelinesManager,

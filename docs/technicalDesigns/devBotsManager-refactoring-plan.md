@@ -638,13 +638,52 @@ Final verification:
 - Better code organization
 - All retry-related operations in one place
 
+### ✅ Completed - Phase 9: Extract SystemLifecycleService (2025-11-12)
+
+**Time Invested**: ~40 minutes
+**Lines Extracted**: 77 lines from devBotsManager
+**New Service**: `systemLifecycle.service.ts` (165 lines)
+
+**Changes**:
+1. ✅ Created SystemLifecycleService
+   - startSystem() - coordinates system startup
+   - stopSystem() - coordinates graceful shutdown
+   - isSystemHealthy() - returns system health state
+   - setSystemHealth() - allows parent to manage health
+   - updateComponents() - dynamic component updates
+2. ✅ Updated devBotsManager
+   - Replaced 28-line startSystem() with 3-line delegation
+   - Replaced 79-line stopSystem() with 3-line delegation
+   - Added component updates when taskQueueWorker/metricsEmitter created
+   - Synchronized isCoordinatorHealthy with service state
+3. ✅ Updated dependency injection
+   - Added to devBotsManager.interfaces.ts
+   - Added to devBotsManager.factory.ts (with callback placeholders)
+   - Added to devBotsManager.mocks.ts
+4. ✅ Fixed type declaration
+   - Updated taskQueueWorker type to match async signatures
+
+**Results**:
+- **devBotsManager.ts**: 1,097 → 1,020 lines (-77 lines, 7.0% reduction)
+- **SystemLifecycleService**: 165 lines (new)
+- ✅ TypeScript compilation passing
+- ✅ Clean lifecycle management logic
+- ✅ Better separation of concerns
+
+**Phase 9 Benefits**:
+- System lifecycle independently testable
+- Cleaner devBotsManager with less orchestration logic
+- Easier to modify startup/shutdown behavior
+- Better code organization
+- All lifecycle operations in one place
+
 ### 📋 Remaining Tasks
 - [ ] Run backend tests to verify all phases (936 tests)
 - [ ] Continue extraction to reach ~600 line target
 
 ---
 
-**Current Status**: Phase 8 complete! devBotsManager reduced by 38.7% total (1,789 → 1,097 lines, -692 lines).
+**Current Status**: Phase 9 complete! devBotsManager reduced by 43.0% total (1,789 → 1,020 lines, -769 lines).
 
 **Progress Summary**:
 - Phase 1: Worker Health Monitor extraction (-280 lines)
@@ -655,6 +694,7 @@ Final verification:
 - Phase 6: TaskCreationService extraction (-119 lines)
 - Phase 7: StatusAggregationService extraction (-59 lines)
 - Phase 8: RetryCoordinationService extraction (-83 lines)
+- Phase 9: SystemLifecycleService extraction (-77 lines)
 
-**Remaining to Target**: ~497 more lines to reach ~600 line goal.
-**Next Steps**: Continue extraction - potential candidates include Docker health methods, initialization logic, or worker assignment orchestration.
+**Remaining to Target**: ~420 more lines to reach ~600 line goal.
+**Next Steps**: Continue extraction - potential candidates include initialization logic (~150 lines), Docker validation methods (~80 lines), or interactive session management.
