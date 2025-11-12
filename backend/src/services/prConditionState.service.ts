@@ -499,7 +499,7 @@ export class PRConditionStateService {
         // Log warning when falling back to name for better debugging
         if (!check.id) {
           logger.warn({
-            category: 'pr_condition',
+            category: 'pr-workflow',
             action: 'check_id_missing',
             message: `Check "${check.name}" has no ID, using name as reference`,
             details: { check_name: check.name }
