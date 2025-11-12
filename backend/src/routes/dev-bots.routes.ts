@@ -1957,5 +1957,98 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
     }
   });
 
+  // ============================================================================
+  // Chain Management Routes (Phase 3: Staged Queue)
+  // ============================================================================
+
+  /**
+   * GET /dev-bots/queue/stats
+   * Get queue statistics including chain utilization
+   */
+  router.get('/queue/stats', (_req: Request, res: Response) => {
+    try {
+      const stats = devBotsManager.getTaskQueue().getChainStats();
+      res.json(stats);
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_queue_stats',
+        message: `Error getting queue stats: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to get queue stats',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  /**
+   * GET /dev-bots/chains/blocked
+   * Get list of blocked chains requiring manual intervention
+   */
+  router.get('/chains/blocked', (_req: Request, res: Response) => {
+    try {
+      const blockedChains = devBotsManager.getTaskQueue().getBlockedChains();
+      res.json(blockedChains);
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_blocked_chains',
+        message: `Error getting blocked chains: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to get blocked chains',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  /**
+   * POST /dev-bots/chains/:chainId/unblock
+   * Unblock a chain after manual intervention
+   * Body: { unblockedBy: string }
+   */
+  router.post('/chains/:chainId/unblock', (req: Request, res: Response) => {
+    try {
+      const { chainId } = req.params;
+      const { unblockedBy } = req.body;
+
+      if (!unblockedBy) {
+        return res.status(400).json({
+          error: 'Missing required field',
+          message: 'unblockedBy is required'
+        });
+      }
+
+      devBotsManager.getTaskQueue().unblockChain(chainId, unblockedBy);
+
+      logger.info({
+        category: 'api',
+        action: 'chain_unblocked',
+        message: `Chain ${chainId} unblocked by ${unblockedBy}`,
+        details: { chainId, unblockedBy }
+      });
+
+      res.json({
+        success: true,
+        chainId,
+        unblockedBy
+      });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_unblocking_chain',
+        message: `Error unblocking chain: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to unblock chain',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
   return router;
 }
