@@ -828,7 +828,7 @@ export class TaskExecutionService {
         const commitStatus = await this.verifyBotCommitted(
           task.id,
           repoRoot,
-          task.assigned_at || task.created_at
+          new Date(task.assigned_at || task.created_at).toISOString()
         );
 
         if (!commitStatus.committed) {

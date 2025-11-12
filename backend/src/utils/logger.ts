@@ -55,6 +55,7 @@ export type LogCategory =
   | 'automation' // Agent selection and automation
   | 'delegation' // Copilot delegation
   | 'recovery'
+  | 'safety' // Safety mechanisms for git operations
   | 'scripts'
   | 'socket'
   | 'system'
