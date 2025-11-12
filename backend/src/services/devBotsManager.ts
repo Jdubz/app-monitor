@@ -71,6 +71,7 @@ export class DevBotsManager extends EventEmitter {
   private taskQueue!: TaskQueueService;
   private taskCreationService!: import('./taskCreation.service.js').TaskCreationService;
   private statusAggregationService!: import('./statusAggregation.service.js').StatusAggregationService;
+  private retryCoordinationService!: import('./retryCoordination.service.js').RetryCoordinationService;
   private agentManager!: AgentPersonalityManager;
   private templateManager!: TaskPromptTemplateManager;
   private guidelinesManager!: TaskCreationGuidelinesManager;
@@ -102,6 +103,7 @@ export class DevBotsManager extends EventEmitter {
     this.taskQueue = dependencies.taskQueue;
     this.taskCreationService = dependencies.taskCreationService;
     this.statusAggregationService = dependencies.statusAggregationService;
+    this.retryCoordinationService = dependencies.retryCoordinationService;
     this.agentManager = dependencies.agentManager;
     this.templateManager = dependencies.templateManager;
     this.guidelinesManager = dependencies.guidelinesManager;
@@ -126,6 +128,11 @@ export class DevBotsManager extends EventEmitter {
     // Note: WorkerHealthMonitor is injected but needs recovery instance from DevBotsManager
     (this.workerHealthMonitor as any).recovery = this.recovery;
     (this.workerHealthMonitor as any).emit = this.emit.bind(this);
+
+    // Update RetryCoordinationService with emit and assignNextTask functions
+    // Note: RetryCoordinationService is injected but needs these callbacks from DevBotsManager
+    (this.retryCoordinationService as any).emitEvent = this.emit.bind(this);
+    (this.retryCoordinationService as any).assignNextTask = this.assignNextTask.bind(this);
 
     // Initialize TaskCompletionService with PR workflow orchestrator callback
     // Create no-op implementations for removed dependencies
@@ -180,9 +187,9 @@ export class DevBotsManager extends EventEmitter {
     // Run async initialization (orphaned task recovery)
     void this.initializeAsync();
 
-    // Listen for retry events
+    // Listen for retry events (delegate to RetryCoordinationService)
     this.retryManager.on('taskReadyForRetry', (task: Task) => {
-      this.handleTaskRetry(task);
+      this.retryCoordinationService.handleTaskRetry(task);
     });
 
     // Listen for process status changes
@@ -1021,94 +1028,24 @@ export class DevBotsManager extends EventEmitter {
   }
 
   /**
-   * Handle task retry when it becomes ready
-   */
-  private async handleTaskRetry(task: Task): Promise<void> {
-    try {
-      logger.info({
-      category: 'process',
-      action: 'handling_retry_for_task_task_id',
-      message: `Handling retry for task ${task.id}`
-    });
-      
-      // Reset task status for retry
-      task.status = 'pending';
-      task.assigned_worker = undefined;
-      task.assigned_at = undefined;
-      task.error = undefined;
-
-      // Add task back to queue
-      await this.taskQueue.updateTask(task.id, task);
-      
-      // Emit retry event
-      this.emit('taskRetrying', task);
-      
-      // Try to assign the retry task
-      await this.assignNextTask();
-      
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_handle_retry_for_task_task_id',
-      message: `Failed to handle retry for task ${task.id}:`,
-      error: error
-    });
-      this.emit('taskRetryFailed', task, error);
-    }
-  }
-
-  /**
    * Manually retry a failed task
+   * Delegated to RetryCoordinationService
    */
   public async retryTask(taskId: string, reason?: string): Promise<{ success: boolean; message: string }> {
-    try {
-      // Find the task in SQLite
-      const task = await this.taskQueue.getTask(taskId);
-      if (!task) {
-        return { success: false, message: 'Task not found' };
-      }
-
-      if (task.status !== 'failed') {
-        return { success: false, message: 'Task is not in failed status' };
-      }
-
-      // Check if task can be retried
-      if (!this.retryManager.canRetryTask(task)) {
-        return { success: false, message: 'Task cannot be retried' };
-      }
-
-      // Manual retry - add task back to queue
-      const retryResult = this.retryManager.retryTask(task, reason || 'Manual retry');
-
-      if (retryResult.success) {
-        // Update retry task in queue
-        await this.taskQueue.updateTask(retryResult.task.id, retryResult.task);
-
-        this.emit('taskRetrying', retryResult.task);
-        return { success: true, message: 'Task queued for retry' };
-      } else {
-        return { success: false, message: retryResult.reason || 'Failed to retry task' };
-      }
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_retry_task_taskid',
-      message: `Failed to retry task ${taskId}:`,
-      error: error
-    });
-      return { success: false, message: `Failed to retry task: ${error}` };
-    }
+    return await this.retryCoordinationService.retryTask(taskId, reason);
   }
 
   /**
-   * Cancel a scheduled retry (not needed for manual retry)
+   * Cancel a scheduled retry
+   * Delegated to RetryCoordinationService
    */
-  public cancelRetry(_taskId: string): { success: boolean; message: string } {
-    return { success: false, message: 'Manual retry cannot be cancelled once started' };
+  public cancelRetry(taskId: string): { success: boolean; message: string } {
+    return this.retryCoordinationService.cancelRetry(taskId);
   }
 
   /**
    * Get retry information for a task
+   * Delegated to RetryCoordinationService
    */
   public async getRetryInfo(taskId: string): Promise<{
     canRetry: boolean;
@@ -1117,20 +1054,12 @@ export class DevBotsManager extends EventEmitter {
     retryHistory: RetryAttempt[];
     scheduledRetries: Array<{ taskId: string; retryAt: string; retryCount: number }>;
   }> {
-    const task = await this.taskQueue.getTask(taskId);
-    const retryHistory = this.retryManager.getRetryHistory(taskId);
-
-    return {
-      canRetry: task?.can_retry ?? (task?.status === 'failed'),
-      retryCount: task?.retry_count || 0,
-      maxRetries: task?.max_retries || this.retryManager.getConfig().max_retries,
-      retryHistory,
-      scheduledRetries: [] // Manual retry system - no scheduled retries
-    };
+    return await this.retryCoordinationService.getRetryInfo(taskId);
   }
 
   /**
    * Get all retry statistics
+   * Delegated to RetryCoordinationService
    */
   public getRetryStats(): {
     totalRetries: number;
@@ -1139,35 +1068,23 @@ export class DevBotsManager extends EventEmitter {
     scheduledRetries: number;
     retryConfig: RetryConfig;
   } {
-    const stats = this.retryManager.getRetryStats();
-    const config = this.retryManager.getConfig();
-
-    return {
-      ...stats,
-      scheduledRetries: 0, // Manual retry system - no scheduled retries
-      retryConfig: config
-    };
+    return this.retryCoordinationService.getRetryStats();
   }
 
   /**
    * Get retry manager instance (for state persistence)
+   * Delegated to RetryCoordinationService
    */
   public getRetryManager(): RetryManager {
-    return this.retryManager;
+    return this.retryCoordinationService.getRetryManager();
   }
 
   /**
    * Update retry configuration
+   * Delegated to RetryCoordinationService
    */
   public updateRetryConfig(config: Partial<RetryConfig>): void {
-    this.retryManager.updateConfig(config);
-    this.emit('retryConfigUpdated', config);
-    logger.info({
-      category: 'process',
-      action: 'retry_configuration_updated',
-      message: 'Retry configuration updated',
-      details: { config }
-    });
+    this.retryCoordinationService.updateRetryConfig(config);
   }
 
   destroy(): void {

@@ -29,6 +29,7 @@ import type { InteractiveSessionOrchestrator } from './interactiveSessionOrchest
 import type { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
 import type { TaskCreationService } from './taskCreation.service.js';
 import type { StatusAggregationService } from './statusAggregation.service.js';
+import type { RetryCoordinationService } from './retryCoordination.service.js';
 import { EventEmitter } from 'events';
 
 /**
@@ -289,6 +290,39 @@ export function createMockStatusAggregationService(): StatusAggregationService {
 }
 
 /**
+ * Create mock RetryCoordinationService
+ */
+export function createMockRetryCoordinationService(): RetryCoordinationService {
+  return {
+    handleTaskRetry: vi.fn().mockResolvedValue(undefined),
+    retryTask: vi.fn().mockResolvedValue({
+      success: true,
+      message: 'Task queued for retry'
+    }),
+    cancelRetry: vi.fn().mockReturnValue({
+      success: false,
+      message: 'Manual retry cannot be cancelled once started'
+    }),
+    getRetryInfo: vi.fn().mockResolvedValue({
+      canRetry: true,
+      retryCount: 0,
+      maxRetries: 3,
+      retryHistory: [],
+      scheduledRetries: []
+    }),
+    getRetryStats: vi.fn().mockReturnValue({
+      totalRetries: 0,
+      successfulRetries: 0,
+      failedRetries: 0,
+      scheduledRetries: 0,
+      retryConfig: { max_retries: 3 }
+    }),
+    getRetryManager: vi.fn().mockReturnValue(createMockRetryManager()),
+    updateRetryConfig: vi.fn()
+  } as unknown as RetryCoordinationService;
+}
+
+/**
  * Create mock WorkspaceSyncManager
  */
 export function createMockWorkspaceSyncManager(): WorkspaceSyncManager {
@@ -464,6 +498,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
   const taskQueue = createMockTaskQueue();
   const taskCreationService = createMockTaskCreationService();
   const statusAggregationService = createMockStatusAggregationService();
+  const retryCoordinationService = createMockRetryCoordinationService();
   const agentManager = createMockAgentManager();
   const templateManager = createMockTemplateManager();
   const guidelinesManager = createMockGuidelinesManager();
@@ -483,6 +518,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     taskQueue,
     taskCreationService,
     statusAggregationService,
+    retryCoordinationService,
     agentManager,
     templateManager,
     guidelinesManager,

@@ -29,6 +29,7 @@ import { InteractiveSessionStreamManager } from './interactiveSessionStreamManag
 import { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
 import { TaskCreationService } from './taskCreation.service.js';
 import { StatusAggregationService } from './statusAggregation.service.js';
+import { RetryCoordinationService } from './retryCoordination.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
 
 /**
@@ -125,6 +126,14 @@ export async function createDevBotsManagerDependencies(
   // Initialize status aggregation service
   const statusAggregationService = new StatusAggregationService(taskQueue, ephemeralWorkerService);
 
+  // Initialize retry coordination service (callbacks will be set by DevBotsManager)
+  const retryCoordinationService = new RetryCoordinationService(
+    taskQueue,
+    retryManager,
+    () => {}, // emit function placeholder, will be bound by DevBotsManager
+    async () => {} // assignNextTask placeholder, will be bound by DevBotsManager
+  );
+
   // Initialize task execution service
   const taskExecutionService = new TaskExecutionService(
     taskQueue,
@@ -209,6 +218,7 @@ export async function createDevBotsManagerDependencies(
     taskQueue,
     taskCreationService,
     statusAggregationService,
+    retryCoordinationService,
     agentManager,
     templateManager,
     guidelinesManager,

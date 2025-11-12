@@ -29,6 +29,7 @@ import type { InteractiveSessionStreamManager } from './interactiveSessionStream
 import type { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
 import type { TaskCreationService } from './taskCreation.service.js';
 import type { StatusAggregationService } from './statusAggregation.service.js';
+import type { RetryCoordinationService } from './retryCoordination.service.js';
 
 /**
  * All dependencies required by DevBotsManager
@@ -43,6 +44,7 @@ export interface DevBotsManagerDependencies {
   taskQueue: TaskQueueService;
   taskCreationService: TaskCreationService;
   statusAggregationService: StatusAggregationService;
+  retryCoordinationService: RetryCoordinationService;
   agentManager: AgentPersonalityManager;
   templateManager: TaskPromptTemplateManager;
   guidelinesManager: TaskCreationGuidelinesManager;

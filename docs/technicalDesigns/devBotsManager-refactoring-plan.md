@@ -598,13 +598,53 @@ Final verification:
 - Easier to modify status reporting format
 - Better code organization
 
+### ✅ Completed - Phase 8: Extract RetryCoordinationService (2025-11-12)
+
+**Time Invested**: ~35 minutes
+**Lines Extracted**: 83 lines from devBotsManager
+**New Service**: `retryCoordination.service.ts` (176 lines)
+
+**Changes**:
+1. ✅ Created RetryCoordinationService
+   - handleTaskRetry() - handles task retry when ready
+   - retryTask() - manually retry a failed task
+   - cancelRetry() - cancel scheduled retry (stub for manual system)
+   - getRetryInfo() - get retry information for task
+   - getRetryStats() - get all retry statistics
+   - getRetryManager() - get retry manager instance
+   - updateRetryConfig() - update retry configuration
+2. ✅ Updated devBotsManager
+   - Replaced 6 retry-related public methods with 1-line delegations
+   - Removed private handleTaskRetry() method (33 lines)
+   - Removed retry method implementations (~50 lines total)
+   - Injected emit and assignNextTask callbacks
+   - Updated retry event listener to delegate to service
+3. ✅ Updated dependency injection
+   - Added to devBotsManager.interfaces.ts
+   - Added to devBotsManager.factory.ts (with callback placeholders)
+   - Added to devBotsManager.mocks.ts
+
+**Results**:
+- **devBotsManager.ts**: 1,180 → 1,097 lines (-83 lines, 7.0% reduction)
+- **RetryCoordinationService**: 176 lines (new)
+- ✅ TypeScript compilation passing
+- ✅ Clean retry coordination logic
+- ✅ Better separation of concerns
+
+**Phase 8 Benefits**:
+- Retry coordination independently testable
+- Cleaner devBotsManager with less retry logic
+- Easier to modify retry behavior
+- Better code organization
+- All retry-related operations in one place
+
 ### 📋 Remaining Tasks
 - [ ] Run backend tests to verify all phases (936 tests)
 - [ ] Continue extraction to reach ~600 line target
 
 ---
 
-**Current Status**: Phase 7 complete! devBotsManager reduced by 34.0% total (1,789 → 1,180 lines, -609 lines).
+**Current Status**: Phase 8 complete! devBotsManager reduced by 38.7% total (1,789 → 1,097 lines, -692 lines).
 
 **Progress Summary**:
 - Phase 1: Worker Health Monitor extraction (-280 lines)
@@ -614,6 +654,7 @@ Final verification:
 - Phase 5: Dead code and comment cleanup (-70 lines)
 - Phase 6: TaskCreationService extraction (-119 lines)
 - Phase 7: StatusAggregationService extraction (-59 lines)
+- Phase 8: RetryCoordinationService extraction (-83 lines)
 
-**Remaining to Target**: ~580 more lines to reach ~600 line goal.
-**Next Steps**: Continue extraction - potential candidates include retry coordination, Docker health methods, or initialization logic.
+**Remaining to Target**: ~497 more lines to reach ~600 line goal.
+**Next Steps**: Continue extraction - potential candidates include Docker health methods, initialization logic, or worker assignment orchestration.
