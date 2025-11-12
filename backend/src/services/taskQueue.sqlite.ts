@@ -735,6 +735,24 @@ export class TaskQueueService {
       });
     }
     
+    // Determine queue_stage and chain_id (Staged Queue System)
+    const isImplementation = !taskData.original_task_id && !taskData.is_repair_bot;
+    const queueStage = isImplementation ? 'implementation' : 'followup';
+    
+    // Chain ID determination
+    let chainId = taskData.chain_id;
+    if (!chainId) {
+      if (isImplementation) {
+        // Implementation tasks: chain_id = task id (set after insert)
+        chainId = taskData.id || generatedId;
+      } else if (taskData.original_task_id) {
+        // Follow-up tasks: inherit chain_id from original task
+        const originalStmt = this.db.prepare('SELECT chain_id FROM tasks WHERE id = ?');
+        const original = originalStmt.get(taskData.original_task_id) as { chain_id?: string } | undefined;
+        chainId = original?.chain_id || taskData.original_task_id;
+      }
+    }
+    
     const task: Task = {
       id: taskData.id || generatedId,
       type: taskData.type || 'implementation',
@@ -758,18 +776,24 @@ export class TaskQueueService {
       task_category: taskCategory,
       file_patterns: filePatterns,
       estimated_complexity: estimatedComplexity,
-      preferred_agent: taskData.preferred_agent
+      preferred_agent: taskData.preferred_agent,
+      // Staged Queue fields
+      queue_stage: queueStage,
+      chain_status: 'pending',
+      chain_id: chainId,
+      chain_depth: taskData.chain_depth || 0
     };
 
     return this.transaction(() => {
-      // Insert main task with classification fields
+      // Insert main task with classification and staged queue fields
       const stmt = this.db.prepare(`
         INSERT INTO tasks (
           id, type, title, description, documentation, notes, status, priority,
           created_at, assigned_agent, prompt, can_retry, retry_count, max_retries,
           timeout_ms, fingerprint, estimated_hours, complexity,
-          task_category, file_patterns, estimated_complexity, preferred_agent
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          task_category, file_patterns, estimated_complexity, preferred_agent,
+          queue_stage, chain_status, chain_id, chain_depth
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       stmt.run(
@@ -777,7 +801,8 @@ export class TaskQueueService {
         task.notes, task.status, task.priority, task.created_at, task.assigned_agent,
         task.prompt, task.can_retry ? 1 : 0, task.retry_count, task.max_retries,
         task.timeout_ms, task.fingerprint, task.estimated_hours, task.complexity,
-        task.task_category, task.file_patterns, task.estimated_complexity, task.preferred_agent
+        task.task_category, task.file_patterns, task.estimated_complexity, task.preferred_agent,
+        task.queue_stage, task.chain_status, task.chain_id, task.chain_depth
       );
 
       // Insert related data

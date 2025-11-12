@@ -604,9 +604,8 @@ export class TaskCompletionService {
       const prInfo = extractPRInfo(output);
 
       if (isValidPRInfo(prInfo)) {
-        // Update task with PR information (only pr_number and pr_status)
+        // Update task with PR information (only pr_number, PR status not stored)
         task.pr_number = prInfo.number;
-        task.pr_status = 'pending_checks';
 
         logger.info({
           category: 'pr-workflow',

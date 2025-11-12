@@ -798,12 +798,8 @@ export class GitHubPRService {
         // Find and update task
         const task = taskQueue.getTask(taskId);
         if (task) {
-          await taskQueue.updatePRStatus(taskId, {
-            pr_number: prNumber,
-            pr_url: prData.url,
-            pr_branch: branchName,
-            pr_status: prData.state === 'MERGED' ? 'merged' :
-                      prData.state === 'CLOSED' ? 'closed' : 'pending_checks'
+          taskQueue.updateTask(taskId, {
+            pr_number: prNumber
           });
           
           logger.info({

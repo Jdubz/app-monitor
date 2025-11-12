@@ -17,8 +17,6 @@ import type { Task } from './taskQueue.sqlite.js';
 import { ReviewCommentTracker } from './reviewCommentTracker.service.js';
 import { getDatabase } from './database.js';
 
-type TaskPRStatus = NonNullable<Task['pr_status']>;
-
 export interface PRMonitorConfig {
   enableAutoMerge: boolean;
   maxFollowupDepth?: number;
@@ -30,8 +28,6 @@ export interface PRMonitorConfig {
 /**
  * Service for PR workflow business logic (webhook-driven)
  */
-const MAX_COMMENT_SNIPPET_LENGTH = 150;
-
 export class PRMonitorService {
   private readonly config: PRMonitorConfig;
   private readonly githubPR: GitHubPRService;
@@ -188,7 +184,6 @@ ${prData.description || 'No description available'}`,
         priority: 7,
         assigned_agent: 'backend-specialist',
         pr_number: prNumber,
-        pr_status: 'pending_checks',
         acceptance_criteria: acceptanceCriteria,
         is_orphaned_pr: true, // Mark as orphaned
         notes: `Auto-adopted on ${new Date().toISOString()}`
@@ -1029,12 +1024,10 @@ ${taskChain}
     taskId: string,
     errors: { squashError?: string; rebaseError?: string; mergeError?: string }
   ): Promise<void> {
-    const task = this.taskQueue.getTask(taskId);
-
     // Fetch PR branch name from GitHub
     let branchName = 'unknown';
     try {
-      const prStatus = await this.githubPR.getPR(prNumber);
+      const prStatus = await this.githubPR.getPRStatus(prNumber);
       branchName = prStatus.head_ref;
     } catch (error) {
       logger.warn({
@@ -1107,17 +1100,16 @@ gh pr merge ${prNumber} --squash  # Or --merge or --rebase
 
   /**
    * Update task PR status in database
+   * Note: PR status no longer stored in Task - this method only updates notes
    */
-  private async updateTaskPRStatus(taskId: string, prStatus: TaskPRStatus, notes?: string): Promise<void> {
+  private async updateTaskPRStatus(taskId: string, _prStatus: string, notes?: string): Promise<void> {
     const task = this.taskQueue.getTask(taskId);
     if (!task) {
       return;
     }
 
-    // Build updates object
-    const updates: Partial<Task> = {
-      pr_status: prStatus
-    };
+    // Build updates object (only notes, PR status not stored in Task anymore)
+    const updates: Partial<Task> = {};
 
     // Update notes if provided
     if (notes) {
@@ -1137,11 +1129,10 @@ gh pr merge ${prNumber} --squash  # Or --merge or --rebase
 
     logger.info({
       category: 'pr-workflow',
-      action: 'task_pr_status_updated',
-      message: `Updated PR status for task ${taskId}`,
+      action: 'task_updated',
+      message: `Updated task ${taskId}`,
       details: {
         taskId,
-        prStatus,
         notes
       }
     });
