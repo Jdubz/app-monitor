@@ -2,7 +2,17 @@
 
 **Date:** 2025-11-08  
 **Author:** Platform Tooling (Dev-Bot Enablement)  
-**Status:** Draft – needs product sign-off
+**Status:** ✅ Shipped (2025-11-12) – interactive tab + streaming gateway live in production
+
+---
+
+## Current Implementation Snapshot
+
+- **Frontend:** `frontend/src/components/dev-bots/interactive/InteractiveSessionTab.tsx` (plus the hook and terminal helpers) owns the model selector, PTY stream, hotkeys, and start/stop controls.
+- **Backend:** `backend/src/services/interactiveSessionGateway.ts` (wired via `backend/src/server.ts`) exposes the websocket gateway that bridges DevBotsManager PTYs to the browser tab.
+- **Contracts:** Shared interactive-session types in `shared/api-contracts` keep the backend gateway, hooks, and UI aligned.
+
+Use the remainder of this document as historical context when planning future iterations (RBAC, chat pane, etc.); extend the shipped implementation instead of forking it.
 
 ---
 

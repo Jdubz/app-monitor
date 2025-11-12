@@ -257,6 +257,11 @@ However, **architectural issues remain** around dual database usage and task sta
 4. Add deployment safety checks
 5. Improve task monitoring and timeout handling
 
+### Closure & Hand-off
+- Archive location reserved under `/opt/app-monitor/shared/artifacts/pr-tracking/2025-11-11/` for logs, DB snapshots, and replay scripts referenced throughout the report.
+- Remediation projects—database consolidation, deployment safety checks, and monitoring improvements—are formally scoped in `docs/plans/PR_TRACKING_SYSTEM_RESILIENCE_PLAN.md`.
+- This investigation can be closed once the resilience plan delivers (a) a single authoritative PR-tracking database with automated backups and (b) continuous monitors that alert within 5 minutes if PR processing stalls.
+
 ---
 
 ## Appendix

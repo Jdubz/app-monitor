@@ -190,8 +190,30 @@ Only add keys when tasks are actually spawned.
 ## Next Steps
 
 1. ✅ Document bugs (this file)
-2. ⏳ Fix Bug #1 (check status parsing)
-3. ⏳ Investigate Bug #2 (branch update)
-4. ⏳ Test fixes
-5. ⏳ Deploy to production
-6. ⏳ Restart PR tracking for 96-99
+2. ✅ Fix Bug #1 (check status parsing deployed to `main` on 2025-11-11 23:10 UTC)
+3. 🔄 Implement Bug #2 fix (branch update evaluation) — targeted for 2025-11-13
+4. 🔄 Add guardrails for Bug #3 (active task count) — schema migration scheduled with Bug #2 rollout
+5. ⏳ Run regression test matrix across all four PRs
+6. ⏳ Deploy to production & restart PR tracking for 96-99 with enhanced telemetry
+
+---
+
+## Investigation Closure & Hand-off
+
+### Confirmed Findings
+- **Bug #1 (status parsing):** `normalizeCheckConclusion()` was comparing GitHub `check_suite.status` instead of `check_suite.conclusion`, leading to false "success" states whenever a job merely completed. Patched in `backend/src/services/githubPR.service.ts`.
+- **Bug #2 (branch update evaluation):** `evaluateAndHandleBranchUpdate()` never triggered because `branch.behind_by` is compared against stale branch metadata, so branches that are actually behind never enqueue update tasks.
+- **Bug #3 (active task count):** `active_fix_tasks` entries persist even after tasks finish, so later automation short-circuits under the assumption a fixer is already running.
+
+### Validation Summary
+- Document review of GitHub API payload samples for PRs 96–99 confirms conclusion states now drive decision logic.
+- Added unit-test outline around `normalizeCheckConclusion()` with before/after snapshots in Section "Fix #1".
+- Dry-run instructions for `evaluateAndHandleBranchUpdate()` still reproduce the missing BEHIND detection, which is why Bug #2 remains in progress.
+
+### Remaining Risks
+- Without schema cleanup, orphaned `active_fix_tasks` entries will keep blocking automation even after code fixes ship.
+- There is no regression test in CI that simulates failing checks plus behind branches; we rely on production telemetry today.
+- Deployment still requires manual restart of the PR tracker, posing a single point of failure.
+
+### Hand-off
+Implementation is tracked in `docs/plans/PR_TRACKING_CRITICAL_FIX_IMPLEMENTATION.md`. Once that plan delivers the Bug #2/3 fixes, regression suite, and deployment automation, update the status block at the top of this file and archive the investigation.

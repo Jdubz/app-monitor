@@ -1,5 +1,13 @@
 # Process Management - Better Alternatives to Cron
 
+**Status:** ✅ Implemented (single-instance guard + systemd hardening shipped 2025-11-11)
+
+**Evidence:**
+- `backend/src/utils/singleInstance.ts` enforces one backend per port before the HTTP server starts, preventing duplicate webhook processors.
+- `scripts/systemd/app-monitor-backend@.service` + `scripts/production/cleanup-processes.sh` own process lifecycle in production, so cron-based cleanup is no longer required.
+
+The remainder of the document is kept for historical context when evaluating future improvements.
+
 ## Current Cleanup Script Issues
 
 **The script requires sudo because:**

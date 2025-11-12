@@ -1,7 +1,7 @@
 # Dev-Bot Pipeline - REVISED Path to Completion
 
 **Date:** 2025-11-10T20:06:00Z  
-**Current Status:** ~60-70% Complete (Much more than initially assessed!)  
+**Current Status:** ~80-85% Complete (agent selection + queue integration landed 2025-11-12)  
 **Estimated Time to Complete:** 1-2 weeks (down from 3-4)  
 **Reference:** `docs/plans/DEV_BOT_PIPELINE_ENHANCEMENT_PLAN.md`
 
@@ -12,7 +12,7 @@
 **Previous Assessment:** Incorrectly stated ~30% complete  
 **Actual Status:** ~60-70% complete based on deep audit  
 **Key Discovery:** Artifact logging, task execution, and failure handling already implemented  
-**CRITICAL MISSING:** Intelligent agent selection (Codex vs Claude vs Copilot delegation)
+**CRITICAL MISSING (RESOLVED 2025-11-12):** Intelligent agent selection (Codex vs Claude vs Copilot delegation) now handled by `AgentSelector` inside `TaskExecutionService` (`backend/src/services/taskExecution.service.ts:30-120,500-552`). Remaining gaps are artifact linking + Copilot delegation.
 
 ---
 
