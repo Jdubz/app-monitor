@@ -33,6 +33,7 @@ import type { RetryCoordinationService } from './retryCoordination.service.js';
 import type { SystemLifecycleService } from './systemLifecycle.service.js';
 import type { SystemInitializationService } from './systemInitialization.service.js';
 import type { InteractiveSessionCoordinator } from './interactiveSessionCoordinator.service.js';
+import type { InfoQueryService } from './infoQuery.service.js';
 import { EventEmitter } from 'events';
 
 /**
@@ -604,6 +605,14 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
   const ephemeralWorkerService = createMockEphemeralWorkerService();
   const taskExecutionService = createMockTaskExecutionService();
   const taskCompletionService = createMockTaskCompletionService();
+  
+  const infoQueryService = {
+    getAgentPersonalities: vi.fn().mockReturnValue([]),
+    getTaskTemplates: vi.fn().mockReturnValue({ universal: {} }),
+    getTaskCreationGuidelines: vi.fn().mockReturnValue({ guidelines: {} }),
+    getMaxWorkers: vi.fn().mockReturnValue(3),
+    getActiveWorkers: vi.fn().mockReturnValue(0)
+  } as unknown as InfoQueryService;
 
   return {
     processManager,
@@ -617,6 +626,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     systemInitializationService,
     interactiveSessionCoordinator,
     cleanupCoordinator,
+    infoQueryService,
     agentManager,
     templateManager,
     guidelinesManager,

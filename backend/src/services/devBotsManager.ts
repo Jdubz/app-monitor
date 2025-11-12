@@ -89,6 +89,7 @@ export class DevBotsManager extends EventEmitter {
   private systemInitializationService!: import('./systemInitialization.service.js').SystemInitializationService;
   private interactiveSessionCoordinator!: import('./interactiveSessionCoordinator.service.js').InteractiveSessionCoordinator;
   private cleanupCoordinator!: import('./cleanupCoordinator.service.js').CleanupCoordinator;
+  private infoQueryService!: import('./infoQuery.service.js').InfoQueryService;
   private taskQueueWorker?: { start: () => Promise<void>; stop: () => Promise<void> };
   private metricsEmitter?: MetricsEmitter;
 
@@ -124,6 +125,7 @@ export class DevBotsManager extends EventEmitter {
     this.systemInitializationService = dependencies.systemInitializationService;
     this.interactiveSessionCoordinator = dependencies.interactiveSessionCoordinator;
     this.cleanupCoordinator = dependencies.cleanupCoordinator;
+    this.infoQueryService = dependencies.infoQueryService;
 
     // Initialize maxWorkers from config
     this.maxWorkers = config.devBots.maxWorkers;
@@ -404,48 +406,47 @@ export class DevBotsManager extends EventEmitter {
     });
   }
 
+  /**
+   * Info/query methods - delegated to InfoQueryService
+   */
   public getAgentPersonalities(): AgentPersonality[] {
-    return this.agentManager.getAllPersonalities();
+    return this.infoQueryService.getAgentPersonalities();
   }
 
   public getTaskTemplates(): Record<string, unknown>[] {
-    // Return the single universal template as an array for API compatibility
-    return [this.templateManager.getTemplate() as unknown as Record<string, unknown>];
+    return this.infoQueryService.getTaskTemplates();
   }
 
   public getTaskGuidelines(taskType?: string): unknown {
-    if (taskType) {
-      return this.guidelinesManager.getGuidelines(taskType);
-    }
-    return this.guidelinesManager.getAllGuidelines();
+    return this.infoQueryService.getTaskGuidelines(taskType);
   }
 
   public getTaskExample(taskType: string): unknown {
-    return this.guidelinesManager.getExampleTask(taskType);
+    return this.infoQueryService.getTaskExample(taskType);
   }
 
   public getTaskChecklist(taskType: string): string[] {
-    return this.guidelinesManager.generateTaskChecklist(taskType);
+    return this.infoQueryService.getTaskChecklist(taskType);
   }
 
   public validateTaskData(taskData: Record<string, unknown>, taskType: string): unknown {
-    return this.guidelinesManager.validateTaskData(taskData, taskType);
+    return this.infoQueryService.validateTaskData(taskData, taskType);
   }
 
   public getValidProjects(): string[] {
-    return this.guidelinesManager.getValidProjects();
+    return this.infoQueryService.getValidProjects();
   }
 
   public getValidAgents(): string[] {
-    return this.guidelinesManager.getValidAgents();
+    return this.infoQueryService.getValidAgents();
   }
 
   public getWorkerCount(): number {
-    return this.ephemeralWorkerService.getActiveWorkers().length;
+    return this.infoQueryService.getWorkerCount();
   }
 
   public getMaxWorkers(): number {
-    return 2;
+    return this.infoQueryService.getMaxWorkers();
   }
 
   /**
