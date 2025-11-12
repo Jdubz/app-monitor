@@ -402,18 +402,45 @@ Final verification:
 - ✅ All health monitoring features preserved
 - ✅ Proper delegation to new service
 
+### ✅ Completed - Phase 2: Interactive Idle Watchdog (2025-11-12)
+
+**Time Invested**: ~30 minutes
+**Lines Moved**: 23 lines from devBotsManager
+**Service Updated**: `interactiveSession.service.ts` (169 → 236 lines, +67 lines)
+
+**Changes Made**:
+1. ✅ Updated `interactiveSession.service.ts`
+   - Added `startIdleWatchdog()` method with callback parameter
+   - Added `stopIdleWatchdog()` method
+   - Added `getLastActivity()` method to calculate idle time
+   - Added interval tracking and cleanup
+   - Emits 'idleTimeout' event for monitoring
+
+2. ✅ Updated `devBotsManager.ts`
+   - Removed `interactiveIdleInterval` property
+   - Removed `getInteractiveLastActivity()` method (moved to service)
+   - Simplified `startInteractiveIdleWatchdog()` to delegate to service
+   - Updated `stopSystem()` to call `interactiveSessionService.stopIdleWatchdog()`
+   - Added watchdog initialization in `initializeAsync()`
+
+**Results**:
+- **devBotsManager.ts**: 1,509 → 1,486 lines (23 lines removed, 1.5% reduction)
+- **interactiveSession.service.ts**: 169 → 236 lines (+67 lines for watchdog)
+- ✅ TypeScript compilation passing
+- ✅ Interactive session service now self-contained
+- ✅ Better separation of concerns
+
 ### 🔄 In Progress
-- [ ] Phase 2: Move Interactive Watchdog
 - [ ] Phase 3: Consolidate Worker Tracking
 - [ ] Phase 4: Move Token Extraction
 - [ ] Phase 5: Final Cleanup
 
 ### 📋 Remaining
 - [ ] Run backend tests to verify functionality
-- [ ] Commit Phase 1 changes
+- [ ] Commit Phase 2 changes
 - [ ] Continue with remaining phases
 
 ---
 
-**Current Status**: Phase 1 complete! devBotsManager reduced by 15.6%. Ready for Phase 2.
-**Next Step**: Begin Phase 2 - Move Interactive Idle Watchdog to InteractiveSessionService
+**Current Status**: Phase 2 complete! devBotsManager reduced by 17% total (1,789 → 1,486 lines).
+**Next Step**: Begin Phase 3 - Consolidate Worker Tracking

@@ -136,7 +136,6 @@ export class DevBotsManager extends EventEmitter {
   private interactiveSessionStreamManager!: InteractiveSessionStreamManager;
   private taskQueueWorker?: { start: () => void; stop: () => void }; // TaskQueueWorker (imported lazily to avoid circular deps)
   private metricsEmitter?: MetricsEmitter;
-  private interactiveIdleInterval?: NodeJS.Timeout;
 
   // System state
   private startTime = Date.now();
@@ -408,6 +407,9 @@ export class DevBotsManager extends EventEmitter {
 
     // Start metrics emitter
     this.startMetricsEmitter();
+
+    // Start interactive session idle watchdog
+    this.startInteractiveIdleWatchdog();
   }
 
   /**
@@ -514,52 +516,33 @@ export class DevBotsManager extends EventEmitter {
     });
   }
 
+  /**
+   * Start interactive session idle timeout watchdog
+   * Delegated to InteractiveSessionService
+   */
   private startInteractiveIdleWatchdog(): void {
-    if (this.interactiveIdleInterval) {
-      clearInterval(this.interactiveIdleInterval);
-    }
-    this.interactiveIdleInterval = setInterval(() => {
-      const session = this.interactiveSessionService.getActiveSession();
-      if (!session) {
-        return;
-      }
-      const lastActivity = this.getInteractiveLastActivity(session);
-      if (!lastActivity) {
-        return;
-      }
+    this.interactiveSessionService.startIdleWatchdog((sessionId, idleDuration) => {
       const idleTimeout = this.interactiveSessionService.getIdleTimeoutMs();
-      const idleDuration = Date.now() - lastActivity;
-      if (idleDuration >= idleTimeout) {
-        logger.warn({
-          category: 'system',
-          action: 'idle_timeout',
-          message: 'Interactive session exceeded idle timeout',
-          details: {
-            sessionId: session.id,
-            idleDurationMs: idleDuration,
-            idleTimeoutMs: idleTimeout,
-          },
-        });
-        void this.endInteractiveSession(session.id, 'Idle timeout (no activity)').catch((error) => {
-          logger.error({
-            category: 'system',
-            action: 'idle_timeout_cleanup_failed',
-            message: `Failed to stop idle interactive session ${session.id}`,
-            error,
-          });
-        });
-      }
-    }, 30000);
-  }
+      logger.warn({
+        category: 'system',
+        action: 'idle_timeout',
+        message: 'Interactive session exceeded idle timeout',
+        details: {
+          sessionId,
+          idleDurationMs: idleDuration,
+          idleTimeoutMs: idleTimeout,
+        },
+      });
 
-  private getInteractiveLastActivity(session: InteractiveSessionRecord): number | null {
-    const timestamps = [session.startedAt, session.lastUserActivityAt, session.lastAgentActivityAt]
-      .map((value) => (value ? Date.parse(value) : Number.NaN))
-      .filter((value) => Number.isFinite(value)) as number[];
-    if (!timestamps.length) {
-      return null;
-    }
-    return Math.max(...timestamps);
+      void this.endInteractiveSession(sessionId, 'Idle timeout (no activity)').catch((error) => {
+        logger.error({
+          category: 'system',
+          action: 'idle_timeout_cleanup_failed',
+          message: `Failed to stop idle interactive session ${sessionId}`,
+          error,
+        });
+      });
+    });
   }
 
   // cleanupStuckTaskContainers moved to EphemeralWorkerService
@@ -1039,10 +1022,8 @@ export class DevBotsManager extends EventEmitter {
     // Stop health monitoring
     this.workerHealthMonitor.stop();
 
-    if (this.interactiveIdleInterval) {
-      clearInterval(this.interactiveIdleInterval);
-      this.interactiveIdleInterval = undefined;
-    }
+    // Stop interactive session idle watchdog
+    this.interactiveSessionService.stopIdleWatchdog();
 
     // Stop background task queue worker
     if (this.taskQueueWorker) {
