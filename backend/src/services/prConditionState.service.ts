@@ -370,7 +370,9 @@ export class PRConditionStateService {
    * Handle check_suite event - ONLY evaluate CI checks
    */
   private async evaluateAndHandleCIChecks(prNumber: number, state: PRConditionState): Promise<void> {
-    const evaluation = await this.evaluateCIChecksCondition(prNumber);
+    // Fetch PR status once and reuse
+    const prStatus = await this.github.getPRStatus(prNumber);
+    const evaluation = await this.evaluateCIChecksCondition(prNumber, prStatus);
 
     await this.handleConditionChange(prNumber, state, 'ci_checks_passing', evaluation);
   }
@@ -379,12 +381,15 @@ export class PRConditionStateService {
    * Handle pull_request_review event - ONLY evaluate comments and change requests
    */
   private async evaluateAndHandleReview(prNumber: number, state: PRConditionState): Promise<void> {
+    // Fetch PR status once and reuse
+    const prStatus = await this.github.getPRStatus(prNumber);
+    
     // Evaluate comments
     const commentsEval = await this.evaluateCommentsCondition(prNumber);
     await this.handleConditionChange(prNumber, state, 'comments_resolved', commentsEval);
 
     // Evaluate change requests
-    const changeRequestsEval = await this.evaluateChangeRequestsCondition(prNumber);
+    const changeRequestsEval = await this.evaluateChangeRequestsCondition(prNumber, prStatus);
     await this.handleConditionChange(prNumber, state, 'no_change_requests', changeRequestsEval);
   }
 
@@ -394,14 +399,17 @@ export class PRConditionStateService {
   private async evaluateAndHandleSynchronize(prNumber: number, state: PRConditionState): Promise<void> {
     state.last_updated = Date.now();
 
+    // Fetch PR status once and reuse for all evaluations
+    const prStatus = await this.github.getPRStatus(prNumber);
+
     // Evaluate conditions that code changes might affect
     const commentsEval = await this.evaluateCommentsCondition(prNumber);
     await this.handleConditionChange(prNumber, state, 'comments_resolved', commentsEval);
 
-    const conflictsEval = await this.evaluateMergeConflictsCondition(prNumber);
+    const conflictsEval = await this.evaluateMergeConflictsCondition(prNumber, prStatus);
     await this.handleConditionChange(prNumber, state, 'no_merge_conflicts', conflictsEval);
 
-    const branchEval = await this.evaluateBranchUpdateCondition(prNumber);
+    const branchEval = await this.evaluateBranchUpdateCondition(prNumber, prStatus);
     await this.handleConditionChange(prNumber, state, 'branch_updated', branchEval);
 
     // NOTE: Do NOT evaluate CI checks here - wait for check_suite.completed event
@@ -411,7 +419,9 @@ export class PRConditionStateService {
    * Handle push to base branch - ONLY evaluate branch update
    */
   private async evaluateAndHandleBranchUpdate(prNumber: number, state: PRConditionState): Promise<void> {
-    const evaluation = await this.evaluateBranchUpdateCondition(prNumber);
+    // Fetch PR status once and reuse
+    const prStatus = await this.github.getPRStatus(prNumber);
+    const evaluation = await this.evaluateBranchUpdateCondition(prNumber, prStatus);
     await this.handleConditionChange(prNumber, state, 'branch_updated', evaluation);
   }
 
@@ -419,15 +429,18 @@ export class PRConditionStateService {
    * Handle task completion - Re-evaluate all conditions to detect partial fixes
    */
   private async evaluateAndHandleTaskCompletion(prNumber: number, state: PRConditionState): Promise<void> {
+    // Fetch PR status once and reuse for all evaluations
+    const prStatus = await this.github.getPRStatus(prNumber);
+    
     // Re-evaluate ALL conditions to see what changed
     const evaluations = await Promise.all([
-      this.evaluateCIChecksCondition(prNumber),
+      this.evaluateCIChecksCondition(prNumber, prStatus),
       this.evaluateCommentsCondition(prNumber),
-      this.evaluateMergeConflictsCondition(prNumber),
-      this.evaluateBranchUpdateCondition(prNumber),
-      this.evaluateChangeRequestsCondition(prNumber),
-      this.evaluateTaskVerificationCondition(prNumber),
-      this.evaluateCopilotReviewCondition(prNumber)
+      this.evaluateMergeConflictsCondition(prNumber, prStatus),
+      this.evaluateBranchUpdateCondition(prNumber, prStatus),
+      this.evaluateChangeRequestsCondition(prNumber, prStatus),
+      this.evaluateTaskVerificationCondition(prNumber, prStatus),
+      this.evaluateCopilotReviewCondition(prNumber, prStatus)
     ]);
 
     const conditionIds = [
@@ -452,9 +465,12 @@ export class PRConditionStateService {
   /**
    * Evaluate Condition 1: CI Checks Passing
    */
-  private async evaluateCIChecksCondition(prNumber: number): Promise<ConditionEvaluation> {
+  private async evaluateCIChecksCondition(prNumber: number, prStatus?: PRStatus): Promise<ConditionEvaluation> {
     try {
-      const prStatus = await this.github.getPRStatus(prNumber);
+      // Reuse prStatus if provided, otherwise fetch
+      if (!prStatus) {
+        prStatus = await this.github.getPRStatus(prNumber);
+      }
       const checks = prStatus.checks;
 
       // Find failing checks
@@ -594,9 +610,12 @@ export class PRConditionStateService {
   /**
    * Evaluate Condition 3: No Merge Conflicts
    */
-  private async evaluateMergeConflictsCondition(prNumber: number): Promise<ConditionEvaluation> {
+  private async evaluateMergeConflictsCondition(prNumber: number, prStatus?: PRStatus): Promise<ConditionEvaluation> {
     try {
-      const prStatus = await this.github.getPRStatus(prNumber);
+      // Reuse prStatus if provided, otherwise fetch
+      if (!prStatus) {
+        prStatus = await this.github.getPRStatus(prNumber);
+      }
 
       if (prStatus.mergeable === 'MERGEABLE') {
         return {
@@ -647,9 +666,12 @@ export class PRConditionStateService {
   /**
    * Evaluate Condition 4: Branch Updated
    */
-  private async evaluateBranchUpdateCondition(prNumber: number): Promise<ConditionEvaluation> {
+  private async evaluateBranchUpdateCondition(prNumber: number, prStatus?: PRStatus): Promise<ConditionEvaluation> {
     try {
-      const prStatus = await this.github.getPRStatus(prNumber);
+      // Reuse prStatus if provided, otherwise fetch
+      if (!prStatus) {
+        prStatus = await this.github.getPRStatus(prNumber);
+      }
 
       // GitHub returns mergeStateStatus in UPPERCASE
       const mergeState = (prStatus.mergeable_state || '').toUpperCase();
@@ -705,9 +727,12 @@ export class PRConditionStateService {
   /**
    * Evaluate Condition 5: No Change Requests
    */
-  private async evaluateChangeRequestsCondition(prNumber: number): Promise<ConditionEvaluation> {
+  private async evaluateChangeRequestsCondition(prNumber: number, prStatus?: PRStatus): Promise<ConditionEvaluation> {
     try {
-      const prStatus = await this.github.getPRStatus(prNumber);
+      // Reuse prStatus if provided, otherwise fetch
+      if (!prStatus) {
+        prStatus = await this.github.getPRStatus(prNumber);
+      }
       const reviews = prStatus.reviews;
 
       // Find latest review from each reviewer
@@ -769,8 +794,9 @@ export class PRConditionStateService {
 
   /**
    * Evaluate Condition 6: Task Verification
+   * Note: Does not use prStatus as it evaluates task data, not PR data
    */
-  private async evaluateTaskVerificationCondition(prNumber: number): Promise<ConditionEvaluation> {
+  private async evaluateTaskVerificationCondition(prNumber: number, _prStatus?: PRStatus): Promise<ConditionEvaluation> {
     try {
       // Find the task associated with this PR
       const tasks = await this.taskQueue.findByPRNumber(prNumber);
@@ -847,9 +873,12 @@ export class PRConditionStateService {
   /**
    * Evaluate Condition 7: Copilot Review Completed
    */
-  private async evaluateCopilotReviewCondition(prNumber: number): Promise<ConditionEvaluation> {
+  private async evaluateCopilotReviewCondition(prNumber: number, prStatus?: PRStatus): Promise<ConditionEvaluation> {
     try {
-      const prStatus = await this.github.getPRStatus(prNumber);
+      // Reuse prStatus if provided, otherwise fetch
+      if (!prStatus) {
+        prStatus = await this.github.getPRStatus(prNumber);
+      }
       
       // Check for formal Copilot reviews
       const copilotReviews = prStatus.reviews.filter(review =>

@@ -966,7 +966,16 @@ describe('API Integration Suite', () => {
           files: ['src/server.ts'],
         },
         assert: (res) => {
-          expect(res.body?.data?.message).toContain('Task added');
+          // In non-production environments, task creation is blocked and returns stubbed response
+          // In production, it would return 'Task added successfully'
+          expect(res.body?.data?.message).toMatch(/Task (added|creation stubbed)/);
+          expect(res.body?.data?.task).toBeDefined();
+
+          // If stubbed (non-production), verify stub structure
+          if (res.body?.data?.task?.stubbed) {
+            expect(res.body?.data?.task?.id).toMatch(/^stub-/);
+            expect(res.body?.data?.task?.reason).toContain('non-production');
+          }
         },
       },
       {
