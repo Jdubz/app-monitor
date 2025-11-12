@@ -80,7 +80,7 @@ export class CopilotThrottleManager {
    */
   private async getActiveCopilotTaskCount(): Promise<number> {
     try {
-      const activeTasks = await this.taskQueue.getActiveCopilotTasks();
+      const activeTasks = this.taskQueue.getActiveCopilotTasks();
       return activeTasks.length;
     } catch (error) {
       logger.error({

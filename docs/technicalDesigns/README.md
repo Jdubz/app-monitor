@@ -28,15 +28,15 @@ This directory contains consolidated technical design documents for major app-mo
 | Document | Status | Progress | Description |
 |----------|--------|----------|-------------|
 | [Error Detection & Recovery](error-detection-and-recovery-design.md) | 🟡 Partial | 30% | Structured review chains with escalation |
-| [Dev-Bot Foundational Upgrades](dev-bot-foundational-upgrades.md) | 🔴 Not Started | 0% | Data/analytics backbone and diagnostics |
-| [App-Monitor Resilience](app-monitor-resilience-and-deployments.md) | 🟡 In Progress | - | Zero-downtime deploys and monitoring |
+| [Dev-Bot Foundational Upgrades](dev-bot-foundational-upgrades.md) | 🟡 Partially Implemented | 85% | Data/analytics backbone and diagnostics |
+| [App-Monitor Resilience](app-monitor-resilience-and-deployments.md) | 🟡 In Progress | 40% | Zero-downtime deploys and monitoring |
 
 ### Priority 2 (Important)
 
 | Document | Status | Progress | Description |
 |----------|--------|----------|-------------|
 | [Dev-Bot Context Management](dev-bot-context-management.md) | 🔴 Not Started | 0% | Programmatic context bundles per task type |
-| [Frontend Integration Tests](frontend-integration-test-remediation-design.md) | 🟡 In Progress | - | FE test stabilization and monitoring |
+| [Frontend Integration Tests](frontend-integration-test-remediation-design.md) | 🔴 Not Started | 0% | FE test stabilization and monitoring |
 
 ### Priority 3 (Future)
 

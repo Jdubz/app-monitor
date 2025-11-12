@@ -1344,8 +1344,9 @@ export class TaskQueueService {
   }
 
   /**
-   * Get currently active Copilot tasks
+   * Get currently active Copilot tasks (synchronous)
    * Used by Copilot throttle manager to enforce concurrency limits
+   * Note: Returns synchronously as SQLite operations are synchronous
    */
   getActiveCopilotTasks(): Task[] {
     try {
