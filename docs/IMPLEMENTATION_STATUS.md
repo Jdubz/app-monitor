@@ -25,19 +25,19 @@
 
 **Impact:** PR workflow can now properly detect behind branches and spawn fix tasks. PRs closed without merge now properly cancel associated tasks (no more database bloat). System simplified by removing unnecessary complexity. Production deployment guarantees clearly documented.
 
-## ✅ Production Stability - RESOLVED
+## ✅ Production Stability - COMPLETE
 
-**Status:** Infrastructure 80% complete, minor fixes applied (2025-11-12)
+**Status:** Production deployment infrastructure complete (2025-11-12)
 
-**What Was Fixed:**
-1. Health endpoint returns 503 during drain
-2. Drain period optimized (60s → 30s)
-3. systemd timeout increased (30s → 120s)
-4. Process cleanup automated
+**Implemented:**
+1. Health endpoint returns 503 during drain ✅
+2. systemd timeout increased to 120s ✅
+3. Process cleanup automated ✅
+4. DATABASE_PATH env var support ✅
 
 **Current State:**
 - ✅ Blue-green deployment working (ports 5001 ↔ 5002)
-- ✅ Graceful shutdown implemented (90s: 60s tasks + 30s WebSocket)
+- ✅ Graceful shutdown (120s timeout for full cleanup)
 - ✅ Comprehensive health checks (6 different checks)
 - ✅ Health-gated traffic switching (nginx routes to new instance ONLY if healthy)
 - ✅ Automatic rollback on failure (zero downtime maintained)
@@ -59,8 +59,8 @@
 | BOT_PROMPT_ENGINEERING_V3.md | ✅ Active | Task prompts now flow through `backend/src/services/taskPromptTemplates.ts` / `taskTypeGuidelines.ts`. | Keep guidelines updated as new domains arrive. |
 | BUG_REPORT_SYSTEM_IMPLEMENTATION.md | Not started | No `bug_reports` tables or services exist outside the plan doc. | Implement schema, service layer, and UI per plan. |
 | COMPREHENSIVE_BACKEND_ANALYSIS.md | ✅ Complete | Documented audit; no code changes required. | Use findings to prioritize stabilization backlog. |
-| CONTINUOUS_PR_IMPLEMENTATION_ROADMAP.md | ✅ Phase 1-2 Complete | Quality gates + webhook ingestion live in `backend/src/services/githubPR.service.ts` / `githubWebhookHandler.service.ts`. Bug fixes #2 & #3 deployed 2025-11-12. | **Phase 3:** Implement self-healing loop (3-5 days). **Phase 4:** Auto-merge implementation (2-3 days). |
-| CONTINUOUS_PR_SELF_HEALING.md | Not started | Repo lacks the self-healing orchestrators described (no `self-heal` modules). | Build the event-driven workflow. |
+| CONTINUOUS_PR_IMPLEMENTATION_ROADMAP.md | ✅ Phase 1-3 Complete | Quality gates + webhook ingestion + **event-driven fix spawning** live in `backend/src/services/prConditionState.service.ts` / `githubWebhookHandler.service.ts`. Bug fixes #2 & #3 deployed 2025-11-12. | **Phase 4:** Auto-merge implementation + chain depth tracking (2-3 days). |
+| CONTINUOUS_PR_SELF_HEALING.md | ✅ 80% Complete | Event-driven self-healing implemented via `PRConditionStateService` with intelligent fix task spawning, fingerprinting, and duplicate prevention. | Add chain_id tracking, Copilot throttle manager, auto-merge, and blocked chain UI. |
 | DATABASE_CONSOLIDATION_PLAN.md | ✅ Archived 2025-11-12 | All services now use `backend/data/app-monitor.db` (configured via `config.databasePath`). Legacy databases moved to backups. | None - Moved to archive. |
 | DATABASE_REORGANIZATION.md | ✅ Archived 2025-11-12 | Consolidated to single `app-monitor.db`. Legacy files in backups/. | None - Moved to archive. |
 | DEV_BOT_INTERACTIVE_SESSION_TAB.md | ✅ Archived 2025-11-12 | Frontend tab (`frontend/src/components/dev-bots/interactive/InteractiveSessionTab.tsx`) + backend gateway (`backend/src/services/interactiveSessionGateway.ts`) are live. | None - Moved to archive. |
@@ -89,23 +89,24 @@
 
 ### Immediate (This Week)
 
-**1. Artifact System (P1 - 1 day)**
+**1. Complete PR Self-Healing (P0 - 2 days)** ✨ **80% Done!**
+- Status: Event-driven spawning ✅, need chain tracking & auto-merge
+- Priority: CRITICAL - Blocks full autonomy
+- Remaining Components:
+  - Add chain_id column + migration (2-3 hours)
+  - Implement chain depth tracking (3-4 hours)
+  - Add auto-merge when all conditions met (4-6 hours)
+  - Copilot throttle manager (2-3 hours)
+- Location: `backend/src/services/prConditionState.service.ts`
+- Investigation: `docs/investigations/PR_SELF_HEALING_EVENT_DRIVEN_DESIGN.md`
+
+**2. Artifact System (P1 - 1 day)**
 - Status: Not started  
 - Priority: HIGH - Debugging/metrics unlock
 - Components:
   - session_summary.json generation (4-6 hours)
   - task_artifacts table + DB linking (4-6 hours)
 - Location: `backend/src/services/taskExecution.service.ts`
-
-**2. PR Self-Healing Loop (P0 - 3-5 days)**
-- Status: Not started
-- Priority: CRITICAL - Blocks full autonomy
-- Components:
-  - Failure classification (lint, test, build, conflict)
-  - Fix task generation with proper prompts
-  - Retry logic (max 3 attempts)
-  - Escalation to humans after failures
-- Plan: `docs/plans/CONTINUOUS_PR_SELF_HEALING.md`
 
 ### Next Week
 
