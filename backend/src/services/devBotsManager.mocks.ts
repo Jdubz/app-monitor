@@ -31,6 +31,7 @@ import type { TaskCreationService } from './taskCreation.service.js';
 import type { StatusAggregationService } from './statusAggregation.service.js';
 import type { RetryCoordinationService } from './retryCoordination.service.js';
 import type { SystemLifecycleService } from './systemLifecycle.service.js';
+import type { SystemInitializationService } from './systemInitialization.service.js';
 import { EventEmitter } from 'events';
 
 /**
@@ -337,6 +338,25 @@ export function createMockSystemLifecycleService(): SystemLifecycleService {
 }
 
 /**
+ * Create mock SystemInitializationService
+ */
+export function createMockSystemInitializationService(): SystemInitializationService {
+  return {
+    initializeDockerEnvironment: vi.fn().mockResolvedValue(undefined),
+    initializeAsync: vi.fn().mockResolvedValue(undefined),
+    wireInteractiveStreamEvents: vi.fn(),
+    getDockerValidationResult: vi.fn().mockReturnValue({
+      isValid: true,
+      errors: [],
+      warnings: [],
+      info: {}
+    }),
+    getTaskQueueWorker: vi.fn().mockReturnValue(undefined),
+    getMetricsEmitter: vi.fn().mockReturnValue(undefined)
+  } as unknown as SystemInitializationService;
+}
+
+/**
  * Create mock WorkspaceSyncManager
  */
 export function createMockWorkspaceSyncManager(): WorkspaceSyncManager {
@@ -514,6 +534,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
   const statusAggregationService = createMockStatusAggregationService();
   const retryCoordinationService = createMockRetryCoordinationService();
   const systemLifecycleService = createMockSystemLifecycleService();
+  const systemInitializationService = createMockSystemInitializationService();
   const agentManager = createMockAgentManager();
   const templateManager = createMockTemplateManager();
   const guidelinesManager = createMockGuidelinesManager();
@@ -535,6 +556,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     statusAggregationService,
     retryCoordinationService,
     systemLifecycleService,
+    systemInitializationService,
     agentManager,
     templateManager,
     guidelinesManager,

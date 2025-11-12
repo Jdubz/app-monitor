@@ -65,7 +65,6 @@ export class DevBotsManager extends EventEmitter {
   private dockerManager: DockerManager;
   private workerHealthMonitor!: WorkerHealthMonitor;
   private isCoordinatorHealthy: boolean = false;
-  private dockerValidationResult?: DockerValidationResult;
 
   // Services injected via dependency injection
   private taskQueue!: TaskQueueService;
@@ -217,296 +216,6 @@ export class DevBotsManager extends EventEmitter {
       if (serviceName === 'dev-bots') {
         this.emit('systemStatusChange', status);
       }
-    });
-  }
-
-  /**
-   * Initialize and validate Docker environment
-   */
-  private async initializeDockerEnvironment(): Promise<void> {
-    try {
-      logger.info({
-      category: 'process',
-      action: 'validating_docker_environment',
-      message: 'Validating Docker environment...'
-    });
-      this.dockerValidationResult = await this.dockerManager.validateDockerEnvironment();
-
-      if (!this.dockerValidationResult.isValid) {
-        logger.error({
-          category: 'process',
-          action: 'docker_validation_failed',
-          message: 'Docker validation failed',
-          details: { errors: this.dockerValidationResult.errors }
-        });
-        this.emit('dockerError', {
-          type: 'validation_failed',
-          errors: this.dockerValidationResult.errors,
-          message: 'Docker environment validation failed. Dev-Bots cannot start.'
-        });
-        return;
-      }
-
-      // Log warnings if any
-      if (this.dockerValidationResult.warnings.length > 0) {
-        logger.warn({
-          category: 'process',
-          action: 'docker_validation_warnings',
-          message: 'Docker validation warnings',
-          details: { warnings: this.dockerValidationResult.warnings }
-        });
-        this.emit('dockerWarning', {
-          warnings: this.dockerValidationResult.warnings
-        });
-      }
-
-      // Ensure required images are available
-      logger.info({
-      category: 'process',
-      action: 'checking_required_docker_images',
-      message: 'Checking required Docker images...'
-    });
-      const imageResult = await this.dockerManager.ensureRequiredImages();
-
-      if (!imageResult.success) {
-        logger.error({
-          category: 'process',
-          action: 'required_docker_images_not_available',
-          message: 'Required Docker images not available',
-          details: { errors: imageResult.errors }
-        });
-        this.emit('dockerError', {
-          type: 'images_missing',
-          errors: imageResult.errors,
-          message: 'Required Docker images are not available'
-        });
-        return;
-      }
-
-      logger.info({
-        category: 'process',
-        action: 'docker_environment_validated_successfully',
-        message: 'Docker environment validated successfully',
-        details: { info: this.dockerValidationResult.info }
-      });
-    } catch (error) {
-      logger.error({
-      category: 'process',
-      action: 'failed_to_initialize_docker_environment',
-      message: 'Failed to initialize Docker environment:',
-      error: error
-    });
-      this.emit('dockerError', {
-        type: 'initialization_failed',
-        error: error instanceof Error ? error.message : String(error),
-        message: 'Failed to initialize Docker environment'
-      });
-    }
-  }
-
-  /**
-   * Initialize async components (orphaned task recovery)
-   */
-  private async initializeAsync(): Promise<void> {
-    // Recover orphaned tasks from previous server crash/restart
-    const orphanedTaskIds = this.taskQueue.recoverOrphanedTasks();
-
-    if (orphanedTaskIds.length > 0) {
-      logger.warn({
-        category: 'recovery',
-        action: 'orphaned_tasks_recovered_on_startup',
-        message: `Recovered ${orphanedTaskIds.length} orphaned tasks on startup`,
-        details: {
-          taskIds: orphanedTaskIds,
-          willAttemptRecovery: true
-        }
-      });
-
-      // Attempt recovery for each orphaned task
-      for (const taskId of orphanedTaskIds) {
-        const task = this.taskQueue.getTask(taskId);
-        if (task && task.status === 'failed' && this.recovery) {
-          try {
-            const recoveryResult = await this.recovery.attemptRecovery({
-              task: task as Task & { metadata?: Record<string, unknown> },
-              failurePattern: {
-                name: 'server_restart',
-                description: 'Task was orphaned when server restarted or crashed',
-                patterns: [],
-                immediateFailure: false,
-                category: 'system_error',
-                suggestedFix: 'Task was orphaned due to server restart. Cleanup and retry.'
-              },
-              stderr: task.error || 'Task orphaned due to server restart',
-              stdout: '',
-              exitCode: -1
-            });
-
-            if (recoveryResult.recovered) {
-              logger.info({
-                category: 'recovery',
-                action: 'orphaned_task_recovery_initiated',
-                message: `Initiated recovery for orphaned task ${taskId}`,
-                details: {
-                  taskId,
-                  cleanupTaskId: recoveryResult.cleanupTaskId
-                }
-              });
-            }
-          } catch (error) {
-            logger.error({
-              category: 'recovery',
-              action: 'orphaned_task_recovery_failed',
-              message: `Failed to attempt recovery for orphaned task ${taskId}`,
-              error: error instanceof Error ? error.message : String(error)
-            });
-          }
-        }
-      }
-    }
-
-    logger.info({
-      category: 'process',
-      action: 'async_initialization_complete',
-      message: 'Async initialization complete: orphaned task recovery finished'
-    });
-
-    // Start background task queue worker
-    await this.startTaskQueueWorker();
-
-    // Start metrics emitter
-    this.startMetricsEmitter();
-
-    // Start interactive session idle watchdog
-    this.startInteractiveIdleWatchdog();
-  }
-
-  /**
-   * Start background task queue worker
-   */
-  private async startTaskQueueWorker(): Promise<void> {
-    try {
-      // Dynamically import to avoid circular dependency
-      const { TaskQueueWorker } = await import('./taskQueueWorker.js');
-
-      this.taskQueueWorker = new TaskQueueWorker(this.taskExecutionService, {
-        pollIntervalMs: 5000, // Poll every 5 seconds
-        enabled: true,
-        maxConsecutiveFailures: 10
-      });
-
-      await this.taskQueueWorker.start();
-
-      // Update SystemLifecycleService with taskQueueWorker reference
-      this.systemLifecycleService.updateComponents({ taskQueueWorker: this.taskQueueWorker });
-
-      logger.info({
-        category: 'process',
-        action: 'task_queue_worker_started',
-        message: 'Background task queue worker started successfully'
-      });
-    } catch (error) {
-      logger.error({
-        category: 'process',
-        action: 'task_queue_worker_start_failed',
-        message: 'Failed to start background task queue worker',
-        error
-      });
-    }
-  }
-
-  private startMetricsEmitter(): void {
-    try {
-      this.metricsEmitter = new MetricsEmitter(
-        this.taskQueue,
-        this.ephemeralWorkerService,
-        60000
-      );
-      this.metricsEmitter.start();
-
-      // Update SystemLifecycleService with metricsEmitter reference
-      this.systemLifecycleService.updateComponents({ metricsEmitter: this.metricsEmitter });
-
-      logger.info({
-        category: 'process',
-        action: 'metrics_emitter_started',
-        message: 'Background metrics emitter started successfully'
-      });
-    } catch (error) {
-      logger.error({
-        category: 'process',
-        action: 'metrics_emitter_start_failed',
-        message: 'Failed to start metrics emitter',
-        error
-      });
-    }
-  }
-
-  private wireInteractiveStreamEvents(): void {
-    this.interactiveSessionStreamManager.on('message', (message: InteractiveStreamMessage) => {
-      if (message.kind === 'stdout' || message.kind === 'stderr') {
-        try {
-          this.interactiveSessionService.recordActivity(message.sessionId, 'agent');
-        } catch (error) {
-          logger.warn({
-            category: 'system',
-            action: 'activity_record_failed',
-            message: `Failed to record agent activity for session ${message.sessionId}`,
-            error,
-          });
-        }
-      }
-    });
-
-    this.interactiveSessionStreamManager.on('error', ({ sessionId, error }) => {
-      logger.error({
-        category: 'system',
-        action: 'stream_error',
-        message: `Interactive stream error for session ${sessionId}`,
-        error,
-      });
-      const session = this.interactiveSessionService.getSessionById(sessionId);
-      if (session && session.status !== 'ended') {
-        this.interactiveSessionService.endSession(sessionId, error.message, 'error');
-      }
-    });
-
-    this.interactiveSessionStreamManager.on('closed', ({ sessionId, reason }) => {
-      const session = this.interactiveSessionService.getSessionById(sessionId);
-      if (session && session.status !== 'ended') {
-        this.interactiveSessionService.setStatus(sessionId, 'disconnecting', {
-          terminationReason: reason,
-        });
-      }
-    });
-  }
-
-  /**
-   * Start interactive session idle timeout watchdog
-   * Delegated to InteractiveSessionService
-   */
-  private startInteractiveIdleWatchdog(): void {
-    this.interactiveSessionService.startIdleWatchdog((sessionId, idleDuration) => {
-      const idleTimeout = this.interactiveSessionService.getIdleTimeoutMs();
-      logger.warn({
-        category: 'system',
-        action: 'idle_timeout',
-        message: 'Interactive session exceeded idle timeout',
-        details: {
-          sessionId,
-          idleDurationMs: idleDuration,
-          idleTimeoutMs: idleTimeout,
-        },
-      });
-
-      void this.endInteractiveSession(sessionId, 'Idle timeout (no activity)').catch((error) => {
-        logger.error({
-          category: 'system',
-          action: 'idle_timeout_cleanup_failed',
-          message: `Failed to stop idle interactive session ${sessionId}`,
-          error,
-        });
-      });
     });
   }
 
@@ -880,15 +589,17 @@ export class DevBotsManager extends EventEmitter {
 
   /**
    * Get Docker validation status
+   * Delegated to SystemInitializationService
    */
   getDockerStatus(): {
     isValid: boolean;
     validation?: DockerValidationResult;
     lastCheck: Date;
   } {
+    const dockerValidation = this.systemInitializationService.getDockerValidationResult();
     return {
-      isValid: this.dockerValidationResult?.isValid || false,
-      validation: this.dockerValidationResult,
+      isValid: dockerValidation?.isValid || false,
+      validation: dockerValidation,
       lastCheck: new Date()
     };
   }
@@ -902,10 +613,11 @@ export class DevBotsManager extends EventEmitter {
 
   /**
    * Trigger Docker environment re-validation
+   * Delegated to SystemInitializationService
    */
   async revalidateDockerEnvironment(): Promise<DockerValidationResult> {
-    await this.initializeDockerEnvironment();
-    return this.dockerValidationResult || {
+    await this.systemInitializationService.initializeDockerEnvironment();
+    return this.systemInitializationService.getDockerValidationResult() || {
       isValid: false,
       errors: ['Docker validation not available'],
       warnings: [],

@@ -677,13 +677,57 @@ Final verification:
 - Better code organization
 - All lifecycle operations in one place
 
+### ✅ Completed - Phase 10: Extract SystemInitializationService (2025-11-12)
+
+**Time Invested**: ~50 minutes
+**Lines Extracted**: 275 lines from devBotsManager
+**New Service**: `systemInitialization.service.ts` (353 lines)
+
+**Changes**:
+1. ✅ Created SystemInitializationService
+   - initializeDockerEnvironment() - Docker validation and image checks
+   - initializeAsync() - orphaned task recovery
+   - startTaskQueueWorker() - background worker startup
+   - startMetricsEmitter() - metrics emitter startup
+   - wireInteractiveStreamEvents() - event wiring for interactive sessions
+   - startInteractiveIdleWatchdog() - idle timeout watchdog
+   - Getters for dockerValidationResult, taskQueueWorker, metricsEmitter
+2. ✅ Updated devBotsManager
+   - Removed 6 private initialization methods (~288 lines)
+   - Replaced Docker validation calls with delegations
+   - Updated getDockerStatus() to use service getter
+   - Updated revalidateDockerEnvironment() to delegate to service
+   - Removed dockerValidationResult property
+   - Wire interactive stream events on startup
+3. ✅ Updated dependency injection
+   - Added to devBotsManager.interfaces.ts
+   - Added to devBotsManager.factory.ts (with callback placeholders)
+   - Added to devBotsManager.mocks.ts
+   - Bound emit and endInteractiveSession callbacks
+   - Set recovery instance after initialization
+
+**Results**:
+- **devBotsManager.ts**: 1,020 → 745 lines (-275 lines, 27.0% reduction!)
+- **SystemInitializationService**: 353 lines (new)
+- ✅ TypeScript compilation passing
+- ✅ Clean initialization logic
+- ✅ Better separation of concerns
+
+**Phase 10 Benefits**:
+- Initialization logic independently testable
+- Cleaner devBotsManager with minimal setup code
+- Easier to modify initialization sequence
+- Better code organization
+- All initialization operations in one place
+- Largest single-phase reduction so far!
+
 ### 📋 Remaining Tasks
 - [ ] Run backend tests to verify all phases (936 tests)
 - [ ] Continue extraction to reach ~600 line target
 
 ---
 
-**Current Status**: Phase 9 complete! devBotsManager reduced by 43.0% total (1,789 → 1,020 lines, -769 lines).
+**Current Status**: Phase 10 complete! devBotsManager reduced by 58.4% total (1,789 → 745 lines, -1,044 lines).
 
 **Progress Summary**:
 - Phase 1: Worker Health Monitor extraction (-280 lines)
@@ -695,6 +739,7 @@ Final verification:
 - Phase 7: StatusAggregationService extraction (-59 lines)
 - Phase 8: RetryCoordinationService extraction (-83 lines)
 - Phase 9: SystemLifecycleService extraction (-77 lines)
+- Phase 10: SystemInitializationService extraction (-275 lines) ⭐
 
-**Remaining to Target**: ~420 more lines to reach ~600 line goal.
-**Next Steps**: Continue extraction - potential candidates include initialization logic (~150 lines), Docker validation methods (~80 lines), or interactive session management.
+**Remaining to Target**: ~145 more lines to reach ~600 line goal.
+**Next Steps**: Final extraction phase - potential candidates include interactive session management (~60 lines), or smaller utility methods consolidation.
