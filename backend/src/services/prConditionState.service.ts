@@ -467,56 +467,6 @@ export class PRConditionStateService {
     const evaluator = this.evaluators.get('no_change_requests')!;
     return evaluator.evaluate(prNumber, prStatus);
   }
-      });
-
-      // Check for change requests
-      const changeRequests = Array.from(latestReviews.values()).filter(
-        r => r.state === 'CHANGES_REQUESTED'
-      );
-
-      if (changeRequests.length === 0) {
-        return {
-          condition_id: 'no_change_requests',
-          status: 'met',
-          fingerprint: 'no-change-requests',
-          blocking_issues: []
-        };
-      }
-
-      // Build blocking issues
-      const blocking_issues: BlockingIssue[] = changeRequests.map(review => ({
-        type: 'change_requested',
-        github_ref_type: 'review' as const,
-        github_ref_id: review.id,  // Store review ID, not author/body
-        severity: 'high' as const
-      }));
-
-      const fingerprint = this.generateFingerprintFromList(
-        changeRequests.map(r => `${r.author}:${r.submittedAt}`).sort()
-      );
-
-      return {
-        condition_id: 'no_change_requests',
-        status: 'unmet',
-        fingerprint,
-        blocking_issues
-      };
-    } catch (error) {
-      logger.error({
-        category: 'pr-workflow',
-        action: 'evaluate_change_requests_failed',
-        message: `Failed to evaluate change requests for PR #${prNumber}`,
-        error
-      });
-
-      return {
-        condition_id: 'no_change_requests',
-        status: 'not_ready',
-        fingerprint: 'evaluation-error',
-        blocking_issues: []
-      };
-    }
-  }
 
   /**
    * Evaluate Condition 6: Task Verification
@@ -528,54 +478,6 @@ export class PRConditionStateService {
     return evaluator.evaluate(prNumber);
   }
 
-      // Check if task has verification results
-      if (task.verification_passed === true) {
-        return {
-          condition_id: 'task_verification',
-          status: 'met',
-          fingerprint: 'verification-passed',
-          blocking_issues: []
-        };
-      }
-
-      if (task.verification_passed === false) {
-        // Verification failed - task needs rework
-        // NOTE: verificationDetails is stored in task.verification_results, not here
-        return {
-          condition_id: 'task_verification',
-          status: 'unmet',
-          fingerprint: 'verification-failed',
-          blocking_issues: [{
-            type: 'verification_failed',
-            severity: 'high',
-          }]
-        };
-      }
-
-      // Verification not yet run or pending
-      return {
-        condition_id: 'task_verification',
-        status: 'not_ready',
-        fingerprint: 'verification-pending',
-        blocking_issues: []
-      };
-    } catch (error) {
-      logger.error({
-        category: 'pr-workflow',
-        action: 'evaluate_task_verification_failed',
-        message: `Failed to evaluate task verification for PR #${prNumber}`,
-        error
-      });
-
-      return {
-        condition_id: 'task_verification',
-        status: 'not_ready',
-        fingerprint: 'evaluation-error',
-        blocking_issues: []
-      };
-    }
-  }
-
   /**
    * Evaluate Condition 7: Copilot Review Completed
    */
@@ -583,59 +485,6 @@ export class PRConditionStateService {
     // Delegate to modular evaluator
     const evaluator = this.evaluators.get('copilot_review_completed')!;
     return evaluator.evaluate(prNumber, prStatus);
-  }
-      }
-
-      // If Copilot submitted formal review, check its state
-      if (copilotReviews.length > 0) {
-        const latestReview = copilotReviews[copilotReviews.length - 1];
-        if (latestReview.state === 'CHANGES_REQUESTED') {
-          return {
-            condition_id: 'copilot_review_completed',
-            status: 'unmet',
-            fingerprint: 'copilot-requested-changes',
-            blocking_issues: [{
-              type: 'copilot_changes_requested',
-              github_ref_type: 'review' as const,
-              github_ref_id: latestReview.id,  // Store review ID, not body
-              severity: 'high'
-            }]
-          };
-        }
-        
-        return {
-          condition_id: 'copilot_review_completed',
-          status: 'met',
-          fingerprint: 'copilot-reviewed',
-          blocking_issues: []
-        };
-      }
-
-      // No Copilot interaction yet - condition unmet
-      return {
-        condition_id: 'copilot_review_completed',
-        status: 'unmet',
-        fingerprint: 'awaiting-copilot',
-        blocking_issues: [{
-          type: 'copilot_review_pending',
-          severity: 'medium'
-        }]
-      };
-    } catch (error) {
-      logger.error({
-        category: 'pr-workflow',
-        action: 'evaluate_copilot_review_failed',
-        message: `Failed to evaluate Copilot review for PR #${prNumber}`,
-        error
-      });
-
-      return {
-        condition_id: 'copilot_review_completed',
-        status: 'not_ready',
-        fingerprint: 'evaluation-error',
-        blocking_issues: []
-      };
-    }
   }
 
   /**
@@ -647,6 +496,29 @@ export class PRConditionStateService {
     const evaluator = this.evaluators.get('final_validation_passed')!;
     return evaluator.evaluate(prNumber, undefined, state);
   }
+
+  // ==========================================================================
+  // Condition Change Handling & Task Spawning
+  // ==========================================================================
+
+  /**
+   * Handle condition state change and spawn tasks if needed
+   */
+  private async handleConditionChange(
+    prNumber: number,
+    state: PRConditionState,
+    conditionId: keyof PRConditionState['conditions'],
+    evaluation: ConditionEvaluation
+  ): Promise<void> {
+    const previousState = state.conditions[conditionId];
+    const previousFingerprint = previousState?.issue_fingerprint || '';
+    const currentFingerprint = evaluation.fingerprint;
+
+    // Check if condition state changed
+    if (previousState && previousState.status === evaluation.status && previousFingerprint === currentFingerprint) {
+      // No change - skip
+      return;
+    }
 
     // Log condition change
     logger.info({
