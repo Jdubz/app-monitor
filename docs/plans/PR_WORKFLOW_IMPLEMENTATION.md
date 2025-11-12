@@ -386,10 +386,13 @@ time_to_merge_seconds: histogram
 **Fix:** HOME env, gh config mount, GH_TOKEN  
 **Status:** Resolved 2025-11-12
 
-### Issue 2: Branch Updates Not Evaluated
-**Root Cause:** Webhook doesn't trigger on push to PR branch  
-**Fix:** Add push event handler for PR branches  
-**Status:** ⏳ Pending
+### Issue 2: Branch Updates Not Evaluated ✅ COMPLETE
+**Root Cause:** Misunderstanding - feature already implemented  
+**Implementation:**  
+- `/api/github/webhooks/push` endpoint exists (line 156)
+- `handlePush()` evaluates all tracked PRs when base branch updated
+- Requires GitHub webhook configured in repo settings  
+**Status:** ✅ Complete - Just needs webhook registration in GitHub
 
 ### Issue 3: Stuck PRs Not Cleaned Up
 **Root Cause:** No automatic cleanup of stale PRs  
