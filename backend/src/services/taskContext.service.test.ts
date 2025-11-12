@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TaskContextService } from './taskContext.service.js';
+import { getTaskContextService, resetTaskContextService } from './taskContext.getTaskContextService().js';
 import { getDatabase, closeDatabase } from './database.js';
 import type {
   TaskCreationContext,
@@ -7,11 +7,10 @@ import type {
 } from '../types/taskContext.js';
 
 describe('TaskContextService', () => {
-  let service: TaskContextService;
 
   beforeEach(() => {
-    // Create new service instance
-    service = new TaskContextService();
+    // Reset singleton before each test
+    resetTaskContextService();
 
     // Get database connection
     const db = getDatabase();
@@ -108,7 +107,7 @@ describe('TaskContextService', () => {
           stmt.run(run.run_id, run.task_id, run.started_at, run.status, run.exit_code);
         });
 
-        const result = service.getTaskAutomationRuns(taskId);
+        const result = getTaskContextService().getTaskAutomationRuns(taskId);
 
         expect(result).toHaveLength(3);
         // Should be ordered by started_at DESC
@@ -118,7 +117,7 @@ describe('TaskContextService', () => {
       });
 
       it('should return empty array when no runs exist for task', () => {
-        const result = service.getTaskAutomationRuns('non-existent-task');
+        const result = getTaskContextService().getTaskAutomationRuns('non-existent-task');
         expect(result).toEqual([]);
       });
 
@@ -134,7 +133,7 @@ describe('TaskContextService', () => {
         stmt.run('run-1', 'task-test-001', '2025-11-10T10:00:00Z', 'success');
         stmt.run('run-2', 'task-test-002', '2025-11-10T11:00:00Z', 'success');
 
-        const result = service.getTaskAutomationRuns('task-test-001');
+        const result = getTaskContextService().getTaskAutomationRuns('task-test-001');
 
         expect(result).toHaveLength(1);
         expect(result[0].run_id).toBe('run-1');
@@ -187,7 +186,7 @@ describe('TaskContextService', () => {
           testRun.lint_warnings
         );
 
-        const result = service.getAutomationRun('run-123');
+        const result = getTaskContextService().getAutomationRun('run-123');
 
         expect(result).not.toBeNull();
         expect(result?.run_id).toBe('run-123');
@@ -201,7 +200,7 @@ describe('TaskContextService', () => {
       });
 
       it('should return null when run does not exist', () => {
-        const result = service.getAutomationRun('non-existent-run');
+        const result = getTaskContextService().getAutomationRun('non-existent-run');
         expect(result).toBeNull();
       });
     });
@@ -221,7 +220,7 @@ describe('TaskContextService', () => {
         stmt.run('run-2', taskId, '2025-11-10T11:00:00Z', 'failed');
         stmt.run('run-3', taskId, '2025-11-10T10:00:00Z', 'success');
 
-        const result = service.getLatestAutomationRun(taskId);
+        const result = getTaskContextService().getLatestAutomationRun(taskId);
 
         expect(result).not.toBeNull();
         expect(result?.run_id).toBe('run-2'); // Most recent
@@ -229,7 +228,7 @@ describe('TaskContextService', () => {
       });
 
       it('should return null when no runs exist for task', () => {
-        const result = service.getLatestAutomationRun('non-existent-task');
+        const result = getTaskContextService().getLatestAutomationRun('non-existent-task');
         expect(result).toBeNull();
       });
 
@@ -245,7 +244,7 @@ describe('TaskContextService', () => {
 
         stmt.run('run-only', taskId, '2025-11-10T10:00:00Z', 'success');
 
-        const result = service.getLatestAutomationRun(taskId);
+        const result = getTaskContextService().getLatestAutomationRun(taskId);
 
         expect(result).not.toBeNull();
         expect(result?.run_id).toBe('run-only');
@@ -269,7 +268,7 @@ describe('TaskContextService', () => {
           null, null, null, null, null, null
         );
 
-        const result = service.getAutomationRun('run-nulls');
+        const result = getTaskContextService().getAutomationRun('run-nulls');
 
         expect(result).not.toBeNull();
         expect(result?.worker_id).toBeNull();
@@ -304,7 +303,7 @@ describe('TaskContextService', () => {
           JSON.stringify(containerMeta)
         );
 
-        const result = service.getAutomationRun('run-json');
+        const result = getTaskContextService().getAutomationRun('run-json');
 
         expect(result).not.toBeNull();
         expect(result?.quality_validation_json).toBe(JSON.stringify(qualityValidation));
@@ -329,7 +328,7 @@ describe('TaskContextService', () => {
           'Build failed: TypeScript compilation errors'
         );
 
-        const result = service.getAutomationRun('run-failed');
+        const result = getTaskContextService().getAutomationRun('run-failed');
 
         expect(result).not.toBeNull();
         expect(result?.status).toBe('failed');
@@ -361,7 +360,7 @@ describe('TaskContextService', () => {
         targetBranch: 'main',
       };
 
-      expect(() => service.storeTaskCreationContext(taskId, context)).not.toThrow();
+      expect(() => getTaskContextService().storeTaskCreationContext(taskId, context)).not.toThrow();
     });
 
     it('should retrieve stored task creation context', () => {
@@ -380,8 +379,8 @@ describe('TaskContextService', () => {
         affectedFiles: ['src/test.ts', 'src/utils.ts'],
       };
 
-      service.storeTaskCreationContext(taskId, context);
-      const retrieved = service.getTaskCreationContext(taskId);
+      getTaskContextService().storeTaskCreationContext(taskId, context);
+      const retrieved = getTaskContextService().getTaskCreationContext(taskId);
 
       expect(retrieved).not.toBeNull();
       expect(retrieved?.workTarget).toBe('dev-monitor');
@@ -391,7 +390,7 @@ describe('TaskContextService', () => {
     });
 
     it('should return null for non-existent task creation context', () => {
-      const retrieved = service.getTaskCreationContext('non-existent-task');
+      const retrieved = getTaskContextService().getTaskCreationContext('non-existent-task');
       expect(retrieved).toBeNull();
     });
 
@@ -413,8 +412,8 @@ describe('TaskContextService', () => {
         },
       };
 
-      service.storeTaskCreationContext(taskId, context);
-      const retrieved = service.getTaskCreationContext(taskId);
+      getTaskContextService().storeTaskCreationContext(taskId, context);
+      const retrieved = getTaskContextService().getTaskCreationContext(taskId);
 
       expect(retrieved).not.toBeNull();
       expect(retrieved?.screenshot).toBe('data:image/png;base64,iVBORw0KGgoAAAANS');
@@ -438,7 +437,7 @@ describe('TaskContextService', () => {
         status: 'success',
       };
 
-      expect(() => service.storeTaskExecutionContext(runId, taskId, context)).not.toThrow();
+      expect(() => getTaskContextService().storeTaskExecutionContext(runId, taskId, context)).not.toThrow();
     });
 
     it('should retrieve stored task execution context', () => {
@@ -456,8 +455,8 @@ describe('TaskContextService', () => {
         commitSha: 'xyz789',
       };
 
-      service.storeTaskExecutionContext(runId, taskId, context);
-      const retrieved = service.getTaskExecutionContext(runId);
+      getTaskContextService().storeTaskExecutionContext(runId, taskId, context);
+      const retrieved = getTaskContextService().getTaskExecutionContext(runId);
 
       expect(retrieved).not.toBeNull();
       expect(retrieved?.taskId).toBe(taskId);
@@ -469,7 +468,7 @@ describe('TaskContextService', () => {
     });
 
     it('should return null for non-existent task execution context', () => {
-      const retrieved = service.getTaskExecutionContext('non-existent-run');
+      const retrieved = getTaskContextService().getTaskExecutionContext('non-existent-run');
       expect(retrieved).toBeNull();
     });
 
@@ -502,8 +501,8 @@ describe('TaskContextService', () => {
         },
       };
 
-      service.storeTaskExecutionContext(runId, taskId, context);
-      const retrieved = service.getTaskExecutionContext(runId);
+      getTaskContextService().storeTaskExecutionContext(runId, taskId, context);
+      const retrieved = getTaskContextService().getTaskExecutionContext(runId);
 
       expect(retrieved).not.toBeNull();
       expect(retrieved?.status).toBe('failed');
@@ -545,8 +544,8 @@ describe('TaskContextService', () => {
         },
       };
 
-      service.storeTaskExecutionContext(runId, taskId, context);
-      const retrieved = service.getTaskExecutionContext(runId);
+      getTaskContextService().storeTaskExecutionContext(runId, taskId, context);
+      const retrieved = getTaskContextService().getTaskExecutionContext(runId);
 
       expect(retrieved).not.toBeNull();
       expect(retrieved?.testResults?.passed).toBe(45);
@@ -578,10 +577,10 @@ describe('TaskContextService', () => {
         targetBranch: 'staging',
       };
 
-      service.storeTaskCreationContext(taskId, context1);
+      getTaskContextService().storeTaskCreationContext(taskId, context1);
 
       // Second store should throw or handle gracefully
-      expect(() => service.storeTaskCreationContext(taskId, context2)).toThrow();
+      expect(() => getTaskContextService().storeTaskCreationContext(taskId, context2)).toThrow();
     });
 
     it('should handle large context objects', () => {
@@ -609,8 +608,8 @@ describe('TaskContextService', () => {
         })),
       };
 
-      expect(() => service.storeTaskCreationContext(taskId, largeContext)).not.toThrow();
-      const retrieved = service.getTaskCreationContext(taskId);
+      expect(() => getTaskContextService().storeTaskCreationContext(taskId, largeContext)).not.toThrow();
+      const retrieved = getTaskContextService().getTaskCreationContext(taskId);
       expect(retrieved?.recentLogs?.length).toBe(200);
       expect(retrieved?.recentApiCalls?.length).toBe(50);
     });
@@ -711,8 +710,8 @@ describe('TaskContextService', () => {
         commitSha: 'final-commit-xyz',
       };
 
-      service.storeTaskExecutionContext(runId, taskId, context);
-      const retrieved = service.getTaskExecutionContext(runId);
+      getTaskContextService().storeTaskExecutionContext(runId, taskId, context);
+      const retrieved = getTaskContextService().getTaskExecutionContext(runId);
 
       expect(retrieved).not.toBeNull();
       expect(retrieved?.containerMeta?.containerId).toBe('container-123');

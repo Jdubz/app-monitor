@@ -50,7 +50,7 @@ import type { Task, TaskExecution } from '../services/taskQueue.sqlite.js';
 import type { InteractiveSessionRecord } from '../services/database.js';
 import { WorkerLogLocator } from '../services/taskLogLocator.js';
 import { LogStreamAccessTracker } from '../services/logStreamAccessTracker.js';
-import { TaskContextService } from '../services/taskContext.service.js';
+import { getTaskContextService } from '../services/taskContext.service.js';
 
 const TECHNICAL_TASK_TYPES = new Set(['refactor', 'implementation', 'bug', 'feature']);
 const MIN_DOCUMENTATION_LENGTH = 50;
@@ -459,7 +459,6 @@ const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOp
 export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Router {
   const router = Router();
   const workerLogLocator = new WorkerLogLocator();
-  const taskContextService = new TaskContextService();
 
   router.use((_req: Request, res: Response, next: NextFunction) => {
     const originalJson = res.json.bind(res);
@@ -1830,7 +1829,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
   router.get('/tasks/:id/context', (req: Request, res: Response) => {
     try {
       const { id: taskId } = req.params;
-      const latestRun = taskContextService.getLatestAutomationRun(taskId);
+      const latestRun = getTaskContextService().getLatestAutomationRun(taskId);
 
       if (!latestRun) {
         return res.status(404).json({
@@ -1861,7 +1860,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
   router.get('/tasks/:id/runs', (req: Request, res: Response) => {
     try {
       const { id: taskId } = req.params;
-      const runs = taskContextService.getTaskAutomationRuns(taskId);
+      const runs = getTaskContextService().getTaskAutomationRuns(taskId);
 
       res.json({ runs });
     } catch (error) {
@@ -1885,7 +1884,7 @@ export function createClaudeWorkersRouter(devBotsManager: DevBotsManager): Route
   router.get('/tasks/:id/runs/:runId', (req: Request, res: Response) => {
     try {
       const { id: taskId, runId } = req.params;
-      const run = taskContextService.getAutomationRun(runId);
+      const run = getTaskContextService().getAutomationRun(runId);
 
       if (!run) {
         return res.status(404).json({
