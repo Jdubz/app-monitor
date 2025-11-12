@@ -83,7 +83,7 @@ describe('TaskQueueService Staged Queue API', () => {
         files: ['src/app.ts'],
       });
 
-      const task2 = taskQueue.createTask({
+      taskQueue.createTask({
         title: 'Task 2',
         description: 'Modify same file',
         files: ['src/app.ts'],
@@ -99,7 +99,7 @@ describe('TaskQueueService Staged Queue API', () => {
     });
 
     it('should assign tasks in priority order', () => {
-      const lowPriority = taskQueue.createTask({
+      taskQueue.createTask({
         title: 'Low priority',
         description: 'Low',
         priority: 1,

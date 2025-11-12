@@ -35,7 +35,6 @@ import { logger } from '../utils/logger.js';
 import { config } from '../config.js';
 import { TaskClassifier } from './taskClassifier.js';
 import { ChainTrackerService, type ChainStats, type BlockedChain } from './chainTracker.service.js';
-import { MigrationManager } from './migrationManager.js';
 
 // Re-export chain types for convenience
 export type { ChainStats, BlockedChain };
