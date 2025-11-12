@@ -95,11 +95,13 @@ export interface QualityGateObservation {
 
 /**
  * Complete quality observation for a task
+ *
+ * NOTE: Branch names are available from GitHub via pr_number, not stored here
+ * per design principle: "Any information available from GitHub should NOT be stored in our DB"
  */
 export interface QualityObservation {
   taskId: string;
   prNumber?: number;
-  branch?: string;
   timestamp: string;
 
   // Observations from various checks
@@ -151,7 +153,6 @@ export class QualityObservationService {
     const observation: QualityObservation = {
       taskId: task.id,
       prNumber: task.pr_number,
-      branch: task.pr_branch,
       timestamp: new Date().toISOString(),
       observations: {},
       improvementOpportunities: [],

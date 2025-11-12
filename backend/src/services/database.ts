@@ -537,9 +537,11 @@ export class DevBotsDatabase {
     improvementOpportunities: Array<unknown>;
     blockers: Array<unknown>;
   }): number {
+    // NOTE: Branch names available from GitHub via pr_number, not stored here per design principle:
+    // "Any information available from GitHub should NOT be stored in our DB"
     const result = this.db.prepare(`
       INSERT INTO quality_observations (
-        task_id, pr_number, branch, timestamp,
+        task_id, pr_number, timestamp,
         overall_score, quality_level, ready_for_merge,
         acceptance_criteria_observation,
         test_coverage_observation,
@@ -547,11 +549,10 @@ export class DevBotsDatabase {
         quality_gates_observation,
         improvement_opportunities,
         blockers
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       observation.taskId,
       observation.prNumber || null,
-      observation.branch || null,
       observation.timestamp,
       observation.overallScore,
       observation.qualityLevel,
@@ -581,7 +582,6 @@ export class DevBotsDatabase {
       id: row.id,
       task_id: row.task_id,
       pr_number: row.pr_number,
-      branch: row.branch,
       timestamp: row.timestamp,
       overall_score: row.overall_score,
       quality_level: row.quality_level,
@@ -900,7 +900,6 @@ export interface StoredQualityObservation {
   id: number;
   task_id: string;
   pr_number?: number;
-  branch?: string;
   timestamp: string;
   overall_score: number;
   quality_level: string;
