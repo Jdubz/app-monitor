@@ -88,7 +88,7 @@ export function getGitCredentialMounts(): string[] {
   const homeDir = os.homedir();
 
   return [
-    // Don't mount .gitconfig - Dockerfile already configures git globally
+    // Don't mount .gitconfig - git configuration is handled at runtime (see taskExecution.service.ts)
     // Mounting host .gitconfig as read-only causes "Resource busy" errors
     '-v', `${homeDir}/.git-credentials:/home/node/.git-credentials:ro`,
     '-v', `${homeDir}/.config/gh:/home/node/.config/gh:rw`  // rw for gh CLI state updates
