@@ -239,18 +239,22 @@ export class DevBotsDatabase {
    * 
    * Used when migrations are handled by TaskQueueService to avoid duplication.
    * This establishes clear ownership boundaries: TaskQueueService manages core
-   * task tables, while DevBotsDatabase manages supplementary analytics tables.
+   * task tables (tasks, workers, task_executions), while DevBotsDatabase manages 
+   * supplementary analytics tables (quality, PR workflow, context).
    * 
-   * Critical: TaskQueueService MUST be initialized BEFORE DevBotsDatabase.
+   * **Critical**: TaskQueueService MUST be initialized BEFORE DevBotsDatabase.
    * The factory (devBotsManager.factory.ts) ensures this initialization order.
+   * 
+   * **Initialization Order**:
+   * 1. TaskQueueService.createSchema() creates tasks, workers, task_executions
+   * 2. DevBotsDatabase.runMigrations() creates supplementary tables
+   * 3. DevBotsDatabase.validateDatabaseIntegrity() verifies only its tables
    * 
    * @param name - Migration name (e.g., '002_tasks_table')
    * @throws {Error} If database operation fails
    */
   private skipMigration(name: string): void {
     try {
-      // Mark migration as applied without running it
-      // Used when TaskQueueService handles the migration internally
       let applied;
       try {
         applied = this.db.prepare(
@@ -258,14 +262,8 @@ export class DevBotsDatabase {
         ).get(name);
       } catch (err: unknown) {
         // If the migrations table does not exist, create it
-        const error = err as unknown;
-        if (
-          error &&
-          typeof error === 'object' &&
-          'message' in error &&
-          typeof (error as { message: unknown }).message === 'string' &&
-          (error as { message: string }).message.includes('no such table: migrations')
-        ) {
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        if (errorMsg.includes('no such table: migrations')) {
           this.db.exec(`
             CREATE TABLE IF NOT EXISTS migrations (
               name TEXT PRIMARY KEY,
