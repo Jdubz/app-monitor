@@ -148,8 +148,8 @@
 
 ## 🔗 References
 
-- [PR Self-Healing Event-Driven Design](./investigations/PR_SELF_HEALING_EVENT_DRIVEN_DESIGN.md)
-- [Schema Audit & Cleanup](./investigations/SCHEMA_AUDIT_AND_CLEANUP.md)
+- [PR Self-Healing Event-Driven Design](./analysis/PR_SELF_HEALING_EVENT_DRIVEN_DESIGN.md)
+- [Schema Audit & Cleanup](./analysis/SCHEMA_AUDIT_AND_CLEANUP.md)
 - [Master Design Intent](./architecture/master-design-intent.md)
 - [Implementation Status](./IMPLEMENTATION_STATUS.md)
 
@@ -157,4 +157,3 @@
 
 **Updated**: 2025-11-12 (All changes committed and pushed to staging)  
 **Next Review**: After production deployment
-
