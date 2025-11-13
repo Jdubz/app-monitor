@@ -182,16 +182,18 @@ function displayTaskStatus(task, index) {
 
 function displaySystemStatus(status) {
   console.log(`\n${colors.bright}System Status:${colors.reset}`);
-  console.log(`  Workers: ${status.workerCount}/${status.maxWorkers} (${status.systemStatus})`);
-  console.log(`  Active: ${status.activeTasks} | Queue: ${status.queueSize}`);
+  const data = status?.data || status || {};
+  console.log(`  Workers: ${data.workerCount || 0}/${data.maxWorkers || 0} (${data.systemStatus || 'unknown'})`);
+  console.log(`  Active: ${data.activeTasks || 0} | Queue: ${data.queueSize || 0}`);
 }
 
 function displayQueueSummary(queue) {
   console.log(`\n${colors.bright}Queue Summary:${colors.reset}`);
-  console.log(`  Pending: ${queue.counts.pending}`);
-  console.log(`  Active: ${queue.counts.active}`);
-  console.log(`  Completed: ${queue.counts.completed}`);
-  console.log(`  Failed: ${queue.counts.failed}`);
+  const counts = queue?.data?.counts || queue?.counts || {};
+  console.log(`  Pending: ${counts.pending || 0}`);
+  console.log(`  Active: ${counts.active || 0}`);
+  console.log(`  Completed: ${counts.completed || 0}`);
+  console.log(`  Failed: ${counts.failed || 0}`);
 }
 
 function checkWorkerLimit(status) {
