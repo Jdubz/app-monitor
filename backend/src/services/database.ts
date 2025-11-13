@@ -92,7 +92,10 @@ export class DevBotsDatabase {
     // Apply migrations in order
     this.applyMigration('001_initial_schema', () => {
       this.db.exec(`
-        -- NOTE: task_executions table is created by TaskQueueService, not here
+        -- NOTE: task_executions table is created by TaskQueueService, not here.
+        -- CRITICAL: TaskQueueService must initialize BEFORE DevBotsDatabase.
+        -- The factory (devBotsManager.factory.ts) ensures this initialization order.
+        --
         -- TaskQueueService owns: tasks, task_executions, workers
         -- DevBotsDatabase owns: token_usage, experiments, batch_approvals, failure_patterns
 
@@ -148,8 +151,9 @@ export class DevBotsDatabase {
     });
 
     // Migration 002: Tasks Table - SKIPPED
-    // TaskQueueService.createSchema() creates the tasks table with complete schema
-    // This migration is documented but not applied to avoid conflicts
+    // TaskQueueService.createSchema() creates the tasks table with complete schema.
+    // This migration is documented but not applied to avoid conflicts.
+    // See DATABASE_SCHEMA_ALIGNMENT_COMPLETE.md for architecture details.
     this.skipMigration('002_tasks_table');
 
     // Migration 004: Task Context & Automation Run Tracking
@@ -237,6 +241,9 @@ export class DevBotsDatabase {
    * This establishes clear ownership boundaries: TaskQueueService manages core
    * task tables, while DevBotsDatabase manages supplementary analytics tables.
    * 
+   * Critical: TaskQueueService MUST be initialized BEFORE DevBotsDatabase.
+   * The factory (devBotsManager.factory.ts) ensures this initialization order.
+   * 
    * @param name - Migration name (e.g., '002_tasks_table')
    * @throws {Error} If database operation fails
    */
@@ -251,8 +258,14 @@ export class DevBotsDatabase {
         ).get(name);
       } catch (err: unknown) {
         // If the migrations table does not exist, create it
-        const error = err as { message?: string };
-        if (error && error.message && error.message.includes('no such table: migrations')) {
+        const error = err as unknown;
+        if (
+          error &&
+          typeof error === 'object' &&
+          'message' in error &&
+          typeof (error as { message: unknown }).message === 'string' &&
+          (error as { message: string }).message.includes('no such table: migrations')
+        ) {
           this.db.exec(`
             CREATE TABLE IF NOT EXISTS migrations (
               name TEXT PRIMARY KEY,
@@ -352,9 +365,10 @@ export class DevBotsDatabase {
    * Ensures critical tables exist and have expected schema
    */
   private validateDatabaseIntegrity(): void {
-    // Note: 'tasks', 'task_executions', 'workers' NOT in this list
-    // Those are created by TaskQueueService.createSchema()
-    // DevBotsDatabase only validates tables it owns (supplementary tables)
+    // Note: 'tasks', 'task_executions', 'workers' NOT in this list.
+    // Those are created by TaskQueueService.createSchema().
+    // DevBotsDatabase only validates tables it owns (supplementary tables).
+    // TaskQueueService validates its own tables separately.
     const requiredTables = [
       'migrations',
       'token_usage',

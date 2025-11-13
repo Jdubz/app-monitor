@@ -272,6 +272,9 @@ Already implemented in `devBotsManager.factory.ts`:
 
 ### README Updates Needed
 
+> **Note:** As of this PR, the updates to `backend/migrations/README.md` listed below **have not yet been made**.  
+> Please create a follow-up task/PR to update the README with these changes and link to this document.
+
 Update `backend/migrations/README.md` with:
 - New table ownership model
 - Which migrations are skipped and why
