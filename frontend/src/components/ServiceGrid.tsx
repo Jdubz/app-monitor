@@ -2,6 +2,7 @@ import ServiceCard from './ServiceCard';
 import { useServices } from '../hooks/useServices';
 import { usePortStatus } from '../hooks/usePortStatus';
 import { Badge } from '@/components/ui/badge';
+import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 
 const ServiceGrid: React.FC = () => {
   const {
@@ -23,8 +24,8 @@ const ServiceGrid: React.FC = () => {
 
   if (loading && serviceArray.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-card/60 px-6 py-10 text-sm text-muted-foreground">
-        <span className="text-base font-semibold tracking-tight text-foreground">Loading services…</span>
+      <div className="flex flex-col items-center gap-2 rounded-xl border border-border/60 bg-card/60 px-6 py-10">
+        <LoadingSpinner size="medium" message="Loading services…" />
         <span className="text-xs uppercase tracking-[0.3em] text-muted-foreground/80">
           Connecting to dev monitor backend
         </span>
