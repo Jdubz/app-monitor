@@ -94,30 +94,84 @@ export interface GitHubCheckRunPayload {
 
 export interface GitHubPullRequestReviewPayload {
   action: 'submitted' | 'edited' | 'dismissed';
-  review: {
+  review: GitHubReview;
+  pull_request: GitHubPullRequest;
+  repository: GitHubRepository;
+}
+
+export interface GitHubReview {
+  id: number;
+  user: {
+    login: string;
+    type: string;
+  };
+  body: string;
+  state: 'commented' | 'approved' | 'changes_requested';
+  submitted_at: string;
+}
+
+export interface GitHubPullRequest {
+  number: number;
+  title: string;
+  state?: string;
+  html_url?: string;
+  head: {
+    ref: string;
+    sha?: string;
+  };
+  base?: {
+    ref: string;
+  };
+  user?: {
+    login: string;
+    type: string;
+  };
+  draft?: boolean;
+  merged?: boolean;
+  merged_at?: string | null;
+}
+
+export interface GitHubRepository {
+  full_name: string;
+  name: string;
+  owner: {
+    login: string;
+  };
+}
+
+export interface GitHubComment {
+  id: number;
+  author: string;
+  body: string;
+  path?: string | null;
+  line?: number | null;
+  createdAt?: string;
+}
+
+export interface GitHubThread {
+  isResolved: boolean;
+  isOutdated: boolean;
+  comments: {
+    nodes: Array<{
+      body: string;
+      author: {
+        login: string;
+      };
+    }>;
+  };
+}
+
+export interface PRStatusData {
+  state: string;
+  mergeable_state?: string;
+  comments: Array<{
     id: number;
-    user: {
-      login: string;
-      type: string;
-    };
+    author: string;
     body: string;
-    state: 'commented' | 'approved' | 'changes_requested';
-    submitted_at: string;
-  };
-  pull_request: {
-    number: number;
-    title: string;
-    head: {
-      ref: string;
-    };
-  };
-  repository: {
-    full_name: string;
-    name: string;
-    owner: {
-      login: string;
-    };
-  };
+    path?: string | null;
+    line?: number | null;
+    createdAt?: string;
+  }>;
 }
 
 export interface AutoMergeBlockReason {

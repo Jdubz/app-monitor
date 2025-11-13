@@ -501,10 +501,23 @@ export class GitHubPRService {
       const result = JSON.parse(stdout);
       const threads = result.data?.repository?.pullRequest?.reviewThreads?.nodes || [];
 
-      return threads.map((thread: any) => ({
+      interface ThreadNode {
+        isResolved: boolean;
+        isOutdated: boolean;
+        comments: {
+          nodes: Array<{
+            body: string;
+            author: {
+              login: string;
+            };
+          }>;
+        };
+      }
+
+      return threads.map((thread: ThreadNode) => ({
         isResolved: thread.isResolved,
         isOutdated: thread.isOutdated,
-        comments: thread.comments.nodes.map((comment: any) => ({
+        comments: thread.comments.nodes.map((comment) => ({
           body: comment.body,
           author: comment.author.login
         }))

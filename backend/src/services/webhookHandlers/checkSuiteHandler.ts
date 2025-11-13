@@ -8,6 +8,8 @@
 import { logger } from '../../utils/logger.js';
 import { BaseWebhookHandler } from './baseHandler.js';
 import type { GitHubCheckSuitePayload } from './types.js';
+import type { Task } from '../taskQueue.sqlite.js';
+import type { GitHubPRService } from '../githubPR.service.js';
 
 /**
  * Handler for GitHub check_suite webhook events
@@ -141,7 +143,7 @@ export class CheckSuiteHandler extends BaseWebhookHandler {
     prNumber: number,
     owner: string,
     repo: string,
-    githubPR: any
+    githubPR: GitHubPRService
   ): Promise<void> {
     try {
       logger.info({
@@ -192,7 +194,7 @@ export class CheckSuiteHandler extends BaseWebhookHandler {
   /**
    * Run task verification
    */
-  private async runTaskVerification(prNumber: number, task: any): Promise<void> {
+  private async runTaskVerification(prNumber: number, task: Task): Promise<void> {
     if (!this.taskQueue) return;
 
     try {

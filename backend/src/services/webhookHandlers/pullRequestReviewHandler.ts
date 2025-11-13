@@ -8,6 +8,10 @@
 import { logger } from '../../utils/logger.js';
 import { BaseWebhookHandler } from './baseHandler.js';
 import type { GitHubPullRequestReviewPayload } from './types.js';
+import type { Task } from '../taskQueue.sqlite.js';
+import type { CopilotReviewAnalysis, PRStatus } from '../githubPR.service.js';
+import type { PRMonitorService } from '../prMonitor.service.js';
+import type { GitHubPRService } from '../githubPR.service.js';
 
 /**
  * Handler for GitHub pull_request_review webhook events
@@ -85,10 +89,10 @@ export class PullRequestReviewHandler extends BaseWebhookHandler {
    */
   private async processReview(
     prNumber: number,
-    review: any,
-    pull_request: any,
-    repository: any,
-    tasks: any[],
+    review: GitHubPullRequestReviewPayload['review'],
+    pull_request: GitHubPullRequestReviewPayload['pull_request'],
+    repository: GitHubPullRequestReviewPayload['repository'],
+    tasks: Task[],
     isCopilot: boolean
   ): Promise<void> {
     if (!this.prOrchestrator) return;
@@ -139,9 +143,9 @@ export class PullRequestReviewHandler extends BaseWebhookHandler {
    */
   private async autoUpdateBranchIfNeeded(
     prNumber: number,
-    prStatus: any,
-    repository: any,
-    githubPR: any
+    prStatus: PRStatus,
+    repository: GitHubPullRequestReviewPayload['repository'],
+    githubPR: GitHubPRService
   ): Promise<void> {
     if (prStatus.mergeable_state === 'behind' && prStatus.state === 'OPEN') {
       try {
@@ -194,10 +198,10 @@ export class PullRequestReviewHandler extends BaseWebhookHandler {
   /**
    * Store Copilot review comments for tracking
    */
-  private async storeCopilotComments(prNumber: number, prStatus: any): Promise<void> {
+  private async storeCopilotComments(prNumber: number, prStatus: PRStatus): Promise<void> {
     if (prStatus.comments.length === 0) return;
 
-    const copilotComments = prStatus.comments.filter((c: any) =>
+    const copilotComments = prStatus.comments.filter((c) =>
       c.author.toLowerCase().includes('copilot') || c.author.toLowerCase().includes('bot')
     );
 
@@ -232,13 +236,13 @@ export class PullRequestReviewHandler extends BaseWebhookHandler {
    */
   private async processCopilotReview(
     prNumber: number,
-    review: any,
-    pull_request: any,
-    prStatus: any,
-    copilotAnalysis: any,
-    tasks: any[],
-    prMonitor: any,
-    githubPR: any
+    review: GitHubPullRequestReviewPayload['review'],
+    pull_request: GitHubPullRequestReviewPayload['pull_request'],
+    prStatus: PRStatus,
+    copilotAnalysis: CopilotReviewAnalysis,
+    tasks: Task[],
+    prMonitor: PRMonitorService,
+    githubPR: GitHubPRService
   ): Promise<void> {
     logger.info({
       category: 'pr-workflow',
@@ -268,11 +272,11 @@ export class PullRequestReviewHandler extends BaseWebhookHandler {
    */
   private async createFollowupTask(
     prNumber: number,
-    pull_request: any,
-    prStatus: any,
-    copilotAnalysis: any,
-    task: any,
-    prMonitor: any
+    pull_request: GitHubPullRequestReviewPayload['pull_request'],
+    prStatus: PRStatus,
+    copilotAnalysis: CopilotReviewAnalysis,
+    task: Task,
+    prMonitor: PRMonitorService
   ): Promise<void> {
     const prBranch = pull_request.head.ref;
 
@@ -305,11 +309,11 @@ export class PullRequestReviewHandler extends BaseWebhookHandler {
    */
   private async attemptAutoMerge(
     prNumber: number,
-    prStatus: any,
-    copilotAnalysis: any,
-    task: any,
-    prMonitor: any,
-    githubPR: any
+    prStatus: PRStatus,
+    copilotAnalysis: CopilotReviewAnalysis,
+    task: Task,
+    prMonitor: PRMonitorService,
+    githubPR: GitHubPRService
   ): Promise<void> {
     const canMerge = githubPR.canAutoMerge(prStatus, copilotAnalysis);
     
