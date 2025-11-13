@@ -669,11 +669,11 @@ logger.info({
 
 ## Related Documentation
 
-- [PR Workflow Enhancement Plan](./pr-workflow-enhancement-plan.md) - Implementation plan and task tracking
-- [Task Verification Service](../backend/src/services/taskVerification.service.ts) - Verification implementation
-- [Review Comment Tracker](../backend/src/services/reviewCommentTracker.service.ts) - Comment tracking implementation
-- [GitHub PR Service](../backend/src/services/githubPR.service.ts) - PR status and analysis
-- [PR Monitor Service](../backend/src/services/prMonitor.service.ts) - Quality gate business logic
+- [PR Workflow Enhancement Plan](./pr-workflow-enhancement-plan-2025-11.md) - Implementation plan and task tracking
+- [Task Verification Service](../../backend/src/services/taskVerification.service.ts) - Verification implementation
+- [Review Comment Tracker](../../backend/src/services/reviewCommentTracker.service.ts) - Comment tracking implementation
+- [GitHub PR Service](../../backend/src/services/githubPR.service.ts) - PR status and analysis
+- [PR Monitor Service](../../backend/src/services/prMonitor.service.ts) - Quality gate business logic
 
 ## Changelog
 

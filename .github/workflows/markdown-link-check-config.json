@@ -19,14 +19,6 @@
       "replacement": "{{BASEURL}}/"
     }
   ],
-  "httpHeaders": [
-    {
-      "urls": ["https://github.com"],
-      "headers": {
-        "Accept": "application/vnd.github+json"
-      }
-    }
-  ],
   "timeout": "20s",
   "retryOn429": true,
   "retryCount": 3,
