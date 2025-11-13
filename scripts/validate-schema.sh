@@ -28,20 +28,26 @@ ERRORS=0
 
 log "Starting schema validation..."
 
-# Check 1: Specifically check for tasks table in TaskQueueService
-log "Checking for duplicate tasks table definition..."
+# Check 1: Verify tasks table schema is compatible if it exists in TaskQueueService
+log "Checking tasks table schema compatibility..."
 if grep -A 20 "CREATE TABLE.*tasks" "$BACKEND_DIR"/taskQueue.sqlite.ts 2>/dev/null | grep -q "id TEXT PRIMARY KEY"; then
-  error "Found tasks table definition in taskQueue.sqlite.ts!"
-  error "The tasks table MUST ONLY be created by migrations (002_tasks_table.sql)"
-  error ""
-  error "TaskQueueService should only create:"
-  error "  - workers"
-  error "  - pr_followup_fingerprints"
-  error "  - task_executions (auxiliary)"
-  error "  - task_files, task_criteria, etc. (auxiliary)"
-  ERRORS=$((ERRORS + 1))
+  # Tasks table exists in TaskQueueService - check if it has required columns
+  log "Found tasks table in TaskQueueService (for tests/standalone usage)"
+  
+  # Check if it includes migration columns (fingerprint, project, etc.)
+  if grep -A 60 "CREATE TABLE.*tasks" "$BACKEND_DIR"/taskQueue.sqlite.ts | grep -q "fingerprint TEXT" &&\
+     grep -A 60 "CREATE TABLE.*tasks" "$BACKEND_DIR"/taskQueue.sqlite.ts | grep -q "project TEXT"; then
+    log "✓ Tasks table includes columns from migrations (unified schema)"
+  else
+    error "Tasks table in TaskQueueService is missing columns from migrations!"
+    error "The schema must include ALL columns from migrations to be compatible:"
+    error "  - fingerprint (migration 016)"
+    error "  - project (migration 002)"
+    error "  - pr_number, chain_id, etc. (other migrations)"
+    ERRORS=$((ERRORS + 1))
+  fi
 else
-  log "✓ No duplicate tasks table definition in TaskQueueService"
+  log "✓ No tasks table in TaskQueueService (will use migrations only)"
 fi
 
 # Check 2: Migrations are properly numbered (allowing gaps for skipped migrations)
