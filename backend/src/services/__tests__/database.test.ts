@@ -21,10 +21,6 @@ type DatabaseModule = typeof import('../database');
 type DevBotsDatabaseClass = DatabaseModule['DevBotsDatabase'];
 type DevBotsDatabaseInstance = InstanceType<DevBotsDatabaseClass>;
 
-type TaskQueueModule = typeof import('../taskQueue.sqlite');
-type TaskQueueServiceClass = TaskQueueModule['TaskQueueService'];
-type TaskQueueServiceInstance = InstanceType<TaskQueueServiceClass>;
-
 function cleanupTestDatabaseFiles(): void {
   [TEST_DB_PATH, TEST_TASKQUEUE_DB_PATH].forEach((dbPath) => {
     if (fs.existsSync(dbPath)) {
@@ -41,26 +37,20 @@ function cleanupTestDatabaseFiles(): void {
 
 describeNativeDb('DevBotsDatabase', () => {
   let DevBotsDatabaseCtor: DevBotsDatabaseClass;
-  let TaskQueueServiceCtor: TaskQueueServiceClass;
   let db: DevBotsDatabaseInstance;
-  let taskQueue: TaskQueueServiceInstance;
 
   beforeAll(async () => {
     const dbModule: DatabaseModule = await import('../database.js');
     DevBotsDatabaseCtor = dbModule.DevBotsDatabase;
-    const tqModule: TaskQueueModule = await import('../taskQueue.sqlite.js');
-    TaskQueueServiceCtor = tqModule.TaskQueueService;
   });
 
   beforeEach(() => {
     cleanupTestDatabaseFiles();
     db = new DevBotsDatabaseCtor(TEST_DB_PATH);
-    // TaskQueueService removed - only needed for skipped tests
   });
 
   afterEach(() => {
     (db as DevBotsDatabaseInstance | undefined)?.close?.();
-    taskQueue?.close?.();
     cleanupTestDatabaseFiles();
   });
 
