@@ -114,33 +114,9 @@ export class DevBotsDatabase {
     // Apply migrations in order
     this.applyMigration('001_initial_schema', () => {
       this.db.exec(`
-        -- Task execution history
-        CREATE TABLE IF NOT EXISTS task_executions (
-          id TEXT PRIMARY KEY,
-          task_id TEXT NOT NULL,
-          agent_id TEXT NOT NULL,
-          model_provider TEXT,
-          model_name TEXT,
-          started_at TIMESTAMP,
-          completed_at TIMESTAMP,
-          status TEXT,
-          token_input INTEGER,
-          token_output INTEGER,
-          complexity_estimated INTEGER,
-          complexity_actual INTEGER,
-          quality_score_completion INTEGER,
-          quality_score_code_quality INTEGER,
-          quality_score_test_coverage INTEGER,
-          quality_score_process INTEGER,
-          quality_score_efficiency INTEGER,
-          quality_score_overall INTEGER,
-          git_commit TEXT,
-          output TEXT
-        );
-
-        CREATE INDEX idx_task_executions_task_id ON task_executions(task_id);
-        CREATE INDEX idx_task_executions_agent_id ON task_executions(agent_id);
-        CREATE INDEX idx_task_executions_completed_at ON task_executions(completed_at);
+        -- NOTE: task_executions table is created by TaskQueueService, not here
+        -- TaskQueueService owns: tasks, task_executions, workers
+        -- DevBotsDatabase owns: token_usage, experiments, batch_approvals, failure_patterns
 
         -- Token usage tracking
         CREATE TABLE IF NOT EXISTS token_usage (
@@ -193,13 +169,10 @@ export class DevBotsDatabase {
       `);
     });
 
-    // Migration 002: Tasks Table
-    this.applyMigration('002_tasks_table', () => {
-      this.db.exec(fs.readFileSync(
-        path.join(__dirname, '..', '..', 'migrations', '002_tasks_table.sql'),
-        'utf-8'
-      ));
-    });
+    // Migration 002: Tasks Table - SKIPPED
+    // TaskQueueService.createSchema() creates the tasks table with complete schema
+    // This migration is documented but not applied to avoid conflicts
+    this.skipMigration('002_tasks_table');
 
     // Migration 004: Task Context & Automation Run Tracking
     this.applyMigration('004_task_context', () => {
@@ -209,13 +182,9 @@ export class DevBotsDatabase {
       ));
     });
 
-    // Migration 005: PR-Based Workflow Support
-    this.applyMigration('005_pr_workflow', () => {
-      this.db.exec(fs.readFileSync(
-        path.join(__dirname, '..', '..', 'migrations', '005_pr_workflow.sql'),
-        'utf-8'
-      ));
-    });
+    // Migration 005: PR Workflow - SKIPPED
+    // TaskQueueService.runMigrations() adds these columns (pr_number, pr_url, etc.)
+    this.skipMigration('005_pr_workflow');
 
     // Migration 006: Quality Observations
     this.applyMigration('006_quality_observations', () => {
@@ -249,7 +218,8 @@ export class DevBotsDatabase {
       ));
     });
 
-    // Migration 010: PR Condition States for Self-Healing Workflow
+    // Migration 010: PR Condition States - APPLIES non-task tables
+    // This migration creates pr_condition_states, retry_history, etc. (not tasks table)
     this.applyMigration('010_pr_condition_states', () => {
       this.db.exec(fs.readFileSync(
         path.join(__dirname, '..', '..', 'migrations', '010_pr_condition_states.sql'),
@@ -257,36 +227,50 @@ export class DevBotsDatabase {
       ));
     });
 
-    // Migration 011: Add Chain Tracking for PR Fix Tasks
-    this.applyMigration('011_add_chain_tracking', () => {
+    // Migration 011: Add Chain Tracking - SKIPPED
+    // TaskQueueService.createSchema() includes chain_id and chain_depth columns
+    this.skipMigration('011_add_chain_tracking');
+
+    // Migrations 012-016: Schema Unification - ALL SKIPPED
+    // TaskQueueService.createSchema() handles all task table schema:
+    // - Migration 012: Staged queue columns (queue_stage, chain_status, etc.)
+    // - Migrations 013-015: Column removals (pr_url, pr_branch, etc.)
+    // - Migration 016: Fingerprint column
+    // TaskQueueService.runMigrations() applies these internally
+    this.skipMigration('012_staged_queue');
+    this.skipMigration('013_remove_duplicate_pr_columns');
+    this.skipMigration('014_slim_pr_review_comments');
+    this.skipMigration('015_clean_quality_observations');
+    this.skipMigration('016_add_fingerprint_column');
+
+    // Migration 017: Schema Alignment Marker
+    this.applyMigration('017_align_with_taskqueue', () => {
       this.db.exec(fs.readFileSync(
-        path.join(__dirname, '..', '..', 'migrations', '011_add_chain_tracking.sql'),
+        path.join(__dirname, '..', '..', 'migrations', '017_align_with_taskqueue.sql'),
         'utf-8'
       ));
     });
+  }
 
-    // Note: Migrations 012-015 are documented but not auto-applied due to SQLite limitations
-    // Migration 012: Staged queue columns added directly in code
-    // Migration 013-015: Empty migrations (soft deprecation of unused columns)
-    // These columns are ignored by the application - see migration files for details
+  private skipMigration(name: string): void {
+    // Mark migration as applied without running it
+    // Used when TaskQueueService handles the migration internally
+    const applied = this.db.prepare(
+      'SELECT 1 FROM migrations WHERE name = ?'
+    ).get(name);
 
-    // Migration 016: Add fingerprint column to unify TaskQueueService and DevBotsDatabase schemas
-    this.applyMigration('016_add_fingerprint_column', () => {
-      // Check if fingerprint column already exists (from TaskQueueService.createSchema)
-      const columns = this.db.prepare('PRAGMA table_info(tasks)').all() as Array<{name: string}>;
-      const hasFingerprint = columns.some(col => col.name === 'fingerprint');
+    if (!applied) {
+      this.db.prepare(
+        'INSERT INTO migrations (name) VALUES (?)'
+      ).run(name);
       
-      if (!hasFingerprint) {
-        // Column doesn't exist, add it
-        this.db.exec('ALTER TABLE tasks ADD COLUMN fingerprint TEXT;');
-      }
-      
-      // Create index (idempotent - safe even if column was just added or already existed)
-      this.db.exec(fs.readFileSync(
-        path.join(__dirname, '..', '..', 'migrations', '016_add_fingerprint_column.sql'),
-        'utf-8'
-      ));
-    });
+      logger.info({
+        category: 'database',
+        action: 'migration_skipped',
+        message: `Migration ${name} skipped (handled by TaskQueueService)`,
+        details: { migrationName: name }
+      });
+    }
   }
 
   private applyMigration(name: string, migration: () => void): void {
@@ -352,14 +336,15 @@ export class DevBotsDatabase {
    * Ensures critical tables exist and have expected schema
    */
   private validateDatabaseIntegrity(): void {
+    // Note: 'tasks', 'task_executions', 'workers' NOT in this list
+    // Those are created by TaskQueueService.createSchema()
+    // DevBotsDatabase only validates tables it owns (supplementary tables)
     const requiredTables = [
       'migrations',
-      'task_executions',
       'token_usage',
       'experiments',
       'batch_approvals',
       'failure_patterns',
-      'tasks',
       'task_automation_runs'
     ];
 

@@ -1,0 +1,37 @@
+-- Migration 017: Align DevBotsDatabase with TaskQueueService Schema
+-- Date: 2025-11-13
+-- Purpose: Resolve schema conflicts between DevBotsDatabase migrations and TaskQueueService
+--
+-- Background:
+--   TaskQueueService.createSchema() creates the tasks table with its own schema.
+--   DevBotsDatabase migrations (002, 012, etc.) tried to create/modify the same table.
+--   This caused conflicts when both systems tried to manage the tasks table.
+--
+-- Solution:
+--   1. TaskQueueService owns the tasks, workers, and task_executions tables
+--   2. DevBotsDatabase migrations only create SUPPLEMENTARY tables (PR workflow, quality, etc.)
+--   3. This migration is a NO-OP - it just marks the alignment point
+--
+-- Tables Owned by TaskQueueService (via createSchema):
+--   - tasks (with ALL columns including chain tracking, staged queue, etc.)
+--   - workers (worker registration and heartbeats)
+--   - task_executions (execution history and metrics)
+--   - pr_followup_fingerprints (duplicate PR followup detection)
+--   - task_files, task_criteria, task_dependencies (task metadata)
+--
+-- Tables Owned by DevBotsDatabase (via migrations):
+--   - migrations (migration tracking)
+--   - token_usage, experiments, batch_approvals, failure_patterns (001_initial_schema)
+--   - task_automation_runs, task_commands, task_file_operations, etc. (004_task_context)
+--   - quality_observations, quality_improvement_tasks, pr_quality_history (006_quality)
+--   - interactive_sessions (007_interactive_sessions)
+--   - pr_review_comments (008_pr_review_comments)
+--   - task_creation_context, task_execution_context (009_task_context_storage)
+--   - pr_condition_states, retry_history, log_file_positions, circuit_breaker_states (010_pr_condition_states)
+--
+-- NO-OP Migration:
+--   This migration does nothing. It exists to mark the schema alignment point in history.
+--   When applied, it indicates that the system now uses TaskQueueService for core tables.
+
+-- Mark alignment complete
+SELECT 1; -- NO-OP query
