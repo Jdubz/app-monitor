@@ -65,6 +65,10 @@ export const EnhancedLogsViewer: React.FC<EnhancedLogsViewerProps> = ({
   // Keyboard shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Check if user is typing in an input field
+      const activeElement = document.activeElement;
+      const isTyping = activeElement?.tagName === 'INPUT' || activeElement?.tagName === 'TEXTAREA';
+
       // Ctrl/Cmd + K: Focus search
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
         const searchInput = document.querySelector('input[type="text"]') as HTMLInputElement;
@@ -102,16 +106,58 @@ export const EnhancedLogsViewer: React.FC<EnhancedLogsViewerProps> = ({
         e.preventDefault();
       }
 
+      // Ctrl/Cmd + A: Select all levels
+      if ((e.ctrlKey || e.metaKey) && e.key === 'a' && !e.shiftKey && !isTyping) {
+        onSelectAllLevels();
+        e.preventDefault();
+      }
+
+      // Ctrl/Cmd + Shift + A: Clear all levels
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'A') {
+        onClearAllLevels();
+        e.preventDefault();
+      }
+
+      // Ctrl/Cmd + Shift + S: Select all services
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'S') {
+        onSelectAllServices();
+        e.preventDefault();
+      }
+
       // Escape: Clear search
       if (e.key === 'Escape' && searchText) {
         onClearSearch();
         e.preventDefault();
       }
 
-      // N: Toggle line numbers
-      if (e.key === 'n' && !e.ctrlKey && !e.metaKey && !e.altKey) {
-        const activeElement = document.activeElement;
-        if (activeElement?.tagName !== 'INPUT' && activeElement?.tagName !== 'TEXTAREA') {
+      // Single key shortcuts (only when not typing in input)
+      if (!isTyping && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        // E: Toggle ERROR level
+        if (e.key === 'e' || e.key === 'E') {
+          onToggleLevel('ERROR');
+          e.preventDefault();
+        }
+
+        // W: Toggle WARN level
+        if (e.key === 'w' || e.key === 'W') {
+          onToggleLevel('WARN');
+          e.preventDefault();
+        }
+
+        // I: Toggle INFO level
+        if (e.key === 'i' || e.key === 'I') {
+          onToggleLevel('INFO');
+          e.preventDefault();
+        }
+
+        // D: Toggle DEBUG level
+        if (e.key === 'd' || e.key === 'D') {
+          onToggleLevel('DEBUG');
+          e.preventDefault();
+        }
+
+        // N: Toggle line numbers
+        if (e.key === 'n' || e.key === 'N') {
           setShowLineNumbers(prev => !prev);
           e.preventDefault();
         }
@@ -120,7 +166,7 @@ export const EnhancedLogsViewer: React.FC<EnhancedLogsViewerProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onTogglePause, searchText, onClearSearch, onClear]);
+  }, [onTogglePause, searchText, onClearSearch, onClear, onToggleLevel, onSelectAllLevels, onClearAllLevels, onSelectAllServices]);
 
   const handleToggleAutoScroll = useCallback(() => {
     const newValue = !internalAutoScroll;
@@ -291,8 +337,9 @@ export const EnhancedLogsViewer: React.FC<EnhancedLogsViewerProps> = ({
         {[
           ['Ctrl+K', 'Search'],
           ['Ctrl+Space', 'Pause'],
+          ['E/W/I/D', 'Filters'],
+          ['Ctrl+A', 'All Levels'],
           ['Ctrl+L', 'Clear'],
-          ['Ctrl+S', 'Download'],
           ['N', 'Line#'],
         ].map(([key, label]) => (
           <span key={key} className="flex items-center gap-2">
