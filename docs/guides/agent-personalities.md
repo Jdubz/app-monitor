@@ -314,11 +314,11 @@ New agents can be created with custom skills and specializations:
 
 ## 📚 Related Documentation
 
-- [API Endpoints](endpoints.md)
-- [Task Creation Guidelines](task-creation-guidelines.md)
-- [Task Prompt Template](task-prompt-template.md)
-- [System Architecture](../architecture/system-overview.md)
-- [Learning System](../learning/learning-system-analysis.md)
+- [API Endpoints](../../dev-bots/docs/api/endpoints.md)
+- [Task Execution Template](./task-execution-template.md)
+- [Task Prompt Template](../../dev-bots/docs/api/task-prompt-template.md)
+- [System Architecture](../../dev-bots/docs/architecture/system-overview.md)
+- [Learning System](../../dev-bots/docs/learning/learning-system-analysis.md)
 
 ---
 

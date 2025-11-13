@@ -21,7 +21,7 @@
   ],
   "httpHeaders": [
     {
-      "urls": ["https://github.com"],
+      "urls": ["https://api.github.com"],
       "headers": {
         "Accept": "application/vnd.github+json"
       }

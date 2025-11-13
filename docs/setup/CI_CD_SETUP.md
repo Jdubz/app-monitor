@@ -112,11 +112,12 @@ echo "OP_SERVICE_ACCOUNT_TOKEN=ops_..." >> ~/Development/.env
 
 ### Step 3: Create GitHub Personal Access Token
 
-1. Go to: https://github.com/settings/tokens/new
-2. Name: `app-monitor-deploy-agent`
-3. Scopes: **`repo`** only
-4. Expiration: 1 year (recommended)
-5. Generate and copy token
+1. Review GitHub's PAT guide: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens
+2. In GitHub, navigate to **Settings → Developer settings → Personal access tokens (Classic)** and click **Generate new token**.
+3. Name: `app-monitor-deploy-agent`
+4. Scopes: **`repo`** only
+5. Expiration: 1 year (recommended)
+6. Generate and copy the token
 
 ### Step 4: Store GitHub PAT in 1Password
 
