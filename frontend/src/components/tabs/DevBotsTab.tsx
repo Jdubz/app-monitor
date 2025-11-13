@@ -1,6 +1,7 @@
 import { Socket } from 'socket.io-client';
 import { DevBotsPanel } from '../DevBotsPanel';
 import { DevBotsLayout } from '../dev-bots/DevBotsLayout';
+import { ErrorBoundary } from '../common';
 
 interface DevBotsTabProps {
   socket: Socket | null;
@@ -11,8 +12,16 @@ export function DevBotsTab({ socket }: DevBotsTabProps) {
     (import.meta.env.VITE_FEATURE_DEV_BOTS_LAYOUT ?? 'true').toString().toLowerCase() !== 'false';
 
   if (enableNewLayout) {
-    return <DevBotsLayout socket={socket} />;
+    return (
+      <ErrorBoundary>
+        <DevBotsLayout socket={socket} />
+      </ErrorBoundary>
+    );
   }
 
-  return <DevBotsPanel socket={socket} />;
+  return (
+    <ErrorBoundary>
+      <DevBotsPanel socket={socket} />
+    </ErrorBoundary>
+  );
 }
