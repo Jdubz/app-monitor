@@ -10,6 +10,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const TEST_DB_PATH = path.join(__dirname, 'test.db');
+const TEST_TASKQUEUE_DB_PATH = path.join(__dirname, 'test-taskqueue.db');
 
 // Skip the native better-sqlite3 backed suite in CI where the addon is unavailable.
 const shouldSkipNativeDbSuite =
@@ -21,34 +22,47 @@ type DatabaseModule = typeof import('../database');
 type DevBotsDatabaseClass = DatabaseModule['DevBotsDatabase'];
 type DevBotsDatabaseInstance = InstanceType<DevBotsDatabaseClass>;
 
+type TaskQueueModule = typeof import('../taskQueue.sqlite');
+type TaskQueueServiceClass = TaskQueueModule['TaskQueueService'];
+type TaskQueueServiceInstance = InstanceType<TaskQueueServiceClass>;
+
 function cleanupTestDatabaseFiles(): void {
-  if (fs.existsSync(TEST_DB_PATH)) {
-    fs.unlinkSync(TEST_DB_PATH);
-  }
-  if (fs.existsSync(TEST_DB_PATH + '-shm')) {
-    fs.unlinkSync(TEST_DB_PATH + '-shm');
-  }
-  if (fs.existsSync(TEST_DB_PATH + '-wal')) {
-    fs.unlinkSync(TEST_DB_PATH + '-wal');
-  }
+  [TEST_DB_PATH, TEST_TASKQUEUE_DB_PATH].forEach((dbPath) => {
+    if (fs.existsSync(dbPath)) {
+      fs.unlinkSync(dbPath);
+    }
+    if (fs.existsSync(dbPath + '-shm')) {
+      fs.unlinkSync(dbPath + '-shm');
+    }
+    if (fs.existsSync(dbPath + '-wal')) {
+      fs.unlinkSync(dbPath + '-wal');
+    }
+  });
 }
 
 describeNativeDb('DevBotsDatabase', () => {
   let DevBotsDatabaseCtor: DevBotsDatabaseClass;
+  let TaskQueueServiceCtor: TaskQueueServiceClass;
   let db: DevBotsDatabaseInstance;
+  let taskQueue: TaskQueueServiceInstance;
 
   beforeAll(async () => {
-    const module: DatabaseModule = await import('../database.js');
-    DevBotsDatabaseCtor = module.DevBotsDatabase;
+    const dbModule: DatabaseModule = await import('../database.js');
+    DevBotsDatabaseCtor = dbModule.DevBotsDatabase;
+    const tqModule: TaskQueueModule = await import('../taskQueue.sqlite.js');
+    TaskQueueServiceCtor = tqModule.TaskQueueService;
   });
 
   beforeEach(() => {
     cleanupTestDatabaseFiles();
     db = new DevBotsDatabaseCtor(TEST_DB_PATH);
+    // TaskQueueService only needed for skipped tests
+    taskQueue = new TaskQueueServiceCtor(TEST_TASKQUEUE_DB_PATH);
   });
 
   afterEach(() => {
     (db as DevBotsDatabaseInstance | undefined)?.close?.();
+    taskQueue?.close?.();
     cleanupTestDatabaseFiles();
   });
 
@@ -106,8 +120,11 @@ describeNativeDb('DevBotsDatabase', () => {
     });
   });
 
-  // Note: Task Executions tests skipped - task_executions table is owned by TaskQueueService
-  // These methods in DevBotsDatabase may be deprecated or need refactoring
+  // Task Executions tests skipped - these methods in DevBotsDatabase are dead code
+  // The actual task_executions table is owned by TaskQueueService with a different schema
+  // DevBotsDatabase.recordTaskExecution() expects columns that don't exist (agent_id, model_provider, quality_scores)
+  // TaskQueueService.task_executions has: (id, task_id, worker_id, attempt_number, started_at, ended_at)
+  // TODO: Remove DevBotsDatabase.recordTaskExecution() and getTaskExecution() methods - they're unused
   describe.skip('Task Executions', () => {
     it('should record and retrieve task execution', () => {
       const execution: TaskExecution = {
@@ -421,17 +438,23 @@ describeNativeDb('DevBotsDatabase', () => {
     });
   });
 
-  // Note: Task Creation Context tests skipped - tasks table is owned by TaskQueueService
-  // These tests need TaskQueueService to be initialized alongside DevBotsDatabase
+  // Task Creation Context tests skipped - DevBotsDatabase.saveTaskCreationContext() 
+  // tries to UPDATE tasks table which is owned by TaskQueueService in a different database instance
+  // TODO: Move task context methods to TaskContext Service or refactor to work with shared DB
   describe.skip('Task Creation Context', () => {
     it('should save task creation context', () => {
-      // First, create a task in the tasks table
+      // Create a task via TaskQueueService (which owns the tasks table)
       const taskId = 'test-task-1';
-      (db as any).db.prepare(`
-        INSERT INTO tasks (
-          id, type, title, status, created_at, assigned_agent, priority
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(taskId, 'implementation', 'Test Task', 'pending', new Date().toISOString(), 'backend-specialist', 5);
+      taskQueue.addTask({
+        id: taskId,
+        type: 'implementation',
+        title: 'Test Task',
+        description: 'Test description',
+        status: 'pending',
+        priority: 5,
+        created_at: new Date().toISOString(),
+        assigned_agent: 'backend-specialist'
+      } as any);
 
       // Create a task creation context
       const context: TaskCreationContext = {
@@ -461,22 +484,20 @@ describeNativeDb('DevBotsDatabase', () => {
     });
 
     it('should update existing task context', () => {
-      // Create a task with initial context
+      // Create a task with initial context via TaskQueueService
       const taskId = 'test-task-2';
-      (db as any).db.prepare(`
-        INSERT INTO tasks (
-          id, type, title, status, created_at, assigned_agent, priority, context_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        taskId,
-        'implementation',
-        'Test Task 2',
-        'pending',
-        new Date().toISOString(),
-        'backend-specialist',
-        5,
-        JSON.stringify({ workTarget: 'old-target' })
-      );
+      
+      taskQueue.addTask({
+        id: taskId,
+        type: 'implementation',
+        title: 'Test Task 2',
+        description: 'Test description',
+        status: 'pending',
+        priority: 5,
+        created_at: new Date().toISOString(),
+        assigned_agent: 'backend-specialist',
+        context_json: JSON.stringify({ workTarget: 'old-target' })
+      } as any);
 
       // Update with new context
       const newContext: TaskCreationContext = {
@@ -502,11 +523,16 @@ describeNativeDb('DevBotsDatabase', () => {
 
     it('should handle context with optional fields', () => {
       const taskId = 'test-task-3';
-      (db as any).db.prepare(`
-        INSERT INTO tasks (
-          id, type, title, status, created_at, assigned_agent, priority
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(taskId, 'implementation', 'Test Task 3', 'pending', new Date().toISOString(), 'backend-specialist', 5);
+      taskQueue.addTask({
+        id: taskId,
+        type: 'implementation',
+        title: 'Test Task 3',
+        description: 'Test description',
+        status: 'pending',
+        priority: 5,
+        created_at: new Date().toISOString(),
+        assigned_agent: 'backend-specialist'
+      } as any);
 
       // Create context with all optional fields
       const context: TaskCreationContext = {

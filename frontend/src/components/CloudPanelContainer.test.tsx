@@ -278,9 +278,36 @@ describe('CloudPanelContainer', () => {
       });
     });
 
-    it.skip('should remove a panel when remove button is clicked', async () => {
-      // Skip this test for now - needs more complex setup with multiple panels
-      // TODO: Implement this test when we have better panel management controls
+    it('should remove a panel when remove button is clicked', async () => {
+      const user = userEvent.setup();
+
+      render(
+        <CloudPanelContainer
+          socket={mockSocket as Socket}
+          environments={mockEnvironments}
+        />
+      );
+
+      // Add a second panel first
+      const addButton = screen.getByTitle('Add new panel');
+      await user.click(addButton);
+
+      await waitFor(() => {
+        const envSelectors = screen.getAllByTitle('Select environment');
+        expect(envSelectors).toHaveLength(2);
+      });
+
+      // Now remove one panel
+      const removeButtons = screen.getAllByTitle(/remove panel/i);
+      expect(removeButtons.length).toBeGreaterThanOrEqual(1);
+      
+      await user.click(removeButtons[0]);
+
+      // Should be back to 1 panel
+      await waitFor(() => {
+        const envSelectors = screen.getAllByTitle('Select environment');
+        expect(envSelectors).toHaveLength(1);
+      });
     });
 
     it('should not remove the last panel', async () => {
