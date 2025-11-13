@@ -17,7 +17,7 @@ echo "  4. Clean up old/deprecated database files"
 echo ""
 
 # Paths
-BACKEND_DIR="/home/jdubz/Development/app-monitor/backend"
+BACKEND_DIR="${BACKEND_DIR:-$(cd "$(dirname "$0")/../backend" && pwd)}"
 DATA_DIR="$BACKEND_DIR/data"
 SHARED_DATA="/opt/app-monitor/shared/data"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
@@ -40,12 +40,31 @@ fi
 
 # Remove old/deprecated databases
 echo ""
-echo "🗑️  Removing deprecated database files..."
-rm -f "$DATA_DIR/dev-bots-tasks.db"
-rm -f "$SHARED_DATA/dev-bots-tasks.db"
-rm -f "$DATA_DIR/task-queue.db"
-rm -f "$SHARED_DATA/task-queue.db"
-echo "  ✅ Removed deprecated databases"
+echo "🗑️  The following deprecated database files will be removed:"
+FILES_TO_DELETE=(
+  "$DATA_DIR/dev-bots-tasks.db"
+  "$SHARED_DATA/dev-bots-tasks.db"
+  "$DATA_DIR/task-queue.db"
+  "$SHARED_DATA/task-queue.db"
+)
+for file in "${FILES_TO_DELETE[@]}"; do
+  if [ -f "$file" ]; then
+    echo "  - $file"
+  fi
+done
+echo ""
+read -p "Are you sure you want to delete these files? [y/N] " confirm
+if [[ "$confirm" =~ ^[Yy]$ ]]; then
+  for file in "${FILES_TO_DELETE[@]}"; do
+    if [ -f "$file" ]; then
+      rm -f "$file"
+      echo "  🗑️  Deleted: $file"
+    fi
+  done
+  echo "  ✅ Removed deprecated databases"
+else
+  echo "  ❌ Deletion cancelled. Deprecated databases were not removed."
+fi
 
 # Create fresh database (TaskQueueService will initialize it)
 echo ""
@@ -64,5 +83,13 @@ echo "  2. TaskQueueService will create unified schema"
 echo "  3. DevBotsDatabase migrations will add supplementary tables"
 echo ""
 echo "Backups available at:"
-ls -lh "$DATA_DIR"/*backup* 2>/dev/null || echo "  (no local backups)"
-ls -lh "$SHARED_DATA"/*backup* 2>/dev/null || echo "  (no production backups)"
+if [ -n "$(find "$DATA_DIR" -maxdepth 1 -name '*backup*' 2>/dev/null)" ]; then
+  ls -lh "$DATA_DIR"/*backup* 2>/dev/null
+else
+  echo "  (no local backups)"
+fi
+if [ -n "$(find "$SHARED_DATA" -maxdepth 1 -name '*backup*' 2>/dev/null)" ]; then
+  ls -lh "$SHARED_DATA"/*backup* 2>/dev/null
+else
+  echo "  (no production backups)"
+fi

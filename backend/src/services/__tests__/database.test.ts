@@ -55,8 +55,7 @@ describeNativeDb('DevBotsDatabase', () => {
   beforeEach(() => {
     cleanupTestDatabaseFiles();
     db = new DevBotsDatabaseCtor(TEST_DB_PATH);
-    // TaskQueueService only needed for skipped tests
-    taskQueue = new TaskQueueServiceCtor(TEST_TASKQUEUE_DB_PATH);
+    // TaskQueueService removed - only needed for skipped tests
   });
 
   afterEach(() => {

@@ -156,9 +156,14 @@ node -e "const db=require('better-sqlite3')('/opt/app-monitor/shared/data/dev-bo
 If something goes wrong, rollback to previous release:
 
 ```bash
+# List available releases and identify the previous one:
+ls -lt /opt/app-monitor/releases/
+
+# Rollback to the previous release (replace YYYYMMDD_HHMMSS with actual timestamp):
 cd /opt/app-monitor
-sudo ln -sfn releases/20251108_221301 current
+sudo ln -sfn releases/YYYYMMDD_HHMMSS current
 sudo systemctl restart app-monitor-backend@5001.service
+sudo systemctl restart app-monitor-backend@5002.service
 ```
 
 ---

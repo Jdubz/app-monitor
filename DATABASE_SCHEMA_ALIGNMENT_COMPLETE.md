@@ -277,6 +277,9 @@ Update `backend/migrations/README.md` with:
 - Which migrations are skipped and why
 - Link to this document
 
+> **Note:** As of this PR, the updates to `backend/migrations/README.md` listed above **have not yet been made**.  
+> Please create a follow-up task/PR to update the README with these changes and link to this document.
+
 ---
 
 ## Lessons Learned

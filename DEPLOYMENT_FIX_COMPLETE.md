@@ -215,17 +215,12 @@ Updated docs:
 **What Happened**:
 ```
 Nov 5-12: Features added using both TaskQueueService and migrations
-Nov 12 15:45: Deployment triggered
-Nov 12 15:45: Migrations run successfully (tasks table created with project)
-Nov 12 15:45: TaskQueueService initializes
-Nov 12 15:45: createSchema() tries to create tasks table (with fingerprint)
-Nov 12 15:45: SQL fails: "no such column: fingerprint"
-Nov 12 15:45: Backend crashes, systemd gives up after 5 retries
-Nov 12 23:53: GitHub Actions times out after 10 minutes
-Nov 13 09:00: Investigation begins
-Nov 13 09:30: Root cause identified
-Nov 13 15:00: Fix implemented and tested
-Nov 13 17:26: PR created with complete solution
+Nov 12: Deployment triggered, migrations run successfully (tasks table created with project)
+Nov 12: TaskQueueService initializes and tries to create tasks table (with fingerprint)
+Nov 12: SQL fails ("no such column: fingerprint"), backend crashes, systemd gives up
+Nov 12: GitHub Actions times out after 10 minutes
+Nov 13: Investigation begins, root cause identified
+Nov 13: Fix implemented, tested, and PR created with complete solution
 ```
 
 **Why It Happened**:

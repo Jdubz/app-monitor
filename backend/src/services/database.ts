@@ -196,8 +196,8 @@ export class DevBotsDatabase {
       ));
     });
 
-    // Migration 010: PR Condition States - APPLIES non-task tables
-    // This migration creates pr_condition_states, retry_history, etc. (not tasks table)
+    // Migration 010: PR Condition States
+    // APPLIES: Creates pr_condition_states, retry_history, etc. (not tasks table)
     this.applyMigration('010_pr_condition_states', () => {
       this.db.exec(fs.readFileSync(
         path.join(__dirname, '..', '..', 'migrations', '010_pr_condition_states.sql'),
@@ -230,24 +230,61 @@ export class DevBotsDatabase {
     });
   }
 
+  /**
+   * Marks a migration as applied without executing it.
+   * 
+   * Used when migrations are handled by TaskQueueService to avoid duplication.
+   * This establishes clear ownership boundaries: TaskQueueService manages core
+   * task tables, while DevBotsDatabase manages supplementary analytics tables.
+   * 
+   * @param name - Migration name (e.g., '002_tasks_table')
+   * @throws {Error} If database operation fails
+   */
   private skipMigration(name: string): void {
-    // Mark migration as applied without running it
-    // Used when TaskQueueService handles the migration internally
-    const applied = this.db.prepare(
-      'SELECT 1 FROM migrations WHERE name = ?'
-    ).get(name);
+    try {
+      // Mark migration as applied without running it
+      // Used when TaskQueueService handles the migration internally
+      let applied;
+      try {
+        applied = this.db.prepare(
+          'SELECT 1 FROM migrations WHERE name = ?'
+        ).get(name);
+      } catch (err: unknown) {
+        // If the migrations table does not exist, create it
+        const error = err as { message?: string };
+        if (error && error.message && error.message.includes('no such table: migrations')) {
+          this.db.exec(`
+            CREATE TABLE IF NOT EXISTS migrations (
+              name TEXT PRIMARY KEY,
+              applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+          `);
+          applied = undefined;
+        } else {
+          throw err;
+        }
+      }
 
-    if (!applied) {
-      this.db.prepare(
-        'INSERT INTO migrations (name) VALUES (?)'
-      ).run(name);
-      
-      logger.info({
+      if (!applied) {
+        this.db.prepare(
+          'INSERT INTO migrations (name) VALUES (?)'
+        ).run(name);
+        
+        logger.info({
+          category: 'database',
+          action: 'migration_delegated_to_taskqueue',
+          message: `Migration ${name} delegated to TaskQueueService (not executed here)`,
+          details: { migrationName: name }
+        });
+      }
+    } catch (error: unknown) {
+      logger.error({
         category: 'database',
-        action: 'migration_skipped',
-        message: `Migration ${name} skipped (handled by TaskQueueService)`,
-        details: { migrationName: name }
+        action: 'skip_migration_failed',
+        message: `Failed to skip migration ${name}`,
+        details: { error }
       });
+      throw error;
     }
   }
 
