@@ -43,7 +43,7 @@ export class WorkerHealthMonitor {
     private scopeControl: ScopeControlService,
     private processManager: ProcessManager,
     private recovery: SimpleFailureRecovery | null,
-    private emit: (event: string, ...args: any[]) => void,
+    private emit: (event: string, ...args: unknown[]) => void,
     private config: WorkerHealthMonitorConfig = {
       heartbeatCheckInterval: 60000,  // 1 minute (disabled)
       longRunningCheckInterval: 300000,  // 5 minutes

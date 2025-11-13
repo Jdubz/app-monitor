@@ -9,6 +9,7 @@ import { logger } from '../../utils/logger.js';
 import { BaseWebhookHandler } from './baseHandler.js';
 import type { GitHubPullRequestPayload } from './types.js';
 import type { Task } from '../taskQueue.sqlite.js';
+import type Database from 'better-sqlite3';
 
 /**
  * Handler for GitHub pull_request webhook events
@@ -76,7 +77,7 @@ export class PullRequestHandler extends BaseWebhookHandler {
   private async findOrAdoptTasks(
     prNumber: number,
     taskId: string | null,
-    pull_request: any,
+    pull_request: GitHubPullRequestPayload['pull_request'],
     branchName: string
   ): Promise<Task[]> {
     if (!this.taskQueue) return [];
@@ -105,7 +106,7 @@ export class PullRequestHandler extends BaseWebhookHandler {
    */
   private async adoptOrphanedSystemPR(
     prNumber: number,
-    pull_request: any,
+    pull_request: GitHubPullRequestPayload['pull_request'],
     branchName: string,
     extractedTaskId: string | null
   ): Promise<Task[]> {
@@ -185,7 +186,7 @@ export class PullRequestHandler extends BaseWebhookHandler {
   private async routeToHandler(
     action: string,
     prNumber: number,
-    pull_request: any,
+    pull_request: GitHubPullRequestPayload['pull_request'],
     tasks: Task[]
   ): Promise<void> {
     switch (action) {
@@ -282,7 +283,7 @@ export class PullRequestHandler extends BaseWebhookHandler {
       const githubPR = this.prOrchestrator.getGitHubPRService();
       const prStatus = await githubPR.getPRStatus(prNumber);
 
-      const currentCommentIds = prStatus.comments.map((c: any) => c.id);
+      const currentCommentIds = prStatus.comments.map((c) => c.id);
       const resolvedFingerprints = this.reviewCommentTracker.detectResolvedComments(
         prNumber,
         currentCommentIds
@@ -337,7 +338,7 @@ export class PullRequestHandler extends BaseWebhookHandler {
     for (const task of tasks) {
       // Mark task as completed if not already
       if (task.status !== 'completed') {
-        const completeStmt = (this.taskQueue as any).db.prepare(`
+        const completeStmt = (this.taskQueue as unknown as { db: Database.Database }).db.prepare(`
           UPDATE tasks
           SET status = 'completed',
               completed_at = ?
@@ -373,7 +374,7 @@ export class PullRequestHandler extends BaseWebhookHandler {
     for (const task of tasks) {
       // Cancel task if it's still pending or running
       if (task.status === 'pending' || task.status === 'running') {
-        const completeStmt = (this.taskQueue as any).db.prepare(`
+        const completeStmt = (this.taskQueue as unknown as { db: Database.Database }).db.prepare(`
           UPDATE tasks
           SET status = 'cancelled',
               completed_at = ?,
@@ -445,8 +446,31 @@ export class PullRequestHandler extends BaseWebhookHandler {
   private async evaluateConditions(prNumber: number, trigger: string): Promise<void> {
     if (!this.prConditionState) return;
 
+    const validTriggers = [
+      'check_suite',
+      'pull_request_review',
+      'pull_request_synchronize',
+      'push',
+      'task_completion',
+      'manual_restart',
+      'pull_request_reopened',
+      'pull_request_ready_for_review'
+    ] as const;
+
+    type ValidTrigger = typeof validTriggers[number];
+    const isValidTrigger = (t: string): t is ValidTrigger => validTriggers.includes(t as ValidTrigger);
+
     try {
-      await this.prConditionState.evaluateConditions(prNumber, trigger as any);
+      if (isValidTrigger(trigger)) {
+        await this.prConditionState.evaluateConditions(prNumber, trigger);
+      } else {
+        logger.warn({
+          category: 'pr-workflow',
+          action: 'invalid_trigger',
+          message: `Invalid trigger type: ${trigger}`,
+          details: { pr_number: prNumber, trigger }
+        });
+      }
     } catch (error) {
       logger.warn({
         category: 'pr-workflow',

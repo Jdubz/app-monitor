@@ -31,7 +31,7 @@ export class SystemInitializationService {
 
   constructor(
     private components: InitializationComponents,
-    private emitEvent: (event: string, ...args: any[]) => void,
+    private emitEvent: (event: string, ...args: unknown[]) => void,
     private endInteractiveSession: (sessionId: string, reason: string) => Promise<void>
   ) {}
 

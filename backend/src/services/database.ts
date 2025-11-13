@@ -3,7 +3,6 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import type { TaskCreationContext } from '../types/taskContext.js';
 import { logger } from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -19,28 +18,7 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-type TaskExecutionRow = {
-  id: string;
-  task_id: string;
-  agent_id: string;
-  model_provider: string | null;
-  model_name: string | null;
-  started_at: string;
-  completed_at: string | null;
-  status: string;
-  token_input: number | null;
-  token_output: number | null;
-  complexity_estimated: number | null;
-  complexity_actual: number | null;
-  quality_score_completion: number;
-  quality_score_code_quality: number;
-  quality_score_test_coverage: number;
-  quality_score_process: number;
-  quality_score_efficiency: number;
-  quality_score_overall: number;
-  git_commit: string | null;
-  output: string | null;
-};
+
 
 type BatchApprovalRow = {
   id: number;
@@ -114,33 +92,12 @@ export class DevBotsDatabase {
     // Apply migrations in order
     this.applyMigration('001_initial_schema', () => {
       this.db.exec(`
-        -- Task execution history
-        CREATE TABLE IF NOT EXISTS task_executions (
-          id TEXT PRIMARY KEY,
-          task_id TEXT NOT NULL,
-          agent_id TEXT NOT NULL,
-          model_provider TEXT,
-          model_name TEXT,
-          started_at TIMESTAMP,
-          completed_at TIMESTAMP,
-          status TEXT,
-          token_input INTEGER,
-          token_output INTEGER,
-          complexity_estimated INTEGER,
-          complexity_actual INTEGER,
-          quality_score_completion INTEGER,
-          quality_score_code_quality INTEGER,
-          quality_score_test_coverage INTEGER,
-          quality_score_process INTEGER,
-          quality_score_efficiency INTEGER,
-          quality_score_overall INTEGER,
-          git_commit TEXT,
-          output TEXT
-        );
-
-        CREATE INDEX idx_task_executions_task_id ON task_executions(task_id);
-        CREATE INDEX idx_task_executions_agent_id ON task_executions(agent_id);
-        CREATE INDEX idx_task_executions_completed_at ON task_executions(completed_at);
+        -- NOTE: task_executions table is created by TaskQueueService, not here.
+        -- CRITICAL: TaskQueueService must initialize BEFORE DevBotsDatabase.
+        -- The factory (devBotsManager.factory.ts) ensures this initialization order.
+        --
+        -- TaskQueueService owns: tasks, task_executions, workers
+        -- DevBotsDatabase owns: token_usage, experiments, batch_approvals, failure_patterns
 
         -- Token usage tracking
         CREATE TABLE IF NOT EXISTS token_usage (
@@ -193,13 +150,11 @@ export class DevBotsDatabase {
       `);
     });
 
-    // Migration 002: Tasks Table
-    this.applyMigration('002_tasks_table', () => {
-      this.db.exec(fs.readFileSync(
-        path.join(__dirname, '..', '..', 'migrations', '002_tasks_table.sql'),
-        'utf-8'
-      ));
-    });
+    // Migration 002: Tasks Table - SKIPPED
+    // TaskQueueService.createSchema() creates the tasks table with complete schema.
+    // This migration is documented but not applied to avoid conflicts.
+    // See DATABASE_SCHEMA_ALIGNMENT_COMPLETE.md for architecture details.
+    this.skipMigration('002_tasks_table');
 
     // Migration 004: Task Context & Automation Run Tracking
     this.applyMigration('004_task_context', () => {
@@ -209,13 +164,9 @@ export class DevBotsDatabase {
       ));
     });
 
-    // Migration 005: PR-Based Workflow Support
-    this.applyMigration('005_pr_workflow', () => {
-      this.db.exec(fs.readFileSync(
-        path.join(__dirname, '..', '..', 'migrations', '005_pr_workflow.sql'),
-        'utf-8'
-      ));
-    });
+    // Migration 005: PR Workflow - SKIPPED
+    // TaskQueueService.runMigrations() adds these columns (pr_number, pr_url, etc.)
+    this.skipMigration('005_pr_workflow');
 
     // Migration 006: Quality Observations
     this.applyMigration('006_quality_observations', () => {
@@ -249,7 +200,8 @@ export class DevBotsDatabase {
       ));
     });
 
-    // Migration 010: PR Condition States for Self-Healing Workflow
+    // Migration 010: PR Condition States
+    // APPLIES: Creates pr_condition_states, retry_history, etc. (not tasks table)
     this.applyMigration('010_pr_condition_states', () => {
       this.db.exec(fs.readFileSync(
         path.join(__dirname, '..', '..', 'migrations', '010_pr_condition_states.sql'),
@@ -257,36 +209,94 @@ export class DevBotsDatabase {
       ));
     });
 
-    // Migration 011: Add Chain Tracking for PR Fix Tasks
-    this.applyMigration('011_add_chain_tracking', () => {
+    // Migration 011: Add Chain Tracking - SKIPPED
+    // TaskQueueService.createSchema() includes chain_id and chain_depth columns
+    this.skipMigration('011_add_chain_tracking');
+
+    // Migrations 012-016: Schema Unification - ALL SKIPPED
+    // TaskQueueService.createSchema() handles all task table schema:
+    // - Migration 012: Staged queue columns (queue_stage, chain_status, etc.)
+    // - Migrations 013-015: Column removals (pr_url, pr_branch, etc.)
+    // - Migration 016: Fingerprint column
+    // TaskQueueService.runMigrations() applies these internally
+    this.skipMigration('012_staged_queue');
+    this.skipMigration('013_remove_duplicate_pr_columns');
+    this.skipMigration('014_slim_pr_review_comments');
+    this.skipMigration('015_clean_quality_observations');
+    this.skipMigration('016_add_fingerprint_column');
+
+    // Migration 017: Schema Alignment Marker
+    this.applyMigration('017_align_with_taskqueue', () => {
       this.db.exec(fs.readFileSync(
-        path.join(__dirname, '..', '..', 'migrations', '011_add_chain_tracking.sql'),
+        path.join(__dirname, '..', '..', 'migrations', '017_align_with_taskqueue.sql'),
         'utf-8'
       ));
     });
+  }
 
-    // Note: Migrations 012-015 are documented but not auto-applied due to SQLite limitations
-    // Migration 012: Staged queue columns added directly in code
-    // Migration 013-015: Empty migrations (soft deprecation of unused columns)
-    // These columns are ignored by the application - see migration files for details
-
-    // Migration 016: Add fingerprint column to unify TaskQueueService and DevBotsDatabase schemas
-    this.applyMigration('016_add_fingerprint_column', () => {
-      // Check if fingerprint column already exists (from TaskQueueService.createSchema)
-      const columns = this.db.prepare('PRAGMA table_info(tasks)').all() as Array<{name: string}>;
-      const hasFingerprint = columns.some(col => col.name === 'fingerprint');
-      
-      if (!hasFingerprint) {
-        // Column doesn't exist, add it
-        this.db.exec('ALTER TABLE tasks ADD COLUMN fingerprint TEXT;');
+  /**
+   * Marks a migration as applied without executing it.
+   * 
+   * Used when migrations are handled by TaskQueueService to avoid duplication.
+   * This establishes clear ownership boundaries: TaskQueueService manages core
+   * task tables (tasks, workers, task_executions), while DevBotsDatabase manages 
+   * supplementary analytics tables (quality, PR workflow, context).
+   * 
+   * **Critical**: TaskQueueService MUST be initialized BEFORE DevBotsDatabase.
+   * The factory (devBotsManager.factory.ts) ensures this initialization order.
+   * 
+   * **Initialization Order**:
+   * 1. TaskQueueService.createSchema() creates tasks, workers, task_executions
+   * 2. DevBotsDatabase.runMigrations() creates supplementary tables
+   * 3. DevBotsDatabase.validateDatabaseIntegrity() verifies only its tables
+   * 
+   * @param name - Migration name (e.g., '002_tasks_table')
+   * @throws {Error} If database operation fails
+   */
+  private skipMigration(name: string): void {
+    try {
+      let applied;
+      try {
+        applied = this.db.prepare(
+          'SELECT 1 FROM migrations WHERE name = ?'
+        ).get(name);
+      } catch (err: unknown) {
+        // If the migrations table does not exist, create it
+        const errorMsg = err instanceof Error ? err.message : String(err);
+        if (errorMsg.includes('no such table: migrations')) {
+          this.db.exec(`
+            CREATE TABLE IF NOT EXISTS migrations (
+              name TEXT PRIMARY KEY,
+              applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+          `);
+          applied = undefined;
+        } else {
+          throw err;
+        }
       }
-      
-      // Create index (idempotent - safe even if column was just added or already existed)
-      this.db.exec(fs.readFileSync(
-        path.join(__dirname, '..', '..', 'migrations', '016_add_fingerprint_column.sql'),
-        'utf-8'
-      ));
-    });
+
+      if (!applied) {
+        this.db.prepare(
+          'INSERT INTO migrations (name) VALUES (?)'
+        ).run(name);
+        
+        logger.info({
+          category: 'database',
+          action: 'migration_delegated_to_taskqueue',
+          message: `Migration ${name} delegated to TaskQueueService (not executed here)`,
+          details: { migrationName: name }
+        });
+      }
+    } catch (error: unknown) {
+      logger.error({
+        category: 'database',
+        action: 'skip_migration_failed',
+        message: `Failed to skip migration ${name}`,
+        details: { error }
+      });
+      throw error;
+    }
   }
 
   private applyMigration(name: string, migration: () => void): void {
@@ -306,14 +316,15 @@ export class DevBotsDatabase {
           message: `Applied migration: ${name}`,
           details: { migrationName: name }
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Safety check: If migration fails due to "already exists", log warning but don't crash
-        if (error.code === 'SQLITE_ERROR' && error.message.includes('already exists')) {
+        const sqliteError = error as { code?: string; message?: string };
+        if (sqliteError.code === 'SQLITE_ERROR' && sqliteError.message?.includes('already exists')) {
           logger.warn({
             category: 'database',
             action: 'migration_already_exists',
             message: `Migration ${name} failed with "already exists" error. This indicates the migration tracking may be out of sync.`,
-            details: { migrationName: name, errorMessage: error.message }
+            details: { migrationName: name, errorMessage: sqliteError.message || 'Unknown error' }
           });
           logger.warn({
             category: 'database',
@@ -352,14 +363,16 @@ export class DevBotsDatabase {
    * Ensures critical tables exist and have expected schema
    */
   private validateDatabaseIntegrity(): void {
+    // Note: 'tasks', 'task_executions', 'workers' NOT in this list.
+    // Those are created by TaskQueueService.createSchema().
+    // DevBotsDatabase only validates tables it owns (supplementary tables).
+    // TaskQueueService validates its own tables separately.
     const requiredTables = [
       'migrations',
-      'task_executions',
       'token_usage',
       'experiments',
       'batch_approvals',
       'failure_patterns',
-      'tasks',
       'task_automation_runs'
     ];
 
@@ -405,7 +418,7 @@ export class DevBotsDatabase {
         message: 'Database integrity validated',
         details: { tableCount: requiredTables.length, tables: requiredTables }
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({
         category: 'database',
         action: 'integrity_validation_failed',
@@ -414,71 +427,6 @@ export class DevBotsDatabase {
       });
       throw error;
     }
-  }
-
-  // Task Executions
-  recordTaskExecution(data: TaskExecution): void {
-    this.db.prepare(`
-      INSERT INTO task_executions (
-        id, task_id, agent_id, model_provider, model_name,
-        started_at, completed_at, status,
-        token_input, token_output,
-        complexity_estimated, complexity_actual,
-        quality_score_completion, quality_score_code_quality,
-        quality_score_test_coverage, quality_score_process,
-        quality_score_efficiency, quality_score_overall,
-        git_commit, output
-      ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-      )
-    `).run(
-      data.id, data.taskId, data.agentId, data.modelProvider, data.modelName,
-      data.startedAt, data.completedAt, data.status,
-      data.tokenInput, data.tokenOutput,
-      data.complexityEstimated, data.complexityActual,
-      data.qualityScores.completion, data.qualityScores.codeQuality,
-      data.qualityScores.testCoverage, data.qualityScores.process,
-      data.qualityScores.efficiency, data.qualityScores.overall,
-      data.gitCommit, data.output
-    );
-  }
-
-  getTaskExecution(id: string): TaskExecution | undefined {
-    const result = this.db.prepare(
-      'SELECT * FROM task_executions WHERE id = ?'
-    ).get(id);
-
-    if (!result) return undefined;
-
-    return this.mapToTaskExecution(result as TaskExecutionRow);
-  }
-
-  private mapToTaskExecution(row: TaskExecutionRow): TaskExecution {
-    return {
-      id: row.id,
-      taskId: row.task_id,
-      agentId: row.agent_id,
-      modelProvider: row.model_provider ?? undefined,
-      modelName: row.model_name ?? undefined,
-      startedAt: row.started_at,
-      completedAt: row.completed_at ?? undefined,
-      status: row.status,
-      tokenInput: row.token_input ?? undefined,
-      tokenOutput: row.token_output ?? undefined,
-      complexityEstimated: row.complexity_estimated ?? undefined,
-      complexityActual: row.complexity_actual ?? undefined,
-      qualityScores: {
-        completion: row.quality_score_completion,
-        codeQuality: row.quality_score_code_quality,
-        testCoverage: row.quality_score_test_coverage,
-        process: row.quality_score_process,
-        efficiency: row.quality_score_efficiency,
-        overall: row.quality_score_overall
-      },
-      gitCommit: row.git_commit ?? undefined,
-      output: row.output ?? undefined
-    };
   }
 
   // Token Usage
@@ -732,18 +680,6 @@ export class DevBotsDatabase {
     this.storeQualityObservation(observation);
   }
 
-  // Task Creation Context
-  saveTaskCreationContext(taskId: string, context: TaskCreationContext): void {
-    this.db.prepare(`
-      UPDATE tasks
-      SET context_json = ?
-      WHERE id = ?
-    `).run(
-      this.serializeNullableJson(context),
-      taskId
-    );
-  }
-
   // Interactive Sessions
   createInteractiveSession(session: NewInteractiveSession): void {
     this.db.prepare(`
@@ -905,33 +841,6 @@ export class DevBotsDatabase {
 }
 
 // Types
-export interface TaskExecution {
-  id: string;
-  taskId: string;
-  agentId: string;
-  modelProvider?: string;
-  modelName?: string;
-  startedAt: string;
-  completedAt?: string;
-  status: string;
-  tokenInput?: number;
-  tokenOutput?: number;
-  complexityEstimated?: number;
-  complexityActual?: number;
-  qualityScores: QualityScores;
-  gitCommit?: string;
-  output?: string;
-}
-
-export interface QualityScores {
-  completion: number;
-  codeQuality: number;
-  testCoverage: number;
-  process: number;
-  efficiency: number;
-  overall: number;
-}
-
 export interface TokenUsage {
   provider: string;
   model: string;

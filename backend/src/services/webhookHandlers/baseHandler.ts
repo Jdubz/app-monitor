@@ -30,12 +30,12 @@ export abstract class BaseWebhookHandler {
    * Handle the webhook event
    * @param payload The webhook payload
    */
-  abstract handle(payload: any): Promise<void>;
+  abstract handle(payload: unknown): Promise<void>;
 
   /**
    * Log a webhook event with consistent format
    */
-  protected logEvent(eventType: string, action: string, details: any = {}): void {
+  protected logEvent(eventType: string, action: string, details: Record<string, unknown> = {}): void {
     logger.info({
       category: 'api',
       action: `${eventType}_${action}`,
@@ -47,7 +47,7 @@ export abstract class BaseWebhookHandler {
   /**
    * Log an error during webhook handling
    */
-  protected logError(eventType: string, action: string, error: unknown, details: any = {}): void {
+  protected logError(eventType: string, action: string, error: unknown, details: Record<string, unknown> = {}): void {
     logger.error({
       category: 'api',
       action: `${eventType}_${action}_error`,

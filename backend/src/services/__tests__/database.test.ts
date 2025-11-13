@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
-import type { TaskExecution, TokenUsage, FailurePattern } from '../database';
-import type { TaskCreationContext } from '../../types/taskContext';
+import type { TokenUsage, FailurePattern } from '../database';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -10,6 +9,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const TEST_DB_PATH = path.join(__dirname, 'test.db');
+const TEST_TASKQUEUE_DB_PATH = path.join(__dirname, 'test-taskqueue.db');
 
 // Skip the native better-sqlite3 backed suite in CI where the addon is unavailable.
 const shouldSkipNativeDbSuite =
@@ -22,15 +22,17 @@ type DevBotsDatabaseClass = DatabaseModule['DevBotsDatabase'];
 type DevBotsDatabaseInstance = InstanceType<DevBotsDatabaseClass>;
 
 function cleanupTestDatabaseFiles(): void {
-  if (fs.existsSync(TEST_DB_PATH)) {
-    fs.unlinkSync(TEST_DB_PATH);
-  }
-  if (fs.existsSync(TEST_DB_PATH + '-shm')) {
-    fs.unlinkSync(TEST_DB_PATH + '-shm');
-  }
-  if (fs.existsSync(TEST_DB_PATH + '-wal')) {
-    fs.unlinkSync(TEST_DB_PATH + '-wal');
-  }
+  [TEST_DB_PATH, TEST_TASKQUEUE_DB_PATH].forEach((dbPath) => {
+    if (fs.existsSync(dbPath)) {
+      fs.unlinkSync(dbPath);
+    }
+    if (fs.existsSync(dbPath + '-shm')) {
+      fs.unlinkSync(dbPath + '-shm');
+    }
+    if (fs.existsSync(dbPath + '-wal')) {
+      fs.unlinkSync(dbPath + '-wal');
+    }
+  });
 }
 
 describeNativeDb('DevBotsDatabase', () => {
@@ -38,8 +40,8 @@ describeNativeDb('DevBotsDatabase', () => {
   let db: DevBotsDatabaseInstance;
 
   beforeAll(async () => {
-    const module: DatabaseModule = await import('../database.js');
-    DevBotsDatabaseCtor = module.DevBotsDatabase;
+    const dbModule: DatabaseModule = await import('../database.js');
+    DevBotsDatabaseCtor = dbModule.DevBotsDatabase;
   });
 
   beforeEach(() => {
@@ -66,13 +68,15 @@ describeNativeDb('DevBotsDatabase', () => {
     });
 
     it('should create all required tables', () => {
+      // Note: 'tasks', 'task_executions', 'workers' are created by TaskQueueService, not DevBotsDatabase
+      // DevBotsDatabase creates supplementary tables only
       const tables = [
         'migrations',
-        'task_executions',
         'token_usage',
         'experiments',
         'batch_approvals',
-        'failure_patterns'
+        'failure_patterns',
+        'task_automation_runs'
       ];
 
       tables.forEach((table) => {
@@ -104,99 +108,6 @@ describeNativeDb('DevBotsDatabase', () => {
     });
   });
 
-  describe('Task Executions', () => {
-    it('should record and retrieve task execution', () => {
-      const execution: TaskExecution = {
-        id: 'exec-1',
-        taskId: 'task-1',
-        agentId: 'backend-specialist',
-        modelProvider: 'claude',
-        modelName: 'claude-3-5-sonnet',
-        startedAt: new Date().toISOString(),
-        status: 'completed',
-        tokenInput: 1000,
-        tokenOutput: 500,
-        complexityEstimated: 5,
-        complexityActual: 7,
-        qualityScores: {
-          completion: 100,
-          codeQuality: 95,
-          testCoverage: 90,
-          process: 100,
-          efficiency: 85,
-          overall: 94
-        },
-        gitCommit: 'abc123',
-        output: 'Task completed successfully'
-      };
-
-      db.recordTaskExecution(execution);
-      const retrieved = db.getTaskExecution('exec-1');
-
-      expect(retrieved).toBeDefined();
-      expect(retrieved?.taskId).toBe('task-1');
-      expect(retrieved?.agentId).toBe('backend-specialist');
-      expect(retrieved?.modelProvider).toBe('claude');
-      expect(retrieved?.qualityScores.overall).toBe(94);
-    });
-
-    it('should return undefined for non-existent task execution', () => {
-      const retrieved = db.getTaskExecution('non-existent');
-      expect(retrieved).toBeUndefined();
-    });
-
-    it('should handle minimal task execution data', () => {
-      const execution: TaskExecution = {
-        id: 'exec-2',
-        taskId: 'task-2',
-        agentId: 'frontend-specialist',
-        startedAt: new Date().toISOString(),
-        status: 'running',
-        qualityScores: {
-          completion: 0,
-          codeQuality: 0,
-          testCoverage: 0,
-          process: 0,
-          efficiency: 0,
-          overall: 0
-        }
-      };
-
-      db.recordTaskExecution(execution);
-      const retrieved = db.getTaskExecution('exec-2');
-
-      expect(retrieved).toBeDefined();
-      expect(retrieved?.status).toBe('running');
-      expect(retrieved?.modelProvider).toBeUndefined();
-    });
-
-    it('should handle task execution with completed timestamp', () => {
-      const startTime = new Date().toISOString();
-      const endTime = new Date(Date.now() + 60000).toISOString();
-
-      const execution: TaskExecution = {
-        id: 'exec-3',
-        taskId: 'task-3',
-        agentId: 'backend-specialist',
-        startedAt: startTime,
-        completedAt: endTime,
-        status: 'completed',
-        qualityScores: {
-          completion: 100,
-          codeQuality: 100,
-          testCoverage: 100,
-          process: 100,
-          efficiency: 100,
-          overall: 100
-        }
-      };
-
-      db.recordTaskExecution(execution);
-      const retrieved = db.getTaskExecution('exec-3');
-
-      expect(retrieved?.completedAt).toBe(endTime);
-    });
-  });
 
   describe('Token Usage', () => {
     it('should record token usage', () => {
@@ -417,149 +328,6 @@ describeNativeDb('DevBotsDatabase', () => {
     });
   });
 
-  describe('Task Creation Context', () => {
-    it('should save task creation context', () => {
-      // First, create a task in the tasks table
-      const taskId = 'test-task-1';
-      (db as any).db.prepare(`
-        INSERT INTO tasks (
-          id, type, title, status, created_at, assigned_agent, priority
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(taskId, 'implementation', 'Test Task', 'pending', new Date().toISOString(), 'backend-specialist', 5);
-
-      // Create a task creation context
-      const context: TaskCreationContext = {
-        environment: {
-          appVersion: '1.0.0',
-          gitSha: 'abc123',
-          buildTime: '2025-11-10T12:00:00Z',
-          nodeVersion: 'v20.0.0'
-        },
-        workTarget: 'dev-monitor',
-        targetBranch: 'main'
-      };
-
-      // Save the context
-      db.saveTaskCreationContext(taskId, context);
-
-      // Verify the context was saved
-      const result = (db as any).db.prepare('SELECT context_json FROM tasks WHERE id = ?').get(taskId);
-      expect(result).toBeDefined();
-      expect(result.context_json).toBeDefined();
-
-      const savedContext = JSON.parse(result.context_json);
-      expect(savedContext.environment.appVersion).toBe('1.0.0');
-      expect(savedContext.environment.gitSha).toBe('abc123');
-      expect(savedContext.workTarget).toBe('dev-monitor');
-      expect(savedContext.targetBranch).toBe('main');
-    });
-
-    it('should update existing task context', () => {
-      // Create a task with initial context
-      const taskId = 'test-task-2';
-      (db as any).db.prepare(`
-        INSERT INTO tasks (
-          id, type, title, status, created_at, assigned_agent, priority, context_json
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(
-        taskId,
-        'implementation',
-        'Test Task 2',
-        'pending',
-        new Date().toISOString(),
-        'backend-specialist',
-        5,
-        JSON.stringify({ workTarget: 'old-target' })
-      );
-
-      // Update with new context
-      const newContext: TaskCreationContext = {
-        environment: {
-          appVersion: '2.0.0',
-          gitSha: 'def456',
-          buildTime: '2025-11-10T13:00:00Z'
-        },
-        workTarget: 'new-target',
-        targetBranch: 'develop',
-        affectedFiles: ['src/file1.ts', 'src/file2.ts']
-      };
-
-      db.saveTaskCreationContext(taskId, newContext);
-
-      // Verify the context was updated
-      const result = (db as any).db.prepare('SELECT context_json FROM tasks WHERE id = ?').get(taskId);
-      const savedContext = JSON.parse(result.context_json);
-      expect(savedContext.workTarget).toBe('new-target');
-      expect(savedContext.targetBranch).toBe('develop');
-      expect(savedContext.affectedFiles).toEqual(['src/file1.ts', 'src/file2.ts']);
-    });
-
-    it('should handle context with optional fields', () => {
-      const taskId = 'test-task-3';
-      (db as any).db.prepare(`
-        INSERT INTO tasks (
-          id, type, title, status, created_at, assigned_agent, priority
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)
-      `).run(taskId, 'implementation', 'Test Task 3', 'pending', new Date().toISOString(), 'backend-specialist', 5);
-
-      // Create context with all optional fields
-      const context: TaskCreationContext = {
-        environment: {
-          appVersion: '1.0.0',
-          gitSha: 'abc123',
-          buildTime: '2025-11-10T12:00:00Z',
-          nodeVersion: 'v20.0.0',
-          npmVersion: '10.0.0',
-          dockerImage: 'node:20-alpine',
-          claudeVersion: '3.5'
-        },
-        clientMeta: {
-          locationHref: 'http://localhost:3000',
-          userAgent: 'Mozilla/5.0',
-          platform: 'linux',
-          timestamp: '2025-11-10T12:00:00Z'
-        },
-        workTarget: 'dev-monitor',
-        targetBranch: 'feature/test',
-        affectedFiles: ['src/test.ts'],
-        screenshot: 'data:image/png;base64,iVBORw0KG...',
-        appState: {
-          activePanel: 'logs',
-          filters: { severity: 'error' }
-        }
-      };
-
-      db.saveTaskCreationContext(taskId, context);
-
-      const result = (db as any).db.prepare('SELECT context_json FROM tasks WHERE id = ?').get(taskId);
-      const savedContext = JSON.parse(result.context_json);
-      expect(savedContext.clientMeta).toBeDefined();
-      expect(savedContext.clientMeta.platform).toBe('linux');
-      expect(savedContext.screenshot).toBeDefined();
-      expect(savedContext.appState.activePanel).toBe('logs');
-    });
-
-    it('should handle non-existent task gracefully', () => {
-      const context: TaskCreationContext = {
-        environment: {
-          appVersion: '1.0.0',
-          gitSha: 'abc123',
-          buildTime: '2025-11-10T12:00:00Z'
-        },
-        workTarget: 'dev-monitor',
-        targetBranch: 'main'
-      };
-
-      // This should not throw but also won't update anything
-      expect(() => {
-        db.saveTaskCreationContext('non-existent-task', context);
-      }).not.toThrow();
-
-      // Verify no row was affected
-      const result = (db as any).db.prepare('SELECT context_json FROM tasks WHERE id = ?').get('non-existent-task');
-      expect(result).toBeUndefined();
-    });
-  });
 
   describe('Database Close', () => {
     it('should close database connection', () => {

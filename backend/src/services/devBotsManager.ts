@@ -133,32 +133,61 @@ export class DevBotsManager extends EventEmitter {
     // Initialize SimpleFailureRecovery
     this.recovery = new SimpleFailureRecovery(this);
 
+    // Type helper for dependency injection
+    interface WorkerHealthMonitorDeps {
+      recovery: SimpleFailureRecovery;
+      emit: (event: string, data: unknown) => void;
+    }
+
     // Update WorkerHealthMonitor with recovery and emit function
     // Note: WorkerHealthMonitor is injected but needs recovery instance from DevBotsManager
-    (this.workerHealthMonitor as any).recovery = this.recovery;
-    (this.workerHealthMonitor as any).emit = this.emit.bind(this);
+    (this.workerHealthMonitor as unknown as WorkerHealthMonitorDeps).recovery = this.recovery;
+    (this.workerHealthMonitor as unknown as WorkerHealthMonitorDeps).emit = this.emit.bind(this);
+
+    // Type helper for dependency injection
+    interface SystemInitDeps {
+      components: { recovery: SimpleFailureRecovery };
+    }
 
     // Update SystemInitializationService with recovery instance
-    (this.systemInitializationService as any).components.recovery = this.recovery;
+    (this.systemInitializationService as unknown as SystemInitDeps).components.recovery = this.recovery;
+
+    // Type helper for dependency injection
+    interface RetryCoordinationDeps {
+      emitEvent: (event: string, data: unknown) => void;
+      assignNextTask: () => Promise<void>;
+    }
 
     // Update RetryCoordinationService with emit and assignNextTask functions
     // Note: RetryCoordinationService is injected but needs these callbacks from DevBotsManager
-    (this.retryCoordinationService as any).emitEvent = this.emit.bind(this);
-    (this.retryCoordinationService as any).assignNextTask = this.assignNextTask.bind(this);
+    (this.retryCoordinationService as unknown as RetryCoordinationDeps).emitEvent = this.emit.bind(this);
+    (this.retryCoordinationService as unknown as RetryCoordinationDeps).assignNextTask = this.assignNextTask.bind(this);
+
+    // Type helper for dependency injection
+    interface SystemLifecycleDeps {
+      emitEvent: (event: string, data: unknown) => void;
+      assignNextTask: () => Promise<void>;
+    }
 
     // Update SystemLifecycleService with emit and assignNextTask functions
     // Note: SystemLifecycleService is injected but needs these callbacks from DevBotsManager
-    (this.systemLifecycleService as any).emitEvent = this.emit.bind(this);
-    (this.systemLifecycleService as any).assignNextTask = this.assignNextTask.bind(this);
+    (this.systemLifecycleService as unknown as SystemLifecycleDeps).emitEvent = this.emit.bind(this);
+    (this.systemLifecycleService as unknown as SystemLifecycleDeps).assignNextTask = this.assignNextTask.bind(this);
+
+    // Type helper for dependency injection
+    interface SystemInitCallbackDeps {
+      emitEvent: (event: string, data: unknown) => void;
+      endInteractiveSession: (sessionId: string, reason: string) => Promise<void>;
+    }
 
     // Update SystemInitializationService with emit and endInteractiveSession callbacks
     // Note: SystemInitializationService is injected but needs these callbacks from DevBotsManager
-    (this.systemInitializationService as any).emitEvent = this.emit.bind(this);
-    (this.systemInitializationService as any).endInteractiveSession = this.endInteractiveSession.bind(this);
+    (this.systemInitializationService as unknown as SystemInitCallbackDeps).emitEvent = this.emit.bind(this);
+    (this.systemInitializationService as unknown as SystemInitCallbackDeps).endInteractiveSession = this.endInteractiveSession.bind(this);
 
     // Update CleanupCoordinator with assignNextTask callback
     // Note: CleanupCoordinator is injected but needs this callback from DevBotsManager
-    (this.cleanupCoordinator as any).assignNextTask = this.assignNextTask.bind(this);
+    (this.cleanupCoordinator as unknown as { assignNextTask: () => Promise<void> }).assignNextTask = this.assignNextTask.bind(this);
 
     // Initialize TaskCompletionService with PR workflow orchestrator callback
     // Create no-op implementations for removed dependencies
