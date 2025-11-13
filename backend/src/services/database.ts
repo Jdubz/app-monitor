@@ -3,7 +3,6 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
-import type { TaskCreationContext } from '../types/taskContext.js';
 import { logger } from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -19,28 +18,7 @@ if (!fs.existsSync(dataDir)) {
   fs.mkdirSync(dataDir, { recursive: true });
 }
 
-type TaskExecutionRow = {
-  id: string;
-  task_id: string;
-  agent_id: string;
-  model_provider: string | null;
-  model_name: string | null;
-  started_at: string;
-  completed_at: string | null;
-  status: string;
-  token_input: number | null;
-  token_output: number | null;
-  complexity_estimated: number | null;
-  complexity_actual: number | null;
-  quality_score_completion: number;
-  quality_score_code_quality: number;
-  quality_score_test_coverage: number;
-  quality_score_process: number;
-  quality_score_efficiency: number;
-  quality_score_overall: number;
-  git_commit: string | null;
-  output: string | null;
-};
+
 
 type BatchApprovalRow = {
   id: number;
@@ -402,71 +380,6 @@ export class DevBotsDatabase {
     }
   }
 
-  // Task Executions
-  recordTaskExecution(data: TaskExecution): void {
-    this.db.prepare(`
-      INSERT INTO task_executions (
-        id, task_id, agent_id, model_provider, model_name,
-        started_at, completed_at, status,
-        token_input, token_output,
-        complexity_estimated, complexity_actual,
-        quality_score_completion, quality_score_code_quality,
-        quality_score_test_coverage, quality_score_process,
-        quality_score_efficiency, quality_score_overall,
-        git_commit, output
-      ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-      )
-    `).run(
-      data.id, data.taskId, data.agentId, data.modelProvider, data.modelName,
-      data.startedAt, data.completedAt, data.status,
-      data.tokenInput, data.tokenOutput,
-      data.complexityEstimated, data.complexityActual,
-      data.qualityScores.completion, data.qualityScores.codeQuality,
-      data.qualityScores.testCoverage, data.qualityScores.process,
-      data.qualityScores.efficiency, data.qualityScores.overall,
-      data.gitCommit, data.output
-    );
-  }
-
-  getTaskExecution(id: string): TaskExecution | undefined {
-    const result = this.db.prepare(
-      'SELECT * FROM task_executions WHERE id = ?'
-    ).get(id);
-
-    if (!result) return undefined;
-
-    return this.mapToTaskExecution(result as TaskExecutionRow);
-  }
-
-  private mapToTaskExecution(row: TaskExecutionRow): TaskExecution {
-    return {
-      id: row.id,
-      taskId: row.task_id,
-      agentId: row.agent_id,
-      modelProvider: row.model_provider ?? undefined,
-      modelName: row.model_name ?? undefined,
-      startedAt: row.started_at,
-      completedAt: row.completed_at ?? undefined,
-      status: row.status,
-      tokenInput: row.token_input ?? undefined,
-      tokenOutput: row.token_output ?? undefined,
-      complexityEstimated: row.complexity_estimated ?? undefined,
-      complexityActual: row.complexity_actual ?? undefined,
-      qualityScores: {
-        completion: row.quality_score_completion,
-        codeQuality: row.quality_score_code_quality,
-        testCoverage: row.quality_score_test_coverage,
-        process: row.quality_score_process,
-        efficiency: row.quality_score_efficiency,
-        overall: row.quality_score_overall
-      },
-      gitCommit: row.git_commit ?? undefined,
-      output: row.output ?? undefined
-    };
-  }
-
   // Token Usage
   recordTokenUsage(data: TokenUsage): void {
     this.db.prepare(`
@@ -718,18 +631,6 @@ export class DevBotsDatabase {
     this.storeQualityObservation(observation);
   }
 
-  // Task Creation Context
-  saveTaskCreationContext(taskId: string, context: TaskCreationContext): void {
-    this.db.prepare(`
-      UPDATE tasks
-      SET context_json = ?
-      WHERE id = ?
-    `).run(
-      this.serializeNullableJson(context),
-      taskId
-    );
-  }
-
   // Interactive Sessions
   createInteractiveSession(session: NewInteractiveSession): void {
     this.db.prepare(`
@@ -891,33 +792,6 @@ export class DevBotsDatabase {
 }
 
 // Types
-export interface TaskExecution {
-  id: string;
-  taskId: string;
-  agentId: string;
-  modelProvider?: string;
-  modelName?: string;
-  startedAt: string;
-  completedAt?: string;
-  status: string;
-  tokenInput?: number;
-  tokenOutput?: number;
-  complexityEstimated?: number;
-  complexityActual?: number;
-  qualityScores: QualityScores;
-  gitCommit?: string;
-  output?: string;
-}
-
-export interface QualityScores {
-  completion: number;
-  codeQuality: number;
-  testCoverage: number;
-  process: number;
-  efficiency: number;
-  overall: number;
-}
-
 export interface TokenUsage {
   provider: string;
   model: string;
