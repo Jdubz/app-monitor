@@ -21,7 +21,7 @@ export class RetryCoordinationService {
   constructor(
     private taskQueue: TaskQueueService,
     private retryManager: RetryManager,
-    private emitEvent: (event: string, ...args: any[]) => void,
+    private emitEvent: (event: string, ...args: unknown[]) => void,
     private assignNextTask: () => Promise<void>
   ) {}
 

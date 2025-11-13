@@ -290,14 +290,15 @@ export class DevBotsDatabase {
           message: `Applied migration: ${name}`,
           details: { migrationName: name }
         });
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Safety check: If migration fails due to "already exists", log warning but don't crash
-        if (error.code === 'SQLITE_ERROR' && error.message.includes('already exists')) {
+        const sqliteError = error as { code?: string; message?: string };
+        if (sqliteError.code === 'SQLITE_ERROR' && sqliteError.message?.includes('already exists')) {
           logger.warn({
             category: 'database',
             action: 'migration_already_exists',
             message: `Migration ${name} failed with "already exists" error. This indicates the migration tracking may be out of sync.`,
-            details: { migrationName: name, errorMessage: error.message }
+            details: { migrationName: name, errorMessage: sqliteError.message || 'Unknown error' }
           });
           logger.warn({
             category: 'database',
@@ -390,7 +391,7 @@ export class DevBotsDatabase {
         message: 'Database integrity validated',
         details: { tableCount: requiredTables.length, tables: requiredTables }
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       logger.error({
         category: 'database',
         action: 'integrity_validation_failed',

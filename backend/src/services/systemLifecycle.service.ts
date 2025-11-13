@@ -20,7 +20,7 @@ export class SystemLifecycleService {
 
   constructor(
     private components: SystemLifecycleComponents,
-    private emitEvent: (event: string, ...args: any[]) => void,
+    private emitEvent: (event: string, ...args: unknown[]) => void,
     private assignNextTask: () => void
   ) {}
 

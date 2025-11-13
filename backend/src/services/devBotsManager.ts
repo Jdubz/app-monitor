@@ -135,30 +135,30 @@ export class DevBotsManager extends EventEmitter {
 
     // Update WorkerHealthMonitor with recovery and emit function
     // Note: WorkerHealthMonitor is injected but needs recovery instance from DevBotsManager
-    (this.workerHealthMonitor as any).recovery = this.recovery;
-    (this.workerHealthMonitor as any).emit = this.emit.bind(this);
+    (this.workerHealthMonitor as unknown as { recovery: SimpleFailureRecovery; emit: (event: string, data: unknown) => void }).recovery = this.recovery;
+    (this.workerHealthMonitor as unknown as { recovery: SimpleFailureRecovery; emit: (event: string, data: unknown) => void }).emit = this.emit.bind(this);
 
     // Update SystemInitializationService with recovery instance
-    (this.systemInitializationService as any).components.recovery = this.recovery;
+    (this.systemInitializationService as unknown as { components: { recovery: SimpleFailureRecovery } }).components.recovery = this.recovery;
 
     // Update RetryCoordinationService with emit and assignNextTask functions
     // Note: RetryCoordinationService is injected but needs these callbacks from DevBotsManager
-    (this.retryCoordinationService as any).emitEvent = this.emit.bind(this);
-    (this.retryCoordinationService as any).assignNextTask = this.assignNextTask.bind(this);
+    (this.retryCoordinationService as unknown as { emitEvent: (event: string, data: unknown) => void; assignNextTask: () => Promise<void> }).emitEvent = this.emit.bind(this);
+    (this.retryCoordinationService as unknown as { emitEvent: (event: string, data: unknown) => void; assignNextTask: () => Promise<void> }).assignNextTask = this.assignNextTask.bind(this);
 
     // Update SystemLifecycleService with emit and assignNextTask functions
     // Note: SystemLifecycleService is injected but needs these callbacks from DevBotsManager
-    (this.systemLifecycleService as any).emitEvent = this.emit.bind(this);
-    (this.systemLifecycleService as any).assignNextTask = this.assignNextTask.bind(this);
+    (this.systemLifecycleService as unknown as { emitEvent: (event: string, data: unknown) => void; assignNextTask: () => Promise<void> }).emitEvent = this.emit.bind(this);
+    (this.systemLifecycleService as unknown as { emitEvent: (event: string, data: unknown) => void; assignNextTask: () => Promise<void> }).assignNextTask = this.assignNextTask.bind(this);
 
     // Update SystemInitializationService with emit and endInteractiveSession callbacks
     // Note: SystemInitializationService is injected but needs these callbacks from DevBotsManager
-    (this.systemInitializationService as any).emitEvent = this.emit.bind(this);
-    (this.systemInitializationService as any).endInteractiveSession = this.endInteractiveSession.bind(this);
+    (this.systemInitializationService as unknown as { emitEvent: (event: string, data: unknown) => void; endInteractiveSession: (sessionId: string, reason: string) => Promise<void> }).emitEvent = this.emit.bind(this);
+    (this.systemInitializationService as unknown as { emitEvent: (event: string, data: unknown) => void; endInteractiveSession: (sessionId: string, reason: string) => Promise<void> }).endInteractiveSession = this.endInteractiveSession.bind(this);
 
     // Update CleanupCoordinator with assignNextTask callback
     // Note: CleanupCoordinator is injected but needs this callback from DevBotsManager
-    (this.cleanupCoordinator as any).assignNextTask = this.assignNextTask.bind(this);
+    (this.cleanupCoordinator as unknown as { assignNextTask: () => Promise<void> }).assignNextTask = this.assignNextTask.bind(this);
 
     // Initialize TaskCompletionService with PR workflow orchestrator callback
     // Create no-op implementations for removed dependencies
