@@ -484,8 +484,13 @@ export class TaskQueueService {
   }
 
   private createSchema(): void {
+    // NOTE: In production, the tasks table is created by migrations (002_tasks_table.sql + 016_add_fingerprint_column.sql)
+    // However, for tests and standalone usage, we need to create it here with a compatible schema
+    // This table definition includes ALL columns from migrations to ensure compatibility
+    
     this.db.exec(`
-      -- Main tasks table
+      -- Main tasks table (compatible with migrations schema)
+      -- Includes columns from migrations: project, pr_number, pr_url, chain_id, chain_depth, etc.
       CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY,
         type TEXT NOT NULL,
@@ -493,7 +498,7 @@ export class TaskQueueService {
         description TEXT,
         documentation TEXT,
         notes TEXT,
-        status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled', 'timeout')),
+        status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled', 'timeout', 'assigned', 'active', 'retrying')),
         priority INTEGER NOT NULL DEFAULT 5,
         created_at INTEGER NOT NULL,
         assigned_at INTEGER,
@@ -501,17 +506,43 @@ export class TaskQueueService {
         completed_at INTEGER,
         assigned_agent TEXT NOT NULL,
         assigned_worker TEXT,
-        agent_type TEXT CHECK(agent_type IN ('claude', 'codex')), -- Track which CLI tool executed
+        agent_type TEXT CHECK(agent_type IN ('claude', 'codex')),
         prompt TEXT,
         output TEXT,
         error TEXT,
         can_retry INTEGER DEFAULT 1,
         retry_count INTEGER DEFAULT 0,
         max_retries INTEGER DEFAULT 3,
-        timeout_ms INTEGER DEFAULT NULL, -- NULL = no timeout (conservative approach)
+        timeout_ms INTEGER DEFAULT NULL,
         fingerprint TEXT,
         estimated_hours REAL,
-        complexity TEXT
+        complexity TEXT,
+        -- Migration 002 columns
+        exit_code INTEGER,
+        files TEXT,
+        dependencies TEXT,
+        project TEXT,
+        timeout INTEGER,
+        metadata TEXT,
+        context_json TEXT,
+        -- Migration 005 columns
+        pr_number INTEGER,
+        pr_url TEXT,
+        pr_branch TEXT,
+        pr_status TEXT,
+        pr_checks_status TEXT,
+        pr_review_status TEXT,
+        pr_created_at TEXT,
+        pr_merged_at TEXT,
+        followup_for_pr INTEGER,
+        followup_tasks TEXT,
+        -- Migration 011 columns
+        chain_id TEXT,
+        chain_depth INTEGER,
+        -- Migration 012 columns
+        queue_stage TEXT,
+        chain_status TEXT,
+        original_task_id TEXT
       );
 
       -- Indexes for performance
@@ -520,6 +551,12 @@ export class TaskQueueService {
       CREATE INDEX IF NOT EXISTS idx_tasks_priority ON tasks(priority DESC, created_at ASC);
       CREATE INDEX IF NOT EXISTS idx_tasks_fingerprint ON tasks(fingerprint);
       CREATE INDEX IF NOT EXISTS idx_tasks_assigned_worker ON tasks(assigned_worker);
+      CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project);
+      CREATE INDEX IF NOT EXISTS idx_tasks_status_priority ON tasks(status, priority DESC, created_at);
+      CREATE INDEX IF NOT EXISTS idx_tasks_pr_number ON tasks(pr_number) WHERE pr_number IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_tasks_chain_id ON tasks(chain_id) WHERE chain_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_tasks_chain_status ON tasks(chain_status) WHERE chain_status IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_tasks_queue_stage ON tasks(queue_stage) WHERE queue_stage IS NOT NULL;
       -- Note: idx_tasks_agent_type is created in migration, not here
 
       -- Worker tracking

@@ -269,6 +269,24 @@ export class DevBotsDatabase {
     // Migration 012: Staged queue columns added directly in code
     // Migration 013-015: Empty migrations (soft deprecation of unused columns)
     // These columns are ignored by the application - see migration files for details
+
+    // Migration 016: Add fingerprint column to unify TaskQueueService and DevBotsDatabase schemas
+    this.applyMigration('016_add_fingerprint_column', () => {
+      // Check if fingerprint column already exists (from TaskQueueService.createSchema)
+      const columns = this.db.prepare('PRAGMA table_info(tasks)').all() as Array<{name: string}>;
+      const hasFingerprint = columns.some(col => col.name === 'fingerprint');
+      
+      if (!hasFingerprint) {
+        // Column doesn't exist, add it
+        this.db.exec('ALTER TABLE tasks ADD COLUMN fingerprint TEXT;');
+      }
+      
+      // Create index (idempotent - safe even if column was just added or already existed)
+      this.db.exec(fs.readFileSync(
+        path.join(__dirname, '..', '..', 'migrations', '016_add_fingerprint_column.sql'),
+        'utf-8'
+      ));
+    });
   }
 
   private applyMigration(name: string, migration: () => void): void {
