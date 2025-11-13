@@ -17,9 +17,24 @@ describe('TaskContextService', () => {
     const connection = db.getConnection();
 
     // Clean up any existing test data from all context tables
-    connection.prepare('DELETE FROM task_creation_context WHERE task_id LIKE ?').run('task-test-%');
-    connection.prepare('DELETE FROM task_execution_context WHERE run_id LIKE ?').run('run-%');
-    connection.prepare('DELETE FROM tasks WHERE id LIKE ?').run('task-test-%');
+    // Wrap in try-catch since tables might not exist yet
+    try {
+      connection.prepare('DELETE FROM task_creation_context WHERE task_id LIKE ?').run('task-test-%');
+    } catch (error) {
+      // Table might not exist yet, ignore error
+    }
+    
+    try {
+      connection.prepare('DELETE FROM task_execution_context WHERE run_id LIKE ?').run('run-%');
+    } catch (error) {
+      // Table might not exist yet, ignore error
+    }
+    
+    try {
+      connection.prepare('DELETE FROM tasks WHERE id LIKE ?').run('task-test-%');
+    } catch (error) {
+      // Table might not exist yet, ignore error
+    }
 
     // Also clean up task_automation_runs table data (migration 004)
     try {
@@ -31,9 +46,26 @@ describe('TaskContextService', () => {
     // Insert test tasks for foreign key constraints
     const taskIds = ['task-test-001', 'task-test-002', 'task-test-003', 'task-test-004', 'task-test-005', 'task-test-006', 'task-test-007', 'task-test-008', 'task-test-009', 'task-test-010'];
 
+    // Create tasks table if it doesn't exist (normally created by TaskQueueService)
+    try {
+      connection.exec(`
+        CREATE TABLE IF NOT EXISTS tasks (
+          id TEXT PRIMARY KEY,
+          type TEXT NOT NULL,
+          title TEXT NOT NULL,
+          status TEXT NOT NULL,
+          priority INTEGER DEFAULT 5,
+          created_at INTEGER NOT NULL,
+          assigned_agent TEXT
+        )
+      `);
+    } catch (error) {
+      // Ignore if table already exists
+    }
+
     for (const taskId of taskIds) {
       connection.prepare(`
-        INSERT INTO tasks (
+        INSERT OR REPLACE INTO tasks (
           id, type, title, status, priority, created_at, assigned_agent
         ) VALUES (?, 'test', 'Test Task', 'pending', 5, ?, 'test-agent')
       `).run(taskId, Date.now());
@@ -45,9 +77,24 @@ describe('TaskContextService', () => {
     const db = getDatabase();
     const connection = db.getConnection();
 
-    connection.prepare('DELETE FROM task_creation_context WHERE task_id LIKE ?').run('task-test-%');
-    connection.prepare('DELETE FROM task_execution_context WHERE run_id LIKE ?').run('run-%');
-    connection.prepare('DELETE FROM tasks WHERE id LIKE ?').run('task-test-%');
+    // Wrap in try-catch since tables might not exist
+    try {
+      connection.prepare('DELETE FROM task_creation_context WHERE task_id LIKE ?').run('task-test-%');
+    } catch (error) {
+      // Table might not exist, ignore error
+    }
+    
+    try {
+      connection.prepare('DELETE FROM task_execution_context WHERE run_id LIKE ?').run('run-%');
+    } catch (error) {
+      // Table might not exist, ignore error
+    }
+    
+    try {
+      connection.prepare('DELETE FROM tasks WHERE id LIKE ?').run('task-test-%');
+    } catch (error) {
+      // Table might not exist, ignore error
+    }
 
     // Clean up task_automation_runs if table exists
     try {
