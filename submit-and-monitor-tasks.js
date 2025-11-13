@@ -116,9 +116,10 @@ async function submitTask(taskData) {
   
   const result = await apiRequest('/api/dev-bots/tasks', 'POST', apiTask);
   
-  if (result.task) {
-    log.success(`Task submitted: ${result.task.id} - ${taskData.title}`);
-    return result.task;
+  const task = result.task || result.data?.task;
+  if (task) {
+    log.success(`Task submitted: ${task.id} - ${taskData.title}`);
+    return task;
   } else {
     throw new Error('No task returned from API');
   }

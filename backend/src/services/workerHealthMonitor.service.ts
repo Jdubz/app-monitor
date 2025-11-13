@@ -240,54 +240,38 @@ export class WorkerHealthMonitor {
         // Attempt recovery if enabled
         const { config } = await import('../config.js');
         if (config.recovery.enabled) {
-          if (config.recovery.dryRun) {
-            logger.info({
-              category: 'process',
-              action: 'dry_run_would_attempt_recovery_for_stuck_task',
-              message: `[DRY RUN] Would attempt automatic recovery for stuck task ${task.id}`,
-              details: {
-                taskId: task.id,
-                taskTitle: task.title,
-                failurePattern: failurePattern.name,
-                category: failurePattern.category,
-                suggestedFix: failurePattern.suggestedFix,
-                stuckDuration_minutes: Math.round(task.duration_ms / 60000)
-              }
+          // Actually attempt recovery
+          try {
+            const recoveryResult = await this.recovery.attemptRecovery({
+              task: fullTask as Task & { metadata?: Record<string, unknown> },
+              failurePattern,
+              stderr: taskError,
+              stdout: '',
+              exitCode: 0
             });
-          } else {
-            // Actually attempt recovery
-            try {
-              const recoveryResult = await this.recovery.attemptRecovery({
-                task: fullTask as Task & { metadata?: Record<string, unknown> },
-                failurePattern,
-                stderr: taskError,
-                stdout: '',
-                exitCode: 0
-              });
 
-              if (recoveryResult.recovered) {
-                logger.info({
-                  category: 'process',
-                  action: 'recovery_initiated_for_stuck_task',
-                  message: `Initiated automatic recovery for stuck task ${task.id}`,
-                  details: {
-                    taskId: task.id,
-                    cleanupTaskId: recoveryResult.cleanupTaskId,
-                    failurePattern: failurePattern.name
-                  }
-                });
-              }
-            } catch (recoveryError) {
-              logger.error({
+            if (recoveryResult.recovered) {
+              logger.info({
                 category: 'process',
-                action: 'recovery_attempt_failed_for_stuck_task',
-                message: `Failed to attempt recovery for stuck task ${task.id}: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`,
+                action: 'recovery_initiated_for_stuck_task',
+                message: `Initiated automatic recovery for stuck task ${task.id}`,
                 details: {
                   taskId: task.id,
-                  error: recoveryError instanceof Error ? recoveryError.message : String(recoveryError)
+                  cleanupTaskId: recoveryResult.cleanupTaskId,
+                  failurePattern: failurePattern.name
                 }
               });
             }
+          } catch (recoveryError) {
+            logger.error({
+              category: 'process',
+              action: 'recovery_attempt_failed_for_stuck_task',
+              message: `Failed to attempt recovery for stuck task ${task.id}: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`,
+              details: {
+                taskId: task.id,
+                error: recoveryError instanceof Error ? recoveryError.message : String(recoveryError)
+              }
+            });
           }
         }
       }

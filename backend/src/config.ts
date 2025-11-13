@@ -34,13 +34,13 @@ export const config = {
     maxWorkers: parseInt(process.env.MAX_DEV_BOTS || '3', 10),
   },
 
-  // Automatic Failure Recovery Feature Flags
+  // Automatic Failure Recovery - ALWAYS ENABLED IN PRODUCTION
   recovery: {
-    // Enable automatic recovery system (default: disabled for safety)
-    enabled: process.env.ENABLE_AUTO_RECOVERY === 'true',
+    // Recovery is always enabled - this is a core system feature
+    enabled: true,
 
-    // Dry run mode - logs recovery actions without executing repair bots (default: true for testing)
-    dryRun: process.env.RECOVERY_DRY_RUN !== 'false',  // Defaults to true unless explicitly disabled
+    // Dry run mode removed - recovery always executes for real
+    dryRun: false,
 
     // Maximum concurrent repair bots (cleanup + followup) to prevent resource exhaustion
     maxConcurrentRepairBots: parseInt(process.env.MAX_CONCURRENT_REPAIR_BOTS || '1', 10),
