@@ -147,8 +147,6 @@ export function getRepoCloneScript(baseBranch: string, repoUrl: string = 'https:
     mkdir -p /workspace
     cd /workspace
     git clone ${repoUrl} .
-    git config --global user.name "DevBot"
-    git config --global user.email "devbot@local"
     git fetch --all
 
     # Checkout the appropriate branch

@@ -169,49 +169,35 @@ export class TaskExecutionService {
       const failurePattern = this.normalizeFailurePattern(context.failurePattern);
 
       try {
-        if (this.config.recovery.dryRun) {
+        const recoveryResult = await this.recovery.attemptRecovery({
+          task: task as Task & { metadata?: Record<string, unknown> },
+          failurePattern,
+          stderr: context.stderr || error,
+          stdout: context.stdout || '',
+          exitCode: context.exitCode || 1
+        });
+
+        if (recoveryResult.recovered) {
           logger.info({
             category: 'recovery',
-            action: 'dry_run_would_attempt_recovery',
-            message: `[DRY RUN] Would attempt automatic recovery for task ${task.id}`,
+            action: 'recovery_initiated',
+            message: `Initiated automatic recovery for task ${task.id}`,
             details: {
               taskId: task.id,
-              taskTitle: task.title,
-              failurePattern: failurePattern.name,
-              error
+              cleanupTaskId: recoveryResult.cleanupTaskId,
+              failurePattern: failurePattern.name
             }
           });
         } else {
-          const recoveryResult = await this.recovery.attemptRecovery({
-            task: task as Task & { metadata?: Record<string, unknown> },
-            failurePattern,
-            stderr: context.stderr || error,
-            stdout: context.stdout || '',
-            exitCode: context.exitCode || 1
+          logger.info({
+            category: 'recovery',
+            action: 'recovery_not_attempted',
+            message: `Recovery was not attempted for task ${task.id}`,
+            details: {
+              taskId: task.id,
+              reason: 'Failure not recoverable or already has active repair'
+            }
           });
-
-          if (recoveryResult.recovered) {
-            logger.info({
-              category: 'recovery',
-              action: 'recovery_initiated',
-              message: `Initiated automatic recovery for task ${task.id}`,
-              details: {
-                taskId: task.id,
-                cleanupTaskId: recoveryResult.cleanupTaskId,
-                failurePattern: failurePattern.name
-              }
-            });
-          } else {
-            logger.info({
-              category: 'recovery',
-              action: 'recovery_not_attempted',
-              message: `Recovery was not attempted for task ${task.id}`,
-              details: {
-                taskId: task.id,
-                reason: 'Failure not recoverable or already has active repair'
-              }
-            });
-          }
         }
       } catch (recoveryError) {
         logger.error({
