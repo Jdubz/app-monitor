@@ -661,6 +661,21 @@ export class PRConditionStateService {
     // Build task description based on condition type
     const taskConfig = this.buildFixTaskConfig(prNumber, conditionId, evaluation, prStatus, parentTask);
 
+    // EVENT-BASED GUARD: If task config is null, PR is closed/merged - don't create task
+    if (!taskConfig) {
+      logger.info({
+        category: 'pr-workflow',
+        action: 'fix_task_skipped_pr_state',
+        message: `Skipped fix task creation for ${conditionId} - PR #${prNumber} is closed/merged`,
+        details: {
+          prNumber,
+          conditionId,
+          prState: prStatus.state
+        }
+      });
+      return; // Exit early without creating task
+    }
+
     // Create task via existing task queue
     const task = await this.taskQueue.createTask(taskConfig);
 
@@ -690,6 +705,7 @@ export class PRConditionStateService {
 
   /**
    * Build task configuration for fix task
+   * EVENT-BASED GUARD: Prevents task creation for merged/closed PRs
    */
   private buildFixTaskConfig(
     prNumber: number,
@@ -697,7 +713,24 @@ export class PRConditionStateService {
     evaluation: ConditionEvaluation,
     prStatus: PRStatus,
     parentTask: Task | null
-  ): Partial<Task> {
+  ): Partial<Task> | null {
+    // CRITICAL: Guard against creating tasks for merged/closed PRs
+    if (prStatus.state === 'CLOSED' || prStatus.state === 'MERGED') {
+      logger.warn({
+        category: 'pr-workflow',
+        action: 'task_creation_blocked_pr_state',
+        message: `Blocked task creation for ${prStatus.state} PR #${prNumber}`,
+        details: {
+          prNumber,
+          prState: prStatus.state,
+          merged: prStatus.state === 'MERGED',
+          conditionId,
+          evaluation: evaluation.status
+        }
+      });
+      return null; // Don't create task for closed/merged PR
+    }
+
     // Chain tracking: maintain chain_id from parent, or create new one
     const chainId = parentTask?.chain_id || crypto.randomBytes(16).toString('hex');
     const chainDepth = (parentTask?.chain_depth || 0) + 1;

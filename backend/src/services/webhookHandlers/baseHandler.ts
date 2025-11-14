@@ -11,6 +11,7 @@ import type { PRWorkflowOrchestrator } from '../prWorkflowOrchestrator.service.j
 import type { PRConditionStateService } from '../prConditionState.service.js';
 import type { ReviewCommentTracker } from '../reviewCommentTracker.service.js';
 import type { TaskVerificationService } from '../taskVerification.service.js';
+import type { DockerManager } from '../dockerManager.js';
 import type { WebhookHandlerStats } from './types.js';
 
 /**
@@ -23,7 +24,8 @@ export abstract class BaseWebhookHandler {
     protected readonly prConditionState: PRConditionStateService | null,
     protected readonly reviewCommentTracker: ReviewCommentTracker,
     protected readonly taskVerification: TaskVerificationService,
-    protected readonly stats: WebhookHandlerStats
+    protected readonly stats: WebhookHandlerStats,
+    protected readonly dockerManager?: DockerManager
   ) {}
 
   /**

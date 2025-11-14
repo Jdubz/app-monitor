@@ -320,6 +320,7 @@ export class PullRequestHandler extends BaseWebhookHandler {
 
   /**
    * Handle PR merged event
+   * CRITICAL: Cleanup ALL related tasks and stop running containers
    */
   private async handlePRMerged(
     prNumber: number,
@@ -329,33 +330,81 @@ export class PullRequestHandler extends BaseWebhookHandler {
     logger.info({
       category: 'api',
       action: 'pr_merged',
-      message: `PR #${prNumber} merged - marking ${tasks.length} task(s) complete`,
-      details: { pr_number: prNumber, task_count: tasks.length }
+      message: `PR #${prNumber} merged - performing comprehensive cleanup`,
+      details: { pr_number: prNumber, initial_task_count: tasks.length }
     });
 
     if (!this.taskQueue) return;
 
-    for (const task of tasks) {
-      // Mark task as completed if not already
-      if (task.status !== 'completed') {
-        const completeStmt = (this.taskQueue as unknown as { db: Database.Database }).db.prepare(`
+    // CRITICAL: Find ALL tasks related to this PR, not just those with pr_number
+    const allRelatedTasks = await this.taskQueue.findAllTasksForPR(prNumber);
+
+    logger.info({
+      category: 'pr-workflow',
+      action: 'pr_cleanup_tasks_found',
+      message: `Found ${allRelatedTasks.length} total tasks related to PR #${prNumber}`,
+      details: {
+        pr_number: prNumber,
+        tasks_with_pr_number: tasks.length,
+        total_related_tasks: allRelatedTasks.length,
+        task_ids: allRelatedTasks.map(t => ({ id: t.id, status: t.status }))
+      }
+    });
+
+    // Group tasks by status for targeted cleanup
+    const runningTasks = allRelatedTasks.filter(t => t.status === 'running');
+    const pendingTasks = allRelatedTasks.filter(t => t.status === 'pending');
+
+    // 1. STOP running containers immediately
+    if (runningTasks.length > 0) {
+      await this.stopRunningContainers(runningTasks, prNumber, 'merged');
+    }
+
+    // 2. Cancel pending tasks
+    if (pendingTasks.length > 0) {
+      await this.cancelPendingTasks(pendingTasks, prNumber, 'merged');
+    }
+
+    // 3. Mark original tasks as completed if not already
+    const db = (this.taskQueue as unknown as { db: Database.Database }).db;
+    for (const task of allRelatedTasks) {
+      if (task.status !== 'completed' && task.status !== 'cancelled') {
+        const completeStmt = db.prepare(`
           UPDATE tasks
           SET status = 'completed',
-              completed_at = ?
+              completed_at = ?,
+              notes = CASE
+                WHEN notes IS NULL THEN ?
+                ELSE notes || '\n' || ?
+              END
           WHERE id = ?
         `);
-        completeStmt.run(Date.now(), task.id);
+        const note = `Auto-completed: PR #${prNumber} merged`;
+        completeStmt.run(Date.now(), note, note, task.id);
       }
     }
 
-    // Clean up PR condition state
+    // 4. Clean up PR condition state
     if (this.prConditionState) {
       await this.prConditionState.deletePRConditionState(prNumber);
     }
+
+    logger.info({
+      category: 'pr-workflow',
+      action: 'pr_merged_cleanup_complete',
+      message: `PR #${prNumber} merged - cleanup complete`,
+      details: {
+        pr_number: prNumber,
+        stopped_containers: runningTasks.length,
+        cancelled_pending: pendingTasks.length,
+        total_tasks_cleaned: allRelatedTasks.length
+      }
+    });
   }
 
   /**
    * Handle PR closed (without merge) event
+   * CRITICAL: Cleanup ALL related tasks and stop running containers
    */
   private async handlePRClosed(
     prNumber: number,
@@ -365,41 +414,56 @@ export class PullRequestHandler extends BaseWebhookHandler {
     logger.info({
       category: 'api',
       action: 'pr_closed',
-      message: `PR #${prNumber} closed without merging - cleaning up ${tasks.length} task(s)`,
-      details: { pr_number: prNumber, task_count: tasks.length }
+      message: `PR #${prNumber} closed without merging - performing comprehensive cleanup`,
+      details: { pr_number: prNumber, initial_task_count: tasks.length }
     });
 
     if (!this.taskQueue) return;
 
-    for (const task of tasks) {
-      // Cancel task if it's still pending or running
-      if (task.status === 'pending' || task.status === 'running') {
-        const completeStmt = (this.taskQueue as unknown as { db: Database.Database }).db.prepare(`
-          UPDATE tasks
-          SET status = 'cancelled',
-              completed_at = ?,
-              result = ?
-          WHERE id = ?
-        `);
-        completeStmt.run(
-          Date.now(),
-          JSON.stringify({ reason: 'PR closed without merging' }),
-          task.id
-        );
-        
-        logger.info({
-          category: 'pr-workflow',
-          action: 'task_cancelled_pr_closed',
-          message: `Cancelled task ${task.id} because PR #${prNumber} was closed`,
-          details: { task_id: task.id, pr_number: prNumber }
-        });
+    // CRITICAL: Find ALL tasks related to this PR
+    const allRelatedTasks = await this.taskQueue.findAllTasksForPR(prNumber);
+
+    logger.info({
+      category: 'pr-workflow',
+      action: 'pr_closed_tasks_found',
+      message: `Found ${allRelatedTasks.length} total tasks related to closed PR #${prNumber}`,
+      details: {
+        pr_number: prNumber,
+        total_related_tasks: allRelatedTasks.length,
+        task_ids: allRelatedTasks.map(t => ({ id: t.id, status: t.status }))
       }
+    });
+
+    // Group tasks by status
+    const runningTasks = allRelatedTasks.filter(t => t.status === 'running');
+    const pendingTasks = allRelatedTasks.filter(t => t.status === 'pending');
+
+    // 1. STOP running containers immediately
+    if (runningTasks.length > 0) {
+      await this.stopRunningContainers(runningTasks, prNumber, 'closed');
     }
 
-    // Clean up PR condition state
+    // 2. Cancel pending tasks
+    if (pendingTasks.length > 0) {
+      await this.cancelPendingTasks(pendingTasks, prNumber, 'closed');
+    }
+
+    // 3. Clean up PR condition state
     if (this.prConditionState) {
       await this.prConditionState.deletePRConditionState(prNumber);
     }
+
+    logger.info({
+      category: 'pr-workflow',
+      action: 'pr_closed_cleanup_complete',
+      message: `PR #${prNumber} closed - cleanup complete`,
+      details: {
+        pr_number: prNumber,
+        stopped_containers: runningTasks.length,
+        cancelled_pending: pendingTasks.length,
+        total_tasks_cleaned: allRelatedTasks.length
+      }
+    });
   }
 
   /**
@@ -478,6 +542,133 @@ export class PullRequestHandler extends BaseWebhookHandler {
         message: `Failed to evaluate PR conditions for PR #${prNumber}`,
         error,
         details: { pr_number: prNumber, trigger }
+      });
+    }
+  }
+
+  /**
+   * Stop Docker containers for running tasks
+   * EVENT-BASED: Triggered when PR is merged or closed
+   */
+  private async stopRunningContainers(
+    runningTasks: Task[],
+    prNumber: number,
+    reason: 'merged' | 'closed'
+  ): Promise<void> {
+    if (!this.dockerManager) {
+      logger.warn({
+        category: 'pr-workflow',
+        action: 'no_docker_manager',
+        message: 'Cannot stop containers - DockerManager not available',
+        details: { pr_number: prNumber, task_count: runningTasks.length }
+      });
+      return;
+    }
+
+    if (!this.taskQueue) return;
+
+    const db = (this.taskQueue as unknown as { db: Database.Database }).db;
+
+    for (const task of runningTasks) {
+      if (task.assigned_worker) {
+        try {
+          await this.dockerManager.stopContainer(task.assigned_worker, 5); // 5 second timeout
+
+          logger.info({
+            category: 'pr-workflow',
+            action: 'container_stopped_pr_event',
+            message: `Stopped container for task ${task.id} (PR #${prNumber} ${reason})`,
+            details: {
+              task_id: task.id,
+              container_id: task.assigned_worker,
+              pr_number: prNumber,
+              reason
+            }
+          });
+
+          // Mark task as cancelled after stopping container
+          const cancelStmt = db.prepare(`
+            UPDATE tasks
+            SET status = 'cancelled',
+                completed_at = ?,
+                notes = ?,
+                assigned_worker = NULL
+            WHERE id = ?
+          `);
+          cancelStmt.run(
+            Date.now(),
+            `Container stopped: PR #${prNumber} ${reason} while task was running`,
+            task.id
+          );
+
+        } catch (error) {
+          logger.error({
+            category: 'pr-workflow',
+            action: 'stop_container_failed',
+            message: `Failed to stop container for task ${task.id}`,
+            error,
+            details: {
+              task_id: task.id,
+              container_id: task.assigned_worker,
+              pr_number: prNumber
+            }
+          });
+        }
+      } else {
+        // No worker assigned - just cancel the task
+        const cancelStmt = db.prepare(`
+          UPDATE tasks
+          SET status = 'cancelled',
+              completed_at = ?,
+              notes = ?
+          WHERE id = ?
+        `);
+        cancelStmt.run(
+          Date.now(),
+          `Auto-cancelled: PR #${prNumber} ${reason} before task could start`,
+          task.id
+        );
+      }
+    }
+  }
+
+  /**
+   * Cancel pending tasks
+   * EVENT-BASED: Triggered when PR is merged or closed
+   */
+  private async cancelPendingTasks(
+    pendingTasks: Task[],
+    prNumber: number,
+    reason: 'merged' | 'closed'
+  ): Promise<void> {
+    if (!this.taskQueue) return;
+
+    const db = (this.taskQueue as unknown as { db: Database.Database }).db;
+
+    for (const task of pendingTasks) {
+      const cancelStmt = db.prepare(`
+        UPDATE tasks
+        SET status = 'cancelled',
+            completed_at = ?,
+            notes = ?
+        WHERE id = ?
+      `);
+      cancelStmt.run(
+        Date.now(),
+        `Auto-cancelled: PR #${prNumber} ${reason} before task execution`,
+        task.id
+      );
+
+      logger.info({
+        category: 'pr-workflow',
+        action: 'task_cancelled_pr_event',
+        message: `Cancelled pending task ${task.id} for ${reason} PR #${prNumber}`,
+        details: {
+          task_id: task.id,
+          task_title: task.title,
+          pr_number: prNumber,
+          reason
+        }
       });
     }
   }
