@@ -662,7 +662,7 @@ export class TaskExecutionService {
       hostLogsDir,
       homeDir
     );
-    
+
     // Log sanitized docker command details for debugging without leaking secrets
     const redactedDockerArgs: string[] = [];
     for (let i = 0; i < dockerArgs.length; i++) {
