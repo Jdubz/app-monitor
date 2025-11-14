@@ -18,7 +18,7 @@ export interface AgentEligibilityService {
 export class AgentEligibilityServiceImpl implements AgentEligibilityService {
   constructor() {
     logger.info({
-      category: 'automation',
+      category: 'services',
       action: 'agent_eligibility_service_initialized',
       message: 'AgentEligibilityService initialized',
     });
@@ -47,7 +47,7 @@ export class AgentEligibilityServiceImpl implements AgentEligibilityService {
     const eligible = riskScoreEligible && contextReady && quotaHealthy && !policyOverrides;
 
     logger.info({
-      category: 'automation',
+      category: 'services',
       action: 'is_gemini_eligible',
       message: `Gemini eligibility for task ${task.id}: ${eligible}`,
       details: {

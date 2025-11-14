@@ -844,13 +844,13 @@ export class EphemeralWorkerService {
     let credentialSetup: string[];
     if (agent.id.startsWith('gemini')) {
       credentialSetup = [
-        'cp /tmp/host-creds.json /home/worker/.gemini/credentials.json',
-        'echo "Gemini credentials: $(test -f ~/.gemini/credentials.json && echo found || echo missing)" >> ' + logFile
+        'cp /tmp/host-creds.json /home/worker/.gemini/.credentials.json',
+        'echo "Gemini credentials: $(test -f ~/.gemini/.credentials.json && echo found || echo missing)" >> ' + logFile
       ];
     } else if (agent.id.startsWith('codex')) {
       credentialSetup = [
-        'cp /tmp/host-creds.json /home/worker/.codex/credentials.json',
-        'echo "Codex credentials: $(test -f ~/.codex/credentials.json && echo found || echo missing)" >> ' + logFile
+        'cp /tmp/host-creds.json /home/worker/.codex/.credentials.json',
+        'echo "Codex credentials: $(test -f ~/.codex/.credentials.json && echo found || echo missing)" >> ' + logFile
       ];
     } else {
       credentialSetup = [

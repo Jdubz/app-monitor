@@ -94,12 +94,12 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
 
   return (
     <Card className="border border-border/60 bg-card/70 text-foreground shadow-xl backdrop-blur">
-      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between space-y-0">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="space-y-1">
           <CardTitle className="text-base sm:text-lg md:text-xl font-semibold tracking-tight">
             {service.displayName}
           </CardTitle>
-          <CardDescription className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-muted-foreground">
+          <CardDescription className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
             {service.name}
           </CardDescription>
         </div>
@@ -111,23 +111,23 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
           <div className="rounded-xl border border-border/50 bg-background/50 p-3 sm:p-4 md:p-5">
             <div className="flex flex-col gap-2 sm:gap-3 text-xs sm:text-sm text-muted-foreground">
               <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <span className="min-w-[70px] sm:min-w-[88px] text-[10px] sm:text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                <span className="min-w-[70px] sm:min-w-[88px] text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                   Container
                 </span>
-                <Badge className={cn('text-[10px] sm:text-xs font-semibold uppercase tracking-[0.3em]', serviceContainerVariant(service.dockerContainer.status))}>
+                <Badge className={cn('text-xs font-semibold uppercase tracking-[0.3em]', serviceContainerVariant(service.dockerContainer.status))}>
                   {service.dockerContainer.status}
                 </Badge>
-                <span className="font-mono text-[10px] sm:text-xs text-muted-foreground/80 break-all">
+                <span className="font-mono text-xs text-muted-foreground/80 break-words">
                   {service.dockerContainer.name}
                 </span>
               </div>
 
               {service.dockerContainer.workerStatus && (
                 <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                  <span className="min-w-[70px] sm:min-w-[88px] text-[10px] sm:text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                  <span className="min-w-[70px] sm:min-w-[88px] text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                     Worker
                   </span>
-                  <Badge className={cn('text-[10px] sm:text-xs font-semibold uppercase tracking-[0.3em]', serviceContainerVariant(service.dockerContainer.workerStatus))}>
+                  <Badge className={cn('text-xs font-semibold uppercase tracking-[0.3em]', serviceContainerVariant(service.dockerContainer.workerStatus))}>
                     {service.dockerContainer.workerStatus}
                   </Badge>
                 </div>

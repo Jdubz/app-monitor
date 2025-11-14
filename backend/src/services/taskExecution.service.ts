@@ -458,6 +458,23 @@ export class TaskExecutionService {
   // Task Execution (Docker Run)
   // ==========================================================================
 
+  /**
+   * Build Docker run command for agent execution
+   * 
+   * Creates a complete docker run command with:
+   * - Git environment and credentials setup
+   * - Agent-specific credential mounting
+   * - Repository cloning and branch checkout
+   * - Task context and prompt execution
+   * 
+   * @param chosenAgentType - Agent type to use (claude, codex, or gemini)
+   * @param promptText - Formatted prompt for the agent
+   * @param baseBranch - Git branch to check out
+   * @param hostLogsDir - Directory for log file output
+   * @param homeDir - User home directory for credential files
+   * @returns Object with dockerArgs array and cliCommand string
+   * @throws Error if required credential files are missing
+   */
   private buildDockerCommand(
     chosenAgentType: 'claude' | 'codex' | 'gemini',
     agent: AgentPersonality,
@@ -484,8 +501,7 @@ export class TaskExecutionService {
       `set -e && ` +
       `export HOME=/home/node && ` +
       `mkdir -p /workspace && cd /workspace && ` +
-      // TODO: Externalize repository URL to configuration
-      `git clone https://github.com/Jdubz/app-monitor.git . && ` +
+      `git clone ${config.devBots.repositoryUrl} . && ` +
       `git config --global user.name "Dev Bot (${agent.name})" && ` +
       `git config --global user.email "devbot+${agent.name}@app-monitor.local" && ` +
       // Create git credentials from GITHUB_TOKEN for bot authentication (not using host credentials)
@@ -497,6 +513,11 @@ export class TaskExecutionService {
       `git pull origin ${baseBranch} || true`;
 
     if (chosenAgentType === 'codex') {
+      // Verify Codex credentials exist
+      const codexCredentials = path.join(homeDir, '.codex', 'credentials.json');
+      if (!fs.existsSync(codexCredentials)) {
+        throw new Error('Codex credentials file not found at ~/.codex/credentials.json');
+      }
       dockerArgs = [
         ...commonArgs,
         '--tmpfs', '/home/node/.codex:uid=1000,gid=1000',
