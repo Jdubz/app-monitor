@@ -79,17 +79,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Validate package locks (root)
-        run: |
-          echo "📦 Validating root package-lock.json..."
-          npm run validate:locks
-
-      - name: Validate workspace lock files (deployment simulation)
-        run: |
-          echo "🔍 Validating workspace lock files (simulates production deployment)..."
-          echo "NOTE: This should have already passed in PR, but we check again as final safety net"
-          chmod +x ./scripts/validate-workspace-locks.cjs
-          node ./scripts/validate-workspace-locks.cjs
+      # NOTE: Critical validations (lock files, migrations, smoke tests) run in PR CI
+      # This workflow assumes all validation passed before merge to main
+      # We only do quick sanity checks here for defense-in-depth
 
       - name: Validate infrastructure configuration
         run: |
