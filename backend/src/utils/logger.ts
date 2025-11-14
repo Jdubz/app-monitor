@@ -38,6 +38,7 @@ export type LogCategory =
   | 'build'
   | 'circuit-breaker'
   | 'cloud'
+  | 'context' // Context bundle generation and caching
   | 'copilot-throttle' // Copilot throttle management
   | 'database'
   | 'docker'
@@ -47,6 +48,7 @@ export type LogCategory =
   | 'merge_conflict'
   | 'metrics'
   | 'mirror_debug'
+  | 'plan' // AI agent-managed planning system
   | 'pr-workflow'
   | 'process'
   | 'quality'

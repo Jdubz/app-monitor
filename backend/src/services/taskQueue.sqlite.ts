@@ -122,7 +122,8 @@ export interface Task {
   estimated_complexity?: 'simple' | 'medium' | 'complex';
   preferred_agent?: 'claude' | 'codex' | 'copilot'; // Manual override for agent selection
   // Enhanced task fields for comprehensive task planning
-  parent_initiative?: string;
+  parent_initiative?: string; // Legacy field - use plan_id instead
+  plan_id?: string; // Links task to a plan in the plans table
   long_term_goals?: string[];
   related_tasks?: string[];
   estimated_effort?: {
@@ -147,6 +148,11 @@ export interface Task {
   // Agent eligibility fields
   risk_score?: number; // Explicit risk score for agent eligibility assessment
   metadata?: Record<string, unknown>; // Dynamic metadata for policy overrides and extensibility
+  // Context management fields (migration 020)
+  context_bundle_id?: string; // UUID of generated context bundle
+  context_cache_key?: string; // Git hash-based cache key for bundle lookup
+  context_profiles?: string[]; // Array of profile names (e.g., ["scope-control", "pr-workflow"])
+  risk_level?: 'minimal' | 'low' | 'medium' | 'high'; // Task risk classification
 }
 
 export interface Worker {
@@ -484,6 +490,43 @@ export class TaskQueueService {
         message: 'Staged queue columns added successfully for chain tracking'
       });
     }
+
+    // Migration 020: Add context bundle fields (context management integration)
+    const contextBundleColumns = ['context_bundle_id', 'context_cache_key', 'context_profiles', 'risk_level'];
+    const missingContextBundleColumns = contextBundleColumns.filter(col => !columnNames.has(col));
+
+    if (missingContextBundleColumns.length > 0) {
+      logger.info({
+        category: 'process',
+        action: 'adding_context_bundle_columns',
+        message: `Adding ${missingContextBundleColumns.length} context bundle columns for context management integration`,
+        details: { columns: missingContextBundleColumns }
+      });
+
+      if (!columnNames.has('context_bundle_id')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN context_bundle_id TEXT;`);
+      }
+      if (!columnNames.has('context_cache_key')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN context_cache_key TEXT;`);
+      }
+      if (!columnNames.has('context_profiles')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN context_profiles TEXT;`); // JSON array
+      }
+      if (!columnNames.has('risk_level')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN risk_level TEXT CHECK(risk_level IN ('minimal', 'low', 'medium', 'high'));`);
+      }
+
+      // Create indexes for context bundle lookups
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_context_bundle_id ON tasks(context_bundle_id) WHERE context_bundle_id IS NOT NULL;`);
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_context_cache_key ON tasks(context_cache_key) WHERE context_cache_key IS NOT NULL;`);
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_risk_level ON tasks(risk_level) WHERE risk_level IS NOT NULL;`);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'Context bundle columns added successfully for context management integration'
+      });
+    }
   }
 
   private createSchema(): void {
@@ -545,7 +588,12 @@ export class TaskQueueService {
         -- Migration 012 columns
         queue_stage TEXT,
         chain_status TEXT,
-        original_task_id TEXT
+        original_task_id TEXT,
+        -- Migration 020 columns (context management)
+        context_bundle_id TEXT,
+        context_cache_key TEXT,
+        context_profiles TEXT,
+        risk_level TEXT CHECK(risk_level IN ('minimal', 'low', 'medium', 'high'))
       );
 
       -- Indexes for performance
@@ -560,6 +608,9 @@ export class TaskQueueService {
       CREATE INDEX IF NOT EXISTS idx_tasks_chain_id ON tasks(chain_id) WHERE chain_id IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_tasks_chain_status ON tasks(chain_status) WHERE chain_status IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_tasks_queue_stage ON tasks(queue_stage) WHERE queue_stage IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_tasks_context_bundle_id ON tasks(context_bundle_id) WHERE context_bundle_id IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_tasks_context_cache_key ON tasks(context_cache_key) WHERE context_cache_key IS NOT NULL;
+      CREATE INDEX IF NOT EXISTS idx_tasks_risk_level ON tasks(risk_level) WHERE risk_level IS NOT NULL;
       -- Note: idx_tasks_agent_type is created in migration, not here
 
       -- Worker tracking

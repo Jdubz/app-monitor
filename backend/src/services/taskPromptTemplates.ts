@@ -324,6 +324,9 @@ For each piece of code you plan to write, document:
 ## 📋 Task Description
 {{task.description}}
 
+## 📦 Context Bundle (Read These First!)
+{{task.contextBundle}}
+
 ## 📚 Required Reading (Read BEFORE Starting)
 {{task.documentation}}
 
@@ -1346,6 +1349,77 @@ echo "PR_BRANCH: $PR_BRANCH"`;
 - [ ] CI checks are running`;
       }
     });
+
+    // Context Bundle processor
+    this.variableProcessors.set('task.contextBundle', (context) => {
+      // Skip if task has no context bundle metadata
+      if (!context.task.context_bundle_id && !context.task.context_profiles) {
+        return 'No context bundle available for this task.';
+      }
+
+      const profiles = context.task.context_profiles || [];
+      const bundlePath = '/workspace/context';
+
+      let output = `This task has a curated context bundle with the following profiles:\n\n`;
+
+      if (profiles.length > 0) {
+        profiles.forEach((profile) => {
+          const fileName = `${profile}.md`;
+          const displayName = profile
+            .split('-')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+          output += `### 📄 ${displayName}\n`;
+          output += `**File**: \`${bundlePath}/${fileName}\`\n`;
+          output += `**Purpose**: ${this.getProfilePurpose(profile)}\n`;
+          output += `**When to Read**: ${this.getProfileGuidance(profile)}\n\n`;
+        });
+
+        output += `\n**💡 How to Use Context Files:**\n`;
+        output += `1. Read the relevant context files BEFORE implementing\n`;
+        output += `2. Use the file paths above (context files are at \`${bundlePath}/\`)\n`;
+        output += `3. Context files contain investigation steps, constraints, and patterns\n`;
+        output += `4. Follow the guidance in these files to avoid common mistakes\n\n`;
+        output += `**⚠️ Important**: These files are READ-ONLY references. Do not modify them.\n`;
+      } else {
+        output += `Context bundle ID: ${context.task.context_bundle_id}\n`;
+        output += `No specific profiles loaded. Context files available at: \`${bundlePath}/\`\n`;
+      }
+
+      return output;
+    });
+  }
+
+  /**
+   * Get the purpose description for a context profile
+   */
+  private getProfilePurpose(profile: string): string {
+    const purposes: Record<string, string> = {
+      'scope-control': 'Prevents scope creep and feature invention',
+      'dev-monitor': 'Development best practices and patterns',
+      'pr-workflow': 'Git and PR workflow guidelines',
+      'failure-recovery': 'Error handling and recovery patterns',
+      'deployment': 'Deployment and production guidelines',
+      'testing': 'Testing strategies and requirements',
+      'security': 'Security best practices and constraints'
+    };
+    return purposes[profile] || 'Context-specific guidance';
+  }
+
+  /**
+   * Get guidance on when to read a context profile
+   */
+  private getProfileGuidance(profile: string): string {
+    const guidance: Record<string, string> = {
+      'scope-control': 'Read BEFORE planning implementation to understand boundaries',
+      'dev-monitor': 'Read BEFORE coding to follow established patterns',
+      'pr-workflow': 'Read BEFORE creating branches/PRs',
+      'failure-recovery': 'Read BEFORE implementing error handling',
+      'deployment': 'Read BEFORE making deployment-related changes',
+      'testing': 'Read BEFORE writing tests',
+      'security': 'Read BEFORE handling auth, data, or sensitive operations'
+    };
+    return guidance[profile] || 'Read before relevant implementation steps';
   }
 
   /**
