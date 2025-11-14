@@ -148,6 +148,71 @@ export class TaskExecutionService {
   // ==========================================================================
 
   /**
+   * Validate PR status before task execution
+   * Cancels task if PR is already merged or closed
+   */
+  private async validatePRStatusBeforeExecution(task: Task): Promise<void> {
+    const prNumber = task.pr_number || task.followup_for_pr;
+
+    if (!prNumber) {
+      // Not a PR-related task, no validation needed
+      return;
+    }
+
+    try {
+      const { getGitHubPRService } = await import('./githubPR.service.js');
+      const ghService = getGitHubPRService();
+      const prStatus = await ghService.getPRStatus(prNumber);
+
+      if (prStatus.state === 'closed' || prStatus.merged) {
+        logger.warn({
+          category: 'task-validation',
+          action: 'stale_pr_task_cancelled',
+          message: `Cancelling task ${task.id} - PR #${prNumber} is ${prStatus.state}${prStatus.merged ? ' (merged)' : ''}`,
+          details: {
+            taskId: task.id,
+            prNumber,
+            prState: prStatus.state,
+            merged: prStatus.merged,
+            taskTitle: task.title
+          }
+        });
+
+        await this.taskQueue.updateTask(task.id, {
+          status: 'cancelled',
+          completed_at: Date.now(),
+          notes: `Auto-cancelled: PR #${prNumber} ${prStatus.merged ? 'merged' : 'closed'} before task execution`
+        });
+
+        // Throw error to stop execution
+        throw new Error(`Task cancelled: PR #${prNumber} ${prStatus.merged ? 'merged' : 'closed'}`);
+      }
+
+      logger.debug({
+        category: 'task-validation',
+        action: 'pr_status_validated',
+        message: `PR #${prNumber} is ${prStatus.state} - task ${task.id} can proceed`,
+        details: { taskId: task.id, prNumber, prState: prStatus.state }
+      });
+
+    } catch (error) {
+      // If we threw the cancellation error, re-throw it
+      if (error instanceof Error && error.message.includes('Task cancelled')) {
+        throw error;
+      }
+
+      // If GitHub API failed, log warning but allow execution to proceed
+      logger.warn({
+        category: 'task-validation',
+        action: 'pr_validation_failed',
+        message: `Failed to validate PR status for task ${task.id}, allowing execution`,
+        error,
+        details: { taskId: task.id, prNumber }
+      });
+    }
+  }
+
+  /**
    * Set the recovery service (called by DevBotsManager after initialization)
    */
   public setRecovery(recovery: SimpleFailureRecovery): void {
@@ -572,6 +637,9 @@ export class TaskExecutionService {
    */
   private async executeTaskWithDockerRun(task: Task, agent: AgentPersonality, agentType?: 'claude' | 'codex' | 'gemini'): Promise<void> {
     const { spawn } = await import('child_process');
+
+    // CRITICAL: Validate PR status before execution
+    await this.validatePRStatusBeforeExecution(task);
 
     // Use intelligent agent selection (Phase 0.3 Integration)
     let chosenAgentType: 'claude' | 'codex' | 'gemini';
