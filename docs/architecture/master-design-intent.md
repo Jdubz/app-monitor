@@ -142,112 +142,46 @@
 
 ## Documentation Guidelines
 
-### Organization Principles
+### Organization (<60 total docs, delete don't archive)
 
-**Keep It Minimal:** Target <60 total documents. Delete completed/outdated docs instead of archiving.
-
-**Directory Structure:**
 ```
 docs/
 ├── architecture/
-│   ├── master-design-intent.md (<200 lines - THIS FILE)
-│   ├── system-overview.md (detailed architecture)
-│   └── README.md
-├── technicalDesigns/  (feature implementation specs)
-├── guides/  (operational how-tos)
-├── plans/  (active future work only)
-├── analysis/  (<5 files - active investigations only)
-└── setup/  (environment configuration)
+│   ├── master-design-intent.md (<200 lines - philosophy)
+│   └── system-overview.md (detailed architecture)
+├── technicalDesigns/  (implementation specs)
+├── guides/  (how-tos)
+├── plans/  (future work only)
+├── analysis/  (<5 files - active investigations)
+└── setup/  (environment config)
 ```
 
-### Document Lifecycle
+### Lifecycle Rules
 
-**Planning Phase:**
-- Create in `/plans/` for future work
-- Move to `/analysis/` if investigation needed
+1. **Planning** → Create in `/plans/`
+2. **Investigation** → Move to `/analysis/` if needed
+3. **Implementation** → Move to `/technicalDesigns/`, update system-overview.md
+4. **Completion** → **DELETE** plan/analysis (NEVER archive)
 
-**Implementation Phase:**
-- Move to `/technicalDesigns/` when implementing
-- Update system-overview.md if architecture changes
-- Delete plan/analysis docs when addressed
+### CI-Enforced Rules
 
-**Completion:**
-- **DELETE** completed plans/analyses
-- **NEVER** archive (archives appear in searches and mislead)
-- Update guides if operational procedures change
-
-### Anti-Patterns (CI Will Fail)
-
-❌ **Archive directories** - Delete old docs instead  
-❌ **Versioned docs** (`-v2.md`, `-new.md`) - Replace the original  
-❌ **Completed markers** (`COMPLETED.md`, `archived.md`) - Just delete  
-❌ **Test databases** in docs/ - Keep data out of documentation  
-❌ **Large master-design-intent** (>200 lines) - Keep it concise  
+❌ No `archive/` directories  
+❌ No versioned docs (`-v2.md`, `-new.md`)  
+❌ No completed markers (`COMPLETED.md`)  
+❌ No databases in docs/  
+❌ master-design-intent.md >200 lines  
+❌ analysis/ >5 files  
+❌ Total docs >60  
 
 ### What Goes Where
 
-| Document Type | Location | Purpose | Lifecycle |
-|--------------|----------|---------|-----------|
-| Design philosophy | `architecture/master-design-intent.md` | Guiding principles | Living doc |
-| System architecture | `architecture/system-overview.md` | Complete architecture | Updated as system evolves |
-| Feature specs | `technicalDesigns/` | Implementation details | Permanent |
-| How-tos | `guides/` | Operational procedures | Updated as needed |
-| Future work | `plans/` | Not yet implemented | Delete when done |
-| Investigations | `analysis/` | Active research | Delete when addressed |
-| Setup | `setup/` | Environment config | Updated as needed |
+| Type | Location | Keep? |
+|------|----------|-------|
+| Philosophy | master-design-intent.md | Living doc |
+| Architecture | system-overview.md | Update as needed |
+| Feature specs | technicalDesigns/ | Permanent |
+| How-tos | guides/ | Update as needed |
+| Future work | plans/ | Delete when done |
+| Investigations | analysis/ | Delete when addressed |
 
-### CI Enforcement
-
-The `docs-check.yml` workflow enforces:
-- ✅ No `docs/archive/` directory exists
-- ✅ No database files in docs
-- ✅ Analysis directory has <5 files
-- ✅ No COMPLETED/archived/old markers in filenames
-- ✅ master-design-intent.md is <200 lines
-- ✅ Required structure (architecture/, technicalDesigns/, etc.)
-- ✅ Total docs <60 (target)
-- ✅ All markdown links valid
-
-**When CI Fails:** Clean up before merging. Documentation sprawl compounds quickly.
-
-### Writing Guidelines
-
-**master-design-intent.md (this file):**
-- Design philosophy and principles
-- High-level restrictions
-- Quick developer onboarding
-- <200 lines (enforced)
-
-**system-overview.md:**
-- Complete system architecture
-- Component details
-- Data flows
-- Integration points
-
-**technicalDesigns/:**
-- Implementation specifications
-- Design decisions
-- API contracts
-- Usage examples
-
-**guides/:**
-- Step-by-step procedures
-- Troubleshooting
-- Best practices
-- Runbooks
-
-**plans/:**
-- Future features
-- Proposed changes
-- Research directions
-- Delete when implemented
-
-**analysis/:**
-- Active investigations
-- Problem diagnosis
-- Options evaluation
-- Delete when addressed
-
----
-
-**Remember:** Good documentation hygiene prevents context window bloat and keeps the project maintainable. When in doubt, delete.
+**Rule:** When in doubt, delete. Documentation sprawl compounds quickly.
