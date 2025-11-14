@@ -242,7 +242,10 @@ jobs:
             console.log(`Will check every ${checkIntervalSeconds}s for up to ${maxWaitMinutes} minutes`);
             
             let seenInProgress = false;
-            
+            let lastStatusState = 'unknown';
+            let statusUnchangedCount = 0;
+            const maxStatusUnchanged = 8; // ~2 minutes at 15s intervals
+
             for (let i = 0; i < maxChecks; i++) {
               // Get more statuses to avoid missing failures due to pagination
               const statuses = await github.rest.repos.listDeploymentStatuses({
@@ -251,23 +254,39 @@ jobs:
                 deployment_id: deploymentId,
                 per_page: 10
               });
-              
+
               if (statuses.data.length > 0) {
                 const latestStatus = statuses.data[0];
                 const state = latestStatus.state;
                 const description = latestStatus.description || 'No description';
-                
-                console.log(`Status: ${state} - ${description}`);
-                
+                const statusUpdated = latestStatus.updated_at;
+
+                console.log(`[Check ${i + 1}/${maxChecks}] Status: ${state} - ${description}`);
+                console.log(`  Last updated: ${statusUpdated}`);
+
+                // Track if status is stuck
+                if (state === lastStatusState) {
+                  statusUnchangedCount++;
+                } else {
+                  statusUnchangedCount = 0;
+                  lastStatusState = state;
+                }
+
                 if (state === 'in_progress') {
                   seenInProgress = true;
+
+                  // Check if stuck in progress for too long
+                  if (statusUnchangedCount >= maxStatusUnchanged) {
+                    core.setFailed(`❌ Deployment appears stuck in 'in_progress' state for ${statusUnchangedCount * checkIntervalSeconds}s. Last update: ${description}\n\nCheck server logs: journalctl -u app-monitor-deploy-agent.service -n 100`);
+                    return;
+                  }
                 }
-                
+
                 if (state === 'success') {
                   console.log('✅ Deployment completed successfully!');
                   return;
                 } else if (state === 'failure' || state === 'error') {
-                  core.setFailed(`❌ Deployment failed: ${description}`);
+                  core.setFailed(`❌ Deployment failed: ${description}\n\nCheck server logs: journalctl -u app-monitor-deploy-agent.service -n 100`);
                   return;
                 }
               } else {
@@ -275,7 +294,13 @@ jobs:
                 if (seenInProgress) {
                   console.log('⚠️  Warning: No deployment statuses found after seeing in_progress');
                   console.log('This might indicate the deployment failed but status update was lost');
-                  // Don't fail immediately, keep checking in case it's a temporary API issue
+                  statusUnchangedCount++;
+
+                  // If we've seen in_progress but now have no statuses for too long, fail
+                  if (statusUnchangedCount >= 4) { // 1 minute
+                    core.setFailed(`❌ Deployment status disappeared after being in progress. Agent may have crashed.\n\nCheck server logs: journalctl -u app-monitor-deploy-agent.service -n 100`);
+                    return;
+                  }
                 } else {
                   console.log('No deployment statuses yet, waiting...');
                 }
