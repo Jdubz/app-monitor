@@ -1,3 +1,2 @@
-export { LocalTab } from './LocalTab';
-export { DeployedServicesTab } from './DeployedServicesTab';
+// Export dev-bots tab (main intervention panel)
 export { DevBotsTab } from './DevBotsTab';

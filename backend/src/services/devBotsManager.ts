@@ -1,7 +1,6 @@
 import { EventEmitter } from 'events';
 import { logger } from '../utils/logger.js';
 import { config } from '../config.js';
-import { ProcessManager, ProcessInfo } from './processManager.js';
 import Docker from 'dockerode';
 import type { TaskPersistence } from './taskPersistence.js';
 import { TaskQueueService, Task, TaskStatus as SQLiteTaskStatus, TaskExecution } from './taskQueue.sqlite.js';
@@ -62,7 +61,6 @@ export type { WorkerStatus, DevBotsStatus } from './statusAggregation.service.js
 // Scope control classes moved to scopeControl.service.ts
 
 export class DevBotsManager extends EventEmitter {
-  private processManager: ProcessManager;
   private docker: Docker;
   private dockerManager: DockerManager;
   private workerHealthMonitor!: WorkerHealthMonitor;
@@ -103,7 +101,6 @@ export class DevBotsManager extends EventEmitter {
     super();
 
     // Inject all dependencies
-    this.processManager = dependencies.processManager;
     this.dockerManager = dependencies.dockerManager;
     this.docker = dependencies.docker;
     this.taskQueue = dependencies.taskQueue;
@@ -264,12 +261,7 @@ export class DevBotsManager extends EventEmitter {
       this.retryCoordinationService.handleTaskRetry(task);
     });
 
-    // Listen for process status changes
-    this.processManager.on('statusChange', (serviceName: string, status: ProcessInfo) => {
-      if (serviceName === 'dev-bots') {
-        this.emit('systemStatusChange', status);
-      }
-    });
+    // Process status change listening removed (processManager removed)
   }
 
   /**

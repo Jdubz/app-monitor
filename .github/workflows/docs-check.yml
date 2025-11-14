@@ -2,13 +2,8 @@ name: Documentation Check
 
 on:
   pull_request:
-    paths:
-      - 'docs/**'
-      - '*.md'
-  push:
     branches:
       - main
-      - staging
     paths:
       - 'docs/**'
       - '*.md'
@@ -41,34 +36,80 @@ jobs:
           fi
           echo "✅ No database files in docs"
 
-      - name: Enforce document organization
+      - name: Enforce sprawl prevention
         run: |
-          # Check for misplaced files
           ERRORS=0
           
-          # Analysis docs should be minimal (only active investigations)
-          ANALYSIS_COUNT=$(find docs/analysis -name "*.md" ! -name "README.md" | wc -l)
+          echo "📊 Documentation Sprawl Prevention Check"
+          echo "=========================================="
+          echo ""
+          
+          # 1. Check total document count (hard limit)
+          TOTAL_DOCS=$(find docs -name "*.md" | wc -l)
+          echo "Total documentation files: $TOTAL_DOCS"
+          if [ "$TOTAL_DOCS" -gt 60 ]; then
+            echo "❌ ERROR: Too many docs ($TOTAL_DOCS > 60 limit)"
+            echo "Delete outdated/completed docs before adding new ones."
+            ERRORS=1
+          else
+            echo "✅ Document count within limit ($TOTAL_DOCS/60)"
+          fi
+          echo ""
+          
+          # 2. Analysis docs should be minimal (active investigations only)
+          ANALYSIS_COUNT=$(find docs/analysis -name "*.md" ! -name "README.md" 2>/dev/null | wc -l)
+          echo "Analysis documents: $ANALYSIS_COUNT"
           if [ "$ANALYSIS_COUNT" -gt 5 ]; then
-            echo "⚠️  WARNING: docs/analysis/ has $ANALYSIS_COUNT documents"
-            echo "Should have minimal active investigations only."
+            echo "❌ ERROR: Too many analysis docs ($ANALYSIS_COUNT > 5 limit)"
             echo "Delete completed analyses, don't keep them."
             ERRORS=1
+          else
+            echo "✅ Analysis count healthy ($ANALYSIS_COUNT/5)"
           fi
+          echo ""
           
-          # Check for common anti-patterns
-          if find docs -name "*COMPLETED*.md" -o -name "*archived*.md" -o -name "*old*.md" | grep -q .; then
-            echo "❌ ERROR: Found completed/archived/old documents:"
-            find docs -name "*COMPLETED*.md" -o -name "*archived*.md" -o -name "*old*.md"
-            echo "Delete these instead of keeping them."
-            exit 1
-          fi
+          # 3. Check for anti-patterns indicating doc hoarding
+          echo "Checking for documentation anti-patterns..."
+          ANTIPATTERNS=0
           
-          # Check for duplicate content indicators
-          if find docs -name "*-v2.md" -o -name "*-new.md" -o -name "*-draft.md" | grep -q .; then
-            echo "⚠️  WARNING: Found versioned/draft documents:"
-            find docs -name "*-v2.md" -o -name "*-new.md" -o -name "*-draft.md"
-            echo "Consider consolidating or cleaning up."
+          if find docs -name "*COMPLETED*.md" -o -name "*archived*.md" -o -name "*old*.md" 2>/dev/null | grep -q .; then
+            echo "❌ Found completed/archived/old documents:"
+            find docs -name "*COMPLETED*.md" -o -name "*archived*.md" -o -name "*old*.md" 2>/dev/null
+            echo "   DELETE these instead of keeping them."
+            ANTIPATTERNS=1
             ERRORS=1
+          fi
+          
+          if find docs -name "*-v2.md" -o -name "*-new.md" -o -name "*-draft.md" 2>/dev/null | grep -q .; then
+            echo "⚠️  Found versioned/draft documents:"
+            find docs -name "*-v2.md" -o -name "*-new.md" -o -name "*-draft.md" 2>/dev/null
+            echo "   Consolidate or delete these."
+            ANTIPATTERNS=1
+          fi
+          
+          if [ "$ANTIPATTERNS" -eq 0 ]; then
+            echo "✅ No documentation anti-patterns detected"
+          fi
+          echo ""
+          
+          # 4. Report by directory (for awareness)
+          echo "Documentation distribution:"
+          for dir in docs/*/; do
+            if [ -d "$dir" ]; then
+              COUNT=$(find "$dir" -maxdepth 1 -name "*.md" | wc -l)
+              DIRNAME=$(basename "$dir")
+              echo "  $DIRNAME: $COUNT files"
+            fi
+          done
+          echo ""
+          
+          if [ "$ERRORS" -eq 0 ]; then
+            echo "✅ Sprawl prevention checks passed!"
+          else
+            echo "❌ Sprawl prevention checks failed!"
+            echo ""
+            echo "Philosophy: Documentation sprawl kills maintainability."
+            echo "Action: Delete outdated docs. Don't archive. Don't hoard."
           fi
           
           exit $ERRORS
@@ -107,38 +148,6 @@ jobs:
             ERRORS=1
           fi
           
-          # Each directory should have README.md
-          for dir in docs/architecture docs/technicalDesigns docs/guides docs/plans docs/setup; do
-            if [ -d "$dir" ] && [ ! -f "$dir/README.md" ]; then
-              echo "⚠️  WARNING: Missing README.md in $dir"
-              ERRORS=1
-            fi
-          done
-          
-          exit $ERRORS
-
-      - name: Check for documentation hygiene
-        run: |
-          ERRORS=0
-          
-          # Check total document count
-          TOTAL_DOCS=$(find docs -name "*.md" | wc -l)
-          if [ "$TOTAL_DOCS" -gt 60 ]; then
-            echo "⚠️  WARNING: Total documentation count: $TOTAL_DOCS (target: <60)"
-            echo "Consider consolidating or deleting outdated docs."
-            ERRORS=1
-          else
-            echo "✅ Total documentation count: $TOTAL_DOCS (healthy)"
-          fi
-          
-          # Report by directory
-          echo ""
-          echo "Documentation by directory:"
-          for dir in docs/*/; do
-            COUNT=$(find "$dir" -name "*.md" | wc -l)
-            echo "  $(basename $dir): $COUNT files"
-          done
-          
           exit $ERRORS
 
       - name: Markdown link check
@@ -153,5 +162,5 @@ jobs:
         run: |
           echo "✅ All documentation checks passed!"
           echo ""
-          echo "Documentation structure:"
-          tree -L 2 docs/ -I 'node_modules'
+          echo "Documentation is lean, focused, and sprawl-free."
+

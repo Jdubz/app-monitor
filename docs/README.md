@@ -18,13 +18,11 @@ Comprehensive documentation for the App Monitor developer tool and autonomous de
 - ✅ API endpoints for stats, blocked chains, and unblocking
 - ✅ Schema migrations 012-015 (staged queue + Phase 2A cleanup)
 - ✅ All 936 backend tests passing
-- 📚 See [Staged Queue Progress](./analysis/STAGED_QUEUE_PROGRESS.md) for details
 - 📚 See [Technical Design](./technicalDesigns/staged-task-queue.md) (now marked complete)
 
 **2025-11-12 Documentation Organized:**
 - ✅ Updated all staged queue documentation to reflect completed status
-- ✅ Archived pre-implementation analysis documents
-- ✅ Updated IMPLEMENTATION_STATUS.md with staged queue entry
+- ✅ Cleaned up outdated documentation
 - ✅ Organized docs structure for clarity
 
 **2025-11-12 Deployment Documentation Consolidated:**
@@ -58,7 +56,6 @@ Comprehensive documentation for the App Monitor developer tool and autonomous de
 
 ### Migration & History
 - [Migration Guide](./guides/MIGRATION_GUIDE.md) - From dev-monitor to app-monitor
-- [Historical Documentation](./archive/) - Archived plans, analyses, and session summaries
 
 ---
 
@@ -99,14 +96,6 @@ Strategic planning and evolution documents:
 - **DEV_BOT_PIPELINE_ENHANCEMENT_PLAN.md** - Pipeline improvements
 - See [plans/README.md](./plans/README.md) for complete list
 
-### Archived Documentation (`/archive/`)
-
-Historical documentation including:
-- **Completed plans** - Archived implementation plans (capability roadmap, database consolidation, etc.)
-- **Session summaries** - Historical implementation and fix sessions
-- **Analysis archives** - Pre-implementation analyses and investigations
-- Browse [archive/](./archive/) directory for complete archive structure
-
 ### Other Documentation
 
 - **guides/** - Operational guides (migration, deployment, API reference, testing)
@@ -123,7 +112,6 @@ Historical documentation including:
 **Architecture & Design**
 - [architecture/](./architecture/README.md) - System architecture
 - [master-design-intent.md](./architecture/master-design-intent.md) - Master design document
-- [dev-bots-overview.md](./architecture/dev-bots-overview.md) - Dev-bots architecture
 
 **Setup & Configuration**
 - [setup/](./setup/README.md) - Complete setup guide
@@ -138,18 +126,13 @@ Historical documentation including:
 **Planning & Roadmap**
 - [plans/PRIORITIZED_FEATURE_ROADMAP.md](./plans/PRIORITIZED_FEATURE_ROADMAP.md) - Prioritized roadmap
 - [plans/](./plans/) - All planning documents
-- [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) - Implementation status overview
 
 **Dev-Bots & Automation**
-- [architecture/dev-bots-overview.md](./architecture/dev-bots-overview.md) - Dev-bots documentation
 - [guides/api-reference.md](./guides/api-reference.md) - API reference
 - [guides/task-examples.md](./guides/task-examples.md) - Task examples
 
 **Analysis & Investigations**
 - [analysis/](./analysis/README.md) - Analysis reports and investigations
-- [analysis/BACKEND_COMPREHENSIVE_ANALYSIS.md](./analysis/BACKEND_COMPREHENSIVE_ANALYSIS.md) - Backend analysis
-- [analysis/DEV_BOTS_ARCHITECTURE_ANALYSIS.md](./analysis/DEV_BOTS_ARCHITECTURE_ANALYSIS.md) - Dev-bots architecture analysis
-- [archive/analysis-archived/](./archive/analysis-archived/) - Historical analyses
 
 ### By Audience
 
@@ -163,13 +146,10 @@ Historical documentation including:
 1. [architecture/README.md](./architecture/README.md) - Understand system design
 2. [plans/APP_MONITOR_STABILIZATION_PLAN.md](./plans/APP_MONITOR_STABILIZATION_PLAN.md) - Current work
 3. [plans/PRIORITIZED_FEATURE_ROADMAP.md](./plans/PRIORITIZED_FEATURE_ROADMAP.md) - Prioritized tasks
-4. [architecture/dev-bots-overview.md](./architecture/dev-bots-overview.md) - Deep dive into dev-bots
 
 **Planning & Strategy**
 1. [plans/APP_MONITOR_STABILIZATION_PLAN.md](./plans/APP_MONITOR_STABILIZATION_PLAN.md) - Current phase
-2. [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) - Implementation status
-3. [plans/README.md](./plans/README.md) - All planning docs
-4. [archive/plans-completed-2025-11/](./archive/plans-completed-2025-11/) - Completed plans (including capability roadmap)
+2. [plans/README.md](./plans/README.md) - All planning docs
 
 ---
 
@@ -206,32 +186,25 @@ Historical documentation including:
 → [architecture/README.md](./architecture/README.md)
 
 **"What should I work on next?"**
-→ [plans/PRIORITIZED_FEATURE_ROADMAP.md](./plans/PRIORITIZED_FEATURE_ROADMAP.md) or [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md)
+→ [plans/PRIORITIZED_FEATURE_ROADMAP.md](./plans/PRIORITIZED_FEATURE_ROADMAP.md)
 
 **"How do I contribute?"**
 → [../CONTRIBUTING.md](../CONTRIBUTING.md)
 
-**"What are dev-bots?"**
-→ [architecture/dev-bots-overview.md](./architecture/dev-bots-overview.md)
-
 **"How do I troubleshoot issues?"**
 → [setup/ENVIRONMENT_SETUP.md](./setup/ENVIRONMENT_SETUP.md)
-
-**"What's the long-term vision?"**
-→ [archive/plans-completed-2025-11/APP_MONITOR_CAPABILITY_ROADMAP-completed-2025-11.md](./archive/plans-completed-2025-11/APP_MONITOR_CAPABILITY_ROADMAP-completed-2025-11.md)
 
 ---
 
 ## Documentation Standards
 
 ### File Organization
-- **Root docs/** - Essential documentation (README, implementation status)
+- **Root docs/** - Essential documentation (README)
 - **docs/architecture/** - System architecture and design documents
 - **docs/setup/** - Setup and configuration guides
 - **docs/guides/** - Operational guides and tutorials
 - **docs/plans/** - Strategic planning documents
 - **docs/analysis/** - Analysis, investigation, and verification documents
-- **docs/archive/** - Historical documentation
 
 ### Naming Conventions
 - `*.md` - All documentation in Markdown
@@ -280,7 +253,6 @@ All major documents should include:
 ## Document Maintenance
 
 ### Regular Updates
-- **Weekly**: Update [IMPLEMENTATION_STATUS.md](./IMPLEMENTATION_STATUS.md) with completed tasks
 - **Monthly**: Review and update [plans/APP_MONITOR_STABILIZATION_PLAN.md](./plans/APP_MONITOR_STABILIZATION_PLAN.md)
 - **Per phase**: Update [architecture/](./architecture/) for major changes
 - **As needed**: Investigation notes in [analysis/](./analysis/)
@@ -288,11 +260,8 @@ All major documents should include:
 ### Deprecation Process
 1. Mark document as deprecated with notice at top
 2. Link to replacement documentation
-3. Move to appropriate archive after 1 month
+3. Delete deprecated documentation after replacement is validated
 4. Update all cross-references
-
-### Archive Structure
-- **docs/archive/** - Archived documentation organized by topic
 
 ---
 

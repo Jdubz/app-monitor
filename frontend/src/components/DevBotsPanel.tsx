@@ -28,7 +28,6 @@ import type {
   DevBotsTaskTemplate,
   DevBotsWorkerStatus,
 } from '@/types/dev-bots';
-import StatusBadge from './StatusBadge';
 import {
   Card,
   CardContent,
@@ -658,7 +657,7 @@ export const DevBotsPanel: React.FC<DevBotsPanelProps> = ({
                                   {worker.personality?.role || worker.personality?.description || 'Ephemeral worker'}
                                 </p>
                               </div>
-                              <StatusBadge status={badgeStatus as any} />
+                              <span className={`text-xs font-medium px-2 py-1 rounded ${ badgeStatus === "running" ? "bg-green-100 text-green-800" : badgeStatus === "busy" ? "bg-yellow-100 text-yellow-800" : badgeStatus === "stopped" ? "bg-gray-100 text-gray-800" : "bg-red-100 text-red-800" }`}>{String(badgeStatus)}</span>
                             </div>
                             <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2 text-xs text-muted-foreground">
                               <span>Mode: {label}</span>
