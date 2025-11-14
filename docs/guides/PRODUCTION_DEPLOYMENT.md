@@ -217,14 +217,12 @@ This will:
 
 ### Future Enhancement: Self-Healing Deployments
 
-**Status:** Documented for future implementation (P3 priority)
+**Status:** Planned for future implementation (P3 priority)
 
 The system could leverage the existing review/repair bot system to automatically fix failed deployments. This would require:
 - Special "prod-deploy-bot" with access to production folder
 - Ability to update `.env`, deploy scripts, systemd configs
 - Integration with existing review/repair workflow
-
-See [SELF_HEALING_DEPLOYMENT.md](../plans/SELF_HEALING_DEPLOYMENT.md) for full design.
 
 **Current State:** Manual fixes after deployment failure are acceptable. Rollback mechanism ensures zero downtime.
 - Clients must reconnect (happens automatically in <5s)
@@ -400,7 +398,6 @@ Production environment variables live in:
 
 - [Deployment Checklist](./deployment-checklist.md) - Pre/post deployment tasks
 - [CI/CD Setup Guide](../setup/CI_CD_SETUP.md) - Pull-agent architecture
-- [Self-Healing Deployment](../plans/SELF_HEALING_DEPLOYMENT.md) - Future enhancement
 
 **Scripts:**
 - `scripts/production/deploy.sh` - Main deployment script
