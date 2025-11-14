@@ -31,6 +31,8 @@ import { AgentSelector, type AgentSelectionCriteria, type AgentAttempt } from '.
 import { TaskClassifier } from './taskClassifier.js';
 import * as DockerConfig from './dockerConfig.js';
 import { config } from '../config.js';
+import { TaskArtifactService } from './taskArtifact.service.js';
+import { SessionSummaryService } from './sessionSummary.service.js';
 
 const execAsync = promisify(exec);
 
@@ -72,6 +74,8 @@ export class TaskExecutionService {
   private dockerCircuitBreaker?: { execute: <T>(fn: () => Promise<T>) => Promise<T> };
   private readonly agentSelector: AgentSelector; // Intelligent agent selection
   private readonly taskClassifier: TaskClassifier; // Task classification
+  private readonly artifactService: TaskArtifactService; // Artifact tracking
+  private readonly sessionSummaryService: SessionSummaryService; // Session summaries
 
   constructor(
     taskQueue: TaskQueueService,
@@ -102,6 +106,12 @@ export class TaskExecutionService {
 
     // Initialize intelligent agent selection (Phase 0.2)
     this.taskClassifier = new TaskClassifier();
+
+    // Initialize artifact service
+    this.artifactService = new TaskArtifactService();
+    
+    // Initialize session summary service
+    this.sessionSummaryService = new SessionSummaryService();
 
     // Initialize circuit breaker for Docker operations
     this.initializeCircuitBreaker();
@@ -839,11 +849,17 @@ export class TaskExecutionService {
     const stderrLogPath = path.join(artifactsDir, `${task.id}-stderr-${timestamp}.log`);
 
     try {
+      const runId = `run-${task.id}-${timestamp}`;
+      
       if (stdout.length > 0) {
         fs.writeFileSync(stdoutLogPath, stdout, 'utf-8');
+        // Insert artifact metadata into database
+        this.artifactService.insertLogArtifact(task.id, runId, stdoutLogPath, 'stdout');
       }
       if (stderr.length > 0) {
         fs.writeFileSync(stderrLogPath, stderr, 'utf-8');
+        // Insert artifact metadata into database
+        this.artifactService.insertLogArtifact(task.id, runId, stderrLogPath, 'stderr');
       }
     } catch (logError) {
       logger.warn({
@@ -928,6 +944,9 @@ export class TaskExecutionService {
         // Complete task in SQLite with agent type for comparison tracking
         this.taskQueue.completeTask(task.id, JSON.stringify(cliOutput), chosenAgentType);
 
+        // Generate session summary
+        await this.generateSessionSummary(task, 0, stdout, stderr, timestamp);
+
         logger.info({
           category: 'process',
           action: 'task_completed_successfully',
@@ -963,6 +982,9 @@ export class TaskExecutionService {
 
         // Still complete task even if output parsing fails
         this.taskQueue.completeTask(task.id, stdout, chosenAgentType);
+        
+        // Generate session summary
+        await this.generateSessionSummary(task, 0, stdout, stderr, timestamp);
       }
 
     } else {
@@ -1235,6 +1257,59 @@ export class TaskExecutionService {
         message: `Failed to auto-stash changes for task ${taskId}`,
         details: { error: error instanceof Error ? error.message : String(error) }
       });
+    }
+  }
+
+  /**
+   * Generate session summary artifact
+   */
+  private async generateSessionSummary(
+    task: Task,
+    exitCode: number,
+    stdout: string,
+    stderr: string,
+    timestamp: number
+  ): Promise<void> {
+    try {
+      // Get artifacts for this task
+      const artifacts = this.artifactService.getTaskArtifacts(task.id);
+      
+      // Generate summary
+      const summary = this.sessionSummaryService.generateSummary(
+        task,
+        exitCode,
+        stdout,
+        stderr,
+        artifacts
+      );
+      
+      // Write to file
+      const summaryPath = await this.sessionSummaryService.writeSummary(
+        summary,
+        this.config.artifactsDir
+      );
+      
+      // Insert into artifacts table
+      const runId = `run-${task.id}-${timestamp}`;
+      this.artifactService.insertSessionSummary(task.id, runId, summaryPath);
+      
+      logger.debug({
+        category: 'artifact',
+        action: 'session_summary_complete',
+        message: `Session summary generated for task ${task.id}`,
+        details: {
+          task_id: task.id,
+          summary_path: summaryPath,
+        },
+      });
+    } catch (error) {
+      logger.error({
+        category: 'artifact',
+        action: 'session_summary_generation_failed',
+        message: `Failed to generate session summary for task ${task.id}`,
+        error,
+      });
+      // Don't throw - session summary is non-critical
     }
   }
 }

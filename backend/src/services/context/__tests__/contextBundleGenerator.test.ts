@@ -524,8 +524,10 @@ describe('ContextBundleGenerator', () => {
       await createTempFile(largeContent, 'large.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
+        required: true,
         taskTypes: ['implementation'],
-        sources: [{ type: 'markdown' as const, path: 'large.md', optional: false }]
+        sources: [{ type: 'markdown' as const, path: 'large.md', optional: false }],
+        sizeLimit: { maxBytes: 200 * 1024 * 1024, maxInlineBytes: 100 * 1024 * 1024 } // Allow 200MB at profile level
       });
 
       const mockLoader = {
@@ -827,6 +829,7 @@ describe('ContextBundleGenerator', () => {
 
     it('should fail when required source is missing', async () => {
       const recipe = mockRecipe({
+        required: true,
         taskTypes: ['implementation'],
         sources: [{ type: 'markdown' as const, path: 'missing.md', optional: false }]
       });
@@ -857,6 +860,7 @@ describe('ContextBundleGenerator', () => {
       await createTempFile(largeContent, 'large.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
+        required: true,
         taskTypes: ['implementation'],
         sources: [{ type: 'markdown' as const, path: 'large.md', optional: false }],
         sizeLimit: { maxBytes: 1000, maxInlineBytes: 500 }
@@ -1950,9 +1954,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {

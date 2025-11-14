@@ -34,6 +34,7 @@ type LogLevel = 'debug' | 'info' | 'warning' | 'error';
 type LogSeverity = 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR';
 export type LogCategory =
   | 'api'
+  | 'artifact' // Task artifact tracking
   | 'build'
   | 'circuit-breaker'
   | 'cloud'
