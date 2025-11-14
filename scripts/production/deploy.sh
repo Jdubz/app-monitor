@@ -328,7 +328,7 @@ main() {
     # Install dependencies locally
     npm ci
     # Remove devDependencies after build (frontend doesn't run on server)
-    npm prune --production
+    NPM_CONFIG_WORKSPACES=false npm prune --production
     # Restore root package.json
     mv "${RELEASE_DIR}/package.json.bak" "${RELEASE_DIR}/package.json" 2>/dev/null || true
 
