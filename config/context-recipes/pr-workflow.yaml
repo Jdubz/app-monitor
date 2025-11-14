@@ -1,0 +1,51 @@
+profile: pr-workflow
+version: "1.0"
+description: "PR tracking, quality gates, Copilot delegation, auto-merge workflow"
+taskTypes: [implementation, review, pr-follow-up]
+required: false
+
+sizeLimit:
+  maxBytes: 25000
+  maxInlineBytes: 5000
+
+investigationSteps:
+  - "READ backend/src/services/prConditionState.service.ts for gate definitions"
+  - "CHECK docs/guides/GITHUB_WEBHOOKS.md for webhook event handling"
+  - "VERIFY existing PR automation in prWorkflowOrchestrator.service.ts"
+  - "REVIEW PR condition evaluators in backend/src/services/prConditions/"
+  - "UNDERSTAND the PR self-healing workflow from docs/technicalDesigns/"
+
+constraints:
+  - "MUST use existing PRConditionStateService for gate evaluation"
+  - "MUST NOT modify webhook handler core logic without approval"
+  - "MUST follow PR workflow patterns from prWorkflowOrchestrator.service.ts"
+  - "MUST NOT duplicate PR condition evaluation logic"
+  - "MUST use existing GitHubPRService for GitHub API calls"
+
+sources:
+  - type: code
+    path: "backend/src/services/prConditionState.service.ts"
+    extract:
+      sections: ["evaluateCondition", "PRCondition"]
+    transform: strip-comments
+    
+  - type: markdown
+    path: "docs/guides/GITHUB_WEBHOOKS.md"
+    transform: summarize
+    
+  - type: markdown
+    path: "docs/technicalDesigns/pr-self-healing-and-resilience.md"
+    extract:
+      headings: ["Quality Gates", "Auto-Merge", "Self-Healing Engine"]
+    transform: summarize
+    
+  - type: code
+    path: "backend/src/services/prWorkflowOrchestrator.service.ts"
+    extract:
+      sections: ["class PRWorkflowOrchestrator"]
+    transform: strip-comments
+
+outputs:
+  format: markdown
+  filename: "pr-workflow.md"
+  includeMetadata: true
