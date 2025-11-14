@@ -7,7 +7,6 @@
  * - Manual overrides
  */
 
-// TODO: Fix import path for TaskType
 type TaskType = string;
 
 export interface RecipeSelectionOptions {

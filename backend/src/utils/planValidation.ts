@@ -4,9 +4,6 @@
  * Validates plan input data for API endpoints
  */
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import type { CreatePlanInput, UpdatePlanInput, PlanQueryFilters } from '../types/plan.js';
-
 const VALID_PLAN_TYPES = ['feature', 'refactor', 'fix', 'investigation'] as const;
 const VALID_PRIORITIES = ['p0', 'p1', 'p2', 'p3'] as const;
 const VALID_STATUSES = ['planning', 'in_progress', 'blocked', 'completed', 'cancelled'] as const;
@@ -376,6 +373,108 @@ export function validateUpdatePlanInput(input: unknown): ValidationResult {
         message: `Estimated effort hours must not exceed ${MAX_ESTIMATED_HOURS}`,
         value: data.estimated_effort_hours,
       });
+    }
+  }
+
+  // Optional: success_criteria
+  if (data.success_criteria !== undefined && data.success_criteria !== null) {
+    if (!Array.isArray(data.success_criteria)) {
+      errors.push({ field: 'success_criteria', message: 'Success criteria must be an array' });
+    } else {
+      if (data.success_criteria.length > MAX_SUCCESS_CRITERIA_ITEMS) {
+        errors.push({
+          field: 'success_criteria',
+          message: `Success criteria must not exceed ${MAX_SUCCESS_CRITERIA_ITEMS} items`,
+          value: data.success_criteria.length,
+        });
+      }
+      data.success_criteria.forEach((item, index) => {
+        if (typeof item !== 'string') {
+          errors.push({
+            field: `success_criteria[${index}]`,
+            message: 'Success criteria items must be strings',
+          });
+        } else if (item.length > MAX_SUCCESS_CRITERIA_ITEM_LENGTH) {
+          errors.push({
+            field: `success_criteria[${index}]`,
+            message: `Success criteria item must not exceed ${MAX_SUCCESS_CRITERIA_ITEM_LENGTH} characters`,
+            value: item.length,
+          });
+        }
+      });
+    }
+  }
+
+  // Optional: scope_boundaries
+  if (data.scope_boundaries !== undefined && data.scope_boundaries !== null) {
+    if (typeof data.scope_boundaries !== 'object' || Array.isArray(data.scope_boundaries)) {
+      errors.push({ field: 'scope_boundaries', message: 'Scope boundaries must be an object' });
+    } else {
+      const boundaries = data.scope_boundaries as Record<string, unknown>;
+
+      // Validate mustNotChange
+      if (boundaries.mustNotChange !== undefined && boundaries.mustNotChange !== null) {
+        if (!Array.isArray(boundaries.mustNotChange)) {
+          errors.push({
+            field: 'scope_boundaries.mustNotChange',
+            message: 'mustNotChange must be an array',
+          });
+        } else {
+          if (boundaries.mustNotChange.length > MAX_SCOPE_BOUNDARIES_ITEMS) {
+            errors.push({
+              field: 'scope_boundaries.mustNotChange',
+              message: `mustNotChange must not exceed ${MAX_SCOPE_BOUNDARIES_ITEMS} items`,
+              value: boundaries.mustNotChange.length,
+            });
+          }
+          boundaries.mustNotChange.forEach((item, index) => {
+            if (typeof item !== 'string') {
+              errors.push({
+                field: `scope_boundaries.mustNotChange[${index}]`,
+                message: 'mustNotChange items must be strings',
+              });
+            } else if (item.length > MAX_SCOPE_BOUNDARIES_ITEM_LENGTH) {
+              errors.push({
+                field: `scope_boundaries.mustNotChange[${index}]`,
+                message: `mustNotChange item must not exceed ${MAX_SCOPE_BOUNDARIES_ITEM_LENGTH} characters`,
+                value: item.length,
+              });
+            }
+          });
+        }
+      }
+
+      // Validate mustNotAffect
+      if (boundaries.mustNotAffect !== undefined && boundaries.mustNotAffect !== null) {
+        if (!Array.isArray(boundaries.mustNotAffect)) {
+          errors.push({
+            field: 'scope_boundaries.mustNotAffect',
+            message: 'mustNotAffect must be an array',
+          });
+        } else {
+          if (boundaries.mustNotAffect.length > MAX_SCOPE_BOUNDARIES_ITEMS) {
+            errors.push({
+              field: 'scope_boundaries.mustNotAffect',
+              message: `mustNotAffect must not exceed ${MAX_SCOPE_BOUNDARIES_ITEMS} items`,
+              value: boundaries.mustNotAffect.length,
+            });
+          }
+          boundaries.mustNotAffect.forEach((item, index) => {
+            if (typeof item !== 'string') {
+              errors.push({
+                field: `scope_boundaries.mustNotAffect[${index}]`,
+                message: 'mustNotAffect items must be strings',
+              });
+            } else if (item.length > MAX_SCOPE_BOUNDARIES_ITEM_LENGTH) {
+              errors.push({
+                field: `scope_boundaries.mustNotAffect[${index}]`,
+                message: `mustNotAffect item must not exceed ${MAX_SCOPE_BOUNDARIES_ITEM_LENGTH} characters`,
+                value: item.length,
+              });
+            }
+          });
+        }
+      }
     }
   }
 

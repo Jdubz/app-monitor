@@ -881,21 +881,23 @@ export class TaskQueueService {
         message: `Created task ${task.id}: ${task.title}`
       });
 
-      // Trigger plan status update if task is linked to a plan
-      const planStatusUpdater = getPlanStatusUpdater();
-      if (planStatusUpdater && task.plan_id) {
-        planStatusUpdater.onTaskCreated(task.id).catch((error: unknown) => {
-          logger.error({
-            category: 'plan',
-            action: 'plan_status_update_failed',
-            message: `Failed to update plan status after task creation: ${task.id}`,
-            error: error instanceof Error ? error : new Error(String(error)),
-          });
-        });
-      }
-
       return task;
     });
+
+    // Trigger plan status update if task is linked to a plan (after transaction)
+    if (task.plan_id) {
+      const planStatusUpdater = getPlanStatusUpdater();
+      planStatusUpdater?.onTaskCreated(task.id).catch((error: unknown) => {
+        logger.error({
+          category: 'plan',
+          action: 'plan_status_update_failed',
+          message: `Failed to update plan status after task creation: ${task.id}`,
+          error: error instanceof Error ? error : new Error(String(error)),
+        });
+      });
+    }
+
+    return task;
   }
 
   /**
@@ -1181,19 +1183,17 @@ export class TaskQueueService {
         action: 'task_completed',
         message: `Task ${taskId} completed successfully`
       });
+    });
 
-      // Trigger plan status update if task is linked to a plan
-      const planStatusUpdater = getPlanStatusUpdater();
-      if (planStatusUpdater) {
-        planStatusUpdater.onTaskStatusChange(taskId).catch((error: unknown) => {
-          logger.error({
-            category: 'plan',
-            action: 'plan_status_update_failed',
-            message: `Failed to update plan status after task completion: ${taskId}`,
-            error: error instanceof Error ? error : new Error(String(error)),
-          });
-        });
-      }
+    // Trigger plan status update if task is linked to a plan (after transaction)
+    const planStatusUpdater = getPlanStatusUpdater();
+    planStatusUpdater?.onTaskStatusChange(taskId).catch((error: unknown) => {
+      logger.error({
+        category: 'plan',
+        action: 'plan_status_update_failed',
+        message: `Failed to update plan status after task completion: ${taskId}`,
+        error: error instanceof Error ? error : new Error(String(error)),
+      });
     });
   }
 
@@ -1287,19 +1287,17 @@ export class TaskQueueService {
           willEnterRecovery: true
         }
       });
+    });
 
-      // Trigger plan status update if task is linked to a plan
-      const planStatusUpdater = getPlanStatusUpdater();
-      if (planStatusUpdater) {
-        planStatusUpdater.onTaskStatusChange(taskId).catch((error: unknown) => {
-          logger.error({
-            category: 'plan',
-            action: 'plan_status_update_failed',
-            message: `Failed to update plan status after task failure: ${taskId}`,
-            error: error instanceof Error ? error : new Error(String(error)),
-          });
-        });
-      }
+    // Trigger plan status update if task is linked to a plan (after transaction)
+    const planStatusUpdater = getPlanStatusUpdater();
+    planStatusUpdater?.onTaskStatusChange(taskId).catch((error: unknown) => {
+      logger.error({
+        category: 'plan',
+        action: 'plan_status_update_failed',
+        message: `Failed to update plan status after task failure: ${taskId}`,
+        error: error instanceof Error ? error : new Error(String(error)),
+      });
     });
   }
 
