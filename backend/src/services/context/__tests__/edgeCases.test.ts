@@ -310,7 +310,7 @@ sources: ${JSON.stringify(sources)}
       expect(stats.misses).toBe(0);
 
       cache.clear();
-      expect(cache.getStats().size).toBe(0);
+      expect(cache.getStats().totalEntries).toBe(0);
 
       await cache.destroy();
     });
@@ -546,7 +546,7 @@ sources: ${JSON.stringify(sources)}
 
       await Promise.all(operations);
 
-      expect(cache.getStats().size).toBeGreaterThan(0);
+      expect(cache.getStats().totalEntries).toBeGreaterThan(0);
 
       await cache.destroy();
     });
