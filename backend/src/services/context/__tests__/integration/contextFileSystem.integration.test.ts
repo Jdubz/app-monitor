@@ -9,7 +9,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ContextRecipeLoader } from '../../contextRecipeLoader.js';
 import { ContextBundleGenerator } from '../../contextBundleGenerator.js';
 import { ContextCache } from '../../contextCache.js';
-import { createTempDir, createTempFile, removeDir, createMockFileSystem } from '../helpers/testUtils.js';
+import { createTempDir, createTempFile, removeDir } from '../helpers/testUtils.js';
 import { mockFileContent } from '../helpers/testMocks.js';
 import type { BundleGenerationOptions } from '../../../../types/contextBundle.js';
 import * as path from 'path';

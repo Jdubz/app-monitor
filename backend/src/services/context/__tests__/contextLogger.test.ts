@@ -5,7 +5,7 @@
  * Tests logging functionality, level filtering, and formatting
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ContextLogger, getContextLogger } from '../contextLogger.js';
 import { spyOnConsole } from './helpers/testUtils.js';
 

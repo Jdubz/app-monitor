@@ -8,6 +8,7 @@
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { execSync } from 'child_process';
 import { vi } from 'vitest';
 
 /**
@@ -72,7 +73,7 @@ export async function createMockFileSystem(structure: Record<string, string>): P
  * Returns a function to restore original behavior
  */
 export function mockGitCommand(commitHash: string = 'abc123def456'): () => void {
-  const originalExecSync = require('child_process').execSync;
+  const originalExecSync = execSync;
 
   const mockExecSync = vi.fn((command: string) => {
     if (command === 'git rev-parse HEAD') {
@@ -81,10 +82,11 @@ export function mockGitCommand(commitHash: string = 'abc123def456'): () => void 
     return originalExecSync(command);
   });
 
-  require('child_process').execSync = mockExecSync;
+  // Note: This modifies the module's exported function for testing
+  (global as any).execSync = mockExecSync;
 
   return () => {
-    require('child_process').execSync = originalExecSync;
+    (global as any).execSync = originalExecSync;
   };
 }
 

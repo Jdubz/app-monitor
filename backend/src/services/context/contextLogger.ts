@@ -94,6 +94,7 @@ export class ContextLogger {
 
     // Additional context
     if (context) {
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { component, operation, ...additionalContext } = context;
 
       if (Object.keys(additionalContext).length > 0) {

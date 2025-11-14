@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ContextCache } from '../contextCache.js';
 import { createTestDatabase, TestDatabase } from './helpers/testDatabase.js';
-import { mockBundle, mockCacheEntry } from './helpers/testMocks.js';
+import { mockBundle } from './helpers/testMocks.js';
 import { sleep, mockGitHash } from './helpers/testUtils.js';
 import type { BundleGenerationOptions } from '../../../types/contextBundle.js';
 

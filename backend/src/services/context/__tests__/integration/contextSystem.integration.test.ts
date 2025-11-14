@@ -16,9 +16,7 @@ import { mockFileContent } from '../helpers/testMocks.js';
 import * as path from 'path';
 
 describe('Context System Integration', () => {
-  let generator: ContextBundleGenerator;
   let cache: ContextCache;
-  let loader: ContextRecipeLoader;
   let testDb: TestDatabase;
   let tempDir: string;
 
@@ -27,12 +25,6 @@ describe('Context System Integration', () => {
     tempDir = await createTempDir('system-integration-');
 
     cache = new ContextCache({ persistToDb: true });
-    loader = new ContextRecipeLoader();
-    generator = new ContextBundleGenerator({
-      cache,
-      loader,
-      repoRoot: tempDir
-    });
   });
 
   afterEach(async () => {
@@ -345,8 +337,6 @@ sources:
     });
 
     it('should fail when required source is missing', async () => {
-      const backendPath = path.join(tempDir, 'backend');
-
       const recipePath = path.join(tempDir, 'config', 'context-recipes');
       const recipeContent = `
 profile: missing-required-test

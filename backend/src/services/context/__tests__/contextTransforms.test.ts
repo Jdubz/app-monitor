@@ -7,7 +7,6 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ContextTransforms } from '../contextTransforms.js';
-import { mockFileContent } from './helpers/testMocks.js';
 
 describe('ContextTransforms', () => {
   let transforms: ContextTransforms;

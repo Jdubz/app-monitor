@@ -8,8 +8,7 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ContextCache } from '../../contextCache.js';
 import { createTestDatabase, TestDatabase } from '../helpers/testDatabase.js';
-import { mockBundle, mockCacheEntry } from '../helpers/testMocks.js';
-import type { BundleGenerationOptions } from '../../../../types/contextBundle.js';
+import { mockBundle } from '../helpers/testMocks.js';
 
 describe('Context Database Integration', () => {
   let cache: ContextCache;

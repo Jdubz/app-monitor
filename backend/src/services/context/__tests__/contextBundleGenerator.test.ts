@@ -10,10 +10,9 @@ import { ContextBundleGenerator } from '../contextBundleGenerator.js';
 import { ContextCache } from '../contextCache.js';
 import { ContextRecipeLoader } from '../contextRecipeLoader.js';
 import type { BundleGenerationOptions } from '../../../types/contextBundle.js';
-import type { ContextRecipe } from '../../../types/contextRecipe.js';
 import { createTestDatabase, TestDatabase } from './helpers/testDatabase.js';
-import { mockRecipe, mockSource, mockFileContent } from './helpers/testMocks.js';
-import { createTempDir, createTempFile, removeDir, createMockFileSystem } from './helpers/testUtils.js';
+import { mockRecipe, mockFileContent } from './helpers/testMocks.js';
+import { createTempDir, createTempFile, removeDir } from './helpers/testUtils.js';
 import * as path from 'path';
 
 describe('ContextBundleGenerator', () => {
@@ -284,7 +283,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should accept valid relative paths', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const mockLoader = {
         loadRecipe: vi.fn().mockResolvedValue({
@@ -337,7 +336,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should generate bundle from recipe', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -365,7 +364,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should return cached bundle on second call', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -401,7 +400,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should bypass cache when force flag is set', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -464,7 +463,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should warn when optional recipe fails', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe1 = mockRecipe({
         profile: 'required-profile',
@@ -505,7 +504,7 @@ describe('ContextBundleGenerator', () => {
 
     it('should enforce bundle size limit', async () => {
       const largeContent = 'x'.repeat(100 * 1024 * 1024); // 100MB
-      const testFile = await createTempFile(largeContent, 'large.md', path.join(tempDir, 'backend'));
+      await createTempFile(largeContent, 'large.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -537,7 +536,7 @@ describe('ContextBundleGenerator', () => {
       process.env.CONTEXT_MAX_BUNDLE_SIZE = '1000'; // 1KB limit
 
       const largeContent = 'x'.repeat(2000); // 2KB
-      const testFile = await createTempFile(largeContent, 'large.md', path.join(tempDir, 'backend'));
+      await createTempFile(largeContent, 'large.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -622,13 +621,13 @@ describe('ContextBundleGenerator', () => {
       };
 
       // This will call loadRecipesForTask internally
-      const result = await generator.generateBundle(options);
+      await generator.generateBundle(options);
       // Should load profile1 and profile3 (both have 'implementation')
       // Result will fail because files don't exist, but that's ok for this test
     });
 
     it('should sort recipes with required first', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe1 = mockRecipe({
         profile: 'optional1',
@@ -674,7 +673,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should include metadata when configured', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -704,7 +703,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should include constraints when present', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -734,7 +733,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should include investigation steps when present', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -764,7 +763,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should skip optional sources when missing', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -820,7 +819,7 @@ describe('ContextBundleGenerator', () => {
 
     it('should enforce profile size limit', async () => {
       const largeContent = 'x'.repeat(2000);
-      const testFile = await createTempFile(largeContent, 'large.md', path.join(tempDir, 'backend'));
+      await createTempFile(largeContent, 'large.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -854,7 +853,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should read and process markdown file', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -883,7 +882,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should add source header', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'docs/test.md', path.join(tempDir, 'backend', 'docs'));
+      await createTempFile(mockFileContent.markdown, 'docs/test.md', path.join(tempDir, 'backend', 'docs'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -937,7 +936,7 @@ describe('ContextBundleGenerator', () => {
       const customBackend = await createTempDir('custom-backend-');
       process.env.CONTEXT_BACKEND_PATH = customBackend;
 
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', customBackend);
+      await createTempFile(mockFileContent.markdown, 'test.md', customBackend);
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -973,7 +972,7 @@ describe('ContextBundleGenerator', () => {
 
   describe('Bundle Structure', () => {
     it('should create bundle with correct structure', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -1008,7 +1007,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should include profile content with metadata', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -1044,7 +1043,7 @@ describe('ContextBundleGenerator', () => {
 
   describe('Extractions', () => {
     it('should extract markdown headings', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -1078,7 +1077,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should extract code blocks from markdown', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -1113,7 +1112,7 @@ describe('ContextBundleGenerator', () => {
 
     it('should extract tables from markdown', async () => {
       const tableContent = mockFileContent.table;
-      const testFile = await createTempFile(tableContent, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(tableContent, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -1146,7 +1145,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should extract code sections', async () => {
-      const testFile = await createTempFile(mockFileContent.code, 'test.ts', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.code, 'test.ts', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -1180,7 +1179,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should extract JSON path', async () => {
-      const testFile = await createTempFile(mockFileContent.json, 'test.json', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.json, 'test.json', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -1216,7 +1215,7 @@ describe('ContextBundleGenerator', () => {
 
   describe('Transforms', () => {
     it('should apply summarize transform', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -1247,7 +1246,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should apply strip-comments transform to code', async () => {
-      const testFile = await createTempFile(mockFileContent.code, 'test.ts', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.code, 'test.ts', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -1278,7 +1277,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should apply minify transform to JSON', async () => {
-      const testFile = await createTempFile(mockFileContent.json, 'test.json', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.json, 'test.json', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -1309,7 +1308,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should apply bullet-list transform', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -1340,7 +1339,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should skip strip-comments for non-code files', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -1371,7 +1370,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should skip minify for non-JSON files', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -1402,7 +1401,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should handle none transform', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -1433,7 +1432,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should handle unknown transform gracefully', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -1466,8 +1465,8 @@ describe('ContextBundleGenerator', () => {
 
   describe('Multiple Profiles', () => {
     it('should generate bundle with multiple profiles', async () => {
-      const testFile1 = await createTempFile(mockFileContent.markdown, 'test1.md', path.join(tempDir, 'backend'));
-      const testFile2 = await createTempFile(mockFileContent.code, 'test2.ts', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test1.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.code, 'test2.ts', path.join(tempDir, 'backend'));
 
       const recipe1 = mockRecipe({
         profile: 'profile1',
@@ -1506,7 +1505,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should load specific requested profiles', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe1 = mockRecipe({
         profile: 'profile1',
@@ -1544,8 +1543,8 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should combine profile sizes in metadata', async () => {
-      const testFile1 = await createTempFile(mockFileContent.markdown, 'test1.md', path.join(tempDir, 'backend'));
-      const testFile2 = await createTempFile(mockFileContent.code, 'test2.ts', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test1.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.code, 'test2.ts', path.join(tempDir, 'backend'));
 
       const recipe1 = mockRecipe({
         profile: 'profile1',
@@ -1586,7 +1585,7 @@ describe('ContextBundleGenerator', () => {
 
   describe('TTL and Caching', () => {
     it('should cache bundle with TTL from recipe', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -1621,8 +1620,8 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should cache with first recipe TTL when multiple recipes', async () => {
-      const testFile1 = await createTempFile(mockFileContent.markdown, 'test1.md', path.join(tempDir, 'backend'));
-      const testFile2 = await createTempFile(mockFileContent.code, 'test2.ts', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test1.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.code, 'test2.ts', path.join(tempDir, 'backend'));
 
       const recipe1 = mockRecipe({
         profile: 'profile1',
@@ -1667,7 +1666,7 @@ describe('ContextBundleGenerator', () => {
 
   describe('Edge Cases', () => {
     it('should handle empty source content', async () => {
-      const testFile = await createTempFile('', 'empty.md', path.join(tempDir, 'backend'));
+      await createTempFile('', 'empty.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -1746,7 +1745,7 @@ describe('ContextBundleGenerator', () => {
 
     it('should handle special characters in file names', async () => {
       const specialName = 'test-file_123.md';
-      const testFile = await createTempFile(mockFileContent.markdown, specialName, path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, specialName, path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -1773,7 +1772,7 @@ describe('ContextBundleGenerator', () => {
 
     it('should handle Unicode content', async () => {
       const unicodeContent = '# 测试文档\n\nこんにちは世界 🌍\n\nПривет мир';
-      const testFile = await createTempFile(unicodeContent, 'unicode.md', path.join(tempDir, 'backend'));
+      await createTempFile(unicodeContent, 'unicode.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -1801,7 +1800,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should handle all valid task types', async () => {
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
       const taskTypes = ['implementation', 'fix', 'review', 'deployment', 'pr-follow-up', 'analysis'];
 
       for (const taskType of taskTypes) {
@@ -1882,7 +1881,7 @@ describe('ContextBundleGenerator', () => {
       const originalEnv = process.env.CONTEXT_MAX_BUNDLE_SIZE;
       process.env.CONTEXT_MAX_BUNDLE_SIZE = 'not-a-number';
 
-      const testFile = await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],

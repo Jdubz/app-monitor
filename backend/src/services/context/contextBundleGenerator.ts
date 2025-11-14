@@ -249,11 +249,11 @@ export class ContextBundleGenerator {
    */
   private async processSource(
     source: RecipeSource,
-    options: BundleGenerationOptions
+    _options: BundleGenerationOptions
   ): Promise<string | null> {
     // Sanitize the source path to prevent path traversal
     // Remove any leading ../ sequences first
-    const normalizedPath = path.normalize(source.path).replace(/^(\.\.[\/\\])+/, '');
+    const normalizedPath = path.normalize(source.path).replace(/^(\.\.[/\\])+/, '');
 
     // Prevent path traversal attacks
     if (normalizedPath.includes('..') || path.isAbsolute(normalizedPath)) {
@@ -305,7 +305,7 @@ export class ContextBundleGenerator {
   private async applyExtraction(
     content: string,
     source: RecipeSource,
-    filePath: string
+    _filePath: string
   ): Promise<string> {
     const extract = source.extract!;
 
