@@ -164,16 +164,15 @@ export class TaskExecutionService {
       const ghService = getGitHubPRService();
       const prStatus = await ghService.getPRStatus(prNumber);
 
-      if (prStatus.state === 'closed' || prStatus.merged) {
+      if (prStatus.state === 'CLOSED' || prStatus.state === 'MERGED') {
         logger.warn({
-          category: 'task-validation',
+          category: 'automation',
           action: 'stale_pr_task_cancelled',
-          message: `Cancelling task ${task.id} - PR #${prNumber} is ${prStatus.state}${prStatus.merged ? ' (merged)' : ''}`,
+          message: `Cancelling task ${task.id} - PR #${prNumber} is ${prStatus.state}`,
           details: {
             taskId: task.id,
             prNumber,
             prState: prStatus.state,
-            merged: prStatus.merged,
             taskTitle: task.title
           }
         });
@@ -181,15 +180,15 @@ export class TaskExecutionService {
         await this.taskQueue.updateTask(task.id, {
           status: 'cancelled',
           completed_at: Date.now(),
-          notes: `Auto-cancelled: PR #${prNumber} ${prStatus.merged ? 'merged' : 'closed'} before task execution`
+          notes: `Auto-cancelled: PR #${prNumber} ${prStatus.state === 'MERGED' ? 'merged' : 'closed'} before task execution`
         });
 
         // Throw error to stop execution
-        throw new Error(`Task cancelled: PR #${prNumber} ${prStatus.merged ? 'merged' : 'closed'}`);
+        throw new Error(`Task cancelled: PR #${prNumber} ${prStatus.state === 'MERGED' ? 'merged' : 'closed'}`);
       }
 
       logger.debug({
-        category: 'task-validation',
+        category: 'automation',
         action: 'pr_status_validated',
         message: `PR #${prNumber} is ${prStatus.state} - task ${task.id} can proceed`,
         details: { taskId: task.id, prNumber, prState: prStatus.state }
@@ -203,7 +202,7 @@ export class TaskExecutionService {
 
       // If GitHub API failed, log warning but allow execution to proceed
       logger.warn({
-        category: 'task-validation',
+        category: 'automation',
         action: 'pr_validation_failed',
         message: `Failed to validate PR status for task ${task.id}, allowing execution`,
         error,

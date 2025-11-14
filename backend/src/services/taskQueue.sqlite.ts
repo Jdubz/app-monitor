@@ -1890,12 +1890,41 @@ export class TaskQueueService {
    */
   async findByPRNumber(prNumber: number): Promise<Task[]> {
     const stmt = this.db.prepare(`
-      SELECT * FROM tasks 
+      SELECT * FROM tasks
       WHERE pr_number = ?
       ORDER BY created_at DESC
     `);
 
     return stmt.all(prNumber) as Task[];
+  }
+
+  /**
+   * Find ALL tasks related to a PR (both pr_number and followup_for_pr)
+   * Used for comprehensive cleanup when PR is merged/closed
+   */
+  async findAllTasksForPR(prNumber: number): Promise<Task[]> {
+    const stmt = this.db.prepare(`
+      SELECT * FROM tasks
+      WHERE pr_number = ? OR followup_for_pr = ?
+      ORDER BY created_at ASC
+    `);
+
+    return stmt.all(prNumber, prNumber) as Task[];
+  }
+
+  /**
+   * Get all tasks that have PR associations (for cleanup/validation)
+   * Only returns pending and running tasks to minimize overhead
+   */
+  async getTasksWithPRNumber(): Promise<Task[]> {
+    const stmt = this.db.prepare(`
+      SELECT * FROM tasks
+      WHERE (pr_number IS NOT NULL OR followup_for_pr IS NOT NULL)
+        AND status IN ('pending', 'running')
+      ORDER BY created_at ASC
+    `);
+
+    return stmt.all() as Task[];
   }
 
   /**
