@@ -14,9 +14,15 @@
 import { Router, Request, Response } from 'express';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
 import { logger } from '../../utils/logger.js';
+import { requireApiKey } from '../../middleware/auth.js';
+import {
+  validateCreatePlanInput,
+  validateUpdatePlanInput,
+  validatePlanQueryFilters,
+} from '../../utils/planValidation.js';
 import { PlansService } from '../../services/plans.service.js';
 import { PlanProgressCalculator } from '../../services/planProgressCalculator.service.js';
-// import { PlanStatusUpdater } from '../../services/planStatusUpdater.service.js'; // TODO: Wire up event-driven updates
+import { initializePlanStatusUpdater } from '../../services/planStatusUpdater.singleton.js';
 import type {
   CreatePlanInput,
   UpdatePlanInput,
@@ -29,13 +35,18 @@ import type {
 export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
   const router = Router();
 
+  // Apply authentication to all plan endpoints
+  router.use(requireApiKey);
+
   // Get database instance from task queue
   const db = devBotsManager.getTaskQueue().getDatabase();
+
+  // Initialize singleton plan status updater (if not already initialized)
+  initializePlanStatusUpdater(db);
 
   // Initialize services
   const plansService = new PlansService(db);
   const progressCalculator = new PlanProgressCalculator(db);
-  // const statusUpdater = new PlanStatusUpdater(db, plansService, progressCalculator); // TODO: Wire up event-driven updates
 
   // ============================================================================
   // Plan Management Endpoints
@@ -59,30 +70,17 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
    */
   router.post('/plans', (req: Request, res: Response) => {
     try {
+      // Validate input
+      const validation = validateCreatePlanInput(req.body);
+      if (!validation.valid) {
+        res.status(400).json({
+          error: 'Validation failed',
+          details: validation.errors,
+        });
+        return;
+      }
+
       const input = req.body as CreatePlanInput;
-
-      // Validate required fields
-      if (!input.title) {
-        res.status(400).json({
-          error: 'Missing required field: title',
-        });
-        return;
-      }
-
-      if (!input.plan_type) {
-        res.status(400).json({
-          error: 'Missing required field: plan_type',
-        });
-        return;
-      }
-
-      if (!input.priority) {
-        res.status(400).json({
-          error: 'Missing required field: priority',
-        });
-        return;
-      }
-
       const plan = plansService.createPlan(input);
 
       logger.info({
@@ -120,6 +118,16 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
    */
   router.get('/plans', (req: Request, res: Response) => {
     try {
+      // Validate query filters
+      const validation = validatePlanQueryFilters(req.query as Record<string, unknown>);
+      if (!validation.valid) {
+        res.status(400).json({
+          error: 'Validation failed',
+          details: validation.errors,
+        });
+        return;
+      }
+
       const filters: PlanQueryFilters = {};
 
       if (req.query.status) {
@@ -210,8 +218,18 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
   router.patch('/plans/:planId', (req: Request, res: Response) => {
     try {
       const { planId } = req.params;
-      const input = req.body as UpdatePlanInput;
 
+      // Validate input
+      const validation = validateUpdatePlanInput(req.body);
+      if (!validation.valid) {
+        res.status(400).json({
+          error: 'Validation failed',
+          details: validation.errors,
+        });
+        return;
+      }
+
+      const input = req.body as UpdatePlanInput;
       const updatedPlan = plansService.updatePlan(planId, input);
       if (!updatedPlan) {
         res.status(404).json({

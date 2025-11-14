@@ -88,7 +88,7 @@ export class TaskCreationService {
       const selectedProfiles = ContextRecipeSelector.getProfilesToInclude({
         taskType,
         targetFiles: normalizedData.files || [],
-        manualProfiles: normalizedData.metadata?.contextProfiles as string[] | undefined,
+        manualProfiles: undefined, // TODO: Add metadata field to EnhancedTaskData if needed
         includeOptional: false // Only include required + recommended
       });
 

@@ -10,6 +10,7 @@ import { BaseWebhookHandler } from './baseHandler.js';
 import type { GitHubPullRequestPayload } from './types.js';
 import type { Task } from '../taskQueue.sqlite.js';
 import type Database from 'better-sqlite3';
+import { getPlanStatusUpdater } from '../planStatusUpdater.singleton.js';
 
 /**
  * Handler for GitHub pull_request webhook events
@@ -400,6 +401,19 @@ export class PullRequestHandler extends BaseWebhookHandler {
         total_tasks_cleaned: allRelatedTasks.length
       }
     });
+
+    // Trigger plan status update for all plans linked to this PR
+    const planStatusUpdater = getPlanStatusUpdater();
+    if (planStatusUpdater) {
+      planStatusUpdater.onPRMerged(prNumber).catch((error: unknown) => {
+        logger.error({
+          category: 'plan',
+          action: 'plan_status_update_failed',
+          message: `Failed to update plan status after PR merged: ${prNumber}`,
+          error: error instanceof Error ? error : new Error(String(error)),
+        });
+      });
+    }
   }
 
   /**
