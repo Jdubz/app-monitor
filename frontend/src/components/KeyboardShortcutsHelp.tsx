@@ -38,6 +38,13 @@ export function KeyboardShortcutsHelp({ isOpen, onClose }: KeyboardShortcutsHelp
     { keys: "Ctrl+↑", description: "Jump to top", category: "Log Viewer" },
     { keys: "Ctrl+↓", description: "Jump to bottom", category: "Log Viewer" },
     { keys: "N", description: "Toggle line numbers", category: "Log Viewer" },
+    { keys: "E", description: "Toggle ERROR filter", category: "Filtering" },
+    { keys: "W", description: "Toggle WARN filter", category: "Filtering" },
+    { keys: "I", description: "Toggle INFO filter", category: "Filtering" },
+    { keys: "D", description: "Toggle DEBUG filter", category: "Filtering" },
+    { keys: "Ctrl+A", description: "Select all levels", category: "Filtering" },
+    { keys: "Ctrl+Shift+A", description: "Clear all levels", category: "Filtering" },
+    { keys: "Ctrl+Shift+S", description: "Select all services", category: "Filtering" },
     { keys: "Ctrl+R", description: "Refresh current view", category: "Navigation" },
   ];
 
