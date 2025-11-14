@@ -921,7 +921,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should add source header', async () => {
-      await createTempFile(mockFileContent.markdown, 'docs/test.md', path.join(tempDir, 'backend', 'docs'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend', 'docs'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
