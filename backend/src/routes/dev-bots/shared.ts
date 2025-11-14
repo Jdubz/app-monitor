@@ -13,7 +13,6 @@ import type { Task, TaskExecution } from '../../services/taskQueue.sqlite.js';
 import type { InteractiveSessionRecord } from '../../services/database.js';
 import type { TaskLogFileDescriptor } from '../../services/taskLogLocator.js';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
-import { logger } from '../../utils/logger.js';
 
 // ============================================================================
 // Type Definitions
@@ -357,7 +356,7 @@ export const writeSseEvent = (res: Response, event: string, data: unknown) => {
  * Stream log file with SSE, handling follower limits
  * NOTE: Log streaming functionality deprecated - keeping stub for compatibility
  */
-export const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOptions) => {
+export const streamLogFile = async ({ res }: LogStreamOptions) => {
   // Log streaming removed - return not implemented
   res.status(501).json({
     error: 'Not Implemented',
