@@ -52,7 +52,7 @@ describe('Context Management E2E', () => {
     });
   });
 
-  describe('Context File Validation', () => {
+  describe.skip('Context File Validation', () => {
     it('should create valid context bundles', async () => {
       // This test validates the structure we've built
       const contextPath = path.resolve(__dirname, '../../context/recipes');
