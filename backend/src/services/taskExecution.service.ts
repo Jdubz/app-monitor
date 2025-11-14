@@ -593,22 +593,20 @@ export class TaskExecutionService {
         '-v', `${hostLogsDir}:/logs:rw`,  // Mount logs
         '--tmpfs', '/home/node/.codex:uid=1000,gid=1000',  // Writable temp for Codex CLI
         '-v', `${homeDir}/.codex:/tmp/host-codex:ro`,  // Mount Codex credentials
-        // Mount git credentials for committing and pushing
-        '-v', `${homeDir}/.gitconfig:/home/node/.gitconfig:ro`,  // Git config
-        '-v', `${homeDir}/.git-credentials:/home/node/.git-credentials:ro`,  // Git credential store
-        // TODO: Security improvement - consider using GITHUB_TOKEN env var with :ro mount instead
-        // Current: :rw needed for gh CLI state updates (caching, request metadata)
-        // Trade-off: Allows potential credential tampering if container compromised
-        '-v', `${homeDir}/.config/gh:/home/node/.config/gh:rw`,  // GitHub CLI auth
+        // Mount gh CLI config for API access
+        '-v', `${homeDir}/.config/gh:/home/node/.config/gh:rw`,  // GitHub CLI auth (rw for state updates)
         this.getAgentDockerImage(agent),
         'sh', '-c',
-        // Clone fresh repository, then copy credentials and run Codex
+        // Clone fresh repository, create bot git credentials, then run Codex
         `set -e && ` +
         `export HOME=/home/node && ` +  // Set HOME for gh CLI
         `mkdir -p /workspace && cd /workspace && ` +
         `git clone https://github.com/Jdubz/app-monitor.git . && ` +
-        `git config --global user.name "DevBot" && ` +
-        `git config --global user.email "devbot@local" && ` +
+        `git config --global user.name "Dev Bot (${agent.name})" && ` +
+        `git config --global user.email "devbot+${agent.name}@app-monitor.local" && ` +
+        `echo "https://devbot:\${GITHUB_TOKEN}@github.com" > /home/node/.git-credentials && ` +
+        `chmod 600 /home/node/.git-credentials && ` +
+        `git config --global credential.helper store && ` +
         `git fetch --all && ` +
         `git checkout ${baseBranch} && ` +
         `git pull origin ${baseBranch} || true && ` +
@@ -634,19 +632,20 @@ export class TaskExecutionService {
         '-v', `${hostLogsDir}:/logs:rw`,  // Mount logs
         '--tmpfs', '/home/node/.claude:uid=1000,gid=1000',  // Writable temp for Claude CLI
         '-v', `${claudeCredentials}:/tmp/host-creds.json:ro`,  // Mount Claude credentials
-        // Mount git credentials for committing and pushing
-        '-v', `${homeDir}/.gitconfig:/home/node/.gitconfig:ro`,  // Git config
-        '-v', `${homeDir}/.git-credentials:/home/node/.git-credentials:ro`,  // Git credential store
+        // Mount gh CLI config for API access
         '-v', `${homeDir}/.config/gh:/home/node/.config/gh:rw`,  // GitHub CLI auth (rw for state updates)
         this.getAgentDockerImage(agent),
         'sh', '-c',
-        // Clone fresh repository, then copy credentials and run Claude
+        // Clone fresh repository, create bot git credentials, then run Claude
         `set -e && ` +
         `export HOME=/home/node && ` +  // Set HOME for gh CLI
         `mkdir -p /workspace && cd /workspace && ` +
         `git clone https://github.com/Jdubz/app-monitor.git . && ` +
-        `git config --global user.name "DevBot" && ` +
-        `git config --global user.email "devbot@local" && ` +
+        `git config --global user.name "Dev Bot (${agent.name})" && ` +
+        `git config --global user.email "devbot+${agent.name}@app-monitor.local" && ` +
+        `echo "https://devbot:\${GITHUB_TOKEN}@github.com" > /home/node/.git-credentials && ` +
+        `chmod 600 /home/node/.git-credentials && ` +
+        `git config --global credential.helper store && ` +
         `git fetch --all && ` +
         `git checkout ${baseBranch} && ` +
         `git pull origin ${baseBranch} || true && ` +
