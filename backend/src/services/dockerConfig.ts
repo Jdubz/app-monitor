@@ -90,7 +90,7 @@ export function getGitCredentialMounts(): string[] {
   return [
     // Don't mount .gitconfig - git configuration is handled at runtime (see taskExecution.service.ts)
     // Mounting host .gitconfig as read-only causes "Resource busy" errors
-    '-v', `${homeDir}/.git-credentials:/home/node/.git-credentials:ro`,
+    // Don't mount user's .git-credentials - bots create their own from GITHUB_TOKEN (see taskExecution.service.ts)
     '-v', `${homeDir}/.config/gh:/home/node/.config/gh:rw`  // rw for gh CLI state updates
   ];
 }

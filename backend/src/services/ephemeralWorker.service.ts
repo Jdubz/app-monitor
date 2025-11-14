@@ -829,6 +829,10 @@ export class EphemeralWorkerService {
     const escapedPrompt = (task.prompt || task.description || task.title)
       .replace(/'/g, "'\\''");  // Escape single quotes for shell
 
+    const agentCommand = agent.id.startsWith('gemini')
+      ? `gemini --print --dangerously-skip-permissions --output-format json --workingDirectory /workspace '${escapedPrompt}' 2>&1 | tee -a ` + logFile
+      : `claude --print --dangerously-skip-permissions --output-format json --workingDirectory /workspace '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
+
     // Create a wrapper command that logs to the worker-specific file
     // Following imagineer's pattern: copy credentials then run Claude
     const wrapperCommand = [
@@ -841,12 +845,12 @@ export class EphemeralWorkerService {
       'cp /tmp/host-creds.json /home/worker/.claude/.credentials.json',
       'echo "Claude credentials: $(test -f ~/.claude/.credentials.json && echo found || echo missing)" >> ' + logFile,
       // Run Claude with JSON output (imagineer pattern)
-      `claude --print --dangerously-skip-permissions --output-format json --workingDirectory /workspace '${escapedPrompt}' 2>&1 | tee -a ` + logFile,
-      'CLAUDE_EXIT=$?',
+      agentCommand,
+      'AGENT_EXIT=$?',
       'echo "=== Worker Task Execution Completed ===" >> ' + logFile,
-      'echo "Exit Code: $CLAUDE_EXIT" >> ' + logFile,
+      'echo "Exit Code: $AGENT_EXIT" >> ' + logFile,
       'echo "=======================================" >> ' + logFile,
-      'exit $CLAUDE_EXIT'
+      'exit $AGENT_EXIT'
     ].join(' && ');
 
     logger.info({

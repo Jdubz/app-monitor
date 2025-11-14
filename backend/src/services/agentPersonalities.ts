@@ -361,6 +361,53 @@ export class AgentPersonalityManager {
         complexityRange: 'any'
       }
     });
+
+    // Gemini Pro Specialist
+    this.personalities.set('gemini-1.5-pro', {
+      id: 'gemini-1.5-pro',
+      name: 'Gemini 1.5 Pro',
+      role: 'Advanced Development & Analysis',
+      description: 'A powerful, next-generation model for complex development and analysis tasks.',
+      specialties: [
+        'code-generation',
+        'refactoring',
+        'bug-fixing',
+        'documentation',
+        'testing',
+        'research'
+      ],
+      expertise: {
+        primary: ['TypeScript', 'JavaScript', 'Python', 'Go', 'Java', 'C++'],
+        secondary: ['Rust', 'Swift', 'Kotlin', 'Ruby', 'PHP'],
+        tools: ['Git', 'Docker', 'VS Code', 'Jira', 'Confluence']
+      },
+      personality: {
+        communicationStyle: 'technical',
+        approach: 'analytical',
+        focus: 'quality'
+      },
+      onboarding: {
+        requiredReading: [
+          'GEMINI_API_GUIDE.md',
+          'BEST_PRACTICES_FOR_PROMPTING.md'
+        ],
+        setupSteps: [
+          'Verify API key',
+          'Check model access',
+          'Test basic prompts'
+        ],
+        validationChecks: [
+          'Code is well-structured',
+          'Solutions are efficient',
+          'Documentation is clear'
+        ]
+      },
+      taskPreferences: {
+        preferredTypes: ['implementation', 'refactoring', 'bug-fixing', 'research'],
+        avoidedTypes: ['ui-design'],
+        complexityRange: 'any'
+      }
+    });
   }
 
   private initializeTaskMappings(): void {
