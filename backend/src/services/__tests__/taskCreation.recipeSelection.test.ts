@@ -6,7 +6,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TaskCreationService } from '../taskCreation.service.js';
 import { TaskQueueService } from '../taskQueue.sqlite.js';
 import { TaskCreationGuidelinesManager } from '../taskCreationGuidelines.js';
-import { ContextBundleGenerator } from '../context/contextBundleGenerator.js';
 import type { SimpleTaskData } from '../taskCreation.service.js';
 
 describe('TaskCreation with Intelligent Recipe Selection', () => {

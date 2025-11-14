@@ -5,12 +5,11 @@
  * to prompt generation (without requiring actual Docker execution)
  */
 
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { ContextBundleGenerator } from '../context/contextBundleGenerator';
 import { ContextRecipeLoader } from '../context/contextRecipeLoader';
 import { TaskPromptTemplateManager } from '../taskPromptTemplates';
 import type { TaskData } from '../../types/task.types';
-import type { ContextBundle } from '../../types/contextBundle';
 
 describe('Context Integration Flow', () => {
   let bundleGenerator: ContextBundleGenerator;
