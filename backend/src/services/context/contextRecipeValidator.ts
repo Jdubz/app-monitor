@@ -14,7 +14,7 @@ import type {
 
 const PROFILE_NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
-const FILENAME_PATTERN = /^[a-z0-9][a-z0-9._-]*$/;
+const FILENAME_PATTERN = /^[a-z0-9][a-z0-9._\-{}]*$/;
 
 const VALID_TASK_TYPES: RecipeTaskType[] = [
   'implementation',
