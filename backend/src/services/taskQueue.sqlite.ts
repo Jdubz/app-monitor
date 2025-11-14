@@ -609,9 +609,7 @@ export class TaskQueueService {
       CREATE INDEX IF NOT EXISTS idx_tasks_chain_id ON tasks(chain_id) WHERE chain_id IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_tasks_chain_status ON tasks(chain_status) WHERE chain_status IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_tasks_queue_stage ON tasks(queue_stage) WHERE queue_stage IS NOT NULL;
-      CREATE INDEX IF NOT EXISTS idx_tasks_context_bundle_id ON tasks(context_bundle_id) WHERE context_bundle_id IS NOT NULL;
-      CREATE INDEX IF NOT EXISTS idx_tasks_context_cache_key ON tasks(context_cache_key) WHERE context_cache_key IS NOT NULL;
-      CREATE INDEX IF NOT EXISTS idx_tasks_risk_level ON tasks(risk_level) WHERE risk_level IS NOT NULL;
+      -- Note: idx_tasks_context_bundle_id, idx_tasks_context_cache_key, idx_tasks_risk_level created in migration 020
       -- Note: idx_tasks_agent_type is created in migration, not here
 
       -- Worker tracking
