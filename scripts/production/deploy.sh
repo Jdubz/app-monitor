@@ -179,14 +179,19 @@ main() {
 
     # Backend build
     cd "${RELEASE_DIR}/backend"
-    npm ci --production=false
+    # Install all dependencies (needed for build)
+    npm ci
     # Clean stale build cache to prevent missing file issues
     rm -f tsconfig.build.tsbuildinfo
     npm run build
+    # Remove devDependencies after build
+    npm prune --production
 
     # Frontend build
     cd "${RELEASE_DIR}/frontend"
     npm ci
+    # Remove devDependencies after build (frontend doesn't run on server)
+    npm prune --production
 
     # Load environment variables from shared config if available
     if [ -f "${SHARED_DIR}/config/.env.production" ]; then
