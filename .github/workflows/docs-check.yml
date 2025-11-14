@@ -156,6 +156,8 @@ jobs:
           config-file: '.github/workflows/markdown-link-check-config.json'
           use-quiet-mode: 'yes'
           use-verbose-mode: 'no'
+          folder-path: 'docs'
+          max-depth: -1
 
       - name: Summary
         if: success()
