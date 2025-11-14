@@ -1,0 +1,12 @@
+{
+  "type": "implementation",
+  "title": "Test Task - Verify Pipeline",
+  "description": "Simple test task to verify the dev-bot execution pipeline is working correctly.",
+  "acceptanceCriteria": [
+    "Task is created successfully",
+    "Task is assigned to an agent",
+    "Task execution completes without errors"
+  ],
+  "assignedAgent": "backend-specialist",
+  "priority": 5
+}
