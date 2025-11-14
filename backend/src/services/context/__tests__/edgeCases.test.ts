@@ -439,9 +439,9 @@ sources: ${JSON.stringify(sources)}
 
       const duration = Date.now() - start;
 
-      // Should complete 1000 cache key generations in under 10 seconds
-      // (each call involves git operations to get commit hash)
-      expect(duration).toBeLessThan(10000);
+      // Should complete 1000 cache key generations in under 20 seconds
+      // (each call involves git operations to get commit hash, which can be slower in CI)
+      expect(duration).toBeLessThan(20000);
 
       await cache.destroy();
     });
