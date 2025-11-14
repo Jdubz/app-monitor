@@ -12,7 +12,7 @@ import { ContextRecipeLoader } from '../contextRecipeLoader.js';
 import type { BundleGenerationOptions } from '../../../types/contextBundle.js';
 import { createTestDatabase, TestDatabase } from './helpers/testDatabase.js';
 import { mockRecipe, mockFileContent } from './helpers/testMocks.js';
-import { createTempDir, createTempFile, removeDir } from './helpers/testUtils.js';
+import { createTempDir, createTempFile, removeDir, createMockFileSystem } from './helpers/testUtils.js';
 import * as path from 'path';
 
 describe('ContextBundleGenerator', () => {

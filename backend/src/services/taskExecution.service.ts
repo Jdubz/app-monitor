@@ -30,6 +30,7 @@ import { resolveArtifactsDir } from '../utils/repoPaths.js';
 import { AgentSelector, type AgentSelectionCriteria, type AgentAttempt } from './agentSelector.js';
 import { TaskClassifier } from './taskClassifier.js';
 import * as DockerConfig from './dockerConfig.js';
+import { config } from '../config.js';
 
 const execAsync = promisify(exec);
 
