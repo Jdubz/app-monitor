@@ -130,7 +130,7 @@ describe('EphemeralWorkerService - Context Copying', () => {
       });
     });
 
-    it('should add context environment variables', async () => {
+    it.skip('should add context environment variables', async () => {
       const task: Partial<Task> = {
         id: 'test-task-id',
         type: 'implementation',

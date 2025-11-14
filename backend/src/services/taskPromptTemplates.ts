@@ -1365,7 +1365,11 @@ echo "PR_BRANCH: $PR_BRANCH"`;
       if (profiles.length > 0) {
         profiles.forEach((profile) => {
           const fileName = `${profile}.md`;
-          output += `### 📄 ${profile.charAt(0).toUpperCase() + profile.slice(1).replace(/-/g, ' ')}\n`;
+          const displayName = profile
+            .split('-')
+            .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+            .join(' ');
+          output += `### 📄 ${displayName}\n`;
           output += `**File**: \`${bundlePath}/${fileName}\`\n`;
           output += `**Purpose**: ${this.getProfilePurpose(profile)}\n`;
           output += `**When to Read**: ${this.getProfileGuidance(profile)}\n\n`;
