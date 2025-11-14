@@ -3,16 +3,26 @@
 
 echo "🔒 Running pre-commit checks..."
 
-# 1. Validate package locks
-echo "  → Validating package-lock.json files..."
+# 1. Validate package locks (root)
+echo "  → Validating root package-lock.json..."
 npm run validate:locks || {
   echo ""
-  echo "❌ Pre-commit check failed: Package lock files out of sync"
+  echo "❌ Pre-commit check failed: Root package lock file out of sync"
   echo ""
   exit 1
 }
 
-# 2. Check for package.json dependency changes without lock file changes
+# 2. Validate workspace lock files (deployment simulation)
+echo "  → Validating workspace lock files (deployment simulation)..."
+node scripts/validate-workspace-locks.cjs || {
+  echo ""
+  echo "❌ Pre-commit check failed: Workspace lock files out of sync"
+  echo "   This would cause production deployment to FAIL!"
+  echo ""
+  exit 1
+}
+
+# 3. Check for package.json dependency changes without lock file changes
 if git diff --cached --name-only | grep -q "package\.json$"; then
   # Check if dependencies/devDependencies sections changed
   if git diff --cached package.json | grep -qE '^\+.*"(dependencies|devDependencies|peerDependencies|optionalDependencies)"'; then
@@ -26,7 +36,7 @@ if git diff --cached --name-only | grep -q "package\.json$"; then
   fi
 fi
 
-# 3. Lint staged files
+# 4. Lint staged files
 echo "  → Linting staged files..."
 npx lint-staged
 
