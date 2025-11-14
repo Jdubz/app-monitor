@@ -267,13 +267,15 @@ sources:
 profile: size-limit-test
 version: 1.0.0
 description: Recipe with size limit for testing
+required: true
 taskTypes:
   - implementation
 sources:
   - type: markdown
     path: large.md
+    optional: false
 sizeLimit:
-  maxBytes: 1000
+  maxBytes: 1500
 `;
       await createTempFile(recipeContent, 'size-limit-test.yaml', recipePath);
 

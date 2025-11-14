@@ -19,6 +19,7 @@ interface CacheOptions {
   maxEntries?: number;
   maxTotalBytes?: number;
   persistToDb?: boolean;
+  db?: DevBotsDatabase; // Allow injecting database for testing
 }
 
 export class ContextCache {
@@ -45,7 +46,8 @@ export class ContextCache {
     this.persistToDb = options.persistToDb ?? true;
 
     try {
-      this.db = new DevBotsDatabase();
+      // Use provided database or create new one
+      this.db = options.db ?? new DevBotsDatabase();
       // Verify database connection
       this.db.getConnection().prepare('SELECT 1').get();
 
@@ -301,6 +303,20 @@ export class ContextCache {
     if (entry) {
       entry.lastAccessedAt = new Date();
       entry.hitCount++;
+
+      // Update database if persistence is enabled
+      if (this.persistToDb && this.db) {
+        try {
+          this.db.getConnection().prepare(`
+            UPDATE context_bundle_cache
+            SET hit_count = hit_count + 1,
+                last_accessed_at = ?
+            WHERE cache_key = ?
+          `).run(entry.lastAccessedAt.toISOString(), cacheKey);
+        } catch (error) {
+          this.logger.warn('Failed to update access time in database', { component: 'ContextCache', operation: 'updateAccessTime', cacheKey }, error instanceof Error ? error : undefined);
+        }
+      }
     }
   }
 

@@ -28,19 +28,27 @@ export class ContextRecipeLoader {
   private recipeDir: string;
   private logger = getContextLogger();
 
-  constructor(options: LoaderOptions = {}) {
+  constructor(pathOrOptions?: string | LoaderOptions) {
     this.validator = new ContextRecipeValidator();
-    this.cacheEnabled = options.cacheRecipes ?? true;
 
-    // Initialize recipe directory path (ES module compatible)
-    // Can be overridden via CONTEXT_RECIPE_DIR environment variable
-    if (process.env.CONTEXT_RECIPE_DIR) {
-      this.recipeDir = path.resolve(process.env.CONTEXT_RECIPE_DIR);
+    // Handle both string path and options object
+    if (typeof pathOrOptions === 'string') {
+      this.recipeDir = path.resolve(pathOrOptions);
+      this.cacheEnabled = true;
     } else {
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = path.dirname(__filename);
-      const repoRoot = findRepoRoot(__dirname);
-      this.recipeDir = path.join(repoRoot, 'backend', 'config', 'context-recipes');
+      const options = pathOrOptions ?? {};
+      this.cacheEnabled = options.cacheRecipes ?? true;
+
+      // Initialize recipe directory path (ES module compatible)
+      // Can be overridden via CONTEXT_RECIPE_DIR environment variable
+      if (process.env.CONTEXT_RECIPE_DIR) {
+        this.recipeDir = path.resolve(process.env.CONTEXT_RECIPE_DIR);
+      } else {
+        const __filename = fileURLToPath(import.meta.url);
+        const __dirname = path.dirname(__filename);
+        const repoRoot = findRepoRoot(__dirname);
+        this.recipeDir = path.join(repoRoot, 'backend', 'config', 'context-recipes');
+      }
     }
   }
 
