@@ -1,0 +1,147 @@
+# Failure Recovery Context Recipe
+# Provides context for diagnosing and recovering from dev-bot failures
+
+profile: failure-recovery
+version: 1.0.0
+description: Context bundle for diagnosing failures and executing recovery procedures
+
+taskTypes:
+  - fix
+  - analysis
+
+required: true
+
+sizeLimit:
+  maxBytes: 45000
+  maxInlineBytes: 10000
+
+constraints:
+  - "Never delete error logs during recovery"
+  - "Always preserve failure state for debugging"
+  - "Do not restart services without capturing diagnostics"
+  - "Follow incident response procedures"
+  - "Document all recovery actions taken"
+  - "Do not apply fixes without understanding root cause"
+
+investigationSteps:
+  - "Review error logs and stack traces"
+  - "Check container health and resource usage"
+  - "Verify database connectivity and integrity"
+  - "Review recent code changes that may have caused failure"
+  - "Check for known issues in troubleshooting guide"
+  - "Analyze failure patterns and frequency"
+  - "Verify external dependencies are accessible"
+
+sources:
+  # Troubleshooting documentation
+  - type: markdown
+    path: docs/TROUBLESHOOTING.md
+    extract:
+      headings:
+        - "Common Failures"
+        - "Recovery Procedures"
+        - "Diagnostic Steps"
+        - "Known Issues"
+    transform: bullet-list
+    optional: true
+
+  # Incident response guide
+  - type: markdown
+    path: docs/INCIDENT_RESPONSE.md
+    extract:
+      headings:
+        - "Response Procedure"
+        - "Escalation"
+        - "Recovery Steps"
+    transform: bullet-list
+    optional: true
+
+  # Error handling code
+  - type: code
+    path: src/utils/errorHandler.ts
+    transform: strip-comments
+    optional: false
+
+  # Dev-bot service error handling
+  - type: code
+    path: src/services/devBot/devBotService.ts
+    extract:
+      sections:
+        - "handleError"
+        - "handleFailure"
+        - "recoverFromError"
+        - "cleanup"
+    transform: strip-comments
+    optional: true
+
+  # Docker recovery procedures
+  - type: code
+    path: src/services/devBot/dockerManager.ts
+    extract:
+      sections:
+        - "cleanup"
+        - "handleContainerFailure"
+        - "restart"
+    transform: strip-comments
+    optional: true
+
+  # Database recovery
+  - type: markdown
+    path: docs/DATABASE_RECOVERY.md
+    extract:
+      headings:
+        - "Backup Procedures"
+        - "Recovery Steps"
+        - "Data Integrity Checks"
+    transform: bullet-list
+    optional: true
+
+  # Health check implementation
+  - type: code
+    path: src/routes/health.ts
+    transform: strip-comments
+    optional: true
+
+  # Monitoring and alerting
+  - type: code
+    path: src/services/monitoring/monitoringService.ts
+    extract:
+      sections:
+        - "logError"
+        - "alertOnFailure"
+    transform: strip-comments
+    optional: true
+
+  # Docker configuration for debugging
+  - type: config
+    path: Dockerfile
+    transform: none
+    optional: false
+
+  - type: yaml
+    path: docker-compose.yml
+    transform: none
+    optional: true
+
+  # Environment configuration
+  - type: text
+    path: .env.example
+    transform: none
+    optional: true
+
+  # Known issues and workarounds
+  - type: markdown
+    path: docs/KNOWN_ISSUES.md
+    extract:
+      headings:
+        - "Active Issues"
+        - "Workarounds"
+    transform: bullet-list
+    optional: true
+
+outputs:
+  format: markdown
+  filename: recovery-context.md
+  includeMetadata: true
+
+ttl: 900  # 15 minutes cache (short for failure scenarios)
