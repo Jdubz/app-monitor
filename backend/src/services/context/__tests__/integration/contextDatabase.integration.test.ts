@@ -174,7 +174,7 @@ describe('Context Database Integration', () => {
     });
 
     it('should evict LRU entries when cache is full', async () => {
-      const cache = new ContextCache({ maxSize: 3, persistToDb: true });
+      const cache = new ContextCache({ maxEntries: 3, persistToDb: true });
 
       const bundles = [
         mockBundle({ id: 'bundle-1' }),

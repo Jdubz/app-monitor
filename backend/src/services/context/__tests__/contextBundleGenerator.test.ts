@@ -38,7 +38,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should initialize with custom cache', () => {
-      const cache = new ContextCache({ maxSize: 5 });
+      const cache = new ContextCache({ maxEntries: 5 });
       generator = new ContextBundleGenerator({ cache });
       expect(generator).toBeDefined();
     });
@@ -204,7 +204,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should reject absolute paths', async () => {
-      const cache = new ContextCache({ maxSize: 0, persistToDb: false });
+      const cache = new ContextCache({ maxEntries: 0, persistToDb: false });
       const mockLoader = {
         loadRecipe: vi.fn().mockResolvedValue({
           success: true,
@@ -234,7 +234,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should reject path traversal with ../', async () => {
-      const cache = new ContextCache({ maxSize: 0, persistToDb: false });
+      const cache = new ContextCache({ maxEntries: 0, persistToDb: false });
       const mockLoader = {
         loadRecipe: vi.fn().mockResolvedValue({
           success: true,
@@ -263,7 +263,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should reject path traversal with embedded ../', async () => {
-      const cache = new ContextCache({ maxSize: 0, persistToDb: false });
+      const cache = new ContextCache({ maxEntries: 0, persistToDb: false });
       const mockLoader = {
         loadRecipe: vi.fn().mockResolvedValue({
           success: true,

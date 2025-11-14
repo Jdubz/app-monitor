@@ -234,7 +234,7 @@ sources: ${JSON.stringify(sources)}
 
   describe('Boundary conditions', () => {
     it('should handle cache at max capacity', async () => {
-      const cache = new ContextCache({ maxSize: 5, persistToDb: false });
+      const cache = new ContextCache({ maxEntries: 5, persistToDb: false });
 
       const bundles = Array.from({ length: 10 }, (_, i) => mockBundle({ id: `bundle-${i}` }));
 
@@ -259,7 +259,7 @@ sources: ${JSON.stringify(sources)}
     });
 
     it('should handle zero-sized cache', async () => {
-      const cache = new ContextCache({ maxSize: 0, persistToDb: false });
+      const cache = new ContextCache({ maxEntries: 0, persistToDb: false });
 
       const bundle = mockBundle();
       const cacheKey = await cache.generateCacheKey({
@@ -404,7 +404,7 @@ sources: ${JSON.stringify(sources)}
     });
 
     it('should efficiently handle cache eviction', async () => {
-      const cache = new ContextCache({ maxSize: 10, persistToDb: false });
+      const cache = new ContextCache({ maxEntries: 10, persistToDb: false });
 
       // Add 100 bundles (should evict 90)
       for (let i = 0; i < 100; i++) {
