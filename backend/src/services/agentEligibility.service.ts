@@ -9,8 +9,10 @@
 import { logger } from '../utils/logger.js';
 import type { Task } from './taskQueue.sqlite.js';
 
+import type { AgentType } from './agentSelector.js';
+
 export interface AgentEligibilityService {
-  isEligible(task: Task, agent: 'gemini'): Promise<boolean>;
+  isEligible(task: Task, agent: AgentType): Promise<boolean>;
 }
 
 export class AgentEligibilityServiceImpl implements AgentEligibilityService {
@@ -22,9 +24,14 @@ export class AgentEligibilityServiceImpl implements AgentEligibilityService {
     });
   }
 
-  public async isEligible(task: Task, agent: 'gemini'): Promise<boolean> {
+  public async isEligible(task: Task, agent: AgentType): Promise<boolean> {
     if (agent === 'gemini') {
       return this.isGeminiEligible(task);
+    }
+    // For other agents, eligibility checks not yet implemented
+    // Default to eligible for Claude and Codex
+    if (agent === 'claude' || agent === 'codex') {
+      return true;
     }
     return false;
   }
@@ -57,7 +64,8 @@ export class AgentEligibilityServiceImpl implements AgentEligibilityService {
 
   private async isRiskScoreEligible(task: Task): Promise<boolean> {
     // TODO: Implement actual risk score calculation
-    const riskScore = (task as Task & { risk_score: number }).risk_score || 0;
+    // Use type guard to safely check for risk_score property
+    const riskScore = 'risk_score' in task && typeof (task as any).risk_score === 'number' ? (task as any).risk_score : 0;
     return riskScore <= 5;
   }
 

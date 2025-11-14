@@ -483,9 +483,10 @@ export class TaskExecutionService {
       `set -e && ` +
       `export HOME=/home/node && ` +
       `mkdir -p /workspace && cd /workspace && ` +
-      `git clone https://github.com/Jdubz/app-monitor.git . && ` +
+      `git clone ${config.devBots.repositoryUrl} . && ` +
       `git config --global user.name "Dev Bot (${agent.name})" && ` +
       `git config --global user.email "devbot+${agent.name}@app-monitor.local" && ` +
+      // Create git credentials from GITHUB_TOKEN for bot authentication (not using host credentials)
       `echo "https://devbot:\${GITHUB_TOKEN}@github.com" > /home/node/.git-credentials && ` +
       `chmod 600 /home/node/.git-credentials && ` +
       `git config --global credential.helper store && ` +
@@ -585,7 +586,7 @@ export class TaskExecutionService {
         taskDescription: task.description
       };
 
-      const selection = this.agentSelector.selectAgent(criteria);
+      const selection = await this.agentSelector.selectAgent(criteria, task);
       
       // Copilot not supported in Docker execution yet
       if (selection.agent === 'copilot') {

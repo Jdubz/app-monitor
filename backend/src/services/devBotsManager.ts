@@ -117,7 +117,7 @@ export class DevBotsManager extends EventEmitter {
     this.retryManager = dependencies.retryManager;
     this.scopeControl = dependencies.scopeControl;
     this.ephemeralWorkerService = dependencies.ephemeralWorkerService;
-    this.taskExecutionService = dependencies.taskExecutionService;
+    // taskExecutionService is initialized later with agent selector (line 242-248)
     this.prWorkflowOrchestrator = dependencies.prWorkflowOrchestrator;
     this.interactiveSessionService = dependencies.interactiveSessionService;
     this.interactiveSessionOrchestrator = dependencies.interactiveSessionOrchestrator;

@@ -10,13 +10,13 @@ describe('AgentSelector', () => {
 
   describe('selectAgent', () => {
     describe('Manual Override', () => {
-      it('should respect manual agent preference', () => {
+      it('should respect manual agent preference', async () => {
         const criteria: AgentSelectionCriteria = {
           preferredAgent: 'codex',
           taskCategory: 'implementation' // Would normally select Claude
         };
 
-        const result = selector.selectAgent(criteria);
+        const result = await selector.selectAgent(criteria);
 
         expect(result.agent).toBe('codex');
         expect(result.reasoning).toContain('Manual override');
@@ -25,14 +25,14 @@ describe('AgentSelector', () => {
     });
 
     describe('Documentation Tasks', () => {
-      it('should select Codex for documentation tasks', () => {
+      it('should select Codex for documentation tasks', async () => {
         const criteria: AgentSelectionCriteria = {
           taskCategory: 'documentation',
           filePatterns: ['md'],
           complexity: 'simple'
         };
 
-        const result = selector.selectAgent(criteria);
+        const result = await selector.selectAgent(criteria);
 
         expect(result.agent).toBe('codex');
         expect(result.reasoning).toContain('Documentation');
@@ -40,14 +40,14 @@ describe('AgentSelector', () => {
         expect(result.fallbackAgent).toBe('claude');
       });
 
-      it('should select Codex for only markdown files', () => {
+      it('should select Codex for only markdown files', async () => {
         const criteria: AgentSelectionCriteria = {
           taskCategory: 'implementation',
           filePatterns: ['md'],
           complexity: 'simple'
         };
 
-        const result = selector.selectAgent(criteria);
+        const result = await selector.selectAgent(criteria);
 
         expect(result.agent).toBe('codex');
         expect(result.reasoning).toContain('markdown');
@@ -55,38 +55,38 @@ describe('AgentSelector', () => {
     });
 
     describe('Analysis Tasks', () => {
-      it('should select Codex for analysis tasks', () => {
+      it('should select Codex for analysis tasks', async () => {
         const criteria: AgentSelectionCriteria = {
           taskCategory: 'analysis',
           complexity: 'medium'
         };
 
-        const result = selector.selectAgent(criteria);
+        const result = await selector.selectAgent(criteria);
 
         expect(result.agent).toBe('codex');
         expect(result.reasoning).toContain('analysis');
         expect(result.confidence).toBeGreaterThan(0.8);
       });
 
-      it('should select Codex for review tasks', () => {
+      it('should select Codex for review tasks', async () => {
         const criteria: AgentSelectionCriteria = {
           taskCategory: 'review',
           filePatterns: ['ts', 'js']
         };
 
-        const result = selector.selectAgent(criteria);
+        const result = await selector.selectAgent(criteria);
 
         expect(result.agent).toBe('codex');
         expect(result.reasoning).toContain('review');
       });
 
-      it('should select Codex for planning tasks', () => {
+      it('should select Codex for planning tasks', async () => {
         const criteria: AgentSelectionCriteria = {
           taskCategory: 'planning',
           complexity: 'complex'
         };
 
-        const result = selector.selectAgent(criteria);
+        const result = await selector.selectAgent(criteria);
 
         expect(result.agent).toBe('codex');
         expect(result.reasoning).toContain('planning');
@@ -94,49 +94,49 @@ describe('AgentSelector', () => {
     });
 
     describe('Implementation Tasks', () => {
-      it('should select Claude for implementation tasks', () => {
+      it('should select Claude for implementation tasks', async () => {
         const criteria: AgentSelectionCriteria = {
           taskCategory: 'implementation',
           filePatterns: ['ts', 'tsx'],
           complexity: 'medium'
         };
 
-        const result = selector.selectAgent(criteria);
+        const result = await selector.selectAgent(criteria);
 
         expect(result.agent).toBe('claude');
         expect(result.reasoning).toContain('Code files');
         expect(result.confidence).toBeGreaterThan(0.9);
       });
 
-      it('should select Claude for TypeScript files', () => {
+      it('should select Claude for TypeScript files', async () => {
         const criteria: AgentSelectionCriteria = {
           filePatterns: ['ts'],
           taskCategory: 'implementation'
         };
 
-        const result = selector.selectAgent(criteria);
+        const result = await selector.selectAgent(criteria);
 
         expect(result.agent).toBe('claude');
         expect(result.reasoning).toContain('Code files');
       });
 
-      it('should select Claude for JavaScript files', () => {
+      it('should select Claude for JavaScript files', async () => {
         const criteria: AgentSelectionCriteria = {
           filePatterns: ['js', 'jsx'],
           taskCategory: 'implementation'
         };
 
-        const result = selector.selectAgent(criteria);
+        const result = await selector.selectAgent(criteria);
 
         expect(result.agent).toBe('claude');
       });
 
-      it('should select Claude for Python files', () => {
+      it('should select Claude for Python files', async () => {
         const criteria: AgentSelectionCriteria = {
           filePatterns: ['py']
         };
 
-        const result = selector.selectAgent(criteria);
+        const result = await selector.selectAgent(criteria);
 
         expect(result.agent).toBe('claude');
         expect(result.reasoning).toContain('Code files');
@@ -144,25 +144,25 @@ describe('AgentSelector', () => {
     });
 
     describe('SQL/Database Tasks', () => {
-      it('should select Claude for SQL implementation', () => {
+      it('should select Claude for SQL implementation', async () => {
         const criteria: AgentSelectionCriteria = {
           taskCategory: 'implementation',
           filePatterns: ['sql']
         };
 
-        const result = selector.selectAgent(criteria);
+        const result = await selector.selectAgent(criteria);
 
         expect(result.agent).toBe('claude');
         expect(result.reasoning).toContain('SQL implementation');
       });
 
-      it('should select Codex for SQL analysis', () => {
+      it('should select Codex for SQL analysis', async () => {
         const criteria: AgentSelectionCriteria = {
           taskCategory: 'analysis',
           filePatterns: ['sql']
         };
 
-        const result = selector.selectAgent(criteria);
+        const result = await selector.selectAgent(criteria);
 
         expect(result.agent).toBe('codex');
         expect(result.reasoning).toContain('analysis');
@@ -170,32 +170,32 @@ describe('AgentSelector', () => {
     });
 
     describe('Task Classification Integration', () => {
-      it('should classify task from title and description', () => {
+      it('should classify task from title and description', async () => {
         const criteria: AgentSelectionCriteria = {
           taskTitle: 'Implement user authentication',
           taskDescription: 'Add JWT authentication to auth.ts and user.service.ts'
         };
 
-        const result = selector.selectAgent(criteria);
+        const result = await selector.selectAgent(criteria);
 
         expect(result.agent).toBe('claude');
         expect(result.reasoning).toContain('Code files');
       });
 
-      it('should classify documentation task from title', () => {
+      it('should classify documentation task from title', async () => {
         const criteria: AgentSelectionCriteria = {
           taskTitle: 'Update API documentation',
           taskDescription: 'Write comprehensive docs in README.md'
         };
 
-        const result = selector.selectAgent(criteria);
+        const result = await selector.selectAgent(criteria);
 
         expect(result.agent).toBe('codex');
       });
     });
 
     describe('Fallback After Failure', () => {
-      it('should try Codex after Claude fails', () => {
+      it('should try Codex after Claude fails', async () => {
         const criteria: AgentSelectionCriteria = {
           taskCategory: 'implementation',
           filePatterns: ['ts'],
@@ -204,7 +204,7 @@ describe('AgentSelector', () => {
           ]
         };
 
-        const result = selector.selectAgent(criteria);
+        const result = await selector.selectAgent(criteria);
 
         expect(result.agent).toBe('codex');
         expect(result.reasoning).toContain('Previous attempt');
@@ -212,7 +212,7 @@ describe('AgentSelector', () => {
         expect(result.confidence).toBe(0.8);
       });
 
-      it('should try Claude after Codex fails on code files', () => {
+      it('should try Claude after Codex fails on code files', async () => {
         const criteria: AgentSelectionCriteria = {
           taskCategory: 'implementation',
           filePatterns: ['ts', 'js'],
@@ -221,13 +221,13 @@ describe('AgentSelector', () => {
           ]
         };
 
-        const result = selector.selectAgent(criteria);
+        const result = await selector.selectAgent(criteria);
 
         expect(result.agent).toBe('claude');
         expect(result.reasoning).toContain('Previous attempt');
       });
 
-      it('should not change agent after success', () => {
+      it('should not change agent after success', async () => {
         const criteria: AgentSelectionCriteria = {
           taskCategory: 'implementation',
           filePatterns: ['ts'],
@@ -236,7 +236,7 @@ describe('AgentSelector', () => {
           ]
         };
 
-        const result = selector.selectAgent(criteria);
+        const result = await selector.selectAgent(criteria);
 
         // Should select based on rules, not previous attempt
         expect(result.agent).toBe('claude');
@@ -245,12 +245,12 @@ describe('AgentSelector', () => {
     });
 
     describe('Default Selection', () => {
-      it('should default to Claude for unclear tasks', () => {
+      it('should default to Claude for unclear tasks', async () => {
         const criteria: AgentSelectionCriteria = {
           // No clear indicators
         };
 
-        const result = selector.selectAgent(criteria);
+        const result = await selector.selectAgent(criteria);
 
         expect(result.agent).toBe('claude');
         expect(result.reasoning).toContain('Default selection');
@@ -260,14 +260,14 @@ describe('AgentSelector', () => {
   });
 
   describe('explainSelection', () => {
-    it('should provide detailed explanation', () => {
+    it('should provide detailed explanation', async () => {
       const criteria: AgentSelectionCriteria = {
         taskCategory: 'implementation',
         filePatterns: ['ts', 'tsx'],
         complexity: 'medium'
       };
 
-      const explanation = selector.explainSelection(criteria);
+      const explanation = await selector.explainSelection(criteria);
 
       expect(explanation).toContain('Selected: claude');
       expect(explanation).toContain('Category: implementation');
@@ -276,13 +276,13 @@ describe('AgentSelector', () => {
       expect(explanation).toContain('Confidence:');
     });
 
-    it('should explain manual override', () => {
+    it('should explain manual override', async () => {
       const criteria: AgentSelectionCriteria = {
         preferredAgent: 'codex',
         taskCategory: 'implementation'
       };
 
-      const explanation = selector.explainSelection(criteria);
+      const explanation = await selector.explainSelection(criteria);
 
       expect(explanation).toContain('Selected: codex');
       expect(explanation).toContain('Manual override');
@@ -314,7 +314,7 @@ describe('AgentSelector', () => {
 
     it('should return supported types', () => {
       const types = AgentSelector.getSupportedTypes();
-      expect(types).toEqual(['claude', 'codex', 'copilot']);
+      expect(types).toEqual(['claude', 'codex', 'copilot', 'gemini']);
     });
   });
 });

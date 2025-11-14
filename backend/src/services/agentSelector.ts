@@ -70,7 +70,7 @@ export class AgentSelector {
   /**
    * Select the best agent for a task based on intelligent criteria
    */
-  selectAgent(criteria: AgentSelectionCriteria): AgentSelection {
+  async selectAgent(criteria: AgentSelectionCriteria, task?: Task): Promise<AgentSelection> {
     // Manual override takes precedence
     if (criteria.preferredAgent) {
       return this.createSelection(
@@ -114,8 +114,8 @@ export class AgentSelector {
     const selection = this.applySelectionRules(category, filePatterns, complexity);
 
     if (selection.agent === 'claude' && this.canGeminiHandle(criteria)) {
-      // The any cast is needed because the isEligible method is not yet implemented for other agents
-      if (this.eligibilityService && this.eligibilityService.isEligible(criteria as Task, 'gemini')) {
+      // The task object is required for eligibility checks
+      if (this.eligibilityService && task && (await this.eligibilityService.isEligible(task, 'gemini'))) {
         return this.createSelection('gemini', 'Eligible implementation rerouted to Gemini', 0.82, 'claude');
       }
     }
@@ -274,21 +274,26 @@ export class AgentSelector {
   }
 
   private canGeminiHandle(criteria: AgentSelectionCriteria): boolean {
-    const { taskCategory, filePatterns } = criteria;
+    const { taskCategory, filePatterns, taskTitle, taskDescription, complexity } = criteria;
 
-    if (taskCategory === 'frontend-implementation' && filePatterns?.some(p => p.startsWith('frontend/'))) {
+    // Frontend implementation tasks
+    if (taskCategory === 'implementation' && filePatterns?.some(p => p.startsWith('frontend/') || ['tsx', 'jsx', 'vue'].includes(p))) {
       return true;
     }
 
-    if (taskCategory === 'logs/telemetry polish' && filePatterns?.some(p => p.includes('Logs') || p.includes('analysis'))) {
+    // Logs/telemetry polish tasks
+    if ((taskTitle?.toLowerCase().includes('log') || taskDescription?.toLowerCase().includes('log')) &&
+        filePatterns?.some(p => p.includes('Logs') || p.includes('analysis'))) {
       return true;
     }
 
-    if (taskCategory === 'analysis/reporting') {
+    // Analysis and reporting tasks
+    if (taskCategory === 'analysis' || taskCategory === 'review') {
       return true;
     }
 
-    if (taskCategory === 'low-risk fix') {
+    // Low-risk fixes (simple complexity implementation/documentation)
+    if ((taskCategory === 'implementation' || taskCategory === 'documentation') && complexity === 'simple') {
       return true;
     }
 
@@ -349,8 +354,8 @@ export class AgentSelector {
   /**
    * Explain why a specific agent was selected (for debugging/logging)
    */
-  explainSelection(criteria: AgentSelectionCriteria): string {
-    const selection = this.selectAgent(criteria);
+  async explainSelection(criteria: AgentSelectionCriteria): Promise<string> {
+    const selection = await this.selectAgent(criteria);
     const parts: string[] = [];
 
     parts.push(`Selected: ${selection.agent}`);
