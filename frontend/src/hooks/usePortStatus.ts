@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
-import { getPortStatuses, killPortProcess as apiKillPortProcess, PortStatuses } from '../services/api';
+import { getPortStatuses, killPortProcess as apiKillPortProcess } from '../services/api';
+import type { PortStatusMap } from '@/types/contracts';
 import { createLogger } from '@/utils/logger';
 
 interface UsePortStatusReturn {
-  portStatuses: PortStatuses;
+  portStatuses: PortStatusMap;
   loading: boolean;
   error: string | null;
   killPortProcess: (port: number) => Promise<void>;
@@ -17,7 +18,7 @@ interface UsePortStatusReturn {
 const log = createLogger('usePortStatus');
 
 export const usePortStatus = (pollInterval: number = 5000): UsePortStatusReturn => {
-  const [portStatuses, setPortStatuses] = useState<PortStatuses>({});
+  const [portStatuses, setPortStatuses] = useState<PortStatusMap>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 

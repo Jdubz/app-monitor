@@ -20,6 +20,10 @@ import type {
   DevBotsInteractiveSessionStartPayload,
   DevBotsInteractiveHeartbeatPayload,
   DevBotsInteractiveInterruptPayload,
+  PortStatusMap,
+  PortStatusesResponse,
+  PortKillResponse,
+  PortKillApiResponse,
 } from '@/types/contracts';
 import type {
   DevBotsAgentComparison,
@@ -254,7 +258,7 @@ export const getDevBotsAgentComparison = async (): Promise<DevBotsAgentCompariso
 };
 
 // Port management endpoints
-export const getPortStatuses = async (): Promise<PortStatuses> => {
+export const getPortStatuses = async (): Promise<PortStatusMap> => {
   const client = await getApiClient();
   const response = await client.get<PortStatusesResponse>('/ports/status');
   return ensureApiSuccess(response, 'fetching port statuses');
