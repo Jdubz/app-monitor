@@ -25,6 +25,7 @@ import type { DockerManager } from './dockerManager.js';
 import * as DockerConfig from './dockerConfig.js';
 import { getLogPaths } from './workTargetDocumentation.js';
 import { getGitHubPRService, type GitHubPRService } from './githubPR.service.js';
+import { ContextBundleGenerator } from './context/index.js';
 
 export interface WorkspaceContext {
   id: string;
@@ -75,17 +76,20 @@ export class EphemeralWorkerService {
   private readonly docker: Docker;
   private readonly dockerManager: DockerManager;
   private readonly githubPR: GitHubPRService;
+  private readonly contextGenerator: ContextBundleGenerator;
   private logStreams = new Map<string, fs.WriteStream>();
   private readonly devBotsLogPath: string;
 
   constructor(
     docker: Docker,
     dockerManager: DockerManager,
-    config: Partial<EphemeralWorkerServiceConfig> = {}
+    config: Partial<EphemeralWorkerServiceConfig> = {},
+    contextGenerator?: ContextBundleGenerator  // Optional for DI/testing
   ) {
     this.docker = docker;
     this.githubPR = getGitHubPRService();
     this.dockerManager = dockerManager;
+    this.contextGenerator = contextGenerator || new ContextBundleGenerator();
 
     this.config = {
       maxConcurrentWorkers: config.maxConcurrentWorkers ?? 2,
@@ -359,6 +363,92 @@ export class EphemeralWorkerService {
         }
       }
 
+      // Mount context bundle if available (migration 020 integration)
+      if (task.context_cache_key && task.files && task.files.length > 0) {
+        try {
+          // Regenerate bundle (will use cache if available)
+          const contextResult = await this.contextGenerator.generateBundle({
+            taskType: (task.type || 'implementation') as 'implementation' | 'fix' | 'review' | 'deployment' | 'pr-follow-up' | 'analysis',
+            targetFiles: task.files,
+            force: false  // Use cached bundle if available
+          });
+          
+          if (contextResult.success && contextResult.bundle?.mountPath) {
+            const contextMountPath = contextResult.bundle.mountPath;
+            
+            // Verify the mount path exists
+            if (fs.existsSync(contextMountPath)) {
+              binds.push(`${contextMountPath}:/workspace/context:ro`);
+              
+              logger.info({
+                category: 'context',
+                action: 'context_bundle_mounted',
+                message: `Mounted context bundle in container`,
+                details: {
+                  taskId: task.id,
+                  bundleId: task.context_bundle_id,
+                  cacheKey: task.context_cache_key,
+                  profiles: task.context_profiles,
+                  hostPath: contextMountPath,
+                  containerPath: '/workspace/context',
+                  mode: 'ro',
+                  cached: contextResult.cached || false
+                }
+              });
+            } else {
+              logger.warn({
+                category: 'context',
+                action: 'context_bundle_path_not_found',
+                message: `Context bundle path does not exist: ${contextMountPath}`,
+                details: {
+                  taskId: task.id,
+                  bundleId: task.context_bundle_id,
+                  note: 'Task will proceed without context'
+                }
+              });
+            }
+          } else if (!contextResult.success) {
+            logger.warn({
+              category: 'context',
+              action: 'context_bundle_retrieval_failed',
+              message: `Failed to retrieve context bundle`,
+              details: {
+                taskId: task.id,
+                cacheKey: task.context_cache_key,
+                errors: contextResult.errors,
+                note: 'Task will proceed without context'
+              }
+            });
+          }
+        } catch (error) {
+          // Context bundle mounting failure should NOT block task execution
+          logger.warn({
+            category: 'context',
+            action: 'context_mount_failed',
+            message: `Failed to mount context bundle`,
+            error,
+            details: {
+              taskId: task.id,
+              cacheKey: task.context_cache_key,
+              note: 'Task will proceed without context'
+            }
+          });
+        }
+      } else if (task.context_bundle_id) {
+        // Task has bundle ID but no cache key or no files - log for debugging
+        logger.debug({
+          category: 'context',
+          action: 'context_mount_skipped',
+          message: `Task has context_bundle_id but missing cache_key or files`,
+          details: {
+            taskId: task.id,
+            bundleId: task.context_bundle_id,
+            hasCacheKey: !!task.context_cache_key,
+            hasFiles: !!(task.files && task.files.length > 0)
+          }
+        });
+      }
+
       const envVars = [
         `AGENT_ID=${agent.id}`,
         `AGENT_NAME=${agent.name}`,
@@ -367,7 +457,12 @@ export class EphemeralWorkerService {
         `WORKSPACE_BRANCH=${baseBranch}`,
         `WORKSPACE_ID=${workspaceId}`,
         `HOME=/home/node`,  // Explicitly set HOME for gh CLI to find config
-        ...(task.is_repair_bot ? [`IS_IMPROVEMENT_TASK=true`, `PARENT_TASK_ID=${task.original_task_id}`] : [])
+        ...(task.is_repair_bot ? [`IS_IMPROVEMENT_TASK=true`, `PARENT_TASK_ID=${task.original_task_id}`] : []),
+        // Context management environment variables
+        ...(task.context_bundle_id ? [`CONTEXT_BUNDLE_ID=${task.context_bundle_id}`] : []),
+        ...(task.context_cache_key ? [`CONTEXT_CACHE_KEY=${task.context_cache_key}`] : []),
+        ...(task.context_profiles ? [`CONTEXT_PROFILES=${JSON.stringify(task.context_profiles)}`] : []),
+        ...(task.risk_level ? [`TASK_RISK_LEVEL=${task.risk_level}`] : [])
       ];
       
       // Only add GITHUB_TOKEN if it exists to avoid empty env var

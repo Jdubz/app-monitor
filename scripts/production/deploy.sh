@@ -327,10 +327,6 @@ main() {
     mv "${RELEASE_DIR}/package.json" "${RELEASE_DIR}/package.json.bak" 2>/dev/null || true
     # Install dependencies locally
     npm ci
-    # Remove devDependencies after build (frontend doesn't run on server)
-    NPM_CONFIG_WORKSPACES=false npm prune --production
-    # Restore root package.json
-    mv "${RELEASE_DIR}/package.json.bak" "${RELEASE_DIR}/package.json" 2>/dev/null || true
 
     # Load environment variables from shared config if available
     if [ -f "${SHARED_DIR}/config/.env.production" ]; then
@@ -344,6 +340,11 @@ main() {
     fi
 
     NODE_ENV=production npm run build
+
+    # Remove devDependencies after build (frontend doesn't run on server)
+    NPM_CONFIG_WORKSPACES=false npm prune --production
+    # Restore root package.json
+    mv "${RELEASE_DIR}/package.json.bak" "${RELEASE_DIR}/package.json" 2>/dev/null || true
 
     # Fix ownership of build artifacts (prevent 403 errors from nginx)
     sudo chown -R jdubz:jdubz dist/
