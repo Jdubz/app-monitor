@@ -88,9 +88,11 @@ export function getGitCredentialMounts(): string[] {
   const homeDir = os.homedir();
 
   return [
-    // Don't mount .gitconfig - git configuration is handled at runtime (see taskExecution.service.ts)
-    // Mounting host .gitconfig as read-only causes "Resource busy" errors
-    // Don't mount user's .git-credentials - bots create their own from GITHUB_TOKEN (see taskExecution.service.ts)
+    // Don't mount .gitconfig - git configuration is handled at runtime in taskExecution.service.ts
+    // and ephemeralWorker.service.ts to avoid "Resource busy" errors with read-only mounts
+    // Don't mount user's .git-credentials - all containers now use credentials from GITHUB_TOKEN/GH_TOKEN
+    // environment variables. This removal is intentional and applies to all code paths,
+    // including those previously handled in taskExecution.service.ts and ephemeralWorker.service.ts.
     '-v', `${homeDir}/.config/gh:/home/node/.config/gh:rw`  // rw for gh CLI state updates
   ];
 }

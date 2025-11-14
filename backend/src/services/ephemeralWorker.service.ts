@@ -829,22 +829,45 @@ export class EphemeralWorkerService {
     const escapedPrompt = (task.prompt || task.description || task.title)
       .replace(/'/g, "'\\''");  // Escape single quotes for shell
 
-    const agentCommand = agent.id.startsWith('gemini')
-      ? `gemini --print --dangerously-skip-permissions --output-format json --workingDirectory /workspace '${escapedPrompt}' 2>&1 | tee -a ` + logFile
-      : `claude --print --dangerously-skip-permissions --output-format json --workingDirectory /workspace '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
+    let agentCommand: string;
+    if (agent.id.startsWith('gemini')) {
+      agentCommand = `gemini --print --dangerously-skip-permissions --output-format json --workingDirectory /workspace '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
+    } else if (agent.id.startsWith('codex')) {
+      agentCommand = `codex --print --dangerously-skip-permissions --output-format json --workingDirectory /workspace '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
+    } else {
+      agentCommand = `claude --print --dangerously-skip-permissions --output-format json --workingDirectory /workspace '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
+    }
 
     // Create a wrapper command that logs to the worker-specific file
-    // Following imagineer's pattern: copy credentials then run Claude
+    // Following imagineer's pattern: copy credentials then run agent CLI
+    // Set up credentials based on agent type
+    let credentialSetup: string[];
+    if (agent.id.startsWith('gemini')) {
+      credentialSetup = [
+        'cp /tmp/host-creds.json /home/worker/.gemini/.credentials.json',
+        'echo "Gemini credentials: $(test -f ~/.gemini/.credentials.json && echo found || echo missing)" >> ' + logFile
+      ];
+    } else if (agent.id.startsWith('codex')) {
+      credentialSetup = [
+        'cp /tmp/host-creds.json /home/worker/.codex/.credentials.json',
+        'echo "Codex credentials: $(test -f ~/.codex/.credentials.json && echo found || echo missing)" >> ' + logFile
+      ];
+    } else {
+      credentialSetup = [
+        'cp /tmp/host-creds.json /home/worker/.claude/.credentials.json',
+        'echo "Claude credentials: $(test -f ~/.claude/.credentials.json && echo found || echo missing)" >> ' + logFile
+      ];
+    }
+
     const wrapperCommand = [
       'echo "=== Worker Task Execution Started ===" >> ' + logFile,
       'echo "Timestamp: $(date)" >> ' + logFile,
       'echo "Worker: ' + agent.name + '" >> ' + logFile,
       'echo "Task: ' + task.title + '" >> ' + logFile,
       'echo "=====================================" >> ' + logFile,
-      // Copy credentials from temp mount to .claude directory (imagineer pattern)
-      'cp /tmp/host-creds.json /home/worker/.claude/.credentials.json',
-      'echo "Claude credentials: $(test -f ~/.claude/.credentials.json && echo found || echo missing)" >> ' + logFile,
-      // Run Claude with JSON output (imagineer pattern)
+      // Copy credentials from temp mount to appropriate agent directory
+      ...credentialSetup,
+      // Run agent CLI with JSON output (imagineer pattern)
       agentCommand,
       'AGENT_EXIT=$?',
       'echo "=== Worker Task Execution Completed ===" >> ' + logFile,

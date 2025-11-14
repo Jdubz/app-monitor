@@ -1,0 +1,112 @@
+# PR Workflow Context Recipe
+# Provides context for pull request reviews and follow-up tasks
+
+profile: pr-workflow
+version: 1.0.0
+description: Context bundle for PR reviews, follow-ups, and code quality checks
+
+taskTypes:
+  - review
+  - pr-follow-up
+
+required: true
+
+sizeLimit:
+  maxBytes: 40000
+  maxInlineBytes: 8000
+
+constraints:
+  - "Do not approve PRs without proper test coverage"
+  - "Ensure all CI checks pass before merging"
+  - "Follow the code review checklist"
+  - "Do not merge breaking changes to main without team discussion"
+  - "Always leave constructive feedback on code reviews"
+
+investigationSteps:
+  - "Review the PR description and linked issues"
+  - "Check test coverage for changed files"
+  - "Verify CI/CD pipeline status"
+  - "Review coding standards compliance"
+  - "Check for security vulnerabilities in dependencies"
+  - "Verify documentation updates for API changes"
+
+sources:
+  # Code review guidelines
+  - type: markdown
+    path: docs/CODE_REVIEW_GUIDELINES.md
+    extract:
+      headings:
+        - "Review Checklist"
+        - "Code Quality Standards"
+        - "Security Considerations"
+    transform: bullet-list
+    optional: true
+
+  # Coding standards
+  - type: markdown
+    path: docs/CODING_STANDARDS.md
+    extract:
+      headings:
+        - "TypeScript Standards"
+        - "Testing Requirements"
+        - "Documentation"
+    transform: bullet-list
+    optional: true
+
+  # Contributing guide
+  - type: markdown
+    path: CONTRIBUTING.md
+    extract:
+      headings:
+        - "Pull Request Process"
+        - "Code Style"
+        - "Testing"
+    transform: bullet-list
+    optional: true
+
+  # ESLint configuration
+  - type: json
+    path: .eslintrc.json
+    transform: none
+    optional: true
+
+  # Prettier configuration
+  - type: json
+    path: .prettierrc
+    transform: none
+    optional: true
+
+  # TypeScript configuration
+  - type: json
+    path: tsconfig.json
+    extract:
+      jsonPath: $.compilerOptions
+    transform: none
+    optional: false
+
+  # Test configuration
+  - type: config
+    path: vitest.config.ts
+    transform: strip-comments
+    optional: true
+
+  # CI workflow
+  - type: yaml
+    path: .github/workflows/ci.yml
+    transform: none
+    optional: true
+
+  # Package dependencies
+  - type: json
+    path: package.json
+    extract:
+      jsonPath: $.scripts
+    transform: none
+    optional: false
+
+outputs:
+  format: markdown
+  filename: pr-context.md
+  includeMetadata: true
+
+ttl: 7200  # 2 hours cache

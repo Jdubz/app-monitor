@@ -32,6 +32,8 @@ export const config = {
   devBots: {
     // Maximum concurrent dev-bot workers (implementation chains)
     maxWorkers: parseInt(process.env.MAX_DEV_BOTS || '3', 10),
+    // Repository URL for task execution
+    repositoryUrl: process.env.REPOSITORY_URL || 'https://github.com/Jdubz/app-monitor.git',
   },
 
   // Automatic Failure Recovery - ALWAYS ENABLED IN PRODUCTION

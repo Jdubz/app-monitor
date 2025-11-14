@@ -29,11 +29,10 @@ export interface DockerImageInfo {
 
 export class DockerManager {
   private docker: Docker;
-  private static readonly CLAUDE_WORKER_IMAGE = 'dev-bot:latest';
-  private static readonly GEMINI_WORKER_IMAGE = 'dev-bot:latest';
+  // All agents (Claude, Codex, Gemini) use the same unified dev-bot image
+  private static readonly DEV_BOT_IMAGE = 'dev-bot:latest';
   private static readonly REQUIRED_IMAGES = [
-    DockerManager.CLAUDE_WORKER_IMAGE,
-    DockerManager.GEMINI_WORKER_IMAGE,
+    DockerManager.DEV_BOT_IMAGE,
   ];
 
   constructor(socketPath: string = '/var/run/docker.sock') {
@@ -311,17 +310,18 @@ export class DockerManager {
   }
 
   /**
-   * Get the Dev-Bot image name
+   * Get the Dev-Bot image name (used by all agents)
    */
   static getDevBotImage(): string {
-    return DockerManager.CLAUDE_WORKER_IMAGE;
+    return DockerManager.DEV_BOT_IMAGE;
   }
 
   /**
    * Get the Gemini Dev-Bot image name
+   * @deprecated Use getDevBotImage() instead. All agents use the same unified image.
    */
   static getGeminiDevBotImage(): string {
-    return DockerManager.GEMINI_WORKER_IMAGE;
+    return DockerManager.DEV_BOT_IMAGE;
   }
 
   /**

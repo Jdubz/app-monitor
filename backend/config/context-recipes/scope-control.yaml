@@ -1,0 +1,117 @@
+# Scope Control Context Recipe
+# Defines boundaries and constraints for dev-bot operations
+
+profile: scope-control
+version: 1.0.0
+description: Context bundle defining what dev-bots should and should not modify
+
+taskTypes:
+  - implementation
+  - fix
+  - review
+
+required: true
+
+sizeLimit:
+  maxBytes: 30000
+  maxInlineBytes: 6000
+
+constraints:
+  - "Never modify files outside the specified task scope"
+  - "Do not alter database schema without explicit migration files"
+  - "Never modify security-critical configuration without approval"
+  - "Do not change API contracts without versioning"
+  - "Never commit directly to main branch"
+  - "Do not modify CI/CD workflows without review"
+  - "Never bypass tests or linting checks"
+
+investigationSteps:
+  - "Identify files directly related to the task"
+  - "Check for dependencies on changed code"
+  - "Review architectural boundaries"
+  - "Verify changes don't affect public APIs"
+  - "Check if database migrations are needed"
+
+sources:
+  # Architecture documentation
+  - type: markdown
+    path: docs/ARCHITECTURE.md
+    extract:
+      headings:
+        - "System Boundaries"
+        - "Module Dependencies"
+        - "API Design"
+    transform: bullet-list
+    optional: true
+
+  # Project structure
+  - type: markdown
+    path: docs/PROJECT_STRUCTURE.md
+    extract:
+      headings:
+        - "Directory Organization"
+        - "Module Responsibilities"
+    transform: bullet-list
+    optional: true
+
+  # Development guidelines
+  - type: markdown
+    path: docs/DEVELOPMENT.md
+    extract:
+      headings:
+        - "Development Workflow"
+        - "Best Practices"
+        - "What Not to Do"
+    transform: bullet-list
+    optional: true
+
+  # Technical design docs
+  - type: markdown
+    path: docs/technicalDesigns/dev-bot-context-management.md
+    extract:
+      headings:
+        - "Boundaries"
+        - "Constraints"
+        - "Scope"
+    transform: bullet-list
+    optional: true
+
+  # API documentation
+  - type: markdown
+    path: docs/API.md
+    extract:
+      headings:
+        - "Public API"
+        - "Internal API"
+        - "Breaking Changes"
+    transform: bullet-list
+    optional: true
+
+  # Database schema
+  - type: text
+    path: migrations/
+    transform: summarize
+    optional: true
+
+  # Package boundaries
+  - type: json
+    path: package.json
+    extract:
+      jsonPath: $.exports
+    transform: none
+    optional: true
+
+  # TypeScript path mappings
+  - type: json
+    path: tsconfig.json
+    extract:
+      jsonPath: $.compilerOptions.paths
+    transform: none
+    optional: true
+
+outputs:
+  format: markdown
+  filename: scope-context.md
+  includeMetadata: true
+
+ttl: 86400  # 24 hours cache

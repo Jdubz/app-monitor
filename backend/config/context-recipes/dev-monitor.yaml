@@ -1,0 +1,118 @@
+# Dev Monitor Context Recipe
+# Provides context for monitoring dev-bot operations and health
+
+profile: dev-monitor
+version: 1.0.0
+description: Context bundle for monitoring dev-bot system health, logs, and operational metrics
+
+taskTypes:
+  - analysis
+  - fix
+
+required: false
+
+sizeLimit:
+  maxBytes: 35000
+  maxInlineBytes: 5000
+
+constraints:
+  - "Do not modify monitoring configuration without testing"
+  - "Never disable error logging or critical alerts"
+  - "Do not expose sensitive information in logs"
+  - "Always preserve historical monitoring data"
+  - "Follow privacy guidelines for log retention"
+
+investigationSteps:
+  - "Check recent error logs for patterns"
+  - "Review dev-bot health metrics"
+  - "Analyze container resource usage"
+  - "Check for failed or timeout tasks"
+  - "Review database query performance"
+  - "Identify any resource leaks or bottlenecks"
+
+sources:
+  # Dev-bot monitoring documentation
+  - type: markdown
+    path: docs/DEV_BOT_MONITORING.md
+    extract:
+      headings:
+        - "Health Checks"
+        - "Metrics"
+        - "Logging"
+        - "Alerts"
+    transform: bullet-list
+    optional: true
+
+  # Docker monitoring
+  - type: markdown
+    path: docs/DOCKER_MONITORING.md
+    extract:
+      headings:
+        - "Container Health"
+        - "Resource Limits"
+        - "Performance"
+    transform: bullet-list
+    optional: true
+
+  # Dev-bot service code
+  - type: code
+    path: src/services/devBot/devBotService.ts
+    extract:
+      sections:
+        - "monitorHealth"
+        - "getMetrics"
+        - "checkContainerStatus"
+    transform: strip-comments
+    optional: true
+
+  # Monitoring service
+  - type: code
+    path: src/services/monitoring/monitoringService.ts
+    extract:
+      sections:
+        - "collectMetrics"
+        - "logEvent"
+    transform: strip-comments
+    optional: true
+
+  # Docker configuration
+  - type: config
+    path: Dockerfile
+    transform: none
+    optional: false
+
+  - type: yaml
+    path: docker-compose.yml
+    transform: none
+    optional: true
+
+  # Database schema for logs/metrics
+  - type: text
+    path: migrations/
+    transform: summarize
+    optional: true
+
+  # Health check endpoints
+  - type: code
+    path: src/routes/health.ts
+    transform: strip-comments
+    optional: true
+
+  # Error handling
+  - type: code
+    path: src/utils/errorHandler.ts
+    transform: strip-comments
+    optional: true
+
+  # Logging configuration
+  - type: code
+    path: src/utils/logger.ts
+    transform: strip-comments
+    optional: true
+
+outputs:
+  format: markdown
+  filename: monitor-context.md
+  includeMetadata: true
+
+ttl: 1800  # 30 minutes cache (short for monitoring)

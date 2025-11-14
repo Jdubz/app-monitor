@@ -154,6 +154,171 @@ Use this document as the standing reference when judging whether new work aligns
 
 ---
 
+## Production Deployment Architecture
+
+### Overview
+The app-monitor system runs on a local production server and is accessible via **https://app-monitor.joshwentworth.com**, exposed through a Cloudflare Tunnel.
+
+**⚠️ CRITICAL: Development Servers Are Disabled**
+
+- **All testing must use production**: https://app-monitor.joshwentworth.com
+- **Development servers are non-functional**: Docker is deactivated in dev environments
+- **No local dev testing**: The system requires Docker orchestration which only runs in production
+- **Development workflow**: Make changes → deploy to production → test at production URL
+- **Reason**: Dev-bots execution requires Docker container isolation, unavailable in dev mode
+
+### Blue-Green Deployment Strategy
+
+**Deployment Directory Structure:**
+```
+/opt/app-monitor/
+├── current -> /opt/app-monitor/releases/YYYYMMDD_HHMMSS  # Symlink to active release
+├── releases/
+│   ├── 20251113_180038/  # Timestamped release directories
+│   ├── 20251113_171717/
+│   └── ...
+├── shared/
+│   ├── data/
+│   │   └── dev-bots.db  # ⚠️ SINGLE AUTHORITATIVE DATABASE
+│   ├── .env             # Production secrets (API keys, tokens)
+│   └── logs/
+└── scripts/             # Deployment scripts (deploy.sh, rollback.sh, etc.)
+```
+
+**Deployment Flow (`scripts/deploy.sh`):**
+1. **Pre-deployment checks** - Acquire deployment lock, determine active/target ports
+2. **Update scripts** - Copy latest deployment scripts from source
+3. **Database backup** - Automatic backup before deployment
+4. **Create release** - rsync source to timestamped release directory, symlink shared data
+5. **Build** - Backend (TypeScript → dist/), Frontend (Vite production build)
+6. **Deploy to target port** - Start backend on inactive port (5001 or 5002)
+7. **Health checks** - Verify service responds correctly
+8. **Traffic switch** - Update nginx upstream, 30s connection drain
+9. **Cleanup** - Stop old service, verify deployment
+
+**Zero-Downtime Mechanism:**
+- Two systemd services: `app-monitor-backend@5001.service` and `app-monitor-backend@5002.service`
+- nginx proxies API requests to active backend port (configured in `/etc/nginx/sites-available/app-monitor`)
+- During deployment: new version starts on inactive port → health checked → nginx switched → old version drained → old version stopped
+- Frontend served as static files from `/opt/app-monitor/current/frontend/dist`
+
+### Systemd Services
+
+**Backend Services (Parameterized):**
+- Template: `/etc/systemd/system/app-monitor-backend@.service`
+- Active instance: `app-monitor-backend@5001.service` (or 5002)
+- Environment:
+  - `DATABASE_PATH=/opt/app-monitor/shared/data/dev-bots.db`
+  - `NODE_ENV=production`
+  - `PORT=%i` (port from service instance name)
+  - Loads secrets from `/opt/app-monitor/shared/.env`
+- Working directory: `/opt/app-monitor/current/backend`
+- Restart policy: `on-failure` with 10s delay
+
+**Cloudflare Tunnel:**
+- Service: `cloudflared-app-monitor.service`
+- Exposes `http://localhost:80` as `app-monitor.joshwentworth.com`
+- Config: `/home/jdubz/.cloudflared/app-monitor-config.yml`
+- Tunnel ID: `f522d5d2-4766-4b01-b35a-5f624d443d2c`
+
+**Frontend (Development/Preview):**
+- Service: `app-monitor-frontend-prod.service` (optional preview server)
+- Production serves static files via nginx, not a Node process
+
+### Database Architecture
+
+**⚠️ CRITICAL: Single Database Mandate**
+
+The system uses **ONE database file only:**
+- **Path:** `/opt/app-monitor/shared/data/dev-bots.db`
+- **Purpose:** All tasks, workers, executions, PR tracking, quality metrics
+- **Configured via:** `DATABASE_PATH` environment variable
+- **Shared across:** `TaskQueueService`, `DevBotsDatabase`, all services
+
+**Migration Status:**
+- All 17 migrations applied (002-017, plus 001 and 003)
+- Schema includes: tasks (58 columns), workers, executions, PR tracking, quality observations, interactive sessions, chain tracking, etc.
+- Migrations managed via: `backend/src/scripts/migrate.js` with `DB_PATH` env var
+
+**Historical Note:**
+- Old databases previously existed in `/opt/app-monitor/shared/backend/data/` (now archived/deleted)
+- Config default points to `backend/data/app-monitor.db` but production overrides via `DATABASE_PATH`
+- **Never create multiple databases** - ensures single source of truth
+
+### Nginx Configuration
+
+**File:** `/etc/nginx/sites-available/app-monitor`
+
+**Upstream:** Dynamic backend port (updated by deploy.sh)
+```nginx
+upstream app_monitor_backend {
+    server 127.0.0.1:5001;  # or 5002
+}
+```
+
+**Routes:**
+- `/` - Frontend static files from `/opt/app-monitor/current/frontend/dist`
+- `/api/*` - Proxied to active backend with WebSocket support
+- `/nginx-health` - Health check bypass
+
+**WebSocket Support:**
+- `proxy_set_header Upgrade $http_upgrade`
+- `proxy_set_header Connection "upgrade"`
+- Required for Socket.IO real-time updates
+
+### Security & Secrets
+
+**Environment File:** `/opt/app-monitor/shared/.env`
+- `API_KEY` - Backend authentication
+- `GITHUB_TOKEN` - GitHub API access
+- `REQUIRE_AUTH=true` - Force API authentication in production
+
+**File Permissions:**
+- Database: `640` (rw-r-----)
+- Shared directory: `750` (rwxr-x---)
+- Owner: `jdubz:jdubz`
+
+### Monitoring & Health
+
+**Health Endpoints:**
+- Frontend: `http://localhost:80/nginx-health` (nginx status)
+- Backend: `http://localhost:5001/api/health` (API health, includes DB check)
+
+**Logs:**
+- Backend: `journalctl -u app-monitor-backend@5001.service -f`
+- Cloudflare: `journalctl -u cloudflared-app-monitor.service -f`
+- Application: `/opt/app-monitor/shared/logs/`
+
+**Deployment Lock:**
+- Lock file: `/opt/app-monitor/shared/deploy.lock`
+- Prevents concurrent deployments
+- Contains PID and timestamp
+- Auto-released on script exit
+
+### Rollback Procedure
+
+**Automated Rollback (on health check failure):**
+```bash
+/opt/app-monitor/scripts/rollback.sh 5001
+```
+
+**Manual Rollback:**
+1. Determine previous release: `ls -lt /opt/app-monitor/releases/`
+2. Update symlink: `ln -sfn /opt/app-monitor/releases/TIMESTAMP /opt/app-monitor/current`
+3. Restart service: `sudo systemctl restart app-monitor-backend@5001.service`
+4. Update nginx if needed: `sudo sed -i 's/server 127.0.0.1:[0-9]\+;/server 127.0.0.1:5001;/' /etc/nginx/sites-available/app-monitor && sudo systemctl reload nginx`
+
+### Deployment Best Practices
+
+1. **Always use deploy.sh** - Never manually restart services or update current symlink
+2. **Verify DATABASE_PATH** - Ensure `/opt/app-monitor/shared/.env` sets correct path
+3. **Check disk space** - Releases accumulate, clean up old releases periodically
+4. **Monitor health checks** - Failed health checks trigger automatic rollback
+5. **Connection drain** - 30s drain period allows WebSocket connections to migrate gracefully
+6. **Database backups** - Automatic before each deployment, manual: `scripts/backup-db.sh`
+
+---
+
 ## Using This Document
 - Every change proposal or PR must cite the relevant sections here and explain how it preserves or intentionally alters the design intent.
 - Only human-directed efforts may change this master document. Automated agents must align their behavior with it.
