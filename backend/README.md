@@ -697,11 +697,8 @@ export function getMyService(): MyService {
 
 ## Related Documentation
 
-- [IMPLEMENTATION_STATUS.md](../docs/IMPLEMENTATION_STATUS.md) - Overall project status
-- [OUTSTANDING_CLEANUP_IMPROVEMENTS.md](../docs/analysis/OUTSTANDING_CLEANUP_IMPROVEMENTS.md) - Feature roadmap
-- [CODE_HYGIENE_AND_MAINTAINABILITY_ANALYSIS.md](../docs/analysis/CODE_HYGIENE_AND_MAINTAINABILITY_ANALYSIS.md) - Code quality review
-- [DATABASE_MIGRATION_SAFETY.md](../docs/DATABASE_MIGRATION_SAFETY.md) - Migration guide
-- [DEV_BOTS_ARCHITECTURE_ANALYSIS.md](../docs/analysis/DEV_BOTS_ARCHITECTURE_ANALYSIS.md) - Architecture details
+- [Architecture Overview](../docs/architecture/README.md) - System design and components
+- [Setup Guides](../docs/setup/README.md) - Installation and configuration
 
 ---
 

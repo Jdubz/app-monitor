@@ -4,7 +4,7 @@ This directory contains SQL migration files for the dev-monitor SQLite database.
 
 ## ✨ New Automated Migration System
 
-We now have an elegant migration management system! See [Database Migrations Guide](../../docs/database-migrations.md) for full documentation.
+We now have an elegant migration management system!
 
 ### Quick Start
 
@@ -154,7 +154,7 @@ Implements chain-aware task scheduling that separates implementation tasks (new 
 
 Follows design principle: "Any information available from GitHub should NOT be stored in our DB"
 
-> This avoids data staleness, reduces unnecessary storage, and ensures GitHub remains the source of truth. See [Database Migrations Guide](../../docs/database-migrations.md) for more details.
+> This avoids data staleness, reduces unnecessary storage, and ensures GitHub remains the source of truth.
 
 **Columns Removed**:
 - `pr_url` - Redundant (can construct from pr_number)

@@ -451,4 +451,4 @@ The system maintains 100% test coverage for context components and introduces ze
 ## Related Documentation
 
 - [Phase 2 Code Review and Security Fixes](./PHASE2_CODE_REVIEW_FIXES.md)
-- [Dev Bot Context Management System](./technicalDesigns/dev-bot-context-management.md)
+- [Architecture Overview](../../docs/architecture/README.md)
