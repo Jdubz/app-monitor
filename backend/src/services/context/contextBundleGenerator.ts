@@ -34,7 +34,7 @@ export class ContextBundleGenerator {
   private repoRoot: string;
 
   constructor(options: GeneratorOptions = {}) {
-    this.cache = options.cache ?? new ContextCache();
+    this.cache = options.cache ?? new ContextCache({ persistToDb: false });
     this.loader = options.loader ?? new ContextRecipeLoader();
     this.transforms = new ContextTransforms();
 
