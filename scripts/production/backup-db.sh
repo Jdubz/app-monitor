@@ -9,7 +9,7 @@ set -euo pipefail
 # Configuration
 DEPLOY_DIR="/opt/app-monitor"
 SHARED_DIR="${DEPLOY_DIR}/shared"
-DB_PATH="${SHARED_DIR}/backend/data/dev-bots.db"
+DB_PATH="${SHARED_DIR}/data/dev-bots.db"
 BACKUP_DIR="${SHARED_DIR}/backups/database"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 BACKUP_FILE="${BACKUP_DIR}/dev-bots_${TIMESTAMP}.db"
