@@ -24,11 +24,11 @@ The app-monitor system implements a sophisticated multi-stage workflow for auton
 - ✅ Automatic orphaned PR adoption and system self-healing
 
 **Critical Findings:**
-- ⚠️ Plan status updates are asynchronous without guaranteed ordering
+- ⚠️ Plan status updates are asynchronous without retry on failure (can drift)
 - ⚠️ Context bundle generation failures are silently ignored (by design, but risks incomplete context)
-- ⚠️ Chain blocking can cascade without automatic recovery triggers
-- ⚠️ No automatic detection of stale plans (planning status with no tasks)
-- ⚠️ PR merge cleanup relies on webhook delivery (no fallback polling)
+- ⚠️ Chain blocking can cascade without automatic unblocking on resolution
+- ⚠️ Stale chains (>24h no activity) not detected until manual intervention
+- ⚠️ PR merge cleanup relies entirely on webhook delivery (no verification on task completion)
 
 ---
 
@@ -1043,25 +1043,43 @@ await taskQueue.completeTask(task3); // → onTaskStatusChange(task3.id)
 **GitHub Webhook Reliability**:
 - GitHub guarantees "at least once" delivery
 - Retry with exponential backoff (up to 3 attempts)
-- **No fallback polling in current implementation**
+- **No verification on task lifecycle events in current implementation**
 
-**Recommendation**: Implement periodic PR status polling as fallback:
+**Event-Driven Solution**: Verify PR status on task completion (no polling):
 ```typescript
-async pollPRStatus(): Promise<void> {
-  const openTasks = await taskQueue.getTasksWithOpenPRs();
+// Trigger on task completion (event-driven)
+async handleCompletion(task: Task): Promise<void> {
+  // ... existing completion logic
 
-  for (const task of openTasks) {
+  // If task has PR, verify PR status (detect missed webhook)
+  if (task.pr_number) {
     const prStatus = await githubPR.getPRStatus(task.pr_number);
 
     if (prStatus.merged && task.status !== 'completed') {
-      logger.warn(`Missed PR merge webhook for #${task.pr_number}`);
+      logger.warn(`Missed PR merge webhook for #${task.pr_number}, triggering cleanup`);
       await pullRequestHandler.handlePRMerged(task.pr_number);
     }
   }
 }
 
-// Run every 5 minutes
-setInterval(pollPRStatus, 5 * 60 * 1000);
+// One-time reconciliation on system startup
+async initializeAsync(): Promise<void> {
+  const tasksWithPRs = await taskQueue.getTasksWithOpenPRs();
+
+  for (const task of tasksWithPRs) {
+    const prStatus = await githubPR.getPRStatus(task.pr_number);
+    if (prStatus.merged) {
+      logger.warn(`Startup recovery: PR #${task.pr_number} merged but task not cleaned up`);
+      await pullRequestHandler.handlePRMerged(task.pr_number);
+    }
+  }
+}
+
+// Manual trigger via API (user intervention)
+router.post('/api/dev-bots/pr/reconcile', async (req, res) => {
+  const reconciledPRs = await prMonitor.reconcileAllOpenPRs();
+  res.json({ reconciledPRs });
+});
 ```
 
 ---
@@ -1088,30 +1106,57 @@ planStatusUpdater.onTaskStatusChange(taskId).catch(error => {
 **Mitigation**:
 - ✅ **Current**: Errors logged with details
 - ⚠️ **Missing**: No retry mechanism for failed updates
-- ⚠️ **Missing**: No periodic reconciliation job
+- ⚠️ **Missing**: No lazy reconciliation on plan retrieval
 
-**Recommendation**:
+**Event-Driven Solution**:
 ```typescript
-// Add periodic reconciliation
-async reconcilePlanStatuses(): Promise<void> {
-  const plans = plansService.listPlans({ status: ['in_progress', 'blocked'] });
+// Add retry logic to event handlers
+async onTaskStatusChange(taskId: string): Promise<void> {
+  const task = this.getTask(taskId);
+  if (!task?.plan_id) return;
 
-  for (const plan of plans) {
-    const computedStatus = calculator.computeStatus(plan.id);
-
-    if (plan.status !== computedStatus) {
-      logger.warn(`Plan ${plan.id} status drift detected`, {
-        stored: plan.status,
-        computed: computedStatus
-      });
-
-      plansService.updatePlanStatus(plan.id, computedStatus);
+  let retries = 3;
+  while (retries > 0) {
+    try {
+      await this.updatePlanStatus(task.plan_id);
+      return; // Success
+    } catch (error) {
+      retries--;
+      if (retries === 0) {
+        logger.error({ message: 'Plan status update failed after retries', error });
+        throw error;
+      }
+      await sleep(1000 * (4 - retries)); // Exponential backoff
     }
   }
 }
 
-// Run hourly
-setInterval(reconcilePlanStatuses, 60 * 60 * 1000);
+// Add lazy reconciliation on plan retrieval
+getPlan(planId: string): Plan | null {
+  const plan = this.getPlanFromDB(planId);
+  if (!plan) return null;
+
+  // Lazy reconciliation: verify status is correct
+  const computedStatus = calculator.computeStatus(planId);
+  if (plan.status !== computedStatus) {
+    logger.warn(`Plan ${planId} status drift detected on retrieval`, {
+      stored: plan.status,
+      computed: computedStatus
+    });
+    this.updatePlanStatus(planId, computedStatus);
+    plan.status = computedStatus;
+  }
+
+  return plan;
+}
+
+// One-time reconciliation on system startup
+async initializeAsync(): Promise<void> {
+  const plans = plansService.listPlans({ status: ['in_progress', 'blocked'] });
+  for (const plan of plans) {
+    await planStatusUpdater.updatePlanStatus(plan.id);
+  }
+}
 ```
 
 #### Scenario 2: Missed PR Merge Webhook
@@ -1129,7 +1174,11 @@ setInterval(reconcilePlanStatuses, 60 * 60 * 1000);
 
 **Mitigation**:
 - ⚠️ **Current**: None (relies entirely on webhooks)
-- **Recommendation**: Implement fallback polling (see Section 4.3)
+- **Event-Driven Solution**:
+  - On task completion with pr_number: query GitHub API to verify PR status
+  - If merged: trigger cleanup flow (same as webhook handler)
+  - On system startup: one-time reconciliation of tasks with open PRs
+  - Manual trigger via API endpoint for user intervention
 
 #### Scenario 3: Context Bundle Generation Failure
 
@@ -1192,9 +1241,39 @@ chainTracker.blockChain(chainId, 'Task X requires manual fix', 'system');
 **Mitigation**:
 - ⚠️ **Current**: Manual intervention required (unblockChain API call)
 - ⚠️ **Missing**: No automatic detection of resolved blocks
-- ⚠️ **Missing**: No chain timeout/staleness alerts
+- ⚠️ **Missing**: No stale chain detection
 
-**Recommendation**: Implement chain health monitoring (see Section 3.4)
+**Event-Driven Solution**:
+```typescript
+// On task completion: check if this resolved a blocking condition
+async handleCompletion(task: Task): Promise<void> {
+  // ... existing completion logic
+
+  // Check if any chains were blocked waiting for this task
+  const blockedChains = chainTracker.getBlockedChains();
+  for (const chain of blockedChains) {
+    if (await isBlockingTaskResolved(chain.chain_id, task)) {
+      logger.info(`Auto-unblocking chain ${chain.chain_id} after task ${task.id} completion`);
+      chainTracker.unblockChain(chain.chain_id, 'system');
+    }
+  }
+}
+
+// On assignNextTask: detect and block stale chains
+async assignNextTask(): Promise<void> {
+  // Detect stale chains before checking concurrency
+  const staleChains = await chainTracker.detectStaleChains(24 * 60 * 60 * 1000); // 24h
+  for (const chain of staleChains) {
+    logger.warn(`Blocking stale chain ${chain.chain_id}`);
+    chainTracker.blockChain(chain.chain_id, 'Stale chain (no activity for 24h)', 'system');
+  }
+
+  // Continue with normal assignment logic
+  const activeChains = chainTracker.countActiveChains();
+  if (activeChains >= maxConcurrentChains) return;
+  // ...
+}
+```
 
 #### Scenario 5: Worker Heartbeat Timeout False Positive
 
@@ -1269,75 +1348,168 @@ COMMIT;
 
 ## 6. Recommendations
 
+**IMPORTANT**: All recommendations follow the master design intent - **event-driven architecture only**. No polling, no cron jobs, no timers.
+
 ### 6.1 High Priority (P0) - System Stability
 
-1. **Implement PR Merge Fallback Polling**
-   - **Risk**: Missed webhooks leave tasks/containers running indefinitely
-   - **Solution**: Poll GitHub API every 5 minutes for PRs with open tasks
-   - **Effort**: 2 hours
-   - **File**: `backend/src/services/prMonitor.service.ts`
-
-2. **Add Plan Status Reconciliation Job**
+1. **Add Plan Status Reconciliation Retry Logic**
    - **Risk**: Plan status drifts from reality due to failed event handlers
-   - **Solution**: Hourly cron job to recompute all active plan statuses
-   - **Effort**: 1 hour
-   - **File**: New `backend/src/services/planReconciliation.service.ts`
+   - **Event-Driven Solution**:
+     - Add retry logic within PlanStatusUpdater event handlers (3 retries with exponential backoff)
+     - On plan retrieval (lazy reconciliation): check if recomputation needed
+     - On system startup: one-time reconciliation of active plans
+   - **Trigger Points**:
+     - `onTaskStatusChange()`, `onPRMerged()`, `onChainBlocked()` (add retries)
+     - `PlansService.getPlan()` (lazy check)
+     - `SystemInitializationService.initializeAsync()` (startup recovery)
+   - **Effort**: 2 hours
+   - **File**: `backend/src/services/planStatusUpdater.service.ts`, `plans.service.ts`
 
-3. **Implement Chain Timeout Detection**
+2. **Implement Chain Staleness Detection on Task Assignment**
    - **Risk**: Chains stay "active" indefinitely, blocking concurrency slots
-   - **Solution**: Auto-block chains with no activity for 24 hours
+   - **Event-Driven Solution**:
+     - Check for stale chains (>24h no activity) in `DevBotsManager.assignNextTask()`
+     - Auto-block stale chains before checking concurrency limits
+     - Triggers on every task completion → next assignment attempt
+   - **Trigger Points**:
+     - `DevBotsManager.assignNextTask()` (before concurrency check)
+     - `ChainTrackerService.countActiveChains()` (filter out stale)
    - **Effort**: 3 hours
-   - **File**: `backend/src/services/chainTracker.service.ts`
+   - **File**: `backend/src/services/chainTracker.service.ts`, `devBotsManager.ts`
 
-4. **Add Context Generation Retry Logic**
+3. **Add Context Generation Retry Logic**
    - **Risk**: Transient failures cause tasks to run without context
-   - **Solution**: Retry 3x with exponential backoff, inject warning if failed
+   - **Event-Driven Solution**:
+     - Already event-driven (during task creation)
+     - Add retry 3x with exponential backoff in `TaskCreationService.createTask()`
+     - Inject warning into task notes if all retries fail
+   - **Trigger Points**:
+     - `TaskCreationService.createTask()` (already event-driven)
    - **Effort**: 2 hours
    - **File**: `backend/src/services/taskCreation.service.ts`
 
+4. **Add PR Merge Detection on Task Completion**
+   - **Risk**: Missed webhooks leave tasks/containers running indefinitely
+   - **Event-Driven Solution**:
+     - On task completion with pr_number: query GitHub API to check if PR merged
+     - If merged but task not marked complete: trigger cleanup flow
+     - On system startup: one-time reconciliation of tasks with open PRs
+     - Manual trigger via API endpoint for user intervention
+   - **Trigger Points**:
+     - `TaskCompletionService.handleCompletion()` (check PR status)
+     - `SystemInitializationService.initializeAsync()` (startup recovery)
+     - New API endpoint: `POST /api/dev-bots/pr/reconcile` (manual trigger)
+   - **Effort**: 3 hours
+   - **File**: `backend/src/services/taskCompletion.service.ts`, `systemInitialization.service.ts`
+
+5. **Add Automatic Chain Unblocking on Blocker Resolution**
+   - **Risk**: Blocked chains require manual intervention even when blocker resolves
+   - **Event-Driven Solution**:
+     - On task completion: check if any chains were blocked by this task
+     - On assignNextTask(): reevaluate blocked chains before assignment
+     - Auto-unblock if blocking condition no longer exists
+   - **Trigger Points**:
+     - `TaskCompletionService.handleCompletion()` (check dependent chains)
+     - `DevBotsManager.assignNextTask()` (reevaluate before assignment)
+   - **Effort**: 4 hours
+   - **File**: `backend/src/services/chainTracker.service.ts`, `taskCompletion.service.ts`
+
 ### 6.2 Medium Priority (P1) - Operational Excellence
 
-1. **Automatic Chain Unblocking**
-   - **Benefit**: Reduce manual intervention for resolved blocks
-   - **Solution**: Periodic reevaluation of blocked chains
-   - **Effort**: 4 hours
-
-2. **Stale Plan Detection**
-   - **Benefit**: Surface plans in "planning" with no tasks
-   - **Solution**: Weekly report of plans with no activity
+1. **Stale Plan Detection on Plan Query**
+   - **Benefit**: Surface plans in "planning" with no tasks for extended periods
+   - **Event-Driven Solution**:
+     - On plan retrieval: check if plan in "planning" status for >7 days with 0 tasks
+     - Return warning flag in API response for UI alert
+     - On plan list query: filter and flag stale plans
+   - **Trigger Points**:
+     - `PlansService.getPlan()` (lazy detection)
+     - `PlansService.listPlans()` (bulk detection)
    - **Effort**: 2 hours
+   - **File**: `backend/src/services/plans.service.ts`
 
-3. **Worker Health Grace Period**
+2. **Worker Health Grace Period**
    - **Benefit**: Reduce false positive timeout kills
-   - **Solution**: 30s grace period before worker termination
+   - **Event-Driven Solution**:
+     - Already event-driven (heartbeat monitoring)
+     - Add 30s grace period: warn on first timeout, confirm on second check
+     - Prevents network latency false positives
+   - **Trigger Points**:
+     - `WorkerHealthMonitor.monitorWorkerHealth()` (heartbeat check)
    - **Effort**: 1 hour
+   - **File**: `backend/src/services/workerHealthMonitor.service.ts`
 
-4. **Plan Metrics Aggregation**
+3. **Plan Metrics Lazy Computation**
    - **Benefit**: Visibility into plan progress (actual vs estimated effort)
-   - **Solution**: Computed fields in PlanProgressCalculator
+   - **Event-Driven Solution**:
+     - Compute metrics on demand when plan retrieved
+     - Cache in plan object, invalidate on task state changes
+     - No background computation needed
+   - **Trigger Points**:
+     - `PlansService.getPlan()` (compute on demand)
+     - `PlanProgressCalculator.computeProgress()` (already event-driven)
    - **Effort**: 3 hours
+   - **File**: `backend/src/services/planProgressCalculator.service.ts`
+
+4. **Enhanced Context Failure Visibility**
+   - **Benefit**: Alert agents when context bundle generation fails
+   - **Event-Driven Solution**:
+     - Already event-driven (during task creation)
+     - Inject warning banner into agent prompt if context missing
+     - Log detailed error for debugging
+   - **Trigger Points**:
+     - `TaskCreationService.createTask()` (already event-driven)
+   - **Effort**: 1 hour
+   - **File**: `backend/src/services/taskCreation.service.ts`
 
 ### 6.3 Low Priority (P2) - Enhancements
 
 1. **Circuit Breaker for Failing Agents**
    - **Benefit**: Prevent repeated assignment to broken agent
-   - **Solution**: Track agent failure rate, temporary disable if > 80%
+   - **Event-Driven Solution**:
+     - Track agent failure rate on each task failure
+     - On agent selection: check failure rate, skip if > 80% in last hour
+     - Auto-recover circuit after success or timeout
+   - **Trigger Points**:
+     - `TaskExecutionService.executeTask()` (track failures)
+     - `AgentSelector.selectAgent()` (check circuit state)
    - **Effort**: 6 hours
+   - **File**: `backend/src/services/agentSelector.ts`
 
 2. **Dynamic Worker Scaling**
    - **Benefit**: Auto-adjust maxWorkers based on load
-   - **Solution**: Scale workers based on queue depth
+   - **Event-Driven Solution**:
+     - On task queued: check queue depth vs capacity
+     - Dynamically adjust maxConcurrentChains if queue backlog > threshold
+     - Scale down when queue drains (lazy adjustment)
+   - **Trigger Points**:
+     - `TaskQueueService.createTask()` (check queue depth)
+     - `DevBotsManager.assignNextTask()` (adjust limits)
    - **Effort**: 8 hours
+   - **File**: `backend/src/services/devBotsManager.ts`
 
-3. **Context Staleness Detection**
+3. **Context Staleness Detection on Bundle Retrieval**
    - **Benefit**: Invalidate outdated cached context bundles
-   - **Solution**: TTL on cache entries (e.g., 7 days)
+   - **Event-Driven Solution**:
+     - On context bundle retrieval: check age, warn if > 7 days old
+     - On git hash change: automatic invalidation (already happens)
+     - Lazy cleanup: purge stale entries when cache accessed
+   - **Trigger Points**:
+     - `ContextBundleGenerator.generateBundle()` (check cache age)
+     - `ContextCache.get()` (lazy cleanup)
    - **Effort**: 2 hours
+   - **File**: `backend/src/services/context/contextCache.ts`
 
-4. **Orphaned PR Notifications**
+4. **Orphaned PR Adoption Notifications**
    - **Benefit**: Alert users when system PRs are auto-adopted
-   - **Solution**: Emit event + send notification
+   - **Event-Driven Solution**:
+     - Already event-driven (PR webhook handler)
+     - Emit event on orphaned PR detection, emit to frontend via WebSocket
+     - UI shows banner notification (minimalist alert)
+   - **Trigger Points**:
+     - `PullRequestHandler.adoptOrphanedSystemPR()` (already event-driven)
    - **Effort**: 3 hours
+   - **File**: `backend/src/services/webhookHandlers/pullRequestHandler.ts`
 
 ---
 
@@ -1413,28 +1585,37 @@ The app-monitor ecosystem demonstrates **strong architectural foundations**:
 
 ### 8.2 Critical Gaps
 
-**Three critical gaps** require immediate attention:
+**Five critical gaps** require immediate attention (all solvable with event-driven triggers):
 
-1. **Webhook Reliability**: No fallback for missed PR merge events (P0)
-2. **Plan Status Reconciliation**: Event handler failures cause drift (P0)
-3. **Chain Timeout**: Active chains can block slots indefinitely (P0)
+1. **Plan Status Drift**: Event handler failures cause drift without retry (P0)
+2. **Chain Staleness**: Active chains can block slots indefinitely without detection (P0)
+3. **Context Failure Visibility**: Silent failures leave agents without context (P0)
+4. **Missed Webhook Recovery**: No verification of PR status on task completion (P0)
+5. **Chain Auto-Unblocking**: Resolved blockers don't trigger automatic unblock (P0)
 
 ### 8.3 Overall Assessment
 
 **Maturity Level**: Production-ready with operational oversight
 
-The system is **highly sophisticated** and demonstrates deep understanding of distributed system challenges. However, it relies heavily on **event delivery guarantees** that may not hold in production.
+The system is **highly sophisticated** and demonstrates deep understanding of distributed system challenges. The architecture is **already event-driven** - all recommended improvements build on existing event hooks.
 
 **Recommended Next Steps**:
-1. Implement P0 recommendations (fallback polling, reconciliation, chain timeout)
-2. Deploy to staging with monitoring enabled
-3. Collect 30 days of metrics to tune thresholds
-4. Enable P1 enhancements based on observed failure patterns
+1. Implement P0 event-driven improvements (retry logic, lazy checks, lifecycle triggers)
+2. Add verification points to existing lifecycle events (task completion, chain closure)
+3. Enhance system startup to perform one-time reconciliation (adheres to event-driven philosophy)
+4. Add manual trigger API endpoints for user intervention (on-demand events)
+
+**Alignment with Master Design Intent**:
+- ✅ All recommendations use event-driven triggers (task lifecycle, system startup, user actions)
+- ✅ No polling, no cron jobs, no long-lived timers
+- ✅ Lazy evaluation on data retrieval (plan status on getPlan)
+- ✅ Manual triggers via API for user intervention
 
 **Risk Assessment**:
 - **Low Risk**: Task execution, context bundling, error recovery
-- **Medium Risk**: Chain management, worker health monitoring
-- **High Risk**: PR webhook reliability, plan status synchronization
+- **Medium Risk**: Chain management (improved with P0 staleness detection)
+- **Low Risk**: PR webhook reliability (improved with lifecycle verification)
+- **Low Risk**: Plan status synchronization (improved with retry + lazy checks)
 
 ---
 

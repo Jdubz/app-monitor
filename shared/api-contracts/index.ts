@@ -98,6 +98,68 @@ export interface TokenCanUsePayload {
   remainingTokens: number;
 }
 
+// ============================================================================
+// Context-Aware Task Submission (Minimal API)
+// ============================================================================
+
+export interface MinimalTaskPayload {
+  // Required fields (3 only)
+  title: string;
+  taskType: 'implementation' | 'review' | 'fix' | 'pr-follow-up' | 'analysis';
+  intent: string;  // Replaces 'description' and 'documentation'
+  
+  // Optional overrides (auto-detected if omitted)
+  targetFiles?: string[];
+  riskLevel?: 'minimal' | 'low' | 'medium' | 'high';
+  contextProfiles?: string[];
+  desiredOutputs?: string[];
+  
+  // Chain tracking (system-managed)
+  followUpOf?: string;
+  chainId?: string;
+  
+  // Advanced (rarely used)
+  assignedAgent?: string;
+  priority?: number;
+}
+
+export interface TaskAutoDetectionResult {
+  detectedFiles: string[];
+  inferredRiskLevel: 'minimal' | 'low' | 'medium' | 'high';
+  selectedProfiles: string[];
+  recommendedOutputs: string[];
+  confidence: {
+    files: number;       // 0-1
+    riskLevel: number;   // 0-1
+    profiles: number;    // 0-1
+  };
+  warnings: string[];
+}
+
+export interface ContextBundleVersion {
+  bundleId: string;
+  cacheKey: string;
+  version: string;        // semantic version (e.g., "1.2.0")
+  gitCommitHash: string;
+  profiles: string[];
+  totalBytes: number;
+  generatedAt: string;
+  expiresAt?: string;
+}
+
+export interface ContextEffectivenessMetrics {
+  bundleId: string;
+  taskId: string;
+  profilesProvided: string[];
+  filesAccessed: string[];       // Bot reports which files it read
+  filesAccessedCount: number;
+  effectivenessScore: number;    // 1-5 (bot self-report)
+  helpfulFiles: string[];        // Files bot found most useful
+  missingContext: string[];      // Info bot needed but didn't have
+  taskOutcome: 'success' | 'failure' | 'partial';
+  feedbackNotes?: string;
+}
+
 export interface TokenRemainingPayload {
   provider: string;
   remaining: number;

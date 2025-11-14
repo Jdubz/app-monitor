@@ -123,11 +123,13 @@ describe('EphemeralWorkerService - Context Copying', () => {
       const result = await service.testContextCopying(task as Task);
 
       expect(result.copied).toBe(true);
-      expect(mockContextGenerator.generateBundle).toHaveBeenCalledWith({
-        taskType: 'implementation',
-        targetFiles: ['backend/src/services/test.ts'],
-        force: false
-      });
+      expect(mockContextGenerator.generateBundle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskType: 'implementation',
+          targetFiles: ['backend/src/services/test.ts'],
+          force: false
+        })
+      );
     });
 
     it.skip('should add context environment variables', async () => {
