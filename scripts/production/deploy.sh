@@ -179,8 +179,12 @@ main() {
 
     # Backend build
     cd "${RELEASE_DIR}/backend"
-    # Install dependencies locally (ignore workspace config from root)
-    npm ci --install-strategy=shallow --no-workspaces
+    # Temporarily remove root package.json to prevent workspace resolution
+    mv "${RELEASE_DIR}/package.json" "${RELEASE_DIR}/package.json.bak" 2>/dev/null || true
+    # Install dependencies locally
+    npm ci
+    # Restore root package.json
+    mv "${RELEASE_DIR}/package.json.bak" "${RELEASE_DIR}/package.json" 2>/dev/null || true
     # Clean stale build cache to prevent missing file issues
     rm -f tsconfig.build.tsbuildinfo
     npm run build
@@ -189,8 +193,12 @@ main() {
 
     # Frontend build
     cd "${RELEASE_DIR}/frontend"
-    # Install dependencies locally (ignore workspace config from root)
-    npm ci --install-strategy=shallow --no-workspaces
+    # Temporarily remove root package.json to prevent workspace resolution
+    mv "${RELEASE_DIR}/package.json" "${RELEASE_DIR}/package.json.bak" 2>/dev/null || true
+    # Install dependencies locally
+    npm ci
+    # Restore root package.json
+    mv "${RELEASE_DIR}/package.json.bak" "${RELEASE_DIR}/package.json" 2>/dev/null || true
     # Remove devDependencies after build (frontend doesn't run on server)
     npm prune --production
 
