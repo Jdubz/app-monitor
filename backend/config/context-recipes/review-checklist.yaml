@@ -1,0 +1,83 @@
+# Review Checklist Context Recipe
+# Provides review criteria and quality gates for review tasks
+
+profile: review-checklist
+version: 1.0.0
+description: Code review guidelines, quality checks, and acceptance criteria
+
+taskTypes:
+  - review
+
+required: true  # Always include for review tasks
+
+sizeLimit:
+  maxBytes: 25000
+  maxInlineBytes: 5000
+
+constraints:
+  - "Verify all acceptance criteria are met"
+  - "Check for proper error handling"
+  - "Ensure tests cover new code paths"
+  - "Verify no hardcoded secrets or credentials"
+  - "Check for console.log or debugging statements"
+  - "Ensure proper TypeScript typing (no any)"
+  - "Verify linting passes"
+
+investigationSteps:
+  - "Run linter and type checker"
+  - "Check test coverage of changed files"
+  - "Verify acceptance criteria from original task"
+  - "Check for security issues (secrets, SQL injection, etc.)"
+  - "Review error handling and edge cases"
+  - "Verify backwards compatibility"
+  - "Check for performance implications"
+
+sources:
+  # Review guidelines
+  - type: markdown
+    path: docs/guides/CODE_REVIEW.md
+    extract:
+      headings:
+        - "Review Checklist"
+        - "Common Issues"
+        - "Quality Gates"
+    transform: bullet-list
+    optional: true
+
+  # Security guidelines
+  - type: markdown
+    path: docs/guides/SECURITY.md
+    extract:
+      headings:
+        - "Security Checklist"
+        - "Common Vulnerabilities"
+        - "Secrets Management"
+    transform: bullet-list
+    optional: true
+
+  # Testing requirements
+  - type: markdown
+    path: docs/guides/TESTING.md
+    extract:
+      headings:
+        - "Test Coverage Requirements"
+        - "Required Test Types"
+    transform: bullet-list
+    optional: true
+
+  # Breaking changes guide
+  - type: markdown
+    path: docs/guides/API_VERSIONING.md
+    extract:
+      headings:
+        - "Breaking Changes"
+        - "Compatibility"
+    transform: bullet-list
+    optional: true
+
+outputs:
+  format: markdown
+  filename: review-checklist.md
+  includeMetadata: true
+
+ttl: 86400  # 24 hours cache
