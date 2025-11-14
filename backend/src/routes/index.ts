@@ -55,16 +55,6 @@ export function createApiRouter(deps: {
 
   // Health check - no auth required
   router.get('/health', (_req, res) => {
-    logger.debug({
-      category: 'api',
-      action: 'health_check',
-      message: 'Health endpoint called',
-      details: {
-        uptime: process.uptime(),
-        timestamp: new Date().toISOString()
-      }
-    });
-
     // Check if server is shutting down
     // Note: This will be false in test environment where index module isn't loaded
     let shuttingDown = false;
