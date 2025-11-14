@@ -226,9 +226,12 @@ export class ContextTransforms {
     for (const line of lines) {
       if (line.trim().startsWith('```')) {
         if (inCodeBlock) {
-          // End of code block - add closing marker and save block
-          currentBlock.push('```');
-          blocks.push(currentBlock.join('\n'));
+          // End of code block
+          // Only add block if it has content (not just the opening marker)
+          if (currentBlock.length > 1) {
+            currentBlock.push('```');
+            blocks.push(currentBlock.join('\n'));
+          }
           currentBlock = [];
           inCodeBlock = false;
           openingMarker = '';
