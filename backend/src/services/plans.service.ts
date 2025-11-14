@@ -42,6 +42,7 @@ import type {
   UpdatePlanInput,
   PlanQueryFilters,
   PlanStatus,
+  PlanScopeBoundaries,
 } from '../types/plan.js';
 
 export class PlansService {
@@ -139,123 +140,135 @@ export class PlansService {
    * Update a plan (metadata only - status is computed)
    */
   updatePlan(planId: string, input: UpdatePlanInput): Plan | null {
-    const existing = this.getPlan(planId);
-    if (!existing) {
-      return null;
-    }
+    const updateTransaction = this.db.transaction(() => {
+      const existing = this.getPlan(planId);
+      if (!existing) {
+        return null;
+      }
 
-    const updates: string[] = [];
-    const params: Record<string, unknown> = { id: planId };
+      const updates: string[] = [];
+      const params: Record<string, unknown> = { id: planId };
 
-    if (input.title !== undefined) {
-      updates.push('title = @title');
-      params.title = input.title;
-    }
-    if (input.description !== undefined) {
-      updates.push('description = @description');
-      params.description = input.description;
-    }
-    if (input.markdown_ref !== undefined) {
-      updates.push('markdown_ref = @markdown_ref');
-      params.markdown_ref = input.markdown_ref;
-    }
-    if (input.plan_type !== undefined) {
-      updates.push('plan_type = @plan_type');
-      params.plan_type = input.plan_type;
-    }
-    if (input.priority !== undefined) {
-      updates.push('priority = @priority');
-      params.priority = input.priority;
-    }
-    if (input.assigned_to !== undefined) {
-      updates.push('assigned_to = @assigned_to');
-      params.assigned_to = input.assigned_to;
-    }
-    if (input.success_criteria !== undefined) {
-      updates.push('success_criteria = @success_criteria');
-      params.success_criteria = JSON.stringify(input.success_criteria);
-    }
-    if (input.scope_boundaries !== undefined) {
-      updates.push('scope_boundaries = @scope_boundaries');
-      params.scope_boundaries = JSON.stringify(input.scope_boundaries);
-    }
-    if (input.estimated_effort_hours !== undefined) {
-      updates.push('estimated_effort_hours = @estimated_effort_hours');
-      params.estimated_effort_hours = input.estimated_effort_hours;
-    }
-    if (input.metadata !== undefined) {
-      updates.push('metadata = @metadata');
-      params.metadata = JSON.stringify(input.metadata);
-    }
+      if (input.title !== undefined) {
+        updates.push('title = @title');
+        params.title = input.title;
+      }
+      if (input.description !== undefined) {
+        updates.push('description = @description');
+        params.description = input.description;
+      }
+      if (input.markdown_ref !== undefined) {
+        updates.push('markdown_ref = @markdown_ref');
+        params.markdown_ref = input.markdown_ref;
+      }
+      if (input.plan_type !== undefined) {
+        updates.push('plan_type = @plan_type');
+        params.plan_type = input.plan_type;
+      }
+      if (input.priority !== undefined) {
+        updates.push('priority = @priority');
+        params.priority = input.priority;
+      }
+      if (input.assigned_to !== undefined) {
+        updates.push('assigned_to = @assigned_to');
+        params.assigned_to = input.assigned_to;
+      }
+      if (input.success_criteria !== undefined) {
+        updates.push('success_criteria = @success_criteria');
+        params.success_criteria = JSON.stringify(input.success_criteria);
+      }
+      if (input.scope_boundaries !== undefined) {
+        updates.push('scope_boundaries = @scope_boundaries');
+        params.scope_boundaries = JSON.stringify(input.scope_boundaries);
+      }
+      if (input.estimated_effort_hours !== undefined) {
+        updates.push('estimated_effort_hours = @estimated_effort_hours');
+        params.estimated_effort_hours = input.estimated_effort_hours;
+      }
+      if (input.metadata !== undefined) {
+        updates.push('metadata = @metadata');
+        params.metadata = JSON.stringify(input.metadata);
+      }
 
-    if (updates.length === 0) {
-      return existing; // No changes
-    }
+      if (updates.length === 0) {
+        return existing; // No changes
+      }
 
-    const stmt = this.db.prepare(`
-      UPDATE plans SET ${updates.join(', ')} WHERE id = @id
-    `);
+      const stmt = this.db.prepare(`
+        UPDATE plans SET ${updates.join(', ')} WHERE id = @id
+      `);
 
-    stmt.run(params);
+      stmt.run(params);
 
-    logger.info({
-      category: 'plan',
-      action: 'plan_updated',
-      message: `Plan updated: ${existing.title}`,
-      details: { planId, updates: Object.keys(params).filter(k => k !== 'id') },
+      logger.info({
+        category: 'plan',
+        action: 'plan_updated',
+        message: `Plan updated: ${existing.title}`,
+        details: { planId, updates: Object.keys(params).filter(k => k !== 'id') },
+      });
+
+      return this.getPlan(planId);
     });
 
-    return this.getPlan(planId);
+    return updateTransaction();
   }
 
   /**
    * Delete a plan (soft delete - tasks remain valid)
    */
   deletePlan(planId: string): boolean {
-    const stmt = this.db.prepare(`
-      DELETE FROM plans WHERE id = ?
-    `);
+    const deleteTransaction = this.db.transaction(() => {
+      const stmt = this.db.prepare(`
+        DELETE FROM plans WHERE id = ?
+      `);
 
-    const result = stmt.run(planId);
+      const result = stmt.run(planId);
 
-    if (result.changes > 0) {
-      logger.info({
-        category: 'plan',
-        action: 'plan_deleted',
-        message: `Plan deleted: ${planId}`,
-        details: { planId },
-      });
-      return true;
-    }
+      if (result.changes > 0) {
+        logger.info({
+          category: 'plan',
+          action: 'plan_deleted',
+          message: `Plan deleted: ${planId}`,
+          details: { planId },
+        });
+        return true;
+      }
 
-    return false;
+      return false;
+    });
+
+    return deleteTransaction();
   }
 
   /**
    * Cancel a plan
    */
   cancelPlan(planId: string): Plan | null {
-    const existing = this.getPlan(planId);
-    if (!existing) {
-      return null;
-    }
+    const cancelTransaction = this.db.transaction(() => {
+      const existing = this.getPlan(planId);
+      if (!existing) {
+        return null;
+      }
 
-    const stmt = this.db.prepare(`
-      UPDATE plans
-      SET status = 'cancelled', cancelled_at = ?
-      WHERE id = ?
-    `);
+      const stmt = this.db.prepare(`
+        UPDATE plans
+        SET status = 'cancelled', cancelled_at = ?
+        WHERE id = ?
+      `);
 
-    stmt.run(Date.now(), planId);
+      stmt.run(Date.now(), planId);
 
-    logger.info({
-      category: 'plan',
-      action: 'plan_cancelled',
-      message: `Plan cancelled: ${existing.title}`,
-      details: { planId },
+      logger.info({
+        category: 'plan',
+        action: 'plan_cancelled',
+        message: `Plan cancelled: ${existing.title}`,
+        details: { planId },
+      });
+
+      return this.getPlan(planId);
     });
 
-    return this.getPlan(planId);
+    return cancelTransaction();
   }
 
   /**
@@ -357,41 +370,89 @@ export class PlansService {
    * This is called by PlanStatusUpdater when tasks change
    */
   updatePlanStatus(planId: string, newStatus: PlanStatus): void {
-    const now = Date.now();
-    const updates: string[] = ['status = @status'];
-    const params: Record<string, unknown> = { id: planId, status: newStatus };
+    const statusUpdateTransaction = this.db.transaction(() => {
+      const now = Date.now();
+      const updates: string[] = ['status = @status'];
+      const params: Record<string, unknown> = { id: planId, status: newStatus };
 
-    // Update lifecycle timestamps
-    if (newStatus === 'in_progress') {
-      // Only set started_at if not already set
-      const plan = this.getPlan(planId);
-      if (plan && !plan.started_at) {
-        updates.push('started_at = @started_at');
-        params.started_at = now;
+      // Update lifecycle timestamps
+      if (newStatus === 'in_progress') {
+        // Only set started_at if not already set
+        const plan = this.getPlan(planId);
+        if (plan && !plan.started_at) {
+          updates.push('started_at = @started_at');
+          params.started_at = now;
+        }
+      } else if (newStatus === 'completed') {
+        updates.push('completed_at = @completed_at');
+        params.completed_at = now;
       }
-    } else if (newStatus === 'completed') {
-      updates.push('completed_at = @completed_at');
-      params.completed_at = now;
-    }
 
-    const stmt = this.db.prepare(`
-      UPDATE plans SET ${updates.join(', ')} WHERE id = @id
-    `);
+      const stmt = this.db.prepare(`
+        UPDATE plans SET ${updates.join(', ')} WHERE id = @id
+      `);
 
-    stmt.run(params);
+      stmt.run(params);
 
-    logger.info({
-      category: 'plan',
-      action: 'plan_status_updated',
-      message: `Plan status updated to ${newStatus}`,
-      details: { planId, newStatus },
+      logger.info({
+        category: 'plan',
+        action: 'plan_status_updated',
+        message: `Plan status updated to ${newStatus}`,
+        details: { planId, newStatus },
+      });
     });
+
+    statusUpdateTransaction();
   }
 
   /**
    * Convert database row to Plan object
    */
   private rowToPlan(row: Record<string, unknown>): Plan {
+    // Parse JSON fields with error handling
+    let successCriteria: string[] | undefined;
+    let scopeBoundaries: PlanScopeBoundaries | undefined;
+    let metadata: Record<string, unknown> | undefined;
+
+    try {
+      successCriteria = row.success_criteria
+        ? JSON.parse(row.success_criteria as string)
+        : undefined;
+    } catch (error) {
+      logger.warn({
+        category: 'plan',
+        action: 'invalid_success_criteria_json',
+        message: `Invalid JSON in success_criteria for plan ${row.id}`,
+        error: error instanceof Error ? error : undefined
+      });
+    }
+
+    try {
+      scopeBoundaries = row.scope_boundaries
+        ? JSON.parse(row.scope_boundaries as string)
+        : undefined;
+    } catch (error) {
+      logger.warn({
+        category: 'plan',
+        action: 'invalid_scope_boundaries_json',
+        message: `Invalid JSON in scope_boundaries for plan ${row.id}`,
+        error: error instanceof Error ? error : undefined
+      });
+    }
+
+    try {
+      metadata = row.metadata
+        ? JSON.parse(row.metadata as string)
+        : undefined;
+    } catch (error) {
+      logger.warn({
+        category: 'plan',
+        action: 'invalid_metadata_json',
+        message: `Invalid JSON in metadata for plan ${row.id}`,
+        error: error instanceof Error ? error : undefined
+      });
+    }
+
     return {
       id: row.id as string,
       title: row.title as string,
@@ -406,14 +467,10 @@ export class PlansService {
       cancelled_at: row.cancelled_at as number | undefined,
       created_by: row.created_by as string | undefined,
       assigned_to: row.assigned_to as string | undefined,
-      success_criteria: row.success_criteria
-        ? JSON.parse(row.success_criteria as string)
-        : undefined,
-      scope_boundaries: row.scope_boundaries
-        ? JSON.parse(row.scope_boundaries as string)
-        : undefined,
+      success_criteria: successCriteria,
+      scope_boundaries: scopeBoundaries,
       estimated_effort_hours: row.estimated_effort_hours as number | undefined,
-      metadata: row.metadata ? JSON.parse(row.metadata as string) : undefined,
+      metadata,
     };
   }
 }

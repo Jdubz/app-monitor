@@ -229,7 +229,9 @@ export class MockProcessManager extends EventEmitter {
 
   // Minimal API required by routes
   getTaskQueue() {
-    return {};
+    return {
+      getDatabase: () => ({} as never),
+    };
   }
 }
 
@@ -399,6 +401,10 @@ class MockTaskQueue {
       return [baseTask];
     }
     return [];
+  }
+
+  getDatabase() {
+    return {} as never;
   }
 }
 

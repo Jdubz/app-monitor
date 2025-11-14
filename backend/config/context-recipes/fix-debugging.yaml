@@ -1,0 +1,83 @@
+# Fix Debugging Context Recipe
+# Provides debugging strategies and fix patterns for fix/bug tasks
+
+profile: fix-debugging
+version: 1.0.0
+description: Debugging strategies, fix patterns, and regression prevention
+
+taskTypes:
+  - fix
+
+required: true  # Always include for fix tasks
+
+sizeLimit:
+  maxBytes: 35000
+  maxInlineBytes: 7000
+
+constraints:
+  - "Identify root cause before implementing fix"
+  - "Add regression test to prevent recurrence"
+  - "Document the issue and fix in commit message"
+  - "Verify fix doesn't break other functionality"
+  - "Check for similar issues in other files"
+  - "Consider if this reveals a larger architectural issue"
+
+investigationSteps:
+  - "Reproduce the issue consistently"
+  - "Check logs and error messages"
+  - "Review recent changes to related code"
+  - "Check if issue exists in other similar components"
+  - "Trace execution flow to find root cause"
+  - "Review test coverage of affected code"
+  - "Check issue tracker for similar reports"
+
+sources:
+  # Common issues and solutions
+  - type: markdown
+    path: docs/guides/TROUBLESHOOTING.md
+    extract:
+      headings:
+        - "Common Issues"
+        - "Debug Strategies"
+        - "Known Bugs"
+    transform: bullet-list
+    optional: true
+
+  # Error patterns
+  - type: markdown
+    path: docs/analysis/ERROR_PATTERNS.md
+    extract:
+      headings:
+        - "Frequent Errors"
+        - "Root Causes"
+        - "Solutions"
+    transform: bullet-list
+    optional: true
+
+  # Testing strategies
+  - type: markdown
+    path: docs/guides/TESTING.md
+    extract:
+      headings:
+        - "Regression Tests"
+        - "Edge Case Testing"
+    transform: bullet-list
+    optional: true
+
+  # Debugging tools
+  - type: markdown
+    path: docs/guides/DEBUGGING.md
+    extract:
+      headings:
+        - "Debug Tools"
+        - "Log Analysis"
+        - "Stack Trace Interpretation"
+    transform: bullet-list
+    optional: true
+
+outputs:
+  format: markdown
+  filename: fix-debugging.md
+  includeMetadata: true
+
+ttl: 86400  # 24 hours cache

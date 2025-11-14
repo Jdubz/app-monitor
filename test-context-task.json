@@ -1,0 +1,14 @@
+{
+  "title": "Add validation helper to shared utilities",
+  "description": "Create a simple validation helper function in shared/utils with unit tests",
+  "taskType": "implementation",
+  "targetFiles": [
+    "shared/utils/validation.ts"
+  ],
+  "acceptanceCriteria": [
+    "validation.ts exports isValidEmail function",
+    "Unit tests cover happy path and error cases",
+    "Function follows existing code patterns"
+  ],
+  "priority": "low"
+}

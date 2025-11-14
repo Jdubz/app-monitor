@@ -9,6 +9,7 @@ export { ContextCache } from './contextCache.js';
 export { ContextRecipeLoader } from './contextRecipeLoader.js';
 export { ContextRecipeValidator } from './contextRecipeValidator.js';
 export { ContextBundleGenerator } from './contextBundleGenerator.js';
+export { ContextRecipeSelector } from './contextRecipeSelector.js';
 
 // Transforms and utilities
 export { ContextTransforms } from './contextTransforms.js';

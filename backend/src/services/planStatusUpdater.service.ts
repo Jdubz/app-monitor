@@ -66,7 +66,7 @@ export class PlanStatusUpdater {
     }
 
     // If this is the first task for the plan, transition from 'planning' to 'in_progress'
-    const planTasks = this.calculator['getPlanTasks'](task.plan_id);
+    const planTasks = this.calculator.getPlanTasks(task.plan_id);
     if (planTasks.length === 1 && task.status === 'pending') {
       await this.updatePlanStatus(task.plan_id);
     }

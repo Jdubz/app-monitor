@@ -13,6 +13,7 @@
 
 import type Database from 'better-sqlite3';
 import { logger } from '../utils/logger.js';
+import { getPlanStatusUpdater } from './planStatusUpdater.singleton.js';
 
 export interface ChainStats {
   activeChains: number;
@@ -159,6 +160,19 @@ export class ChainTrackerService {
       message: `Chain ${chainId} blocked: ${reason}`,
       details: { chainId, reason, blockedBy, blockedAt: now }
     });
+
+    // Trigger plan status update for all tasks in this chain
+    const planStatusUpdater = getPlanStatusUpdater();
+    if (planStatusUpdater) {
+      planStatusUpdater.onChainBlocked(chainId).catch((error: unknown) => {
+        logger.error({
+          category: 'plan',
+          action: 'plan_status_update_failed',
+          message: `Failed to update plan status after chain blocked: ${chainId}`,
+          error: error instanceof Error ? error : new Error(String(error)),
+        });
+      });
+    }
   }
 
   /**
@@ -182,6 +196,19 @@ export class ChainTrackerService {
       message: `Chain ${chainId} unblocked by ${unblockedBy}`,
       details: { chainId, unblockedBy }
     });
+
+    // Trigger plan status update for all tasks in this chain
+    const planStatusUpdater = getPlanStatusUpdater();
+    if (planStatusUpdater) {
+      planStatusUpdater.onChainUnblocked(chainId).catch((error: unknown) => {
+        logger.error({
+          category: 'plan',
+          action: 'plan_status_update_failed',
+          message: `Failed to update plan status after chain unblocked: ${chainId}`,
+          error: error instanceof Error ? error : new Error(String(error)),
+        });
+      });
+    }
   }
 
   /**

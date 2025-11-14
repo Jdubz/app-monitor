@@ -23,6 +23,8 @@ import {
 import { config } from '../../config.js';
 import { WorkerLogLocator } from '../../services/taskLogLocator.js';
 import { getTaskContextService } from '../../services/taskContext.service.js';
+import { taskAutoDetectionService } from '../../services/taskAutoDetection.service.js';
+import type { MinimalTaskPayload } from '@app-monitor/api-contracts';
 import {
   mapTasksToContract,
   mapTaskToContract,
@@ -150,9 +152,152 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
     }
   });
 
+  // ============================================================================
+  // Context-Aware Minimal Task Creation (NEW)
+  // ============================================================================
+
+  /**
+   * POST /tasks/minimal
+   * Create task with minimal payload (3 required fields)
+   * Auto-detects: files, risk level, context profiles, outputs
+   */
+  router.post('/tasks/minimal', async (req: Request, res: Response) => {
+    try {
+      const payload: MinimalTaskPayload = req.body;
+      
+      // Validate required fields
+      if (!payload.title || !payload.taskType || !payload.intent) {
+        res.status(400).json({
+          error: 'Missing required fields',
+          message: 'title, taskType, and intent are required',
+          provided: Object.keys(payload),
+          required: ['title', 'taskType', 'intent']
+        });
+        return;
+      }
+      
+      // Auto-detect missing fields
+      const detected = await taskAutoDetectionService.detectFields(payload);
+      
+      // Convert to SimpleTaskData format (matches existing task creation)
+      const taskData = {
+        type: payload.taskType,
+        title: payload.title,
+        description: payload.intent,
+        documentation: payload.intent,  // Use intent as documentation
+        acceptanceCriteria: [`Task must accomplish: ${payload.intent}`],
+        files: detected.detectedFiles,
+        dependencies: [],
+        project: 'app-monitor',  // Default project
+        assignedAgent: payload.assignedAgent || 'claude-sonnet',
+        priority: payload.priority || 1,
+        metadata: {
+          riskLevel: detected.inferredRiskLevel,
+          contextProfiles: detected.selectedProfiles,
+          desiredOutputs: detected.recommendedOutputs,
+          autoDetectionConfidence: detected.confidence,
+          autoDetectionWarnings: detected.warnings,
+          submissionMode: 'minimal',
+          followUpOf: payload.followUpOf,
+          chainId: payload.chainId
+        }
+      };
+      
+      // Create task using existing service
+      const result = await devBotsManager.addTask(taskData);
+      
+      logger.info({
+        category: 'api',
+        action: 'task_created_minimal',
+        message: `Created task ${result.task.id} via minimal API`,
+        details: {
+          taskId: result.task.id,
+          taskType: payload.taskType,
+          filesDetected: detected.detectedFiles.length,
+          riskLevel: detected.inferredRiskLevel,
+          contextProfiles: detected.selectedProfiles,
+          hasWarnings: detected.warnings.length > 0
+        }
+      });
+      
+      res.status(201).json({
+        data: {
+          task: mapTaskToContract(result.task),
+          validation: result.validation,
+          autoDetection: detected
+        }
+      });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'task_creation_minimal_failed',
+        message: `Failed to create task via minimal API: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to create task',
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  /**
+   * POST /tasks/preview-detection
+   * Preview auto-detection without creating task
+   * Useful for UX to show what will be detected before submission
+   */
+  router.post('/tasks/preview-detection', async (req: Request, res: Response) => {
+    try {
+      const payload: MinimalTaskPayload = req.body;
+      
+      // Validate at least task type is provided
+      if (!payload.taskType) {
+        res.status(400).json({
+          error: 'Missing taskType',
+          message: 'taskType is required for preview'
+        });
+        return;
+      }
+      
+      const detected = await taskAutoDetectionService.detectFields(payload);
+      
+      logger.debug({
+        category: 'api',
+        action: 'preview_detection',
+        message: `Preview detection for ${payload.taskType} task`,
+        details: {
+          taskType: payload.taskType,
+          filesDetected: detected.detectedFiles.length,
+          riskLevel: detected.inferredRiskLevel,
+          profilesSelected: detected.selectedProfiles.length
+        }
+      });
+      
+      res.json({ data: detected });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'preview_detection_failed',
+        message: `Failed to preview detection: ${error}`,
+        error
+      });
+      res.status(500).json({
+        error: 'Failed to preview detection',
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // ============================================================================
+  // Legacy Task Creation (DEPRECATED - use /tasks/minimal)
+  // ============================================================================
+
   /**
    * POST /tasks
-   * Create a new task
+   * Create a new task (LEGACY ENDPOINT - DEPRECATED)
+   *
+   * @deprecated Use POST /tasks/minimal instead
+   * This endpoint will be removed in a future version.
    *
    * SECURITY: Dev-bots can only spawn other dev-bots in production environments.
    * In non-production environments, this returns a stubbed response to prevent

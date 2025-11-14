@@ -97,11 +97,14 @@ describe('TaskCreationService - Context Integration', () => {
       expect(result.task).toBeDefined();
       expect(result.contextBundle).toBeDefined();
       expect(result.contextBundle?.id).toBe('test-bundle-id');
-      expect(contextGenerator.generateBundle).toHaveBeenCalledWith({
-        taskType: 'implementation',
-        targetFiles: ['backend/src/services/test.ts'],
-        force: false
-      });
+      expect(contextGenerator.generateBundle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskType: 'implementation',
+          targetFiles: ['backend/src/services/test.ts'],
+          force: false,
+          profiles: expect.any(Array) // Intelligent selection adds profiles
+        })
+      );
     });
 
     it('should store context metadata in task record', async () => {
@@ -138,19 +141,19 @@ describe('TaskCreationService - Context Integration', () => {
         expect.objectContaining({
           context_bundle_id: 'test-bundle-id',
           context_cache_key: 'test-cache-key',
-          context_profiles: ['scope-control', 'dev-monitor'],
+          context_profiles: expect.arrayContaining(['scope-control', 'dev-monitor']),
           risk_level: 'medium' // backend/src/services + medium complexity
         })
       );
     });
 
-    it('should skip context generation when no files specified', async () => {
+    it('should still generate context bundle for analysis tasks with intelligent selection', async () => {
       const taskData: EnhancedTaskData = {
         type: 'analysis',
-        title: 'Test task without files',
+        title: 'Test task without explicit files',
         description: 'Test',
         assignedAgent: 'backend-specialist',
-        files: [],
+        files: [], // Empty files array
         acceptanceCriteria: ['Complete'],
         documentation: '',
         notes: '',
@@ -174,8 +177,15 @@ describe('TaskCreationService - Context Integration', () => {
 
       const result = await service.createTask(taskData);
 
-      expect(result.contextBundle).toBeUndefined();
-      expect(contextGenerator.generateBundle).not.toHaveBeenCalled();
+      // With intelligent selection, analysis tasks get context bundles even without explicit files
+      expect(result.contextBundle).toBeDefined();
+      expect(contextGenerator.generateBundle).toHaveBeenCalledWith(
+        expect.objectContaining({
+          taskType: 'analysis',
+          targetFiles: [], // Empty but still generates bundle with profiles
+          profiles: expect.any(Array)
+        })
+      );
     });
 
     it('should handle context generation failures gracefully', async () => {

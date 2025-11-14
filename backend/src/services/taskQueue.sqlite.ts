@@ -42,6 +42,7 @@ import {
   type AgentTaskTypeBreakdown,
   type AgentComparisonMetrics,
 } from './taskQueueMetrics.service.js';
+import { getPlanStatusUpdater } from './planStatusUpdater.singleton.js';
 
 // Re-export chain types for convenience
 export type { ChainStats, BlockedChain };
@@ -724,6 +725,14 @@ export class TaskQueueService {
   }
 
   /**
+   * Get the underlying database instance
+   * Allows other services (like PlansService) to share the same database connection
+   */
+  getDatabase(): Database.Database {
+    return this.db;
+  }
+
+  /**
    * Create a new task
    */
   createTask(taskData: Partial<Task>): Task {
@@ -874,6 +883,21 @@ export class TaskQueueService {
 
       return task;
     });
+
+    // Trigger plan status update if task is linked to a plan (after transaction)
+    if (task.plan_id) {
+      const planStatusUpdater = getPlanStatusUpdater();
+      planStatusUpdater?.onTaskCreated(task.id).catch((error: unknown) => {
+        logger.error({
+          category: 'plan',
+          action: 'plan_status_update_failed',
+          message: `Failed to update plan status after task creation: ${task.id}`,
+          error: error instanceof Error ? error : new Error(String(error)),
+        });
+      });
+    }
+
+    return task;
   }
 
   /**
@@ -1160,6 +1184,17 @@ export class TaskQueueService {
         message: `Task ${taskId} completed successfully`
       });
     });
+
+    // Trigger plan status update if task is linked to a plan (after transaction)
+    const planStatusUpdater = getPlanStatusUpdater();
+    planStatusUpdater?.onTaskStatusChange(taskId).catch((error: unknown) => {
+      logger.error({
+        category: 'plan',
+        action: 'plan_status_update_failed',
+        message: `Failed to update plan status after task completion: ${taskId}`,
+        error: error instanceof Error ? error : new Error(String(error)),
+      });
+    });
   }
 
   /**
@@ -1251,6 +1286,17 @@ export class TaskQueueService {
           retryCount: task.retry_count + 1,
           willEnterRecovery: true
         }
+      });
+    });
+
+    // Trigger plan status update if task is linked to a plan (after transaction)
+    const planStatusUpdater = getPlanStatusUpdater();
+    planStatusUpdater?.onTaskStatusChange(taskId).catch((error: unknown) => {
+      logger.error({
+        category: 'plan',
+        action: 'plan_status_update_failed',
+        message: `Failed to update plan status after task failure: ${taskId}`,
+        error: error instanceof Error ? error : new Error(String(error)),
       });
     });
   }

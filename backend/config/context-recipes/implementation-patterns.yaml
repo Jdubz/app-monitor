@@ -1,0 +1,90 @@
+# Implementation Patterns Context Recipe
+# Provides patterns and best practices for implementation tasks
+
+profile: implementation-patterns
+version: 1.0.0
+description: Implementation patterns, code organization, and development workflows
+
+taskTypes:
+  - implementation
+
+required: false  # Optional, only for implementation tasks
+
+sizeLimit:
+  maxBytes: 40000
+  maxInlineBytes: 8000
+
+constraints:
+  - "Follow existing code patterns and conventions"
+  - "Write tests before or alongside implementation"
+  - "Keep functions small and focused (single responsibility)"
+  - "Use TypeScript strict mode - no any types"
+  - "Prefer functional programming patterns"
+  - "Document complex logic with comments"
+  - "Handle errors explicitly - no silent failures"
+
+investigationSteps:
+  - "Review similar implementations in the codebase"
+  - "Check for existing utilities or helpers"
+  - "Identify patterns in test files"
+  - "Review API contracts in shared/api-contracts"
+  - "Check for TypeScript path mappings"
+  - "Verify module boundaries"
+
+sources:
+  # Coding standards
+  - type: markdown
+    path: docs/guides/CODING_STANDARDS.md
+    extract:
+      headings:
+        - "TypeScript Guidelines"
+        - "Function Design"
+        - "Error Handling"
+        - "Testing Requirements"
+    transform: bullet-list
+    optional: true
+
+  # Architecture patterns
+  - type: markdown
+    path: docs/architecture/README.md
+    extract:
+      headings:
+        - "Service Layer"
+        - "Data Flow"
+        - "Module Organization"
+    transform: bullet-list
+    optional: true
+
+  # Testing patterns
+  - type: markdown
+    path: docs/guides/TESTING.md
+    extract:
+      headings:
+        - "Unit Test Structure"
+        - "Integration Tests"
+        - "Test Coverage"
+    transform: bullet-list
+    optional: true
+
+  # API contract examples
+  - type: code
+    path: shared/api-contracts/index.ts
+    extract:
+      pattern: "export interface.*Response"
+    transform: strip-comments
+    optional: true
+
+  # Service patterns
+  - type: code
+    path: backend/src/services/*.service.ts
+    extract:
+      pattern: "export class.*Service"
+    transform: strip-comments
+    optional: true
+
+outputs:
+  format: markdown
+  filename: implementation-patterns.md
+  includeMetadata: true
+
+ttl: 86400  # 24 hours cache
