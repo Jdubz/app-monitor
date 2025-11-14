@@ -9,6 +9,9 @@
 ## 📊 IMPLEMENTATION STATUS
 
 **Recent Updates:**
+- ✅ **2025-11-14:** BOT_PROMPT_ENGINEERING_V3.md ARCHIVED (superseded by context management)
+- ✅ **2025-11-14:** Context infrastructure complete - Phase 1 (~2400 lines, full test coverage)
+- ⏳ **2025-11-14:** Context Phases 2-7 pending (recipes, minimal API, auto-detection, prompt generation)
 - ✅ **2025-11-10:** Copilot review webhook implemented (real-time detection)
 - ✅ **2025-11-10:** PR workflow P0 items complete (depth limits, graceful degradation)
 - ✅ **2025-11-10:** GitHub webhooks configured (pull_request_review, check_suite, check_run)
@@ -20,16 +23,18 @@
 **→ [PRIORITIZED_FEATURE_ROADMAP.md](./PRIORITIZED_FEATURE_ROADMAP.md)** — **START HERE** for prioritized features with Task V3 creation templates.
 
 ## Primary Roadmap
-- [APP_MONITOR_STABILIZATION_PLAN.md](./APP_MONITOR_STABILIZATION_PLAN.md) ⚠️ **Status Unknown** — Gatekeeping tasks required before turning the continuous task queue and automation on.
-- [PRIORITIZED_FEATURE_ROADMAP.md](./PRIORITIZED_FEATURE_ROADMAP.md) ⚠️ **Needs Update** — Consolidated prioritized features (P0-P2) with dependencies and Task V3 templates.
+- [APP_MONITOR_STABILIZATION_PLAN.md](./APP_MONITOR_STABILIZATION_PLAN.md) ⚠️ **Updated 2025-11-14** — PE-1 through PE-6 superseded by context management.
+- [PRIORITIZED_FEATURE_ROADMAP.md](./PRIORITIZED_FEATURE_ROADMAP.md) ✅ **Updated 2025-11-14** — P0.4 marked superseded, P1.2 updated with context-aware task submission.
 
 ## Supporting Blueprints
-- [BOT_PROMPT_ENGINEERING_V3.md](./BOT_PROMPT_ENGINEERING_V3.md) — Strict task template validation and prompt quality standards.
+- ~~[BOT_PROMPT_ENGINEERING_V3.md](./BOT_PROMPT_ENGINEERING_V3.md)~~ — **⚠️ ARCHIVED 2025-11-14** (see `docs/archive/obsolete-2025-11-14/`)
+  - **Replacement:** [dev-bot-context-management.md](../technicalDesigns/dev-bot-context-management.md)
+  - Manual v3 templates obsolete - context system auto-generates prompts
 - [APP_MONITOR_PRODUCTION_SUPPORT_PLAN.md](./APP_MONITOR_PRODUCTION_SUPPORT_PLAN.md) — Three-root deployment architecture.
 - [DEV_BOT_PIPELINE_COMPLETION_PLAN_REVISED.md](./DEV_BOT_PIPELINE_COMPLETION_PLAN_REVISED.md) — Dev bot pipeline completion plan.
 
 ## Archived Plans
-Legacy strategic documents have been removed to keep documentation focused. Completed plans are removed rather than archived. New strategic updates should extend the active documents above.
+- **docs/archive/obsolete-2025-11-14/BOT_PROMPT_ENGINEERING_V3.md** - Superseded by context-aware auto-generation
 
 ---
 

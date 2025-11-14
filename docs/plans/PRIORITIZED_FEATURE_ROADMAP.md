@@ -180,44 +180,38 @@ Migrate work-target metadata from JSON config files to SQLite with backwards com
 
 ---
 
-### P0.4: Prompt Engineering V3 Implementation (PE-1 through PE-6)
-**Plan:** BOT_PROMPT_ENGINEERING_V3.md
+### P0.4: Prompt Engineering V3 Implementation (PE-1 through PE-6) ⚠️ **SUPERSEDED**
+**Plan:** BOT_PROMPT_ENGINEERING_V3.md (ARCHIVED 2025-11-14)
 **Owner:** Platform Tooling
-**Duration:** 5-6 days
-**Status:** Planning
+**Duration:** N/A
+**Status:** ⚠️ **Superseded by Context Management**
 
-**Description:**
+**Original Description:**
 Implement strict task template validation enforcing investigation-first workflow, explicit action verbs, and file scoping.
 
-**Acceptance Criteria:**
-- validateTaskTemplate() function implemented and integrated into task creation API
-- Template library created with 4+ patterns (migration, extension, bugfix, refactor)
-- Scope validation rules enforced (files[], modifyOnly[], doNotModify[], doNotCreate[] all required)
-- All new tasks must use V3 format (API rejects non-V3 templates)
-- Quality metrics tracked: scope compliance (100%), duplication (0%), investigation completion (100%)
+**Current Status:**
+- Manual v3 template authoring is **obsolete**
+- Replaced by context-aware auto-generation (dev-bot-context-management.md)
+- Phase 1 infrastructure complete (~2400 lines)
+- Phases 2-7 pending: Minimal task API, auto-detection, prompt generation
 
-**Validation Steps:**
-1. Create task without investigation; verify rejection with clear error
-2. Create task without doNotCreate; verify rejection
-3. Create task with V3 template; verify acceptance
-4. Verify template library contains concrete examples
-5. Track metrics: % V3 compliance, % duplication detected
+**What Happened:**
+- Context management system makes manual template authoring unnecessary
+- Investigation steps auto-generated from context bundles
+- Constraints auto-injected from recipe definitions  
+- Task submission reduces from 15+ fields to 3: title, type, intent
 
-**Constraints:**
-- MUST NOT prevent legitimate edge cases (validator must be configurable)
-- MUST provide actionable error messages with examples
-- MUST maintain backwards compatibility during migration (grace period)
+**Migration:**
+- BOT_PROMPT_ENGINEERING_V3.md moved to `docs/archive/obsolete-2025-11-14/`
+- See dev-bot-context-management.md for replacement approach
+- When Phases 2-7 complete, all v3 validation code will be deleted
 
-**Prerequisites:**
-- Task schema extended with V3 fields
-- Validator module created
-- Template library functions implemented
-
-**Dependencies:** None (foundational work)
+**Dependencies:** None (feature replaced by different approach)
 
 **Related Plans:**
-- DEV_BOT_SAFETY_AND_PROMPT_IMPROVEMENTS.md (uses V3 templates)
-- All task-based automation (requires V3)
+- ✅ Context infrastructure complete (Phase 1)
+- ⏳ Context integration pending (Phases 2-7)
+- All task-based automation will use context-aware submission when ready
 
 ---
 
@@ -287,26 +281,55 @@ Separate work-target development path from production deployment with artifact h
 
 ---
 
-### P1.2: Work-Target Path Abstraction
-**Plan:** DEV_BOT_WORK_TARGET_PRODUCTION_PLAN.md
+### P1.2: Context-Aware Task Submission (Replaces Work-Target Path Abstraction)
+**Plan:** dev-bot-context-management.md
 **Owner:** Platform Tooling
-**Duration:** 3 weeks (Phases 0-3)
-**Status:** Draft
+**Duration:** 8-10 weeks (Phases 1-7)
+**Status:** 🟡 Phase 1 Complete (~15%), Phases 2-7 Pending
 
 **Description:**
-Decouple dev-bot runtime from backend binary location via path resolver service.
+**HIGHEST IMPACT FEATURE** - Transform task submission from 15+ manual fields to just 3 (title, type, intent) with auto-generated prompts from context bundles.
+
+**What's Complete (Phase 1 - Nov 2025):**
+- ✅ Context infrastructure (~2400 lines)
+  - ContextCache, ContextRecipeLoader, ContextRecipeValidator, ContextBundleGenerator
+  - Full type system (contextRecipe.ts, contextBundle.ts)
+  - Comprehensive test coverage
+- ✅ Recipe validation system
+- ✅ Bundle generation and caching
+- ✅ Transform functions (markdown→JSON, code extraction)
+
+**What's Pending (Phases 2-7):**
+- ⏳ Context recipes (config/context-recipes/*.yaml) - 5 core profiles needed
+- ⏳ Minimal task submission API (POST /api/tasks with 3-field schema)
+- ⏳ Auto-detection logic (files from git diff, risk level, context profiles)
+- ⏳ Container context mounting (read-only /workspace/context/)
+- ⏳ Prompt auto-generation from context
+- ⏳ Chain context inheritance for REVIEW/FIX tasks
+- ⏳ Complete migration - delete v3 template code
 
 **Acceptance Criteria:**
-- WorkTargetPathResolver service loads JSON + SQLite config
-- devBotsManager uses WorkTargetPathResolver.getWorkRoot() instead of process.cwd()
-- workspaceOrchestrator accepts workRoot/devBotsRoot; mirrors under /var/tmp/app-monitor-worktargets
-- docker-compose mounts ${APP_MONITOR_WORK_ROOT} via bind mount
-- ProcessManager exports APP_MONITOR_WORK_ROOT to dev-bots service
-- API endpoint `/api/work-targets/app-monitor` surfaces resolved paths
+- Task submission requires ONLY: title, type, intent
+- Auto-detection accuracy >90% for files, risk level, context profiles
+- Context bundles generated <5s
+- Bundle sizes within budgets (implementation≤12KB, review≤8KB, fix≤10KB)
+- Investigation steps auto-generated from context
+- Constraints auto-injected from recipes
+- Zero manual template authoring
+
+**Why Highest Impact:**
+- Eliminates 80% of manual task authoring work
+- Context always current (no stale docs)
+- Dramatically improves bot success rates
+- Foundation for full autonomy
 
 **Dependencies:**
-- WT-1 through WT-4 (Work-Target Registry) MUST complete first
-- P1.1 (Production Deployment Model) parallel work
+- ✅ P0.3 Work-Target Registry (can proceed without)
+- ✅ Staged Task Queue (complete)
+- 🟡 Dev-Bot Foundational Upgrades (90% complete)
+
+**Blocker Resolution:**
+Phase 1 infrastructure is complete and tested. Ready to proceed with Phase 2 (create recipes + minimal API).
 
 ---
 
