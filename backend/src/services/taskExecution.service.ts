@@ -714,50 +714,100 @@ export class TaskExecutionService {
 
     let stdout = '';
     let stderr = '';
+    
+    // Update heartbeat on any output to prove container is alive
+    const updateHeartbeat = () => {
+      try {
+        this.taskQueue.updateWorkerHeartbeat(workerId);
+      } catch (error) {
+        // Ignore heartbeat errors - they shouldn't fail the task
+        logger.debug({
+          category: 'process',
+          action: 'heartbeat_update_failed',
+          message: `Failed to update heartbeat for ${workerId}: ${error instanceof Error ? error.message : String(error)}`
+        });
+      }
+    };
 
     dockerProcess.stdout.on('data', (data) => {
       stdout += data.toString();
+      updateHeartbeat();
     });
 
     dockerProcess.stderr.on('data', (data) => {
       stderr += data.toString();
+      updateHeartbeat();
     });
 
     // Track task start time for stuck detection
     const taskStartTime = new Date(task.assigned_at || task.created_at);
+    const DOCKER_PROCESS_GRACE_TIMEOUT = 5 * 60 * 1000; // 5 minutes - failsafe if Docker doesn't signal properly
 
-    // Wait for completion with stuck task detection
-    const exitCode = await new Promise<number>((resolve, reject) => {
-      // Periodic stuck task check
-      const stuckCheckInterval = setInterval(() => {
-        if (isTaskStuck(taskStartTime, this.config.absoluteMaxDuration)) {
+    // Periodic heartbeat update even if no output (every 20 seconds)
+    const heartbeatInterval = setInterval(updateHeartbeat, 20000);
+
+    // Wait for completion with multiple safety mechanisms
+    const exitCode = await Promise.race([
+      // Primary: Docker process completion
+      new Promise<number>((resolve, reject) => {
+        // Periodic stuck task check
+        const stuckCheckInterval = setInterval(() => {
+          if (isTaskStuck(taskStartTime, this.config.absoluteMaxDuration)) {
+            clearInterval(stuckCheckInterval);
+            clearInterval(heartbeatInterval);
+            logger.error({
+              category: 'process',
+              action: 'task_stuck_timeout',
+              message: `Task ${task.id} exceeded maximum duration (${this.config.absoluteMaxDuration / 60000} minutes)`,
+              details: {
+                taskId: task.id,
+                taskTitle: task.title,
+                elapsedMs: Date.now() - taskStartTime.getTime(),
+                maxDurationMs: this.config.absoluteMaxDuration
+              }
+            });
+            // Kill the docker process
+            dockerProcess.kill('SIGKILL');
+            reject(new Error(`Task exceeded maximum duration of ${this.config.absoluteMaxDuration / 60000} minutes`));
+          }
+        }, this.config.stuckCheckInterval);
+
+        dockerProcess.on('close', (code) => {
           clearInterval(stuckCheckInterval);
+          clearInterval(heartbeatInterval);
+          resolve(code || 0);
+        });
+        dockerProcess.on('exit', (code) => {
+          // Also listen to 'exit' as failsafe - fires before 'close'
+          clearInterval(stuckCheckInterval);
+          clearInterval(heartbeatInterval);
+          resolve(code || 0);
+        });
+        dockerProcess.on('error', (error) => {
+          clearInterval(stuckCheckInterval);
+          clearInterval(heartbeatInterval);
+          reject(error);
+        });
+      }),
+      // Failsafe: Grace period timeout in case Docker process doesn't signal
+      new Promise<number>((_, reject) => 
+        setTimeout(() => {
+          clearInterval(heartbeatInterval);
           logger.error({
             category: 'process',
-            action: 'task_stuck_timeout',
-            message: `Task ${task.id} exceeded maximum duration (${this.config.absoluteMaxDuration / 60000} minutes)`,
+            action: 'docker_process_grace_timeout',
+            message: `Docker process did not exit gracefully within ${DOCKER_PROCESS_GRACE_TIMEOUT / 1000}s, force killing`,
             details: {
               taskId: task.id,
               taskTitle: task.title,
-              elapsedMs: Date.now() - taskStartTime.getTime(),
-              maxDurationMs: this.config.absoluteMaxDuration
+              graceTimeout_ms: DOCKER_PROCESS_GRACE_TIMEOUT
             }
           });
-          // Kill the docker process
           dockerProcess.kill('SIGKILL');
-          reject(new Error(`Task exceeded maximum duration of ${this.config.absoluteMaxDuration / 60000} minutes`));
-        }
-      }, this.config.stuckCheckInterval);
-
-      dockerProcess.on('close', (code) => {
-        clearInterval(stuckCheckInterval);
-        resolve(code || 0);
-      });
-      dockerProcess.on('error', (error) => {
-        clearInterval(stuckCheckInterval);
-        reject(error);
-      });
-    });
+          reject(new Error(`Docker process did not exit gracefully within ${DOCKER_PROCESS_GRACE_TIMEOUT / 1000} seconds`));
+        }, DOCKER_PROCESS_GRACE_TIMEOUT)
+      )
+    ]);
 
     // Save dev-bot execution logs to artifacts directory
     const artifactsDir = this.config.artifactsDir;
