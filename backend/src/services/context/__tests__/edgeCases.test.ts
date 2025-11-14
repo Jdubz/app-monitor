@@ -253,7 +253,7 @@ sources: ${JSON.stringify(sources)}
       }
 
       const stats = cache.getStats();
-      expect(stats.size).toBeLessThanOrEqual(5);
+      expect(stats.totalEntries).toBeLessThanOrEqual(5);
 
       await cache.destroy();
     });
@@ -270,7 +270,7 @@ sources: ${JSON.stringify(sources)}
       await cache.set(cacheKey, bundle);
 
       const stats = cache.getStats();
-      expect(stats.size).toBe(0);
+      expect(stats.totalEntries).toBe(0);
 
       await cache.destroy();
     });
@@ -305,7 +305,7 @@ sources: ${JSON.stringify(sources)}
       const cache = new ContextCache({ persistToDb: false });
 
       const stats = cache.getStats();
-      expect(stats.size).toBe(0);
+      expect(stats.totalEntries).toBe(0);
       expect(stats.hits).toBe(0);
       expect(stats.misses).toBe(0);
 
@@ -398,7 +398,7 @@ sources: ${JSON.stringify(sources)}
       }
 
       const stats = cache.getStats();
-      expect(stats.size).toBe(1); // Should only have one entry
+      expect(stats.totalEntries).toBe(1); // Should only have one entry
 
       await cache.destroy();
     });
@@ -417,7 +417,7 @@ sources: ${JSON.stringify(sources)}
       }
 
       const stats = cache.getStats();
-      expect(stats.size).toBeLessThanOrEqual(10);
+      expect(stats.totalEntries).toBeLessThanOrEqual(10);
 
       await cache.destroy();
     });
