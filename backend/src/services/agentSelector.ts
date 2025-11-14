@@ -13,8 +13,10 @@
 import { logger } from '../utils/logger.js';
 import { TaskClassifier, type TaskCategory, type TaskComplexity } from './taskClassifier.js';
 import { CopilotThrottleManager } from './copilotThrottle.service.js';
+import type { AgentEligibilityService } from './agentEligibility.service.js';
+import type { Task } from './taskQueue.sqlite.js';
 
-export type AgentType = 'claude' | 'codex' | 'copilot';
+export type AgentType = 'claude' | 'codex' | 'copilot' | 'gemini';
 
 export interface AgentSelectionCriteria {
   taskCategory?: TaskCategory;
@@ -46,10 +48,12 @@ export interface AgentSelection {
 export class AgentSelector {
   private readonly classifier: TaskClassifier;
   private copilotThrottle?: CopilotThrottleManager;
+  private eligibilityService?: AgentEligibilityService;
 
-  constructor(copilotThrottle?: CopilotThrottleManager) {
+  constructor(copilotThrottle?: CopilotThrottleManager, eligibilityService?: AgentEligibilityService) {
     this.classifier = new TaskClassifier();
     this.copilotThrottle = copilotThrottle;
+    this.eligibilityService = eligibilityService;
 
     logger.info({
       category: 'automation',
@@ -57,7 +61,7 @@ export class AgentSelector {
       message: 'Intelligent agent selector initialized (Phase 0.2)',
       details: {
         strategy: 'intelligent_classification',
-        agents: ['claude', 'codex', 'copilot'],
+        agents: ['claude', 'codex', 'copilot', 'gemini'],
         copilotThrottleEnabled: !!copilotThrottle
       }
     });
@@ -108,6 +112,13 @@ export class AgentSelector {
 
     // Apply intelligent selection rules
     const selection = this.applySelectionRules(category, filePatterns, complexity);
+
+    if (selection.agent === 'claude' && this.canGeminiHandle(criteria)) {
+      // The any cast is needed because the isEligible method is not yet implemented for other agents
+      if (this.eligibilityService && this.eligibilityService.isEligible(criteria as Task, 'gemini')) {
+        return this.createSelection('gemini', 'Eligible implementation rerouted to Gemini', 0.82, 'claude');
+      }
+    }
 
     logger.info({
       category: 'automation',
@@ -252,10 +263,36 @@ export class AgentSelector {
         // If Copilot failed, escalate to Claude
         return 'claude';
       
+      case 'gemini':
+        // If Gemini failed, try Claude
+        return 'claude';
+
       default:
         // Fallback
         return 'claude';
     }
+  }
+
+  private canGeminiHandle(criteria: AgentSelectionCriteria): boolean {
+    const { taskCategory, filePatterns } = criteria;
+
+    if (taskCategory === 'frontend-implementation' && filePatterns?.some(p => p.startsWith('frontend/'))) {
+      return true;
+    }
+
+    if (taskCategory === 'logs/telemetry polish' && filePatterns?.some(p => p.includes('Logs') || p.includes('analysis'))) {
+      return true;
+    }
+
+    if (taskCategory === 'analysis/reporting') {
+      return true;
+    }
+
+    if (taskCategory === 'low-risk fix') {
+      return true;
+    }
+
+    return false;
   }
 
   /**
@@ -284,6 +321,8 @@ export class AgentSelector {
         return 'dev-bot-claude:latest';
       case 'codex':
         return 'dev-bot-codex:latest';
+      case 'gemini':
+        return 'dev-bot-gemini:latest';
       case 'copilot':
         // Copilot uses GitHub delegation, no Docker image
         throw new Error('Copilot agent does not use Docker (GitHub delegation)');
@@ -297,14 +336,14 @@ export class AgentSelector {
    * Validate if an agent type is supported
    */
   static isValidAgentType(type: string): type is AgentType {
-    return type === 'claude' || type === 'codex' || type === 'copilot';
+    return type === 'claude' || type === 'codex' || type === 'copilot' || type === 'gemini';
   }
 
   /**
    * Get all supported agent types
    */
   static getSupportedTypes(): AgentType[] {
-    return ['claude', 'codex', 'copilot'];
+    return ['claude', 'codex', 'copilot', 'gemini'];
   }
 
   /**
