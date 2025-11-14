@@ -69,7 +69,6 @@ export class PlanProgressCalculator {
     const prsBlocked = 0; // TODO: Fetch from GitHub API
 
     // Chain status breakdown
-    const tasksWithChain = tasks.filter(t => t.chain_id);
     const chainsActive = tasks.filter(t => t.chain_status === 'active').length;
     const chainsBlocked = tasks.filter(t => t.chain_status === 'blocked').length;
     const chainsClosed = tasks.filter(t => t.chain_status === 'closed').length;

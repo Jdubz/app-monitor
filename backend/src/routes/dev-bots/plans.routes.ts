@@ -16,7 +16,7 @@ import type { DevBotsManager } from '../../services/devBotsManager.js';
 import { logger } from '../../utils/logger.js';
 import { PlansService } from '../../services/plans.service.js';
 import { PlanProgressCalculator } from '../../services/planProgressCalculator.service.js';
-import { PlanStatusUpdater } from '../../services/planStatusUpdater.service.js';
+// import { PlanStatusUpdater } from '../../services/planStatusUpdater.service.js'; // TODO: Wire up event-driven updates
 import type {
   CreatePlanInput,
   UpdatePlanInput,
@@ -35,7 +35,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
   // Initialize services
   const plansService = new PlansService(db);
   const progressCalculator = new PlanProgressCalculator(db);
-  const statusUpdater = new PlanStatusUpdater(db, plansService, progressCalculator);
+  // const statusUpdater = new PlanStatusUpdater(db, plansService, progressCalculator); // TODO: Wire up event-driven updates
 
   // ============================================================================
   // Plan Management Endpoints
