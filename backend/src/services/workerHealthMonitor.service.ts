@@ -46,7 +46,7 @@ export class WorkerHealthMonitor {
     private emit: (event: string, ...args: unknown[]) => void,
     private config: WorkerHealthMonitorConfig = {
       heartbeatCheckInterval: 60000,  // 1 minute (disabled)
-      longRunningCheckInterval: 300000,  // 5 minutes
+      longRunningCheckInterval: 60000,  // 1 minute (was 5 minutes)
       softTimeoutMs: TIME_BASED_GUARDS.SOFT_TIMEOUT_MS,
       hardTimeoutMs: TIME_BASED_GUARDS.ABSOLUTE_MAX_DURATION_MS,
       healthCheckInterval: 5000,  // 5 seconds
@@ -113,20 +113,13 @@ export class WorkerHealthMonitor {
   }
 
   /**
-   * Monitor worker heartbeats (currently disabled for ephemeral containers)
+   * Monitor worker heartbeats
+   * 
+   * CRITICAL: Docker process.on('close') is NOT reliable - containers can exit
+   * without triggering the event, leaving tasks stuck. Heartbeat monitoring
+   * provides a failsafe to detect and recover from these situations.
    */
   private startHeartbeatMonitor(): void {
-    // DISABLED: Ephemeral containers don't send heartbeats
-    // They auto-cleanup on exit (--rm flag) and are monitored via process.on('close')
-
-    logger.info({
-      category: 'process',
-      action: 'heartbeat_monitor_disabled',
-      message: 'Worker heartbeat monitor disabled (using Docker process monitoring for ephemeral containers)'
-    });
-
-    // Uncomment below to enable heartbeat monitoring for persistent workers:
-    /*
     this.heartbeatInterval = setInterval(() => {
       const stalledWorkers = this.taskQueue.detectStalledWorkers();
       if (stalledWorkers.length > 0) {
@@ -134,7 +127,7 @@ export class WorkerHealthMonitor {
           category: 'process',
           action: 'stalled_workers_detected',
           message: `Detected ${stalledWorkers.length} stalled workers (heartbeat timeout)`,
-          details: stalledWorkers
+          details: { stalledWorkers }
         });
 
         // Trigger task reassignment
@@ -143,7 +136,16 @@ export class WorkerHealthMonitor {
         }
       }
     }, this.config.heartbeatCheckInterval);
-    */
+
+    logger.info({
+      category: 'process',
+      action: 'heartbeat_monitor_started',
+      message: `Worker heartbeat monitor started (check interval: ${this.config.heartbeatCheckInterval / 1000}s, timeout: 30s)`,
+      details: {
+        checkInterval_ms: this.config.heartbeatCheckInterval,
+        timeout_ms: 30000
+      }
+    });
   }
 
   /**
