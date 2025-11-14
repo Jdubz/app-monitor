@@ -273,27 +273,66 @@ export class AgentSelector {
     }
   }
 
+  /**
+   * Determine if Gemini can handle this task
+   * Per design section 4.5: Task Categories Eligible for Gemini
+   */
   private canGeminiHandle(criteria: AgentSelectionCriteria): boolean {
     const { taskCategory, filePatterns, taskTitle, taskDescription, complexity } = criteria;
 
-    // Frontend implementation tasks
-    if (taskCategory === 'implementation' && filePatterns?.some(p => p.startsWith('frontend/') || ['tsx', 'jsx', 'vue'].includes(p))) {
-      return true;
+    // BLOCK: Backend service modifications (design requirement - safety mechanism #1)
+    if (filePatterns?.some(p => p.includes('backend/src/services/'))) {
+      return false;
     }
 
-    // Logs/telemetry polish tasks
+    // BLOCK: Database migrations
+    if (taskTitle?.toLowerCase().includes('migration') || 
+        taskTitle?.toLowerCase().includes('database')) {
+      return false;
+    }
+
+    // BLOCK: PR pipeline logic
+    if (taskTitle?.toLowerCase().includes('pr workflow') ||
+        taskTitle?.toLowerCase().includes('pipeline')) {
+      return false;
+    }
+
+    // ALLOW: Frontend implementation tasks (design section 4.5 row 1)
+    // Conditions: target files under frontend/, estimated effort <= 1.5h, no db/network migrations
+    if (taskCategory === 'implementation' && 
+        filePatterns?.some(p => p.startsWith('frontend/') || ['tsx', 'jsx', 'vue'].includes(p))) {
+      // Simple/medium complexity = roughly <= 1.5h
+      if (complexity === 'simple' || complexity === 'medium') {
+        return true;
+      }
+    }
+
+    // ALLOW: Logs/telemetry polish (design section 4.5 row 2)
+    // Touches frontend/src/components/*Logs* or docs/analysis/*, log-level updates only
     if ((taskTitle?.toLowerCase().includes('log') || taskDescription?.toLowerCase().includes('log')) &&
         filePatterns?.some(p => p.includes('Logs') || p.includes('analysis'))) {
       return true;
     }
 
-    // Analysis and reporting tasks
+    // ALLOW: Analysis/reporting (design section 4.5 row 3)
+    // Tasks requiring data crunching or artifact summarization
     if (taskCategory === 'analysis' || taskCategory === 'review') {
       return true;
     }
 
-    // Low-risk fixes (simple complexity implementation/documentation)
-    if ((taskCategory === 'implementation' || taskCategory === 'documentation') && complexity === 'simple') {
+    // ALLOW: Low-risk fix (design section 4.5 row 4)
+    // Bug labeled cosmetic, no backend file patterns, verification steps automated
+    // Low-risk implementation (categorized as simple)
+    if (taskCategory === 'implementation' && complexity === 'simple') {
+      // Ensure no backend patterns
+      if (!filePatterns?.some(p => p.includes('backend/'))) {
+        return true;
+      }
+    }
+
+    // ALLOW: Documentation tasks (simple/medium)
+    if (taskCategory === 'documentation' && 
+        (complexity === 'simple' || complexity === 'medium')) {
       return true;
     }
 
