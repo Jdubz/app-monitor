@@ -212,7 +212,7 @@
 
 ### Related Designs
 - `docs/technicalDesigns/pr-self-healing-and-resilience.md` - Webhook reliability
-- `docs/architecture/dev-monitor-architecture.md` - Websocket architecture
+- `docs/architecture/system-overview.md` - System architecture
 
 ## Next Actions
 - Review design with platform/SRE owners.

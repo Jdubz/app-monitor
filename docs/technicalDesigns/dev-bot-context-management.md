@@ -492,7 +492,7 @@ async validateContextBudget(task: Task, bundle: ContextBundle) {
 | PR Tracking & Workflow | `docs/plans/PR_*`, `backend/src/services/pr*` | Summaries of condition gates, Copilot delegation rules, chain tracking.|
 | Failure Recovery & Self-Healing | `docs/architecture/automatic-failure-recovery.md`, `failure-guards.md`, healing plans | Provide cleanup/follow-up rules, forbidden ops, chain depth limits.|
 | Learning & Process Improvements | `docs/plans/DEV_BOT_PIPELINE_*`, `ERROR_DETECTION_AND_RECOVERY_ENHANCEMENT.md` | Outline review/fix chain, REVIEW payload requirements.|
-| Dev-Monitor Frontend | `docs/architecture/dev-monitor-architecture.md`, `frontend/src` docs | Describe UI expectations, Socket.IO events, admin workflows.|
+| Dev-Monitor Frontend | `docs/architecture/system-overview.md`, `frontend/src` docs | Describe UI expectations, Socket.IO events, admin workflows.|
 | Deployment Targets & Work Targets | `docs/plans/DEV_BOT_WORK_TARGET_PRODUCTION_PLAN.md` | Future versions must tailor context per work-target.|
 
 ## Alignment with Existing Plans
@@ -627,7 +627,7 @@ async validateContextBudget(task: Task, bundle: ContextBundle) {
 - `docs/plans/APP_MONITOR_STABILIZATION_PLAN.md` - Context submission schema
 - `docs/plans/ERROR_DETECTION_AND_RECOVERY_ENHANCEMENT.md` - REVIEW chain requirements
 - `docs/plans/DEV_BOT_WORK_TARGET_PRODUCTION_PLAN.md` - Work-target requirements
-- `docs/architecture/dev-bots-overview.md` - Agent architecture overview
+- `docs/architecture/system-overview.md` - System architecture
 
 ### Related Designs
 - `docs/technicalDesigns/dev-bot-foundational-upgrades.md` - Storage infrastructure

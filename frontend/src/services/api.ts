@@ -11,28 +11,9 @@ export { getApiBaseUrl, getApiBasePath } from '@/utils/apiBaseUrl';
 import type {
   ApiError,
   ApiSuccess,
-  CloudLogsApiResponse,
-  CloudLogsRequest,
-  CloudLogsResponse,
-  CloudLoggingStatusApiResponse,
-  DevBotsAgentComparisonResponse,
-  EnvironmentsApiResponse,
-  EnvironmentsResponse,
-  EnvironmentServicesApiResponse,
   HealthCheckApiResponse,
   HealthCheckResponse,
-  LogSource as ContractLogSource,
-  LogSourcesResponse,
-  PortKillApiResponse,
-  PortKillResponse,
-  PortStatusesResponse,
-  PortStatusMap,
-  ProcessInfo,
-  ServiceActionResponse,
-  ServiceLogsApiResponse,
-  ServiceLogsResponse,
-  ServiceStatusResponse,
-  ServicesStatusResponse,
+  DevBotsAgentComparisonResponse,
   DevBotsInteractiveSessionStateResponse,
   DevBotsInteractiveSessionInputResponse,
   DevBotsInteractiveSessionInputPayload,
@@ -49,10 +30,6 @@ import type {
   DevBotsStatus,
   DevBotsInteractiveSessionState,
 } from '@/types/dev-bots';
-import type { CloudLoggingStatus, CloudService } from '../types/log.types';
-
-type LogSource = ContractLogSource;
-export type PortStatuses = PortStatusMap;
 
 // Health check endpoint
 const API_CLIENT_SYMBOL = '__APP_MONITOR_API_CLIENT__';
@@ -158,95 +135,7 @@ export const healthCheck = async (): Promise<HealthCheckResponse> => {
   return ensureApiSuccess(response, 'performing health check');
 };
 
-// Service control endpoints
-export const getAllStatuses = async (): Promise<ProcessInfo[]> => {
-  const client = await getApiClient();
-  const response = await client.get<ServicesStatusResponse>('/services/status');
-  return ensureApiSuccess(response, 'fetching all service statuses');
-};
-
-export const getServiceStatus = async (serviceName: string): Promise<ProcessInfo> => {
-  const client = await getApiClient();
-  const response = await client.get<ServiceStatusResponse>(`/services/${serviceName}/status`);
-  return ensureApiSuccess(response, `fetching status for ${serviceName}`);
-};
-
-export const startService = async (serviceName: string): Promise<ProcessInfo> => {
-  const client = await getApiClient();
-  const response = await client.post<ServiceActionResponse>(`/services/${serviceName}/start`);
-  return ensureApiSuccess(response, `starting service ${serviceName}`);
-};
-
-export const stopService = async (serviceName: string, graceful: boolean = true): Promise<ProcessInfo> => {
-  const client = await getApiClient();
-  const response = await client.post<ServiceActionResponse>(
-    `/services/${serviceName}/stop`,
-    {},
-    { params: { graceful } }
-  );
-  return ensureApiSuccess(response, `stopping service ${serviceName}`);
-};
-
-export const restartService = async (serviceName: string, graceful: boolean = true): Promise<ProcessInfo> => {
-  const client = await getApiClient();
-  const response = await client.post<ServiceActionResponse>(
-    `/services/${serviceName}/restart`,
-    {},
-    { params: { graceful } }
-  );
-  return ensureApiSuccess(response, `restarting service ${serviceName}`);
-};
-
-export const killService = async (serviceName: string): Promise<ProcessInfo> => {
-  const client = await getApiClient();
-  const response = await client.post<ServiceActionResponse>(`/services/${serviceName}/kill`);
-  return ensureApiSuccess(response, `killing service ${serviceName}`);
-};
-
-export const getServiceLogs = async (serviceName: string, lines: number = 100): Promise<ServiceLogsResponse> => {
-  const client = await getApiClient();
-  const response = await client.get<ServiceLogsApiResponse>(
-    `/logs/services/${serviceName}/logs`,
-    { params: { lines } }
-  );
-  return ensureApiSuccess(response, `fetching logs for ${serviceName}`);
-};
-
-// Cloud logs endpoints
-export const getEnvironments = async (): Promise<EnvironmentsResponse> => {
-  const client = await getApiClient();
-  const response = await client.get<EnvironmentsApiResponse>('/environments');
-  return ensureApiSuccess(response, 'fetching environments');
-};
-
-export const getEnvironmentServices = async (environment: string): Promise<CloudService[]> => {
-  const client = await getApiClient();
-  const response = await client.get<EnvironmentServicesApiResponse>(`/environments/${environment}/services`);
-  return ensureApiSuccess(response, `fetching services for ${environment}`);
-};
-
-export const getCloudLogs = async (params: CloudLogsRequest): Promise<CloudLogsResponse> => {
-  const { environment, service, ...queryParams } = params;
-  const client = await getApiClient();
-  const response = await client.get<CloudLogsApiResponse>(
-    `/logs/cloud/${environment}/${service}`,
-    { params: queryParams }
-  );
-  return ensureApiSuccess(response, 'fetching cloud logs');
-};
-
-export const checkCloudLoggingStatus = async (): Promise<CloudLoggingStatus> => {
-  const client = await getApiClient();
-  const response = await client.get<CloudLoggingStatusApiResponse>('/logs/cloud/status');
-  return ensureApiSuccess(response, 'checking cloud logging status');
-};
-
-export const getLogSources = async (): Promise<LogSource[]> => {
-  const client = await getApiClient();
-  const response = await client.get<LogSourcesResponse>('/logs/sources');
-  return ensureApiSuccess(response, 'fetching log sources');
-};
-
+// Dev-Bots endpoints
 export const getDevBotsStatus = async (): Promise<DevBotsStatus> => {
   const client = await getApiClient();
   const response = await client.get<ApiSuccess<DevBotsStatus>>('/dev-bots/status');
@@ -420,18 +309,6 @@ export const getDevBotsInteractiveStreamUrl = (sessionId: string): string => {
 // Export everything as a namespace for components that use `api.method()`
 export const api = {
   healthCheck,
-  getAllStatuses,
-  getServiceStatus,
-  startService,
-  stopService,
-  restartService,
-  killService,
-  getServiceLogs,
-  getEnvironments,
-  getEnvironmentServices,
-  getCloudLogs,
-  checkCloudLoggingStatus,
-  getLogSources,
   getDevBotsStatus,
   getDevBotsQueue,
   getDevBotsTaskDetail,
