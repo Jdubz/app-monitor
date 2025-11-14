@@ -79,14 +79,36 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate package locks
+        run: |
+          echo "📦 Validating package-lock.json files..."
+          npm run validate:locks
+
       - name: Validate infrastructure configuration
         run: |
           echo "🔍 Validating infrastructure paths and configuration..."
           chmod +x ./scripts/production/validate-infrastructure.sh
           ./scripts/production/validate-infrastructure.sh .
 
-      - name: Build backend
-        run: npm run build -w backend
+      - name: Dependency audit
+        run: |
+          echo "🔐 Auditing dependencies for vulnerabilities..."
+          npm audit --audit-level=high || {
+            echo "⚠️  High/Critical vulnerabilities found"
+            echo "Review required before deployment"
+            exit 1
+          }
+
+      - name: Build validation
+        run: |
+          echo "🔨 Building backend..."
+          npm run build -w backend
+          echo "✅ Backend build successful"
+
+      - name: Test backend
+        run: |
+          echo "🧪 Running backend tests..."
+          npm run test:backend
 
       # Frontend is built on the server during deployment (not here)
       # The server build uses VITE_PASSWORD from /opt/app-monitor/shared/config/.env.production

@@ -25,6 +25,10 @@
     "lint": "npm run lint --workspaces",
     "lint:fix": "npm run lint:fix --workspaces",
     "clean": "npm run clean --workspaces",
+    "validate:locks": "node scripts/validate-lock-files.cjs",
+    "validate:build": "npm run build -ws --if-present",
+    "validate:all": "npm run validate:locks && npm run validate:build && npm test",
+    "precommit": "npm run validate:locks",
     "prepare": "husky || true"
   },
   "devDependencies": {
