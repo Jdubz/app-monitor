@@ -195,7 +195,7 @@ describe('ContextBundleGenerator', () => {
   describe('Path Security', () => {
     beforeEach(async () => {
       // Create mock file system
-      await createMockFileSystem({
+      tempDir = await createMockFileSystem({
         'docs/test.md': mockFileContent.markdown,
         'safe/file.md': 'Safe content'
       });
@@ -918,7 +918,7 @@ describe('ContextBundleGenerator', () => {
     it('should get cache stats', () => {
       const stats = generator.getCacheStats();
       expect(stats).toBeDefined();
-      expect(stats.size).toBeDefined();
+      expect(stats.totalEntries).toBeDefined();
       expect(stats.hits).toBeDefined();
       expect(stats.misses).toBeDefined();
     });
@@ -926,7 +926,7 @@ describe('ContextBundleGenerator', () => {
     it('should clear cache', () => {
       generator.clearCache();
       const stats = generator.getCacheStats();
-      expect(stats.size).toBe(0);
+      expect(stats.totalEntries).toBe(0);
     });
   });
 
@@ -1616,7 +1616,7 @@ describe('ContextBundleGenerator', () => {
 
       // Verify it's in cache
       const stats = cache.getStats();
-      expect(stats.size).toBe(1);
+      expect(stats.totalEntries).toBe(1);
     });
 
     it('should cache with first recipe TTL when multiple recipes', async () => {
