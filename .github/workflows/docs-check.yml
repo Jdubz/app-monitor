@@ -2,37 +2,156 @@ name: Documentation Check
 
 on:
   pull_request:
+    paths:
+      - 'docs/**'
+      - '*.md'
+  push:
     branches:
       - main
+      - staging
+    paths:
+      - 'docs/**'
+      - '*.md'
 
 jobs:
-  link-check:
-    name: Check Markdown Links
+  check-documentation:
     runs-on: ubuntu-latest
-    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref == 'main' }}
     
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Check links in documentation
+      - name: Check for archive directory
+        run: |
+          if [ -d "docs/archive" ]; then
+            echo "❌ ERROR: docs/archive/ directory exists"
+            echo "Archives mislead in searches and must be deleted, not archived."
+            echo "Delete completed/outdated docs instead of archiving them."
+            exit 1
+          fi
+          echo "✅ No archive directory found"
+
+      - name: Check for test databases in docs
+        run: |
+          if find docs -name "*.db" -o -name "*.sqlite" | grep -q .; then
+            echo "❌ ERROR: Database files found in docs/"
+            find docs -name "*.db" -o -name "*.sqlite"
+            echo "Database files should not be committed to documentation."
+            exit 1
+          fi
+          echo "✅ No database files in docs"
+
+      - name: Enforce document organization
+        run: |
+          # Check for misplaced files
+          ERRORS=0
+          
+          # Analysis docs should be minimal (only active investigations)
+          ANALYSIS_COUNT=$(find docs/analysis -name "*.md" ! -name "README.md" | wc -l)
+          if [ "$ANALYSIS_COUNT" -gt 5 ]; then
+            echo "⚠️  WARNING: docs/analysis/ has $ANALYSIS_COUNT documents"
+            echo "Should have minimal active investigations only."
+            echo "Delete completed analyses, don't keep them."
+            ERRORS=1
+          fi
+          
+          # Check for common anti-patterns
+          if find docs -name "*COMPLETED*.md" -o -name "*archived*.md" -o -name "*old*.md" | grep -q .; then
+            echo "❌ ERROR: Found completed/archived/old documents:"
+            find docs -name "*COMPLETED*.md" -o -name "*archived*.md" -o -name "*old*.md"
+            echo "Delete these instead of keeping them."
+            exit 1
+          fi
+          
+          # Check for duplicate content indicators
+          if find docs -name "*-v2.md" -o -name "*-new.md" -o -name "*-draft.md" | grep -q .; then
+            echo "⚠️  WARNING: Found versioned/draft documents:"
+            find docs -name "*-v2.md" -o -name "*-new.md" -o -name "*-draft.md"
+            echo "Consider consolidating or cleaning up."
+            ERRORS=1
+          fi
+          
+          exit $ERRORS
+
+      - name: Check master-design-intent size
+        run: |
+          LINES=$(wc -l < docs/architecture/master-design-intent.md)
+          if [ "$LINES" -gt 200 ]; then
+            echo "❌ ERROR: master-design-intent.md is $LINES lines (max 200)"
+            echo "This document should be concise philosophy and principles only."
+            echo "Move implementation details to system-overview.md or technicalDesigns/"
+            exit 1
+          fi
+          echo "✅ master-design-intent.md size: $LINES lines (within 200 limit)"
+
+      - name: Validate document structure
+        run: |
+          ERRORS=0
+          
+          # Required directories
+          for dir in architecture technicalDesigns guides plans setup; do
+            if [ ! -d "docs/$dir" ]; then
+              echo "❌ ERROR: Missing required directory: docs/$dir"
+              ERRORS=1
+            fi
+          done
+          
+          # Required files
+          if [ ! -f "docs/architecture/master-design-intent.md" ]; then
+            echo "❌ ERROR: Missing master-design-intent.md"
+            ERRORS=1
+          fi
+          
+          if [ ! -f "docs/architecture/system-overview.md" ]; then
+            echo "❌ ERROR: Missing system-overview.md"
+            ERRORS=1
+          fi
+          
+          # Each directory should have README.md
+          for dir in docs/architecture docs/technicalDesigns docs/guides docs/plans docs/setup; do
+            if [ -d "$dir" ] && [ ! -f "$dir/README.md" ]; then
+              echo "⚠️  WARNING: Missing README.md in $dir"
+              ERRORS=1
+            fi
+          done
+          
+          exit $ERRORS
+
+      - name: Check for documentation hygiene
+        run: |
+          ERRORS=0
+          
+          # Check total document count
+          TOTAL_DOCS=$(find docs -name "*.md" | wc -l)
+          if [ "$TOTAL_DOCS" -gt 60 ]; then
+            echo "⚠️  WARNING: Total documentation count: $TOTAL_DOCS (target: <60)"
+            echo "Consider consolidating or deleting outdated docs."
+            ERRORS=1
+          else
+            echo "✅ Total documentation count: $TOTAL_DOCS (healthy)"
+          fi
+          
+          # Report by directory
+          echo ""
+          echo "Documentation by directory:"
+          for dir in docs/*/; do
+            COUNT=$(find "$dir" -name "*.md" | wc -l)
+            echo "  $(basename $dir): $COUNT files"
+          done
+          
+          exit $ERRORS
+
+      - name: Markdown link check
         uses: gaurav-nelson/github-action-markdown-link-check@v1
         with:
-          use-quiet-mode: 'yes'
-          use-verbose-mode: 'yes'
           config-file: '.github/workflows/markdown-link-check-config.json'
-          check-modified-files-only: 'no'
-          base-branch: 'main'
+          use-quiet-mode: 'yes'
+          use-verbose-mode: 'no'
 
       - name: Summary
-        if: always()
+        if: success()
         run: |
-          echo "## Documentation Link Check Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [ $? -eq 0 ]; then
-            echo "✅ All documentation links are valid" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "❌ Some documentation links are broken" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Please fix broken links before merging." >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "✅ All documentation checks passed!"
+          echo ""
+          echo "Documentation structure:"
+          tree -L 2 docs/ -I 'node_modules'
