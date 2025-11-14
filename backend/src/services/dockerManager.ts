@@ -30,8 +30,10 @@ export interface DockerImageInfo {
 export class DockerManager {
   private docker: Docker;
   private static readonly CLAUDE_WORKER_IMAGE = 'dev-bot:latest';
+  private static readonly GEMINI_WORKER_IMAGE = 'dev-bot:latest';
   private static readonly REQUIRED_IMAGES = [
-    DockerManager.CLAUDE_WORKER_IMAGE
+    DockerManager.CLAUDE_WORKER_IMAGE,
+    DockerManager.GEMINI_WORKER_IMAGE,
   ];
 
   constructor(socketPath: string = '/var/run/docker.sock') {
@@ -313,6 +315,13 @@ export class DockerManager {
    */
   static getDevBotImage(): string {
     return DockerManager.CLAUDE_WORKER_IMAGE;
+  }
+
+  /**
+   * Get the Gemini Dev-Bot image name
+   */
+  static getGeminiDevBotImage(): string {
+    return DockerManager.GEMINI_WORKER_IMAGE;
   }
 
   /**

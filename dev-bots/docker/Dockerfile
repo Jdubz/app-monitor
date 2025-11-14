@@ -1,10 +1,10 @@
 # ==============================================================================
 # OPTIMIZED DEV-BOTS DOCKERFILE
 # ==============================================================================
-# Multi-agent development bots with Claude Code and OpenAI Codex CLIs
+# Multi-agent development bots with Claude Code, OpenAI Codex, and Gemini CLIs
 #
 # Features:
-# - Both Claude and Codex CLIs for agent comparison
+# - Claude, Codex, and Gemini CLIs for agent comparison
 # - Optimized layer caching and minimal runtime image
 # - Fast startup (~2-3s) with pre-installed dependencies
 # - Security hardened (non-root user, minimal attack surface)
@@ -34,10 +34,11 @@ WORKDIR /build
 # INSTALL CLI TOOLS
 # ==============================================================================
 
-# Install both Claude Code and Codex CLIs for agent comparison
+# Install Claude, Codex, and Gemini CLIs for agent comparison
 RUN npm install -g \
     @anthropic-ai/claude-code@latest \
     @openai/codex@latest \
+    @google/gemini-cli@latest \
     && npm cache clean --force
 
 # Install commonly used development tools
@@ -52,12 +53,12 @@ RUN npm install -g \
 
 # ==============================================================================
 # STAGE 2: RUNTIME STAGE (Minimal image)
-# ==============================================================================
+# =================================E=============================================
 FROM node:20-alpine
 
 LABEL maintainer="App Monitor Dev-Bots"
-LABEL description="Optimized dev-bot with Claude, Codex, and MCP servers"
-LABEL version="3.0.0"
+LABEL description="Optimized dev-bot with Claude, Codex, Gemini, and MCP servers"
+LABEL version="3.1.0"
 
 # Install runtime dependencies only
 RUN apk add --no-cache \
@@ -97,6 +98,7 @@ RUN mkdir -p \
     /logs \
     /home/node/.claude \
     /home/node/.codex \
+    /home/node/.gemini \
     && chown -R node:node /workspace /logs /home/node \
     && chmod -R 755 /home/node
 
@@ -163,6 +165,13 @@ else
     exit 1
 fi
 
+if which gemini >/dev/null 2>&1; then
+    echo "  ✅ Gemini:      $(which gemini)"
+else
+    echo "  ❌ Gemini:      NOT FOUND"
+    exit 1
+fi
+
 if which gh >/dev/null 2>&1; then
     echo "  ✅ GitHub CLI:  $(which gh)"
 else
@@ -202,7 +211,7 @@ RUN chmod +x /home/node/verify-install.sh
 # ==============================================================================
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-  CMD which claude && which codex && which gh && which node || exit 1
+  CMD which claude && which codex && which gemini && which gh && which node || exit 1
 
 # ==============================================================================
 # DEFAULT COMMAND
@@ -222,18 +231,21 @@ CMD ["/bin/bash", "-c", "/home/node/verify-install.sh && bash"]
 #     -v $(pwd):/workspace:rw \
 #     -v ~/.claude:/home/node/.claude:ro \
 #     -v ~/.codex:/home/node/.codex:ro \
+#     -v ~/.gemini:/home/node/.gemini:ro \
 #     dev-bot:latest
 #
 # Run a specific task:
 #   docker run --rm \
 #     -v $(pwd):/workspace:rw \
 #     -v ~/.claude:/home/node/.claude:ro \
+#     -v ~/.codex:/home/node/.codex:ro \
+#     -v ~/.gemini:/home/node/.gemini:ro \
 #     dev-bot:latest \
-#     bash -c "cd /workspace && claude --print '<task prompt>'"
+#     bash -c "cd /workspace && gemini --print '<task prompt>'"
 #
 # Optimizations:
 #   - Multi-stage build reduces image size by ~70%
-#   - Both Claude and Codex CLIs for agent comparison
+#   - Claude, Codex, and Gemini CLIs for agent comparison
 #   - Pre-configured MCP servers provide enhanced capabilities
 #   - Layer caching speeds up rebuilds
 #   - Fast startup time (~2-3s)
