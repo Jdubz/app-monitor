@@ -221,16 +221,21 @@ export class ContextTransforms {
     const lines = content.split('\n');
     let inCodeBlock = false;
     let currentBlock: string[] = [];
+    let openingMarker = '';
 
     for (const line of lines) {
       if (line.trim().startsWith('```')) {
         if (inCodeBlock) {
-          // End of code block
+          // End of code block - add closing marker and save block
+          currentBlock.push('```');
           blocks.push(currentBlock.join('\n'));
           currentBlock = [];
           inCodeBlock = false;
+          openingMarker = '';
         } else {
-          // Start of code block
+          // Start of code block - save opening marker
+          openingMarker = line;
+          currentBlock.push(openingMarker);
           inCodeBlock = true;
         }
       } else if (inCodeBlock) {

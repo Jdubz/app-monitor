@@ -18,7 +18,7 @@ describe('ContextCache', () => {
 
   beforeEach(async () => {
     testDb = await createTestDatabase();
-    cache = new ContextCache({ persistToDb: true });
+    cache = new ContextCache({ persistToDb: true, db: testDb.asDevBotsDatabase() });
   });
 
   afterEach(async () => {

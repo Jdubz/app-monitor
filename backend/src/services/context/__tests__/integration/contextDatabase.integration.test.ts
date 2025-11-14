@@ -197,15 +197,17 @@ describe('Context Database Integration', () => {
       await localCache.set(keys[0], bundles[0]);
       await localCache.set(keys[1], bundles[1]);
       await localCache.set(keys[2], bundles[2]);
-      await localCache.set(keys[3], bundles[3]); // Should evict keys[0]
+      await localCache.set(keys[3], bundles[3]); // Should evict keys[0] from memory
 
-      // First one should be evicted
-      const evicted = await localCache.get(keys[0]);
-      expect(evicted).toBeNull();
+      // Memory cache should only have 3 entries max
+      const stats = localCache.getStats();
+      expect(stats.totalEntries).toBeLessThanOrEqual(3);
+      expect(stats.evictions).toBeGreaterThan(0);
 
-      // Others should still exist
-      const exists = await localCache.get(keys[3]);
-      expect(exists).toBeDefined();
+      // All entries should still be in DB
+      const db = localTestDb.getConnection();
+      const dbEntries = db.prepare('SELECT COUNT(*) as count FROM context_bundle_cache').get() as { count: number };
+      expect(dbEntries.count).toBe(4);
 
       await localCache.destroy();
       localTestDb.destroy();
@@ -318,11 +320,14 @@ describe('Context Database Integration', () => {
       });
 
       await cache.set(cacheKey, bundle);
+      
+      // Clear memory to force DB read
+      cache.clear();
 
       // Close database
       testDb.destroy();
 
-      // Should return null gracefully
+      // Should return null gracefully when DB unavailable
       const result = await cache.get(cacheKey);
       expect(result).toBeNull();
     });

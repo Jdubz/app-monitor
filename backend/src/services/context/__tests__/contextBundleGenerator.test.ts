@@ -1565,9 +1565,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1645,9 +1647,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1885,7 +1889,7 @@ describe('ContextBundleGenerator', () => {
       const result = await generator.generateBundle(options);
       expect(result.success).toBe(true);
       const content = result.bundle!.profileContents['test-profile'].content;
-      expect(content).toContain('測試文档');
+      expect(content).toContain('测试文档');
     });
 
     it('should handle all valid task types', async () => {
