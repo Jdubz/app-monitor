@@ -22,12 +22,20 @@ export class ApiClient {
     this.log.debug('Resolved API base input', normalizedBaseUrl || '[current origin]');
     this.log.debug('Raw VITE_API_BASE_URL', import.meta.env.VITE_API_BASE_URL);
 
+    const apiKey = import.meta.env.VITE_API_KEY;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+
+    if (apiKey) {
+      headers['X-API-Key'] = apiKey;
+      this.log.debug('API key configured');
+    }
+
     this.client = axios.create({
       baseURL: fullBaseURL,
       timeout: 30000,
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers,
     });
 
     this.setupInterceptors();
