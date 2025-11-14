@@ -1,6 +1,5 @@
 import { LogLevel } from '../types/log.types';
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
 
 interface LogLevelBadgeProps {
   level: LogLevel;
@@ -25,10 +24,7 @@ const LogLevelBadge: React.FC<LogLevelBadgeProps> = ({ level }) => {
   return (
     <Badge
       variant={getVariant()}
-      className={cn(
-        'min-w-[48px] justify-center font-mono text-[10px] uppercase tracking-[0.3em]',
-        level === 'DEBUG' && 'text-muted-foreground',
-      )}
+      className="min-w-[48px] justify-center font-mono text-[10px] uppercase tracking-[0.3em]"
     >
       {level}
     </Badge>

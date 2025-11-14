@@ -94,12 +94,12 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
 
   return (
     <Card className="border border-border/60 bg-card/70 text-foreground shadow-xl backdrop-blur">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0">
+      <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between space-y-0">
         <div className="space-y-1">
-          <CardTitle className="text-lg font-semibold tracking-tight">
+          <CardTitle className="text-base sm:text-lg md:text-xl font-semibold tracking-tight">
             {service.displayName}
           </CardTitle>
-          <CardDescription className="text-xs uppercase tracking-[0.3em] text-muted-foreground">
+          <CardDescription className="text-[10px] sm:text-xs uppercase tracking-[0.3em] text-muted-foreground">
             {service.name}
           </CardDescription>
         </div>
@@ -108,39 +108,39 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
 
       <CardContent className="space-y-5">
         {service.name === 'job-finder-worker' && service.dockerContainer && (
-          <div className="rounded-xl border border-border/50 bg-background/50 p-4">
-            <div className="flex flex-col gap-3 text-sm text-muted-foreground">
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="min-w-[88px] font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+          <div className="rounded-xl border border-border/50 bg-background/50 p-3 sm:p-4 md:p-5">
+            <div className="flex flex-col gap-2 sm:gap-3 text-xs sm:text-sm text-muted-foreground">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <span className="min-w-[70px] sm:min-w-[88px] text-[10px] sm:text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                   Container
                 </span>
-                <Badge className={cn('font-semibold uppercase tracking-[0.3em]', serviceContainerVariant(service.dockerContainer.status))}>
+                <Badge className={cn('text-[10px] sm:text-xs font-semibold uppercase tracking-[0.3em]', serviceContainerVariant(service.dockerContainer.status))}>
                   {service.dockerContainer.status}
                 </Badge>
-                <span className="font-mono text-xs text-muted-foreground/80">
+                <span className="font-mono text-[10px] sm:text-xs text-muted-foreground/80 break-all">
                   {service.dockerContainer.name}
                 </span>
               </div>
 
               {service.dockerContainer.workerStatus && (
-                <div className="flex flex-wrap items-center gap-3">
-                  <span className="min-w-[88px] font-semibold uppercase tracking-[0.3em] text-muted-foreground">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                  <span className="min-w-[70px] sm:min-w-[88px] text-[10px] sm:text-xs font-semibold uppercase tracking-[0.3em] text-muted-foreground">
                     Worker
                   </span>
-                  <Badge className={cn('font-semibold uppercase tracking-[0.3em]', serviceContainerVariant(service.dockerContainer.workerStatus))}>
+                  <Badge className={cn('text-[10px] sm:text-xs font-semibold uppercase tracking-[0.3em]', serviceContainerVariant(service.dockerContainer.workerStatus))}>
                     {service.dockerContainer.workerStatus}
                   </Badge>
                 </div>
               )}
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-2">
+            <div className="mt-3 sm:mt-4 flex flex-col sm:flex-row sm:flex-wrap gap-2">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => handleDockerAction('start-container')}
                 disabled={service.dockerContainer.status === 'running' || isControlling}
-                className="border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20"
+                className="w-full sm:w-auto text-xs sm:text-sm border-emerald-500/40 bg-emerald-500/10 text-emerald-200 hover:bg-emerald-500/20"
               >
                 Start Container
               </Button>
@@ -149,7 +149,7 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
                 size="sm"
                 onClick={() => handleDockerAction('stop-container')}
                 disabled={service.dockerContainer.status !== 'running' || isControlling}
-                className="border-rose-500/40 bg-rose-500/15 text-rose-100 hover:bg-rose-500/25"
+                className="w-full sm:w-auto text-xs sm:text-sm border-rose-500/40 bg-rose-500/15 text-rose-100 hover:bg-rose-500/25"
               >
                 Stop Container
               </Button>
@@ -158,7 +158,7 @@ const ServiceCard: React.FC<ServiceCardProps> = ({
                 size="sm"
                 onClick={() => handleDockerAction('restart-worker')}
                 disabled={service.dockerContainer.status !== 'running' || isControlling}
-                className="border-amber-500/40 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20"
+                className="w-full sm:w-auto text-xs sm:text-sm border-amber-500/40 bg-amber-500/10 text-amber-200 hover:bg-amber-500/20"
               >
                 Restart Worker
               </Button>

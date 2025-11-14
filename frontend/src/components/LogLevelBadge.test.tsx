@@ -7,8 +7,8 @@ describe('LogLevelBadge', () => {
     render(<LogLevelBadge level="ERROR" />);
     const badge = screen.getByText('ERROR');
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass('bg-destructive/20');
-    expect(badge).toHaveClass('text-destructive-foreground');
+    expect(badge).toHaveClass('bg-red-900/90');
+    expect(badge).toHaveClass('text-red-100');
     expect(badge).toHaveClass('font-mono');
   });
 
@@ -16,23 +16,24 @@ describe('LogLevelBadge', () => {
     render(<LogLevelBadge level="WARN" />);
     const badge = screen.getByText('WARN');
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass('bg-amber-400/20');
-    expect(badge).toHaveClass('text-amber-200');
+    expect(badge).toHaveClass('bg-amber-900/90');
+    expect(badge).toHaveClass('text-amber-100');
   });
 
   it('renders INFO level with correct styling', () => {
     render(<LogLevelBadge level="INFO" />);
     const badge = screen.getByText('INFO');
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass('bg-sky-500/20');
-    expect(badge).toHaveClass('text-sky-200');
+    expect(badge).toHaveClass('bg-sky-900/90');
+    expect(badge).toHaveClass('text-sky-100');
   });
 
   it('renders DEBUG level with correct styling', () => {
     render(<LogLevelBadge level="DEBUG" />);
     const badge = screen.getByText('DEBUG');
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass('text-muted-foreground');
+    expect(badge).toHaveClass('text-foreground');
+    expect(badge).toHaveClass('border-border');
   });
 
   it('has correct base styling', () => {
