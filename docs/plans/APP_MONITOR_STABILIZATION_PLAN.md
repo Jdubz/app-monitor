@@ -93,20 +93,15 @@
 - **TC-6**: ✅ **COMPLETE** - Safety mechanisms for uncommitted changes.
   - *Deliverable*: Patch file creation, git status capture, prevents losing bot work on failures. ✅ **VERIFIED 2025-11-06**
 
-### 8. Prompt Engineering v3 (NEW)
-- **PE-1**: Implement task template validation system (`validateTaskTemplate()` function).
-  - *Deliverable*: TypeScript validator that enforces v3 compliance with clear error messages.
-- **PE-2**: Create task template library for common patterns.
-  - *Deliverable*: Pre-built templates for migrations, extensions, bugfixes, refactors with mandatory fields.
-  - *Templates*: `createMigrationTaskTemplate()`, `createExtensionTaskTemplate()`, `createBugfixTaskTemplate()`, `createRefactorTaskTemplate()`.
-- **PE-3**: Add scope validation rules to task creation API.
-  - *Deliverable*: API endpoint rejects tasks without required v3 fields (investigation, doNotCreate, constraints).
-- **PE-4**: Enforce mandatory investigation phase in all task workflows.
-  - *Deliverable*: Tasks must include investigation steps, mustFind, mustNotDuplicate fields.
-- **PE-5**: Add pre-implementation checklist validation.
-  - *Deliverable*: All tasks include verification checklist before execution begins.
-- **PE-6**: Update specification documents to use "EXACTLY N items" format.
-  - *Deliverable*: All planning docs explicitly list features to prevent scope creep.
+### 8. Prompt Engineering v3 (SUPERSEDED - ARCHIVED 2025-11-14)
+- **PE-1 through PE-6**: ⚠️ **REPLACED BY CONTEXT MANAGEMENT**
+  - Original plan: Manual v3 template validation system
+  - **New approach:** Context-aware auto-generation (see dev-bot-context-management.md)
+  - **Status:** 
+    - ✅ Phase 1 infrastructure complete (~2400 lines)
+    - ⏳ Phases 2-7 pending (recipes, minimal API, auto-detection, prompt generation)
+  - **Migration:** BOT_PROMPT_ENGINEERING_V3.md archived to `docs/archive/obsolete-2025-11-14/`
+  - **Deliverable:** When complete, task submission reduces from 15+ fields to 3: title, type, intent
 
 ### 9. Quality Metrics Baseline (NEW)
 - **QM-1**: Define success metrics for bot execution.
