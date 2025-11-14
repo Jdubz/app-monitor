@@ -11,11 +11,18 @@ Use this document as the standing reference when judging whether new work aligns
 
 ---
 
+## Autonomy Mandate
+- After the initial human planning/dispatch session, the end-to-end system (task queue, dev-bots, verification, PR tracking) must operate autonomously. Manual inputs come *only* when the automation raises an alert or a human intentionally intervenes.
+- The dev-monitor UI exists purely as the safety panel for those interventions. It must surface high-level truth (system power state, queue/concurrency counts, blocked chains, alert banners) and expose controls to pause/resume, block/unblock, or escalate. It must not become a general analytics dashboard, metrics explorer, or documentation browser.
+- Any feature work that increases UI scope or data exposure must prove it directly improves critical intervention speed rather than curiosity/analytics.
+
+---
+
 ## Dev-Monitor Platform (Frontend Control Surface)
 
 ### Philosophy
-- Dev-monitor is the administrative UI for an otherwise automated system. It can expose multiple pages/tabs but must provide a cohesive interface for intervention and situational awareness.
-- Primary goals: surface service health, running versions, deploy outcomes, worker/bot counts, current tasks, and alertable events.
+- Dev-monitor is the administrative UI for an otherwise automated system. Once the initial plan is kicked off, the backend runs unattended—dev-monitor is the breaker panel for when humans must step in.
+- Primary goals: surface binary/high-level status (system power, deployment state, worker/bot counts, tasks/chains active vs. blocked) plus any alerts that demand intervention. No vanity metrics, exploratory analytics, or metadata drill-downs beyond what is required to unblock/triage.
 - It is the human bridge into the automated backend; all orchestration flows from HTTP routes while state changes stream through Socket.IO.
 
 ### Architecture Snapshot
@@ -25,7 +32,7 @@ Use this document as the standing reference when judging whether new work aligns
 
 ### Implementation Requirements & Invariants
 1. **Administrative Focus**
-   - Show health/version/deploy/bot telemetry at a glance. Provide controls for manual intervention (restart service, pause queue, block/unblock task chain, etc.).
+   - Show only the high-signal indicators needed for intervention (on/off state, deployment version, total task chains, blocked chains, hung alerts) alongside the controls to act (restart service, pause queue, block/unblock chain). Suppress metrics/analysis/metadata panels that do not change immediate action.
 2. **Event-Driven Only**
    - No cron jobs or long-lived timers in dev-monitor. Everything reacts to backend events or explicit user input.
 3. **Process & Docker Safety**
