@@ -107,19 +107,19 @@ export const EnhancedLogsViewer: React.FC<EnhancedLogsViewerProps> = ({
       }
 
       // Ctrl/Cmd + A: Select all levels
-      if ((e.ctrlKey || e.metaKey) && e.key === 'a' && !e.shiftKey && !isTyping) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a' && !e.shiftKey && !isTyping) {
         onSelectAllLevels();
         e.preventDefault();
       }
 
       // Ctrl/Cmd + Shift + A: Clear all levels
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'A') {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'a') {
         onClearAllLevels();
         e.preventDefault();
       }
 
       // Ctrl/Cmd + Shift + S: Select all services
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'S') {
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 's') {
         onSelectAllServices();
         e.preventDefault();
       }
@@ -340,6 +340,7 @@ export const EnhancedLogsViewer: React.FC<EnhancedLogsViewerProps> = ({
           ['E/W/I/D', 'Filters'],
           ['Ctrl+A', 'All Levels'],
           ['Ctrl+L', 'Clear'],
+          ['Ctrl+S', 'Download'],
           ['N', 'Line#'],
         ].map(([key, label]) => (
           <span key={key} className="flex items-center gap-2">
