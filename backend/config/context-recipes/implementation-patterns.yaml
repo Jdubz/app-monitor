@@ -71,7 +71,7 @@ sources:
     path: shared/api-contracts/index.ts
     extract:
       pattern: "export interface.*Response"
-    transform: sample
+    transform: strip-comments
     optional: true
 
   # Service patterns
@@ -79,7 +79,7 @@ sources:
     path: backend/src/services/*.service.ts
     extract:
       pattern: "export class.*Service"
-    transform: sample
+    transform: strip-comments
     optional: true
 
 outputs:

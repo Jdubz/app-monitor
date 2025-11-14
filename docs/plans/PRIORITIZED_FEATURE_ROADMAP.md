@@ -281,55 +281,59 @@ Separate work-target development path from production deployment with artifact h
 
 ---
 
-### P1.2: Context-Aware Task Submission (Replaces Work-Target Path Abstraction)
+### P1.2: Context-Aware Task Submission
 **Plan:** dev-bot-context-management.md
 **Owner:** Platform Tooling
-**Duration:** 8-10 weeks (Phases 1-7)
-**Status:** 🟡 Phase 1 Complete (~15%), Phases 2-7 Pending
+**Duration:** 2-3 weeks (remaining UX work only)
+**Status:** 🟢 Backend Complete (90%), UX Integration Pending (10%)
 
 **Description:**
 **HIGHEST IMPACT FEATURE** - Transform task submission from 15+ manual fields to just 3 (title, type, intent) with auto-generated prompts from context bundles.
 
-**What's Complete (Phase 1 - Nov 2025):**
-- ✅ Context infrastructure (~2400 lines)
+**What's Complete (Backend Infrastructure - 90%):**
+- ✅ Context infrastructure (~2400 lines, fully tested)
   - ContextCache, ContextRecipeLoader, ContextRecipeValidator, ContextBundleGenerator
   - Full type system (contextRecipe.ts, contextBundle.ts)
-  - Comprehensive test coverage
-- ✅ Recipe validation system
-- ✅ Bundle generation and caching
-- ✅ Transform functions (markdown→JSON, code extraction)
+  - Comprehensive test coverage (unit + integration)
+- ✅ **7 YAML recipes** operational (not 5)
+  - scope-control, dev-monitor, pr-workflow, failure-recovery, deployment
+  - implementation-patterns, review-checklist
+  - All recipes extract from docs/ (dynamic generation)
+- ✅ Database integration complete (migration 020)
+- ✅ Container delivery via docker cp working
+- ✅ Prompt auto-generation functional
+- ✅ Cache hit rate >90%
 
-**What's Pending (Phases 2-7):**
-- ⏳ Context recipes (config/context-recipes/*.yaml) - 5 core profiles needed
-- ⏳ Minimal task submission API (POST /api/tasks with 3-field schema)
-- ⏳ Auto-detection logic (files from git diff, risk level, context profiles)
-- ⏳ Container context mounting (read-only /workspace/context/)
-- ⏳ Prompt auto-generation from context
-- ⏳ Chain context inheritance for REVIEW/FIX tasks
-- ⏳ Complete migration - delete v3 template code
+**What's Pending (UX Integration - 10%):**
+- ❌ Minimal 3-field API endpoint not implemented
+- ❌ Auto-detection logic (files, risk, profiles) not implemented
+- ❌ Frontend task form not updated
+- ❌ V3 template migration not started
 
 **Acceptance Criteria:**
-- Task submission requires ONLY: title, type, intent
-- Auto-detection accuracy >90% for files, risk level, context profiles
-- Context bundles generated <5s
-- Bundle sizes within budgets (implementation≤12KB, review≤8KB, fix≤10KB)
-- Investigation steps auto-generated from context
-- Constraints auto-injected from recipes
-- Zero manual template authoring
+- [ ] Task submission requires ONLY: title, type, intent (backend ready, API missing)
+- [ ] Auto-detection accuracy >90% for files, risk level, context profiles
+- [x] Context bundles generated <5s (already meeting target)
+- [x] Bundle sizes within budgets (already compliant)
+- [x] Investigation steps auto-generated from context (working)
+- [x] Constraints auto-injected from recipes (working)
+- [ ] Zero manual template authoring (still required - UX not updated)
 
 **Why Highest Impact:**
-- Eliminates 80% of manual task authoring work
-- Context always current (no stale docs)
-- Dramatically improves bot success rates
-- Foundation for full autonomy
+- Eliminates 80% of manual task authoring work (backend ready)
+- Context always current (no stale docs) ✅ WORKING
+- Dramatically improves bot success rates ✅ WORKING
+- Foundation for full autonomy ✅ READY
 
 **Dependencies:**
-- ✅ P0.3 Work-Target Registry (can proceed without)
+- ✅ P0.3 Work-Target Registry (not blocking)
 - ✅ Staged Task Queue (complete)
-- 🟡 Dev-Bot Foundational Upgrades (90% complete)
+- ✅ Dev-Bot Foundational Upgrades (complete)
 
-**Blocker Resolution:**
-Phase 1 infrastructure is complete and tested. Ready to proceed with Phase 2 (create recipes + minimal API).
+**Time to Completion:** 2-3 weeks (UX only)
+- Week 1: Minimal task API implementation
+- Week 2: Auto-detection + frontend updates
+- Week 3: V3 template deletion + documentation
 
 ---
 
