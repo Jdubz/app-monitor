@@ -19,6 +19,7 @@ interface CacheOptions {
   maxEntries?: number;
   maxTotalBytes?: number;
   persistToDb?: boolean;
+  db?: DevBotsDatabase; // Allow injecting database for testing
 }
 
 export class ContextCache {
@@ -31,6 +32,7 @@ export class ContextCache {
   private cleanupInterval?: NodeJS.Timeout;
   private cleanupInProgress = false;
   private logger = getContextLogger();
+  private accessSequence = 0; // For stable LRU ordering
 
   // Statistics
   private stats = {
@@ -45,7 +47,8 @@ export class ContextCache {
     this.persistToDb = options.persistToDb ?? true;
 
     try {
-      this.db = new DevBotsDatabase();
+      // Use provided database or create new one
+      this.db = options.db ?? new DevBotsDatabase();
       // Verify database connection
       this.db.getConnection().prepare('SELECT 1').get();
 
@@ -160,6 +163,11 @@ export class ContextCache {
     bundle: ContextBundle,
     ttl?: number
   ): Promise<void> {
+    // Don't cache if max entries is 0
+    if (this.maxEntries === 0) {
+      return;
+    }
+
     const sizeBytes = this.calculateBundleSize(bundle);
     const now = new Date();
 
@@ -173,8 +181,9 @@ export class ContextCache {
       createdAt: now,
       expiresAt: ttl !== undefined ? new Date(now.getTime() + ttl * 1000) : undefined,
       hitCount: 0,
-      lastAccessedAt: now
-    };
+      lastAccessedAt: now,
+      accessSequence: ++this.accessSequence
+    } as BundleCacheEntry;
 
     // Evict entries if needed
     await this.evictIfNeeded(sizeBytes);
@@ -269,9 +278,13 @@ export class ContextCache {
    * Evict least recently used entries
    */
   private async evictLRU(bytesNeeded: number): Promise<void> {
-    // Sort entries by last accessed time (oldest first)
+    // Sort entries by access sequence (oldest first) for stable LRU ordering
     const entries = Array.from(this.cache.entries())
-      .sort((a, b) => a[1].lastAccessedAt.getTime() - b[1].lastAccessedAt.getTime());
+      .sort((a, b) => {
+        const seqA = (a[1] as any).accessSequence || 0;
+        const seqB = (b[1] as any).accessSequence || 0;
+        return seqA - seqB;
+      });
 
     let freedBytes = 0;
 
@@ -296,6 +309,21 @@ export class ContextCache {
     if (entry) {
       entry.lastAccessedAt = new Date();
       entry.hitCount++;
+      (entry as any).accessSequence = ++this.accessSequence;
+
+      // Update database if persistence is enabled
+      if (this.persistToDb && this.db) {
+        try {
+          this.db.getConnection().prepare(`
+            UPDATE context_bundle_cache
+            SET hit_count = hit_count + 1,
+                last_accessed_at = ?
+            WHERE cache_key = ?
+          `).run(entry.lastAccessedAt.toISOString(), cacheKey);
+        } catch (error) {
+          this.logger.warn('Failed to update access time in database', { component: 'ContextCache', operation: 'updateAccessTime', cacheKey }, error instanceof Error ? error : undefined);
+        }
+      }
     }
   }
 
@@ -444,8 +472,9 @@ export class ContextCache {
         createdAt: new Date(row.created_at),
         expiresAt,
         hitCount: row.hit_count,
-        lastAccessedAt: new Date(row.last_accessed_at)
-      };
+        lastAccessedAt: new Date(row.last_accessed_at),
+        accessSequence: ++this.accessSequence
+      } as BundleCacheEntry;
 
       // Parse and validate bundle data
       let bundle: any;

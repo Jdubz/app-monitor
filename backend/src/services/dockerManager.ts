@@ -320,9 +320,6 @@ export class DockerManager {
    * Get the Gemini Dev-Bot image name
    * @deprecated Use getDevBotImage() instead. All agents use the same unified image.
    */
-  static getGeminiDevBotImage(): string {
-    return DockerManager.DEV_BOT_IMAGE;
-  }
 
   /**
    * Health check for Docker

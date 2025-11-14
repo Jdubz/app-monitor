@@ -302,7 +302,7 @@ sources:
       const result = await generator.generateBundle(options);
 
       expect(result.success).toBe(true);
-      expect(result.bundle!.profileContents['unicode-test'].content).toContain('測試文档');
+      expect(result.bundle!.profileContents['unicode-test'].content).toContain('测试文档');
       expect(result.bundle!.profileContents['unicode-test'].content).toContain('日本語');
 
       await cache.destroy();
@@ -315,11 +315,13 @@ sources:
 profile: abs-path-test
 version: 1.0.0
 description: Test absolute path rejection
+required: true
 taskTypes:
   - implementation
 sources:
   - type: markdown
     path: /etc/passwd
+    optional: false
 `;
       await createTempFile(recipeContent, 'abs-path-test.yaml', recipePath);
 
@@ -349,11 +351,13 @@ sources:
 profile: traversal-test
 version: 1.0.0
 description: Test path traversal rejection
+required: true
 taskTypes:
   - implementation
 sources:
   - type: markdown
     path: ../../etc/passwd
+    optional: false
 `;
       await createTempFile(recipeContent, 'traversal-test.yaml', recipePath);
 

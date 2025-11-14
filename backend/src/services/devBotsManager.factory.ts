@@ -35,6 +35,8 @@ import { SystemInitializationService } from './systemInitialization.service.js';
 import { InteractiveSessionCoordinator } from './interactiveSessionCoordinator.service.js';
 import { CleanupCoordinator } from './cleanupCoordinator.service.js';
 import { InfoQueryService } from './infoQuery.service.js';
+import { AgentSelector } from './agentSelector.js';
+import { AgentEligibilityServiceImpl } from './agentEligibility.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
 
 /**
@@ -139,13 +141,19 @@ export async function createDevBotsManagerDependencies(
     async () => {} // assignNextTask placeholder, will be bound by DevBotsManager
   );
 
+  // Initialize agent eligibility service
+  const agentEligibilityService = new AgentEligibilityServiceImpl();
+
+  // Initialize agent selector
+  const agentSelector = new AgentSelector(undefined, agentEligibilityService);
+
   // Initialize task execution service
   const taskExecutionService = new TaskExecutionService(
     taskQueue,
     agentManager,
     templateManager,
     ephemeralWorkerService,
-    // TaskPersistence removed
+    agentSelector,
     {
       maxConcurrentWorkers: 2,
       stuckCheckInterval: 60000,

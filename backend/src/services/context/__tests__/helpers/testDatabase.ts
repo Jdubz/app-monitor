@@ -9,6 +9,7 @@ import Database from 'better-sqlite3';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import type { DevBotsDatabase } from '../../../database.js';
 
 export class TestDatabase {
   private db: Database.Database | null = null;
@@ -83,6 +84,22 @@ export class TestDatabase {
 
     const result = this.db.prepare('SELECT COUNT(*) as count FROM context_bundle_cache').get() as { count: number };
     return result.count;
+  }
+
+  /**
+   * Get a DevBotsDatabase-compatible wrapper for use with ContextCache
+   */
+  asDevBotsDatabase(): DevBotsDatabase {
+    const db = this.db;
+    if (!db) {
+      throw new Error('Database not created. Call create() first.');
+    }
+
+    // Create a minimal DevBotsDatabase-compatible object
+    return {
+      getConnection: () => db,
+      close: () => db.close()
+    } as DevBotsDatabase;
   }
 }
 

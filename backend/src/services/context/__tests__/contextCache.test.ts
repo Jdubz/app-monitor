@@ -18,7 +18,7 @@ describe('ContextCache', () => {
 
   beforeEach(async () => {
     testDb = await createTestDatabase();
-    cache = new ContextCache({ persistToDb: true });
+    cache = new ContextCache({ persistToDb: true, db: testDb.asDevBotsDatabase() });
   });
 
   afterEach(async () => {
@@ -32,7 +32,7 @@ describe('ContextCache', () => {
 
   describe('constructor', () => {
     it('should initialize with default options', () => {
-      const defaultCache = new ContextCache();
+      const defaultCache = new ContextCache({ persistToDb: false });
       expect(defaultCache).toBeDefined();
       expect(defaultCache.getStats().totalEntries).toBe(0);
     });
@@ -40,7 +40,8 @@ describe('ContextCache', () => {
     it('should initialize with custom maxEntries and maxTotalBytes', () => {
       const customCache = new ContextCache({
         maxEntries: 50,
-        maxTotalBytes: 50 * 1024 * 1024
+        maxTotalBytes: 50 * 1024 * 1024,
+        persistToDb: false
       });
       expect(customCache).toBeDefined();
       expect(customCache.getStats().totalEntries).toBe(0);
@@ -53,9 +54,11 @@ describe('ContextCache', () => {
     });
 
     it('should start cleanup interval when persistToDb is true', async () => {
-      const cacheWithCleanup = new ContextCache({ persistToDb: true });
+      const localTestDb = await createTestDatabase();
+      const cacheWithCleanup = new ContextCache({ persistToDb: true, db: localTestDb.asDevBotsDatabase() });
       expect(cacheWithCleanup).toBeDefined();
       await cacheWithCleanup.destroy();
+      localTestDb.destroy();
     });
 
     it('should not start cleanup interval when persistToDb is false', () => {

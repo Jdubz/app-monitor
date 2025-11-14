@@ -575,9 +575,42 @@ export class PRConditionStateService {
     evaluation: ConditionEvaluation
   ): Promise<void> {
     const currentFingerprint = evaluation.fingerprint;
+    
+    // CRITICAL: Check database for ANY pending/running tasks for this condition
+    // Don't rely on in-memory state which can be stale or lost on restart
+    const prTasks = await this.taskQueue.findByPRNumber(prNumber);
+    const activeTasksForCondition = prTasks.filter(t => {
+      const isActive = t.status === 'pending' || t.status === 'running';
+      const matchesCondition = 
+        (conditionId === 'ci_checks_passing' && t.title.includes('CI checks')) ||
+        (conditionId === 'comments_resolved' && t.title.includes('review comments')) ||
+        (conditionId === 'no_merge_conflicts' && t.title.includes('merge conflicts')) ||
+        (conditionId === 'branch_updated' && t.title.includes('Update PR')) ||
+        (conditionId === 'no_change_requests' && t.title.includes('change requests')) ||
+        (conditionId === 'task_verification' && t.title.includes('verification')) ||
+        (conditionId === 'copilot_review_completed' && t.title.includes('Copilot review')) ||
+        (conditionId === 'final_validation_passed' && t.title.includes('validation'));
+      return isActive && matchesCondition;
+    });
+
+    if (activeTasksForCondition.length > 0) {
+      logger.info({
+        category: 'pr-workflow',
+        action: 'task_already_active',
+        message: `Skipping task spawn for ${conditionId} - ${activeTasksForCondition.length} task(s) already active`,
+        details: {
+          prNumber,
+          conditionId,
+          existing_tasks: activeTasksForCondition.map(t => ({ id: t.id, status: t.status, title: t.title })),
+          fingerprint: currentFingerprint
+        }
+      });
+      return; // Don't spam duplicate tasks
+    }
+
     const activeTasks = state.active_fix_tasks[conditionId] || [];
 
-    // Check if we already have an active task for this exact fingerprint
+    // Check if we already have an active task for this exact fingerprint in memory
     const existingTask = activeTasks.find(t => t.issue_fingerprint === currentFingerprint);
     if (existingTask) {
       logger.debug({

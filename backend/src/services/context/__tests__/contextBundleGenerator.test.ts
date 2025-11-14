@@ -12,7 +12,7 @@ import { ContextRecipeLoader } from '../contextRecipeLoader.js';
 import type { BundleGenerationOptions } from '../../../types/contextBundle.js';
 import { createTestDatabase, TestDatabase } from './helpers/testDatabase.js';
 import { mockRecipe, mockFileContent } from './helpers/testMocks.js';
-import { createTempDir, createTempFile, removeDir } from './helpers/testUtils.js';
+import { createTempDir, createTempFile, removeDir, createMockFileSystem } from './helpers/testUtils.js';
 import * as path from 'path';
 
 describe('ContextBundleGenerator', () => {
@@ -38,7 +38,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should initialize with custom cache', () => {
-      const cache = new ContextCache({ maxSize: 5 });
+      const cache = new ContextCache({ maxEntries: 5, persistToDb: false });
       generator = new ContextBundleGenerator({ cache });
       expect(generator).toBeDefined();
     });
@@ -195,7 +195,7 @@ describe('ContextBundleGenerator', () => {
   describe('Path Security', () => {
     beforeEach(async () => {
       // Create mock file system
-      await createMockFileSystem({
+      tempDir = await createMockFileSystem({
         'docs/test.md': mockFileContent.markdown,
         'safe/file.md': 'Safe content'
       });
@@ -204,10 +204,12 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should reject absolute paths', async () => {
+      const cache = new ContextCache({ maxEntries: 0, persistToDb: false });
       const mockLoader = {
         loadRecipe: vi.fn().mockResolvedValue({
           success: true,
           recipe: mockRecipe({
+            required: true,
             sources: [{ type: 'markdown' as const, path: '/etc/passwd', optional: false }]
           })
         }),
@@ -216,7 +218,8 @@ describe('ContextBundleGenerator', () => {
 
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -231,10 +234,12 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should reject path traversal with ../', async () => {
+      const cache = new ContextCache({ maxEntries: 0, persistToDb: false });
       const mockLoader = {
         loadRecipe: vi.fn().mockResolvedValue({
           success: true,
           recipe: mockRecipe({
+            required: true,
             sources: [{ type: 'markdown' as const, path: '../../etc/passwd', optional: false }]
           })
         }),
@@ -243,7 +248,8 @@ describe('ContextBundleGenerator', () => {
 
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -257,10 +263,12 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should reject path traversal with embedded ../', async () => {
+      const cache = new ContextCache({ maxEntries: 0, persistToDb: false });
       const mockLoader = {
         loadRecipe: vi.fn().mockResolvedValue({
           success: true,
           recipe: mockRecipe({
+            required: true,
             sources: [{ type: 'markdown' as const, path: 'docs/../../etc/passwd', optional: false }]
           })
         }),
@@ -269,7 +277,8 @@ describe('ContextBundleGenerator', () => {
 
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -321,9 +330,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -348,9 +359,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -448,9 +461,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -487,9 +502,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -507,8 +524,10 @@ describe('ContextBundleGenerator', () => {
       await createTempFile(largeContent, 'large.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
+        required: true,
         taskTypes: ['implementation'],
-        sources: [{ type: 'markdown' as const, path: 'large.md', optional: false }]
+        sources: [{ type: 'markdown' as const, path: 'large.md', optional: false }],
+        sizeLimit: { maxBytes: 200 * 1024 * 1024, maxInlineBytes: 100 * 1024 * 1024 } // Allow 200MB at profile level
       });
 
       const mockLoader = {
@@ -516,9 +535,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -548,9 +569,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -582,9 +605,11 @@ describe('ContextBundleGenerator', () => {
         loadAllRecipes: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -650,9 +675,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -686,9 +713,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -716,9 +745,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -746,9 +777,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -778,9 +811,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -794,6 +829,7 @@ describe('ContextBundleGenerator', () => {
 
     it('should fail when required source is missing', async () => {
       const recipe = mockRecipe({
+        required: true,
         taskTypes: ['implementation'],
         sources: [{ type: 'markdown' as const, path: 'missing.md', optional: false }]
       });
@@ -803,9 +839,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -822,6 +860,7 @@ describe('ContextBundleGenerator', () => {
       await createTempFile(largeContent, 'large.md', path.join(tempDir, 'backend'));
 
       const recipe = mockRecipe({
+        required: true,
         taskTypes: ['implementation'],
         sources: [{ type: 'markdown' as const, path: 'large.md', optional: false }],
         sizeLimit: { maxBytes: 1000, maxInlineBytes: 500 }
@@ -832,9 +871,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -865,9 +906,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -882,7 +925,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should add source header', async () => {
-      await createTempFile(mockFileContent.markdown, 'docs/test.md', path.join(tempDir, 'backend', 'docs'));
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend', 'docs'));
 
       const recipe = mockRecipe({
         taskTypes: ['implementation'],
@@ -894,9 +937,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -918,7 +963,7 @@ describe('ContextBundleGenerator', () => {
     it('should get cache stats', () => {
       const stats = generator.getCacheStats();
       expect(stats).toBeDefined();
-      expect(stats.size).toBeDefined();
+      expect(stats.totalEntries).toBeDefined();
       expect(stats.hits).toBeDefined();
       expect(stats.misses).toBeDefined();
     });
@@ -926,7 +971,7 @@ describe('ContextBundleGenerator', () => {
     it('should clear cache', () => {
       generator.clearCache();
       const stats = generator.getCacheStats();
-      expect(stats.size).toBe(0);
+      expect(stats.totalEntries).toBe(0);
     });
   });
 
@@ -948,9 +993,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -984,9 +1031,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1019,9 +1068,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1060,9 +1111,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1094,9 +1147,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1129,9 +1184,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1162,9 +1219,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1196,9 +1255,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1232,9 +1293,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1263,9 +1326,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1294,9 +1359,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1325,9 +1392,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1356,9 +1425,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1387,9 +1458,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1418,9 +1491,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1449,9 +1524,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1488,9 +1565,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1526,9 +1605,11 @@ describe('ContextBundleGenerator', () => {
         loadAllRecipes: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1566,9 +1647,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1616,7 +1699,7 @@ describe('ContextBundleGenerator', () => {
 
       // Verify it's in cache
       const stats = cache.getStats();
-      expect(stats.size).toBe(1);
+      expect(stats.totalEntries).toBe(1);
     });
 
     it('should cache with first recipe TTL when multiple recipes', async () => {
@@ -1678,9 +1761,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1702,9 +1787,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1730,9 +1817,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1757,9 +1846,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1784,9 +1875,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1796,7 +1889,7 @@ describe('ContextBundleGenerator', () => {
       const result = await generator.generateBundle(options);
       expect(result.success).toBe(true);
       const content = result.bundle!.profileContents['test-profile'].content;
-      expect(content).toContain('測試文档');
+      expect(content).toContain('测试文档');
     });
 
     it('should handle all valid task types', async () => {
@@ -1842,9 +1935,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1863,9 +1958,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -1893,9 +1990,11 @@ describe('ContextBundleGenerator', () => {
         loadRecipe: vi.fn()
       };
 
+      const cache = new ContextCache({ persistToDb: false });
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {

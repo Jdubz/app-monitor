@@ -16,7 +16,7 @@ describe('Context Database Integration', () => {
 
   beforeEach(async () => {
     testDb = await createTestDatabase();
-    cache = new ContextCache({ persistToDb: true });
+    cache = new ContextCache({ persistToDb: true, db: testDb.asDevBotsDatabase() });
   });
 
   afterEach(async () => {
@@ -174,7 +174,8 @@ describe('Context Database Integration', () => {
     });
 
     it('should evict LRU entries when cache is full', async () => {
-      const cache = new ContextCache({ maxSize: 3, persistToDb: true });
+      const localTestDb = await createTestDatabase();
+      const localCache = new ContextCache({ maxEntries: 3, persistToDb: true, db: localTestDb.asDevBotsDatabase() });
 
       const bundles = [
         mockBundle({ id: 'bundle-1' }),
@@ -185,7 +186,7 @@ describe('Context Database Integration', () => {
 
       const keys = await Promise.all(
         bundles.map((_, i) =>
-          cache.generateCacheKey({
+          localCache.generateCacheKey({
             taskType: 'implementation',
             profiles: [`profile-${i}`]
           })
@@ -193,20 +194,23 @@ describe('Context Database Integration', () => {
       );
 
       // Add 4 bundles (max is 3)
-      await cache.set(keys[0], bundles[0]);
-      await cache.set(keys[1], bundles[1]);
-      await cache.set(keys[2], bundles[2]);
-      await cache.set(keys[3], bundles[3]); // Should evict keys[0]
+      await localCache.set(keys[0], bundles[0]);
+      await localCache.set(keys[1], bundles[1]);
+      await localCache.set(keys[2], bundles[2]);
+      await localCache.set(keys[3], bundles[3]); // Should evict keys[0] from memory
 
-      // First one should be evicted
-      const evicted = await cache.get(keys[0]);
-      expect(evicted).toBeNull();
+      // Memory cache should only have 3 entries max
+      const stats = localCache.getStats();
+      expect(stats.totalEntries).toBeLessThanOrEqual(3);
+      expect(stats.evictions).toBeGreaterThan(0);
 
-      // Others should still exist
-      const exists = await cache.get(keys[3]);
-      expect(exists).toBeDefined();
+      // All entries should still be in DB
+      const db = localTestDb.getConnection();
+      const dbEntries = db.prepare('SELECT COUNT(*) as count FROM context_bundle_cache').get() as { count: number };
+      expect(dbEntries.count).toBe(4);
 
-      await cache.destroy();
+      await localCache.destroy();
+      localTestDb.destroy();
     });
   });
 
@@ -261,33 +265,34 @@ describe('Context Database Integration', () => {
 
       const columnNames = columns.map((col: any) => col.name);
 
+      expect(columnNames).toContain('id');
       expect(columnNames).toContain('bundle_id');
       expect(columnNames).toContain('cache_key');
       expect(columnNames).toContain('task_type');
       expect(columnNames).toContain('profiles');
       expect(columnNames).toContain('mount_path');
       expect(columnNames).toContain('size_bytes');
-      expect(columnNames).toContain('bundle_content');
+      expect(columnNames).toContain('bundle_data');
       expect(columnNames).toContain('created_at');
       expect(columnNames).toContain('expires_at');
       expect(columnNames).toContain('hit_count');
       expect(columnNames).toContain('last_accessed_at');
     });
 
-    it('should have cache_key as primary key', () => {
+    it('should have id as primary key', () => {
       const db = testDb.getConnection();
       const columns = db.prepare("PRAGMA table_info(context_bundle_cache)").all() as any[];
 
-      const cacheKeyColumn = columns.find((col: any) => col.name === 'cache_key');
-      expect(cacheKeyColumn).toBeDefined();
-      expect(cacheKeyColumn.pk).toBe(1);
+      const idColumn = columns.find((col: any) => col.name === 'id');
+      expect(idColumn).toBeDefined();
+      expect(idColumn.pk).toBe(1);
     });
 
     it('should have index on bundle_id', () => {
       const db = testDb.getConnection();
       const indexes = db.prepare("PRAGMA index_list(context_bundle_cache)").all() as any[];
 
-      const bundleIdIndex = indexes.find((idx: any) => idx.name === 'idx_context_bundle_cache_bundle_id');
+      const bundleIdIndex = indexes.find((idx: any) => idx.name === 'idx_context_bundle_id');
       expect(bundleIdIndex).toBeDefined();
     });
   });
@@ -315,11 +320,14 @@ describe('Context Database Integration', () => {
       });
 
       await cache.set(cacheKey, bundle);
+      
+      // Clear memory to force DB read
+      cache.clear();
 
       // Close database
       testDb.destroy();
 
-      // Should return null gracefully
+      // Should return null gracefully when DB unavailable
       const result = await cache.get(cacheKey);
       expect(result).toBeNull();
     });

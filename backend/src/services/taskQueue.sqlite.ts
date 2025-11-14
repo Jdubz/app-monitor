@@ -1034,7 +1034,7 @@ export class TaskQueueService {
   /**
    * Complete a task (idempotent)
    */
-  completeTask(taskId: string, output: string, agentType?: 'claude' | 'codex'): void {
+  completeTask(taskId: string, output: string, agentType?: 'claude' | 'codex' | 'gemini'): void {
     this.transaction(() => {
       const taskStmt = this.db.prepare('SELECT status FROM tasks WHERE id = ?');
       const task = taskStmt.get(taskId) as { status: TaskStatus } | undefined;
