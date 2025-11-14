@@ -19,7 +19,7 @@ import { SimpleFailureRecovery } from './failureRecovery.js';
 import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
 import type { ScopeControlService } from './scopeControl.service.js';
 import type { EphemeralWorkerService, EphemeralWorker as EphemeralWorkerType } from './ephemeralWorker.service.js';
-import type { TaskExecutionService } from './taskExecution.service.js';
+import { TaskExecutionService } from './taskExecution.service.js';
 import { TaskCompletionService } from './taskCompletion.service.js';
 import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 import { AgentEligibilityServiceImpl } from './agentEligibility.service.js';
