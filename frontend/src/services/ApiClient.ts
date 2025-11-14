@@ -5,7 +5,7 @@
  * Provides error handling, request/response interceptors, and type safety.
  */
 
-import axios, { AxiosInstance, AxiosRequestConfig } from 'axios';
+import axios, { AxiosInstance, AxiosRequestConfig, CreateAxiosDefaults } from 'axios';
 import type { ApiError } from '@/types/contracts';
 import { createLogger } from '@/utils/logger';
 
@@ -24,22 +24,24 @@ export class ApiClient {
 
     const apiKey = import.meta.env.VITE_API_KEY;
     
-    const config: any = {
-      baseURL: fullBaseURL,
-      timeout: 30000,
-      headers: {
-        common: {
-          'Content-Type': 'application/json',
-        }
-      }
+    const commonHeaders: Record<string, string> = {
+      'Content-Type': 'application/json',
     };
 
     if (apiKey) {
-      config.headers.common['X-API-Key'] = apiKey;
+      commonHeaders['X-API-Key'] = apiKey;
       this.log.debug('API key configured');
     } else {
       this.log.warn('No API key configured - requests may fail');
     }
+
+    const config: CreateAxiosDefaults = {
+      baseURL: fullBaseURL,
+      timeout: 30000,
+      headers: {
+        common: commonHeaders,
+      },
+    };
 
     this.client = axios.create(config);
 
