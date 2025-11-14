@@ -252,8 +252,7 @@ export class ContextBundleGenerator {
     _options: BundleGenerationOptions
   ): Promise<string | null> {
     // Sanitize the source path to prevent path traversal
-    // Remove any leading ../ sequences first
-    const normalizedPath = path.normalize(source.path).replace(/^(\.\.[/\\])+/, '');
+    const normalizedPath = path.normalize(source.path);
 
     // Prevent path traversal attacks
     if (normalizedPath.includes('..') || path.isAbsolute(normalizedPath)) {

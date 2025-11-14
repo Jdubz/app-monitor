@@ -204,10 +204,12 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should reject absolute paths', async () => {
+      const cache = new ContextCache({ maxSize: 0, persistToDb: false });
       const mockLoader = {
         loadRecipe: vi.fn().mockResolvedValue({
           success: true,
           recipe: mockRecipe({
+            required: true,
             sources: [{ type: 'markdown' as const, path: '/etc/passwd', optional: false }]
           })
         }),
@@ -216,7 +218,8 @@ describe('ContextBundleGenerator', () => {
 
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -231,10 +234,12 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should reject path traversal with ../', async () => {
+      const cache = new ContextCache({ maxSize: 0, persistToDb: false });
       const mockLoader = {
         loadRecipe: vi.fn().mockResolvedValue({
           success: true,
           recipe: mockRecipe({
+            required: true,
             sources: [{ type: 'markdown' as const, path: '../../etc/passwd', optional: false }]
           })
         }),
@@ -243,7 +248,8 @@ describe('ContextBundleGenerator', () => {
 
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
@@ -257,10 +263,12 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should reject path traversal with embedded ../', async () => {
+      const cache = new ContextCache({ maxSize: 0, persistToDb: false });
       const mockLoader = {
         loadRecipe: vi.fn().mockResolvedValue({
           success: true,
           recipe: mockRecipe({
+            required: true,
             sources: [{ type: 'markdown' as const, path: 'docs/../../etc/passwd', optional: false }]
           })
         }),
@@ -269,7 +277,8 @@ describe('ContextBundleGenerator', () => {
 
       generator = new ContextBundleGenerator({
         loader: mockLoader as any,
-        repoRoot: tempDir
+        repoRoot: tempDir,
+        cache
       });
 
       const options: BundleGenerationOptions = {
