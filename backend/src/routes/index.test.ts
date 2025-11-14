@@ -136,6 +136,7 @@ describe('API Routes Index', () => {
     it('should log debug details when health endpoint is called', async () => {
       await request(app).get('/api/health');
 
+      expect(logger.debug).toHaveBeenCalledTimes(1);
       expect(logger.debug).toHaveBeenCalledWith(
         expect.objectContaining({
           category: 'api',
