@@ -46,4 +46,3 @@ export const config = {
     followupTimeoutMs: parseInt(process.env.RECOVERY_FOLLOWUP_TIMEOUT_MS || '900000', 10), // 15 minutes
   },
 };
-// Test comment for linting

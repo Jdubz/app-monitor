@@ -392,8 +392,6 @@ export interface ApiError {
 }
 
 export type HealthCheckApiResponse = ApiSuccess<HealthCheckResponse>;
-export type PortStatusesResponse = ApiSuccess<PortStatusMap>;
-export type PortKillApiResponse = ApiSuccess<PortKillResponse>;
 
 export type TokenSummariesResponse = ApiSuccess<TokenSummariesPayload>;
 export type TokenSummaryResponse = ApiSuccess<TokenUsageSummary>;

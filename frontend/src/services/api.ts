@@ -20,10 +20,6 @@ import type {
   DevBotsInteractiveSessionStartPayload,
   DevBotsInteractiveHeartbeatPayload,
   DevBotsInteractiveInterruptPayload,
-  PortStatusMap,
-  PortStatusesResponse,
-  PortKillResponse,
-  PortKillApiResponse,
 } from '@/types/contracts';
 import type {
   DevBotsAgentComparison,
@@ -257,19 +253,6 @@ export const getDevBotsAgentComparison = async (): Promise<DevBotsAgentCompariso
   return data.comparison;
 };
 
-// Port management endpoints
-export const getPortStatuses = async (): Promise<PortStatusMap> => {
-  const client = await getApiClient();
-  const response = await client.get<PortStatusesResponse>('/ports/status');
-  return ensureApiSuccess(response, 'fetching port statuses');
-};
-
-export const killPortProcess = async (port: number): Promise<PortKillResponse> => {
-  const client = await getApiClient();
-  const response = await client.post<PortKillApiResponse>(`/ports/${port}/kill`);
-  return ensureApiSuccess(response, `killing port ${port}`);
-};
-
 export const handleApiError = (error: unknown): string => {
   if (isApiErrorPayload(error)) {
     return error.message || error.error;
@@ -327,8 +310,6 @@ export const api = {
   sendDevBotsInteractiveInterrupt,
   sendDevBotsInteractiveHeartbeat,
   getDevBotsInteractiveStreamUrl,
-  getPortStatuses,
-  killPortProcess,
   handleApiError,
   // Add HTTP methods for components that need them
   /**

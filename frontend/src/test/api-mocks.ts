@@ -9,15 +9,9 @@ import { vi } from 'vitest';
 import type {
   ApiSuccess,
   ApiError,
-  ProcessInfo,
   HealthCheckResponse,
-  ServiceLogsResponse,
   PortStatusMap,
   PortKillResponse,
-  EnvironmentsResponse,
-  CloudService,
-  CloudLogsResponse,
-  CloudLoggingStatus,
   DevBotsStatus,
   DevBotsTask,
   DevBotsTaskCollections,
@@ -26,7 +20,6 @@ import type {
   DevBotsAgentMetrics,
   DevBotsInteractiveSessionState,
   DevBotsInteractiveSession,
-  LogSource,
 } from '@app-monitor/api-contracts';
 import type { DevBotsQueueSummary, DevBotsSettings } from '../types/dev-bots';
 import { setApiClientInstance, type ApiClientAdapter } from '../services/api';
@@ -69,26 +62,6 @@ export const mockGenerators = {
     ...overrides,
   }),
 
-  processInfo: (overrides?: Partial<ProcessInfo>): ProcessInfo => ({
-    name: 'test-service',
-    displayName: 'Test Service',
-    status: 'running',
-    pid: 12345,
-    ports: [3000],
-    uptime: 3600,
-    startedAt: Date.now() - 3600000,
-    ...overrides,
-  }),
-
-  serviceLogsResponse: (overrides?: Partial<ServiceLogsResponse>): ServiceLogsResponse => ({
-    serviceName: 'test-service',
-    logs: [
-      '[2025-01-27 14:00:00] Service started',
-      '[2025-01-27 14:01:00] Ready to accept connections',
-    ],
-    ...overrides,
-  }),
-
   portInfo: (port: number = 3000, inUse: boolean = true) => ({
     port,
     pid: inUse ? 12345 : null,
@@ -109,75 +82,6 @@ export const mockGenerators = {
     port,
     pid: success ? 12345 : null,
     wasInUse: true,
-  }),
-
-  cloudService: (overrides?: Partial<CloudService>): CloudService => ({
-    name: 'test-service',
-    displayName: 'Test Service',
-    description: 'A test cloud service',
-    logFilter: 'resource.type="cloud_run_revision"',
-    ...overrides,
-  }),
-
-  environmentsResponse: (): EnvironmentsResponse => ({
-    production: {
-      name: 'production',
-      displayName: 'Production',
-      projectId: 'test-project-prod',
-      services: [
-        mockGenerators.cloudService({ name: 'api', displayName: 'API Service' }),
-        mockGenerators.cloudService({ name: 'worker', displayName: 'Worker Service' }),
-      ],
-      readOnly: true,
-    },
-    staging: {
-      name: 'staging',
-      displayName: 'Staging',
-      projectId: 'test-project-staging',
-      services: [
-        mockGenerators.cloudService({ name: 'api', displayName: 'API Service' }),
-      ],
-      readOnly: false,
-    },
-  }),
-
-  cloudLogsResponse: (
-    environment: string = 'production',
-    service: string = 'api',
-    count: number = 10
-  ): CloudLogsResponse => ({
-    environment,
-    service,
-    count,
-    logs: Array.from({ length: count }, (_, i) => ({
-      id: `log-${i}`,
-      service,
-      timestamp: Date.now() - (count - i) * 60000,
-      level: i % 4 === 0 ? 'ERROR' : i % 3 === 0 ? 'WARN' : 'INFO',
-      message: `Test log message ${i}`,
-      metadata: {
-        severity: i % 4 === 0 ? 'ERROR' : i % 3 === 0 ? 'WARNING' : 'INFO',
-      },
-      raw: {},
-    })),
-  }),
-
-  cloudLoggingStatus: (available: boolean = true): CloudLoggingStatus => ({
-    available,
-    message: available
-      ? 'Cloud Logging is available'
-      : 'Cloud Logging is not configured',
-  }),
-
-  logSource: (overrides?: Partial<LogSource>): LogSource => ({
-    id: 'test-source',
-    name: 'test-source',
-    format: 'json',
-    parser: 'json',
-    color: '#3b82f6',
-    displayOrder: 0,
-    path: '/var/log/test.log',
-    ...overrides,
   }),
 
   devBotsWorkerStatus: (

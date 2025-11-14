@@ -3,7 +3,7 @@ import axios from 'axios';
 import type { AxiosInstance } from 'axios';
 import * as apiModule from './api';
 import { resetApiClientInstance } from './api';
-import { mockHealthCheckResponse, mockPortStatuses } from '../test/fixtures';
+import { mockHealthCheckResponse } from '../test/fixtures';
 import type { ApiError } from '@/types/contracts';
 
 const success = <T>(data: T) => ({ data: { success: true, data } } as any);
@@ -56,32 +56,6 @@ describe('API Service', () => {
   });
 
 
-  describe('Port Management', () => {
-    it('should fetch port statuses', async () => {
-      vi.mocked(mockAxiosInstance.get).mockResolvedValue(success(mockPortStatuses));
-
-      const result = await apiModule.getPortStatuses();
-
-      expect(mockAxiosInstance.get).toHaveBeenCalledWith('/ports/status', undefined);
-      expect(result).toEqual(mockPortStatuses);
-    });
-
-    it('should kill a port process', async () => {
-      const response = {
-        success: true,
-        message: 'Port 3000 killed',
-        port: 3000,
-        pid: 12345,
-        wasInUse: true,
-      };
-      vi.mocked(mockAxiosInstance.post).mockResolvedValue(success(response));
-
-      const result = await apiModule.killPortProcess(3000);
-
-      expect(mockAxiosInstance.post).toHaveBeenCalledWith('/ports/3000/kill', undefined, undefined);
-      expect(result).toEqual(response);
-    });
-  });
 
   describe('Error Handling', () => {
     it('returns ApiError.error when no message is provided', () => {
