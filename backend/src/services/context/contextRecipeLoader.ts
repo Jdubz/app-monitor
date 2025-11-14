@@ -252,6 +252,6 @@ export class ContextRecipeLoader {
     // Ensure required is boolean
     recipeObj.required = Boolean(recipeObj.required);
 
-    return recipeObj as ContextRecipe;
+    return recipeObj as unknown as ContextRecipe;
   }
 }

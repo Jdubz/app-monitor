@@ -554,7 +554,7 @@ export class ContextCache {
         return null;
       }
 
-      return { entry, bundle: bundleObj as ContextBundle };
+      return { entry, bundle: bundleObj as unknown as ContextBundle };
     } catch (error) {
       this.logger.error('Failed to load bundle from database', { component: 'ContextCache', operation: 'loadFromDb', cacheKey }, error instanceof Error ? error : undefined);
       return null;
