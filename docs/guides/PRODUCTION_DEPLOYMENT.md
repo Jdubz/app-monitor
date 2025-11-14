@@ -384,13 +384,122 @@ cd /opt/app-monitor/current/backend
 npm run migrate
 ```
 
-### Environment Variables
+### Environment Variables & Authentication
 
-Production environment variables live in:
-- `/opt/app-monitor/shared/.env` (application config)
-- Systemd service files (system config)
+**Single Source of Truth:** `/opt/app-monitor/shared/.env`
 
-**Never commit secrets to git!**
+All services (backend, frontend build, deployment scripts) read from this one file via symlinks. This prevents configuration drift and API key mismatches.
+
+#### File Structure
+
+```
+/opt/app-monitor/
+├── shared/
+│   ├── .env                          # ✅ MASTER - Single source of truth
+│   └── config/
+│       └── .env.production → ../.env # Symlink for frontend build
+├── .env → shared/.env                # Symlink for backend runtime
+```
+
+#### Required Variables
+
+The `shared/.env` file must contain:
+
+```bash
+# API Authentication (Backend + Frontend must match)
+API_KEY=<your-secure-api-key>
+REQUIRE_AUTH=true
+
+# Frontend Variables (baked into build during deployment)
+VITE_PASSWORD=<frontend-password-gate-password>
+VITE_API_KEY=<must-match-backend-API_KEY>
+
+# Optional
+GITHUB_TOKEN=<github-personal-access-token>
+```
+
+#### How Authentication Works
+
+1. **Frontend Password Gate** (`VITE_PASSWORD`)
+   - First authentication layer
+   - User enters password in browser
+   - Stored in sessionStorage (client-side only)
+   - Controls access to the UI
+
+2. **API Authentication** (`API_KEY` / `VITE_API_KEY`)
+   - Second authentication layer
+   - Frontend sends `X-API-Key` header with every API request
+   - Backend validates header against `API_KEY` from env
+   - **CRITICAL:** Both values must match exactly
+
+#### Deployment Flow
+
+1. **Build time** (frontend):
+   ```bash
+   # deploy.sh line 192-196
+   source "${SHARED_DIR}/config/.env.production"  # Loads shared/.env via symlink
+   npm run build  # Vite bakes VITE_* variables into bundle
+   ```
+
+2. **Runtime** (backend):
+   ```bash
+   # Backend reads /opt/app-monitor/.env (symlink to shared/.env)
+   config.apiKey = process.env.API_KEY
+   ```
+
+#### Common Authentication Issues
+
+| Issue | Cause | Solution |
+|-------|-------|----------|
+| 401 Unauthorized | Frontend API key doesn't match backend | Verify `API_KEY === VITE_API_KEY` in shared/.env, redeploy |
+| Password doesn't work | Old `VITE_PASSWORD` baked into build | Update shared/.env, redeploy to rebuild frontend |
+| Backend reads wrong key | Using old /opt/app-monitor/.env instead of symlink | Remove old file, create symlink: `ln -s shared/.env .env` |
+| Frontend has no API key | Built before VITE_API_KEY was added | Add to shared/.env, redeploy to rebuild |
+
+#### Setting Up Authentication (First Time)
+
+1. **Create master env file:**
+   ```bash
+   cat > /opt/app-monitor/shared/.env << 'EOF'
+   API_KEY=your-secure-key-here
+   REQUIRE_AUTH=true
+   VITE_PASSWORD=your-password-here
+   VITE_API_KEY=your-secure-key-here
+   EOF
+   chmod 600 /opt/app-monitor/shared/.env
+   ```
+
+2. **Create symlinks:**
+   ```bash
+   # Backend reads from symlink
+   cd /opt/app-monitor
+   rm -f .env
+   ln -s shared/.env .env
+   
+   # Frontend build reads from symlink
+   mkdir -p shared/config
+   rm -f shared/config/.env.production
+   ln -s /opt/app-monitor/shared/.env shared/config/.env.production
+   ```
+
+3. **Deploy to bake keys into frontend:**
+   ```bash
+   git push origin main  # Triggers deployment
+   ```
+
+4. **Verify:**
+   ```bash
+   # Check backend can read
+   grep "API_KEY" /opt/app-monitor/.env
+   
+   # Check frontend will use same values
+   cat /opt/app-monitor/shared/config/.env.production | grep "VITE_API_KEY"
+   
+   # After deployment, check frontend bundle has key
+   grep -o "your-secure-key" /opt/app-monitor/current/frontend/dist/assets/*.js
+   ```
+
+**Never commit secrets to git!** The `.env` file is gitignored and only exists on the production server.
 
 ---
 
