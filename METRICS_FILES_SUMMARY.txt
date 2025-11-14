@@ -1,0 +1,217 @@
+COMPLETE METRICS AND PROGRESS TRACKING SYSTEMS - FILES SUMMARY
+===============================================================
+
+CORE METRICS SERVICES
+=====================
+
+1. TaskQueueMetricsService
+   File: /home/jdubz/Development/app-monitor/backend/src/services/taskQueueMetrics.service.ts
+   Lines: 276
+   Purpose: Real-time queue metrics, agent comparison, task duration statistics
+   Key Methods:
+   - getQueueMetrics(): QueueMetrics
+   - getTaskDurationStats(daysBack?: number): TaskDurationStats[]
+   - getAgentComparisonMetrics(): AgentComparisonMetrics
+   - summarizeAgentComparisonMetrics(): Pure function for aggregation
+
+2. MetricsEmitter Service
+   File: /home/jdubz/Development/app-monitor/backend/src/services/metricsEmitter.ts
+   Lines: 192
+   Purpose: Periodic system metrics emission (1-minute interval)
+   Key Methods:
+   - start(): void
+   - stop(): void
+   - getCurrentMetrics(): SystemMetrics | null
+   - getHealthStatus(metrics): 'HEALTHY' | 'DEGRADED' | 'CRITICAL'
+
+3. ChainTrackerService
+   File: /home/jdubz/Development/app-monitor/backend/src/services/chainTracker.service.ts
+   Lines: 226
+   Purpose: Chain lifecycle management and metrics tracking
+   Key Methods:
+   - countActiveChains(): number
+   - countBlockedChains(): number
+   - getQueueDepths(): { implementation, followup }
+   - getChainStats(maxConcurrentChains): ChainStats
+   - closeCompletedChains(): number
+   - blockChain/unblockChain(): void
+
+4. QualityObservationService
+   File: /home/jdubz/Development/app-monitor/backend/src/services/qualityObservation.service.ts
+   Lines: 579
+   Purpose: Quality metrics tracking and score calculation
+   Key Methods:
+   - observeQuality(task, verification?, qualityGate?): Promise<QualityObservation>
+   - calculateOverallScore(observations): number (weighted 30/30/30/10)
+   - determineQualityLevel(score): 'excellent' | 'good' | 'fair' | 'needs-improvement'
+   - generateImprovementOpportunities(observations): ImprovementOpportunity[]
+   - isReadyForMerge(observation): boolean
+
+5. StatusAggregationService
+   File: /home/jdubz/Development/app-monitor/backend/src/services/statusAggregation.service.ts
+   Lines: 108
+   Purpose: Aggregate system status from multiple services
+   Key Methods:
+   - getSystemStatus(systemState): Promise<DevBotsStatus>
+   - getTasks(): Promise<{ pending, active, completed }>
+
+DATABASE & PERSISTENCE
+======================
+
+6. TaskQueueService (SQLite implementation)
+   File: /home/jdubz/Development/app-monitor/backend/src/services/taskQueue.sqlite.ts
+   Lines: 2000+ (excerpt read)
+   Purpose: SQLite-based task persistence and queue management
+   Tables Created:
+   - tasks (primary metrics source)
+   - task_executions (execution history)
+   - workers (worker tracking)
+   - task_files, task_criteria, task_references (related data)
+   - pr_followup_fingerprints (PR tracking)
+
+API ENDPOINTS
+=============
+
+7. Status Routes
+   File: /home/jdubz/Development/app-monitor/backend/src/routes/dev-bots/status.routes.ts
+   Lines: 491
+   Endpoints:
+   - GET /status                          -> DevBotsStatus
+   - GET /health                          -> { healthy, status }
+   - GET /metrics                         -> { metrics, stats }
+   - GET /agent-comparison                -> { comparison }
+   - GET /projects                        -> List of projects
+   - POST /start, /stop                   -> System control
+   - Additional endpoints for Docker, cleanup, scope violations, etc.
+
+CACHING
+=======
+
+8. ContextCache
+   File: /home/jdubz/Development/app-monitor/backend/src/services/context/contextCache.ts
+   Lines: 300+ (excerpt read)
+   Purpose: LRU cache with SQLite persistence for context bundles
+   Cache Metrics:
+   - hits, misses, evictions counters
+   - hit_count per entry
+   - LRU ordering via access_sequence
+
+GATEWAY/MANAGER
+===============
+
+9. DevBotsManager
+   File: /home/jdubz/Development/app-monitor/backend/src/services/devBotsManager.ts
+   Lines: 300+ (excerpt read)
+   Purpose: Centralized manager exposing metrics via delegation
+   Metric Methods:
+   - getQueueMetrics()
+   - getTaskDurationStats()
+   - getAgentComparisonMetrics()
+   - getSystemStatus()
+
+RELATED SERVICES
+================
+
+10. TaskCreationService
+    File: /home/jdubz/Development/app-monitor/backend/src/services/taskCreation.service.ts
+    Purpose: Task creation with automatic classification (Phase 0.3)
+
+11. TaskClassifier
+    File: /home/jdubz/Development/app-monitor/backend/src/services/taskClassifier.ts
+    Purpose: Auto-classification of tasks by category, complexity, file patterns
+
+12. EphemeralWorkerService
+    File: /home/jdubz/Development/app-monitor/backend/src/services/ephemeralWorker.service.ts
+    Purpose: Manages active workers (used in system metrics)
+
+13. RetryCoordinationService
+    File: /home/jdubz/Development/app-monitor/backend/src/services/retryCoordination.service.ts
+    Purpose: Retry tracking and coordination (impacts success metrics)
+
+TESTS
+=====
+
+14. TaskQueueMetrics Tests
+    File: /home/jdubz/Development/app-monitor/backend/src/services/taskQueue.metrics.test.ts
+    Lines: 108
+    Purpose: Tests for metric aggregation and calculation functions
+    Test Cases:
+    - Zero metrics handling
+    - Single agent metrics
+    - Multiple agents with success rates
+    - Task type breakdown inclusion
+
+15. ChainTracker Tests
+    File: /home/jdubz/Development/app-monitor/backend/src/services/__tests__/chainTracker.test.ts
+    Purpose: Tests for chain lifecycle management
+
+16. Context Cache Tests
+    File: /home/jdubz/Development/app-monitor/backend/src/services/context/__tests__/contextCache.test.ts
+    Purpose: Tests for LRU cache behavior, eviction, persistence
+
+TYPES & CONTRACTS
+=================
+
+17. API Contracts
+    File: /home/jdubz/Development/app-monitor/shared/api-contracts/index.ts
+    Purpose: Shared type definitions for metrics endpoints
+
+18. Task Schema
+    File: /home/jdubz/Development/app-monitor/backend/src/types/taskSchema.ts
+    Purpose: TypeScript schema for Task data structure
+
+19. Context Bundle Types
+    File: /home/jdubz/Development/app-monitor/backend/src/types/contextBundle.ts
+    Purpose: TypeScript types for context bundles and cache
+
+CONFIGURATION
+==============
+
+20. Config
+    File: /home/jdubz/Development/app-monitor/backend/src/config.ts
+    Includes:
+    - devBots.maxWorkers (used in chain concurrency limits)
+    - metrics intervals
+    - cache sizes
+
+MONITORING & LOGGING
+====================
+
+21. Logger
+    File: /home/jdubz/Development/app-monitor/backend/src/utils/logger.ts
+    Purpose: Structured logging with categories like 'metrics', 'process'
+    Logged metric events:
+    - system_metrics (from MetricsEmitter)
+    - queue_metrics (status updates)
+    - chains_closed (chain completion)
+    - task_auto_classified (auto-classification events)
+
+TOTAL DISCOVERED COMPONENTS
+===========================
+- 5 core metrics services
+- 1 SQLite database with metrics tables
+- 4 API endpoints for metrics
+- 1 advanced cache system (LRU + persistence)
+- 1 centralized manager (DevBotsManager)
+- 6+ related services impacting metrics
+- 5+ test suites
+- 3+ type definition files
+- 1 configuration file
+- 1 logging system with metric events
+
+KEY FILES BY IMPORTANCE
+=======================
+CRITICAL:
+  1. /backend/src/services/taskQueueMetrics.service.ts - Core real-time metrics
+  2. /backend/src/services/taskQueue.sqlite.ts - Data persistence
+  3. /backend/src/routes/dev-bots/status.routes.ts - API exposure
+
+HIGH:
+  4. /backend/src/services/qualityObservation.service.ts - Quality metrics
+  5. /backend/src/services/chainTracker.service.ts - Chain progress
+  6. /backend/src/services/metricsEmitter.ts - Periodic emission
+
+MEDIUM:
+  7. /backend/src/services/context/contextCache.ts - Cache metrics
+  8. /backend/src/services/devBotsManager.ts - Metric delegation
+  9. /backend/src/services/statusAggregation.service.ts - Status aggregation
