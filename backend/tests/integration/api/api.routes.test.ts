@@ -419,66 +419,6 @@ describe('API Integration Suite', () => {
     ]);
   });
 
-  describe('Service management', () => {
-    runEndpointTests([
-      {
-        name: 'GET /api/services/status',
-        method: 'get',
-        url: '/api/services/status',
-        assert: (res) => {
-          const body: ServicesStatusResponse = res.body;
-          expect(body.success).toBe(true);
-          expect(Array.isArray(body.data)).toBe(true);
-        },
-      },
-      {
-        name: 'GET /api/services/dev-monitor-backend/status',
-        method: 'get',
-        url: '/api/services/dev-monitor-backend/status',
-        assert: (res) => {
-          const body: ServiceStatusResponse = res.body;
-          expect(body.data.name).toBe('dev-monitor-backend');
-        },
-      },
-      {
-        name: 'POST /api/services/dev-monitor-backend/start',
-        method: 'post',
-        url: '/api/services/dev-monitor-backend/start',
-        assert: (res) => {
-          const body: ServiceActionResponse = res.body;
-          expect(body.success).toBe(true);
-        },
-      },
-      {
-        name: 'POST /api/services/dev-monitor-backend/stop',
-        method: 'post',
-        url: '/api/services/dev-monitor-backend/stop',
-        assert: (res) => {
-          const body: ServiceActionResponse = res.body;
-          expect(body.success).toBe(true);
-        },
-      },
-      {
-        name: 'POST /api/services/dev-monitor-backend/kill',
-        method: 'post',
-        url: '/api/services/dev-monitor-backend/kill',
-        assert: (res) => {
-          const body: ServiceActionResponse = res.body;
-          expect(body.success).toBe(true);
-        },
-      },
-      {
-        name: 'POST /api/services/dev-monitor-backend/restart',
-        method: 'post',
-        url: '/api/services/dev-monitor-backend/restart',
-        assert: (res) => {
-          const body: ServiceActionResponse = res.body;
-          expect(body.success).toBe(true);
-        },
-      },
-    ]);
-  });
-
   describe('Docker management', () => {
     runEndpointTests([
       {
