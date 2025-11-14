@@ -7,9 +7,19 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import express, { Application } from 'express';
 import request from 'supertest';
+import { logger } from '../utils/logger.js';
 import { createApiRouter } from './index.js';
 import type { ProcessManager } from '../services/processManager.js';
 import type { CloudLogging } from '../services/cloudLogging.js';
+
+vi.mock('../utils/logger.js', () => ({
+  logger: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+}));
 
 describe('API Routes Index', () => {
   let app: Application;
@@ -35,6 +45,7 @@ describe('API Routes Index', () => {
   beforeEach(() => {
     processManager = createProcessManagerStub();
     cloudLogging = createCloudLoggingStub();
+    vi.mocked(logger.debug).mockClear();
 
     // Create Express app with API router
     app = express();
@@ -120,6 +131,22 @@ describe('API Routes Index', () => {
 
       // ISO 8601 timestamps should end with 'Z' for UTC
       expect(response.body.data.timestamp).toMatch(/Z$/);
+    });
+
+    it('should log debug details when health endpoint is called', async () => {
+      await request(app).get('/api/health');
+
+      expect(logger.debug).toHaveBeenCalledWith(
+        expect.objectContaining({
+          category: 'api',
+          action: 'health_check',
+          details: expect.objectContaining({
+            uptime: expect.any(Number),
+            timestamp: expect.any(String),
+            shuttingDown: false,
+          }),
+        })
+      );
     });
   });
 });

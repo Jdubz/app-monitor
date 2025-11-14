@@ -55,16 +55,6 @@ export function createApiRouter(deps: {
 
   // Health check - no auth required
   router.get('/health', (_req, res) => {
-    logger.debug({
-      category: 'api',
-      action: 'health_check',
-      message: 'Health endpoint called',
-      details: {
-        uptime: process.uptime(),
-        timestamp: new Date().toISOString()
-      }
-    });
-
     // Check if server is shutting down
     // Note: This will be false in test environment where index module isn't loaded
     let shuttingDown = false;
@@ -76,7 +66,21 @@ export function createApiRouter(deps: {
       // In test environment, index.js may not be available
       shuttingDown = false;
     }
-    
+
+    const uptime = process.uptime();
+    const timestamp = new Date().toISOString();
+
+    logger.debug({
+      category: 'api',
+      action: 'health_check',
+      message: shuttingDown ? 'Health endpoint called during shutdown' : 'Health endpoint called',
+      details: {
+        uptime,
+        timestamp,
+        shuttingDown,
+      },
+    });
+
     if (shuttingDown) {
       // Return 503 during graceful shutdown so nginx stops routing here
       return res.status(503).json({
@@ -92,8 +96,8 @@ export function createApiRouter(deps: {
       success: true,
       data: {
         status: 'ok',
-        uptime: process.uptime(),
-        timestamp: new Date().toISOString(),
+        uptime,
+        timestamp,
       },
     };
     res.json(payload);
