@@ -1,7 +1,7 @@
 /**
- * EphemeralWorkerService Context Mounting Tests
+ * EphemeralWorkerService Context Copying Tests
  * 
- * Tests context bundle mounting in Docker containers
+ * Tests context bundle copying into Docker containers using docker cp pattern
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -9,7 +9,7 @@ import type { Task } from '../taskQueue.sqlite.js';
 import type { ContextBundleGenerator } from '../context/index.js';
 import type { ContextBundle } from '../../types/contextBundle.js';
 
-describe('EphemeralWorkerService - Context Mounting', () => {
+describe('EphemeralWorkerService - Context Copying', () => {
   let service: any;  // Using any to avoid complex Docker mocking
   let mockDocker: any;
   let mockDockerManager: any;
@@ -64,11 +64,11 @@ describe('EphemeralWorkerService - Context Mounting', () => {
       getHostLogsDir: vi.fn().mockReturnValue('/tmp/test-logs'),
       
       // Simplified createWorker for testing
-      async testContextMounting(task: Task): Promise<{ binds: string[]; env: string[] }> {
-        const binds: string[] = [];
+      async testContextCopying(task: Task): Promise<{ copied: boolean; env: string[] }> {
         const envVars: string[] = [];
+        let copied = false;
 
-        // Simplified context mounting logic (extracted from createWorker)
+        // Simplified context copying logic (extracted from copyContextBundleToContainer)
         if (task.context_cache_key && task.files && task.files.length > 0) {
           const contextResult = await mockContextGenerator.generateBundle({
             taskType: (task.type || 'implementation') as any,
@@ -77,8 +77,7 @@ describe('EphemeralWorkerService - Context Mounting', () => {
           });
 
           if (contextResult.success && contextResult.bundle?.mountPath) {
-            const contextMountPath = contextResult.bundle.mountPath;
-            binds.push(`${contextMountPath}:/workspace/context:ro`);
+            copied = true;
           }
         }
 
@@ -96,13 +95,13 @@ describe('EphemeralWorkerService - Context Mounting', () => {
           envVars.push(`TASK_RISK_LEVEL=${task.risk_level}`);
         }
 
-        return { binds, env: envVars };
+        return { copied, env: envVars };
       }
     };
   });
 
-  describe('Context Bundle Mounting', () => {
-    it('should mount context bundle when available', async () => {
+  describe('Context Bundle Copying', () => {
+    it('should copy context bundle when available', async () => {
       const task: Partial<Task> = {
         id: 'test-task-id',
         type: 'implementation',
@@ -121,9 +120,9 @@ describe('EphemeralWorkerService - Context Mounting', () => {
         timeout_ms: null
       };
 
-      const result = await service.testContextMounting(task as Task);
+      const result = await service.testContextCopying(task as Task);
 
-      expect(result.binds).toContain('/tmp/context-bundles/test-bundle:/workspace/context:ro');
+      expect(result.copied).toBe(true);
       expect(mockContextGenerator.generateBundle).toHaveBeenCalledWith({
         taskType: 'implementation',
         targetFiles: ['backend/src/services/test.ts'],
@@ -158,7 +157,7 @@ describe('EphemeralWorkerService - Context Mounting', () => {
       expect(result.env).toContain('TASK_RISK_LEVEL=high');
     });
 
-    it('should skip mounting when no context_cache_key', async () => {
+    it('should skip copying when no context_cache_key', async () => {
       const task: Partial<Task> = {
         id: 'test-task-id',
         type: 'implementation',
@@ -173,13 +172,13 @@ describe('EphemeralWorkerService - Context Mounting', () => {
         timeout_ms: null
       };
 
-      const result = await service.testContextMounting(task as Task);
+      const result = await service.testContextCopying(task as Task);
 
-      expect(result.binds.length).toBe(0);
+      expect(result.copied).toBe(false);
       expect(mockContextGenerator.generateBundle).not.toHaveBeenCalled();
     });
 
-    it('should skip mounting when no files specified', async () => {
+    it('should skip copying when no files specified', async () => {
       const task: Partial<Task> = {
         id: 'test-task-id',
         type: 'implementation',
@@ -196,9 +195,9 @@ describe('EphemeralWorkerService - Context Mounting', () => {
         timeout_ms: null
       };
 
-      const result = await service.testContextMounting(task as Task);
+      const result = await service.testContextCopying(task as Task);
 
-      expect(result.binds.length).toBe(0);
+      expect(result.copied).toBe(false);
       expect(mockContextGenerator.generateBundle).not.toHaveBeenCalled();
     });
 
@@ -225,13 +224,13 @@ describe('EphemeralWorkerService - Context Mounting', () => {
         timeout_ms: null
       };
 
-      // Should NOT throw - mounting failure should not block task execution
-      const result = await service.testContextMounting(task as Task);
+      // Should NOT throw - copy failure should not block task execution
+      const result = await service.testContextCopying(task as Task);
 
-      expect(result.binds.length).toBe(0);
+      expect(result.copied).toBe(false);
     });
 
-    it('should mount context as read-only', async () => {
+    it('should copy context as isolated files (docker cp pattern)', async () => {
       const task: Partial<Task> = {
         id: 'test-task-id',
         type: 'implementation',
@@ -248,9 +247,10 @@ describe('EphemeralWorkerService - Context Mounting', () => {
         timeout_ms: null
       };
 
-      const result = await service.testContextMounting(task as Task);
+      const result = await service.testContextCopying(task as Task);
 
-      expect(result.binds[0]).toMatch(/:ro$/);  // Should end with :ro (read-only)
+      // Context should be copied, not mounted
+      expect(result.copied).toBe(true);
     });
   });
 });

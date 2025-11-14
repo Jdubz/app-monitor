@@ -325,8 +325,8 @@ main() {
     cd "${RELEASE_DIR}/frontend"
     # Temporarily remove root package.json to prevent workspace resolution
     mv "${RELEASE_DIR}/package.json" "${RELEASE_DIR}/package.json.bak" 2>/dev/null || true
-    # Install dependencies locally
-    npm ci
+    # Install dependencies locally (force devDependencies so build tools exist)
+    NPM_CONFIG_PRODUCTION=false npm ci --include=dev
 
     # Load environment variables from shared config if available
     if [ -f "${SHARED_DIR}/config/.env.production" ]; then

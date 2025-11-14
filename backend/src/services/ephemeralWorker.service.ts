@@ -16,6 +16,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import tar from 'tar-fs';
 import type Docker from 'dockerode';
 import { logger } from '../utils/logger.js';
 import type { Task } from './taskQueue.sqlite.js';
@@ -363,92 +364,6 @@ export class EphemeralWorkerService {
         }
       }
 
-      // Mount context bundle if available (migration 020 integration)
-      if (task.context_cache_key && task.files && task.files.length > 0) {
-        try {
-          // Regenerate bundle (will use cache if available)
-          const contextResult = await this.contextGenerator.generateBundle({
-            taskType: (task.type || 'implementation') as 'implementation' | 'fix' | 'review' | 'deployment' | 'pr-follow-up' | 'analysis',
-            targetFiles: task.files,
-            force: false  // Use cached bundle if available
-          });
-          
-          if (contextResult.success && contextResult.bundle?.mountPath) {
-            const contextMountPath = contextResult.bundle.mountPath;
-            
-            // Verify the mount path exists
-            if (fs.existsSync(contextMountPath)) {
-              binds.push(`${contextMountPath}:/workspace/context:ro`);
-              
-              logger.info({
-                category: 'context',
-                action: 'context_bundle_mounted',
-                message: `Mounted context bundle in container`,
-                details: {
-                  taskId: task.id,
-                  bundleId: task.context_bundle_id,
-                  cacheKey: task.context_cache_key,
-                  profiles: task.context_profiles,
-                  hostPath: contextMountPath,
-                  containerPath: '/workspace/context',
-                  mode: 'ro',
-                  cached: contextResult.cached || false
-                }
-              });
-            } else {
-              logger.warn({
-                category: 'context',
-                action: 'context_bundle_path_not_found',
-                message: `Context bundle path does not exist: ${contextMountPath}`,
-                details: {
-                  taskId: task.id,
-                  bundleId: task.context_bundle_id,
-                  note: 'Task will proceed without context'
-                }
-              });
-            }
-          } else if (!contextResult.success) {
-            logger.warn({
-              category: 'context',
-              action: 'context_bundle_retrieval_failed',
-              message: `Failed to retrieve context bundle`,
-              details: {
-                taskId: task.id,
-                cacheKey: task.context_cache_key,
-                errors: contextResult.errors,
-                note: 'Task will proceed without context'
-              }
-            });
-          }
-        } catch (error) {
-          // Context bundle mounting failure should NOT block task execution
-          logger.warn({
-            category: 'context',
-            action: 'context_mount_failed',
-            message: `Failed to mount context bundle`,
-            error,
-            details: {
-              taskId: task.id,
-              cacheKey: task.context_cache_key,
-              note: 'Task will proceed without context'
-            }
-          });
-        }
-      } else if (task.context_bundle_id) {
-        // Task has bundle ID but no cache key or no files - log for debugging
-        logger.debug({
-          category: 'context',
-          action: 'context_mount_skipped',
-          message: `Task has context_bundle_id but missing cache_key or files`,
-          details: {
-            taskId: task.id,
-            bundleId: task.context_bundle_id,
-            hasCacheKey: !!task.context_cache_key,
-            hasFiles: !!(task.files && task.files.length > 0)
-          }
-        });
-      }
-
       const envVars = [
         `AGENT_ID=${agent.id}`,
         `AGENT_NAME=${agent.name}`,
@@ -514,6 +429,9 @@ export class EphemeralWorkerService {
 
       // Clone fresh repository inside container for complete isolation
       await this.cloneFreshRepoInContainer(container.id, baseBranch);
+
+      // Copy context bundle into container (if available)
+      await this.copyContextBundleToContainer(container.id, task);
 
       await this.initializeWorkerLogFile(workerId);
 
@@ -717,6 +635,121 @@ export class EphemeralWorkerService {
         error: error
       });
       throw error;
+    }
+  }
+
+  /**
+   * Copy context bundle into container using docker cp
+   * Uses tar-fs to create tar stream from bundle directory
+   */
+  private async copyContextBundleToContainer(containerId: string, task: Task): Promise<void> {
+    // Skip if no context bundle metadata
+    if (!task.context_cache_key || !task.files || task.files.length === 0) {
+      logger.debug({
+        category: 'context',
+        action: 'context_copy_skipped',
+        message: 'No context bundle to copy (no cache key or files)',
+        details: {
+          taskId: task.id,
+          hasCacheKey: !!task.context_cache_key,
+          hasFiles: !!(task.files && task.files.length > 0)
+        }
+      });
+      return;
+    }
+
+    try {
+      // Regenerate bundle (will use cache if available)
+      const contextResult = await this.contextGenerator.generateBundle({
+        taskType: (task.type || 'implementation') as 'implementation' | 'fix' | 'review' | 'deployment' | 'pr-follow-up' | 'analysis',
+        targetFiles: task.files,
+        force: false  // Use cached bundle if available
+      });
+
+      if (!contextResult.success || !contextResult.bundle?.mountPath) {
+        logger.warn({
+          category: 'context',
+          action: 'context_bundle_generation_failed',
+          message: 'Failed to generate context bundle for copying',
+          details: {
+            taskId: task.id,
+            cacheKey: task.context_cache_key,
+            errors: contextResult.errors,
+            note: 'Task will proceed without context'
+          }
+        });
+        return;
+      }
+
+      const bundlePath = contextResult.bundle.mountPath;
+
+      // Verify bundle path exists
+      if (!fs.existsSync(bundlePath)) {
+        logger.warn({
+          category: 'context',
+          action: 'context_bundle_path_not_found',
+          message: `Context bundle path does not exist: ${bundlePath}`,
+          details: {
+            taskId: task.id,
+            bundleId: task.context_bundle_id,
+            bundlePath,
+            note: 'Task will proceed without context'
+          }
+        });
+        return;
+      }
+
+      logger.info({
+        category: 'context',
+        action: 'copying_context_bundle',
+        message: `Copying context bundle to container`,
+        details: {
+          taskId: task.id,
+          bundleId: task.context_bundle_id,
+          cacheKey: task.context_cache_key,
+          profiles: task.context_profiles,
+          bundlePath,
+          containerPath: '/workspace/context',
+          cached: contextResult.cached || false
+        }
+      });
+
+      const container = this.docker.getContainer(containerId);
+
+      // Create tar stream from bundle directory
+      const tarStream = tar.pack(bundlePath);
+
+      // Copy tar stream into container at /workspace/context
+      await container.putArchive(tarStream, {
+        path: '/workspace'  // Will create /workspace/context directory
+      });
+
+      logger.info({
+        category: 'context',
+        action: 'context_bundle_copied',
+        message: `Context bundle successfully copied to container`,
+        details: {
+          taskId: task.id,
+          bundleId: task.context_bundle_id,
+          profiles: task.context_profiles,
+          containerPath: '/workspace/context',
+          sizeBytes: contextResult.bundle.metadata.totalBytes
+        }
+      });
+
+    } catch (error) {
+      // Context bundle copy failure should NOT block task execution
+      logger.warn({
+        category: 'context',
+        action: 'context_copy_failed',
+        message: `Failed to copy context bundle to container`,
+        error,
+        details: {
+          taskId: task.id,
+          cacheKey: task.context_cache_key,
+          note: 'Task will proceed without context'
+        }
+      });
     }
   }
 

@@ -18,6 +18,7 @@ import { createTasksRoutes } from './tasks.routes.js';
 import { createAgentsRoutes } from './agents.routes.js';
 import { createInteractiveRoutes } from './interactive.routes.js';
 import { createTemplatesRoutes } from './templates.routes.js';
+import { createPlansRoutes } from './plans.routes.js';
 
 /**
  * Create main Dev-Bots router with all sub-routers mounted
@@ -66,6 +67,11 @@ export function createDevBotsRouter(devBotsManager: DevBotsManager): Router {
   // Includes: /templates, /guidelines, /guidelines/:taskType,
   //           /examples/:taskType, /checklist/:taskType
   router.use('/', createTemplatesRoutes(devBotsManager));
+
+  // Plans Management endpoints
+  // Includes: /plans, /plans/:planId, /plans/:planId/tasks,
+  //           /plans/:planId/cancel, /plans/:planId/update-status
+  router.use('/', createPlansRoutes(devBotsManager));
 
   return router;
 }

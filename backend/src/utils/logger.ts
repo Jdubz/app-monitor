@@ -48,6 +48,7 @@ export type LogCategory =
   | 'merge_conflict'
   | 'metrics'
   | 'mirror_debug'
+  | 'plan' // AI agent-managed planning system
   | 'pr-workflow'
   | 'process'
   | 'quality'
