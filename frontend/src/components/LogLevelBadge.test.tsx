@@ -7,8 +7,8 @@ describe('LogLevelBadge', () => {
     render(<LogLevelBadge level="ERROR" />);
     const badge = screen.getByText('ERROR');
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass('bg-red-900/90');
-    expect(badge).toHaveClass('text-red-100');
+    expect(badge).toHaveClass('bg-destructive');
+    expect(badge).toHaveClass('text-destructive-foreground');
     expect(badge).toHaveClass('font-mono');
   });
 

@@ -15,7 +15,7 @@ describe('StatusBadge', () => {
     render(<StatusBadge status="stopped" />);
     const badge = screen.getByText('○ Stopped');
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass('bg-red-900/90');
+    expect(badge).toHaveClass('bg-destructive', 'text-destructive-foreground');
     expect(badge).not.toHaveClass('animate-pulse');
   });
 
@@ -37,7 +37,7 @@ describe('StatusBadge', () => {
     render(<StatusBadge status="error" />);
     const badge = screen.getByText('✕ Error');
     expect(badge).toBeInTheDocument();
-    expect(badge).toHaveClass('bg-red-900/90');
+    expect(badge).toHaveClass('bg-destructive', 'text-destructive-foreground');
   });
 
   it('has animation for transitional states (starting)', () => {

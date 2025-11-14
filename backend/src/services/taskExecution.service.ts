@@ -77,6 +77,7 @@ export class TaskExecutionService {
     agentManager: AgentPersonalityManager,
     templateManager: TaskPromptTemplateManager,
     ephemeralWorkerService: EphemeralWorkerService,
+    agentSelector: AgentSelector,
     // TaskPersistence removed - using SQLite directly
     config: Partial<TaskExecutionServiceConfig> = {}
   ) {
@@ -84,6 +85,7 @@ export class TaskExecutionService {
     this.agentManager = agentManager;
     this.templateManager = templateManager;
     this.ephemeralWorkerService = ephemeralWorkerService;
+    this.agentSelector = agentSelector;
     // TaskPersistence removed - using SQLite directly
 
     this.config = {
@@ -98,7 +100,6 @@ export class TaskExecutionService {
     };
 
     // Initialize intelligent agent selection (Phase 0.2)
-    this.agentSelector = new AgentSelector();
     this.taskClassifier = new TaskClassifier();
 
     // Initialize circuit breaker for Docker operations
@@ -456,15 +457,91 @@ export class TaskExecutionService {
   // Task Execution (Docker Run)
   // ==========================================================================
 
+  private buildDockerCommand(
+    chosenAgentType: 'claude' | 'codex' | 'gemini',
+    agent: AgentPersonality,
+    promptText: string,
+    baseBranch: string,
+    hostLogsDir: string,
+    homeDir: string
+  ): { dockerArgs: string[]; cliCommand: string } {
+    const gitEnvVars = DockerConfig.buildGitEnvVars();
+    let dockerArgs: string[];
+    let cliCommand: string;
+
+    const commonArgs = [
+      'run',
+      '--rm',
+      ...gitEnvVars,
+      '-v', `${hostLogsDir}:/logs:rw`,
+      '-v', `${homeDir}/.config/gh:/home/node/.config/gh:rw`,
+      this.getAgentDockerImage(agent),
+      'sh', '-c',
+    ];
+
+    const commonSetup =
+      `set -e && ` +
+      `export HOME=/home/node && ` +
+      `mkdir -p /workspace && cd /workspace && ` +
+      `git clone ${config.devBots.repositoryUrl} . && ` +
+      `git config --global user.name "Dev Bot (${agent.name})" && ` +
+      `git config --global user.email "devbot+${agent.name}@app-monitor.local" && ` +
+      // Create git credentials from GITHUB_TOKEN for bot authentication (not using host credentials)
+      `echo "https://devbot:\${GITHUB_TOKEN}@github.com" > /home/node/.git-credentials && ` +
+      `chmod 600 /home/node/.git-credentials && ` +
+      `git config --global credential.helper store && ` +
+      `git fetch --all && ` +
+      `git checkout ${baseBranch} && ` +
+      `git pull origin ${baseBranch} || true`;
+
+    if (chosenAgentType === 'codex') {
+      dockerArgs = [
+        ...commonArgs,
+        '--tmpfs', '/home/node/.codex:uid=1000,gid=1000',
+        '-v', `${homeDir}/.codex:/tmp/host-codex:ro`,
+        `${commonSetup} && cp -r /tmp/host-codex/* /home/node/.codex/ 2>/dev/null || true && codex exec --dangerously-bypass-approvals-and-sandbox '${promptText}'`
+      ];
+      cliCommand = 'codex';
+    } else if (chosenAgentType === 'gemini') {
+      const geminiCredentials = path.join(homeDir, '.gemini', 'credentials.json');
+      if (!fs.existsSync(geminiCredentials)) {
+        throw new Error('Gemini credentials file not found. Please run "gemini login" first.');
+      }
+      dockerArgs = [
+        ...commonArgs,
+        '--tmpfs', '/home/node/.gemini:uid=1000,gid=1000',
+        '-v', `${geminiCredentials}:/tmp/host-creds.json:ro`,
+        `${commonSetup} && mkdir -p /home/node/.gemini && cp /tmp/host-creds.json /home/node/.gemini/credentials.json && gemini --dangerously-skip-permissions '${promptText}'`
+      ];
+      cliCommand = 'gemini';
+    } else {
+      const claudeCredentialsNew = path.join(homeDir, '.claude', '.credentials.json');
+      const claudeCredentialsOld = path.join(homeDir, '.claude', 'credentials.json');
+      const claudeCredentials = fs.existsSync(claudeCredentialsNew) ? claudeCredentialsNew : claudeCredentialsOld;
+      if (!fs.existsSync(claudeCredentials)) {
+        throw new Error('Claude credentials file not found. Please run "claude login" first.');
+      }
+      dockerArgs = [
+        ...commonArgs,
+        '--tmpfs', '/home/node/.claude:uid=1000,gid=1000',
+        '-v', `${claudeCredentials}:/tmp/host-creds.json:ro`,
+        `${commonSetup} && cp /tmp/host-creds.json /home/node/.claude/.credentials.json && claude --dangerously-skip-permissions '${promptText}'`
+      ];
+      cliCommand = 'claude';
+    }
+
+    return { dockerArgs, cliCommand };
+  }
+
   /**
    * Execute task using docker run with ephemeral container
    * This replaces the old createEphemeralWorker + executeTaskInEphemeralWorker approach
    */
-  private async executeTaskWithDockerRun(task: Task, agent: AgentPersonality, agentType?: 'claude' | 'codex'): Promise<void> {
+  private async executeTaskWithDockerRun(task: Task, agent: AgentPersonality, agentType?: 'claude' | 'codex' | 'gemini'): Promise<void> {
     const { spawn } = await import('child_process');
 
     // Use intelligent agent selection (Phase 0.3 Integration)
-    let chosenAgentType: 'claude' | 'codex';
+    let chosenAgentType: 'claude' | 'codex' | 'gemini';
     
     if (agentType) {
       // Manual override specified
@@ -493,7 +570,7 @@ export class TaskExecutionService {
       if (task.retry_count > 0 && task.agent_type) {
         // Previous attempt failed with this agent
         previousAttempts.push({
-          agent: task.agent_type as 'claude' | 'codex',
+          agent: task.agent_type as 'claude' | 'codex' | 'gemini',
           result: 'failure',
           timestamp: Date.now()
         });
@@ -503,13 +580,13 @@ export class TaskExecutionService {
         taskCategory: task.task_category,
         filePatterns,
         complexity: task.estimated_complexity,
-        preferredAgent: task.preferred_agent as 'claude' | 'codex' | 'copilot' | undefined,
+        preferredAgent: task.preferred_agent as 'claude' | 'codex' | 'copilot' | 'gemini' | undefined,
         previousAttempts,
         taskTitle: task.title,
         taskDescription: task.description
       };
 
-      const selection = this.agentSelector.selectAgent(criteria);
+      const selection = await this.agentSelector.selectAgent(criteria, task);
       
       // Copilot not supported in Docker execution yet
       if (selection.agent === 'copilot') {
@@ -522,9 +599,9 @@ export class TaskExecutionService {
             fallback: selection.fallbackAgent || 'claude'
           }
         });
-        chosenAgentType = (selection.fallbackAgent || 'claude') as 'claude' | 'codex';
+        chosenAgentType = (selection.fallbackAgent || 'claude') as 'claude' | 'codex' | 'gemini';
       } else {
-        chosenAgentType = selection.agent as 'claude' | 'codex';
+        chosenAgentType = selection.agent as 'claude' | 'codex' | 'gemini';
       }
 
       // Log the intelligent selection
@@ -577,83 +654,14 @@ export class TaskExecutionService {
     const promptText = (task.prompt || task.description || task.title).replace(/'/g, "'\\''");
 
     // Build docker run command based on agent type
-    let dockerArgs: string[];
-    let cliCommand: string;
-
-    // Prepare git environment variables (using centralized config)
-    const gitEnvVars = DockerConfig.buildGitEnvVars();
-
-    if (chosenAgentType === 'codex') {
-      // Codex execution with isolated repository
-      dockerArgs = [
-        'run',
-        '--rm',  // Auto-remove container after exit
-        ...gitEnvVars,  // Pass git environment variables
-        // NO direct workspace mount - will clone inside container
-        '-v', `${hostLogsDir}:/logs:rw`,  // Mount logs
-        '--tmpfs', '/home/node/.codex:uid=1000,gid=1000',  // Writable temp for Codex CLI
-        '-v', `${homeDir}/.codex:/tmp/host-codex:ro`,  // Mount Codex credentials
-        // Mount gh CLI config for API access
-        '-v', `${homeDir}/.config/gh:/home/node/.config/gh:rw`,  // GitHub CLI auth (rw for state updates)
-        this.getAgentDockerImage(agent),
-        'sh', '-c',
-        // Clone fresh repository, create bot git credentials, then run Codex
-        `set -e && ` +
-        `export HOME=/home/node && ` +  // Set HOME for gh CLI
-        `mkdir -p /workspace && cd /workspace && ` +
-        `git clone https://github.com/Jdubz/app-monitor.git . && ` +
-        `git config --global user.name "Dev Bot (${agent.name})" && ` +
-        `git config --global user.email "devbot+${agent.name}@app-monitor.local" && ` +
-        `echo "https://devbot:\${GITHUB_TOKEN}@github.com" > /home/node/.git-credentials && ` +
-        `chmod 600 /home/node/.git-credentials && ` +
-        `git config --global credential.helper store && ` +
-        `git fetch --all && ` +
-        `git checkout ${baseBranch} && ` +
-        `git pull origin ${baseBranch} || true && ` +
-        `cp -r /tmp/host-codex/* /home/node/.codex/ 2>/dev/null || true && ` +
-        `codex exec --dangerously-bypass-approvals-and-sandbox '${promptText}'`
-      ];
-      cliCommand = 'codex';
-    } else {
-      // Claude execution
-      const claudeCredentialsNew = path.join(homeDir, '.claude', '.credentials.json');
-      const claudeCredentialsOld = path.join(homeDir, '.claude', 'credentials.json');
-      const claudeCredentials = fs.existsSync(claudeCredentialsNew) ? claudeCredentialsNew : claudeCredentialsOld;
-
-      if (!fs.existsSync(claudeCredentials)) {
-        throw new Error('Claude credentials file not found. Please run "claude login" first.');
-      }
-
-      dockerArgs = [
-        'run',
-        '--rm',  // Auto-remove container after exit
-        ...gitEnvVars,  // Pass git environment variables
-        // NO direct workspace mount - will clone inside container
-        '-v', `${hostLogsDir}:/logs:rw`,  // Mount logs
-        '--tmpfs', '/home/node/.claude:uid=1000,gid=1000',  // Writable temp for Claude CLI
-        '-v', `${claudeCredentials}:/tmp/host-creds.json:ro`,  // Mount Claude credentials
-        // Mount gh CLI config for API access
-        '-v', `${homeDir}/.config/gh:/home/node/.config/gh:rw`,  // GitHub CLI auth (rw for state updates)
-        this.getAgentDockerImage(agent),
-        'sh', '-c',
-        // Clone fresh repository, create bot git credentials, then run Claude
-        `set -e && ` +
-        `export HOME=/home/node && ` +  // Set HOME for gh CLI
-        `mkdir -p /workspace && cd /workspace && ` +
-        `git clone https://github.com/Jdubz/app-monitor.git . && ` +
-        `git config --global user.name "Dev Bot (${agent.name})" && ` +
-        `git config --global user.email "devbot+${agent.name}@app-monitor.local" && ` +
-        `echo "https://devbot:\${GITHUB_TOKEN}@github.com" > /home/node/.git-credentials && ` +
-        `chmod 600 /home/node/.git-credentials && ` +
-        `git config --global credential.helper store && ` +
-        `git fetch --all && ` +
-        `git checkout ${baseBranch} && ` +
-        `git pull origin ${baseBranch} || true && ` +
-        `cp /tmp/host-creds.json /home/node/.claude/.credentials.json && ` +
-        `claude --dangerously-skip-permissions '${promptText}'`
-      ];
-      cliCommand = 'claude';
-    }
+    const { dockerArgs, cliCommand } = this.buildDockerCommand(
+      chosenAgentType,
+      agent,
+      promptText,
+      baseBranch,
+      hostLogsDir,
+      homeDir
+    );
 
     // Log sanitized docker command details for debugging without leaking secrets
     const redactedDockerArgs: string[] = [];
@@ -706,50 +714,100 @@ export class TaskExecutionService {
 
     let stdout = '';
     let stderr = '';
+    
+    // Update heartbeat on any output to prove container is alive
+    const updateHeartbeat = () => {
+      try {
+        this.taskQueue.updateWorkerHeartbeat(workerId);
+      } catch (error) {
+        // Ignore heartbeat errors - they shouldn't fail the task
+        logger.debug({
+          category: 'process',
+          action: 'heartbeat_update_failed',
+          message: `Failed to update heartbeat for ${workerId}: ${error instanceof Error ? error.message : String(error)}`
+        });
+      }
+    };
 
     dockerProcess.stdout.on('data', (data) => {
       stdout += data.toString();
+      updateHeartbeat();
     });
 
     dockerProcess.stderr.on('data', (data) => {
       stderr += data.toString();
+      updateHeartbeat();
     });
 
     // Track task start time for stuck detection
     const taskStartTime = new Date(task.assigned_at || task.created_at);
+    const DOCKER_PROCESS_GRACE_TIMEOUT = 5 * 60 * 1000; // 5 minutes - failsafe if Docker doesn't signal properly
 
-    // Wait for completion with stuck task detection
-    const exitCode = await new Promise<number>((resolve, reject) => {
-      // Periodic stuck task check
-      const stuckCheckInterval = setInterval(() => {
-        if (isTaskStuck(taskStartTime, this.config.absoluteMaxDuration)) {
+    // Periodic heartbeat update even if no output (every 20 seconds)
+    const heartbeatInterval = setInterval(updateHeartbeat, 20000);
+
+    // Wait for completion with multiple safety mechanisms
+    const exitCode = await Promise.race([
+      // Primary: Docker process completion
+      new Promise<number>((resolve, reject) => {
+        // Periodic stuck task check
+        const stuckCheckInterval = setInterval(() => {
+          if (isTaskStuck(taskStartTime, this.config.absoluteMaxDuration)) {
+            clearInterval(stuckCheckInterval);
+            clearInterval(heartbeatInterval);
+            logger.error({
+              category: 'process',
+              action: 'task_stuck_timeout',
+              message: `Task ${task.id} exceeded maximum duration (${this.config.absoluteMaxDuration / 60000} minutes)`,
+              details: {
+                taskId: task.id,
+                taskTitle: task.title,
+                elapsedMs: Date.now() - taskStartTime.getTime(),
+                maxDurationMs: this.config.absoluteMaxDuration
+              }
+            });
+            // Kill the docker process
+            dockerProcess.kill('SIGKILL');
+            reject(new Error(`Task exceeded maximum duration of ${this.config.absoluteMaxDuration / 60000} minutes`));
+          }
+        }, this.config.stuckCheckInterval);
+
+        dockerProcess.on('close', (code) => {
           clearInterval(stuckCheckInterval);
+          clearInterval(heartbeatInterval);
+          resolve(code || 0);
+        });
+        dockerProcess.on('exit', (code) => {
+          // Also listen to 'exit' as failsafe - fires before 'close'
+          clearInterval(stuckCheckInterval);
+          clearInterval(heartbeatInterval);
+          resolve(code || 0);
+        });
+        dockerProcess.on('error', (error) => {
+          clearInterval(stuckCheckInterval);
+          clearInterval(heartbeatInterval);
+          reject(error);
+        });
+      }),
+      // Failsafe: Grace period timeout in case Docker process doesn't signal
+      new Promise<number>((_, reject) => 
+        setTimeout(() => {
+          clearInterval(heartbeatInterval);
           logger.error({
             category: 'process',
-            action: 'task_stuck_timeout',
-            message: `Task ${task.id} exceeded maximum duration (${this.config.absoluteMaxDuration / 60000} minutes)`,
+            action: 'docker_process_grace_timeout',
+            message: `Docker process did not exit gracefully within ${DOCKER_PROCESS_GRACE_TIMEOUT / 1000}s, force killing`,
             details: {
               taskId: task.id,
               taskTitle: task.title,
-              elapsedMs: Date.now() - taskStartTime.getTime(),
-              maxDurationMs: this.config.absoluteMaxDuration
+              graceTimeout_ms: DOCKER_PROCESS_GRACE_TIMEOUT
             }
           });
-          // Kill the docker process
           dockerProcess.kill('SIGKILL');
-          reject(new Error(`Task exceeded maximum duration of ${this.config.absoluteMaxDuration / 60000} minutes`));
-        }
-      }, this.config.stuckCheckInterval);
-
-      dockerProcess.on('close', (code) => {
-        clearInterval(stuckCheckInterval);
-        resolve(code || 0);
-      });
-      dockerProcess.on('error', (error) => {
-        clearInterval(stuckCheckInterval);
-        reject(error);
-      });
-    });
+          reject(new Error(`Docker process did not exit gracefully within ${DOCKER_PROCESS_GRACE_TIMEOUT / 1000} seconds`));
+        }, DOCKER_PROCESS_GRACE_TIMEOUT)
+      )
+    ]);
 
     // Save dev-bot execution logs to artifacts directory
     const artifactsDir = this.config.artifactsDir;

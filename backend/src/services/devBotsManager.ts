@@ -19,9 +19,11 @@ import { SimpleFailureRecovery } from './failureRecovery.js';
 import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
 import type { ScopeControlService } from './scopeControl.service.js';
 import type { EphemeralWorkerService, EphemeralWorker as EphemeralWorkerType } from './ephemeralWorker.service.js';
-import type { TaskExecutionService } from './taskExecution.service.js';
+import { TaskExecutionService } from './taskExecution.service.js';
 import { TaskCompletionService } from './taskCompletion.service.js';
 import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
+import { AgentEligibilityServiceImpl } from './agentEligibility.service.js';
+import { AgentSelector } from './agentSelector.js';
 import {
   InteractiveSessionService,
   StartInteractiveSessionOptions,
@@ -115,7 +117,7 @@ export class DevBotsManager extends EventEmitter {
     this.retryManager = dependencies.retryManager;
     this.scopeControl = dependencies.scopeControl;
     this.ephemeralWorkerService = dependencies.ephemeralWorkerService;
-    this.taskExecutionService = dependencies.taskExecutionService;
+    // taskExecutionService is initialized later with agent selector (line 242-248)
     this.prWorkflowOrchestrator = dependencies.prWorkflowOrchestrator;
     this.interactiveSessionService = dependencies.interactiveSessionService;
     this.interactiveSessionOrchestrator = dependencies.interactiveSessionOrchestrator;
@@ -231,6 +233,18 @@ export class DevBotsManager extends EventEmitter {
           });
         }
       }
+    );
+
+    // Initialize services
+    const eligibilityService = new AgentEligibilityServiceImpl();
+    const agentSelector = new AgentSelector(undefined, eligibilityService);
+
+    this.taskExecutionService = new TaskExecutionService(
+      this.taskQueue,
+      this.agentManager,
+      this.templateManager,
+      this.ephemeralWorkerService,
+      agentSelector
     );
 
     // Wire recovery into task execution service
