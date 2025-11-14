@@ -484,7 +484,8 @@ export class TaskExecutionService {
       `set -e && ` +
       `export HOME=/home/node && ` +
       `mkdir -p /workspace && cd /workspace && ` +
-      `git clone ${config.devBots.repositoryUrl} . && ` +
+      // TODO: Externalize repository URL to configuration
+      `git clone https://github.com/Jdubz/app-monitor.git . && ` +
       `git config --global user.name "Dev Bot (${agent.name})" && ` +
       `git config --global user.email "devbot+${agent.name}@app-monitor.local" && ` +
       // Create git credentials from GITHUB_TOKEN for bot authentication (not using host credentials)
