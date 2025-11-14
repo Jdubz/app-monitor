@@ -392,6 +392,50 @@ export class PlansService {
    * Convert database row to Plan object
    */
   private rowToPlan(row: Record<string, unknown>): Plan {
+    // Parse JSON fields with error handling
+    let successCriteria: string[] | undefined;
+    let scopeBoundaries: PlanScopeBoundaries | undefined;
+    let metadata: Record<string, unknown> | undefined;
+
+    try {
+      successCriteria = row.success_criteria
+        ? JSON.parse(row.success_criteria as string)
+        : undefined;
+    } catch (error) {
+      logger.warn({
+        category: 'plan',
+        action: 'invalid_success_criteria_json',
+        message: `Invalid JSON in success_criteria for plan ${row.id}`,
+        error: error instanceof Error ? error : undefined
+      });
+    }
+
+    try {
+      scopeBoundaries = row.scope_boundaries
+        ? JSON.parse(row.scope_boundaries as string)
+        : undefined;
+    } catch (error) {
+      logger.warn({
+        category: 'plan',
+        action: 'invalid_scope_boundaries_json',
+        message: `Invalid JSON in scope_boundaries for plan ${row.id}`,
+        error: error instanceof Error ? error : undefined
+      });
+    }
+
+    try {
+      metadata = row.metadata
+        ? JSON.parse(row.metadata as string)
+        : undefined;
+    } catch (error) {
+      logger.warn({
+        category: 'plan',
+        action: 'invalid_metadata_json',
+        message: `Invalid JSON in metadata for plan ${row.id}`,
+        error: error instanceof Error ? error : undefined
+      });
+    }
+
     return {
       id: row.id as string,
       title: row.title as string,
@@ -406,14 +450,10 @@ export class PlansService {
       cancelled_at: row.cancelled_at as number | undefined,
       created_by: row.created_by as string | undefined,
       assigned_to: row.assigned_to as string | undefined,
-      success_criteria: row.success_criteria
-        ? JSON.parse(row.success_criteria as string)
-        : undefined,
-      scope_boundaries: row.scope_boundaries
-        ? JSON.parse(row.scope_boundaries as string)
-        : undefined,
+      success_criteria: successCriteria,
+      scope_boundaries: scopeBoundaries,
       estimated_effort_hours: row.estimated_effort_hours as number | undefined,
-      metadata: row.metadata ? JSON.parse(row.metadata as string) : undefined,
+      metadata,
     };
   }
 }

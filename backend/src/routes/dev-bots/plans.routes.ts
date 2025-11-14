@@ -30,7 +30,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
   const router = Router();
 
   // Get database instance from task queue
-  const db = devBotsManager.getTaskQueue()['db']; // Access private db property
+  const db = devBotsManager.getTaskQueue().getDatabase();
 
   // Initialize services
   const plansService = new PlansService(db);

@@ -724,6 +724,14 @@ export class TaskQueueService {
   }
 
   /**
+   * Get the underlying database instance
+   * Allows other services (like PlansService) to share the same database connection
+   */
+  getDatabase(): Database.Database {
+    return this.db;
+  }
+
+  /**
    * Create a new task
    */
   createTask(taskData: Partial<Task>): Task {

@@ -4,6 +4,7 @@ import { TaskQueueService, Task } from './taskQueue.sqlite.js';
 import { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js';
 import { EnhancedTaskData } from './taskMetadataFields.js';
 import { ContextBundleGenerator } from './context/index.js';
+import { ContextRecipeSelector } from './context/contextRecipeSelector.js';
 import type { ContextBundle } from '../types/contextBundle.js';
 import type { RecipeTaskType } from '../types/contextRecipe.js';
 
@@ -80,58 +81,74 @@ export class TaskCreationService {
     // Generate context bundle (optional - graceful failure)
     let contextBundle: ContextBundle | undefined;
     
-    if (normalizedData.files && normalizedData.files.length > 0) {
-      try {
-        const taskType = this.mapToRecipeTaskType(normalizedData.type);
-        
-        const contextResult = await this.contextGenerator.generateBundle({
-          taskType,
-          targetFiles: normalizedData.files,
-          force: false
-        });
+    try {
+      const taskType = this.mapToRecipeTaskType(normalizedData.type);
+      
+      // Use intelligent recipe selector
+      const selectedProfiles = ContextRecipeSelector.getProfilesToInclude({
+        taskType,
+        targetFiles: normalizedData.files || [],
+        manualProfiles: normalizedData.metadata?.contextProfiles as string[] | undefined,
+        includeOptional: false // Only include required + recommended
+      });
 
-        if (contextResult.success && contextResult.bundle) {
-          contextBundle = contextResult.bundle;
-          
-          logger.info({
-            category: 'context',
-            action: 'bundle_generated',
-            message: `Generated context bundle for task: ${normalizedData.title}`,
-            details: {
-              bundleId: contextBundle.id,
-              profiles: contextBundle.metadata.profiles,
-              sizeBytes: contextBundle.metadata.totalBytes,
-              cached: contextResult.cached || false
-            }
-          });
-        } else if (contextResult.warnings && contextResult.warnings.length > 0) {
-          logger.warn({
-            category: 'context',
-            action: 'bundle_generation_warnings',
-            message: 'Context bundle generation completed with warnings',
-            details: { warnings: contextResult.warnings }
-          });
-        }
-      } catch (error) {
-        // Context generation failure should NOT block task creation
-        logger.warn({
-          category: 'context',
-          action: 'bundle_generation_failed',
-          message: `Failed to generate context bundle for task: ${normalizedData.title}`,
-          error,
-          details: {
-            taskType: normalizedData.type,
-            files: normalizedData.files,
-            note: 'Task will proceed without context bundle'
-          }
-        });
-      }
-    } else {
       logger.debug({
         category: 'context',
-        action: 'bundle_generation_skipped',
-        message: `No files specified for task: ${normalizedData.title}`,
-        details: { note: 'Context bundle generation requires target files' }
+        action: 'recipe_selection',
+        message: `Selected ${selectedProfiles.length} recipes for task`,
+        details: {
+          taskType,
+          targetFiles: normalizedData.files || [],
+          selectedProfiles,
+          selectionExplanation: ContextRecipeSelector.explainSelection({
+            taskType,
+            targetFiles: normalizedData.files || []
+          })
+        }
+      });
+
+      const contextResult = await this.contextGenerator.generateBundle({
+        taskType,
+        targetFiles: normalizedData.files || [],
+        profiles: selectedProfiles, // Use intelligent selection
+        force: false
+      });
+
+      if (contextResult.success && contextResult.bundle) {
+        contextBundle = contextResult.bundle;
+        
+        logger.info({
+          category: 'context',
+          action: 'bundle_generated',
+          message: `Generated context bundle for task: ${normalizedData.title}`,
+          details: {
+            bundleId: contextBundle.id,
+            profiles: contextBundle.metadata.profiles,
+            sizeBytes: contextBundle.metadata.totalBytes,
+            cached: contextResult.cached || false,
+            intelligentSelection: true
+          }
+        });
+      } else if (contextResult.warnings && contextResult.warnings.length > 0) {
+        logger.warn({
+          category: 'context',
+          action: 'bundle_generation_warnings',
+          message: 'Context bundle generation completed with warnings',
+          details: { warnings: contextResult.warnings }
+        });
+      }
+    } catch (error) {
+      // Context generation failure should NOT block task creation
+      logger.warn({
+        category: 'context',
+        action: 'bundle_generation_failed',
+        message: `Failed to generate context bundle for task: ${normalizedData.title}`,
+        error,
+        details: {
+          taskType: normalizedData.type,
+          files: normalizedData.files,
+          note: 'Task will proceed without context bundle'
+        }
       });
     }
 

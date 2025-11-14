@@ -222,8 +222,9 @@ export class PlanProgressCalculator {
 
   /**
    * Get tasks for a plan
+   * Made public for use by PlanStatusUpdater
    */
-  private getPlanTasks(planId: string): Task[] {
+  getPlanTasks(planId: string): Task[] {
     const stmt = this.db.prepare(`
       SELECT * FROM tasks WHERE plan_id = ? ORDER BY created_at ASC
     `);
