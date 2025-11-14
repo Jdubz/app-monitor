@@ -33,7 +33,7 @@ This project is currently in **pre-POC stabilization** phase, preparing the foun
 
 **Note:** Some TypeScript build errors remain in backend. These are being addressed as part of ongoing stabilization work.
 
-📖 For complete stabilization details, see [Stabilization Plan](./docs/plans/APP_MONITOR_STABILIZATION_PLAN.md) and [Capability Roadmap (archived)](./docs/archive/plans-completed-2025-11/APP_MONITOR_CAPABILITY_ROADMAP-completed-2025-11.md).
+📖 For complete stabilization details, see [Stabilization Plan](./docs/plans/APP_MONITOR_STABILIZATION_PLAN.md).
 
 ---
 
@@ -285,13 +285,10 @@ make stop
 - [Frontend Development Guide](./docs/guides/FRONTEND_DEVELOPMENT.md) - Developer workflows and best practices
 
 ### Planning & Roadmap
-- [Next Priority Tasks](./docs/NEXT_PRIORITY_TASKS.md) - Current focus areas
 - [Stabilization Plan](./docs/plans/APP_MONITOR_STABILIZATION_PLAN.md) - Current phase details
-- [Implementation Status](./docs/IMPLEMENTATION_STATUS.md) - Progress tracking
 
 ### Migration & History
 - [Migration Guide](./docs/guides/MIGRATION_GUIDE.md) - Migrating from dev-monitor
-- [Database Migrations](./docs/database-migrations.md) - Database schema changes
 - [Google Cloud Logging](./docs/guides/GOOGLE_CLOUD_LOGGING_PERMISSIONS.md) - GCP IAM setup
 
 ### Contributing
