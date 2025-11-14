@@ -23,20 +23,25 @@ export class ApiClient {
     this.log.debug('Raw VITE_API_BASE_URL', import.meta.env.VITE_API_BASE_URL);
 
     const apiKey = import.meta.env.VITE_API_KEY;
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
+    
+    const config: any = {
+      baseURL: fullBaseURL,
+      timeout: 30000,
+      headers: {
+        common: {
+          'Content-Type': 'application/json',
+        }
+      }
     };
 
     if (apiKey) {
-      headers['X-API-Key'] = apiKey;
+      config.headers.common['X-API-Key'] = apiKey;
       this.log.debug('API key configured');
+    } else {
+      this.log.warn('No API key configured - requests may fail');
     }
 
-    this.client = axios.create({
-      baseURL: fullBaseURL,
-      timeout: 30000,
-      headers,
-    });
+    this.client = axios.create(config);
 
     this.setupInterceptors();
   }
