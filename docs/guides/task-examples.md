@@ -388,7 +388,6 @@ This document provides comprehensive examples of different types of tasks that c
 - [API Reference](api-reference.md)
 - [Agent Personalities](agent-personalities.md)
 - [Task Execution Template](task-execution-template.md)
-- [Dev-Bots Architecture](../architecture/dev-bots-overview.md)
 
 ---
 

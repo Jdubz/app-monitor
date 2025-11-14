@@ -6,12 +6,9 @@ Comprehensive guides for using and maintaining app-monitor, including dev-bots a
 
 ### Testing
 - **[e2e-testing-guide.md](e2e-testing-guide.md)** - End-to-end testing with Playwright
-- **[frontend-testing-guide.md](../archive/frontend-testing-guide-2025-11.md)** - ✅ ARCHIVED: Frontend testing strategy and examples
 
 ### Development
 - **[component-style-guide.md](component-style-guide.md)** - Component architecture and styling conventions
-- **[frontend-safety-guide.md](../archive/frontend-safety-guide-2025-11.md)** - ✅ ARCHIVED: Safety features and startup procedures
-- **[frontend-troubleshooting.md](../archive/frontend-troubleshooting-2025-11.md)** - ✅ ARCHIVED: Common issues and solutions
 
 ### Operations
 - **[structured-logging.md](structured-logging.md)** - Structured logging aggregation and cloud forwarding
@@ -57,7 +54,6 @@ Coming soon:
 
 - **Architecture**: See [/docs/architecture/](../architecture/) for system design and architecture docs
 - **Plans**: See [/docs/plans/](../plans/) for active implementation plans
-- **Archive**: See [/docs/archive/](../archive/) for historical documentation
 - **Main README**: See [/docs/README.md](../README.md) for full navigation
 
 ---
