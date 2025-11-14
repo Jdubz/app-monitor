@@ -28,7 +28,6 @@ import type {
   DevBotsTaskTemplate,
   DevBotsWorkerStatus,
 } from '@/types/dev-bots';
-import StatusBadge from './StatusBadge';
 import {
   Card,
   CardContent,
