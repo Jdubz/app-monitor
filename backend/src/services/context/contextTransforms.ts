@@ -73,11 +73,57 @@ export class ContextTransforms {
    * Strip comments from code
    */
   stripComments(content: string): string {
-    // Remove single-line comments
-    let result = content.replace(/\/\/.*$/gm, '');
+    let result = '';
+    let i = 0;
 
-    // Remove multi-line comments
-    result = result.replace(/\/\*[\s\S]*?\*\//g, '');
+    while (i < content.length) {
+      // Handle strings - preserve them completely
+      if (content[i] === '"' || content[i] === "'" || content[i] === '`') {
+        const quote = content[i];
+        result += content[i];
+        i++;
+
+        // Copy everything until closing quote, handling escapes
+        while (i < content.length) {
+          if (content[i] === '\\' && i + 1 < content.length) {
+            result += content[i] + content[i + 1];
+            i += 2;
+          } else if (content[i] === quote) {
+            result += content[i];
+            i++;
+            break;
+          } else {
+            result += content[i];
+            i++;
+          }
+        }
+      }
+      // Handle single-line comments
+      else if (content[i] === '/' && content[i + 1] === '/') {
+        // Skip until end of line
+        i += 2;
+        while (i < content.length && content[i] !== '\n') {
+          i++;
+        }
+      }
+      // Handle multi-line comments
+      else if (content[i] === '/' && content[i + 1] === '*') {
+        // Skip until */
+        i += 2;
+        while (i < content.length - 1) {
+          if (content[i] === '*' && content[i + 1] === '/') {
+            i += 2;
+            break;
+          }
+          i++;
+        }
+      }
+      // Regular content
+      else {
+        result += content[i];
+        i++;
+      }
+    }
 
     // Clean up extra whitespace
     result = result.replace(/\n\s*\n\s*\n/g, '\n\n');

@@ -160,6 +160,11 @@ export class ContextCache {
     bundle: ContextBundle,
     ttl?: number
   ): Promise<void> {
+    // Don't cache if max entries is 0
+    if (this.maxEntries === 0) {
+      return;
+    }
+
     const sizeBytes = this.calculateBundleSize(bundle);
     const now = new Date();
 
