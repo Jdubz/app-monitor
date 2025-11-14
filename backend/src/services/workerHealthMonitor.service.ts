@@ -16,7 +16,6 @@ import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskQueueService, Task } from './taskQueue.sqlite.js';
 import type { DockerManager } from './dockerManager.js';
 import type { ScopeControlService } from './scopeControl.service.js';
-import type { ProcessManager } from './processManager.js';
 import { TIME_BASED_GUARDS } from './taskFailureGuards.js';
 import type { SimpleFailureRecovery } from './failureRecovery.js';
 
@@ -41,7 +40,7 @@ export class WorkerHealthMonitor {
     private taskQueue: TaskQueueService,
     private dockerManager: DockerManager,
     private scopeControl: ScopeControlService,
-    private processManager: ProcessManager,
+    private processManager: null,  // Removed - no longer needed
     private recovery: SimpleFailureRecovery | null,
     private emit: (event: string, ...args: unknown[]) => void,
     private config: WorkerHealthMonitorConfig = {
@@ -324,10 +323,10 @@ export class WorkerHealthMonitor {
     try {
       const wasHealthy = this.isHealthy;
 
-      // Check process manager status
+      // Check Docker health instead of process manager (processManager removed)
       try {
-        const processInfo = await this.processManager.getServiceStatus('dev-bots');
-        this.isHealthy = processInfo?.status === 'running';
+        const ping = await this.dockerManager.getDocker().ping();
+        this.isHealthy = !!ping;
       } catch (error) {
         this.isHealthy = false;
       }

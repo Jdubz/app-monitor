@@ -7,7 +7,6 @@
 
 import { vi } from 'vitest';
 import type Docker from 'dockerode';
-import type { ProcessManager } from './processManager.js';
 import type { TaskQueueService, Task } from './taskQueue.sqlite.js';
 import type { AgentPersonalityManager, AgentPersonality } from './agentPersonalities.js';
 import type { TaskPromptTemplateManager } from './taskPromptTemplates.js';
@@ -36,40 +35,7 @@ import type { InteractiveSessionCoordinator } from './interactiveSessionCoordina
 import type { InfoQueryService } from './infoQuery.service.js';
 import { EventEmitter } from 'events';
 
-/**
- * Create mock ProcessManager
- */
-export function createMockProcessManager(): ProcessManager {
-  const mock = new EventEmitter() as ProcessManager & EventEmitter;
-  mock.on = vi.fn().mockReturnThis();
-  mock.emit = vi.fn();
-  mock.getServiceStatus = vi.fn().mockResolvedValue({
-    name: 'test-service',
-    displayName: 'Test Service',
-    status: 'running',
-    pid: 1234,
-    uptime: 1000,
-    restarts: 0
-  });
-  mock.getAllStatuses = vi.fn().mockResolvedValue([]);
-  mock.startService = vi.fn().mockResolvedValue({
-    name: 'test-service',
-    displayName: 'Test Service',
-    status: 'running',
-    pid: 1234,
-    uptime: 0,
-    restarts: 0
-  });
-  mock.stopService = vi.fn().mockResolvedValue({
-    name: 'test-service',
-    displayName: 'Test Service',
-    status: 'stopped',
-    pid: undefined,
-    uptime: 0,
-    restarts: 0
-  });
-  return mock;
-}
+// ProcessManager removed - no longer needed
 
 /**
  * Create mock Docker
@@ -601,7 +567,6 @@ export function createMockTaskCompletionService(): TaskCompletionService {
  * Create complete mock dependencies for DevBotsManager
  */
 export function createMockDevBotsManagerDependencies(): DevBotsManagerDependencies {
-  const processManager = createMockProcessManager();
   const dockerManager = createMockDockerManager();
   const docker = createMockDocker();
   const taskQueue = createMockTaskQueue();
@@ -633,7 +598,6 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
   } as unknown as InfoQueryService;
 
   return {
-    processManager,
     dockerManager,
     docker,
     taskQueue,

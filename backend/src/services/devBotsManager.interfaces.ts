@@ -7,7 +7,6 @@
  */
 
 import type Docker from 'dockerode';
-import type { ProcessManager } from './processManager.js';
 import type { TaskQueueService } from './taskQueue.sqlite.js';
 import type { AgentPersonalityManager } from './agentPersonalities.js';
 import type { TaskPromptTemplateManager } from './taskPromptTemplates.js';
@@ -41,7 +40,6 @@ import type { InfoQueryService } from './infoQuery.service.js';
  */
 export interface DevBotsManagerDependencies {
   // Required dependencies
-  processManager: ProcessManager;
   dockerManager: DockerManager;
   docker: Docker;
 
