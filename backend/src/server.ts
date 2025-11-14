@@ -2,17 +2,13 @@ import express, { Request, Response } from 'express';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
-import { config, services as defaultServices } from './config.js';
+import { config } from './config.js';
 import { createApiRouter } from './routes/index.js';
-import { ProcessManager } from './services/processManager.js';
 import { CloudLogging } from './services/cloudLogging.js';
 import { DevBotsManager } from './services/devBotsManager.js';
 import { createDevBotsManagerDependencies } from './services/devBotsManager.factory.js';
 import type { DevBotsManagerDependencies } from './services/devBotsManager.interfaces.js';
-import { LogStreamer } from './services/logStreamer.js';
-import { LogRotation } from './services/logRotation.js';
 import { ConnectionManager } from './services/connectionManager.js';
-import { LogSourceManager } from './services/logSourceManager.js';
 import { InteractiveSessionGateway } from './services/interactiveSessionGateway.js';
 import { GitHubWebhookHandler } from './services/githubWebhookHandler.service.js';
 import { setWebhookHandler } from './routes/github-webhooks.routes.js';
@@ -25,24 +21,15 @@ import type {
 } from './types/socketEvents.js';
 
 // Export services for API access
-export let processManager: ProcessManager;
 export let cloudLogging: CloudLogging;
 export let devBotsManager: DevBotsManager | undefined;
-export let logRotation: LogRotation;
-export let logStreamer: LogStreamer;
 export let connectionManager: ConnectionManager;
-export let logSourceManager: LogSourceManager;
 
 export interface CreateAppOverrides {
-  processManager?: ProcessManager;
   cloudLogging?: CloudLogging;
   devBotsManager?: DevBotsManager | null;
   devBotsDependencies?: DevBotsManagerDependencies;
-  logRotation?: LogRotation;
-  logStreamer?: LogStreamer;
   connectionManager?: ConnectionManager;
-  logSourceManager?: LogSourceManager;
-  services?: typeof defaultServices;
 }
 
 export interface CreateAppOptions {
@@ -55,25 +42,7 @@ export async function createApp(options: CreateAppOptions = {}) {
   const httpServer = createServer(app);
 
   // Initialize core services
-  processManager = overrides.processManager ?? new ProcessManager();
   cloudLogging = overrides.cloudLogging ?? new CloudLogging();
-
-  // Initialize LogSourceManager and load configuration
-  if (overrides.logSourceManager) {
-    logSourceManager = overrides.logSourceManager;
-  } else {
-    logSourceManager = new LogSourceManager();
-    try {
-      await logSourceManager.loadConfig();
-    } catch (error) {
-      logger.error({
-        category: 'system',
-        action: 'log_source_manager_init_failed',
-        message: 'Failed to initialize LogSourceManager',
-        error,
-      });
-    }
-  }
 
   // Setup Socket.IO with type-safe events
   const io = new SocketIOServer<
@@ -92,20 +61,11 @@ export async function createApp(options: CreateAppOptions = {}) {
     allowEIO3: true,
   });
 
-  // Initialize LogStreamer with processManager and cloudLogging from routes
-  logStreamer = overrides.logStreamer ?? new LogStreamer(io, processManager, cloudLogging, logSourceManager);
-
   // Initialize ConnectionManager
   connectionManager = overrides.connectionManager ?? new ConnectionManager();
 
   // Set Socket.IO instance for broadcasting
   connectionManager.setIO(io);
-
-  // Initialize and start log rotation
-  logRotation = overrides.logRotation ?? new LogRotation();
-  if (!overrides.logRotation) {
-    logRotation.start();
-  }
 
   if (overrides.devBotsManager === null) {
     devBotsManager = undefined;
@@ -120,7 +80,7 @@ export async function createApp(options: CreateAppOptions = {}) {
       });
     }
   } else {
-    const devBotsDeps = overrides.devBotsDependencies ?? await createDevBotsManagerDependencies(processManager);
+    const devBotsDeps = overrides.devBotsDependencies ?? await createDevBotsManagerDependencies();
     devBotsManager = new DevBotsManager(devBotsDeps);
     new InteractiveSessionGateway({
       server: httpServer,
@@ -306,13 +266,9 @@ export async function createApp(options: CreateAppOptions = {}) {
   app.use(express.json());
 
   const apiRouter = createApiRouter({
-    processManager,
     cloudLogging,
     devBotsManager: devBotsManager ?? undefined,
     connectionManager,
-    logRotation,
-    logStreamer,
-    services: overrides.services ?? defaultServices,
   });
 
   app.use('/api', apiRouter);

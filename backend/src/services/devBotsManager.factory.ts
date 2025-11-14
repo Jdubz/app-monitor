@@ -6,7 +6,6 @@
  */
 
 import path from 'path';
-import { ProcessManager } from './processManager.js';
 import { TaskQueueService } from './taskQueue.sqlite.js';
 import { AgentPersonalityManager } from './agentPersonalities.js';
 import { TaskPromptTemplateManager } from './taskPromptTemplates.js';
@@ -46,7 +45,6 @@ import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBots
  * of all dependencies. For testing, create custom dependencies.
  */
 export async function createDevBotsManagerDependencies(
-  processManager: ProcessManager,
   config: DevBotsManagerConfig = {}
 ): Promise<DevBotsManagerDependencies> {
   // Initialize Docker Manager with validation
@@ -219,7 +217,7 @@ export async function createDevBotsManagerDependencies(
     taskQueue,
     dockerManager,
     scopeControl,
-    processManager,
+    null, // processManager removed
     null, // recovery will be set by DevBotsManager
     () => {} // emit function placeholder, will be bound by DevBotsManager
   );
@@ -277,7 +275,6 @@ export async function createDevBotsManagerDependencies(
   );
 
   return {
-    processManager,
     dockerManager,
     docker,
     taskQueue,

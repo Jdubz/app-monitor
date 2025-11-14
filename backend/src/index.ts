@@ -1,4 +1,4 @@
-import { createApp, logRotation, connectionManager, devBotsManager, processManager } from './server.js';
+import { createApp, connectionManager, devBotsManager } from './server.js';
 import { config } from './config.js';
 import { logger } from './utils/logger.js';
 import { ShutdownStateManager } from './services/shutdownStateManager.js';
@@ -94,23 +94,13 @@ async function gracefulShutdown(signal: string) {
     });
   });
 
-  // Phase 2.5: Cleanup managed processes
-  console.log('🧹 Cleaning up managed processes...');
-  try {
-    await processManager.cleanupAll();
-    logger.info({
-      category: 'system',
-      action: 'process_cleanup_complete',
-      message: 'Managed processes cleaned up'
-    });
-  } catch (error) {
-    logger.error({
-      category: 'system',
-      action: 'process_cleanup_failed',
-      message: 'Failed to cleanup managed processes',
-      error
-    });
-  }
+  // Phase 2.5: Cleanup managed processes (processManager removed)
+  console.log('🧹 Process cleanup skipped (processManager removed)...');
+  logger.info({
+    category: 'system',
+    action: 'process_cleanup_skipped',
+    message: 'ProcessManager removed - no managed processes to cleanup'
+  });
 
   // Phase 3: Wait for active tasks to complete (with timeout)
   console.log('⏳ Waiting for active tasks to complete (max 60s)...');
@@ -169,18 +159,12 @@ async function gracefulShutdown(signal: string) {
       });
     }
 
-    // Get log file positions from log watcher
-    const logWatcher = processManager?.getLogWatcher?.();
-    if (logWatcher && typeof logWatcher.getFilePositions === 'function') {
-      const filePositions = logWatcher.getFilePositions();
-      await shutdownStateManager.saveLogFilePositions(filePositions);
-      logger.info({
-        category: 'system',
-        action: 'log_positions_persisted',
-        message: 'Log file positions persisted',
-        details: { fileCount: filePositions.size }
-      });
-    }
+    // Log file positions tracking removed (logWatcher removed)
+    logger.info({
+      category: 'system',
+      action: 'log_positions_tracking_removed',
+      message: 'Log file position tracking removed with logWatcher'
+    });
 
     logger.info({
       category: 'system',
@@ -198,23 +182,13 @@ async function gracefulShutdown(signal: string) {
     console.log('⚠️  Failed to persist ephemeral state:', error);
   }
 
-  // Phase 6: Stop log rotation
-  console.log('📝 Stopping log rotation...');
-  try {
-    logRotation.stop();
-    logger.info({
-      category: 'system',
-      action: 'log_rotation_stopped',
-      message: 'Log rotation stopped'
-    });
-  } catch (error) {
-    logger.error({
-      category: 'system',
-      action: 'log_rotation_stop_failed',
-      message: 'Failed to stop log rotation',
-      error
-    });
-  }
+  // Phase 6: Log rotation removed
+  console.log('📝 Log rotation not applicable (removed)...');
+  logger.info({
+    category: 'system',
+    action: 'log_rotation_removed',
+    message: 'Log rotation removed - no longer needed'
+  });
 
   // Phase 7: Cleanup (graceful shutdown complete)
   console.log('🗄️  Cleaning up resources...');

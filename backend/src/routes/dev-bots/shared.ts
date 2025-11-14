@@ -13,7 +13,6 @@ import type { Task, TaskExecution } from '../../services/taskQueue.sqlite.js';
 import type { InteractiveSessionRecord } from '../../services/database.js';
 import type { TaskLogFileDescriptor } from '../../services/taskLogLocator.js';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
-import { LogStreamAccessTracker } from '../../services/logStreamAccessTracker.js';
 import { logger } from '../../utils/logger.js';
 
 // ============================================================================
@@ -82,7 +81,6 @@ export const DEFAULT_WORK_TARGET = 'dev-bots';
 const parsedStreamLimit = Number(process.env.MAX_LOG_STREAM_SUBSCRIBERS ?? '5');
 export const MAX_LOG_STREAM_SUBSCRIBERS =
   Number.isFinite(parsedStreamLimit) && parsedStreamLimit > 0 ? parsedStreamLimit : 5;
-export const logStreamAccessTracker = new LogStreamAccessTracker(MAX_LOG_STREAM_SUBSCRIBERS);
 
 // Interactive session configuration
 export const DEFAULT_INTERACTIVE_OWNER_EMAIL = (
@@ -357,47 +355,13 @@ export const writeSseEvent = (res: Response, event: string, data: unknown) => {
 
 /**
  * Stream log file with SSE, handling follower limits
+ * NOTE: Log streaming functionality deprecated - keeping stub for compatibility
  */
 export const streamLogFile = async ({ req, res, filePath, follow, stream }: LogStreamOptions) => {
-  let slotAcquired = false;
-  const streamKey = filePath;
-
-  if (follow) {
-    slotAcquired = logStreamAccessTracker.tryAcquire(streamKey);
-    if (!slotAcquired) {
-      logger.warn({
-        category: 'api',
-        action: 'log_stream_limit_reached',
-        message: `Rejected ${stream} log stream due to subscriber limit`,
-        details: { filePath, limit: MAX_LOG_STREAM_SUBSCRIBERS },
-      });
-      res.status(429).json({
-        error: 'Log stream limit reached',
-        message: `Only ${MAX_LOG_STREAM_SUBSCRIBERS} concurrent followers are allowed per ${stream} stream.`,
-      });
-      return;
-    }
-  }
-
-  res.status(200);
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache, no-transform');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
-
-  // Cleanup handler
-  const cleanup = () => {
-    if (slotAcquired) {
-      logStreamAccessTracker.release(streamKey);
-    }
-  };
-
-  req.on('close', cleanup);
-  req.on('error', cleanup);
-
-  // Send initial connection event
-  writeSseEvent(res, 'connected', { message: 'Stream connected', timestamp: new Date().toISOString() });
-
-  // Stream will be handled by caller (log watcher)
+  // Log streaming removed - return not implemented
+  res.status(501).json({
+    error: 'Not Implemented',
+    message: 'Log streaming has been removed. Use task logs API instead.'
+  });
+  return;
 };
