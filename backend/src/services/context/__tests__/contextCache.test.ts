@@ -53,9 +53,11 @@ describe('ContextCache', () => {
     });
 
     it('should start cleanup interval when persistToDb is true', async () => {
-      const cacheWithCleanup = new ContextCache({ persistToDb: true });
+      const localTestDb = await createTestDatabase();
+      const cacheWithCleanup = new ContextCache({ persistToDb: true, db: localTestDb.asDevBotsDatabase() });
       expect(cacheWithCleanup).toBeDefined();
       await cacheWithCleanup.destroy();
+      localTestDb.destroy();
     });
 
     it('should not start cleanup interval when persistToDb is false', () => {

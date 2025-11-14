@@ -24,7 +24,7 @@ describe('Context System Integration', () => {
     testDb = await createTestDatabase();
     tempDir = await createTempDir('system-integration-');
 
-    cache = new ContextCache({ persistToDb: true });
+    cache = new ContextCache({ persistToDb: true, db: testDb.asDevBotsDatabase() });
   });
 
   afterEach(async () => {
