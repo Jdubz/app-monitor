@@ -32,7 +32,7 @@ describe('ContextCache', () => {
 
   describe('constructor', () => {
     it('should initialize with default options', () => {
-      const defaultCache = new ContextCache();
+      const defaultCache = new ContextCache({ persistToDb: false });
       expect(defaultCache).toBeDefined();
       expect(defaultCache.getStats().totalEntries).toBe(0);
     });
@@ -40,7 +40,8 @@ describe('ContextCache', () => {
     it('should initialize with custom maxEntries and maxTotalBytes', () => {
       const customCache = new ContextCache({
         maxEntries: 50,
-        maxTotalBytes: 50 * 1024 * 1024
+        maxTotalBytes: 50 * 1024 * 1024,
+        persistToDb: false
       });
       expect(customCache).toBeDefined();
       expect(customCache.getStats().totalEntries).toBe(0);

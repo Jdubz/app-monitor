@@ -38,7 +38,7 @@ describe('ContextBundleGenerator', () => {
     });
 
     it('should initialize with custom cache', () => {
-      const cache = new ContextCache({ maxEntries: 5 });
+      const cache = new ContextCache({ maxEntries: 5, persistToDb: false });
       generator = new ContextBundleGenerator({ cache });
       expect(generator).toBeDefined();
     });
