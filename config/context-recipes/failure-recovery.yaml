@@ -1,0 +1,51 @@
+profile: failure-recovery
+version: "1.0"
+description: "Failure detection, recovery patterns, REVIEW→FIX→COMPLETE chains"
+taskTypes: [fix, review]
+required: false
+
+sizeLimit:
+  maxBytes: 18000
+  maxInlineBytes: 3500
+
+investigationSteps:
+  - "READ backend/src/services/failureRecovery.ts for recovery patterns"
+  - "CHECK backend/src/services/taskFailureGuards.ts for failure detection"
+  - "VERIFY chain tracking in backend/src/services/chainTracker.service.ts"
+  - "REVIEW error detection patterns in docs/technicalDesigns/"
+  - "UNDERSTAND the REVIEW chain workflow and depth limits"
+
+constraints:
+  - "MUST use existing failure guards from taskFailureGuards.ts"
+  - "MUST follow recovery patterns from failureRecovery.ts"
+  - "MUST NOT create duplicate recovery mechanisms"
+  - "MUST respect chain depth limits (max 4 automated attempts)"
+  - "MUST use existing ChainTrackerService for chain management"
+  - "MUST capture failure context for REVIEW tasks"
+
+sources:
+  - type: code
+    path: "backend/src/services/failureRecovery.ts"
+    transform: strip-comments
+    
+  - type: code
+    path: "backend/src/services/taskFailureGuards.ts"
+    extract:
+      sections: ["detectFailurePattern", "isTaskStuck"]
+    transform: strip-comments
+    
+  - type: markdown
+    path: "docs/technicalDesigns/error-detection-and-recovery-design.md"
+    extract:
+      headings: ["Failure Detection", "Recovery Patterns", "Chain Management"]
+    transform: summarize
+    
+  - type: code
+    path: "backend/src/services/chainTracker.service.ts"
+    optional: true
+    transform: strip-comments
+
+outputs:
+  format: markdown
+  filename: "failure-recovery.md"
+  includeMetadata: true

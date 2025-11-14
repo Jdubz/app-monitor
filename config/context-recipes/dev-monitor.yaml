@@ -1,0 +1,50 @@
+profile: dev-monitor
+version: "1.0"
+description: "Dev-monitor UI behavior, Socket.IO events, component patterns"
+taskTypes: [implementation, fix]
+required: false
+
+sizeLimit:
+  maxBytes: 20000
+  maxInlineBytes: 4000
+
+investigationSteps:
+  - "READ docs/architecture/system-overview.md for UI architecture"
+  - "CHECK frontend/src/components/ for existing UI components"
+  - "VERIFY Socket.IO event patterns in backend/src/types/socketEvents.ts"
+  - "LIST components in frontend/src/components/ to avoid duplication"
+  - "REVIEW existing UI patterns in frontend/src/"
+
+constraints:
+  - "MUST use existing UI components from frontend/src/components/"
+  - "MUST follow Socket.IO event patterns from socketEvents.ts"
+  - "MUST NOT create duplicate components"
+  - "MUST use Tailwind CSS for styling (no inline styles)"
+  - "MUST use Radix UI primitives for accessible components"
+  - "MUST follow React component patterns (functional components with hooks)"
+
+sources:
+  - type: markdown
+    path: "docs/architecture/system-overview.md"
+    extract:
+      headings: ["Frontend Architecture", "Real-time Updates", "UI Components"]
+    transform: summarize
+    
+  - type: code
+    path: "backend/src/types/socketEvents.ts"
+    transform: strip-comments
+    
+  - type: text
+    path: "frontend/src/components"
+    extract:
+      fileList: true
+    transform: bullet-list
+    
+  - type: markdown
+    path: "frontend/README.md"
+    optional: true
+
+outputs:
+  format: markdown
+  filename: "dev-monitor.md"
+  includeMetadata: true

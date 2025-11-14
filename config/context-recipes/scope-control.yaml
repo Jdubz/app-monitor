@@ -1,0 +1,55 @@
+profile: scope-control
+version: "1.0"
+description: "Boundaries, forbidden operations, and scope enforcement rules"
+taskTypes: [implementation, fix, review, analysis]
+required: true
+
+sizeLimit:
+  maxBytes: 15000
+  maxInlineBytes: 3000
+
+investigationSteps:
+  - "READ docs/architecture/master-design-intent.md for system boundaries"
+  - "CHECK existing services in backend/src/services/ before creating new ones"
+  - "VERIFY you're not duplicating functionality that already exists"
+  - "GREP for similar implementations across the codebase"
+  - "LIST all files in the target directory to understand structure"
+
+constraints:
+  - "MUST NOT create new services without checking for existing implementations"
+  - "MUST NOT duplicate functionality found in backend/src/services/"
+  - "MUST NOT add features beyond the explicit task requirements"
+  - "MUST follow existing architectural patterns (dependency injection, singleton factories)"
+  - "MUST use dependency injection for testability"
+  - "MUST write unit tests for new code"
+  - "MUST follow the existing error handling pattern (structured logging)"
+
+sources:
+  - type: markdown
+    path: "docs/architecture/master-design-intent.md"
+    extract:
+      headings: ["System Boundaries", "Core Principles", "Design Philosophy"]
+    transform: summarize
+    
+  - type: text
+    path: "backend/src/services"
+    extract:
+      fileList: true
+    transform: bullet-list
+    
+  - type: markdown
+    path: "CONTRIBUTING.md"
+    extract:
+      headings: ["Code Style", "Testing Requirements", "Pull Request Process"]
+    transform: summarize
+    
+  - type: markdown
+    path: "CONTEXT_INTEGRATION_ARCHITECTURE.md"
+    extract:
+      headings: ["Dependency Injection Pattern", "Error Handling Patterns", "Test Coverage Patterns"]
+    transform: summarize
+
+outputs:
+  format: markdown
+  filename: "scope-control.md"
+  includeMetadata: true

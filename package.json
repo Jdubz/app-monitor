@@ -28,6 +28,7 @@
     "validate:locks": "node scripts/validate-lock-files.cjs",
     "validate:build": "npm run build -ws --if-present",
     "validate:all": "npm run validate:locks && npm run validate:build && npm test",
+    "context:validate": "node scripts/validate-context-recipes.js",
     "precommit": "npm run validate:locks",
     "prepare": "husky || true"
   },
