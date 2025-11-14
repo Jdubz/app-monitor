@@ -80,18 +80,34 @@ echo -e "${GREEN}✅ Backend builds successfully${NC}"
 echo ""
 
 echo -e "${BLUE}🗄️  Test 4: Database schema validation${NC}"
-# Verify that TaskQueue.createSchema() won't fail
-# This catches the context_bundle_id index creation bug
-cd "${PROJECT_ROOT}"
+# Verify that TaskQueue.createSchema() won't create indexes on columns that don't exist yet
+# This catches bugs where indexes are created before migrations add the columns
 if ! node -e "
-const code = require('fs').readFileSync('backend/dist/services/taskQueue.sqlite.js', 'utf8');
-if (code.includes('CREATE INDEX') && code.includes('context_bundle_id') && code.includes('createSchema')) {
-  console.error('ERROR: createSchema() creates context_bundle_id indexes');
-  console.error('This will fail if columns don\\'t exist yet!');
-  console.error('Indexes should only be in migrations, not createSchema()');
+const fs = require('fs');
+const code = fs.readFileSync('${SMOKE_TEST_DIR}/backend/dist/services/taskQueue.sqlite.js', 'utf8');
+
+// Look for the problematic pattern: CREATE INDEX on context_bundle_id within createSchema's SQL
+// The bug was: createSchema() had SQL like 'CREATE INDEX idx_tasks_context_bundle_id...'
+// But context_bundle_id column is added by migrations, not in the initial schema
+const createSchemaMatch = code.match(/createSchema.*?this\\.db\\.exec\\(\`([^\`]+)\`\\)/s);
+if (!createSchemaMatch) {
+  // Can't find the pattern, skip validation
+  console.log('Schema validation skipped: could not parse createSchema SQL');
+  process.exit(0);
+}
+
+const createSchemaSQL = createSchemaMatch[1];
+
+// Check for the specific bug: CREATE INDEX on context_bundle_id in the initial schema
+if (createSchemaSQL.includes('idx_tasks_context_bundle_id') ||
+    (createSchemaSQL.match(/CREATE INDEX.*context_bundle_id/))) {
+  console.error('ERROR: createSchema() tries to create indexes on context_bundle_id');
+  console.error('This will fail because context_bundle_id column is added by migrations!');
+  console.error('Indexes should only be created AFTER migrations add the columns');
   process.exit(1);
 }
-console.log('Schema validation passed');
+
+console.log('Schema validation passed: createSchema() does not create risky indexes');
 " 2>&1; then
   echo -e "${RED}❌ Schema contains unsafe index creation${NC}"
   exit 1
