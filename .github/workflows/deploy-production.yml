@@ -79,6 +79,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Validate infrastructure configuration
+        run: |
+          echo "🔍 Validating infrastructure paths and configuration..."
+          chmod +x ./scripts/production/validate-infrastructure.sh
+          ./scripts/production/validate-infrastructure.sh .
+
       - name: Validate database schema
         run: |
           echo "🔍 Validating database schema..."
