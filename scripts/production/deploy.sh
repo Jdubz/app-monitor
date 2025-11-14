@@ -9,6 +9,26 @@
 
 set -euo pipefail
 
+# Enhanced error handling
+trap 'handle_error $? $LINENO' ERR
+
+handle_error() {
+    local exit_code=$1
+    local line_number=$2
+    log_error "Deployment failed at line $line_number with exit code $exit_code"
+    log_error "Rolling back..."
+
+    # Cleanup and rollback if possible
+    if [ -n "${TARGET_PORT:-}" ] && [ -n "${ACTIVE_PORT:-}" ] && [ "$ACTIVE_PORT" != "none" ]; then
+        "${SCRIPTS_DIR}/rollback.sh" "${ACTIVE_PORT}" 2>&1 || log_error "Rollback script failed"
+    fi
+
+    # Release lock
+    release_lock
+
+    exit $exit_code
+}
+
 # Accept source directory as parameter, default to current directory
 SOURCE_DIR="${1:-.}"
 
@@ -73,6 +93,35 @@ release_lock() {
 # Ensure lock is released on exit
 trap release_lock EXIT INT TERM
 
+# Validate prerequisites before starting
+validate_prerequisites() {
+    log_info "Validating deployment prerequisites..."
+
+    # Check required commands
+    local required_cmds=("node" "npm" "rsync" "lsof" "systemctl" "nginx")
+    for cmd in "${required_cmds[@]}"; do
+        if ! command -v "$cmd" &> /dev/null; then
+            log_error "Required command not found: $cmd"
+            exit 1
+        fi
+    done
+
+    # Check source directory
+    if [ ! -f "${SOURCE_DIR}/package.json" ]; then
+        log_error "Invalid source directory: ${SOURCE_DIR} (no package.json found)"
+        exit 1
+    fi
+
+    # Check Node.js version
+    local node_version=$(node --version | cut -d'v' -f2 | cut -d'.' -f1)
+    if [ "$node_version" -lt 18 ]; then
+        log_error "Node.js version 18+ required, found: $(node --version)"
+        exit 1
+    fi
+
+    log_info "Prerequisites validated"
+}
+
 # Determine current active port
 get_active_port() {
     if systemctl is-active --quiet app-monitor-backend@5001.service; then
@@ -122,6 +171,9 @@ main() {
 
     # Acquire deployment lock to prevent concurrent deployments
     acquire_lock
+
+    # Validate prerequisites
+    validate_prerequisites
 
     # Phase 1: Pre-deployment checks
     log_info "Phase 1: Pre-deployment checks"
@@ -177,19 +229,97 @@ main() {
     # Phase 5: Build and prepare
     log_info "Phase 5: Building application"
 
-    # Backend build
+    # Backend build with strict error checking
+    log_info "Building backend..."
     cd "${RELEASE_DIR}/backend"
+
     # Temporarily remove root package.json to prevent workspace resolution
-    mv "${RELEASE_DIR}/package.json" "${RELEASE_DIR}/package.json.bak" 2>/dev/null || true
-    # Install dependencies locally
-    npm ci
+    if [ -f "${RELEASE_DIR}/package.json" ]; then
+        mv "${RELEASE_DIR}/package.json" "${RELEASE_DIR}/package.json.bak"
+    fi
+
+    # Install dependencies with validation
+    log_info "Installing backend dependencies..."
+    if ! npm ci 2>&1 | tee /tmp/npm-ci-backend.log; then
+        log_error "Backend npm ci failed"
+        log_error "Last 10 lines of npm output:"
+        tail -10 /tmp/npm-ci-backend.log
+
+        # Check for common issues
+        if grep -q "package-lock.json.*out of sync" /tmp/npm-ci-backend.log; then
+            log_error "DIAGNOSIS: package-lock.json out of sync with package.json"
+            log_error "FIX: Run 'cd backend && npm install' and commit the lock file"
+        fi
+
+        # Restore root package.json
+        [ -f "${RELEASE_DIR}/package.json.bak" ] && \
+            mv "${RELEASE_DIR}/package.json.bak" "${RELEASE_DIR}/package.json"
+
+        exit 1
+    fi
+
     # Restore root package.json
-    mv "${RELEASE_DIR}/package.json.bak" "${RELEASE_DIR}/package.json" 2>/dev/null || true
-    # Clean stale build cache to prevent missing file issues
+    [ -f "${RELEASE_DIR}/package.json.bak" ] && \
+        mv "${RELEASE_DIR}/package.json.bak" "${RELEASE_DIR}/package.json"
+
+    # Verify node_modules exists and has critical packages
+    log_info "Validating installed dependencies..."
+    if [ ! -d "node_modules" ]; then
+        log_error "node_modules directory not created after npm ci"
+        exit 1
+    fi
+
+    # Check for critical dependencies
+    CRITICAL_DEPS=("express" "socket.io" "better-sqlite3" "dockerode")
+    for dep in "${CRITICAL_DEPS[@]}"; do
+        if [ ! -d "node_modules/${dep}" ]; then
+            log_error "Critical dependency missing: ${dep}"
+            exit 1
+        fi
+    done
+
+    # Clean stale build cache
     rm -f tsconfig.build.tsbuildinfo
-    npm run build
-    # Remove devDependencies after build
-    npm prune --production
+
+    # Build TypeScript
+    log_info "Compiling TypeScript..."
+    if ! npm run build 2>&1 | tee /tmp/npm-build-backend.log; then
+        log_error "Backend build failed"
+        tail -20 /tmp/npm-build-backend.log
+        exit 1
+    fi
+
+    # Verify build output
+    if [ ! -f "dist/index.js" ]; then
+        log_error "Build output missing: dist/index.js not created"
+        exit 1
+    fi
+
+    # Remove devDependencies
+    log_info "Pruning dev dependencies..."
+    if ! npm prune --production; then
+        log_error "Backend npm prune failed"
+        exit 1
+    fi
+
+    # Final verification
+    log_info "Verifying production build..."
+    node -e "
+        const critical = ['express', 'socket.io', 'better-sqlite3'];
+        const missing = critical.filter(pkg => {
+            try { require.resolve(pkg); return false; }
+            catch { return true; }
+        });
+        if (missing.length) {
+            console.error('Missing after prune:', missing);
+            process.exit(1);
+        }
+    " || {
+        log_error "Production dependencies verification failed"
+        exit 1
+    }
+
+    log_info "Backend build complete and verified"
 
     # Frontend build
     cd "${RELEASE_DIR}/frontend"

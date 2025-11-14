@@ -2,6 +2,14 @@
 
 echo "🔍 Running app-monitor pre-push quality checks (lint + tsc + unit tests)..."
 
+# Validate package locks FIRST
+echo ""
+echo "📦 Validating package-lock.json files..."
+npm run validate:locks || {
+    echo "❌ Package lock files out of sync! Run npm install and commit lock files."
+    exit 1
+}
+
 # Ensure legacy mirror directories are not present in the repo
 if [ -d "dev-bots/mirror" ]; then
     echo "❌ Refusing to push with dev-bots/mirror present. Run 'rm -rf dev-bots/mirror' and retry."

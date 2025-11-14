@@ -1,4 +1,33 @@
-#!/bin/sh
+#!/usr/bin/env sh
+. "$(dirname -- "$0")/_/husky.sh"
 
-# No checks on commit
-echo "✅ Commit check skipped"
+echo "🔒 Running pre-commit checks..."
+
+# 1. Validate package locks
+echo "  → Validating package-lock.json files..."
+npm run validate:locks || {
+  echo ""
+  echo "❌ Pre-commit check failed: Package lock files out of sync"
+  echo ""
+  exit 1
+}
+
+# 2. Check for package.json dependency changes without lock file changes
+if git diff --cached --name-only | grep -q "package\.json$"; then
+  # Check if dependencies/devDependencies sections changed
+  if git diff --cached package.json | grep -qE '^\+.*"(dependencies|devDependencies|peerDependencies|optionalDependencies)"'; then
+    if ! git diff --cached --name-only | grep -q "package-lock\.json$"; then
+      echo ""
+      echo "❌ package.json dependencies modified without corresponding package-lock.json"
+      echo "   Run: npm install"
+      echo ""
+      exit 1
+    fi
+  fi
+fi
+
+# 3. Lint staged files
+echo "  → Linting staged files..."
+npx lint-staged
+
+echo "✅ Pre-commit checks passed"
