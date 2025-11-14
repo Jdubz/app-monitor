@@ -188,7 +188,7 @@
 
 ### Documentation Dependencies
 - `docs/plans/BUG_REPORT_SYSTEM_IMPLEMENTATION.md` - Implementation plan
-- `docs/architecture/dev-bots-overview.md` - Dev-bot integration
+- `docs/architecture/system-overview.md` - System architecture
 
 ### Related Designs
 - `docs/technicalDesigns/dev-bot-foundational-upgrades.md` - Artifact management dependency

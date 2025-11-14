@@ -122,8 +122,8 @@ export class AgentEligibilityServiceImpl implements AgentEligibilityService {
     }
 
     // Check for explicit risk_score property
-    const explicitRisk = 'risk_score' in task && typeof (task as any).risk_score === 'number' 
-      ? (task as any).risk_score 
+    const explicitRisk = task.risk_score !== undefined && typeof task.risk_score === 'number'
+      ? task.risk_score
       : riskScore;
 
     return explicitRisk < 5;
@@ -181,8 +181,8 @@ export class AgentEligibilityServiceImpl implements AgentEligibilityService {
    * Ops can block Gemini per project/branch
    */
   private async hasPolicyOverrides(task: Task, _agent: AgentType): Promise<boolean> {
-    if ((task as any).metadata && typeof (task as any).metadata === 'object') {
-      const metadata = (task as any).metadata;
+    if (task.metadata && typeof task.metadata === 'object') {
+      const metadata = task.metadata;
       if (metadata.block_gemini === true) {
         return true;
       }

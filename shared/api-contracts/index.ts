@@ -1,5 +1,3 @@
-export type ServiceStatus = "running" | "stopped" | "starting" | "stopping" | "error";
-
 export interface HealthCheckResponse {
   status: string;
   timestamp: string;
@@ -11,80 +9,6 @@ export interface DockerContainerInfo {
   status: "running" | "stopped" | "exited" | "unknown";
   workerStatus?: "running" | "idle" | "stopped" | "unknown";
   containerId?: string;
-}
-
-export interface ProcessInfo {
-  name: string;
-  displayName: string;
-  status: ServiceStatus;
-  pid?: number;
-  ports?: number[];
-  uptime?: number;
-  error?: string;
-  startedAt?: number;
-  dockerContainer?: DockerContainerInfo;
-}
-
-export interface LogSource {
-  id: string;
-  name: string;
-  format: string;
-  parser: string;
-  color: string;
-  displayOrder: number;
-  path: string;
-}
-
-export interface CloudService {
-  name: string;
-  displayName: string;
-  description: string;
-  logFilter?: string;
-}
-
-export interface CloudLoggingStatus {
-  available: boolean;
-  message: string;
-}
-
-export type CloudLogLevel = "ERROR" | "WARN" | "INFO" | "DEBUG";
-
-export interface CloudLogMetadata {
-  trace?: string;
-  spanId?: string;
-  resource?: Record<string, unknown>;
-  labels?: Record<string, string>;
-  severity?: string;
-  insertId?: string;
-  logName?: string;
-  [key: string]: unknown;
-}
-
-export interface ParsedCloudLog {
-  id: string;
-  service: string;
-  timestamp: number;
-  level: CloudLogLevel;
-  message: string;
-  metadata: CloudLogMetadata;
-  raw: unknown;
-}
-
-export interface EnvironmentDefinition {
-  name: string;
-  displayName: string;
-  projectId: string;
-  services: CloudService[];
-  readOnly?: boolean;
-}
-
-export type EnvironmentsResponse = Record<string, EnvironmentDefinition>;
-
-export type EnvironmentServicesResponse = CloudService[];
-
-export interface ServiceLogsResponse {
-  serviceName: string;
-  logs: string[];
 }
 
 export interface PortInfo {
@@ -101,35 +25,6 @@ export interface PortKillResponse {
   port: number;
   pid?: number | null;
   wasInUse: boolean;
-}
-
-export interface CloudLogsRequest {
-  environment: string;
-  service: string;
-  severity?: string;
-  limit?: number;
-  startTime?: string;
-  endTime?: string;
-  customFilter?: string;
-}
-
-export interface CloudLogsQuery {
-  environment: string;
-  service: string;
-  severity?: string;
-  limit?: number;
-  timeRange?: {
-    start: Date;
-    end: Date;
-  };
-  customFilter?: string;
-}
-
-export interface CloudLogsResponse {
-  environment: string;
-  service: string;
-  count: number;
-  logs: ParsedCloudLog[];
 }
 
 export interface TokenBudget {
@@ -496,21 +391,7 @@ export interface ApiError {
   details?: Record<string, unknown>;
 }
 
-export type LogSourcesResponse = ApiSuccess<LogSource[]>;
-
 export type HealthCheckApiResponse = ApiSuccess<HealthCheckResponse>;
-export type ServicesStatusResponse = ApiSuccess<ProcessInfo[]>;
-export type ServiceStatusResponse = ApiSuccess<ProcessInfo>;
-export type ServiceActionResponse = ApiSuccess<ProcessInfo>;
-export type PortStatusesResponse = ApiSuccess<PortStatusMap>;
-export type PortKillApiResponse = ApiSuccess<PortKillResponse>;
-export type EnvironmentsApiResponse = ApiSuccess<EnvironmentsResponse>;
-export type EnvironmentServicesApiResponse = ApiSuccess<EnvironmentServicesResponse>;
-export type ServiceLogsApiResponse = ApiSuccess<ServiceLogsResponse>;
-export type CloudLogsApiResponse = ApiSuccess<CloudLogsResponse>;
-export type CloudLoggingStatusApiResponse = ApiSuccess<CloudLoggingStatus>;
-export type LogConfigResponse = ApiSuccess<Record<string, unknown>>;
-export type LogReloadResponse = ApiSuccess<{ message: string }>;
 
 export type TokenSummariesResponse = ApiSuccess<TokenSummariesPayload>;
 export type TokenSummaryResponse = ApiSuccess<TokenUsageSummary>;

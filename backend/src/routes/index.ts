@@ -9,7 +9,6 @@
  */
 
 import { Router } from 'express';
-import { CloudLogging } from '../services/cloudLogging.js';
 import { DevBotsManager } from '../services/devBotsManager.js';
 import type { ConnectionManager } from '../services/connectionManager.js';
 import type { HealthCheckApiResponse } from '@app-monitor/api-contracts';
@@ -35,7 +34,6 @@ import githubWebhooksRoutes from './github-webhooks.routes.js';
  * - Clear dependencies
  */
 export function createApiRouter(deps: {
-  cloudLogging: CloudLogging;
   devBotsManager?: DevBotsManager;
   connectionManager?: ConnectionManager;
 }) {

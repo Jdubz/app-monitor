@@ -83,10 +83,10 @@ export function mockGitCommand(commitHash: string = 'abc123def456'): () => void 
   });
 
   // Note: This modifies the module's exported function for testing
-  (global as any).execSync = mockExecSync;
+  (global as unknown as { execSync: typeof mockExecSync }).execSync = mockExecSync;
 
   return () => {
-    (global as any).execSync = originalExecSync;
+    (global as unknown as { execSync: typeof originalExecSync }).execSync = originalExecSync;
   };
 }
 

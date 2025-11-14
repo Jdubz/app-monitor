@@ -394,7 +394,7 @@ export class ContextTransforms {
       }
 
       // Traverse with depth limit
-      let result: any = data;
+      let result: unknown = data;
       let depth = 0;
 
       for (const segment of segments) {
@@ -415,10 +415,10 @@ export class ContextTransforms {
           }
           result = result[index];
         } else {
-          if (typeof result !== 'object' || !Object.prototype.hasOwnProperty.call(result, segment)) {
+          if (typeof result !== 'object' || result === null || !Object.prototype.hasOwnProperty.call(result, segment)) {
             return '';
           }
-          result = result[segment];
+          result = (result as Record<string, unknown>)[segment];
         }
       }
 

@@ -1,6 +1,4 @@
-import type { ProcessInfo as SharedProcessInfo } from '@/types/contracts';
-
-export type ProcessInfo = SharedProcessInfo;
+import type { Service } from './shared.types';
 
 export interface ServiceConfig {
   name: string;
@@ -12,5 +10,5 @@ export interface ServiceConfig {
 export interface ServiceControlResponse {
   success: boolean;
   message?: string;
-  status?: ProcessInfo;
+  status?: Service;
 }

@@ -4,7 +4,6 @@ import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
 import { config } from './config.js';
 import { createApiRouter } from './routes/index.js';
-import { CloudLogging } from './services/cloudLogging.js';
 import { DevBotsManager } from './services/devBotsManager.js';
 import { createDevBotsManagerDependencies } from './services/devBotsManager.factory.js';
 import type { DevBotsManagerDependencies } from './services/devBotsManager.interfaces.js';
@@ -21,12 +20,10 @@ import type {
 } from './types/socketEvents.js';
 
 // Export services for API access
-export let cloudLogging: CloudLogging;
 export let devBotsManager: DevBotsManager | undefined;
 export let connectionManager: ConnectionManager;
 
 export interface CreateAppOverrides {
-  cloudLogging?: CloudLogging;
   devBotsManager?: DevBotsManager | null;
   devBotsDependencies?: DevBotsManagerDependencies;
   connectionManager?: ConnectionManager;
@@ -40,9 +37,6 @@ export async function createApp(options: CreateAppOptions = {}) {
   const overrides = options.overrides ?? {};
   const app = express();
   const httpServer = createServer(app);
-
-  // Initialize core services
-  cloudLogging = overrides.cloudLogging ?? new CloudLogging();
 
   // Setup Socket.IO with type-safe events
   const io = new SocketIOServer<
@@ -266,7 +260,6 @@ export async function createApp(options: CreateAppOptions = {}) {
   app.use(express.json());
 
   const apiRouter = createApiRouter({
-    cloudLogging,
     devBotsManager: devBotsManager ?? undefined,
     connectionManager,
   });

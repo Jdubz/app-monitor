@@ -515,9 +515,7 @@ Look for:
 - Vite: https://vitejs.dev
 
 ### Internal Docs:
-- `docs/archive/dev-monitor-refactoring-documentation.md` - Refactoring guide
-- `docs/archive/` - Historical implementation progress
-- `docs/architecture/dev-monitor-architecture.md` - System architecture
+- `docs/architecture/system-overview.md` - System architecture
 
 ---
 

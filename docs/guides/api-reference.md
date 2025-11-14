@@ -414,7 +414,7 @@ socket.on('claude:systemStatusChange', (status) => {
 - [Agent Personalities](agent-personalities.md)
 - [Task Execution Template](task-execution-template.md)
 - [Worker Onboarding](worker-onboarding.md)
-- [Dev-Bots Architecture](../architecture/dev-bots-overview.md)
+- [System Architecture](../architecture/system-overview.md)
 
 ---
 

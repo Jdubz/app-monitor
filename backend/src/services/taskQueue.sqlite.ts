@@ -144,6 +144,9 @@ export interface Task {
   rollback_plan?: string[];
   blockers?: string[];
   risks?: string[];
+  // Agent eligibility fields
+  risk_score?: number; // Explicit risk score for agent eligibility assessment
+  metadata?: Record<string, unknown>; // Dynamic metadata for policy overrides and extensibility
 }
 
 export interface Worker {

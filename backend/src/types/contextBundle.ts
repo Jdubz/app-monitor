@@ -78,6 +78,7 @@ export interface BundleCacheEntry {
   expiresAt?: Date;
   hitCount: number;
   lastAccessedAt: Date;
+  accessSequence?: number; // For stable LRU ordering
 }
 
 /**
