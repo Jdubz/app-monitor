@@ -201,7 +201,10 @@ export class ContextRecipeLoader {
   /**
    * Apply default values to a recipe
    */
-  private applyDefaults(recipe: any): ContextRecipe {
+  private applyDefaults(recipe: unknown): ContextRecipe {
+    // Type assertion after validation
+    const recipeObj = recipe as Record<string, unknown>;
+
     // Import constants (workaround for type-only import)
     const DEFAULT_SIZE_LIMITS_VALUE = {
       implementation: { maxBytes: 50000, maxInlineBytes: 12000 },
@@ -220,35 +223,35 @@ export class ContextRecipeLoader {
     const DEFAULT_TTL_VALUE = 86400;
 
     // Apply size limit defaults based on task type
-    if (!recipe.sizeLimit && recipe.taskTypes && recipe.taskTypes.length > 0) {
-      const taskType = recipe.taskTypes[0];
-      recipe.sizeLimit = DEFAULT_SIZE_LIMITS_VALUE[taskType as keyof typeof DEFAULT_SIZE_LIMITS_VALUE];
+    if (!recipeObj.sizeLimit && recipeObj.taskTypes && Array.isArray(recipeObj.taskTypes) && recipeObj.taskTypes.length > 0) {
+      const taskType = recipeObj.taskTypes[0];
+      recipeObj.sizeLimit = DEFAULT_SIZE_LIMITS_VALUE[taskType as keyof typeof DEFAULT_SIZE_LIMITS_VALUE];
     }
 
     // Apply output defaults
-    if (!recipe.outputs) {
-      recipe.outputs = { ...DEFAULT_RECIPE_OUTPUT_VALUE };
+    if (!recipeObj.outputs) {
+      recipeObj.outputs = { ...DEFAULT_RECIPE_OUTPUT_VALUE };
     } else {
-      recipe.outputs = {
+      recipeObj.outputs = {
         ...DEFAULT_RECIPE_OUTPUT_VALUE,
-        ...recipe.outputs
+        ...(recipeObj.outputs as object)
       };
     }
 
     // Apply TTL default
-    if (recipe.ttl === undefined) {
-      recipe.ttl = DEFAULT_TTL_VALUE;
+    if (recipeObj.ttl === undefined) {
+      recipeObj.ttl = DEFAULT_TTL_VALUE;
     }
 
     // Ensure arrays exist
-    recipe.taskTypes = recipe.taskTypes || [];
-    recipe.investigationSteps = recipe.investigationSteps || [];
-    recipe.constraints = recipe.constraints || [];
-    recipe.dependencies = recipe.dependencies || [];
+    recipeObj.taskTypes = recipeObj.taskTypes || [];
+    recipeObj.investigationSteps = recipeObj.investigationSteps || [];
+    recipeObj.constraints = recipeObj.constraints || [];
+    recipeObj.dependencies = recipeObj.dependencies || [];
 
     // Ensure required is boolean
-    recipe.required = Boolean(recipe.required);
+    recipeObj.required = Boolean(recipeObj.required);
 
-    return recipe as ContextRecipe;
+    return recipeObj as ContextRecipe;
   }
 }

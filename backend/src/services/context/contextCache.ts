@@ -22,6 +22,20 @@ interface CacheOptions {
   db?: DevBotsDatabase; // Allow injecting database for testing
 }
 
+interface DbCacheRow {
+  bundle_id: string;
+  cache_key: string;
+  task_type: string;
+  profiles: string; // JSON string
+  mount_path: string;
+  size_bytes: number;
+  created_at: string;
+  expires_at: string | null;
+  hit_count: number;
+  last_accessed_at: string;
+  bundle_data: string; // JSON string
+}
+
 export class ContextCache {
   private cache: Map<string, BundleCacheEntry> = new Map();
   private bundleData: Map<string, ContextBundle> = new Map();
@@ -281,8 +295,8 @@ export class ContextCache {
     // Sort entries by access sequence (oldest first) for stable LRU ordering
     const entries = Array.from(this.cache.entries())
       .sort((a, b) => {
-        const seqA = (a[1] as any).accessSequence || 0;
-        const seqB = (b[1] as any).accessSequence || 0;
+        const seqA = a[1].accessSequence || 0;
+        const seqB = b[1].accessSequence || 0;
         return seqA - seqB;
       });
 
@@ -309,7 +323,7 @@ export class ContextCache {
     if (entry) {
       entry.lastAccessedAt = new Date();
       entry.hitCount++;
-      (entry as any).accessSequence = ++this.accessSequence;
+      entry.accessSequence = ++this.accessSequence;
 
       // Update database if persistence is enabled
       if (this.persistToDb && this.db) {
@@ -398,7 +412,7 @@ export class ContextCache {
    * Hash object to string
    * Uses SHA-256 with 32 hex characters (128 bits) for collision resistance
    */
-  private hashObject(obj: any): string {
+  private hashObject(obj: unknown): string {
     const str = JSON.stringify(obj);
     return crypto.createHash('sha256').update(str).digest('hex').slice(0, 32);
   }
@@ -434,7 +448,7 @@ export class ContextCache {
           bundle_data
         FROM context_bundle_cache
         WHERE cache_key = ?
-      `).get(cacheKey) as any;
+      `).get(cacheKey) as DbCacheRow | undefined;
 
       if (!row) {
         return null;
@@ -477,7 +491,7 @@ export class ContextCache {
       } as BundleCacheEntry;
 
       // Parse and validate bundle data
-      let bundle: any;
+      let bundle: unknown;
       try {
         bundle = JSON.parse(row.bundle_data);
       } catch (parseError) {
@@ -486,17 +500,24 @@ export class ContextCache {
         return null;
       }
 
-      // Validate bundle structure
-      if (!bundle || typeof bundle !== 'object' ||
-          !bundle.id || !bundle.metadata || !bundle.profileContents) {
+      // Validate bundle structure with type guard
+      if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle)) {
+        this.logger.error('Invalid bundle structure in database', { component: 'ContextCache', operation: 'loadFromDb', cacheKey });
+        this.db.getConnection().prepare('DELETE FROM context_bundle_cache WHERE cache_key = ?').run(cacheKey);
+        return null;
+      }
+
+      const bundleObj = bundle as Record<string, unknown>;
+      if (!bundleObj.id || !bundleObj.metadata || !bundleObj.profileContents) {
         this.logger.error('Invalid bundle structure in database', { component: 'ContextCache', operation: 'loadFromDb', cacheKey });
         this.db.getConnection().prepare('DELETE FROM context_bundle_cache WHERE cache_key = ?').run(cacheKey);
         return null;
       }
 
       // Validate metadata
-      if (!bundle.metadata.bundleId || !bundle.metadata.taskType ||
-          !Array.isArray(bundle.metadata.profiles)) {
+      const metadata = bundleObj.metadata as Record<string, unknown>;
+      if (!metadata.bundleId || !metadata.taskType ||
+          !Array.isArray(metadata.profiles)) {
         this.logger.error('Invalid bundle metadata', { component: 'ContextCache', operation: 'loadFromDb', cacheKey });
         this.db.getConnection().prepare('DELETE FROM context_bundle_cache WHERE cache_key = ?').run(cacheKey);
         return null;
@@ -504,25 +525,26 @@ export class ContextCache {
 
       // Convert date strings back to Date objects with validation
       try {
-        bundle.metadata.createdAt = new Date(bundle.metadata.createdAt);
-        if (isNaN(bundle.metadata.createdAt.getTime())) {
+        metadata.createdAt = new Date(metadata.createdAt as string);
+        if (isNaN((metadata.createdAt as Date).getTime())) {
           throw new Error('Invalid createdAt date');
         }
 
-        if (bundle.metadata.expiresAt) {
-          bundle.metadata.expiresAt = new Date(bundle.metadata.expiresAt);
-          if (isNaN(bundle.metadata.expiresAt.getTime())) {
+        if (metadata.expiresAt) {
+          metadata.expiresAt = new Date(metadata.expiresAt as string);
+          if (isNaN((metadata.expiresAt as Date).getTime())) {
             throw new Error('Invalid expiresAt date');
           }
         }
 
-        for (const [profileName, profileContent] of Object.entries(bundle.profileContents)) {
-          const content = profileContent as any;
+        const profileContents = bundleObj.profileContents as Record<string, unknown>;
+        for (const [profileName, profileContent] of Object.entries(profileContents)) {
+          const content = profileContent as Record<string, unknown>;
           if (!content.generatedAt) {
             throw new Error(`Missing generatedAt for profile ${profileName}`);
           }
-          content.generatedAt = new Date(content.generatedAt);
-          if (isNaN(content.generatedAt.getTime())) {
+          content.generatedAt = new Date(content.generatedAt as string);
+          if (isNaN((content.generatedAt as Date).getTime())) {
             throw new Error(`Invalid generatedAt for profile ${profileName}`);
           }
         }
@@ -532,7 +554,7 @@ export class ContextCache {
         return null;
       }
 
-      return { entry, bundle: bundle as ContextBundle };
+      return { entry, bundle: bundleObj as ContextBundle };
     } catch (error) {
       this.logger.error('Failed to load bundle from database', { component: 'ContextCache', operation: 'loadFromDb', cacheKey }, error instanceof Error ? error : undefined);
       return null;

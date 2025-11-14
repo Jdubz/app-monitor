@@ -13,7 +13,7 @@ export interface LogContext {
   cacheKey?: string;
   profile?: string;
   bundleId?: string;
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 export class ContextLogger {
