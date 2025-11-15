@@ -82,9 +82,18 @@ export function createSettingsRoutes(_devBotsManager: DevBotsManager): Router {
         updatedAt: new Date().toISOString(),
       };
 
+      const updatePayload: Partial<DevBotsSettings> = {};
+      const allowedKeys: (keyof DevBotsSettings)[] = ['modelStrategy', 'maxWorkers', 'dryRun', 'autoCleanup'];
+      
+      allowedKeys.forEach(key => {
+        if (payload[key] !== undefined) {
+          (updatePayload as any)[key] = payload[key];
+        }
+      });
+
       const updatedSettings: DevBotsSettings = {
         ...currentSettings,
-        ...payload,
+        ...updatePayload,
         updatedAt: new Date().toISOString(),
       };
 
