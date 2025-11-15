@@ -3,7 +3,6 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { Request, Response, Router } from 'express';
 import { createInteractiveRoutes } from '../interactive.routes.js';
 import type { DevBotsManager } from '../../../services/devBotsManager.js';
-import { logger } from '../../../utils/logger.js';
 
 // Mock the logger
 vi.mock('../../../utils/logger.js', () => ({

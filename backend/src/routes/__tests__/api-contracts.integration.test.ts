@@ -5,7 +5,7 @@
  * These tests prevent contract violations like the queue endpoint bug.
  */
 
-import { describe, it, expect, beforeAll, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import express, { type Express } from 'express';
 import { createDevBotsRouter } from '../../routes/dev-bots/index.js';
@@ -35,7 +35,7 @@ describe('API Contract Compliance - Dev-Bots Endpoints', () => {
         completed: 0,
         failed: 0,
       }),
-      getStatus: () => ({
+      getSystemStatus: () => ({
         systemStatus: 'running' as const,
         workers: {},
         queueSize: 0,
