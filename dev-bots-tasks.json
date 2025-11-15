@@ -60,7 +60,7 @@
     "project": "app-monitor",
     "priority": 7,
     "estimatedEffort": {
-      "hours": 0.5,
+      "hours": 1,
       "complexity": "simple",
       "confidence": "high"
     }
@@ -82,7 +82,7 @@
     "project": "app-monitor",
     "priority": 7,
     "estimatedEffort": {
-      "hours": 0.5,
+      "hours": 1,
       "complexity": "simple",
       "confidence": "high"
     }
@@ -90,7 +90,7 @@
   {
     "type": "feature",
     "title": "Create AlertsPanel component to display alerts",
-    "documentation": "Create new React component AlertsPanel.tsx that fetches and displays active alerts. Simple list with alert reason, timestamp, and dismiss button. No complex interactions yet.",
+    "documentation": "Create new React component AlertsPanel.tsx in components/common/ that fetches and displays active alerts. Simple list with alert reason, timestamp, and dismiss button. No complex interactions yet. Component should use Card from @/components/ui/card, Button from @/components/ui/button, and Badge from @/components/ui/badge for consistent styling.",
     "acceptanceCriteria": [
       "Component fetches from GET /api/dev-bots/alerts",
       "Displays alerts in a list with reason and time",
@@ -100,7 +100,7 @@
     ],
     "assignedAgent": "frontend-specialist",
     "files": [
-      "frontend/src/components/dev-bots/AlertsPanel.tsx"
+      "frontend/src/components/common/AlertsPanel.tsx"
     ],
     "project": "app-monitor",
     "priority": 6,
@@ -112,8 +112,8 @@
   },
   {
     "type": "feature",
-    "title": "Add alert count badge to DevBotsLayout header",
-    "documentation": "Add small badge to DevBotsLayout showing active alert count. Badge fetches count from alerts API. Red background when count > 0. Clicking opens alerts panel.",
+    "title": "Add alert count badge to DevBotsTabContent header",
+    "documentation": "Add small badge to DevBotsTabContent showing active alert count. Badge fetches count from alerts API. Red background when count > 0. Clicking opens alerts panel. Update the existing DevBotsTabContent component in frontend/src/components/monitor/tabs/DevBotsTabContent.tsx to include this badge in the header area. Use Badge component from @/components/ui/badge.",
     "acceptanceCriteria": [
       "Badge shows alert count in header",
       "Badge red when count > 0, gray when 0",
@@ -122,12 +122,12 @@
     ],
     "assignedAgent": "frontend-specialist",
     "files": [
-      "frontend/src/components/dev-bots/DevBotsLayout.tsx"
+      "frontend/src/components/monitor/tabs/DevBotsTabContent.tsx"
     ],
     "project": "app-monitor",
     "priority": 6,
     "estimatedEffort": {
-      "hours": 0.5,
+      "hours": 1,
       "complexity": "simple",
       "confidence": "high"
     }
@@ -172,7 +172,7 @@
     "project": "app-monitor",
     "priority": 6,
     "estimatedEffort": {
-      "hours": 0.5,
+      "hours": 1,
       "complexity": "simple",
       "confidence": "high"
     }
@@ -194,7 +194,7 @@
     "project": "app-monitor",
     "priority": 6,
     "estimatedEffort": {
-      "hours": 0.5,
+      "hours": 1,
       "complexity": "simple",
       "confidence": "high"
     }
@@ -216,7 +216,7 @@
     "project": "app-monitor",
     "priority": 6,
     "estimatedEffort": {
-      "hours": 0.5,
+      "hours": 1,
       "complexity": "simple",
       "confidence": "high"
     }
@@ -224,10 +224,10 @@
   {
     "type": "feature",
     "title": "Create QueueControls component with pause/resume buttons",
-    "documentation": "Create QueueControls.tsx component with pause and resume buttons. Fetches queue status and calls pause/resume endpoints. Shows current state (paused/active).",
+    "documentation": "Create QueueControls.tsx component in frontend/src/components/dev-bots/queue/ with pause and resume buttons. Fetches queue status and calls pause/resume endpoints. Shows current state (paused/active). Use Button from @/components/ui/button and Badge from @/components/ui/badge. Follow the pattern used in existing queue components like TaskQueuePanel.tsx and ChainStatusPanel.tsx.",
     "acceptanceCriteria": [
-      "Pause button calls POST /queue/pause",
-      "Resume button calls POST /queue/resume",
+      "Pause button calls POST /api/dev-bots/queue/pause",
+      "Resume button calls POST /api/dev-bots/queue/resume",
       "Shows current queue state (paused/active)",
       "Buttons disabled during API call",
       "Status refreshes after action"
@@ -247,7 +247,7 @@
   {
     "type": "feature",
     "title": "Create ChainDetailsModal component skeleton",
-    "documentation": "Create minimal ChainDetailsModal.tsx component that opens when chain row is clicked. Modal shows chain ID, PR link, and close button. Keyboard accessible (Esc closes). No complex data yet.",
+    "documentation": "Create minimal ChainDetailsModal.tsx component in frontend/src/components/dev-bots/queue/ that opens when chain row is clicked. Modal shows chain ID, PR link, and close button. Keyboard accessible (Esc closes). Use Dialog components from @/components/ui (radix-ui based). Reference the existing modal patterns in the codebase. No complex data yet - this is just the skeleton structure.",
     "acceptanceCriteria": [
       "Modal opens from chain row click",
       "Shows chain ID and PR link",
@@ -270,7 +270,7 @@
   {
     "type": "feature",
     "title": "Add task history section to ChainDetailsModal",
-    "documentation": "Extend ChainDetailsModal.tsx to show last 5 tasks for the chain. Display task title, status, and timestamp. Simple read-only list.",
+    "documentation": "Extend ChainDetailsModal.tsx in frontend/src/components/dev-bots/queue/ to show last 5 tasks for the chain. Display task title, status, and timestamp. Simple read-only list. Use Badge from @/components/ui/badge for status display. Reference getTaskStatusColor and getTaskStatusIcon from @/utils/statusHelpers for consistent status rendering.",
     "acceptanceCriteria": [
       "Modal fetches last 5 tasks for chain",
       "Displays task title, status, timestamp",
@@ -308,7 +308,7 @@
     "project": "app-monitor",
     "priority": 4,
     "estimatedEffort": {
-      "hours": 0.5,
+      "hours": 1,
       "complexity": "simple",
       "confidence": "high"
     }
@@ -316,9 +316,9 @@
   {
     "type": "feature",
     "title": "Create SessionHistoryList component to display recent sessions",
-    "documentation": "Create SessionHistoryList.tsx that fetches and displays last 10 sessions from GET /sessions/recent. Shows timestamp and context preview. Each row clickable to resume session.",
+    "documentation": "Create SessionHistoryList.tsx in frontend/src/components/dev-bots/interactive/ that fetches and displays last 10 sessions from GET /api/dev-bots/sessions/recent. Shows timestamp and context preview. Each row clickable to resume session. Use Card, Button, and ScrollArea from @/components/ui. Reference existing interactive components like InteractiveTerminal.tsx and InteractiveSessionTab.tsx for consistent patterns. Use formatRelativeTime from @/utils/dateFormatters for timestamps.",
     "acceptanceCriteria": [
-      "Fetches from GET /sessions/recent",
+      "Fetches from GET /api/dev-bots/sessions/recent",
       "Displays sessions in list with timestamp and preview",
       "Each row has 'Resume' button",
       "Shows 'No recent sessions' when empty",

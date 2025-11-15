@@ -582,7 +582,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         devBotsManager.getQueueMetrics(),
       ]);
       const summary = buildQueueSummary(tasks, metrics);
-      res.json({ data: summary });
+      res.json({ success: true, data: summary });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -591,6 +591,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         error,
       });
       res.status(500).json({
+        success: false,
         error: 'Failed to get queue summary',
         message: error instanceof Error ? error.message : String(error),
       });
