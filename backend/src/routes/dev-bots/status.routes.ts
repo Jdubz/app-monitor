@@ -76,7 +76,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
     sendSuccess(res, {
       healthy: devBotsManager.isHealthy(),
       status: devBotsManager.isHealthy() ? 'healthy' : 'unhealthy'
-    }});
+    });
   });
 
   /**
@@ -94,8 +94,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error starting Dev-Bots: ${error}`,
         error
       });
-      sendError(res, 'Failed to start Dev-Bots', 500, { message: error instanceof Error ? error.message : String(error),
-       });
+      sendError(res, 'Failed to start Dev-Bots', 500, { message: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -114,8 +113,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error stopping Dev-Bots: ${error}`,
         error
       });
-      sendError(res, 'Failed to stop Dev-Bots', 500, { message: error instanceof Error ? error.message : String(error),
-       });
+      sendError(res, 'Failed to stop Dev-Bots', 500, { message: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -131,7 +129,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const metrics = devBotsManager.getQueueMetrics();
       const stats = devBotsManager.getTaskDurationStats();
-      sendSuccess(res, { metrics, stats }});
+      sendSuccess(res, { metrics, stats });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -139,8 +137,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting metrics: ${error}`,
         error
       });
-      sendError(res, 'Failed to get metrics', 500, { message: error instanceof Error ? error.message : String(error),
-       });
+      sendError(res, 'Failed to get metrics', 500, { message: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -151,7 +148,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/agent-comparison', (_req: Request, res: Response) => {
     try {
       const comparison = devBotsManager.getAgentComparisonMetrics();
-      sendSuccess(res, { comparison }});
+      sendSuccess(res, { comparison });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -159,8 +156,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting agent comparison metrics: ${error}`,
         error
       });
-      sendError(res, 'Failed to get agent comparison metrics', 500, { message: error instanceof Error ? error.message : String(error),
-       });
+      sendError(res, 'Failed to get agent comparison metrics', 500, { message: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -175,7 +171,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/projects', (_req: Request, res: Response) => {
     try {
       const projects = devBotsManager.getValidProjects();
-      sendSuccess(res, { projects }});
+      sendSuccess(res, { projects });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -183,8 +179,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting projects: ${error}`,
         error
       });
-      sendError(res, 'Failed to get projects', 500, { message: error instanceof Error ? error.message : String(error),
-       });
+      sendError(res, 'Failed to get projects', 500, { message: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -243,8 +238,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error completing onboarding: ${error}`,
         error
       });
-      sendError(res, 'Failed to complete onboarding', 500, { message: error instanceof Error ? error.message : String(error),
-       });
+      sendError(res, 'Failed to complete onboarding', 500, { message: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -267,8 +261,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting workspace sync status: ${error}`,
         error
       });
-      sendError(res, 'Failed to get workspace sync status', 500, { message: error instanceof Error ? error.message : String(error),
-       });
+      sendError(res, 'Failed to get workspace sync status', 500, { message: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -288,8 +281,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error triggering workspace sync: ${error}`,
         error
       });
-      sendError(res, 'Failed to trigger workspace sync', 500, { message: error instanceof Error ? error.message : String(error),
-       });
+      sendError(res, 'Failed to trigger workspace sync', 500, { message: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -312,8 +304,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting Docker status: ${error}`,
         error
       });
-      sendError(res, 'Failed to get Docker status', 500, { message: error instanceof Error ? error.message : String(error),
-       });
+      sendError(res, 'Failed to get Docker status', 500, { message: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -332,8 +323,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error revalidating Docker containers: ${error}`,
         error
       });
-      sendError(res, 'Failed to revalidate Docker containers', 500, { message: error instanceof Error ? error.message : String(error),
-       });
+      sendError(res, 'Failed to revalidate Docker containers', 500, { message: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -352,8 +342,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error cleaning Docker resources: ${error}`,
         error
       });
-      sendError(res, 'Failed to clean Docker resources', 500, { message: error instanceof Error ? error.message : String(error),
-       });
+      sendError(res, 'Failed to clean Docker resources', 500, { message: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -373,8 +362,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting container health for ${req.params.containerId}: ${error}`,
         error
       });
-      sendError(res, 'Failed to get container health', 500, { message: error instanceof Error ? error.message : String(error),
-       });
+      sendError(res, 'Failed to get container health', 500, { message: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -397,8 +385,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting cleanup status: ${error}`,
         error
       });
-      sendError(res, 'Failed to get cleanup status', 500, { message: error instanceof Error ? error.message : String(error),
-       });
+      sendError(res, 'Failed to get cleanup status', 500, { message: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -418,8 +405,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error triggering cleanup: ${error}`,
         error
       });
-      sendError(res, 'Failed to trigger cleanup', 500, { message: error instanceof Error ? error.message : String(error),
-       });
+      sendError(res, 'Failed to trigger cleanup', 500, { message: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -438,8 +424,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting scope violations: ${error}`,
         error
       });
-      sendError(res, 'Failed to get scope violations', 500, { message: error instanceof Error ? error.message : String(error),
-       });
+      sendError(res, 'Failed to get scope violations', 500, { message: error instanceof Error ? error.message : String(error) });
     }
   });
 
@@ -458,8 +443,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error during emergency recovery: ${error}`,
         error
       });
-      sendError(res, 'Failed to execute emergency recovery', 500, { message: error instanceof Error ? error.message : String(error),
-       });
+      sendError(res, 'Failed to execute emergency recovery', 500, { message: error instanceof Error ? error.message : String(error) });
     }
   });
 
