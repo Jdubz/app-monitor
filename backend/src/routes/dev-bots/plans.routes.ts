@@ -379,11 +379,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
 
       const updatedPlan = plansService.getPlan(planId);
 
-      const response: PlanResponse = {
-        success: true,
-        data: { ...plan, status: newStatus, ...updatedPlan },
-      };
-      sendSuccess(res, response);
+      sendSuccess(res, { ...plan, status: newStatus, ...updatedPlan });
     } catch (error) {
       logger.error({
         category: 'api',
