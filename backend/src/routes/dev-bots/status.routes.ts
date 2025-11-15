@@ -73,7 +73,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
    * Get health check status
    */
   router.get('/health', (_req: Request, res: Response) => {
-    res.json({ data: {
+    sendSuccess(res, {
       healthy: devBotsManager.isHealthy(),
       status: devBotsManager.isHealthy() ? 'healthy' : 'unhealthy'
     }});
@@ -86,7 +86,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
   router.post('/start', (_req: Request, res: Response) => {
     try {
       devBotsManager.startSystem();
-      res.json({ success: true, message: 'Dev-Bots started' });
+      sendSuccess(res, { message: 'Dev-Bots started' });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -94,10 +94,8 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error starting Dev-Bots: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to start Dev-Bots',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to start Dev-Bots', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -108,7 +106,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
   router.post('/stop', (_req: Request, res: Response) => {
     try {
       devBotsManager.stopSystem();
-      res.json({ success: true, message: 'Dev-Bots stopped' });
+      sendSuccess(res, { message: 'Dev-Bots stopped' });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -116,10 +114,8 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error stopping Dev-Bots: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to stop Dev-Bots',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to stop Dev-Bots', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -135,7 +131,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const metrics = devBotsManager.getQueueMetrics();
       const stats = devBotsManager.getTaskDurationStats();
-      res.json({ data: { metrics, stats }});
+      sendSuccess(res, { metrics, stats }});
     } catch (error) {
       logger.error({
         category: 'api',
@@ -143,10 +139,8 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting metrics: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get metrics',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to get metrics', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -157,7 +151,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/agent-comparison', (_req: Request, res: Response) => {
     try {
       const comparison = devBotsManager.getAgentComparisonMetrics();
-      res.json({ data: { comparison }});
+      sendSuccess(res, { comparison }});
     } catch (error) {
       logger.error({
         category: 'api',
@@ -165,10 +159,8 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting agent comparison metrics: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get agent comparison metrics',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to get agent comparison metrics', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -183,7 +175,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/projects', (_req: Request, res: Response) => {
     try {
       const projects = devBotsManager.getValidProjects();
-      res.json({ data: { projects }});
+      sendSuccess(res, { projects }});
     } catch (error) {
       logger.error({
         category: 'api',
@@ -191,10 +183,8 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting projects: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get projects',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to get projects', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -238,10 +228,10 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const { workerId } = req.body;
       if (!workerId) {
-        return res.status(400).json({ error: 'Worker ID is required' });
+        return sendError(res, 'Worker ID is required', 400);
       }
       devBotsManager.completeWorkerOnboarding(workerId);
-      res.json({ success: true, message: 'Onboarding completed' });
+      sendSuccess(res, { message: 'Onboarding completed' });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -249,10 +239,8 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error completing onboarding: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to complete onboarding',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to complete onboarding', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -267,7 +255,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/workspace-sync/status', async (_req: Request, res: Response) => {
     try {
       const status = await devBotsManager.getWorkspaceSyncStatus();
-      res.json(status);
+      sendSuccess(res, status);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -275,10 +263,8 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting workspace sync status: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get workspace sync status',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to get workspace sync status', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -290,7 +276,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const { force } = req.body;
       const result = await devBotsManager.triggerWorkspaceSync(force);
-      res.json(result);
+      sendSuccess(res, result);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -298,10 +284,8 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error triggering workspace sync: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to trigger workspace sync',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to trigger workspace sync', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -316,7 +300,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/docker/status', async (_req: Request, res: Response) => {
     try {
       const status = await devBotsManager.getDockerStatus();
-      res.json(status);
+      sendSuccess(res, status);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -324,10 +308,8 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting Docker status: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get Docker status',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to get Docker status', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -338,7 +320,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
   router.post('/docker/revalidate', async (_req: Request, res: Response) => {
     try {
       const result = await devBotsManager.revalidateDockerEnvironment();
-      res.json(result);
+      sendSuccess(res, result);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -346,10 +328,8 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error revalidating Docker containers: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to revalidate Docker containers',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to revalidate Docker containers', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -360,7 +340,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
   router.post('/docker/cleanup', async (_req: Request, res: Response) => {
     try {
       const result = await devBotsManager.cleanupOrphanedResources();
-      res.json(result);
+      sendSuccess(res, result);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -368,10 +348,8 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error cleaning Docker resources: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to clean Docker resources',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to clean Docker resources', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -383,7 +361,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const { containerId } = req.params;
       const health = await devBotsManager.getContainerHealth(containerId);
-      res.json(health);
+      sendSuccess(res, health);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -391,10 +369,8 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting container health for ${req.params.containerId}: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get container health',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to get container health', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -409,7 +385,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/cleanup-status', async (_req: Request, res: Response) => {
     try {
       const status = await devBotsManager.getCleanupStatus();
-      res.json(status);
+      sendSuccess(res, status);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -417,10 +393,8 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting cleanup status: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get cleanup status',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to get cleanup status', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -432,7 +406,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const { aggressive } = req.body;
       const result = await devBotsManager.triggerCleanup(aggressive);
-      res.json(result);
+      sendSuccess(res, result);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -440,10 +414,8 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error triggering cleanup: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to trigger cleanup',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to trigger cleanup', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -454,7 +426,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/scope-violations', async (_req: Request, res: Response) => {
     try {
       const violations = await devBotsManager.getScopeViolations();
-      res.json(violations);
+      sendSuccess(res, violations);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -462,10 +434,8 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting scope violations: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get scope violations',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to get scope violations', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -476,7 +446,7 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
   router.post('/emergency-recovery', async (_req: Request, res: Response) => {
     try {
       const result = await devBotsManager.triggerEmergencyRecovery();
-      res.json(result);
+      sendSuccess(res, result);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -484,10 +454,8 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error during emergency recovery: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to execute emergency recovery',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to execute emergency recovery', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
