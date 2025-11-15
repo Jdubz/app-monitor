@@ -5,7 +5,7 @@
  * authentication, and error handling.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import express, { Express } from 'express';
 import Database from 'better-sqlite3';

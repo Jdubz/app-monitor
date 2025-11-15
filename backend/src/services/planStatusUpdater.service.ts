@@ -48,27 +48,43 @@ export class PlanStatusUpdater {
    * Update plan status when a task status changes
    */
   async onTaskStatusChange(taskId: string): Promise<void> {
-    const task = this.getTask(taskId);
-    if (!task?.plan_id) {
-      return; // Task not linked to a plan
-    }
+    try {
+      const task = this.getTask(taskId);
+      if (!task?.plan_id) {
+        return; // Task not linked to a plan
+      }
 
-    await this.updatePlanStatus(task.plan_id);
+      await this.updatePlanStatus(task.plan_id);
+    } catch (error) {
+      logger.error('Failed to update plan on task status change', {
+        category: 'plan-automation',
+        action: 'task_status_change_failed',
+        details: { taskId, error: error instanceof Error ? error.message : String(error) },
+      });
+    }
   }
 
   /**
    * Update plan status when a task is created
    */
   async onTaskCreated(taskId: string): Promise<void> {
-    const task = this.getTask(taskId);
-    if (!task?.plan_id) {
-      return;
-    }
+    try {
+      const task = this.getTask(taskId);
+      if (!task?.plan_id) {
+        return;
+      }
 
-    // If this is the first task for the plan, transition from 'planning' to 'in_progress'
-    const planTasks = this.calculator.getPlanTasks(task.plan_id);
-    if (planTasks.length === 1 && task.status === 'pending') {
-      await this.updatePlanStatus(task.plan_id);
+      // If this is the first task for the plan, transition from 'planning' to 'in_progress'
+      const planTasks = this.calculator.getPlanTasks(task.plan_id);
+      if (planTasks.length === 1 && task.status === 'pending') {
+        await this.updatePlanStatus(task.plan_id);
+      }
+    } catch (error) {
+      logger.error('Failed to update plan on task creation', {
+        category: 'plan-automation',
+        action: 'task_created_failed',
+        details: { taskId, error: error instanceof Error ? error.message : String(error) },
+      });
     }
   }
 
@@ -112,18 +128,26 @@ export class PlanStatusUpdater {
    * Update plan status for all plans (batch operation)
    */
   async updateAllPlanStatuses(): Promise<void> {
-    const plans = this.plansService.listPlans();
+    try {
+      const plans = this.plansService.listPlans();
 
-    for (const plan of plans) {
-      await this.updatePlanStatus(plan.id);
+      for (const plan of plans) {
+        await this.updatePlanStatus(plan.id);
+      }
+
+      logger.info({
+        category: 'plan',
+        action: 'batch_status_update',
+        message: `Updated status for ${plans.length} plans`,
+        details: { planCount: plans.length },
+      });
+    } catch (error) {
+      logger.error('Failed to update all plan statuses', {
+        category: 'plan-automation',
+        action: 'batch_update_failed',
+        details: { error: error instanceof Error ? error.message : String(error) },
+      });
     }
-
-    logger.info({
-      category: 'plan',
-      action: 'batch_status_update',
-      message: `Updated status for ${plans.length} plans`,
-      details: { planCount: plans.length },
-    });
   }
 
   /**

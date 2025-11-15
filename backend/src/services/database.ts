@@ -232,6 +232,29 @@ export class DevBotsDatabase {
         'utf-8'
       ));
     });
+
+    // Migration 019: Context Bundle Cache
+    // Note: Migration 018 was skipped (never created)
+    this.applyMigration('019_context_bundle_cache', () => {
+      this.db.exec(fs.readFileSync(
+        path.join(__dirname, '..', '..', 'migrations', '019_context_bundle_cache.sql'),
+        'utf-8'
+      ));
+    });
+
+    // Migration 020: Add Context Bundle Fields to Tasks
+    // Note: This adds columns to tasks table but TaskQueueService handles via inline migration
+    // We mark it as applied here to track in migrations table
+    this.skipMigration('020_add_context_bundle_fields');
+
+    // Migration 021: Plans Table
+    // Creates plans table and adds plan_id column to tasks
+    this.applyMigration('021_plans_table', () => {
+      this.db.exec(fs.readFileSync(
+        path.join(__dirname, '..', '..', 'migrations', '021_plans_table.sql'),
+        'utf-8'
+      ));
+    });
   }
 
   /**
