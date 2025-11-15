@@ -12,8 +12,8 @@ let content = fs.readFileSync(filePath, 'utf8');
 
 const timestamp = new Date().toISOString();
 const newContent = content.replace(
-  /const BUILD_TIMESTAMP = ['"].*?['"];/,
-  `const BUILD_TIMESTAMP = '${timestamp}';`
+  /(const BUILD_TIMESTAMP\s*=\s*)['"].*?['"];/,
+  `$1'${timestamp}';`
 );
 
 if (newContent !== content) {

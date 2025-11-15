@@ -81,11 +81,10 @@ interface ListItemProps<TItem> {
 
 const ListItemComponent = <TItem,>({
   item,
-  itemKey,
   isSelected,
   onSelectItem,
   renderListItem,
-}: ListItemProps<TItem>) => {
+}: Omit<ListItemProps<TItem>, 'itemKey'>) => {
   return (
     <div
       onClick={() => onSelectItem(item)}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AlertCircle, RotateCcw, SkipForward, XCircle, ShieldAlert, Terminal } from 'lucide-react';
+import { RotateCcw, SkipForward, XCircle, ShieldAlert, Terminal } from 'lucide-react';
 import { useDevBotsStore } from '@/contexts/devBotsStore';
 import { ListDetailLayout } from '@/components/layout/ListDetailLayout';
 import { Badge } from '@/components/ui/badge';
@@ -23,7 +23,7 @@ type ChainFilter = 'all' | 'blocked' | 'quarantined';
  * - Detail view with intervention controls
  */
 export function DevBotsTabContent() {
-  const { status, queueRows, isLoading } = useDevBotsStore();
+  const { status, queueRows, isLoading, refreshStatus } = useDevBotsStore();
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState<ChainFilter>('all');
   const [interventionLoading, setInterventionLoading] = useState<string | null>(null);
@@ -92,7 +92,7 @@ export function DevBotsTabContent() {
       const result = await api.retryDevBotsTask(taskId);
       alert(`Success: ${result.message}`);
       // Refresh data after successful retry
-      window.location.reload();
+      refreshStatus();
     } catch (error) {
       const errorMessage = api.handleApiError(error);
       setInterventionError(errorMessage);
@@ -116,7 +116,7 @@ export function DevBotsTabContent() {
     try {
       const result = await api.skipDevBotsTask(taskId, reason || undefined);
       alert(`Success: ${result.message}`);
-      window.location.reload();
+      refreshStatus();
     } catch (error) {
       const errorMessage = api.handleApiError(error);
       setInterventionError(errorMessage);
@@ -137,7 +137,7 @@ export function DevBotsTabContent() {
     try {
       const result = await api.cancelDevBotsTask(taskId);
       alert(`Success: ${result.message}`);
-      window.location.reload();
+      refreshStatus();
     } catch (error) {
       const errorMessage = api.handleApiError(error);
       setInterventionError(errorMessage);
@@ -165,7 +165,7 @@ export function DevBotsTabContent() {
     try {
       const result = await api.quarantineDevBotsChain(chainId, reason);
       alert(`Success: ${result.message}`);
-      window.location.reload();
+      refreshStatus();
     } catch (error) {
       const errorMessage = api.handleApiError(error);
       setInterventionError(errorMessage);
