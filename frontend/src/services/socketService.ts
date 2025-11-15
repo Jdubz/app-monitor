@@ -199,18 +199,21 @@ export class SocketService {
 
     // Server migration notification (for zero-downtime deployments)
     this.socket.on('system_event', (data: unknown) => {
-      if (typeof data === 'object' && data !== null) {
-        const event = data as { type?: string; message?: string; reconnectDelay?: number };
-        if (event.type === 'server_migration') {
-          log.info('Server migration detected', event.message);
-          log.info(`Will automatically reconnect in ${event.reconnectDelay}ms`);
+      if (
+        typeof data === 'object' &&
+        data !== null &&
+        'type' in data &&
+        (data as { type: unknown }).type === 'server_migration'
+      ) {
+        const event = data as { message?: string; reconnectDelay?: number };
+        log.info('Server migration detected', event.message);
+        log.info(`Will automatically reconnect in ${event.reconnectDelay}ms`);
 
-          // Emit migration event for UI notification
-          this.emit('server:migration', data);
+        // Emit migration event for UI notification
+        this.emit('server:migration', data);
 
-          // Socket.IO will automatically reconnect after disconnect
-          // No manual action needed - reconnection is handled automatically
-        }
+        // Socket.IO will automatically reconnect after disconnect
+        // No manual action needed - reconnection is handled automatically
       }
     });
   }
