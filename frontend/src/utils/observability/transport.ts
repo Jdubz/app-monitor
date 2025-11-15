@@ -7,6 +7,7 @@
 
 import type { LogEntry } from './types';
 import { logger } from './logger';
+import { getApiBaseUrl } from '../apiBaseUrl';
 
 interface SessionMetadata {
   sessionId: string;
@@ -32,7 +33,7 @@ class LogTransport {
   private backendUrl: string;
 
   private constructor() {
-    this.backendUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+    this.backendUrl = getApiBaseUrl();
     this.start();
   }
 
