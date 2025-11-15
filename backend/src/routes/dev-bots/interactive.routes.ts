@@ -83,16 +83,18 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
    * End current interactive session
    */
   router.delete('/interactive/session', async (req: Request, res: Response) => {
+    let sessionId: string | undefined;
     try {
       const session = devBotsManager.getActiveInteractiveSession();
       if (!session) {
         return res.status(404).json({ success: false, error: 'not_found', message: 'No active interactive session' });
       }
-      await devBotsManager.endInteractiveSession(session.id, 'Operator ended session');
+      sessionId = session.id;
+      await devBotsManager.endInteractiveSession(sessionId, 'Operator ended session');
       const payload: DevBotsInteractiveSessionStateResponse['data'] = buildInteractiveSessionState(devBotsManager);
       res.json({ success: true, data: payload });
     } catch (error) {
-      logger.error('Failed to end interactive session', { error });
+      logger.error('Failed to end interactive session', { error, sessionId });
       res.status(500).json({
         success: false,
         error: 'end_session_failed',
