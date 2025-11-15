@@ -13,7 +13,7 @@ import type { Task, TaskExecution } from '../../services/taskQueue.sqlite.js';
 import type { InteractiveSessionRecord } from '../../services/database.js';
 import type { TaskLogFileDescriptor } from '../../services/taskLogLocator.js';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
-import type { DevBotsQueueSummary } from '@app-monitor/api-contracts';
+import type { DevBotsQueueSummary, DevBotsQueueItem } from '@app-monitor/api-contracts';
 
 // ============================================================================
 // Type Definitions
@@ -220,9 +220,18 @@ export const buildQueueSummary = (
   metrics: ReturnType<DevBotsManager['getQueueMetrics']>
 ): DevBotsQueueSummary => ({
   items: [
-    ...tasks.pending.map((task) => ({ bucket: 'pending' as const, task: mapTaskToContract(task) })),
-    ...tasks.active.map((task) => ({ bucket: 'active' as const, task: mapTaskToContract(task) })),
-    ...tasks.completed.map((task) => ({ bucket: 'completed' as const, task: mapTaskToContract(task) })),
+    ...tasks.pending.map((task): DevBotsQueueItem => ({ 
+      bucket: 'pending', 
+      task: mapTaskToContract(task) as any 
+    })),
+    ...tasks.active.map((task): DevBotsQueueItem => ({ 
+      bucket: 'active', 
+      task: mapTaskToContract(task) as any 
+    })),
+    ...tasks.completed.map((task): DevBotsQueueItem => ({ 
+      bucket: 'completed', 
+      task: mapTaskToContract(task) as any 
+    })),
   ],
   counts: {
     pending: metrics.pending,

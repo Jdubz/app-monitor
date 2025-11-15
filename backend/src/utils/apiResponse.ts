@@ -43,9 +43,9 @@ export function sendError(
   const response: ApiError = {
     success: false,
     error,
-    message: options?.message,
-    code: options?.code,
-    details: options?.details,
+    ...(options?.message && { message: options.message }),
+    ...(options?.code && { code: options.code }),
+    ...(options?.details && { details: options.details }),
   };
   res.status(status).json(response);
 }
