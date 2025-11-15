@@ -1,62 +1,36 @@
-# Operational Guides
+# Guides - How-To & Reference
 
-Comprehensive guides for using and maintaining app-monitor, including dev-bots automation framework.
+Practical guides for development, deployment, and operations.
 
-## Dev-Monitor Frontend Guides
+## Getting Started
+- [Task Submission Guide](MINIMAL_TASK_SUBMISSION_GUIDE.md) - Submit tasks to dev-bots
+- [Frontend Development](FRONTEND_DEVELOPMENT.md) - Frontend development workflow
+- [Environment Setup](../setup/ENVIRONMENT_SETUP.md) - Set up development environment
 
-### Testing
-- **[e2e-testing-guide.md](e2e-testing-guide.md)** - End-to-end testing with Playwright
+## Task Management
+- [Task Examples](task-examples.md) - Example task configurations
+- [Task Execution Template](task-execution-template.md) - Task structure reference
+- [Tasks README](TASKS_README.md) - Complete task system documentation
 
-### Development
-- **[component-style-guide.md](component-style-guide.md)** - Component architecture and styling conventions
+## Development
+- [API Reference](api-reference.md) - Backend API endpoints
+- [API Authentication](API_AUTHENTICATION.md) - Authentication setup
+- [Component Style Guide](component-style-guide.md) - UI component standards
+- [Structured Logging](structured-logging.md) - Logging conventions
+- [GitHub Webhooks](GITHUB_WEBHOOKS.md) - Webhook integration
 
-### Operations
-- **[structured-logging.md](structured-logging.md)** - Structured logging aggregation and cloud forwarding
+## Deployment & Operations
+- [Production Deployment](PRODUCTION_DEPLOYMENT.md) - Deploy to production
+- [Deployment Checklist](deployment-checklist.md) - Pre-deploy verification
+- [Docker Optimization](docker-optimization.md) - Container optimization
+- [Cloudflare Tunnel](CLOUDFLARE_TUNNEL.md) - Remote access setup
+- [Google Cloud Logging](GOOGLE_CLOUD_LOGGING_PERMISSIONS.md) - Cloud logging setup
 
-## Dev-Bots Guides
+## Troubleshooting
+- [Failure Recovery Quick Start](failure-recovery-quick-start.md) - Handle task failures
+- [Migration Guide](MIGRATION_GUIDE.md) - Upgrade and migration procedures
+- [Worker Onboarding](worker-onboarding.md) - Add new dev-bot workers
+- [E2E Testing](e2e-testing-guide.md) - End-to-end test guide
 
-### Getting Started
-- **[worker-onboarding.md](worker-onboarding.md)** - Onboarding guide for dev-bot workers
-- **[task-execution-template.md](task-execution-template.md)** - Standard task execution template and workflow
-- **[task-examples.md](task-examples.md)** - Example tasks for different types
-
-### System Operation
-- **[failure-recovery-quick-start.md](failure-recovery-quick-start.md)** - Quick start guide for automatic failure recovery system
-- **[docker-optimization.md](docker-optimization.md)** - Docker image optimization and MCP server configuration
-- **[deployment-checklist.md](deployment-checklist.md)** - Deployment verification checklist
-
-### Reference Documentation
-- **[api-reference.md](api-reference.md)** - Complete API endpoint reference (30+ endpoints)
-- **[agent-personalities.md](agent-personalities.md)** - 6 specialized AI agent personalities documentation
-
-## Infrastructure Guides
-
-### Cloud & Deployment
-- **[CLOUDFLARE_TUNNEL.md](CLOUDFLARE_TUNNEL.md)** - Cloudflare tunnel setup and configuration
-- **[GITHUB_WEBHOOKS.md](GITHUB_WEBHOOKS.md)** - GitHub webhook configuration
-- **[PRODUCTION_DEPLOYMENT.md](PRODUCTION_DEPLOYMENT.md)** - Production deployment procedures
-
-### Authentication & Security
-- **[API_AUTHENTICATION.md](API_AUTHENTICATION.md)** - API authentication setup
-- **[GOOGLE_CLOUD_LOGGING_PERMISSIONS.md](GOOGLE_CLOUD_LOGGING_PERMISSIONS.md)** - GCP logging permissions
-
-### Development
-- **[MIGRATION_GUIDE.md](MIGRATION_GUIDE.md)** - System migration guide
-
-## Future Consolidation (Phase 3)
-
-Coming soon:
-- **deployment.md** - Complete deployment guide (consolidated from 6+ docs)
-- **pr-workflow.md** - PR workflow and automation (consolidated from 8+ docs)
-- **troubleshooting.md** - Troubleshooting guide (consolidated from fragments)
-
-## Related Documentation
-
-- **Architecture**: See [/docs/architecture/](../architecture/) for system design and architecture docs
-- **Plans**: See [/docs/plans/](../plans/) for active implementation plans
-- **Main README**: See [/docs/README.md](../README.md) for full navigation
-
----
-
-**Last Updated**: 2025-11-11
-**Source**: Consolidated from `/docs/dev-bots/` reorganization
+## Reference
+- [Agent Personalities](agent-personalities.md) - Dev-bot agent specializations

@@ -1,13 +1,21 @@
-# Analysis Directory
+# Analysis - Technical Analysis Documents
 
-This directory contains active technical analyses that inform ongoing development.
+In-depth analysis of system components kept for ongoing reference value.
 
-## Active Analyses
+## Current Analysis
 
-- **GEMINI_CLI_CODE_ASSIST_INTEGRATION.md** - Analysis of integrating Google Gemini CLI as a dev-bot agent option
+### [Ecosystem Analysis](ECOSYSTEM_ANALYSIS.md)
+Analysis of related repositories and integration points across the job-finder ecosystem.
 
-## Guidelines
+## Purpose
 
-- Completed analyses should be deleted, not archived
-- If analysis leads to implementation, create a technical design in `/technicalDesigns/`
-- If analysis identifies future work, create a plan in `/plans/`
+This directory contains technical analysis that:
+- Informs architectural decisions
+- Documents complex system interactions
+- Provides context for integration work
+
+## Lifecycle
+
+- **Keep:** Analysis with ongoing reference value for decisions
+- **Remove:** Completed investigations with no future value
+- **Move:** Active work moves to plans or technical designs
