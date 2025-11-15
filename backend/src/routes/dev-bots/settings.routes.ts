@@ -63,11 +63,11 @@ export function createSettingsRoutes(_devBotsManager: DevBotsManager): Router {
   router.put('/settings', async (req: Request, res: Response) => {
     const payload = req.body as Partial<DevBotsSettings> | undefined;
     
-    if (!payload) {
+    if (!payload || Object.keys(payload).length === 0) {
       return res.status(400).json({
         success: false,
         error: 'invalid_payload',
-        message: 'Settings payload is required',
+        message: 'Settings payload is required and cannot be empty',
       });
     }
 
