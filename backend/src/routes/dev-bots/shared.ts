@@ -13,18 +13,13 @@ import type { Task, TaskExecution } from '../../services/taskQueue.sqlite.js';
 import type { InteractiveSessionRecord } from '../../services/database.js';
 import type { TaskLogFileDescriptor } from '../../services/taskLogLocator.js';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
+import type { DevBotsQueueSummary } from '@app-monitor/api-contracts';
 
 // ============================================================================
 // Type Definitions
 // ============================================================================
 
-// Temporary types until API contracts are updated
-export type DevBotsQueueSummary = {
-  items: Array<{ bucket: 'pending' | 'active' | 'completed'; task: Record<string, unknown> }>;
-  counts: { pending: number; active: number; completed: number; failed: number };
-  lastUpdated: string;
-};
-
+// Temporary types until fully migrated to API contracts
 export type ContractDevBotsTask = Record<string, unknown>;
 export type ContractDevBotsTaskDetail = {
   task: Record<string, unknown>;
