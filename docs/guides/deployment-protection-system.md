@@ -398,5 +398,4 @@ Potential improvements for consideration:
 ## Related Documentation
 
 - [Production Deployment Guide](../guides/PRODUCTION_DEPLOYMENT.md)
-- [Troubleshooting Guide](../TROUBLESHOOTING_REPORT.md)
 - [CI/CD Setup](../setup/CI_CD_SETUP.md)
