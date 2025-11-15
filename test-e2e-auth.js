@@ -334,3 +334,105 @@ class E2EAuthTest {
 // Run the test
 const test = new E2EAuthTest();
 test.run().catch(console.error);
+
+  async captureProductionLogs() {
+    console.log('🔍 Capturing production frontend logs...\n');
+    
+    const browser = await chromium.launch({ headless: false });
+    const context = await browser.newContext();
+    const page = await context.newPage();
+
+    const logs = {
+      console: [],
+      network: [],
+      errors: []
+    };
+
+    // Capture console logs
+    page.on('console', msg => {
+      logs.console.push({
+        type: msg.type(),
+        text: msg.text(),
+        timestamp: new Date().toISOString()
+      });
+      console.log(`[Console ${msg.type()}]`, msg.text());
+    });
+
+    // Capture network requests
+    page.on('request', request => {
+      const headers = request.headers();
+      logs.network.push({
+        type: 'request',
+        url: request.url(),
+        method: request.method(),
+        headers,
+        hasApiKey: !!headers['x-api-key'] || !!headers['X-API-Key'],
+        apiKey: headers['x-api-key'] || headers['X-API-Key'] || 'NOT SET',
+        timestamp: new Date().toISOString()
+      });
+      
+      if (request.url().includes('/api/')) {
+        console.log(`[Network Request] ${request.method()} ${request.url()}`);
+        console.log(`  Headers:`, headers);
+        console.log(`  API Key:`, headers['x-api-key'] || headers['X-API-Key'] || '❌ NOT SET');
+      }
+    });
+
+    page.on('response', response => {
+      logs.network.push({
+        type: 'response',
+        url: response.url(),
+        status: response.status(),
+        statusText: response.statusText(),
+        timestamp: new Date().toISOString()
+      });
+      
+      if (response.url().includes('/api/')) {
+        console.log(`[Network Response] ${response.status()} ${response.url()}`);
+        if (response.status() === 401) {
+          console.log(`  ⚠️  401 UNAUTHORIZED!`);
+        }
+      }
+    });
+
+    // Navigate to production
+    console.log('Navigating to production site...');
+    await page.goto('https://app-monitor.joshwentworth.com');
+    
+    // Wait for page to load and make requests
+    await page.waitForTimeout(10000);
+
+    console.log('\n📊 Summary:');
+    console.log(`  Console logs: ${logs.console.length}`);
+    console.log(`  Network requests: ${logs.network.filter(l => l.type === 'request').length}`);
+    
+    const apiRequests = logs.network.filter(l => l.type === 'request' && l.url.includes('/api/'));
+    console.log(`  API requests: ${apiRequests.length}`);
+    
+    const unauthorized = logs.network.filter(l => l.type === 'response' && l.status === 401);
+    console.log(`  401 errors: ${unauthorized.length}`);
+    
+    console.log('\n🔑 API Key Status:');
+    apiRequests.forEach(req => {
+      console.log(`  ${req.method} ${req.url.split('/api/')[1]}`);
+      console.log(`    API Key: ${req.hasApiKey ? '✅ ' + req.apiKey.substring(0, 20) + '...' : '❌ NOT SET'}`);
+    });
+
+    // Save logs to file
+    const fs = require('fs');
+    fs.writeFileSync('/tmp/production-frontend-logs.json', JSON.stringify(logs, null, 2));
+    console.log('\n💾 Logs saved to /tmp/production-frontend-logs.json');
+
+    await page.waitForTimeout(30000); // Keep open for inspection
+    await browser.close();
+  }
+}
+
+// Run production capture if --production flag
+if (process.argv.includes('--production')) {
+  const test = new E2EAuthTest();
+  test.captureProductionLogs().then(() => process.exit(0)).catch(err => {
+    console.error(err);
+    process.exit(1);
+  });
+}
