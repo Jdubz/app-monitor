@@ -60,7 +60,7 @@ export function createSettingsRoutes(_devBotsManager: DevBotsManager): Router {
    * PUT /settings
    * Update Dev-Bots settings
    */
-  router.put('/settings', async (req: Request, res: Response) => {
+  router.put('/settings', (req: Request, res: Response) => {
     const payload = req.body as Partial<DevBotsSettings> | undefined;
     
     if (!payload || Object.keys(payload).length === 0) {
