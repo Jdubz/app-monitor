@@ -76,7 +76,7 @@ export function badRequest(
       'BAD_REQUEST',
       message,
       'VALIDATION_ERROR',
-      { field },
+      field ? { field } : {},
       hints
     )
   );
@@ -122,8 +122,8 @@ export function unauthorized(
 export function notFound(
   res: Response,
   resource: string,
-  identifier?: string,
-  context?: ErrorContext
+  context: ErrorContext,
+  identifier?: string
 ): Response {
   const message = identifier 
     ? `${resource} '${identifier}' not found`
@@ -138,19 +138,17 @@ export function notFound(
     }
   ];
 
-  if (context) {
-    logger.info({
-      ...context,
-      message: `Not found: ${message}`,
-    });
-  }
+  logger.warn({
+    ...context,
+    message: `Not found: ${message}`,
+  });
 
   return res.status(404).json(
     createApiError(
       'NOT_FOUND',
       message,
       'RESOURCE_NOT_FOUND',
-      { resource, identifier },
+      identifier !== undefined ? { resource, identifier } : { resource },
       hints
     )
   );

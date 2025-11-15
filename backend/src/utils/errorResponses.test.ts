@@ -208,17 +208,35 @@ describe('Error Response Helpers', () => {
         mockRes as Response,
         'Invalid task data',
         { category: 'api', action: 'create_task' },
-        'schema'
+        [{ field: 'schema', error: 'Invalid format' }]
       );
 
       expect(statusMock).toHaveBeenCalledWith(422);
       expect(jsonMock).toHaveBeenCalledWith(
         expect.objectContaining({
           success: false,
-          error: 'UNPROCESSABLE_ENTITY',
-          code: 'INVALID_DATA'
+          error: 'VALIDATION_FAILED',
+          message: 'Invalid task data',
+          code: 'INVALID_PAYLOAD'
         })
       );
+    });
+
+    it('should include validation errors in details', () => {
+      const errors = [
+        { field: 'email', error: 'Invalid email format' },
+        { field: 'age', error: 'Must be a positive number' }
+      ];
+
+      errorResponses.validationError(
+        mockRes as Response,
+        'Validation failed',
+        { category: 'api', action: 'validate' },
+        errors
+      );
+
+      const response = jsonMock.mock.calls[0][0];
+      expect(response.details).toHaveProperty('errors', errors);
     });
   });
 
