@@ -28,7 +28,6 @@ import type {
   CreatePlanInput,
   UpdatePlanInput,
   PlanQueryFilters,
-  PlanResponse,
   PlanDeleteResponse,
   ApiError,
 } from '@app-monitor/api-contracts';
