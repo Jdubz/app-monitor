@@ -205,7 +205,8 @@ export class IssueTriageService {
     const endTime = new Date(issueTime.getTime() + afterMs);
 
     // Query database for logs in time range (indexed, fast)
-    const stmt = (this.issueStorage as any).db.prepare(`
+    const db = this.issueStorage.getDatabase();
+    const stmt = db.prepare(`
       SELECT
         id, timestamp, level, message, scope, traceId, sessionId, route,
         errorName, errorMessage, errorStack, data

@@ -44,7 +44,7 @@ export function createApiRouter(deps: {
   // Initialize logs and issues routes with database and task queue from devBotsManager
   if (deps.devBotsManager) {
     const taskQueue = deps.devBotsManager.getTaskQueue();
-    const db = (taskQueue as any).db; // Access internal database
+    const db = taskQueue.getDatabase();
     initializeLogsRoutes(db);
     initializeIssuesRoutes(db, taskQueue);
   }
