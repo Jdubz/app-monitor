@@ -256,6 +256,7 @@ export async function createApp(options: CreateAppOptions = {}) {
   app.use(cors({
     origin: config.corsOrigin,
     credentials: true,
+    allowedHeaders: ['Content-Type', 'X-API-Key', 'Authorization'],
   }));
   app.use(express.json());
 
