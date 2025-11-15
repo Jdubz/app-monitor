@@ -5,9 +5,9 @@ set -euo pipefail
 # Fixes the DATABASE_PATH misconfiguration that caused the Nov 12 deployment failure
 
 PROD_DIR="/opt/app-monitor"
-DATA_DIR="${PROD_DIR}/shared/data"
-ENV_FILE="${PROD_DIR}/.env"
-DB_NAME="dev-bots.db"
+DATA_DIR="${PROD_DIR}/shared/backend/data"
+ENV_FILE="${PROD_DIR}/shared/.env"
+DB_NAME="app-monitor.db"
 
 log() {
   echo "[$(date +'%Y-%m-%d %H:%M:%S')] $*"
@@ -30,7 +30,7 @@ log "Creating data directory: $DATA_DIR"
 mkdir -p "$DATA_DIR"
 
 # Step 2: Move existing database files if they exist in wrong location
-for db_file in dev-bots.db dev-bots-tasks.db; do
+for db_file in app-monitor.db; do
   old_path="${PROD_DIR}/${db_file}"
   new_path="${DATA_DIR}/${db_file}"
   

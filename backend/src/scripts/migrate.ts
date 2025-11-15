@@ -18,7 +18,7 @@ import { dirname } from 'path';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', '..', '..', 'data', 'dev-bots.db');
+const DB_PATH = process.env.DATABASE_PATH || path.join(__dirname, '..', '..', '..', 'data', 'app-monitor.db');
 
 function printUsage() {
   console.log(`

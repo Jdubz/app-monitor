@@ -32,12 +32,12 @@ log_error() {
 # Expected infrastructure path patterns (validates patterns in code, not filesystem)
 EXPECTED_DEPLOY_DIR_PATTERN="/opt/app-monitor"
 EXPECTED_SHARED_DIR_PATTERN="\${DEPLOY_DIR}/shared"
-EXPECTED_DB_PATH_PATTERN="\${SHARED_DIR}/data/dev-bots.db"
+EXPECTED_DB_PATH_PATTERN="\${SHARED_DIR}/backend/data/app-monitor.db"
 EXPECTED_BACKUP_DIR_PATTERN="\${SHARED_DIR}/backups/database"
 
 # Forbidden patterns that indicate incorrect paths
-FORBIDDEN_DB_PATH_PATTERN="shared/backend/data"
-FORBIDDEN_DB_PATH_PATTERN2="/backend/data/dev-bots.db"
+FORBIDDEN_DB_PATH_PATTERN="/data/dev-bots.db"
+FORBIDDEN_DB_PATH_PATTERN2="/shared/data/"
 
 # Source directory (for pre-deployment validation)
 SOURCE_DIR="${1:-$(pwd)}"

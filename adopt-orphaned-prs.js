@@ -7,7 +7,7 @@
 import Database from 'better-sqlite3';
 import crypto from 'crypto';
 
-const DB_PATH = '/opt/app-monitor/shared/backend/data/dev-bots.db';
+const DB_PATH = process.env.DATABASE_PATH || '/opt/app-monitor/shared/backend/data/app-monitor.db';
 const PR_NUMBERS = [96, 97, 98, 99];
 
 console.log('🔍 Adopting orphaned PRs:', PR_NUMBERS.join(', '));
