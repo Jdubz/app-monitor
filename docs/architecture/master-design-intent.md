@@ -58,9 +58,14 @@
 - **WHY**: Dev-bots require Docker orchestration unavailable in dev mode
 
 ### Single Database Instance
-- **✅ DO**: Use `/opt/app-monitor/shared/data/dev-bots.db`
+- **✅ DO**: Use the single shared database (see Production Infrastructure section)
 - **❌ NEVER**: Multiple databases, test DBs in production, duplicates
 - **WHY**: Single source of truth for all task/PR/chain state
+
+### Deployment Restrictions
+- **✅ DO**: All deployments through CI/CD pipeline (GitHub Actions → pull-agent)
+- **❌ NEVER**: Manual deployments, worker-initiated deploys, direct production edits
+- **WHY**: Ensures blue-green process, health checks, automatic rollback, audit trail
 
 ---
 
@@ -128,11 +133,16 @@
 ## Production Infrastructure
 
 - **URL**: https://app-monitor.joshwentworth.com
-- **Database**: `/opt/app-monitor/shared/data/dev-bots.db` (SINGLE instance)
-- **Deployment**: Blue-green via `scripts/deploy.sh`
+- **Database**: `/opt/app-monitor/shared/backend/data/app-monitor.db` (SINGLE instance, shared across releases)
+- **Deployment**: Automated CI/CD only (GitHub Actions → pull-agent → blue-green)
 - **Services**: Two systemd units (`app-monitor-backend@5001`, `@5002`)
 - **Proxy**: Nginx upstream switched during deployment
 - **Tunnel**: Cloudflare for external access
+- **Dev Database**: `backend/data/app-monitor.db` (development environment only)
+
+**DATABASE_PATH Environment Variable:**
+- Development: `./data/app-monitor.db` (relative to backend directory)
+- Production: `/opt/app-monitor/shared/backend/data/app-monitor.db` (set in `/opt/app-monitor/shared/.env`)
 
 ---
 
