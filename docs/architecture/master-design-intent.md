@@ -152,46 +152,21 @@
 
 ## Documentation Guidelines
 
-### Organization (<60 total docs, delete don't archive)
+**See:** `docs/guides/DOCUMENTATION_SYSTEM.md` for comprehensive documentation philosophy and rules.
 
-```
-docs/
-├── architecture/
-│   ├── master-design-intent.md (<200 lines - philosophy)
-│   └── system-overview.md (detailed architecture)
-├── technicalDesigns/  (implementation specs)
-├── guides/  (how-tos)
-├── plans/  (future work only)
-├── analysis/  (<5 files - active investigations)
-└── setup/  (environment config)
-```
+### Quick Rules
 
-### Lifecycle Rules
+- **Delete-first mentality** - Documentation is technical debt
+- **No summaries/status docs** - If it doesn't add development velocity, delete it
+- **Hard limits** - <60 total docs, <5 in analysis/, master-design-intent <200 lines
+- **Lifecycle** - Plans/analysis are temporary, DELETE when complete (never archive)
 
-1. **Planning** → Create in `/plans/`
-2. **Investigation** → Move to `/analysis/` if needed
-3. **Implementation** → Move to `/technicalDesigns/`, update system-overview.md
-4. **Completion** → **DELETE** plan/analysis (NEVER archive)
+### Allowed Document Types
 
-### CI-Enforced Rules
+1. **Architecture** (`/architecture/`) - Design decisions and constraints (permanent)
+2. **Guides** (`/guides/`) - Operational how-tos (permanent, updated)
+3. **Plans** (`/plans/`) - Outstanding work (DELETE when complete)
+4. **Technical Designs** (`/technicalDesigns/`) - Feature specs (temporary → permanent)
+5. **Analysis** (`/analysis/`) - Action-oriented investigations (max 30 days, max 5 files)
 
-❌ No `archive/` directories  
-❌ No versioned docs (`-v2.md`, `-new.md`)  
-❌ No completed markers (`COMPLETED.md`)  
-❌ No databases in docs/  
-❌ master-design-intent.md >200 lines  
-❌ analysis/ >5 files  
-❌ Total docs >60  
-
-### What Goes Where
-
-| Type | Location | Keep? |
-|------|----------|-------|
-| Philosophy | master-design-intent.md | Living doc |
-| Architecture | system-overview.md | Update as needed |
-| Feature specs | technicalDesigns/ | Permanent |
-| How-tos | guides/ | Update as needed |
-| Future work | plans/ | Delete when done |
-| Investigations | analysis/ | Delete when addressed |
-
-**Rule:** When in doubt, delete. Documentation sprawl compounds quickly.
+**Prohibited:** Implementation summaries, status reports, meeting notes, archives, drafts, historical narratives
