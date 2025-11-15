@@ -47,7 +47,6 @@ describe('API Contract Compliance - Dev-Bots Endpoints', () => {
         availableWorkerTypes: [],
         tasks: { pending: [], active: [], completed: [] },
       }),
-      getSystemStatus: () => 'running' as const,
       getWorkers: () => ({}),
       getTaskQueue: () => mockTaskQueue,
       addTask: async () => ({
