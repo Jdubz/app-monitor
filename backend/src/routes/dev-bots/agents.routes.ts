@@ -7,6 +7,7 @@
 import { Router, Request, Response } from 'express';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
 import { logger } from '../../utils/logger.js';
+import { sendSuccess, sendError } from '../../utils/apiResponse.js';
 
 /**
  * Create agent management routes
@@ -21,7 +22,7 @@ export function createAgentsRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/agents', (_req: Request, res: Response) => {
     try {
       const agents = devBotsManager.getAgentPersonalities();
-      res.json({ data: { agents } });
+      sendSuccess(res, { agents });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -29,10 +30,12 @@ export function createAgentsRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting agent personalities: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get agent personalities',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(
+        res,
+        'Failed to get agent personalities',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
     }
   });
 
@@ -43,7 +46,7 @@ export function createAgentsRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/agents/valid', (_req: Request, res: Response) => {
     try {
       const validAgents = devBotsManager.getValidAgents();
-      res.json({ data: { validAgents } });
+      sendSuccess(res, { validAgents });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -51,10 +54,12 @@ export function createAgentsRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting valid agents: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get valid agents',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(
+        res,
+        'Failed to get valid agents',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
     }
   });
 
