@@ -28,12 +28,6 @@ import type {
   CreatePlanInput,
   UpdatePlanInput,
   PlanQueryFilters,
-  PlanResponse,
-  PlansListResponse,
-  PlanDetailsResponse,
-  PlanTasksResponse,
-  PlanDeleteResponse,
-  PlanCancelResponse,
   ApiError,
 } from '@app-monitor/api-contracts';
 
@@ -103,8 +97,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         details: { planId: plan.id, createdBy: input.created_by },
       });
 
-      const response: PlanResponse = { success: true, data: plan };
-      sendSuccess(res, response, 201);
+      sendSuccess(res, plan, 201);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -169,8 +162,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
 
       const plans = plansService.listPlans(filters);
 
-      const response: PlansListResponse = { success: true, data: plans };
-      sendSuccess(res, response);
+      sendSuccess(res, plans);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -206,8 +198,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         return;
       }
 
-      const response: PlanDetailsResponse = { success: true, data: planDetails };
-      sendSuccess(res, response);
+      sendSuccess(res, planDetails);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -261,8 +252,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         return;
       }
 
-      const response: PlanResponse = { success: true, data: updatedPlan };
-      sendSuccess(res, response);
+      sendSuccess(res, updatedPlan);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -305,8 +295,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         details: { planId },
       });
 
-      const response: PlanCancelResponse = { success: true, data: cancelledPlan };
-      sendSuccess(res, response);
+      sendSuccess(res, cancelledPlan);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -381,8 +370,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
 
       const tasks = plansService.getPlanTasks(planId);
 
-      const response: PlanTasksResponse = { success: true, data: tasks };
-      sendSuccess(res, response);
+      sendSuccess(res, tasks);
     } catch (error) {
       logger.error({
         category: 'api',
