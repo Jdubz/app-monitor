@@ -133,6 +133,5 @@ Results: ✅ 0 auth errors, clean test isolation
 
 ## Related Documentation
 
-- [E2E Auth Test](../analysis/FRONTEND_AUTH_INVESTIGATION.md)
 - [Environment Setup](ENVIRONMENT_SETUP.md)
 - [Production Setup](PRODUCTION_SETUP_QUICKSTART.md)

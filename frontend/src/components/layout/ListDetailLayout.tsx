@@ -104,9 +104,9 @@ const ListItemComponent = <TItem,>({
 const MemoizedListItem = memo(
   ListItemComponent,
   (prevProps, nextProps) => {
-    // Only re-render if key, selection state, or render function changed
+    // Only re-render if item, selection state, or render function changed
     return (
-      prevProps.itemKey === nextProps.itemKey &&
+      prevProps.item === nextProps.item &&
       prevProps.isSelected === nextProps.isSelected &&
       prevProps.renderListItem === nextProps.renderListItem
     );
@@ -186,7 +186,6 @@ export function ListDetailLayout<TItem, TFilter extends string>({
                   <MemoizedListItem
                     key={key}
                     item={item}
-                    itemKey={key}
                     isSelected={isSelected}
                     onSelectItem={onSelectItem}
                     renderListItem={renderListItem}
