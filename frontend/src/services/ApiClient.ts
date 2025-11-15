@@ -3,8 +3,6 @@
  * 
  * Replaces scattered API calls with a consistent, reusable client.
  * Provides error handling, request/response interceptors, and type safety.
- * 
- * Last updated: 2025-11-15T04:07:00Z - API key authentication
  */
 
 import axios, { AxiosInstance, AxiosRequestConfig, CreateAxiosDefaults } from 'axios';
@@ -25,6 +23,11 @@ export class ApiClient {
     this.log.debug('Raw VITE_API_BASE_URL', import.meta.env.VITE_API_BASE_URL);
 
     const apiKey = import.meta.env.VITE_API_KEY;
+    
+    // Build-time validation: Fail fast if API key is missing
+    if (!apiKey && import.meta.env.MODE === 'production') {
+      throw new Error('VITE_API_KEY environment variable is required for production builds');
+    }
     
     // Build headers for axios configuration
     const headers: Record<string, string> = {
