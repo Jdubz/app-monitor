@@ -99,7 +99,7 @@ describe('Plans API Routes', () => {
     } as any;
 
     const plansRouter = createPlansRoutes(mockDevBotsManager);
-    app.use('/api/dev-bots/plans', mockRequireApiKey, plansRouter);
+    app.use('/api/dev-bots', mockRequireApiKey, plansRouter);
   });
 
   afterEach(() => {

@@ -27,7 +27,14 @@ import type {
   CreatePlanInput,
   UpdatePlanInput,
   PlanQueryFilters,
-} from '../../types/plan.js';
+  PlanResponse,
+  PlansListResponse,
+  PlanDetailsResponse,
+  PlanTasksResponse,
+  PlanDeleteResponse,
+  PlanCancelResponse,
+  ApiError,
+} from '@app-monitor/api-contracts';
 
 /**
  * Create plans routes
@@ -73,10 +80,12 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
       // Validate input
       const validation = validateCreatePlanInput(req.body);
       if (!validation.valid) {
-        res.status(400).json({
+        const errorResponse: ApiError = {
+          success: false,
           error: 'Validation failed',
           details: validation.errors,
-        });
+        };
+        res.status(400).json(errorResponse);
         return;
       }
 
@@ -90,7 +99,8 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         details: { planId: plan.id, createdBy: input.created_by },
       });
 
-      res.status(201).json({ data: plan });
+      const response: PlanResponse = { success: true, data: plan };
+      res.status(201).json(response);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -98,10 +108,12 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error creating plan: ${error}`,
         error,
       });
-      res.status(500).json({
+      const errorResponse: ApiError = {
+        success: false,
         error: 'Failed to create plan',
         message: error instanceof Error ? error.message : String(error),
-      });
+      };
+      res.status(500).json(errorResponse);
     }
   });
 
@@ -121,10 +133,12 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
       // Validate query filters
       const validation = validatePlanQueryFilters(req.query as Record<string, unknown>);
       if (!validation.valid) {
-        res.status(400).json({
+        const errorResponse: ApiError = {
+          success: false,
           error: 'Validation failed',
           details: validation.errors,
-        });
+        };
+        res.status(400).json(errorResponse);
         return;
       }
 
@@ -148,21 +162,8 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
 
       const plans = plansService.listPlans(filters);
 
-      // Compute lightweight progress for each plan
-      const plansWithProgress = plans.map(plan => {
-        const progress = progressCalculator.calculateProgress(plan.id);
-        return {
-          ...plan,
-          progress: {
-            tasksTotal: progress.tasksTotal,
-            tasksCompleted: progress.tasksCompleted,
-            percentComplete: progress.percentComplete,
-          },
-          hasBlockers: progress.chainsBlocked > 0,
-        };
-      });
-
-      res.json({ data: plansWithProgress });
+      const response: PlansListResponse = { success: true, data: plans };
+      res.json(response);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -170,10 +171,12 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error listing plans: ${error}`,
         error,
       });
-      res.status(500).json({
+      const errorResponse: ApiError = {
+        success: false,
         error: 'Failed to list plans',
         message: error instanceof Error ? error.message : String(error),
-      });
+      };
+      res.status(500).json(errorResponse);
     }
   });
 
@@ -187,14 +190,17 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
 
       const planDetails = progressCalculator.getPlanDetails(planId);
       if (!planDetails) {
-        res.status(404).json({
+        const errorResponse: ApiError = {
+          success: false,
           error: 'Plan not found',
           message: `Plan ${planId} was not found`,
-        });
+        };
+        res.status(404).json(errorResponse);
         return;
       }
 
-      res.json({ data: planDetails });
+      const response: PlanDetailsResponse = { success: true, data: planDetails };
+      res.json(response);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -202,10 +208,12 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting plan detail: ${error}`,
         error,
       });
-      res.status(500).json({
+      const errorResponse: ApiError = {
+        success: false,
         error: 'Failed to get plan detail',
         message: error instanceof Error ? error.message : String(error),
-      });
+      };
+      res.status(500).json(errorResponse);
     }
   });
 
@@ -222,24 +230,29 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
       // Validate input
       const validation = validateUpdatePlanInput(req.body);
       if (!validation.valid) {
-        res.status(400).json({
+        const errorResponse: ApiError = {
+          success: false,
           error: 'Validation failed',
           details: validation.errors,
-        });
+        };
+        res.status(400).json(errorResponse);
         return;
       }
 
       const input = req.body as UpdatePlanInput;
       const updatedPlan = plansService.updatePlan(planId, input);
       if (!updatedPlan) {
-        res.status(404).json({
+        const errorResponse: ApiError = {
+          success: false,
           error: 'Plan not found',
           message: `Plan ${planId} was not found`,
-        });
+        };
+        res.status(404).json(errorResponse);
         return;
       }
 
-      res.json({ data: updatedPlan });
+      const response: PlanResponse = { success: true, data: updatedPlan };
+      res.json(response);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -247,10 +260,12 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error updating plan: ${error}`,
         error,
       });
-      res.status(500).json({
+      const errorResponse: ApiError = {
+        success: false,
         error: 'Failed to update plan',
         message: error instanceof Error ? error.message : String(error),
-      });
+      };
+      res.status(500).json(errorResponse);
     }
   });
 
@@ -264,10 +279,12 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
 
       const cancelledPlan = plansService.cancelPlan(planId);
       if (!cancelledPlan) {
-        res.status(404).json({
+        const errorResponse: ApiError = {
+          success: false,
           error: 'Plan not found',
           message: `Plan ${planId} was not found`,
-        });
+        };
+        res.status(404).json(errorResponse);
         return;
       }
 
@@ -278,7 +295,8 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         details: { planId },
       });
 
-      res.json({ data: cancelledPlan });
+      const response: PlanCancelResponse = { success: true, data: cancelledPlan };
+      res.json(response);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -286,10 +304,12 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error cancelling plan: ${error}`,
         error,
       });
-      res.status(500).json({
+      const errorResponse: ApiError = {
+        success: false,
         error: 'Failed to cancel plan',
         message: error instanceof Error ? error.message : String(error),
-      });
+      };
+      res.status(500).json(errorResponse);
     }
   });
 
@@ -302,15 +322,17 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
       const { planId } = req.params;
 
       const deleted = plansService.deletePlan(planId);
-      if (!deleted) {
-        res.status(404).json({
-          error: 'Plan not found',
-          message: `Plan ${planId} was not found`,
-        });
-        return;
-      }
 
-      res.status(204).send();
+      const response: PlanDeleteResponse = {
+        success: true,
+        data: {
+          message: deleted
+            ? `Plan ${planId} deleted successfully`
+            : `Plan ${planId} was not found`,
+          deleted,
+        },
+      };
+      res.status(200).json(response);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -318,10 +340,12 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error deleting plan: ${error}`,
         error,
       });
-      res.status(500).json({
+      const errorResponse: ApiError = {
+        success: false,
         error: 'Failed to delete plan',
         message: error instanceof Error ? error.message : String(error),
-      });
+      };
+      res.status(500).json(errorResponse);
     }
   });
 
@@ -333,9 +357,22 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const { planId } = req.params;
 
+      // Check if plan exists
+      const plan = plansService.getPlan(planId);
+      if (!plan) {
+        const errorResponse: ApiError = {
+          success: false,
+          error: 'Plan not found',
+          message: `Plan ${planId} was not found`,
+        };
+        res.status(404).json(errorResponse);
+        return;
+      }
+
       const tasks = plansService.getPlanTasks(planId);
 
-      res.json({ data: tasks });
+      const response: PlanTasksResponse = { success: true, data: tasks };
+      res.json(response);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -343,10 +380,12 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting plan tasks: ${error}`,
         error,
       });
-      res.status(500).json({
+      const errorResponse: ApiError = {
+        success: false,
         error: 'Failed to get plan tasks',
         message: error instanceof Error ? error.message : String(error),
-      });
+      };
+      res.status(500).json(errorResponse);
     }
   });
 
@@ -354,16 +393,18 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
    * POST /plans/:planId/update-status
    * Manually trigger status recomputation (typically not needed - status updates automatically)
    */
-  router.post('/plans/:planId/update-status', async (req: Request, res: Response) => {
+  router.post('/plans/:planId/update-status', (req: Request, res: Response) => {
     try {
       const { planId } = req.params;
 
       const plan = plansService.getPlan(planId);
       if (!plan) {
-        res.status(404).json({
+        const errorResponse: ApiError = {
+          success: false,
           error: 'Plan not found',
           message: `Plan ${planId} was not found`,
-        });
+        };
+        res.status(404).json(errorResponse);
         return;
       }
 
@@ -373,7 +414,11 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
 
       const updatedPlan = plansService.getPlan(planId);
 
-      res.json({ data: updatedPlan });
+      const response: PlanResponse = {
+        success: true,
+        data: { ...plan, status: newStatus, ...updatedPlan },
+      };
+      res.json(response);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -381,10 +426,12 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error updating plan status: ${error}`,
         error,
       });
-      res.status(500).json({
+      const errorResponse: ApiError = {
+        success: false,
         error: 'Failed to update plan status',
         message: error instanceof Error ? error.message : String(error),
-      });
+      };
+      res.status(500).json(errorResponse);
     }
   });
 
