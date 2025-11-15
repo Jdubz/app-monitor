@@ -485,6 +485,20 @@ export type DevBotsInteractiveSessionStateResponse = ApiSuccess<DevBotsInteracti
 export type DevBotsInteractiveSessionInputResponse = ApiSuccess<{ accepted: boolean }>;
 
 // -----------------------------------------------------------------------------
+// Dev-Bots Settings Contracts
+// -----------------------------------------------------------------------------
+
+export interface DevBotsSettings {
+  modelStrategy: 'alternate' | 'claude-only' | 'codex-only' | 'random';
+  maxWorkers: number;
+  dryRun: boolean;
+  autoCleanup: boolean;
+  updatedAt: string;
+}
+
+export type DevBotsSettingsResponse = ApiSuccess<DevBotsSettings>;
+
+// -----------------------------------------------------------------------------
 // Dev-Bots Intervention Contracts
 // -----------------------------------------------------------------------------
 
