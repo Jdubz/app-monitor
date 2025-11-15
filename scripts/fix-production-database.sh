@@ -29,25 +29,19 @@ log "Starting production database configuration fix..."
 log "Creating data directory: $DATA_DIR"
 mkdir -p "$DATA_DIR"
 
-# Step 2: Move existing database files if they exist in wrong location
-for db_file in app-monitor.db; do
-  old_path="${PROD_DIR}/${db_file}"
-  new_path="${DATA_DIR}/${db_file}"
-  
-  if [[ -f "$old_path" && ! -f "$new_path" ]]; then
-    log "Moving ${db_file} to data directory..."
-    mv "$old_path" "$new_path"
-  elif [[ -f "$old_path" && -f "$new_path" ]]; then
-    log "WARNING: ${db_file} exists in both locations, keeping newer one"
-    if [[ "$old_path" -nt "$new_path" ]]; then
-      log "Old location is newer, moving it..."
-      mv "$old_path" "$new_path"
-    else
-      log "New location is newer, removing old one..."
-      rm "$old_path"
-    fi
+# Step 2: Clean up legacy database files
+# Note: Development phase - no valuable data, enforce clean slate
+log "Cleaning up legacy database files..."
+
+# Remove all old database files from wrong locations
+find "$PROD_DIR" -name "dev-bots.db" -o -name "app-monitor.db" | while read -r db_file; do
+  if [[ "$db_file" != "${DATA_DIR}/app-monitor.db" ]]; then
+    log "Removing legacy database: $db_file"
+    rm -f "$db_file"
   fi
 done
+
+log "Legacy databases cleaned up"
 
 # Step 3: Fix permissions
 log "Setting correct permissions..."
