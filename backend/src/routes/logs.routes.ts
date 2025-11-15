@@ -53,6 +53,15 @@ interface LogBatch {
  */
 router.post('/frontend', (req: Request, res: Response) => {
   try {
+    // Check if logWriter is initialized
+    if (!logWriter) {
+      res.status(503).json({
+        success: false,
+        error: 'Log writer not initialized',
+      });
+      return;
+    }
+
     const batch = req.body as LogBatch;
 
     // Validate batch
