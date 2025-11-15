@@ -8,6 +8,7 @@
 import axios, { AxiosInstance, AxiosRequestConfig, CreateAxiosDefaults } from 'axios';
 import type { ApiError } from '@/types/contracts';
 import { createLogger } from '@/utils/logger';
+import { logger as observabilityLogger } from '@/utils/observability/logger';
 
 import { getApiBaseUrl } from '@/utils/apiBaseUrl';
 
@@ -59,23 +60,81 @@ export class ApiClient {
   }
 
   private setupInterceptors(): void {
-    // Request interceptor
+    // Request interceptor - add trace IDs and log requests
     this.client.interceptors.request.use(
-      (config) => config,
+      (config) => {
+        // Generate trace ID for this request
+        const traceId = observabilityLogger.generateTraceId();
+
+        // Add trace ID to headers
+        if (!config.headers) {
+          config.headers = {} as any;
+        }
+        config.headers['X-Trace-Id'] = traceId;
+
+        // Store trace ID on config for response logging
+        (config as any).__traceId = traceId;
+
+        // Log the API request
+        observabilityLogger.info(
+          'API request',
+          'ApiClient',
+          {
+            method: config.method?.toUpperCase(),
+            url: config.url,
+          },
+          traceId
+        );
+
+        return config;
+      },
       (error) => {
         return Promise.reject(error);
       }
     );
 
-    // Response interceptor
+    // Response interceptor - log responses and errors
     this.client.interceptors.response.use(
       (response) => {
+        // Get trace ID from request config
+        const traceId = (response.config as any).__traceId;
+
+        // Log successful response
+        observabilityLogger.info(
+          'API response',
+          'ApiClient',
+          {
+            method: response.config.method?.toUpperCase(),
+            url: response.config.url,
+            status: response.status,
+          },
+          traceId
+        );
+
         return response;
       },
       (error) => {
+        // Get trace ID from request config
+        const traceId = error.config ? (error.config as any).__traceId : undefined;
+
         // Centralized error handling
         if (error.response) {
           const payload = error.response.data;
+
+          // Log API error
+          observabilityLogger.error(
+            'API error',
+            'ApiClient',
+            error,
+            {
+              method: error.config?.method?.toUpperCase(),
+              url: error.config?.url,
+              status: error.response.status,
+              errorData: payload,
+            },
+            traceId
+          );
+
           if (payload?.success === false && typeof payload?.error === 'string') {
             return Promise.reject(payload as ApiError);
           }
@@ -90,6 +149,17 @@ export class ApiClient {
           return Promise.reject(apiError);
         } else if (error.request) {
           // Network error
+          observabilityLogger.error(
+            'Network error',
+            'ApiClient',
+            error,
+            {
+              method: error.config?.method?.toUpperCase(),
+              url: error.config?.url,
+            },
+            traceId
+          );
+
           const apiError: ApiError = {
             success: false,
             error: 'Network error - please check your connection',
@@ -99,6 +169,14 @@ export class ApiClient {
           return Promise.reject(apiError);
         } else {
           // Other error
+          observabilityLogger.error(
+            'Unexpected error',
+            'ApiClient',
+            error,
+            {},
+            traceId
+          );
+
           const apiError: ApiError = {
             success: false,
             error: error.message || 'An unexpected error occurred',
