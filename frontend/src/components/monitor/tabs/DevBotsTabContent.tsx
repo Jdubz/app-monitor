@@ -31,7 +31,8 @@ export function DevBotsTabContent() {
 
   // For now, treat each task as a "chain" - in the future, group by chainId
   const chains = useMemo(() => {
-    return queueRows.map((row) => row.task);
+    const result = queueRows.map((row) => row.task);
+    return result;
   }, [queueRows]);
 
   // Use list selection hook for consistent auto-selection behavior
@@ -42,17 +43,21 @@ export function DevBotsTabContent() {
   );
 
   const filteredChains = useMemo(() => {
+    let result: DevBotsTask[];
     switch (activeFilter) {
       case 'blocked':
         // Stub: tasks with status 'failed' as "blocked"
-        return chains.filter((chain) => chain.status === 'failed');
+        result = chains.filter((chain) => chain.status === 'failed');
+        break;
       case 'quarantined':
         // Stub: no quarantine logic yet
-        return [];
+        result = [];
+        break;
       case 'all':
       default:
-        return chains;
+        result = chains;
     }
+    return result;
   }, [chains, activeFilter]);
 
   // Summary cards

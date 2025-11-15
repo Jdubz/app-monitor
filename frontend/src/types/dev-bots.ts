@@ -20,6 +20,9 @@ import type {
   DevBotsWorkspaceSyncResult as ContractDevBotsWorkspaceSyncResult,
   DevBotsWorkspaceSyncStatus as ContractDevBotsWorkspaceSyncStatus,
   DevBotsTrackedTaskType as ContractDevBotsTrackedTaskType,
+  DevBotsQueueSummary as ContractDevBotsQueueSummary,
+  DevBotsQueueItem as ContractDevBotsQueueItem,
+  DevBotsQueueBucket as ContractDevBotsQueueBucket,
 } from '@/types/contracts';
 
 export type DevBotsStatus = ContractDevBotsStatus;
@@ -44,23 +47,10 @@ export type DevBotsAgentMetrics = ContractDevBotsAgentMetrics;
 export type DevBotsAgentTaskTypeBreakdown = ContractDevBotsAgentTaskTypeBreakdown;
 export type DevBotsTrackedTaskType = ContractDevBotsTrackedTaskType;
 
-export type DevBotsQueueBucket = 'pending' | 'active' | 'completed';
-
-export interface DevBotsQueueItem {
-  task: DevBotsTask;
-  bucket: DevBotsQueueBucket;
-}
-
-export interface DevBotsQueueSummary {
-  items: DevBotsQueueItem[];
-  counts: {
-    pending: number;
-    active: number;
-    completed: number;
-    failed: number;
-  };
-  lastUpdated: string;
-}
+// Queue types - re-exported from shared contracts
+export type DevBotsQueueSummary = ContractDevBotsQueueSummary;
+export type DevBotsQueueItem = ContractDevBotsQueueItem;
+export type DevBotsQueueBucket = ContractDevBotsQueueBucket;
 
 export interface DevBotsTaskHistoryEvent {
   id: string;

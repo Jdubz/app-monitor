@@ -13,25 +13,23 @@ import type { Task, TaskExecution } from '../../services/taskQueue.sqlite.js';
 import type { InteractiveSessionRecord } from '../../services/database.js';
 import type { TaskLogFileDescriptor } from '../../services/taskLogLocator.js';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
+import type { 
+  DevBotsQueueSummary, 
+  DevBotsQueueItem, 
+  DevBotsTask,
+  DevBotsTaskStatus as ApiDevBotsTaskStatus
+} from '@app-monitor/api-contracts';
 
 // ============================================================================
 // Type Definitions
 // ============================================================================
 
-// Temporary types until API contracts are updated
-export type DevBotsQueueSummary = {
-  items: Array<{ bucket: 'pending' | 'active' | 'completed'; task: Record<string, unknown> }>;
-  counts: { pending: number; active: number; completed: number; failed: number };
-  lastUpdated: string;
-};
-
-export type ContractDevBotsTask = Record<string, unknown>;
+// Temporary types until fully migrated to API contracts
 export type ContractDevBotsTaskDetail = {
-  task: Record<string, unknown>;
+  task: DevBotsTask;
   history: Array<Record<string, unknown>>
 };
 export type DevBotsTaskHistoryEvent = Record<string, unknown>;
-export type DevBotsTaskStatus = 'pending' | 'active' | 'completed' | 'failed';
 export type DevBotsInteractiveSessionState = Record<string, unknown>;
 export type DevBotsInteractiveSessionStateResponse = { data: Record<string, unknown> };
 export type DevBotsInteractiveSessionModelOption = Record<string, unknown>;
@@ -163,7 +161,7 @@ export const computeIdleDeadline = (
 /**
  * Map internal task status to API contract status
  */
-export const mapTaskStatus = (status: Task['status']): DevBotsTaskStatus => {
+export const mapTaskStatus = (status: Task['status']): ApiDevBotsTaskStatus => {
   switch (status) {
     case 'running':
       return 'active';
@@ -182,7 +180,7 @@ export const mapTaskStatus = (status: Task['status']): DevBotsTaskStatus => {
 /**
  * Map Task to API contract format
  */
-export const mapTaskToContract = (task: Task): ContractDevBotsTask => ({
+export const mapTaskToContract = (task: Task): DevBotsTask => ({
   id: task.id,
   type: task.type,
   description: task.description ?? task.documentation ?? '',
@@ -199,14 +197,11 @@ export const mapTaskToContract = (task: Task): ContractDevBotsTask => ({
   exitCode: (task as { exit_code?: number }).exit_code,
   files: task.files ?? [],
   dependencies: task.dependencies ?? [],
-  acceptanceCriteria: task.acceptance_criteria ?? [],
+  acceptanceCriteria: task.acceptance_criteria?.join('\n'),
   priority: task.priority,
   retryCount: task.retry_count,
   maxRetries: task.max_retries,
   canRetry: task.can_retry,
-  architectureReferences: task.architecture_references ?? [],
-  validationSteps: task.validation_steps ?? [],
-  successMetrics: task.success_metrics ?? [],
   notes: task.notes,
   isPeriodicCleanup: task.is_repair_bot ?? false,
 });
@@ -214,7 +209,7 @@ export const mapTaskToContract = (task: Task): ContractDevBotsTask => ({
 /**
  * Map array of tasks to API contract format
  */
-export const mapTasksToContract = (tasks: Task[]): ContractDevBotsTask[] =>
+export const mapTasksToContract = (tasks: Task[]): DevBotsTask[] =>
   tasks.map(mapTaskToContract);
 
 /**
@@ -225,9 +220,18 @@ export const buildQueueSummary = (
   metrics: ReturnType<DevBotsManager['getQueueMetrics']>
 ): DevBotsQueueSummary => ({
   items: [
-    ...tasks.pending.map((task) => ({ bucket: 'pending' as const, task: mapTaskToContract(task) })),
-    ...tasks.active.map((task) => ({ bucket: 'active' as const, task: mapTaskToContract(task) })),
-    ...tasks.completed.map((task) => ({ bucket: 'completed' as const, task: mapTaskToContract(task) })),
+    ...tasks.pending.map((task): DevBotsQueueItem => ({ 
+      bucket: 'pending', 
+      task: mapTaskToContract(task)
+    })),
+    ...tasks.active.map((task): DevBotsQueueItem => ({ 
+      bucket: 'active', 
+      task: mapTaskToContract(task)
+    })),
+    ...tasks.completed.map((task): DevBotsQueueItem => ({ 
+      bucket: 'completed', 
+      task: mapTaskToContract(task)
+    })),
   ],
   counts: {
     pending: metrics.pending,

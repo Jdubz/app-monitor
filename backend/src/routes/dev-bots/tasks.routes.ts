@@ -15,6 +15,7 @@ import { Router, Request, Response } from 'express';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
 import { logger } from '../../utils/logger.js';
 import type { LogEntry } from '../../utils/logger.js';
+import { sendSuccess, sendError } from '../../utils/apiResponse.js';
 import {
   validateTaskTemplate,
   formatValidationErrors,
@@ -60,16 +61,18 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const tasks = await devBotsManager.getTasks();
       if (tasks) {
-        res.json({ data: {
+        sendSuccess(res, {
           pending: mapTasksToContract(tasks.pending),
           active: mapTasksToContract(tasks.active),
           completed: mapTasksToContract(tasks.completed),
-        }});
-      } else {
-        res.status(503).json({
-          error: 'Dev-Bots coordinator is not available',
-          healthy: devBotsManager.isHealthy()
         });
+      } else {
+        sendError(
+          res,
+          'Dev-Bots coordinator is not available',
+          503,
+          { details: { healthy: devBotsManager.isHealthy() } }
+        );
       }
     } catch (error) {
       logger.error({
@@ -78,10 +81,12 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting Dev-Bots tasks: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get Dev-Bots tasks',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(
+        res,
+        'Failed to get Dev-Bots tasks',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
     }
   });
 
@@ -100,7 +105,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         details: { count: tasks.length }
       });
 
-      res.json({ data: { tasks }});
+      sendSuccess(res, { tasks });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -108,10 +113,12 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting completed tasks: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get completed tasks',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(
+        res,
+        'Failed to get completed tasks',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
     }
   });
 
@@ -124,11 +131,12 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       const { taskId } = req.params;
       const task = devBotsManager.getTask(taskId);
       if (!task) {
-        res.status(404).json({
-          error: 'Task not found',
-          message: `Task ${taskId} was not found in the queue`,
-        });
-        return;
+        return sendError(
+          res,
+          'Task not found',
+          404,
+          { message: `Task ${taskId} was not found in the queue` }
+        );
       }
 
       const executions = devBotsManager.getTaskExecutions(taskId);
@@ -137,7 +145,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         history: buildTaskHistoryEvents(executions),
       };
 
-      res.json({ data: detail });
+      sendSuccess(res, detail);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -145,10 +153,12 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting task detail: ${error}`,
         error,
       });
-      res.status(500).json({
-        error: 'Failed to get task detail',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(
+        res,
+        'Failed to get task detail',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
     }
   });
 
@@ -167,13 +177,18 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       
       // Validate required fields
       if (!payload.title || !payload.taskType || !payload.intent) {
-        res.status(400).json({
-          error: 'Missing required fields',
-          message: 'title, taskType, and intent are required',
-          provided: Object.keys(payload),
-          required: ['title', 'taskType', 'intent']
-        });
-        return;
+        return sendError(
+          res,
+          'Missing required fields',
+          400,
+          {
+            message: 'title, taskType, and intent are required',
+            details: {
+              provided: Object.keys(payload),
+              required: ['title', 'taskType', 'intent']
+            }
+          }
+        );
       }
       
       // Auto-detect missing fields
@@ -220,13 +235,15 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         }
       });
       
-      res.status(201).json({
-        data: {
+      sendSuccess(
+        res,
+        {
           task: mapTaskToContract(result.task),
           validation: result.validation,
           autoDetection: detected
-        }
-      });
+        },
+        201
+      );
     } catch (error) {
       logger.error({
         category: 'api',
@@ -234,10 +251,12 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Failed to create task via minimal API: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to create task',
-        message: error instanceof Error ? error.message : String(error)
-      });
+      sendError(
+        res,
+        'Failed to create task',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
     }
   });
 
@@ -252,11 +271,12 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       
       // Validate at least task type is provided
       if (!payload.taskType) {
-        res.status(400).json({
-          error: 'Missing taskType',
-          message: 'taskType is required for preview'
-        });
-        return;
+        return sendError(
+          res,
+          'Missing taskType',
+          400,
+          { message: 'taskType is required for preview' }
+        );
       }
       
       const detected = await taskAutoDetectionService.detectFields(payload);
@@ -273,7 +293,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         }
       });
       
-      res.json({ data: detected });
+      sendSuccess(res, detected);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -281,10 +301,8 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Failed to preview detection: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to preview detection',
-        message: error instanceof Error ? error.message : String(error)
-      });
+      sendError(res, 'Failed to preview detection', 500, { message: error instanceof Error ? error.message : String(error)
+       });
     }
   });
 
@@ -327,18 +345,18 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       const taskDescription = documentation || description;
 
       if (!type || !title || !taskDescription || !acceptanceCriteria) {
-        return res.status(400).json({
-          error: 'Type, title, description, and acceptanceCriteria are required'
-        });
+        return sendError(res, 'Type, title, description, and acceptanceCriteria are required', 400);
       }
 
       // Validate assignedAgent if provided
       if (assignedAgent) {
         const validAgents = devBotsManager.getValidAgents();
         if (!validAgents.includes(assignedAgent)) {
-          return res.status(400).json({
-            error: `Invalid agent: ${assignedAgent}. Valid agents: ${validAgents.join(', ')}`
-          });
+          return sendError(
+            res,
+            `Invalid agent: ${assignedAgent}. Valid agents: ${validAgents.join(', ')}`,
+            400
+          );
         }
       }
 
@@ -358,7 +376,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         });
 
         // Return stubbed success response
-        return res.json({ data: {
+        return sendSuccess(res, {
           task: {
             id: `stub-${Date.now()}-${Math.random().toString(36).substring(7)}`,
             type,
@@ -375,7 +393,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
             suggestions: []
           },
           message: 'Task creation stubbed (non-production environment)'
-        }});
+        });
       }
 
       // V3 Template Validation (PE-API-VALIDATION-001)
@@ -513,11 +531,11 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         });
       }
 
-      res.json({ data: {
+      sendSuccess(res, {
         task: result.task,
         validation: result.validation,
         message: 'Task added successfully'
-      }});
+      });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -525,10 +543,12 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error adding Dev-Bots task: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to add task',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(
+        res,
+        'Failed to add task',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
     }
   });
 
@@ -542,13 +562,11 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       const { reason } = req.body;
 
       if (!reason) {
-        return res.status(400).json({
-          error: 'Reason is required for manual timeout'
-        });
+        return sendError(res, 'Reason is required for manual timeout', 400);
       }
 
       devBotsManager.manuallyTimeoutTask(taskId, reason);
-      res.json({
+      sendSuccess(res, {
         success: true,
         message: `Task ${taskId} manually timed out`,
         reason
@@ -560,10 +578,8 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error timing out task: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to timeout task',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to timeout task', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -582,7 +598,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         devBotsManager.getQueueMetrics(),
       ]);
       const summary = buildQueueSummary(tasks, metrics);
-      res.json({ data: summary });
+      sendSuccess(res, summary);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -590,10 +606,12 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting queue summary: ${error}`,
         error,
       });
-      res.status(500).json({
-        error: 'Failed to get queue summary',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(
+        res,
+        'Failed to get queue summary',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
     }
   });
 
@@ -604,7 +622,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/queue/stats', (_req: Request, res: Response) => {
     try {
       const stats = devBotsManager.getTaskQueue().getChainStats();
-      res.json(stats);
+      sendSuccess(res, stats);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -612,10 +630,8 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting queue stats: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get queue stats',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to get queue stats', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -631,7 +647,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const { type, ...taskData } = req.body;
       const result = devBotsManager.validateTaskData(taskData, type || 'general');
-      res.json({ data: result });
+      sendSuccess(res, result);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -639,10 +655,8 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error validating task: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to validate task',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to validate task', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -666,10 +680,8 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error assigning task: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to assign task',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to assign task', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -694,7 +706,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         stdout: stdoutDescriptor,
         stderr: stderrDescriptor,
       };
-      res.json({ data: response });
+      sendSuccess(res, response);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -702,10 +714,8 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting task log metadata: ${error}`,
         error,
       });
-      res.status(500).json({
-        error: 'Failed to get task logs',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to get task logs', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -751,10 +761,8 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         error,
       });
       if (!res.headersSent) {
-        res.status(500).json({
-          error: 'Failed to stream task logs',
-          message: error instanceof Error ? error.message : String(error),
-        });
+        sendError(res, 'Failed to stream task logs', 500, { message: error instanceof Error ? error.message : String(error),
+         });
       }
     }
   });
@@ -779,7 +787,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         });
       }
 
-      res.json(latestRun);
+      sendSuccess(res, latestRun);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -787,10 +795,8 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting task context: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get task context',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to get task context', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -803,7 +809,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       const { id: taskId } = req.params;
       const runs = getTaskContextService().getTaskAutomationRuns(taskId);
 
-      res.json({ data: { runs }});
+      sendSuccess(res, { runs });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -811,10 +817,8 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting task runs: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get task runs',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to get task runs', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -842,7 +846,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         });
       }
 
-      res.json(run);
+      sendSuccess(res, run);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -850,10 +854,8 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting automation run: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get automation run',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to get automation run', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -873,9 +875,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       const { prNumber } = req.body;
 
       if (!prNumber || typeof prNumber !== 'number') {
-        return res.status(400).json({
-          error: 'PR number is required and must be a number'
-        });
+        return sendError(res, 'PR number is required and must be a number', 400);
       }
 
       // Import services
@@ -925,10 +925,8 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error tracking PR: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to track PR',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to track PR', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -943,7 +941,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/chains/blocked', (_req: Request, res: Response) => {
     try {
       const blockedChains = devBotsManager.getTaskQueue().getBlockedChains();
-      res.json(blockedChains);
+      sendSuccess(res, blockedChains);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -951,10 +949,8 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting blocked chains: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get blocked chains',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to get blocked chains', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 
@@ -1011,10 +1007,8 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error unblocking chain: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to unblock chain',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(res, 'Failed to unblock chain', 500, { message: error instanceof Error ? error.message : String(error),
+       });
     }
   });
 

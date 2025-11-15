@@ -7,6 +7,7 @@
 import { Router, Request, Response } from 'express';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
 import { logger } from '../../utils/logger.js';
+import { sendSuccess, sendError } from '../../utils/apiResponse.js';
 
 /**
  * Create templates and guidelines routes
@@ -21,7 +22,7 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/templates', (_req: Request, res: Response) => {
     try {
       const templates = devBotsManager.getTaskTemplates();
-      res.json({ data: { templates } });
+      sendSuccess(res, { templates });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -29,10 +30,12 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting templates: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get templates',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(
+        res,
+        'Failed to get templates',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
     }
   });
 
@@ -43,7 +46,7 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/guidelines', (_req: Request, res: Response) => {
     try {
       const guidelines = devBotsManager.getTaskGuidelines();
-      res.json({ success: true, data: { guidelines } });
+      sendSuccess(res, { guidelines });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -51,10 +54,12 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting guidelines: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get guidelines',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(
+        res,
+        'Failed to get guidelines',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
     }
   });
 
@@ -66,7 +71,7 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const { taskType } = req.params;
       const guidelines = devBotsManager.getTaskGuidelines(taskType);
-      res.json({ success: true, data: { guidelines } });
+      sendSuccess(res, { guidelines });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -74,10 +79,12 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting guidelines for ${req.params.taskType}: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get task guidelines',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(
+        res,
+        'Failed to get task guidelines',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
     }
   });
 
@@ -89,7 +96,7 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const { taskType } = req.params;
       const example = devBotsManager.getTaskExample(taskType);
-      res.json({ success: true, data: { examples: [example] } });
+      sendSuccess(res, { examples: [example] });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -97,10 +104,12 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting examples for ${req.params.taskType}: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get task examples',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(
+        res,
+        'Failed to get task examples',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
     }
   });
 
@@ -112,7 +121,7 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const { taskType } = req.params;
       const checklist = devBotsManager.getTaskChecklist(taskType);
-      res.json({ success: true, data: { checklist } });
+      sendSuccess(res, { checklist });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -120,10 +129,12 @@ export function createTemplatesRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting checklist for ${req.params.taskType}: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get task checklist',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(
+        res,
+        'Failed to get task checklist',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
     }
   });
 
