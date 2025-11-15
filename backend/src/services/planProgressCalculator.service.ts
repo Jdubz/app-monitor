@@ -52,11 +52,12 @@ export class PlanProgressCalculator {
 
     // Task status breakdown
     const tasksTotal = tasks.length;
-    const tasksCompleted = tasks.filter(t => t.status === 'completed').length;
+    const tasksCancelled = tasks.filter(t => t.status === 'cancelled').length;
+    // Count both completed and cancelled tasks as "done" for progress tracking
+    const tasksCompleted = tasks.filter(t => t.status === 'completed' || t.status === 'cancelled').length;
     const tasksPending = tasks.filter(t => t.status === 'pending').length;
     const tasksRunning = tasks.filter(t => t.status === 'running').length;
     const tasksFailed = tasks.filter(t => t.status === 'failed').length;
-    const tasksCancelled = tasks.filter(t => t.status === 'cancelled').length;
 
     // PR status breakdown
     // Note: We only track pr_number. PR status must be fetched from GitHub API.
@@ -210,9 +211,12 @@ export class PlanProgressCalculator {
     const prStatus = this.getPRStatus(planId);
     const chainStatus = this.getChainStatus(planId);
     const tasks = this.getPlanTasks(planId);
+    // Compute fresh status based on current task states
+    const status = this.computeStatus(planId);
 
     return {
       ...plan,
+      status, // Override stored status with computed status
       progress,
       prStatus,
       chainStatus,

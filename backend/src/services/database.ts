@@ -248,12 +248,30 @@ export class DevBotsDatabase {
     this.skipMigration('020_add_context_bundle_fields');
 
     // Migration 021: Plans Table
-    // Creates plans table and adds plan_id column to tasks
+    // Creates plans table and adds plan_id column to tasks (if tasks table exists)
     this.applyMigration('021_plans_table', () => {
+      // Execute the migration SQL (creates plans table)
       this.db.exec(fs.readFileSync(
         path.join(__dirname, '..', '..', 'migrations', '021_plans_table.sql'),
         'utf-8'
       ));
+
+      // Add plan_id column to tasks table if it exists
+      // The tasks table is managed by TaskQueueService and may not exist in test contexts
+      const tasksTableExists = this.db.prepare(`
+        SELECT name FROM sqlite_master WHERE type='table' AND name='tasks'
+      `).get();
+
+      if (tasksTableExists) {
+        // Check if column already exists
+        const columns = this.db.prepare('PRAGMA table_info(tasks)').all() as Array<{ name: string }>;
+        const hasPlanId = columns.some(col => col.name === 'plan_id');
+
+        if (!hasPlanId) {
+          this.db.exec('ALTER TABLE tasks ADD COLUMN plan_id TEXT');
+          this.db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_plan_id ON tasks(plan_id) WHERE plan_id IS NOT NULL');
+        }
+      }
     });
   }
 

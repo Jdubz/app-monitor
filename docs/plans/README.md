@@ -27,14 +27,9 @@
 - [PRIORITIZED_FEATURE_ROADMAP.md](./PRIORITIZED_FEATURE_ROADMAP.md) ✅ **Updated 2025-11-14** — P0.4 marked superseded, P1.2 updated with context-aware task submission.
 
 ## Supporting Blueprints
-- ~~[BOT_PROMPT_ENGINEERING_V3.md](./BOT_PROMPT_ENGINEERING_V3.md)~~ — **⚠️ ARCHIVED 2025-11-14** (see `docs/archive/obsolete-2025-11-14/`)
-  - **Replacement:** [dev-bot-context-management.md](../technicalDesigns/dev-bot-context-management.md)
-  - Manual v3 templates obsolete - context system auto-generates prompts
+- [dev-bot-context-management.md](../technicalDesigns/dev-bot-context-management.md) — Context-aware auto-generation (replaces manual v3 templates)
 - [APP_MONITOR_PRODUCTION_SUPPORT_PLAN.md](./APP_MONITOR_PRODUCTION_SUPPORT_PLAN.md) — Three-root deployment architecture.
 - [DEV_BOT_PIPELINE_COMPLETION_PLAN_REVISED.md](./DEV_BOT_PIPELINE_COMPLETION_PLAN_REVISED.md) — Dev bot pipeline completion plan.
-
-## Archived Plans
-- **docs/archive/obsolete-2025-11-14/BOT_PROMPT_ENGINEERING_V3.md** - Superseded by context-aware auto-generation
 
 ---
 

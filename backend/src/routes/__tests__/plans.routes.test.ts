@@ -91,7 +91,14 @@ describe('Plans API Routes', () => {
     app = express();
     app.use(express.json());
 
-    const plansRouter = createPlansRoutes(db);
+    // Create mock DevBotsManager
+    const mockDevBotsManager = {
+      getTaskQueue: () => ({
+        getDatabase: () => db,
+      }),
+    } as any;
+
+    const plansRouter = createPlansRoutes(mockDevBotsManager);
     app.use('/api/dev-bots/plans', mockRequireApiKey, plansRouter);
   });
 
