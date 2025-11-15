@@ -151,7 +151,7 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
       return sendError(res, 'invalid_payload', 400, { message: 'sessionId is required' });
     }
 
-    if (!devBotsManager.interruptInteractiveSession(sessionId)) {
+    if (!devBotsManager.interruptExecution(sessionId)) {
       return sendError(
         res,
         'not_found',

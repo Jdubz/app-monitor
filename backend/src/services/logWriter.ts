@@ -70,7 +70,7 @@ export class LogWriter {
 
   writeLogs(logs: LogEntry[]): void {
     for (const log of logs) {
-      this.appendToLog(log);
+      this.appendToLog(log as Record<string, unknown>);
     }
   }
 
