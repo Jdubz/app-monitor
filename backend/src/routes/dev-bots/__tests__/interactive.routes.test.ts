@@ -29,6 +29,9 @@ describe('Interactive Routes', () => {
       getInteractiveSession: vi.fn().mockReturnValue({ id: 'session-123', status: 'active' }),
       sendInteractiveInput: vi.fn(),
       recordInteractiveActivity: vi.fn(),
+      recordInteractiveHeartbeat: vi.fn(),
+      interruptExecution: vi.fn(),
+      endInteractiveSession: vi.fn(),
     };
 
     router = createInteractiveRoutes(mockDevBotsManager as DevBotsManager);
@@ -42,15 +45,14 @@ describe('Interactive Routes', () => {
     };
   });
 
-  describe('POST /interactive/session/:sessionId/input', () => {
+  describe('POST /interactive/input', () => {
     it('should accept input and return { accepted: true }', async () => {
       mockRequest = {
-        params: { sessionId: 'session-123' },
-        body: { data: 'user input' },
+        body: { sessionId: 'session-123', input: 'user input' },
       };
 
       const route = router.stack.find(
-        (l) => l.route.path === '/interactive/session/:sessionId/input' && l.route.methods.post,
+        (l) => l.route && l.route.path === '/interactive/input' && l.route.methods.post,
       );
       await route.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
 
@@ -66,11 +68,11 @@ describe('Interactive Routes', () => {
       };
 
       const route = router.stack.find(
-        (l) => l.route.path === '/interactive/heartbeat' && l.route.methods.post,
+        (l) => l.route && l.route.path === '/interactive/heartbeat' && l.route.methods.post,
       );
       await route.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
 
-      expect(mockDevBotsManager.recordInteractiveActivity).toHaveBeenCalledWith('session-123', 'user');
+      expect(mockDevBotsManager.recordInteractiveHeartbeat).toHaveBeenCalledWith('session-123', 'user');
       expect(responseJson).toEqual({ success: true, data: { acknowledged: true } });
     });
   });
