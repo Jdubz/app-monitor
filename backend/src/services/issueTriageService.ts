@@ -9,7 +9,7 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { IssueStorageService } from './issueStorageService.js';
 import type { StoredIssue } from './issueStorageService.js';
-import type { TaskQueue, Task } from './taskQueue.sqlite.js';
+import type { TaskQueueService, Task } from './taskQueue.sqlite.js';
 
 interface LogEntry {
   id?: string;
@@ -42,10 +42,10 @@ interface Diagnosis {
 export class IssueTriageService {
   private issueStorage: IssueStorageService;
   private logsDirectory: string;
-  private taskQueue?: TaskQueue;
+  private taskQueue?: TaskQueueService;
 
-  constructor(logsDirectory?: string, taskQueue?: TaskQueue) {
-    this.issueStorage = new IssueStorageService();
+  constructor(issueStorage: IssueStorageService, logsDirectory?: string, taskQueue?: TaskQueueService) {
+    this.issueStorage = issueStorage;
     this.logsDirectory = logsDirectory || path.join(process.cwd(), 'logs', 'frontend');
     this.taskQueue = taskQueue;
   }
@@ -53,7 +53,7 @@ export class IssueTriageService {
   /**
    * Set task queue (for dependency injection)
    */
-  setTaskQueue(taskQueue: TaskQueue): void {
+  setTaskQueue(taskQueue: TaskQueueService): void {
     this.taskQueue = taskQueue;
   }
 

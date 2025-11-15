@@ -8,9 +8,17 @@
 import express, { Request, Response } from 'express';
 import { IssueStorageService } from '../services/issueStorageService.js';
 import type { IssueReport } from '../services/issueStorageService.js';
+import type Database from 'better-sqlite3';
 
 const router = express.Router();
-const issueStorage = new IssueStorageService();
+
+// Issue storage will be initialized with database
+let issueStorage: IssueStorageService;
+
+export function initializeIssuesRoutes(db: Database.Database): typeof router {
+  issueStorage = new IssueStorageService(db);
+  return router;
+}
 
 /**
  * POST /api/issues

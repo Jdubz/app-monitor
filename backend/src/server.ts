@@ -159,7 +159,8 @@ export async function createApp(options: CreateAppOptions = {}) {
 
     // Initialize issue triage cron (autonomous bug report processing)
     const { initializeIssueTriageCron } = await import('./services/issueTriageCron.js');
-    initializeIssueTriageCron(taskQueue);
+    const db = (taskQueue as any).db; // Access internal database
+    initializeIssueTriageCron(taskQueue, db);
 
     logger.info({
       category: 'system',

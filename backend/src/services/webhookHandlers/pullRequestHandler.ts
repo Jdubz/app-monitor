@@ -427,18 +427,20 @@ export class PullRequestHandler extends BaseWebhookHandler {
     prNumber: number,
     prTitle: string
   ): Promise<void> {
+    if (!this.taskQueue) return;
+
     try {
-      const { getIssuesDb } = await import('../db/issuesDb.js');
-      const db = getIssuesDb();
+      // Access the shared database
+      const db = (this.taskQueue as unknown as { db: Database.Database }).db;
 
       for (const task of tasks) {
         // Find issues linked to this task by taskId
-        const stmt = db['db'].prepare('SELECT * FROM issues WHERE taskId = ? AND status = ?');
+        const stmt = db.prepare('SELECT * FROM issues WHERE taskId = ? AND status = ?');
         const issues = stmt.all(task.id, 'assigned') as Array<{ id: string; [key: string]: unknown }>;
 
         for (const issue of issues) {
           // Mark issue as resolved
-          const updateStmt = db['db'].prepare(`
+          const updateStmt = db.prepare(`
             UPDATE issues
             SET status = ?, resolved = ?, resolution = ?, prNumber = ?
             WHERE id = ?

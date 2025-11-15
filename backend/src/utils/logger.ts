@@ -42,6 +42,7 @@ export type LogCategory =
   | 'copilot-throttle' // Copilot throttle management
   | 'database'
   | 'docker'
+  | 'issue-triage' // Autonomous issue triage and resolution
   | 'lint_error'
   | 'log_format'
   | 'logs'

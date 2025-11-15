@@ -1,4 +1,7 @@
--- Issues table for fast querying and triage automation
+-- Migration 022: Issues Table
+-- Creates storage for user-reported issues and autonomous triage
+-- Integrates with existing task queue for bugfix task creation
+
 CREATE TABLE IF NOT EXISTS issues (
   id TEXT PRIMARY KEY,
   timestamp TEXT NOT NULL,

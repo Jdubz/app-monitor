@@ -23,7 +23,7 @@ import qualityGatesRoutes from './quality-gates.routes.js';
 import verificationRoutes from './verification.routes.js';
 import githubWebhooksRoutes from './github-webhooks.routes.js';
 import logsRoutes from './logs.routes.js';
-import issuesRoutes from './issues.routes.js';
+import issuesRoutes, { initializeIssuesRoutes } from './issues.routes.js';
 
 /**
  * Create the main API router with all sub-routes
@@ -40,6 +40,13 @@ export function createApiRouter(deps: {
   connectionManager?: ConnectionManager;
 }) {
   const router = Router();
+
+  // Initialize issues routes with database from devBotsManager
+  if (deps.devBotsManager) {
+    const taskQueue = deps.devBotsManager.getTaskQueue();
+    const db = (taskQueue as any).db; // Access internal database
+    initializeIssuesRoutes(db);
+  }
 
   // Health check - no auth required
   router.get('/health', (_req, res) => {

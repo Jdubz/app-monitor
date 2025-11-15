@@ -2,12 +2,13 @@
  * Issue Storage Service
  *
  * Dual persistence: JSONL (source of truth) + SQLite (fast queries)
+ * Uses main app-monitor.db database (not separate database)
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
-import { getIssuesDb } from '../db/issuesDb.js';
+import type Database from 'better-sqlite3';
 
 export interface IssueReport {
   timestamp: string;
@@ -33,9 +34,10 @@ export interface StoredIssue extends IssueReport {
 
 export class IssueStorageService {
   private issuesDirectory: string;
-  private db = getIssuesDb();
+  private db: Database.Database;
 
-  constructor(issuesDirectory?: string) {
+  constructor(db: Database.Database, issuesDirectory?: string) {
+    this.db = db;
     this.issuesDirectory = issuesDirectory || path.join(process.cwd(), 'logs', 'issues');
     this.ensureDirectory();
   }
@@ -70,20 +72,27 @@ export class IssueStorageService {
     };
 
     // Write to JSONL (source of truth)
-    this.writeToJSONL(issue);
+    this.writeToJSONL(issue as unknown as Record<string, unknown>);
 
     // Write to SQLite (fast queries)
-    this.db.insertIssue({
-      id: issue.id,
-      timestamp: issue.timestamp,
-      sessionId: issue.sessionId,
-      traceId: issue.traceId,
-      route: issue.route,
-      userAgent: issue.userAgent,
-      description: issue.description,
-      status: issue.status,
-      created: issue.created,
-    });
+    const stmt = this.db.prepare(`
+      INSERT INTO issues (
+        id, timestamp, sessionId, traceId, route, userAgent,
+        description, status, created
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      issue.id,
+      issue.timestamp,
+      issue.sessionId,
+      issue.traceId || null,
+      issue.route,
+      issue.userAgent,
+      issue.description || null,
+      issue.status,
+      issue.created
+    );
 
     return issue;
   }
@@ -98,7 +107,14 @@ export class IssueStorageService {
     resolution?: string
   ): void {
     // Update SQLite
-    this.db.updateIssueStatus(issueId, status, taskId, resolution);
+    const stmt = this.db.prepare(`
+      UPDATE issues
+      SET status = ?, taskId = ?, resolution = ?, resolved = ?
+      WHERE id = ?
+    `);
+
+    const resolved = status === 'resolved' ? new Date().toISOString() : null;
+    stmt.run(status, taskId || null, resolution || null, resolved, issueId);
 
     // Append update to JSONL
     const update = {
@@ -125,7 +141,19 @@ export class IssueStorageService {
     }
   ): void {
     // Update SQLite
-    this.db.updateIssueDiagnosis(issueId, diagnosis);
+    const stmt = this.db.prepare(`
+      UPDATE issues
+      SET errorMessage = ?, component = ?, severity = ?, fingerprint = ?
+      WHERE id = ?
+    `);
+
+    stmt.run(
+      diagnosis.errorMessage || null,
+      diagnosis.component || null,
+      diagnosis.severity || null,
+      diagnosis.fingerprint || null,
+      issueId
+    );
 
     // Append diagnosis to JSONL
     const record = {
@@ -148,7 +176,21 @@ export class IssueStorageService {
     route: string;
     description?: string;
   }> {
-    return this.db.getPendingIssues();
+    const stmt = this.db.prepare(`
+      SELECT id, timestamp, sessionId, traceId, route, description
+      FROM issues
+      WHERE status = 'pending'
+      ORDER BY created ASC
+    `);
+
+    return stmt.all() as Array<{
+      id: string;
+      timestamp: string;
+      sessionId: string;
+      traceId?: string;
+      route: string;
+      description?: string;
+    }>;
   }
 
   /**
@@ -158,15 +200,37 @@ export class IssueStorageService {
     id: string;
     status: string;
     taskId?: string;
-  } | null {
-    return this.db.findDuplicateIssue(fingerprint, 24);
+  } | undefined {
+    const cutoff = new Date();
+    cutoff.setHours(cutoff.getHours() - 24);
+
+    const stmt = this.db.prepare(`
+      SELECT id, status, taskId
+      FROM issues
+      WHERE fingerprint = ?
+        AND status IN ('pending', 'triaged', 'assigned')
+        AND created > ?
+      ORDER BY created DESC
+      LIMIT 1
+    `);
+
+    return stmt.get(fingerprint, cutoff.toISOString()) as {
+      id: string;
+      status: string;
+      taskId?: string;
+    } | undefined;
   }
 
   /**
    * Add occurrence to existing issue
    */
   addOccurrence(issueId: string, timestamp: string, sessionId: string): void {
-    this.db.addIssueOccurrence(issueId, timestamp, sessionId);
+    const stmt = this.db.prepare(`
+      INSERT INTO issue_occurrences (issueId, timestamp, sessionId)
+      VALUES (?, ?, ?)
+    `);
+
+    stmt.run(issueId, timestamp, sessionId);
 
     const occurrence = {
       type: 'occurrence',
@@ -181,8 +245,9 @@ export class IssueStorageService {
   /**
    * Get issue by ID
    */
-  getIssueById(issueId: string): StoredIssue | null {
-    return this.db.getIssueById(issueId);
+  getIssueById(issueId: string): StoredIssue | undefined {
+    const stmt = this.db.prepare('SELECT * FROM issues WHERE id = ?');
+    return stmt.get(issueId) as StoredIssue | undefined;
   }
 
   /**

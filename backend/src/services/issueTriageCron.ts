@@ -8,8 +8,10 @@
  */
 
 import { IssueTriageService } from './issueTriageService.js';
-import type { TaskQueue } from './taskQueue.sqlite.js';
+import { IssueStorageService } from './issueStorageService.js';
+import type { TaskQueueService } from './taskQueue.sqlite.js';
 import { logger } from '../utils/logger.js';
+import type Database from 'better-sqlite3';
 
 export class IssueTriageCron {
   private triageService: IssueTriageService;
@@ -17,8 +19,9 @@ export class IssueTriageCron {
   private intervalMs: number;
   private isRunning = false;
 
-  constructor(taskQueue: TaskQueue, intervalMs: number = 5 * 60 * 1000) {
-    this.triageService = new IssueTriageService(undefined, taskQueue);
+  constructor(taskQueue: TaskQueueService, db: Database.Database, intervalMs: number = 5 * 60 * 1000) {
+    const issueStorage = new IssueStorageService(db);
+    this.triageService = new IssueTriageService(issueStorage, undefined, taskQueue);
     this.intervalMs = intervalMs;
   }
 
@@ -139,9 +142,9 @@ export class IssueTriageCron {
 // Export singleton
 let cronInstance: IssueTriageCron | null = null;
 
-export function initializeIssueTriageCron(taskQueue: TaskQueue): IssueTriageCron {
+export function initializeIssueTriageCron(taskQueue: TaskQueueService, db: Database.Database): IssueTriageCron {
   if (!cronInstance) {
-    cronInstance = new IssueTriageCron(taskQueue);
+    cronInstance = new IssueTriageCron(taskQueue, db);
     cronInstance.start();
   }
   return cronInstance;
