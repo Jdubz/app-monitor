@@ -3,23 +3,36 @@ import { useServices } from './hooks/useServices';
 import { LogProvider } from './contexts/LogContext';
 import { Header, MainLayout } from './components/layout';
 import { DevBotsTab } from './components/tabs';
+import { DevMonitorShell } from './components/monitor/DevMonitorShell';
 import { ErrorBoundary } from './components/common';
 import { ThemeProvider } from './components/theme/ThemeProvider';
 import { PasswordGate } from './components/PasswordGate';
 
-// Simplified app - single dev-bots intervention panel
+// App content with optional tabbed monitor layout
 function AppContent() {
   const { socket } = useServices();
+
+  // Feature flag for new tabbed monitor layout
+  const enableTabbedLayout =
+    (import.meta.env.VITE_FEATURE_TABBED_MONITOR_LAYOUT ?? 'true').toString().toLowerCase() !== 'false';
 
   return (
     <MainLayout>
       <Header />
       <div className="flex flex-col gap-6">
         <div className="h-full">
-          <Routes>
-            <Route path="/" element={<DevBotsTab socket={socket} />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          {enableTabbedLayout ? (
+            <Routes>
+              <Route path="/monitor/*" element={<DevMonitorShell socket={socket} />} />
+              <Route path="/" element={<Navigate to="/monitor/dev-bots" replace />} />
+              <Route path="*" element={<Navigate to="/monitor/dev-bots" replace />} />
+            </Routes>
+          ) : (
+            <Routes>
+              <Route path="/" element={<DevBotsTab socket={socket} />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          )}
         </div>
       </div>
     </MainLayout>
