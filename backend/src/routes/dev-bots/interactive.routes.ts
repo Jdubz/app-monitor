@@ -1,7 +1,7 @@
 // Temporarily disable broken routes until DevBotsManager interface is updated
 import { Router, type Request, type Response } from 'express';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
-import { sendError } from '../helpers.js';
+import { sendError } from '../responseHelpers.js';
 
 export function createInteractiveRoutes(_devBotsManager: DevBotsManager): Router {
   const router = Router();
