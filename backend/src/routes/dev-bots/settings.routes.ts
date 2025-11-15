@@ -60,14 +60,14 @@ export function createSettingsRoutes(_devBotsManager: DevBotsManager): Router {
    * PUT /settings
    * Update Dev-Bots settings
    */
-  router.put('/settings', async (req: Request, res: Response) => {
+  router.put('/settings', (req: Request, res: Response) => {
     const payload = req.body as Partial<DevBotsSettings> | undefined;
     
-    if (!payload) {
+    if (!payload || Object.keys(payload).length === 0) {
       return res.status(400).json({
         success: false,
         error: 'invalid_payload',
-        message: 'Settings payload is required',
+        message: 'Settings payload is required and cannot be empty',
       });
     }
 
@@ -82,9 +82,18 @@ export function createSettingsRoutes(_devBotsManager: DevBotsManager): Router {
         updatedAt: new Date().toISOString(),
       };
 
+      const updatePayload: Partial<DevBotsSettings> = {};
+      const allowedKeys: (keyof DevBotsSettings)[] = ['modelStrategy', 'maxWorkers', 'dryRun', 'autoCleanup'];
+      
+      allowedKeys.forEach(key => {
+        if (payload[key] !== undefined) {
+          (updatePayload as any)[key] = payload[key];
+        }
+      });
+
       const updatedSettings: DevBotsSettings = {
         ...currentSettings,
-        ...payload,
+        ...updatePayload,
         updatedAt: new Date().toISOString(),
       };
 
