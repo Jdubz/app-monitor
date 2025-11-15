@@ -558,8 +558,6 @@ export class TaskExecutionService {
     homeDir: string
   ): { dockerArgs: string[]; cliCommand: string } {
     const gitEnvVars = DockerConfig.buildGitEnvVars();
-    let dockerArgs: string[];
-    let cliCommand: string;
 
     const commonArgs = [
       'run',
@@ -650,7 +648,7 @@ export class TaskExecutionService {
     }
 
     // Build docker args using agent configuration
-    dockerArgs = [
+    const dockerArgs = [
       ...commonArgs,
       '--tmpfs', agentConfig.tmpfsPath,
       '-v', agentConfig.volumeMount,
@@ -658,7 +656,7 @@ export class TaskExecutionService {
       'sh', '-c',
       `${commonSetup} && ${agentConfig.setupCommand} && ${agentConfig.execCommand}`
     ];
-    cliCommand = chosenAgentType;
+    const cliCommand = chosenAgentType;
 
     return { dockerArgs, cliCommand };
   }
