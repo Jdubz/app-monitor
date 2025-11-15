@@ -12,6 +12,9 @@ import { InteractiveSessionGateway } from './services/interactiveSessionGateway.
 import { GitHubWebhookHandler } from './services/githubWebhookHandler.service.js';
 import { setWebhookHandler } from './routes/github-webhooks.routes.js';
 import { logger } from './utils/logger.js';
+
+// CORS allowed headers for both HTTP and WebSocket
+const ALLOWED_CORS_HEADERS = ['Content-Type', 'X-API-Key', 'Authorization'];
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
@@ -49,6 +52,7 @@ export async function createApp(options: CreateAppOptions = {}) {
       origin: config.corsOrigin,
       credentials: true,
       methods: ['GET', 'POST'],
+      allowedHeaders: ALLOWED_CORS_HEADERS,
     },
     path: '/socket.io',
     transports: ['websocket', 'polling'],
@@ -256,6 +260,7 @@ export async function createApp(options: CreateAppOptions = {}) {
   app.use(cors({
     origin: config.corsOrigin,
     credentials: true,
+    allowedHeaders: ALLOWED_CORS_HEADERS,
   }));
   app.use(express.json());
 
