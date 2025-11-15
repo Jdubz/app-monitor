@@ -32,7 +32,7 @@ class LogTransport {
   private backendUrl: string;
 
   private constructor() {
-    this.backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    this.backendUrl = import.meta.env.VITE_API_URL || 'http://localhost:5000';
     this.start();
   }
 
