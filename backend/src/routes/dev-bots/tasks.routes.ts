@@ -875,9 +875,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       const { prNumber } = req.body;
 
       if (!prNumber || typeof prNumber !== 'number') {
-        return res.status(400).json({
-          error: 'PR number is required and must be a number'
-        });
+        return sendError(res, 'PR number is required and must be a number', 400);
       }
 
       // Import services
