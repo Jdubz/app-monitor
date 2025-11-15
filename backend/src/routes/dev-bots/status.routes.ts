@@ -198,10 +198,12 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
    * Task persistence layer removed in favor of SQLite
    */
   router.post('/export', async (_req: Request, res: Response) => {
-    res.status(410).json({
-      error: 'Export functionality deprecated',
-      message: 'Task export/import functionality removed - tasks are now stored in SQLite database'
-    });
+    sendError(
+      res,
+      'Export functionality deprecated',
+      410,
+      { message: 'Task export/import functionality removed - tasks are now stored in SQLite database' }
+    );
   });
 
   /**
@@ -210,10 +212,12 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
    * Task persistence layer removed in favor of SQLite
    */
   router.post('/import', async (_req: Request, res: Response) => {
-    res.status(410).json({
-      error: 'Import functionality deprecated',
-      message: 'Task export/import functionality removed - tasks are now stored in SQLite database'
-    });
+    sendError(
+      res,
+      'Import functionality deprecated',
+      410,
+      { message: 'Task export/import functionality removed - tasks are now stored in SQLite database' }
+    );
   });
 
   // ============================================================================
