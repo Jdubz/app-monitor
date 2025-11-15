@@ -10,6 +10,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 vi.mock('axios', () => ({
   default: {
     create: vi.fn(() => ({
+      defaults: {
+        headers: {
+          common: {},
+        },
+      },
       interceptors: {
         request: { use: vi.fn() },
         response: { use: vi.fn() },
@@ -51,74 +56,35 @@ describe('ApiClient', () => {
   });
 
   describe('Header Configuration', () => {
-    it('should set API key in headers.common when VITE_API_KEY is provided', () => {
+    it('should configure API key and Content-Type when VITE_API_KEY is provided', () => {
       // Set environment variable
       (import.meta.env as any).VITE_API_KEY = 'test-api-key-123';
 
       new ApiClient();
 
+      // Verify axios.create was called with correct headers
       expect(axios.create).toHaveBeenCalledWith(
         expect.objectContaining({
           headers: expect.objectContaining({
-            common: expect.objectContaining({
-              'X-API-Key': 'test-api-key-123',
-              'Content-Type': 'application/json',
-            }),
+            'X-API-Key': 'test-api-key-123',
+            'Content-Type': 'application/json',
           }),
         })
       );
     });
 
-    it('should not set X-API-Key header when VITE_API_KEY is missing', () => {
+    it('should only set Content-Type when VITE_API_KEY is missing', () => {
       // Ensure VITE_API_KEY is not set
       delete (import.meta.env as any).VITE_API_KEY;
 
       new ApiClient();
 
-      expect(axios.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            common: expect.objectContaining({
-              'Content-Type': 'application/json',
-            }),
-          }),
-        })
-      );
-
-      // Verify X-API-Key is not in headers
-      const mockCreate = axios.create as any;
-      const createCall = mockCreate.mock.calls[0][0];
-      expect(createCall?.headers?.common).not.toHaveProperty('X-API-Key');
-    });
-
-    it('should always set Content-Type header', () => {
-      new ApiClient();
-
-      expect(axios.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            common: expect.objectContaining({
-              'Content-Type': 'application/json',
-            }),
-          }),
-        })
-      );
-    });
-
-    it('should set headers in common object for all HTTP methods', () => {
-      (import.meta.env as any).VITE_API_KEY = 'test-key';
-
-      new ApiClient();
-
+      // Verify axios.create was called with headers but no API key
       const mockCreate = axios.create as any;
       const createCall = mockCreate.mock.calls[0][0];
       
-      // Verify headers are in the 'common' object
-      expect(createCall?.headers).toHaveProperty('common');
-      expect(createCall?.headers?.common).toMatchObject({
-        'Content-Type': 'application/json',
-        'X-API-Key': 'test-key',
-      });
+      expect(createCall?.headers).toHaveProperty('Content-Type', 'application/json');
+      expect(createCall?.headers).not.toHaveProperty('X-API-Key');
     });
   });
 

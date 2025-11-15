@@ -24,12 +24,13 @@ export class ApiClient {
 
     const apiKey = import.meta.env.VITE_API_KEY;
     
-    const commonHeaders: Record<string, string> = {
+    // Build headers for axios configuration
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
 
     if (apiKey) {
-      commonHeaders['X-API-Key'] = apiKey;
+      headers['X-API-Key'] = apiKey;
       this.log.debug('API key configured');
     } else {
       this.log.warn('No API key configured - requests may fail');
@@ -38,9 +39,7 @@ export class ApiClient {
     const config: CreateAxiosDefaults = {
       baseURL: fullBaseURL,
       timeout: 30000,
-      headers: {
-        common: commonHeaders,
-      },
+      headers,
     };
 
     this.client = axios.create(config);
