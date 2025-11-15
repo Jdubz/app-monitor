@@ -24,23 +24,25 @@ export class ApiClient {
 
     const apiKey = import.meta.env.VITE_API_KEY;
     
-    const config: CreateAxiosDefaults = {
-      baseURL: fullBaseURL,
-      timeout: 30000,
+    // Build headers for axios configuration
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
     };
 
-    this.client = axios.create(config);
-
-    // Set headers after instance creation to ensure they're properly registered
-    // in both Node and browser environments
-    this.client.defaults.headers.common['Content-Type'] = 'application/json';
-    
     if (apiKey) {
-      this.client.defaults.headers.common['X-API-Key'] = apiKey;
+      headers['X-API-Key'] = apiKey;
       this.log.debug('API key configured');
     } else {
       this.log.warn('No API key configured - requests may fail');
     }
+
+    const config: CreateAxiosDefaults = {
+      baseURL: fullBaseURL,
+      timeout: 30000,
+      headers,
+    };
+
+    this.client = axios.create(config);
 
     this.setupInterceptors();
   }
