@@ -80,9 +80,12 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
       // Validate input
       const validation = validateCreatePlanInput(req.body);
       if (!validation.valid) {
+        const errorMessage = validation.errors.length > 0
+          ? validation.errors.map(e => e.message).join('; ')
+          : 'Validation failed';
         const errorResponse: ApiError = {
           success: false,
-          error: 'Validation failed',
+          error: errorMessage,
           details: validation.errors,
         };
         res.status(400).json(errorResponse);
@@ -133,9 +136,12 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
       // Validate query filters
       const validation = validatePlanQueryFilters(req.query as Record<string, unknown>);
       if (!validation.valid) {
+        const errorMessage = validation.errors.length > 0
+          ? validation.errors.map(e => e.message).join('; ')
+          : 'Validation failed';
         const errorResponse: ApiError = {
           success: false,
-          error: 'Validation failed',
+          error: errorMessage,
           details: validation.errors,
         };
         res.status(400).json(errorResponse);
@@ -230,9 +236,12 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
       // Validate input
       const validation = validateUpdatePlanInput(req.body);
       if (!validation.valid) {
+        const errorMessage = validation.errors.length > 0
+          ? validation.errors.map(e => e.message).join('; ')
+          : 'Validation failed';
         const errorResponse: ApiError = {
           success: false,
-          error: 'Validation failed',
+          error: errorMessage,
           details: validation.errors,
         };
         res.status(400).json(errorResponse);

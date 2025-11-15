@@ -63,6 +63,8 @@ function setupTestSchema(db: Database.Database) {
       status TEXT NOT NULL,
       plan_id TEXT,
       chain_status TEXT,
+      chain_id TEXT,
+      pr_number INTEGER,
       created_at INTEGER NOT NULL
     );
 
@@ -164,7 +166,7 @@ describe('Plans API Routes', () => {
 
       expect(response.status).toBe(400);
       expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('title');
+      expect(response.body.error.toLowerCase()).toContain('title');
     });
 
     it('should reject request with invalid plan_type', async () => {
@@ -218,7 +220,7 @@ describe('Plans API Routes', () => {
         });
 
       expect(response.status).toBe(400);
-      expect(response.body.error).toContain('title');
+      expect(response.body.error.toLowerCase()).toContain('title');
     });
 
     it('should reject request with negative estimated hours', async () => {

@@ -8,7 +8,7 @@ const VALID_PLAN_TYPES = ['feature', 'refactor', 'fix', 'investigation'] as cons
 const VALID_PRIORITIES = ['p0', 'p1', 'p2', 'p3'] as const;
 const VALID_STATUSES = ['planning', 'in_progress', 'blocked', 'completed', 'cancelled'] as const;
 
-const MAX_TITLE_LENGTH = 500;
+const MAX_TITLE_LENGTH = 200;
 const MAX_DESCRIPTION_LENGTH = 5000;
 const MAX_MARKDOWN_REF_LENGTH = 1000;
 const MAX_CREATED_BY_LENGTH = 255;
