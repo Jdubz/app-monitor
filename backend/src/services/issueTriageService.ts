@@ -2,10 +2,10 @@
  * Issue Triage Service
  *
  * Autonomous triage: searches logs, diagnoses issues, creates tasks
+ *
+ * FIXED: Now uses database queries instead of blocking file I/O
  */
 
-import * as fs from 'fs';
-import * as path from 'path';
 import * as crypto from 'crypto';
 import { IssueStorageService } from './issueStorageService.js';
 import type { StoredIssue } from './issueStorageService.js';
@@ -40,12 +40,10 @@ interface Diagnosis {
 
 export class IssueTriageService {
   private issueStorage: IssueStorageService;
-  private logsDirectory: string;
   private taskQueue?: TaskQueueService;
 
-  constructor(issueStorage: IssueStorageService, logsDirectory?: string, taskQueue?: TaskQueueService) {
+  constructor(issueStorage: IssueStorageService, taskQueue?: TaskQueueService) {
     this.issueStorage = issueStorage;
-    this.logsDirectory = logsDirectory || path.join(process.cwd(), 'logs', 'frontend');
     this.taskQueue = taskQueue;
   }
 
@@ -192,7 +190,10 @@ export class IssueTriageService {
   }
 
   /**
-   * Search logs by time range
+   * Search logs by time range using database query (fast, non-blocking)
+   *
+   * FIXED: Replaced blocking fs.readFileSync() with SQLite query.
+   * Logs are now stored in frontend_logs table for instant querying.
    */
   private async searchLogsByTimeRange(
     timestamp: string,
@@ -203,64 +204,50 @@ export class IssueTriageService {
     const startTime = new Date(issueTime.getTime() + beforeMs);
     const endTime = new Date(issueTime.getTime() + afterMs);
 
-    const logs: LogEntry[] = [];
+    // Query database for logs in time range (indexed, fast)
+    const stmt = (this.issueStorage as any).db.prepare(`
+      SELECT
+        id, timestamp, level, message, scope, traceId, sessionId, route,
+        errorName, errorMessage, errorStack, data
+      FROM frontend_logs
+      WHERE timestamp >= ? AND timestamp <= ?
+      ORDER BY timestamp ASC
+    `);
 
-    // Get log files for the date range
-    const logFiles = this.getLogFilesForDateRange(startTime, endTime);
+    const rows = stmt.all(startTime.toISOString(), endTime.toISOString()) as Array<{
+      id: string;
+      timestamp: string;
+      level: string;
+      message: string;
+      scope: string | null;
+      traceId: string | null;
+      sessionId: string;
+      route: string | null;
+      errorName: string | null;
+      errorMessage: string | null;
+      errorStack: string | null;
+      data: string | null;
+    }>;
 
-    for (const filePath of logFiles) {
-      if (!fs.existsSync(filePath)) {
-        continue;
-      }
-
-      const fileContent = fs.readFileSync(filePath, 'utf8');
-      const lines = fileContent.split('\n').filter(line => line.trim());
-
-      for (const line of lines) {
-        try {
-          const entry = JSON.parse(line) as LogEntry;
-
-          // Skip session_start entries
-          if ((entry as any).type === 'session_start') {
-            continue;
-          }
-
-          const entryTime = new Date(entry.timestamp);
-
-          if (entryTime >= startTime && entryTime <= endTime) {
-            logs.push(entry);
-          }
-        } catch {
-          // Skip malformed lines
-        }
-      }
-    }
-
-    return logs.sort((a, b) =>
-      new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    );
+    // Convert database rows to LogEntry format
+    return rows.map(row => ({
+      id: row.id,
+      timestamp: row.timestamp,
+      level: row.level,
+      message: row.message,
+      scope: row.scope || undefined,
+      traceId: row.traceId || undefined,
+      sessionId: row.sessionId,
+      route: row.route || undefined,
+      error: row.errorName ? {
+        name: row.errorName,
+        message: row.errorMessage || '',
+        stack: row.errorStack || undefined,
+      } : undefined,
+      data: row.data ? JSON.parse(row.data) : undefined,
+    })) as LogEntry[];
   }
 
-  /**
-   * Get log files for date range
-   */
-  private getLogFilesForDateRange(startDate: Date, endDate: Date): string[] {
-    const files: string[] = [];
-    const current = new Date(startDate);
-
-    while (current <= endDate) {
-      const year = current.getFullYear();
-      const month = String(current.getMonth() + 1).padStart(2, '0');
-      const day = String(current.getDate()).padStart(2, '0');
-      const filename = `${year}-${month}-${day}.jsonl`;
-      const filePath = path.join(this.logsDirectory, filename);
-
-      files.push(filePath);
-      current.setDate(current.getDate() + 1);
-    }
-
-    return files;
-  }
 
   /**
    * Extract component name from stack trace

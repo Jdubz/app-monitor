@@ -3,9 +3,12 @@
  *
  * POST /api/issues - Receive issue reports from frontend (triggers immediate triage)
  * GET /api/issues - Query issues (admin only, future)
+ *
+ * SECURITY: Rate limited to prevent abuse (10 reports/hour per session)
  */
 
 import express, { Request, Response } from 'express';
+import rateLimit from 'express-rate-limit';
 import { IssueStorageService } from '../services/issueStorageService.js';
 import { IssueTriageService } from '../services/issueTriageService.js';
 import type { IssueReport } from '../services/issueStorageService.js';
@@ -19,28 +22,135 @@ const router = express.Router();
 let issueStorage: IssueStorageService;
 let triageService: IssueTriageService;
 
+// Rate limiter: Prevent abuse of unauthenticated endpoint
+const issueReportLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, // 1 hour window
+  max: 10, // Max 10 requests per hour
+  message: { success: false, error: 'Too many issue reports. Please try again in an hour.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    // Rate limit by sessionId from request body (or fall back to IP)
+    const body = req.body as IssueReport;
+    return body?.sessionId || req.ip || 'unknown';
+  },
+  handler: (req, res) => {
+    logger.warn({
+      category: 'issue-triage',
+      action: 'rate_limit_exceeded',
+      message: 'Issue report rate limit exceeded',
+      details: {
+        sessionId: (req.body as IssueReport)?.sessionId,
+        ip: req.ip,
+      },
+    });
+    res.status(429).json({
+      success: false,
+      error: 'Too many issue reports. Please try again in an hour.',
+    });
+  },
+});
+
 export function initializeIssuesRoutes(
   db: Database.Database,
   taskQueue: TaskQueueService
 ): typeof router {
   issueStorage = new IssueStorageService(db);
-  triageService = new IssueTriageService(issueStorage, undefined, taskQueue);
+  triageService = new IssueTriageService(issueStorage, taskQueue);
   return router;
 }
 
 /**
  * POST /api/issues
  * Receive issue report, persist it, and immediately trigger triage
+ *
+ * SECURITY: Rate limited to 10 reports/hour per session
  */
-router.post('/', async (req: Request, res: Response) => {
+router.post('/', issueReportLimiter, async (req: Request, res: Response) => {
   try {
     const report = req.body as IssueReport;
 
-    // Validate required fields
-    if (!report.timestamp || !report.sessionId || !report.route) {
+    // Comprehensive input validation
+    // 1. Required fields
+    if (!report.timestamp || !report.sessionId || !report.route || !report.userAgent) {
       res.status(400).json({
         success: false,
-        error: 'Missing required fields: timestamp, sessionId, route',
+        error: 'Missing required fields: timestamp, sessionId, route, userAgent',
+      });
+      return;
+    }
+
+    // 2. Validate timestamp format
+    const timestamp = new Date(report.timestamp);
+    if (isNaN(timestamp.getTime())) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid timestamp format',
+      });
+      return;
+    }
+
+    // 3. Validate timestamp is not in future (allow 5 minute clock skew)
+    const now = Date.now();
+    const maxFuture = now + 5 * 60 * 1000;
+    if (timestamp.getTime() > maxFuture) {
+      res.status(400).json({
+        success: false,
+        error: 'Timestamp cannot be in the future',
+      });
+      return;
+    }
+
+    // 4. Validate sessionId format
+    if (typeof report.sessionId !== 'string' || !/^session-\d+-[a-z0-9]+$/.test(report.sessionId)) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid sessionId format (expected: session-{timestamp}-{random})',
+      });
+      return;
+    }
+
+    // 5. Validate route format (must start with /, no path traversal)
+    if (typeof report.route !== 'string' || !report.route.startsWith('/') || report.route.includes('..')) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid route format (must start with / and contain no ..)',
+      });
+      return;
+    }
+
+    // 6. Validate route length
+    if (report.route.length > 500) {
+      res.status(400).json({
+        success: false,
+        error: 'Route too long (max 500 characters)',
+      });
+      return;
+    }
+
+    // 7. Validate traceId format (if provided)
+    if (report.traceId && (typeof report.traceId !== 'string' || !/^trace-\d+-[a-z0-9]+$/.test(report.traceId))) {
+      res.status(400).json({
+        success: false,
+        error: 'Invalid traceId format (expected: trace-{timestamp}-{random})',
+      });
+      return;
+    }
+
+    // 8. Validate description length (if provided)
+    if (report.description && report.description.length > 5000) {
+      res.status(400).json({
+        success: false,
+        error: 'Description too long (max 5000 characters)',
+      });
+      return;
+    }
+
+    // 9. Validate userAgent length
+    if (report.userAgent.length > 1000) {
+      res.status(400).json({
+        success: false,
+        error: 'User agent too long (max 1000 characters)',
       });
       return;
     }
