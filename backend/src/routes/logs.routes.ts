@@ -6,9 +6,17 @@
 
 import express, { Request, Response } from 'express';
 import { LogWriter } from '../services/logWriter.js';
+import type Database from 'better-sqlite3';
 
 const router = express.Router();
-const logWriter = new LogWriter();
+
+// LogWriter will be initialized with database
+let logWriter: LogWriter;
+
+export function initializeLogsRoutes(db: Database.Database): typeof router {
+  logWriter = new LogWriter(db);
+  return router;
+}
 
 interface LogBatch {
   type: 'session_start' | 'log_batch';

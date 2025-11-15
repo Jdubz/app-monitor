@@ -414,6 +414,66 @@ export class PullRequestHandler extends BaseWebhookHandler {
         });
       });
     }
+
+    // Update issue status to resolved for any issues linked to tasks
+    await this.resolveLinkedIssues(allRelatedTasks, prNumber, pr.title);
+  }
+
+  /**
+   * Resolve issues linked to completed tasks
+   */
+  private async resolveLinkedIssues(
+    tasks: Task[],
+    prNumber: number,
+    prTitle: string
+  ): Promise<void> {
+    if (!this.taskQueue) return;
+
+    try {
+      // Access the shared database
+      const db = (this.taskQueue as unknown as { db: Database.Database }).db;
+
+      for (const task of tasks) {
+        // Find issues linked to this task by taskId
+        const stmt = db.prepare('SELECT * FROM issues WHERE taskId = ? AND status = ?');
+        const issues = stmt.all(task.id, 'assigned') as Array<{ id: string; [key: string]: unknown }>;
+
+        for (const issue of issues) {
+          // Mark issue as resolved
+          const updateStmt = db.prepare(`
+            UPDATE issues
+            SET status = ?, resolved = ?, resolution = ?, prNumber = ?
+            WHERE id = ?
+          `);
+          updateStmt.run(
+            'resolved',
+            new Date().toISOString(),
+            prTitle,
+            prNumber,
+            issue.id
+          );
+
+          logger.info({
+            category: 'issue-triage',
+            action: 'issue_resolved',
+            message: `Issue resolved via PR #${prNumber}`,
+            details: {
+              issue_id: issue.id,
+              task_id: task.id,
+              pr_number: prNumber,
+              pr_title: prTitle,
+            },
+          });
+        }
+      }
+    } catch (error) {
+      logger.error({
+        category: 'issue-triage',
+        action: 'issue_resolution_failed',
+        message: 'Failed to resolve linked issues',
+        error,
+      });
+    }
   }
 
   /**

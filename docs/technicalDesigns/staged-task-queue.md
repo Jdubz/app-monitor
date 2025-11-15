@@ -1,9 +1,24 @@
 # Staged Task Queue Design (Implemented)
 
-The staged task queue technical design was completed and implemented as part of the
-November 2025 stabilization effort. The implementation is now active in the codebase.
+**Status:** Implemented and moved to architecture documentation
 
-See the implementation in:
-- `backend/src/services/taskQueue.ts` - Queue service implementation
-- `backend/src/services/chainTracker.ts` - Chain tracking implementation
-- Related API endpoints in `backend/src/routes/dev-bots.routes.ts`
+This feature is fully implemented and documented in:
+
+**📖 Architecture Documentation:** `docs/architecture/task-queue-architecture.md`
+
+## Implementation References
+
+- **Queue Service:** `backend/src/services/taskQueue.sqlite.ts`
+- **Chain Tracking:** `backend/src/services/chainTracker.service.ts`
+- **API Endpoints:** `backend/src/routes/dev-bots/tasks.routes.ts`
+- **Database Schema:** See migration files in `backend/migrations/`
+
+## Key Features
+
+- SQLite-backed authoritative queue
+- Chain-aware concurrency control (max 3 concurrent chains)
+- Task depth limits (max 10 tasks per chain)
+- Event-driven updates (no polling)
+- ACID-compliant transactions
+
+For complete architecture details, see the architecture documentation.

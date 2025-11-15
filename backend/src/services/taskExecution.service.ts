@@ -558,8 +558,6 @@ export class TaskExecutionService {
     homeDir: string
   ): { dockerArgs: string[]; cliCommand: string } {
     const gitEnvVars = DockerConfig.buildGitEnvVars();
-    let dockerArgs: string[];
-    let cliCommand: string;
 
     const commonArgs = [
       'run',
@@ -567,8 +565,6 @@ export class TaskExecutionService {
       ...gitEnvVars,
       '-v', `${hostLogsDir}:/logs:rw`,
       '-v', `${homeDir}/.config/gh:/home/node/.config/gh:rw`,
-      this.getAgentDockerImage(agent),
-      'sh', '-c',
     ];
 
     const commonSetup =
@@ -586,46 +582,81 @@ export class TaskExecutionService {
       `git checkout ${baseBranch} && ` +
       `git pull origin ${baseBranch} || true`;
 
-    if (chosenAgentType === 'codex') {
-      // Verify Codex credentials exist
-      const codexCredentials = path.join(homeDir, '.codex', 'credentials.json');
-      if (!fs.existsSync(codexCredentials)) {
-        throw new Error('Codex credentials file not found at ~/.codex/credentials.json');
+    // Data-driven agent configuration
+    const agentConfigs: Record<string, {
+      credentialsPath: string | string[];
+      credentialsCheck: () => boolean;
+      tmpfsPath: string;
+      volumeMount: string;
+      setupCommand: string;
+      execCommand: string;
+    }> = {
+      codex: {
+        credentialsPath: path.join(homeDir, '.codex', 'credentials.json'),
+        credentialsCheck() {
+          return fs.existsSync(this.credentialsPath as string);
+        },
+        tmpfsPath: '/home/node/.codex:uid=1000,gid=1000',
+        volumeMount: `${homeDir}/.codex:/tmp/host-codex:ro`,
+        setupCommand: 'cp -r /tmp/host-codex/* /home/node/.codex/ 2>/dev/null || true',
+        execCommand: `codex exec --dangerously-bypass-approvals-and-sandbox '${promptText}'`
+      },
+      gemini: {
+        credentialsPath: path.join(homeDir, '.gemini', 'credentials.json'),
+        credentialsCheck() {
+          return fs.existsSync(this.credentialsPath as string);
+        },
+        tmpfsPath: '/home/node/.gemini:uid=1000,gid=1000',
+        volumeMount: `${path.join(homeDir, '.gemini', 'credentials.json')}:/tmp/host-creds.json:ro`,
+        setupCommand: 'mkdir -p /home/node/.gemini && cp /tmp/host-creds.json /home/node/.gemini/credentials.json',
+        execCommand: `gemini --dangerously-skip-permissions '${promptText}'`
+      },
+      claude: {
+        credentialsPath: [
+          path.join(homeDir, '.claude', '.credentials.json'),
+          path.join(homeDir, '.claude', 'credentials.json')
+        ],
+        credentialsCheck() {
+          const paths = this.credentialsPath as string[];
+          return paths.some(p => fs.existsSync(p));
+        },
+        tmpfsPath: '/home/node/.claude:uid=1000,gid=1000',
+        volumeMount: '', // Set dynamically below
+        setupCommand: 'cp /tmp/host-creds.json /home/node/.claude/.credentials.json',
+        execCommand: `claude --dangerously-skip-permissions '${promptText}'`
       }
-      dockerArgs = [
-        ...commonArgs,
-        '--tmpfs', '/home/node/.codex:uid=1000,gid=1000',
-        '-v', `${homeDir}/.codex:/tmp/host-codex:ro`,
-        `${commonSetup} && cp -r /tmp/host-codex/* /home/node/.codex/ 2>/dev/null || true && codex exec --dangerously-bypass-approvals-and-sandbox '${promptText}'`
-      ];
-      cliCommand = 'codex';
-    } else if (chosenAgentType === 'gemini') {
-      const geminiCredentials = path.join(homeDir, '.gemini', 'credentials.json');
-      if (!fs.existsSync(geminiCredentials)) {
-        throw new Error('Gemini credentials file not found. Please run "gemini login" first.');
-      }
-      dockerArgs = [
-        ...commonArgs,
-        '--tmpfs', '/home/node/.gemini:uid=1000,gid=1000',
-        '-v', `${geminiCredentials}:/tmp/host-creds.json:ro`,
-        `${commonSetup} && mkdir -p /home/node/.gemini && cp /tmp/host-creds.json /home/node/.gemini/credentials.json && gemini --dangerously-skip-permissions '${promptText}'`
-      ];
-      cliCommand = 'gemini';
-    } else {
-      const claudeCredentialsNew = path.join(homeDir, '.claude', '.credentials.json');
-      const claudeCredentialsOld = path.join(homeDir, '.claude', 'credentials.json');
-      const claudeCredentials = fs.existsSync(claudeCredentialsNew) ? claudeCredentialsNew : claudeCredentialsOld;
-      if (!fs.existsSync(claudeCredentials)) {
-        throw new Error('Claude credentials file not found. Please run "claude login" first.');
-      }
-      dockerArgs = [
-        ...commonArgs,
-        '--tmpfs', '/home/node/.claude:uid=1000,gid=1000',
-        '-v', `${claudeCredentials}:/tmp/host-creds.json:ro`,
-        `${commonSetup} && cp /tmp/host-creds.json /home/node/.claude/.credentials.json && claude --dangerously-skip-permissions '${promptText}'`
-      ];
-      cliCommand = 'claude';
+    };
+
+    const agentConfig = agentConfigs[chosenAgentType];
+    if (!agentConfig) {
+      throw new Error(`Unknown agent type: ${chosenAgentType}`);
     }
+
+    // Verify credentials exist
+    if (!agentConfig.credentialsCheck()) {
+      const pathMsg = Array.isArray(agentConfig.credentialsPath)
+        ? agentConfig.credentialsPath.join(' or ')
+        : agentConfig.credentialsPath;
+      throw new Error(`${chosenAgentType} credentials file not found at ${pathMsg}. Please run "${chosenAgentType} login" first.`);
+    }
+
+    // For Claude, determine which credentials file to use
+    if (chosenAgentType === 'claude') {
+      const paths = agentConfig.credentialsPath as string[];
+      const claudeCredentials = paths.find(p => fs.existsSync(p))!;
+      agentConfig.volumeMount = `${claudeCredentials}:/tmp/host-creds.json:ro`;
+    }
+
+    // Build docker args using agent configuration
+    const dockerArgs = [
+      ...commonArgs,
+      '--tmpfs', agentConfig.tmpfsPath,
+      '-v', agentConfig.volumeMount,
+      this.getAgentDockerImage(agent),
+      'sh', '-c',
+      `${commonSetup} && ${agentConfig.setupCommand} && ${agentConfig.execCommand}`
+    ];
+    const cliCommand = chosenAgentType;
 
     return { dockerArgs, cliCommand };
   }

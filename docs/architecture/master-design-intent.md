@@ -38,9 +38,10 @@
 - **WHY**: Prevents contamination, enables safe parallel execution
 
 ### Database as Source of Truth
-- **✅ DO**: Use SQLite (via `TaskQueueService`) for all task/chain state
-- **❌ NEVER**: In-memory arrays, local state that conflicts with DB
-- **WHY**: Single source of truth eliminates race conditions
+- **✅ DO**: Persist ALL state to SQLite database (via services)
+- **❌ NEVER**: In-memory caches, arrays, maps for state that must survive deployments
+- **WHY**: Blue-green deployments constantly roll over servers - in-memory data is lost
+- **EXCEPTION**: Single-request transient data (function-scoped variables only)
 
 ### Chain Concurrency Control
 - **✅ DO**: Limit concurrent *chains* (default: 3), block new implementations until chains complete
@@ -58,9 +59,20 @@
 - **WHY**: Dev-bots require Docker orchestration unavailable in dev mode
 
 ### Single Database Instance
-- **✅ DO**: Use `/opt/app-monitor/shared/data/dev-bots.db`
+- **✅ DO**: Use the single shared database (see Production Infrastructure section)
 - **❌ NEVER**: Multiple databases, test DBs in production, duplicates
 - **WHY**: Single source of truth for all task/PR/chain state
+
+### Deployment Restrictions
+- **✅ DO**: All deployments through CI/CD pipeline (GitHub Actions → pull-agent)
+- **❌ NEVER**: Manual deployments, worker-initiated deploys, direct production edits
+- **WHY**: Ensures blue-green process, health checks, automatic rollback, audit trail
+
+### Deployment-Safe Architecture
+- **✅ DO**: Design all features to survive server restarts and blue-green rollover
+- **❌ NEVER**: Rely on in-memory state, process uptime, or server continuity
+- **WHY**: Production deploys multiple times daily - architecture must assume ephemeral servers
+- **RULE**: If data matters beyond a single function call, persist it to the database
 
 ---
 
@@ -70,6 +82,9 @@
 - Zero-downtime deploys via two systemd services (ports 5001/5002)
 - Nginx upstream switches traffic after health checks
 - Shared data directory (`/opt/app-monitor/shared/`) persists across releases
+- **Frequent rollover**: Deploys happen multiple times daily
+- **Ephemeral servers**: Each release is a new Node.js process with clean memory
+- **State persistence required**: All critical state MUST be in database, not RAM
 
 ### Heartbeat-Based Monitoring
 - Workers heartbeat every 15s
@@ -128,60 +143,45 @@
 ## Production Infrastructure
 
 - **URL**: https://app-monitor.joshwentworth.com
-- **Database**: `/opt/app-monitor/shared/data/dev-bots.db` (SINGLE instance)
-- **Deployment**: Blue-green via `scripts/deploy.sh`
+- **Database**: `/opt/app-monitor/shared/backend/data/app-monitor.db` (SINGLE instance, shared across releases)
+- **Deployment**: Automated CI/CD only (GitHub Actions → pull-agent → blue-green)
 - **Services**: Two systemd units (`app-monitor-backend@5001`, `@5002`)
 - **Proxy**: Nginx upstream switched during deployment
 - **Tunnel**: Cloudflare for external access
+- **Dev Database**: `backend/data/app-monitor.db` (development environment only)
+
+**DATABASE_PATH Environment Variable:**
+- Development: `./data/app-monitor.db` (relative to backend directory)
+- Production: `/opt/app-monitor/shared/backend/data/app-monitor.db` (set in `/opt/app-monitor/shared/.env`)
 
 ---
 
-**Remember**: This document is your north star. When in doubt about a design decision, ask: "Does this align with autonomy, isolation, event-driven architecture, and minimalist UI?" If not, reconsider.
+**Remember**: This document is your north star. When in doubt about a design decision, ask:
+1. "Does this align with autonomy, isolation, event-driven architecture, and minimalist UI?"
+2. "Will this survive a blue-green deployment rollover?"
+3. "Is all critical state persisted to the database?"
+
+If any answer is NO → reconsider the design.
 
 ---
 
 ## Documentation Guidelines
 
-### Organization (<60 total docs, delete don't archive)
+**See:** `docs/guides/DOCUMENTATION_SYSTEM.md` for comprehensive documentation philosophy and rules.
 
-```
-docs/
-├── architecture/
-│   ├── master-design-intent.md (<200 lines - philosophy)
-│   └── system-overview.md (detailed architecture)
-├── technicalDesigns/  (implementation specs)
-├── guides/  (how-tos)
-├── plans/  (future work only)
-├── analysis/  (<5 files - active investigations)
-└── setup/  (environment config)
-```
+### Quick Rules
 
-### Lifecycle Rules
+- **Delete-first mentality** - Documentation is technical debt
+- **No summaries/status docs** - If it doesn't add development velocity, delete it
+- **Hard limits** - <60 total docs, <5 in analysis/, master-design-intent <200 lines
+- **Lifecycle** - Plans/analysis are temporary, DELETE when complete (never archive)
 
-1. **Planning** → Create in `/plans/`
-2. **Investigation** → Move to `/analysis/` if needed
-3. **Implementation** → Move to `/technicalDesigns/`, update system-overview.md
-4. **Completion** → **DELETE** plan/analysis (NEVER archive)
+### Allowed Document Types
 
-### CI-Enforced Rules
+1. **Architecture** (`/architecture/`) - Design decisions and constraints (permanent)
+2. **Guides** (`/guides/`) - Operational how-tos (permanent, updated)
+3. **Plans** (`/plans/`) - Outstanding work (DELETE when complete)
+4. **Technical Designs** (`/technicalDesigns/`) - Feature specs (temporary → permanent)
+5. **Analysis** (`/analysis/`) - Action-oriented investigations (max 30 days, max 5 files)
 
-❌ No `archive/` directories  
-❌ No versioned docs (`-v2.md`, `-new.md`)  
-❌ No completed markers (`COMPLETED.md`)  
-❌ No databases in docs/  
-❌ master-design-intent.md >200 lines  
-❌ analysis/ >5 files  
-❌ Total docs >60  
-
-### What Goes Where
-
-| Type | Location | Keep? |
-|------|----------|-------|
-| Philosophy | master-design-intent.md | Living doc |
-| Architecture | system-overview.md | Update as needed |
-| Feature specs | technicalDesigns/ | Permanent |
-| How-tos | guides/ | Update as needed |
-| Future work | plans/ | Delete when done |
-| Investigations | analysis/ | Delete when addressed |
-
-**Rule:** When in doubt, delete. Documentation sprawl compounds quickly.
+**Prohibited:** Implementation summaries, status reports, meeting notes, archives, drafts, historical narratives

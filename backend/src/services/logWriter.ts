@@ -1,12 +1,14 @@
 /**
- * JSONL Log Writer Service
+ * Log Writer Service
  *
- * Writes logs to daily-rotated JSONL files.
- * Format: One JSON object per line, easy to grep.
+ * Writes logs to SQLite (for fast queries) and JSONL files (for backup/grep).
+ * SQLite is the source of truth for log querying (used by issue triage).
+ * JSONL is append-only backup for recovery.
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
+import type Database from 'better-sqlite3';
 
 export interface LogEntry {
   id: string;
@@ -39,8 +41,10 @@ export interface SessionMetadata {
 
 export class LogWriter {
   private logsDirectory: string;
+  private db: Database.Database;
 
-  constructor(logsDirectory?: string) {
+  constructor(db: Database.Database, logsDirectory?: string) {
+    this.db = db;
     this.logsDirectory = logsDirectory || path.join(process.cwd(), 'logs', 'frontend');
     this.ensureLogDirectory();
   }
@@ -65,23 +69,78 @@ export class LogWriter {
       ...meta,
     };
 
-    this.appendToLog(entry);
+    // Store in database
+    try {
+      const stmt = this.db.prepare(`
+        INSERT OR IGNORE INTO session_metadata (
+          sessionId, userAgent, viewportWidth, viewportHeight, startTime
+        ) VALUES (?, ?, ?, ?, ?)
+      `);
+
+      stmt.run(
+        meta.sessionId,
+        meta.userAgent,
+        meta.viewport.width,
+        meta.viewport.height,
+        meta.timestamp
+      );
+    } catch (error) {
+      console.error('[LogWriter] Failed to write session metadata to database:', error);
+    }
+
+    this.appendToJSONL(entry);
   }
 
   writeLogs(logs: LogEntry[]): void {
+    // Write to SQLite (source of truth for queries)
+    const stmt = this.db.prepare(`
+      INSERT INTO frontend_logs (
+        id, timestamp, level, message, scope, traceId, sessionId, route, userId,
+        data, errorName, errorMessage, errorStack
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    const transaction = this.db.transaction((logEntries: LogEntry[]) => {
+      for (const log of logEntries) {
+        stmt.run(
+          log.id,
+          log.timestamp,
+          log.level,
+          log.message,
+          log.scope || null,
+          log.traceId || null,
+          log.sessionId,
+          log.route || null,
+          log.userId || null,
+          log.data ? JSON.stringify(log.data) : null,
+          log.error?.name || null,
+          log.error?.message || null,
+          log.error?.stack || null
+        );
+      }
+    });
+
+    try {
+      transaction(logs);
+    } catch (error) {
+      console.error('[LogWriter] Failed to write logs to database:', error);
+      // Continue to JSONL backup even if DB fails
+    }
+
+    // Write to JSONL (backup for grep/recovery)
     for (const log of logs) {
-      this.appendToLog(log as unknown as Record<string, unknown>);
+      this.appendToJSONL(log as unknown as Record<string, unknown>);
     }
   }
 
-  private appendToLog(entry: Record<string, unknown>): void {
+  private appendToJSONL(entry: Record<string, unknown>): void {
     const filePath = this.getLogFilePath();
     const line = JSON.stringify(entry) + '\n';
 
     try {
       fs.appendFileSync(filePath, line, 'utf8');
     } catch (error) {
-      console.error('[LogWriter] Failed to write log:', error);
+      console.error('[LogWriter] Failed to write to JSONL:', error);
       // Don't throw - we don't want logging failures to break the API
     }
   }
