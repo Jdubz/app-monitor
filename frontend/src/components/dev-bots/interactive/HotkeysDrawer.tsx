@@ -8,6 +8,9 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { createLogger } from '@/utils/logger';
+
+const log = createLogger('HotkeysDrawer');
 
 type HotkeyId = "interrupt" | "clear-terminal" | "clear-line" | "delete-word";
 
@@ -64,7 +67,7 @@ export function HotkeysDrawer({
       try {
         await handler();
       } catch (error) {
-        console.error("[HotkeysDrawer] Hotkey action failed", error);
+        log.error('Hotkey action failed', { error, hotkeyId: id });
       } finally {
         setPendingAction(null);
       }

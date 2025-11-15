@@ -19,6 +19,9 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { api } from "../services/api";
+import { createLogger } from '@/utils/logger';
+
+const log = createLogger('EnhancedTaskCreationForm');
 
 interface EnhancedTaskData {
   // Core fields (required)
@@ -216,8 +219,8 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
       setGuidelines((guidelinesRes as any).data.guidelines);
       setExample((exampleRes as any).data.example);
       setChecklist((checklistRes as any).data.checklist);
-    } catch (err: any) {
-      console.error("Failed to load guidelines:", err);
+    } catch (err: unknown) {
+      log.error('Failed to load guidelines', { error: err });
     }
   };
 
@@ -228,8 +231,8 @@ export const EnhancedTaskCreationForm: React.FC<EnhancedTaskCreationFormProps> =
         taskType: taskData.type,
       });
       setValidation((response as any).data.validation);
-    } catch (err: any) {
-      console.error("Failed to validate task data:", err);
+    } catch (err: unknown) {
+      log.error('Failed to validate task data', { error: err });
     }
   };
 

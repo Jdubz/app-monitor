@@ -4,6 +4,9 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 
 import type { ConnectionState, InteractiveLogEntry } from '@/hooks/useInteractiveSession';
+import { createLogger } from '@/utils/logger';
+
+const log = createLogger('InteractiveTerminal');
 
 interface InteractiveTerminalProps {
   logs: InteractiveLogEntry[];
@@ -48,7 +51,7 @@ export function InteractiveTerminal({
       try {
         fitAddon.fit();
       } catch (error) {
-        console.warn('[InteractiveTerminal] Unable to fit terminal', error);
+        log.warn('Unable to fit terminal', { error });
       }
     };
 
@@ -124,7 +127,7 @@ export function InteractiveTerminal({
     try {
       fitAddonRef.current?.fit();
     } catch (error) {
-      console.warn('[InteractiveTerminal] Unable to fit terminal after update', error);
+      log.warn('Unable to fit terminal after update', { error });
     }
   }, [logs]);
 
