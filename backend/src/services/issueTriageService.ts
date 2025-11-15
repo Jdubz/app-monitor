@@ -82,8 +82,8 @@ export class IssueTriageService {
           fingerprint: diagnosis.fingerprint,
         });
 
-        // Check for duplicates
-        const duplicate = this.issueStorage.findDuplicate(diagnosis.fingerprint);
+        // Check for duplicates (exclude current issue)
+        const duplicate = this.issueStorage.findDuplicate(diagnosis.fingerprint, issue.id);
         if (duplicate) {
           // Link to existing issue
           this.issueStorage.addOccurrence(duplicate.id, issue.timestamp, issue.sessionId);

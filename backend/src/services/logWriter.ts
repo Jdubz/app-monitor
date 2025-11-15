@@ -69,6 +69,25 @@ export class LogWriter {
       ...meta,
     };
 
+    // Store in database
+    try {
+      const stmt = this.db.prepare(`
+        INSERT OR IGNORE INTO session_metadata (
+          sessionId, userAgent, viewportWidth, viewportHeight, startTime
+        ) VALUES (?, ?, ?, ?, ?)
+      `);
+
+      stmt.run(
+        meta.sessionId,
+        meta.userAgent,
+        meta.viewport.width,
+        meta.viewport.height,
+        meta.timestamp
+      );
+    } catch (error) {
+      console.error('[LogWriter] Failed to write session metadata to database:', error);
+    }
+
     this.appendToJSONL(entry);
   }
 

@@ -160,7 +160,7 @@ export class IssueStorageService {
   /**
    * Check for duplicate by fingerprint
    */
-  findDuplicate(fingerprint: string): {
+  findDuplicate(fingerprint: string, excludeIssueId?: string): {
     id: string;
     status: string;
     taskId?: string;
@@ -174,11 +174,16 @@ export class IssueStorageService {
       WHERE fingerprint = ?
         AND status IN ('pending', 'triaged', 'assigned')
         AND created > ?
+        ${excludeIssueId ? 'AND id != ?' : ''}
       ORDER BY created DESC
       LIMIT 1
     `);
 
-    return stmt.get(fingerprint, cutoff.toISOString()) as {
+    const params = excludeIssueId
+      ? [fingerprint, cutoff.toISOString(), excludeIssueId]
+      : [fingerprint, cutoff.toISOString()];
+
+    return stmt.get(...params) as {
       id: string;
       status: string;
       taskId?: string;

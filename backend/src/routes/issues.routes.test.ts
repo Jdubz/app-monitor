@@ -116,11 +116,16 @@ describe('Issues Routes', () => {
       expect(response.body.data.issueId).toBeDefined();
       expect(response.body.data.message).toContain('triage');
 
-      // Verify issue was stored in database
+      // Wait for async triage to complete
+      await new Promise(resolve => setTimeout(resolve, 50));
+
+      // Verify issue was stored and triaged in database
       const issue = db.prepare('SELECT * FROM issues WHERE id = ?').get(response.body.data.issueId);
       expect(issue).toBeDefined();
       expect(issue.route).toBe('/dashboard');
-      expect(issue.status).toBe('pending');
+      // Issue should be triaged and assigned (since triage runs immediately)
+      expect(issue.status).toBe('assigned');
+      expect(issue.taskId).toBeDefined();
     });
 
     it('should accept issue without optional fields', async () => {
