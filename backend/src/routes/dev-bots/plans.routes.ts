@@ -170,7 +170,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
       const plans = plansService.listPlans(filters);
 
       const response: PlansListResponse = { success: true, data: plans };
-      res.json(response);
+      sendSuccess(res, response);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -207,7 +207,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
       }
 
       const response: PlanDetailsResponse = { success: true, data: planDetails };
-      res.json(response);
+      sendSuccess(res, response);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -262,7 +262,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
       }
 
       const response: PlanResponse = { success: true, data: updatedPlan };
-      res.json(response);
+      sendSuccess(res, response);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -306,7 +306,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
       });
 
       const response: PlanCancelResponse = { success: true, data: cancelledPlan };
-      res.json(response);
+      sendSuccess(res, response);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -382,7 +382,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
       const tasks = plansService.getPlanTasks(planId);
 
       const response: PlanTasksResponse = { success: true, data: tasks };
-      res.json(response);
+      sendSuccess(res, response);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -428,7 +428,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         success: true,
         data: { ...plan, status: newStatus, ...updatedPlan },
       };
-      res.json(response);
+      sendSuccess(res, response);
     } catch (error) {
       logger.error({
         category: 'api',
