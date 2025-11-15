@@ -9,14 +9,12 @@
 import { Router, Request, Response } from 'express';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
 import { logger } from '../../utils/logger.js';
-
-export interface DevBotsSettings {
-  modelStrategy: 'alternate' | 'claude-only' | 'codex-only' | 'random';
-  maxWorkers: number;
-  dryRun: boolean;
-  autoCleanup: boolean;
-  updatedAt: string;
-}
+import { validateSettingsUpdatePayload } from '../../utils/settingsValidation.js';
+import type {
+  DevBotsSettings,
+  DevBotsSettingsResponse,
+  ApiError,
+} from '@app-monitor/api-contracts';
 
 /**
  * Create settings routes
@@ -40,7 +38,8 @@ export function createSettingsRoutes(_devBotsManager: DevBotsManager): Router {
         updatedAt: new Date().toISOString(),
       };
 
-      res.json({ success: true, data: settings });
+      const response: DevBotsSettingsResponse = { success: true, data: settings };
+      res.json(response);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -48,11 +47,12 @@ export function createSettingsRoutes(_devBotsManager: DevBotsManager): Router {
         message: 'Failed to fetch Dev-Bots settings',
         error
       });
-      res.status(500).json({
+      const errorResponse: ApiError = {
         success: false,
         error: 'fetch_failed',
         message: error instanceof Error ? error.message : 'Failed to fetch settings',
-      });
+      };
+      res.status(500).json(errorResponse);
     }
   });
 
@@ -61,18 +61,26 @@ export function createSettingsRoutes(_devBotsManager: DevBotsManager): Router {
    * Update Dev-Bots settings
    */
   router.put('/settings', (req: Request, res: Response) => {
-    const payload = req.body as Partial<DevBotsSettings> | undefined;
-    
-    if (!payload || Object.keys(payload).length === 0) {
-      return res.status(400).json({
+    // Validate input
+    const validation = validateSettingsUpdatePayload(req.body);
+    if (!validation.valid) {
+      const errorMessage = validation.errors.length > 0
+        ? validation.errors.map(e => e.message).join('; ')
+        : 'Validation failed';
+      const errorResponse: ApiError = {
         success: false,
-        error: 'invalid_payload',
-        message: 'Settings payload is required and cannot be empty',
-      });
+        error: 'validation_failed',
+        message: errorMessage,
+        details: validation.errors,
+      };
+      res.status(400).json(errorResponse);
+      return;
     }
 
     try {
-      // For now, just return the updated settings merged with defaults
+      const payload = req.body as Partial<DevBotsSettings>;
+      
+      // Get current settings (for now, using defaults)
       // TODO: Integrate with actual settings storage when implemented
       const currentSettings: DevBotsSettings = {
         modelStrategy: 'alternate',
@@ -82,18 +90,13 @@ export function createSettingsRoutes(_devBotsManager: DevBotsManager): Router {
         updatedAt: new Date().toISOString(),
       };
 
-      const updatePayload: Partial<DevBotsSettings> = {};
-      const allowedKeys: (keyof DevBotsSettings)[] = ['modelStrategy', 'maxWorkers', 'dryRun', 'autoCleanup'];
-      
-      allowedKeys.forEach(key => {
-        if (payload[key] !== undefined) {
-          (updatePayload as any)[key] = payload[key];
-        }
-      });
-
+      // Build updated settings with only validated fields
       const updatedSettings: DevBotsSettings = {
         ...currentSettings,
-        ...updatePayload,
+        ...(payload.modelStrategy !== undefined && { modelStrategy: payload.modelStrategy }),
+        ...(payload.maxWorkers !== undefined && { maxWorkers: payload.maxWorkers }),
+        ...(payload.dryRun !== undefined && { dryRun: payload.dryRun }),
+        ...(payload.autoCleanup !== undefined && { autoCleanup: payload.autoCleanup }),
         updatedAt: new Date().toISOString(),
       };
 
@@ -104,20 +107,22 @@ export function createSettingsRoutes(_devBotsManager: DevBotsManager): Router {
         details: { settings: updatedSettings }
       });
 
-      res.json({ success: true, data: updatedSettings });
+      const response: DevBotsSettingsResponse = { success: true, data: updatedSettings };
+      res.json(response);
     } catch (error) {
       logger.error({
         category: 'api',
         action: 'update_settings_failed',
         message: 'Failed to update Dev-Bots settings',
         error,
-        details: { payload }
+        details: { payload: req.body }
       });
-      res.status(500).json({
+      const errorResponse: ApiError = {
         success: false,
         error: 'update_failed',
         message: error instanceof Error ? error.message : 'Failed to update settings',
-      });
+      };
+      res.status(500).json(errorResponse);
     }
   });
 
