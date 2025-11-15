@@ -105,7 +105,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         details: { count: tasks.length }
       });
 
-      res.json({ data: { tasks }});
+      sendSuccess(res, { tasks });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -113,10 +113,12 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting completed tasks: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get completed tasks',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(
+        res,
+        'Failed to get completed tasks',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
     }
   });
 
@@ -129,11 +131,12 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       const { taskId } = req.params;
       const task = devBotsManager.getTask(taskId);
       if (!task) {
-        res.status(404).json({
-          error: 'Task not found',
-          message: `Task ${taskId} was not found in the queue`,
-        });
-        return;
+        return sendError(
+          res,
+          'Task not found',
+          404,
+          { message: `Task ${taskId} was not found in the queue` }
+        );
       }
 
       const executions = devBotsManager.getTaskExecutions(taskId);
@@ -142,7 +145,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         history: buildTaskHistoryEvents(executions),
       };
 
-      res.json({ data: detail });
+      sendSuccess(res, detail);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -150,10 +153,12 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting task detail: ${error}`,
         error,
       });
-      res.status(500).json({
-        error: 'Failed to get task detail',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(
+        res,
+        'Failed to get task detail',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
     }
   });
 
