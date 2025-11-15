@@ -15,17 +15,17 @@ import * as path from 'path';
 global.fetch = vi.fn();
 
 describe('LogTransport Configuration', () => {
-  it('should use VITE_API_BASE_URL for backend URL construction', () => {
-    // This test verifies the source code uses the correct env var name
-    // We can't easily mock import.meta.env, so we check the code directly
+  it('should use getApiBaseUrl() function for backend URL', () => {
+    // Verify the source code uses getApiBaseUrl() function (not manual logic)
     const transportPath = path.join(__dirname, 'transport.ts');
     const source = fs.readFileSync(transportPath, 'utf8');
     
-    // Verify it uses VITE_API_BASE_URL
-    expect(source).toContain('VITE_API_BASE_URL');
+    // Should import and use getApiBaseUrl
+    expect(source).toContain('getApiBaseUrl');
+    expect(source).toContain("from '../apiBaseUrl'");
     
-    // Verify it does NOT use VITE_API_URL (regression prevention)
-    expect(source).not.toContain('VITE_API_URL');
+    // Should NOT have the old broken logic (regression prevention)
+    expect(source).not.toContain("VITE_API_BASE_URL || 'http://localhost:5000'");
   });
 
   it('should construct correct API endpoint for log upload', async () => {

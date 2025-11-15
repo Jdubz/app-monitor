@@ -9,25 +9,18 @@ Practical guides for development, deployment, and operations.
 
 ## Task Management
 - [Task Examples](task-examples.md) - Example task configurations
-- [Task Execution Template](task-execution-template.md) - Task structure reference
 
 ## Development
 - [API Reference](api-reference.md) - Backend API endpoints
 - [API Authentication](API_AUTHENTICATION.md) - Authentication setup
 - [Component Style Guide](component-style-guide.md) - UI component standards
-- [Structured Logging](structured-logging.md) - Logging conventions
 - [GitHub Webhooks](GITHUB_WEBHOOKS.md) - Webhook integration
 
 ## Deployment & Operations
 - [Production Deployment](PRODUCTION_DEPLOYMENT.md) - Deploy to production
-- [Docker Optimization](docker-optimization.md) - Container optimization
-- [Cloudflare Tunnel](CLOUDFLARE_TUNNEL.md) - Remote access setup
-- [Google Cloud Logging](GOOGLE_CLOUD_LOGGING_PERMISSIONS.md) - Cloud logging setup
-
-## Troubleshooting
-- [Failure Recovery Quick Start](failure-recovery-quick-start.md) - Handle task failures
-- [Worker Onboarding](worker-onboarding.md) - Add new dev-bot workers
-- [E2E Testing](e2e-testing-guide.md) - End-to-end test guide
+- [Deployment Protection System](deployment-protection-system.md) - Deployment safeguards
 
 ## Reference
 - [Agent Personalities](agent-personalities.md) - Dev-bot agent specializations
+- [API Error Responses](api-error-responses.md) - API error handling
+- [Documentation System](DOCUMENTATION_SYSTEM.md) - Documentation guidelines

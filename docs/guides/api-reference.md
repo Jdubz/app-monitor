@@ -412,9 +412,10 @@ socket.on('claude:systemStatusChange', (status) => {
 
 - [Task Examples](task-examples.md)
 - [Agent Personalities](agent-personalities.md)
-- [Task Execution Template](task-execution-template.md)
-- [Worker Onboarding](worker-onboarding.md)
+- [Task Submission Guide](MINIMAL_TASK_SUBMISSION_GUIDE.md)
 - [System Architecture](../architecture/system-overview.md)
+- [API Authentication](API_AUTHENTICATION.md)
+- [API Error Responses](api-error-responses.md)
 
 ---
 
