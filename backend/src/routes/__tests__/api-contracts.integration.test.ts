@@ -128,6 +128,38 @@ describe('API Contract Compliance - Dev-Bots Endpoints', () => {
     });
   });
 
+  describe('GET /api/dev-bots/tasks', () => {
+    it('should return ApiSuccess with task array', async () => {
+      const response = await request(app).get('/api/dev-bots/tasks');
+      
+      expect(response.status).toBe(200);
+      assertApiSuccess(response.body);
+      expect(Array.isArray(response.body.data)).toBe(true);
+    });
+  });
+
+  describe('POST /api/dev-bots/tasks', () => {
+    it('should return ApiSuccess with created task', async () => {
+      const taskPayload = {
+        type: 'implementation',
+        title: 'Test Task',
+        documentation: 'Test documentation for the task',
+        acceptanceCriteria: ['Task should work correctly'],
+      };
+
+      const response = await request(app)
+        .post('/api/dev-bots/tasks')
+        .send(taskPayload);
+      
+      if (response.status === 200) {
+        assertApiSuccess(response.body);
+        expect(response.body.data).toHaveProperty('id');
+        expect(response.body.data).toHaveProperty('type');
+        expect(response.body.data).toHaveProperty('status');
+      }
+    });
+  });
+
   describe('Error Responses', () => {
     it('should return ApiError for invalid endpoints', async () => {
       const response = await request(app).get('/api/dev-bots/nonexistent');

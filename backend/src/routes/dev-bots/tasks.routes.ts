@@ -61,16 +61,18 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const tasks = await devBotsManager.getTasks();
       if (tasks) {
-        res.json({ data: {
+        sendSuccess(res, {
           pending: mapTasksToContract(tasks.pending),
           active: mapTasksToContract(tasks.active),
           completed: mapTasksToContract(tasks.completed),
-        }});
-      } else {
-        res.status(503).json({
-          error: 'Dev-Bots coordinator is not available',
-          healthy: devBotsManager.isHealthy()
         });
+      } else {
+        sendError(
+          res,
+          'Dev-Bots coordinator is not available',
+          503,
+          { details: { healthy: devBotsManager.isHealthy() } }
+        );
       }
     } catch (error) {
       logger.error({
@@ -79,10 +81,12 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting Dev-Bots tasks: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get Dev-Bots tasks',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(
+        res,
+        'Failed to get Dev-Bots tasks',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
     }
   });
 
@@ -328,18 +332,18 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       const taskDescription = documentation || description;
 
       if (!type || !title || !taskDescription || !acceptanceCriteria) {
-        return res.status(400).json({
-          error: 'Type, title, description, and acceptanceCriteria are required'
-        });
+        return sendError(res, 'Type, title, description, and acceptanceCriteria are required', 400);
       }
 
       // Validate assignedAgent if provided
       if (assignedAgent) {
         const validAgents = devBotsManager.getValidAgents();
         if (!validAgents.includes(assignedAgent)) {
-          return res.status(400).json({
-            error: `Invalid agent: ${assignedAgent}. Valid agents: ${validAgents.join(', ')}`
-          });
+          return sendError(
+            res,
+            `Invalid agent: ${assignedAgent}. Valid agents: ${validAgents.join(', ')}`,
+            400
+          );
         }
       }
 
@@ -359,7 +363,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         });
 
         // Return stubbed success response
-        return res.json({ data: {
+        return sendSuccess(res, {
           task: {
             id: `stub-${Date.now()}-${Math.random().toString(36).substring(7)}`,
             type,
@@ -376,7 +380,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
             suggestions: []
           },
           message: 'Task creation stubbed (non-production environment)'
-        }});
+        });
       }
 
       // V3 Template Validation (PE-API-VALIDATION-001)
@@ -514,11 +518,11 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         });
       }
 
-      res.json({ data: {
+      sendSuccess(res, {
         task: result.task,
         validation: result.validation,
         message: 'Task added successfully'
-      }});
+      });
     } catch (error) {
       logger.error({
         category: 'api',
@@ -526,10 +530,12 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error adding Dev-Bots task: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to add task',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(
+        res,
+        'Failed to add task',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
     }
   });
 
