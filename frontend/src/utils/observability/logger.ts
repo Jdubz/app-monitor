@@ -72,7 +72,7 @@ class Logger {
         name: error.name,
         message: error.message,
         stack: error.stack,
-        cause: error.cause,
+        cause: (error as any).cause,
       };
     }
 
