@@ -567,8 +567,6 @@ export class TaskExecutionService {
       ...gitEnvVars,
       '-v', `${hostLogsDir}:/logs:rw`,
       '-v', `${homeDir}/.config/gh:/home/node/.config/gh:rw`,
-      this.getAgentDockerImage(agent),
-      'sh', '-c',
     ];
 
     const commonSetup =
@@ -596,6 +594,8 @@ export class TaskExecutionService {
         ...commonArgs,
         '--tmpfs', '/home/node/.codex:uid=1000,gid=1000',
         '-v', `${homeDir}/.codex:/tmp/host-codex:ro`,
+        this.getAgentDockerImage(agent),
+        'sh', '-c',
         `${commonSetup} && cp -r /tmp/host-codex/* /home/node/.codex/ 2>/dev/null || true && codex exec --dangerously-bypass-approvals-and-sandbox '${promptText}'`
       ];
       cliCommand = 'codex';
@@ -608,6 +608,8 @@ export class TaskExecutionService {
         ...commonArgs,
         '--tmpfs', '/home/node/.gemini:uid=1000,gid=1000',
         '-v', `${geminiCredentials}:/tmp/host-creds.json:ro`,
+        this.getAgentDockerImage(agent),
+        'sh', '-c',
         `${commonSetup} && mkdir -p /home/node/.gemini && cp /tmp/host-creds.json /home/node/.gemini/credentials.json && gemini --dangerously-skip-permissions '${promptText}'`
       ];
       cliCommand = 'gemini';
@@ -622,6 +624,8 @@ export class TaskExecutionService {
         ...commonArgs,
         '--tmpfs', '/home/node/.claude:uid=1000,gid=1000',
         '-v', `${claudeCredentials}:/tmp/host-creds.json:ro`,
+        this.getAgentDockerImage(agent),
+        'sh', '-c',
         `${commonSetup} && cp /tmp/host-creds.json /home/node/.claude/.credentials.json && claude --dangerously-skip-permissions '${promptText}'`
       ];
       cliCommand = 'claude';
