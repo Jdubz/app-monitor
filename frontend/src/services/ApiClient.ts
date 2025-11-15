@@ -12,13 +12,9 @@ import { createLogger } from '@/utils/logger';
 import { getApiBaseUrl } from '@/utils/apiBaseUrl';
 
 // Build timestamp for cache busting - updated automatically on each build
-// Exported to ensure it affects bundle hash (must be in final bundle)
-export const BUILD_TIMESTAMP = '__BUILD_TIMESTAMP__';
-
-// Runtime validation: ensure build script replaced the placeholder
-if (BUILD_TIMESTAMP === '__BUILD_TIMESTAMP__') {
-  console.warn('[ApiClient] BUILD_TIMESTAMP placeholder not replaced - build script may have failed');
-}
+// Vite will replace BUILD_TIMESTAMP_VALUE at build time via define config
+declare const BUILD_TIMESTAMP_VALUE: string;
+export const BUILD_TIMESTAMP = BUILD_TIMESTAMP_VALUE;
 
 export class ApiClient {
   private client: AxiosInstance;
