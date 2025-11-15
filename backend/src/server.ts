@@ -156,7 +156,11 @@ export async function createApp(options: CreateAppOptions = {}) {
     
     // Inject PR sync service into task queue (dependency injection, not dynamic import)
     taskQueue.setPRSyncService(prSyncService);
-    
+
+    // Initialize issue triage cron (autonomous bug report processing)
+    const { initializeIssueTriageCron } = await import('./services/issueTriageCron.js');
+    initializeIssueTriageCron(taskQueue);
+
     logger.info({
       category: 'system',
       action: 'webhook_handler_initialized',
@@ -165,7 +169,8 @@ export async function createApp(options: CreateAppOptions = {}) {
         has_task_queue: !!taskQueue,
         has_pr_orchestrator: !!prOrchestrator,
         pr_sync_enabled: config.prSync.enabled,
-        pr_sync_threshold: config.prSync.taskThreshold
+        pr_sync_threshold: config.prSync.taskThreshold,
+        issue_triage_enabled: true
       }
     });
   }
