@@ -38,7 +38,7 @@ export interface TaskExample {
   example: Record<string, unknown>;
 }
 
-type GuidelineType = 'implementation' | 'review' | 'testing';
+type GuidelineType = 'implementation' | 'review' | 'testing' | 'feature';
 
 type GuidelineFieldSet = {
   required: readonly TaskMetadataFieldKey[];
@@ -62,6 +62,21 @@ const BASE_OPTIONAL_FIELDS = ensureTaskMetadataFieldKeys([
 ] as const);
 
 const GUIDELINE_FIELD_DEFINITIONS: Readonly<Record<GuidelineType, GuidelineFieldSet>> = {
+  feature: {
+    required: ensureTaskMetadataFieldKeys([
+      'title',
+      'description',
+      'acceptanceCriteria'
+    ] as const),
+    optional: ensureTaskMetadataFieldKeys([
+      ...BASE_OPTIONAL_FIELDS,
+      'validationSteps',
+      'successMetrics',
+      'assignedAgent',
+      'estimatedEffort',
+      'dependencies'
+    ] as const)
+  },
   implementation: {
     required: ensureTaskMetadataFieldKeys([
       ...BASE_REQUIRED_FIELDS,
@@ -128,6 +143,47 @@ export class TaskCreationGuidelinesManager {
   }
 
   private initializeGuidelines(): void {
+    // Feature Task Guidelines (Simplified)
+    this.guidelines.set('feature', {
+      id: 'feature',
+      name: 'Feature Task Guidelines',
+      description: 'Guidelines for creating simple feature tasks with minimal requirements',
+      requiredFields: GUIDELINE_FIELD_DEFINITIONS.feature.required,
+      optionalFields: GUIDELINE_FIELD_DEFINITIONS.feature.optional,
+      validationRules: [
+        {
+          field: 'acceptanceCriteria',
+          rule: 'minLength:1',
+          message: 'Must have at least 1 acceptance criterion',
+          severity: 'error'
+        }
+      ],
+      examples: [
+        {
+          type: 'feature',
+          title: 'Add user profile endpoint',
+          description: 'Create a simple REST endpoint to fetch user profile data',
+          example: {
+            title: 'Add user profile endpoint',
+            description: 'Create GET /api/users/:id endpoint that returns user profile information',
+            acceptanceCriteria: [
+              'GET /api/users/:id returns user data',
+              'Returns 404 if user not found',
+              'Returns proper JSON response'
+            ],
+            files: ['backend/src/routes/users.ts'],
+            assignedAgent: 'backend-specialist'
+          }
+        }
+      ],
+      bestPractices: [
+        'Keep tasks focused and small',
+        'Include clear acceptance criteria',
+        'Specify which files need changes'
+      ],
+      dryGuidelines: []
+    });
+
     // Implementation Task Guidelines
     this.guidelines.set('implementation', {
       id: 'implementation',
