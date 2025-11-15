@@ -92,7 +92,7 @@ Roadmap and task prioritization:
 
 Strategic planning and evolution documents:
 - **APP_MONITOR_STABILIZATION_PLAN.md** - v0.2.0 stabilization workstreams
-- **BOT_PROMPT_ENGINEERING_V3.md** - Prompt engineering strategy
+- **dev-bot-context-management.md** - Context-aware prompt generation (in technicalDesigns/)
 - **DEV_BOT_PIPELINE_ENHANCEMENT_PLAN.md** - Pipeline improvements
 - See [plans/README.md](./plans/README.md) for complete list
 

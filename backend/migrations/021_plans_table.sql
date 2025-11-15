@@ -64,10 +64,9 @@ CREATE INDEX IF NOT EXISTS idx_plans_created_at ON plans(created_at);
 CREATE INDEX IF NOT EXISTS idx_plans_status_priority ON plans(status, priority);
 
 -- Add plan_id column to tasks table (replaces parent_initiative concept)
-ALTER TABLE tasks ADD COLUMN plan_id TEXT;
-
--- Create index for efficient plan->task lookups
-CREATE INDEX IF NOT EXISTS idx_tasks_plan_id ON tasks(plan_id) WHERE plan_id IS NOT NULL;
+-- Note: This table is managed by TaskQueueService and may not exist in all test contexts
+-- The column addition will be handled by TaskQueueService inline migration if tasks table exists
+-- This migration is primarily for creating the plans table itself
 
 -- Foreign key constraint (soft reference - plans can be deleted)
 -- No explicit FK constraint to allow plan deletion without cascading task deletion

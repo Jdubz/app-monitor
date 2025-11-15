@@ -101,8 +101,8 @@ export interface PlanPRStatus {
     status: 'open' | 'merged' | 'closed';
     url?: string;
     branch?: string;
-    created_at?: string;
-    merged_at?: string;
+    created_at?: number;
+    merged_at?: number;
   }>;
   blockingIssues: string[]; // Aggregated from all PR merge gates
 }

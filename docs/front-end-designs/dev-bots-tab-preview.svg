@@ -1,0 +1,199 @@
+<svg width="1440" height="900" viewBox="0 0 1440 900" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Dev-Bots Tab - Dual Pane Overview</title>
+  <desc id="desc">
+    Wireframe preview of the Dev-Bots tab showing a global status header,
+    high-level automation metrics, and a dual-pane layout with an overview
+    list on the left and chain details on the right.
+  </desc>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="1440" height="900" fill="#020617" />
+
+  <!-- App header -->
+  <rect x="40" y="32" width="1360" height="72" rx="16" fill="#020617" stroke="#1e293b" stroke-width="2" />
+  <text x="72" y="78" fill="#e5e7eb" font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="22" font-weight="600">
+    App Monitor · Dev Console
+  </text>
+  <rect x="1140" y="48" width="220" height="40" rx="999" fill="#0f172a" stroke="#22c55e" stroke-width="1.5" />
+  <circle cx="1164" cy="68" r="6" fill="#22c55e" />
+  <text x="1180" y="72" fill="#d1fae5" font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="13">
+    Automation: Stable · 3/3 chains
+  </text>
+
+  <!-- Primary feature tabs -->
+  <rect x="40" y="120" width="1360" height="44" rx="10" fill="#020617" stroke="#1e293b" />
+  <!-- Tabs -->
+  <g font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="13">
+    <rect x="56" y="126" width="130" height="32" rx="8" fill="#0f172a" stroke="#22c55e" />
+    <text x="78" y="147" fill="#e5e7eb">Dev-Bots</text>
+
+    <rect x="200" y="126" width="130" height="32" rx="8" fill="#020617" stroke="#1e293b" />
+    <text x="220" y="147" fill="#9ca3af">PR Tracking</text>
+
+    <rect x="344" y="126" width="150" height="32" rx="8" fill="#020617" stroke="#1e293b" />
+    <text x="364" y="147" fill="#9ca3af">Task Queue</text>
+
+    <rect x="512" y="126" width="110" height="32" rx="8" fill="#020617" stroke="#1e293b" />
+    <text x="532" y="147" fill="#9ca3af">Plans</text>
+
+    <rect x="640" y="126" width="170" height="32" rx="8" fill="#020617" stroke="#1e293b" />
+    <text x="660" y="147" fill="#9ca3af">Interactive Terminal</text>
+  </g>
+
+  <!-- Global alerts bar -->
+  <rect x="40" y="176" width="1360" height="52" rx="12" fill="#111827" stroke="#1f2937" />
+  <circle cx="64" cy="202" r="10" fill="#b91c1c" />
+  <text x="82" y="206" fill="#fee2e2" font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="13">
+    2 chains blocked · 1 quarantined worker · 1 stuck task &gt; 60m
+  </text>
+  <rect x="1160" y="188" width="220" height="36" rx="8" fill="#b91c1c" />
+  <text x="1180" y="210" fill="#fef2f2" font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="13">
+    Open Critical Interventions
+  </text>
+
+  <!-- Summary metric cards (top of left pane) -->
+  <g>
+    <rect x="40" y="244" width="430" height="76" rx="14" fill="#020617" stroke="#1f2937" />
+    <text x="60" y="270" fill="#6b7280" font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="11" letter-spacing="3">
+      QUEUE
+    </text>
+    <text x="60" y="294" fill="#e5e7eb" font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="20" font-weight="600">
+      14 tasks · 3 active chains
+    </text>
+
+    <rect x="490" y="244" width="430" height="76" rx="14" fill="#020617" stroke="#1f2937" />
+    <text x="510" y="270" fill="#6b7280" font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="11" letter-spacing="3">
+      WORKERS
+    </text>
+    <text x="510" y="294" fill="#e5e7eb" font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="20" font-weight="600">
+      3 / 3 online · 0 idle
+    </text>
+
+    <rect x="940" y="244" width="460" height="76" rx="14" fill="#020617" stroke="#1f2937" />
+    <text x="960" y="270" fill="#6b7280" font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="11" letter-spacing="3">
+      SCOPE &amp; SAFETY
+    </text>
+    <text x="960" y="294" fill="#e5e7eb" font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="20" font-weight="600">
+      1 scope violation · 1 quarantine
+    </text>
+  </g>
+
+  <!-- Dual pane container -->
+  <rect x="40" y="336" width="1360" height="520" rx="18" fill="#020617" stroke="#1f2937" />
+
+  <!-- Left pane: Dev-Bots overview list -->
+  <rect x="56" y="352" width="640" height="488" rx="14" fill="#020617" stroke="#1f2937" />
+  <text x="76" y="380" fill="#9ca3af" font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="12" letter-spacing="3">
+    AUTOMATION OVERVIEW
+  </text>
+  <text x="76" y="404" fill="#e5e7eb" font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="18" font-weight="600">
+    Chains, queues, and workers
+  </text>
+
+  <!-- Overview list rows -->
+  <g font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="12">
+    <!-- Header -->
+    <rect x="72" y="424" width="608" height="30" rx="6" fill="#020617" stroke="#111827" />
+    <text x="88" y="444" fill="#6b7280">Chain</text>
+    <text x="280" y="444" fill="#6b7280">Status</text>
+    <text x="380" y="444" fill="#6b7280">Active Task</text>
+    <text x="540" y="444" fill="#6b7280">Last Updated</text>
+
+    <!-- Row 1 (selected) -->
+    <rect x="72" y="458" width="608" height="44" rx="8" fill="#0b1120" stroke="#22c55e" />
+    <circle cx="88" cy="480" r="6" fill="#22c55e" />
+    <text x="104" y="484" fill="#e5e7eb">plan-context-v3 · chain-017</text>
+    <text x="280" y="484" fill="#22c55e">running</text>
+    <text x="380" y="484" fill="#e5e7eb">Generate session summary artifacts</text>
+    <text x="540" y="484" fill="#9ca3af">just now</text>
+
+    <!-- Row 2 -->
+    <rect x="72" y="508" width="608" height="44" rx="8" fill="#020617" stroke="#111827" />
+    <circle cx="88" cy="530" r="6" fill="#f97316" />
+    <text x="104" y="534" fill="#e5e7eb">pr-self-healing · chain-011</text>
+    <text x="280" y="534" fill="#f97316">blocked (merge conflict)</text>
+    <text x="380" y="534" fill="#e5e7eb">Prepare fix task for conflicts</text>
+    <text x="540" y="534" fill="#9ca3af">12m ago</text>
+
+    <!-- Row 3 -->
+    <rect x="72" y="558" width="608" height="44" rx="8" fill="#020617" stroke="#111827" />
+    <circle cx="88" cy="580" r="6" fill="#ef4444" />
+    <text x="104" y="584" fill="#e5e7eb">dev-bot-foundations · chain-009</text>
+    <text x="280" y="584" fill="#ef4444">quarantined</text>
+    <text x="380" y="584" fill="#e5e7eb">Repeated failures · manual review</text>
+    <text x="540" y="584" fill="#9ca3af">45m ago</text>
+  </g>
+
+  <!-- Right pane: Selected chain details -->
+  <rect x="720" y="352" width="664" height="488" rx="14" fill="#020617" stroke="#1f2937" />
+  <text x="740" y="380" fill="#9ca3af" font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="12" letter-spacing="3">
+    CHAIN DETAIL
+  </text>
+  <text x="740" y="404" fill="#e5e7eb" font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="18" font-weight="600">
+    plan-context-v3 · chain-017
+  </text>
+  <text x="740" y="428" fill="#9ca3af" font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="12">
+    Derived from task queue · linked to plan "Context Management V3"
+  </text>
+
+  <!-- Detail sections -->
+  <!-- Status chips -->
+  <rect x="740" y="446" width="160" height="28" rx="999" fill="#064e3b" />
+  <text x="758" y="465" fill="#bbf7d0" font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="12">
+    status: running · depth 2/4
+  </text>
+  <rect x="912" y="446" width="200" height="28" rx="999" fill="#0f172a" stroke="#1f2937" />
+  <text x="930" y="465" fill="#e5e7eb" font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="12">
+    PR #128 · merge gates 6/8
+  </text>
+
+  <!-- Timeline box -->
+  <rect x="740" y="486" width="624" height="140" rx="10" fill="#020617" stroke="#1f2937" />
+  <text x="760" y="510" fill="#9ca3af" font-family="system-ui, -apple-system, BlinkMacSystemFont" font-size="12">
+    Task chain timeline (implementation → review → fix → complete)
+  </text>
+  <line x1="770" y1="530" x2="1330" y2="530" stroke="#1f2937" stroke-width="1" stroke-dasharray="4 4" />
+  <circle cx="800" cy="530" r="6" fill="#22c55e" />
+  <text x="816" y="534" fill="#e5e7eb" font-family="system-ui" font-size="11">
+    Implementation · completed
+  </text>
+  <circle cx="980" cy="530" r="6" fill="#22c55e" />
+  <text x="996" y="534" fill="#e5e7eb" font-family="system-ui" font-size="11">
+    Review · completed
+  </text>
+  <circle cx="1160" cy="530" r="6" fill="#f97316" />
+  <text x="1176" y="534" fill="#fbbf24" font-family="system-ui" font-size="11">
+    Fix · in progress
+  </text>
+
+  <!-- Intervention actions -->
+  <rect x="740" y="638" width="624" height="80" rx="10" fill="#020617" stroke="#1f2937" />
+  <text x="760" y="662" fill="#9ca3af" font-family="system-ui" font-size="12">
+    Critical interventions (2-click max)
+  </text>
+  <rect x="760" y="674" width="150" height="32" rx="8" fill="#b91c1c" />
+  <text x="774" y="694" fill="#fef2f2" font-family="system-ui" font-size="12">
+    Escalate chain
+  </text>
+  <rect x="924" y="674" width="170" height="32" rx="8" fill="#0f172a" stroke="#4b5563" />
+  <text x="938" y="694" fill="#e5e7eb" font-family="system-ui" font-size="12">
+    Pause new implementation tasks
+  </text>
+  <rect x="1112" y="674" width="180" height="32" rx="8" fill="#0f172a" stroke="#4b5563" />
+  <text x="1126" y="694" fill="#e5e7eb" font-family="system-ui" font-size="12">
+    Open interactive session for chain
+  </text>
+
+  <!-- Session summary / diagnostics -->
+  <rect x="740" y="732" width="624" height="92" rx="10" fill="#020617" stroke="#1f2937" />
+  <text x="760" y="756" fill="#9ca3af" font-family="system-ui" font-size="12">
+    Last automation attempt summary
+  </text>
+  <text x="760" y="778" fill="#e5e7eb" font-family="system-ui" font-size="11">
+    • Success: true · Exit code 0 · Duration 45s · Files changed: 3
+  </text>
+  <text x="760" y="796" fill="#9ca3af" font-family="system-ui" font-size="11">
+    • Token usage: 1.8k in / 0.9k out · Work target: app-monitor · Environment: production
+  </text>
+</svg>
+

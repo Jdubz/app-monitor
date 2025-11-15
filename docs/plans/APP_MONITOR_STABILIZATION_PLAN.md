@@ -103,7 +103,7 @@
     - ✅ Minimal API endpoints live (/tasks/minimal, /tasks/preview-detection)
     - ✅ Auto-detection service functional
     - ✅ Prompt generation from context bundles working
-  - **Migration:** BOT_PROMPT_ENGINEERING_V3.md archived to `docs/archive/obsolete-2025-11-14/`
+  - **Migration:** Manual v3 prompt templates superseded by context-aware auto-generation
   - **Achievement:** Task submission reduced from 15+ fields to 3: title, taskType, intent
   - **Deliverable:** ✅ Production-ready API available now. Frontend UI component pending but not blocking.
 

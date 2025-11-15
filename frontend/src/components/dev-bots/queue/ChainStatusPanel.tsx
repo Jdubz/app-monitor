@@ -5,6 +5,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import { createLogger } from '@/utils/logger';
+
+const log = createLogger('ChainStatusPanel');
 
 interface ChainStats {
   activeChains: number;
@@ -55,8 +58,8 @@ export function ChainStatusPanel() {
       if (storedName) {
         setOperatorName(storedName);
       }
-    } catch (err) {
-      console.error('Failed to load operator name from storage', err);
+    } catch (err: unknown) {
+      log.error('Failed to load operator name from storage', { error: err });
     }
   }, []);
 
@@ -65,8 +68,8 @@ export function ChainStatusPanel() {
     if (typeof window !== 'undefined') {
       try {
         window.localStorage.setItem(OPERATOR_NAME_STORAGE_KEY, value);
-      } catch (err) {
-        console.error('Failed to persist operator name', err);
+      } catch (err: unknown) {
+        log.error('Failed to persist operator name', { error: err });
       }
     }
   };
@@ -89,8 +92,8 @@ export function ChainStatusPanel() {
       if (!response.ok) throw new Error('Failed to fetch blocked chains');
       const data = await response.json();
       setBlockedChains(data);
-    } catch (err) {
-      console.error('Failed to fetch blocked chains:', err);
+    } catch (err: unknown) {
+      log.error('Failed to fetch blocked chains', { error: err });
     }
   };
 

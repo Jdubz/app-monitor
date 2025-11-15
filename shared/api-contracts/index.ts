@@ -450,7 +450,7 @@ export interface ApiError {
   error: string;
   message?: string;
   code?: string;
-  details?: Record<string, unknown>;
+  details?: Record<string, unknown> | unknown[];
 }
 
 export type HealthCheckApiResponse = ApiSuccess<HealthCheckResponse>;
@@ -483,3 +483,136 @@ export type DevBotsWorkspaceSyncStatusResponse = ApiSuccess<DevBotsWorkspaceSync
 export type DevBotsWorkspaceSyncResultResponse = ApiSuccess<DevBotsWorkspaceSyncResult>;
 export type DevBotsInteractiveSessionStateResponse = ApiSuccess<DevBotsInteractiveSessionState>;
 export type DevBotsInteractiveSessionInputResponse = ApiSuccess<{ accepted: boolean }>;
+
+// -----------------------------------------------------------------------------
+// Plans System Contracts
+// -----------------------------------------------------------------------------
+
+export type PlanType = 'feature' | 'refactor' | 'fix' | 'investigation';
+export type PlanPriority = 'p0' | 'p1' | 'p2' | 'p3';
+export type PlanStatus = 'planning' | 'in_progress' | 'blocked' | 'completed' | 'cancelled';
+
+export interface PlanScopeBoundaries {
+  mustNotChange?: string[];
+  mustNotAffect?: string[];
+}
+
+export interface Plan {
+  id: string;
+  title: string;
+  description?: string;
+  markdown_ref?: string;
+  plan_type: PlanType;
+  priority: PlanPriority;
+  status: PlanStatus;
+  created_at: number;
+  started_at?: number;
+  completed_at?: number;
+  cancelled_at?: number;
+  created_by?: string;
+  assigned_to?: string;
+  success_criteria?: string[];
+  scope_boundaries?: PlanScopeBoundaries;
+  estimated_effort_hours?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface CreatePlanInput {
+  title: string;
+  description?: string;
+  markdown_ref?: string;
+  plan_type: PlanType;
+  priority: PlanPriority;
+  created_by?: string;
+  assigned_to?: string;
+  success_criteria?: string[];
+  scope_boundaries?: PlanScopeBoundaries;
+  estimated_effort_hours?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface UpdatePlanInput {
+  title?: string;
+  description?: string;
+  markdown_ref?: string;
+  plan_type?: PlanType;
+  priority?: PlanPriority;
+  assigned_to?: string;
+  success_criteria?: string[];
+  scope_boundaries?: PlanScopeBoundaries;
+  estimated_effort_hours?: number;
+  metadata?: Record<string, unknown>;
+}
+
+export interface PlanProgress {
+  tasksTotal: number;
+  tasksCompleted: number;
+  tasksPending: number;
+  tasksRunning: number;
+  tasksFailed: number;
+  tasksCancelled: number;
+  prsTotal: number;
+  prsMerged: number;
+  prsOpen: number;
+  prsClosed: number;
+  prsBlocked: number;
+  percentComplete: number;
+  estimatedHoursRemaining?: number;
+}
+
+export interface PlanChainStatus {
+  activeChains: number;
+  blockedChains: Array<{
+    chainId: string;
+    taskId: string;
+    blockedReason?: string;
+    blockedAt?: number;
+  }>;
+  escalationNeeded: boolean;
+  escalationReason?: string;
+}
+
+export interface PlanPRStatus {
+  prs: Array<{
+    number: number;
+    taskId: string;
+    status: 'open' | 'closed' | 'merged';
+    url?: string;
+    branch?: string;
+    created_at?: number;
+    merged_at?: number;
+  }>;
+  blockingIssues: string[];
+}
+
+export interface PlanTask {
+  id: string;
+  title: string;
+  status: string;
+  pr_number?: number;
+  chain_id?: string;
+  chain_status?: string;
+}
+
+export interface PlanDetails extends Plan {
+  progress: PlanProgress;
+  prStatus: PlanPRStatus;
+  chainStatus: PlanChainStatus;
+  tasks: PlanTask[];
+}
+
+export interface PlanQueryFilters {
+  status?: PlanStatus | PlanStatus[];
+  priority?: PlanPriority | PlanPriority[];
+  plan_type?: PlanType | PlanType[];
+  created_by?: string;
+  assigned_to?: string;
+}
+
+// API Response types
+export type PlanResponse = ApiSuccess<Plan>;
+export type PlansListResponse = ApiSuccess<Plan[]>;
+export type PlanDetailsResponse = ApiSuccess<PlanDetails>;
+export type PlanTasksResponse = ApiSuccess<PlanTask[]>;
+export type PlanDeleteResponse = ApiSuccess<{ message: string; deleted: boolean }>;
+export type PlanCancelResponse = ApiSuccess<Plan>;

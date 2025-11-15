@@ -438,7 +438,7 @@ But tasks won't automatically use it until Phases 2-7 are complete.
 ### Documentation
 - **Design:** `docs/technicalDesigns/dev-bot-context-management.md`
 - **Roadmap:** `docs/plans/PRIORITIZED_FEATURE_ROADMAP.md`
-- **Archived:** `docs/archive/obsolete-2025-11-14/BOT_PROMPT_ENGINEERING_V3.md`
+- **Superseded:** Manual v3 prompt templates (replaced by context-aware generation)
 
 ### Configuration (Pending)
 - **Recipes:** `config/context-recipes/*.yaml` (NOT YET CREATED)

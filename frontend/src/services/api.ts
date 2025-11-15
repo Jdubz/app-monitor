@@ -7,6 +7,10 @@
 
 import type { ApiClient } from './ApiClient';
 import { getApiBaseUrl } from '@/utils/apiBaseUrl';
+import { createLogger } from '@/utils/logger';
+
+const log = createLogger('api');
+
 export { getApiBaseUrl, getApiBasePath } from '@/utils/apiBaseUrl';
 import type {
   ApiError,
@@ -111,7 +115,7 @@ const unwrapApiResponse = <T>(payload: unknown, context?: string): T => {
     );
   }
 
-  console.error('[api] Unexpected API envelope', { context, payload });
+  log.error('Unexpected API envelope', { context, payload });
   throw new Error(
     `Malformed API response${context ? ` while ${context}` : ''}`,
   );
@@ -280,7 +284,7 @@ export const getDevBotsInteractiveStreamUrl = (sessionId: string): string => {
     const ensuredPath = normalizedPath.startsWith('/') ? normalizedPath : '/' + normalizedPath;
     return wsProtocol + '//' + parsed.host + ensuredPath;
   } catch (error) {
-    console.warn('[api] Unable to parse API base URL for interactive stream', error);
+    log.warn('Unable to parse API base URL for interactive stream', { error });
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     return (
       wsProtocol +

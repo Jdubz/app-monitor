@@ -1,0 +1,177 @@
+<svg width="1440" height="900" viewBox="0 0 1440 900" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">Plans Tab - Dual Pane Overview</title>
+  <desc id="desc">
+    Wireframe preview of the Plans tab showing a list of active plans
+    and their computed progress on the left, with detailed plan status
+    and blockers on the right.
+  </desc>
+
+  <!-- Background -->
+  <rect x="0" y="0" width="1440" height="900" fill="#020617" />
+
+  <!-- App header -->
+  <rect x="40" y="32" width="1360" height="72" rx="16" fill="#020617" stroke="#1e293b" stroke-width="2" />
+  <text x="72" y="78" fill="#e5e7eb" font-family="system-ui" font-size="22" font-weight="600">
+    App Monitor · Plans
+  </text>
+
+  <!-- Primary feature tabs -->
+  <rect x="40" y="120" width="1360" height="44" rx="10" fill="#020617" stroke="#1e293b" />
+  <g font-family="system-ui" font-size="13">
+    <rect x="56" y="126" width="130" height="32" rx="8" fill="#020617" stroke="#1e293b" />
+    <text x="78" y="147" fill="#9ca3af">Dev-Bots</text>
+
+    <rect x="200" y="126" width="130" height="32" rx="8" fill="#020617" stroke="#1e293b" />
+    <text x="220" y="147" fill="#9ca3af">PR Tracking</text>
+
+    <rect x="344" y="126" width="150" height="32" rx="8" fill="#020617" stroke="#1e293b" />
+    <text x="364" y="147" fill="#9ca3af">Task Queue</text>
+
+    <rect x="512" y="126" width="110" height="32" rx="8" fill="#0f172a" stroke="#22c55e" />
+    <text x="532" y="147" fill="#e5e7eb">Plans</text>
+
+    <rect x="640" y="126" width="170" height="32" rx="8" fill="#020617" stroke="#1e293b" />
+    <text x="660" y="147" fill="#9ca3af">Interactive Terminal</text>
+  </g>
+
+  <!-- Summary metrics -->
+  <g>
+    <rect x="40" y="176" width="430" height="76" rx="14" fill="#020617" stroke="#1f2937" />
+    <text x="60" y="202" fill="#6b7280" font-family="system-ui" font-size="11" letter-spacing="3">ACTIVE PLANS</text>
+    <text x="60" y="226" fill="#e5e7eb" font-family="system-ui" font-size="20" font-weight="600">
+      4 active · 1 blocked
+    </text>
+
+    <rect x="490" y="176" width="430" height="76" rx="14" fill="#020617" stroke="#1f2937" />
+    <text x="510" y="202" fill="#6b7280" font-family="system-ui" font-size="11" letter-spacing="3">COMPLETION</text>
+    <text x="510" y="226" fill="#e5e7eb" font-family="system-ui" font-size="20" font-weight="600">
+      Median progress · 62%
+    </text>
+
+    <rect x="940" y="176" width="460" height="76" rx="14" fill="#020617" stroke="#1f2937" />
+    <text x="960" y="202" fill="#6b7280" font-family="system-ui" font-size="11" letter-spacing="3">BLOCKERS</text>
+    <text x="960" y="226" fill="#e5e7eb" font-family="system-ui" font-size="20" font-weight="600">
+      3 PRs blocked · 2 chains
+    </text>
+  </g>
+
+  <!-- Dual pane container -->
+  <rect x="40" y="268" width="1360" height="588" rx="18" fill="#020617" stroke="#1f2937" />
+
+  <!-- Left pane: plans list -->
+  <rect x="56" y="284" width="640" height="556" rx="14" fill="#020617" stroke="#1f2937" />
+  <text x="76" y="312" fill="#9ca3af" font-family="system-ui" font-size="12" letter-spacing="3">
+    PLANS
+  </text>
+  <text x="76" y="336" fill="#e5e7eb" font-family="system-ui" font-size="18" font-weight="600">
+    Active initiatives
+  </text>
+
+  <!-- Header row -->
+  <rect x="72" y="348" width="608" height="30" rx="6" fill="#020617" stroke="#111827" />
+  <text x="88" y="368" fill="#6b7280" font-family="system-ui" font-size="12">Plan</text>
+  <text x="310" y="368" fill="#6b7280" font-family="system-ui" font-size="12">Status</text>
+  <text x="420" y="368" fill="#6b7280" font-family="system-ui" font-size="12">% Complete</text>
+  <text x="520" y="368" fill="#6b7280" font-family="system-ui" font-size="12">Open blockers</text>
+
+  <!-- Row 1 (selected) -->
+  <rect x="72" y="382" width="608" height="56" rx="8" fill="#0b1120" stroke="#22c55e" />
+  <text x="88" y="404" fill="#e5e7eb" font-family="system-ui" font-size="13">
+    Integrated Planning System v1
+  </text>
+  <text x="88" y="420" fill="#9ca3af" font-family="system-ui" font-size="11">
+    plan_type: feature · priority: P1
+  </text>
+  <text x="310" y="404" fill="#22c55e" font-family="system-ui" font-size="12">
+    in_progress
+  </text>
+  <text x="420" y="404" fill="#e5e7eb" font-family="system-ui" font-size="12">
+    68%
+  </text>
+  <text x="520" y="404" fill="#e5e7eb" font-family="system-ui" font-size="12">
+    1 PR, 1 chain
+  </text>
+
+  <!-- Row 2 -->
+  <rect x="72" y="444" width="608" height="56" rx="8" fill="#020617" stroke="#111827" />
+  <text x="88" y="466" fill="#e5e7eb" font-family="system-ui" font-size="13">
+    Dev-Bot Foundational Upgrades
+  </text>
+  <text x="88" y="482" fill="#9ca3af" font-family="system-ui" font-size="11">
+    plan_type: refactor · priority: P1
+  </text>
+  <text x="310" y="466" fill="#f97316" font-family="system-ui" font-size="12">
+    blocked
+  </text>
+  <text x="420" y="466" fill="#e5e7eb" font-family="system-ui" font-size="12">
+    73%
+  </text>
+  <text x="520" y="466" fill="#e5e7eb" font-family="system-ui" font-size="12">
+    2 PRs
+  </text>
+
+  <!-- Right pane: plan detail -->
+  <rect x="720" y="284" width="664" height="556" rx="14" fill="#020617" stroke="#1f2937" />
+  <text x="740" y="312" fill="#9ca3af" font-family="system-ui" font-size="12" letter-spacing="3">
+    PLAN DETAIL
+  </text>
+  <text x="740" y="336" fill="#e5e7eb" font-family="system-ui" font-size="18" font-weight="600">
+    Integrated Planning System v1
+  </text>
+  <text x="740" y="358" fill="#9ca3af" font-family="system-ui" font-size="12">
+    status: in_progress · priority: P1 · owner: Platform Tooling
+  </text>
+
+  <!-- Progress summary -->
+  <rect x="740" y="374" width="624" height="110" rx="10" fill="#020617" stroke="#1f2937" />
+  <text x="760" y="398" fill="#9ca3af" font-family="system-ui" font-size="12">
+    Progress breakdown
+  </text>
+  <text x="760" y="420" fill="#e5e7eb" font-family="system-ui" font-size="11">
+    • Tasks: 12 total · 7 completed · 3 running · 2 pending
+  </text>
+  <text x="760" y="438" fill="#e5e7eb" font-family="system-ui" font-size="11">
+    • PRs: 4 total · 2 merged · 1 blocked · 1 open
+  </text>
+  <text x="760" y="456" fill="#e5e7eb" font-family="system-ui" font-size="11">
+    • Chains: 3 active · 0 blocked · 0 escalated
+  </text>
+
+  <!-- Blockers -->
+  <rect x="740" y="500" width="624" height="120" rx="10" fill="#020617" stroke="#1f2937" />
+  <text x="760" y="524" fill="#9ca3af" font-family="system-ui" font-size="12">
+    Blockers (aggregated)
+  </text>
+  <text x="760" y="546" fill="#e5e7eb" font-family="system-ui" font-size="11">
+    • PR #124: CI checks failing · merge conflict on backend/schema.sql
+  </text>
+  <text x="760" y="564" fill="#e5e7eb" font-family="system-ui" font-size="11">
+    • Task: "Review quarantine behavior" · chain-009 at depth limit
+  </text>
+  <text x="760" y="582" fill="#9ca3af" font-family="system-ui" font-size="11">
+    • Scope boundaries enforced: dev-bots only · no host filesystem changes
+  </text>
+
+  <!-- Success criteria / scope -->
+  <rect x="740" y="634" width="624" height="120" rx="10" fill="#020617" stroke="#1f2937" />
+  <text x="760" y="658" fill="#9ca3af" font-family="system-ui" font-size="12">
+    Goals &amp; scope
+  </text>
+  <text x="760" y="680" fill="#e5e7eb" font-family="system-ui" font-size="11">
+    • Success criteria: all plan-linked tasks completed, PR gates green, no quarantined chains
+  </text>
+  <text x="760" y="698" fill="#9ca3af" font-family="system-ui" font-size="11">
+    • Scope boundaries: must not affect production DB schema; must not reintroduce log viewer UI
+  </text>
+
+  <!-- Actions -->
+  <rect x="760" y="726" width="150" height="28" rx="8" fill="#0f172a" stroke="#4b5563" />
+  <text x="774" y="744" fill="#e5e7eb" font-family="system-ui" font-size="12">
+    Open plan markdown
+  </text>
+  <rect x="924" y="726" width="160" height="28" rx="8" fill="#0f172a" stroke="#4b5563" />
+  <text x="938" y="744" fill="#e5e7eb" font-family="system-ui" font-size="12">
+    Pause new tasks for plan
+  </text>
+</svg>
+

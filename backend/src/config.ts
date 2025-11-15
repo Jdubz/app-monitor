@@ -5,8 +5,11 @@ import dotenv from 'dotenv';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Load environment variables from .env file (backend directory)
-dotenv.config({ path: path.join(__dirname, '../.env') });
+// Load environment variables from shared .env file
+// Production: /opt/app-monitor/shared/.env
+// Development: <repo-root>/shared/.env
+const sharedEnvPath = path.join(__dirname, '../../shared/.env');
+dotenv.config({ path: sharedEnvPath });
 
 export const config = {
   port: parseInt(process.env.PORT || '5000', 10),
