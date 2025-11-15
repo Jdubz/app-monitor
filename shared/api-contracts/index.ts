@@ -260,6 +260,24 @@ export interface DevBotsStatus {
   tasks: DevBotsTaskCollections;
 }
 
+export type DevBotsQueueBucket = 'pending' | 'active' | 'completed' | 'failed';
+
+export interface DevBotsQueueItem {
+  bucket: DevBotsQueueBucket;
+  task: DevBotsTask;
+}
+
+export interface DevBotsQueueSummary {
+  items: DevBotsQueueItem[];
+  counts: {
+    pending: number;
+    active: number;
+    completed: number;
+    failed: number;
+  };
+  lastUpdated: string;
+}
+
 export interface DevBotsScopeViolation {
   taskId: string;
   violations: Array<{
@@ -472,6 +490,7 @@ export type DockerInfoResponse = ApiSuccess<DockerContainerInfo>;
 export type DockerActionResponse = ApiSuccess<{ message: string }>;
 
 export type DevBotsStatusResponse = ApiSuccess<DevBotsStatus>;
+export type DevBotsQueueResponse = ApiSuccess<DevBotsQueueSummary>;
 export type DevBotsTasksResponse = ApiSuccess<DevBotsTask[]>;
 export type DevBotsScopeViolationsResponse = ApiSuccess<DevBotsScopeViolation[]>;
 export type DevBotsCleanupStatusResponse = ApiSuccess<DevBotsCleanupStatus>;
