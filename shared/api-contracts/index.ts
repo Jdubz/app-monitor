@@ -692,3 +692,23 @@ export type PlanDetailsResponse = ApiSuccess<PlanDetails>;
 export type PlanTasksResponse = ApiSuccess<PlanTask[]>;
 export type PlanDeleteResponse = ApiSuccess<{ message: string; deleted: boolean }>;
 export type PlanCancelResponse = ApiSuccess<Plan>;
+
+// ============================================================================
+// Issue Reporting
+// ============================================================================
+
+export interface IssueReportRequest {
+  timestamp: string;
+  traceId?: string;
+  sessionId: string;
+  route: string;
+  userAgent: string;
+  description?: string;
+}
+
+export interface IssueReportResponse {
+  issueId: string;
+  message: string;
+}
+
+export type IssueReportApiResponse = ApiSuccess<IssueReportResponse>;
