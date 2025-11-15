@@ -19,6 +19,7 @@ import { createAgentsRoutes } from './agents.routes.js';
 import { createInteractiveRoutes } from './interactive.routes.js';
 import { createTemplatesRoutes } from './templates.routes.js';
 import { createPlansRoutes } from './plans.routes.js';
+import { createSettingsRoutes } from './settings.routes.js';
 import { logger } from '../../utils/logger.js';
 import * as ErrorResponses from '../../utils/errorResponses.js';
 
@@ -74,6 +75,10 @@ export function createDevBotsRouter(devBotsManager: DevBotsManager): Router {
   // Includes: /plans, /plans/:planId, /plans/:planId/tasks,
   //           /plans/:planId/cancel, /plans/:planId/update-status
   router.use('/', createPlansRoutes(devBotsManager));
+
+  // Settings endpoints
+  // Includes: /settings
+  router.use('/', createSettingsRoutes(devBotsManager));
 
   // ============================================================================
   // PR Sync Endpoint (Manual Trigger for Debugging)
