@@ -9,9 +9,9 @@ All API endpoints return standardized error responses that follow the `ApiError`
 ```typescript
 interface ApiError {
   success: false;
-  error: string;           // Error category (e.g., "UNAUTHORIZED")
-  message?: string;         // Human-readable error message  
-  code?: string;            // Specific error code (e.g., "AUTH_REQUIRED")
+  error: string;         // Error category (e.g., "UNAUTHORIZED")
+  message?: string;      // Human-readable error message
+  code?: string;         // Specific error code (e.g., "AUTH_REQUIRED")
   details?: {
     // Error-specific context
     field?: string;
@@ -195,7 +195,6 @@ return ErrorResponses.rateLimitExceeded(
   "message": "Failed to process task",
   "code": "SERVER_ERROR",
   "details": {
-    "errorMessage": "Cannot read property 'id' of undefined",
     "timestamp": "2025-11-15T06:25:00.000Z",
     "troubleshooting": [
       {
