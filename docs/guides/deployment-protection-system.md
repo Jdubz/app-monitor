@@ -34,38 +34,36 @@ The deployment protection system prevents common deployment failures through aut
 - `2` - Deadlock detected (deployment running too long)
 - `3` - Stale lock detected (process not running)
 
-### 2. Automated Monitoring (Systemd Timer)
+### 2. Deploy Agent Integration
 
-**Purpose**: Periodic health checks with automatic recovery.
+**Purpose**: Automated health checks integrated into existing deploy agent.
 
-**Configuration**:
-- **Interval**: Every 5 minutes
-- **First Run**: 2 minutes after boot
-- **Action**: Auto-cleanup of stale locks, alerts for deadlocks
+**How It Works**:
+- The existing `app-monitor-deploy-agent.timer` runs every 2 minutes
+- Before checking for new deployments, the agent runs `deployment-lock-manager.sh check`
+- Stale locks are automatically cleaned up (exit code 3)
+- Deadlocks are logged for alerting (exit code 2)
+- All events are recorded in deploy agent logs
 
-**Service Files**:
-- `deployment-lock-monitor.service` - Oneshot service that runs health check
-- `deployment-lock-monitor.timer` - Timer that triggers the service
+**Benefits**:
+- No separate timer needed - reuses existing infrastructure
+- More frequent checks (2 minutes vs 5 minutes)
+- Integrated logging with deployment events
+- Single service to monitor and maintain
 
-**Installation**:
+**Verification**:
 ```bash
-sudo /opt/app-monitor/scripts/production/install-deployment-monitor.sh
+# View deploy agent status (includes lock health checks)
+systemctl status app-monitor-deploy-agent.timer
+
+# View deploy agent logs (includes lock monitoring)
+journalctl -u app-monitor-deploy-agent.service -n 50
+
+# View lock health log specifically
+tail -f ~/.cache/app-monitor-deploy-agent/logs/lock-health.log
 ```
 
-**Commands**:
-```bash
-# View timer status
-systemctl status deployment-lock-monitor.timer
-
-# View recent health checks
-journalctl -u deployment-lock-monitor.service -n 50
-
-# View continuous monitoring
-tail -f /var/log/app-monitor/deployment-lock-monitor.log
-
-# Manually trigger check
-sudo systemctl start deployment-lock-monitor.service
-```
+**Note**: The deploy agent script is maintained separately in the deployment repository. Lock health checks will be automatically included after the next deployment.
 
 ### 3. Enhanced Deploy Script
 
@@ -199,36 +197,38 @@ The error message now shows expected vs. received values and the correct command
 
 ### Log Files
 
-**Deployment Lock Monitor**:
+**Deploy Agent Logs** (includes lock health checks):
 ```bash
-/var/log/app-monitor/deployment-lock-monitor.log
-```
-- All health checks
-- Detected issues
-- Automatic recoveries
+# View lock health check log
+tail -f ~/.cache/app-monitor-deploy-agent/logs/lock-health.log
 
-**System Journal**:
+# View all deploy agent activity
+journalctl -u app-monitor-deploy-agent.service -n 100
+```
+
+**Deployment Logs**:
 ```bash
-journalctl -u deployment-lock-monitor.service
-journalctl -u app-monitor-deploy-agent.service
+# Production deployment logs
+journalctl -u app-monitor.service -n 100
+
+# Deployment script logs (per-deployment)
+ls -lh ~/.cache/app-monitor-deploy-agent/logs/deploy-*.log
 ```
 
 ### Alert Events
 
-The system logs to syslog for integration with monitoring tools:
+The system logs events for integration with monitoring tools:
 
-```bash
-# Stale lock cleaned up
-logger -t app-monitor-deployment "Auto-recovered from stale deployment lock"
-
-# Deadlock detected
-logger -t app-monitor-deployment -p user.err "DEADLOCK: Deployment stuck for over 30 minutes"
-```
+**Lock Health Events** (in deploy agent logs):
+- `Stale deployment lock detected, cleaning up` - Auto-recovery action
+- `Deployment deadlock detected (>30min)` - Manual intervention required
+- Lock health check results every 2 minutes
 
 **Integration Points**:
-- Add email notifications in `deployment-lock-manager.sh` (commented section)
-- Configure rsyslog to forward to monitoring system
-- Set up alerts on specific log patterns
+- Monitor `~/.cache/app-monitor-deploy-agent/logs/lock-health.log` for issues
+- Parse deploy agent logs with monitoring tools
+- Set up alerts for "deadlock" or "ERROR" keywords
+- Optional: Add email/Slack notifications to lock manager script
 
 ## Configuration
 

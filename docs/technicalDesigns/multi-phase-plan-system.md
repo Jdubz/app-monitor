@@ -14,6 +14,293 @@ A **file-first, event-driven planning system** where development plans evolve th
 
 ---
 
+## Existing System Audit
+
+### Current Planning Implementation (Migration 021)
+
+**Already Implemented:**
+- ✅ `plans` table in database (migration 021)
+- ✅ Basic types: `Plan`, `PlanProgress`, `PlanDetails` (`backend/src/types/plan.ts`)
+- ✅ Core services:
+  - `PlansService` - CRUD operations
+  - `PlanProgressCalculator` - Real-time progress from tasks
+  - `PlanStatusUpdater` - Event-driven status updates
+- ✅ API routes: `backend/src/routes/dev-bots/plans.routes.ts`
+- ✅ Frontend component: `PlansTabContent.tsx` (with stub data)
+- ✅ Task integration: `plan_id` column in tasks table
+- ✅ Event system: Task completion triggers plan status updates
+
+**Current Status Values:**
+```typescript
+status: 'planning' | 'in_progress' | 'blocked' | 'completed' | 'cancelled'
+```
+
+**What Works Well (Keep & Extend):**
+- Event-driven status computation ✅
+- Progress calculation from task/PR/chain states ✅
+- Database schema for plans ✅
+- Task linking via `plan_id` ✅
+- API authentication and validation patterns ✅
+
+**What's Missing (Add via This Design):**
+- ❌ No multi-phase workflow (draft → researched → ready)
+- ❌ No task batches/swimlanes
+- ❌ No file-first approach (database-only)
+- ❌ No admin bot integration
+- ❌ No plan dependencies (blocks_on, enables)
+- ❌ No incremental task submission
+- ❌ No learning/retrospective capture
+
+---
+
+## Migration Strategy: Refactor, Don't Coexist
+
+### ⚠️ Critical: NO Dual Systems
+
+**Principle:** The legacy planning system MUST be completely replaced. We will NOT maintain two planning systems side-by-side.
+
+### What to KEEP and EXTEND
+
+| Component | Status | Action |
+|-----------|--------|--------|
+| `plans` table | ✅ Keep | **Extend** with new fields (status values, dependencies, batches) |
+| `Plan` TypeScript interface | ✅ Keep | **Extend** with new fields (phase_metadata, task_batches) |
+| `PlansService` | ✅ Keep | **Refactor** to handle file-first workflow |
+| `PlanProgressCalculator` | ✅ Keep | **Extend** to include batch progress |
+| `PlanStatusUpdater` | ✅ Keep | **Extend** to handle batch events |
+| `plans.routes.ts` | ✅ Keep | **Add** new endpoints (validate, submit, batch submission) |
+| `plan_id` in tasks | ✅ Keep | **Add** `batch_id` column alongside |
+
+### What to REPLACE
+
+| Component | Current Behavior | New Behavior |
+|-----------|------------------|--------------|
+| Status values | `'planning' | 'in_progress' | 'blocked' | 'completed' | 'cancelled'` | **Replace** with `'draft' | 'researched' | 'ready' | 'in_progress' | 'blocked' | 'completed' | 'cancelled'` |
+| Plan creation | Direct API POST with minimal data | **Replace** with admin bot workflow (file edit → validate → submit) |
+| Task creation | Manual task creation with `plan_id` | **Replace** with batch submission (pre-formatted tasks) |
+| Progress tracking | Task-based only | **Add** batch-level tracking |
+| Frontend | `PlansTabContent.tsx` (stub data) | **Replace** with connected component + batch UI |
+
+### What to REMOVE Completely
+
+| Component | Location | Reason for Removal |
+|-----------|----------|-------------------|
+| Stub data in UI | `frontend/src/components/monitor/tabs/PlansTabContent.tsx:29-86` | **Remove** and connect to real API |
+| Database-first assumption | All services | **Replace** with file-first, DB-as-backup |
+| Manual plan metadata updates | `PlansService.updatePlan()` | **Replace** with file edit workflow |
+
+---
+
+## Integration Points with Existing Features
+
+### 1. Task Queue Integration
+
+**Existing:** Tasks have `plan_id` column
+**New:** Add `batch_id` column
+
+```sql
+-- Extend existing tasks table
+ALTER TABLE tasks ADD COLUMN batch_id TEXT REFERENCES plan_batches(id);
+CREATE INDEX idx_tasks_batch ON tasks(batch_id) WHERE batch_id IS NOT NULL;
+```
+
+**Integration:** When batch submitted, create tasks with both `plan_id` and `batch_id`:
+
+```typescript
+// NEW: Batch submission creates tasks
+POST /api/plans/:planId/batches/:batchId/submit
+  → Creates tasks with: { plan_id, batch_id, ...taskSpec }
+
+// EXISTING: Task completion event
+task:completed → PlanStatusUpdater checks if batch complete
+```
+
+**Prevents Duplication:** Single task table, single linkage mechanism (`plan_id` + `batch_id`).
+
+### 2. Progress Calculation
+
+**Existing:** `PlanProgressCalculator` computes progress from tasks
+**New:** Extend to compute batch-level progress
+
+```typescript
+// EXTEND existing service
+class PlanProgressCalculator {
+  // EXISTING: Keep as-is
+  calculateProgress(planId: string): PlanProgress { ... }
+
+  // NEW: Add batch progress
+  calculateBatchProgress(planId: string, batchId: string): BatchProgress {
+    const tasks = this.getPlanTasks(planId).filter(t => t.batch_id === batchId);
+    return {
+      tasksTotal: tasks.length,
+      tasksCompleted: tasks.filter(t => t.status === 'completed').length,
+      percentComplete: ...
+    };
+  }
+}
+```
+
+**Prevents Duplication:** Reuse existing task aggregation logic, add batch filtering.
+
+### 3. Event System
+
+**Existing:** `task:completed` triggers plan status update
+**New:** Add `plan:batch_completed` event
+
+```typescript
+// EXISTING event handler (keep)
+@on('task:completed')
+async onTaskCompleted(event) {
+  // Check if batch complete (NEW)
+  if (task.batch_id) {
+    const batchComplete = await this.checkBatchComplete(task.batch_id);
+    if (batchComplete) {
+      eventBus.emit('plan:batch_completed', { plan_id, batch_id });
+    }
+  }
+
+  // Update plan status (EXISTING - keep)
+  const newStatus = progressCalculator.computeStatus(planId);
+  plansService.updatePlanStatus(planId, newStatus);
+}
+
+// NEW event handler
+@on('plan:batch_completed')
+async onBatchCompleted(event) {
+  // Check dependent batches now ready
+  // Update plan file
+  // Emit notifications
+}
+```
+
+**Prevents Duplication:** Single event system, add new event types, don't duplicate handlers.
+
+### 4. API Routes
+
+**Existing:** `backend/src/routes/dev-bots/plans.routes.ts`
+**New:** Add endpoints to same file
+
+```typescript
+// File: backend/src/routes/dev-bots/plans.routes.ts
+
+// EXISTING endpoints (keep)
+router.post('/plans', ...)            // Create plan
+router.get('/plans', ...)             // List plans
+router.get('/plans/:id', ...)         // Get plan details
+router.patch('/plans/:id', ...)       // Update plan
+router.delete('/plans/:id', ...)      // Delete plan
+
+// NEW endpoints (add to same file)
+router.post('/plans/:id/validate', ...)              // Validate plan file
+router.post('/plans/:id/submit', ...)                // Submit file to DB
+router.post('/plans/:id/batches/:batchId/submit', ...)  // Submit batch to queue
+router.post('/plans/:id/restore', ...)               // Restore from backup
+```
+
+**Prevents Duplication:** Single routes file, single router registration.
+
+### 5. Frontend Component
+
+**Existing:** `PlansTabContent.tsx` (with stub data)
+**New:** Remove stubs, connect to API, add batch UI
+
+```typescript
+// REPLACE this file completely
+// OLD: Uses STUB_PLANS constant
+// NEW: Fetches from API + adds batch management UI
+
+// Keep component structure (ListDetailLayout pattern)
+// Remove: STUB_PLANS constant
+// Add: API integration (usePlans hook)
+// Add: Batch submission UI
+```
+
+**Prevents Duplication:** Single component, single tab, replace stubs with real data.
+
+### 6. Database Schema
+
+**Existing:** `plans` table (migration 021)
+**New:** Extend in migration 022
+
+```sql
+-- Migration 022: Extend Plans for Multi-Phase System
+
+-- 1. Add new status values
+-- SQLite doesn't support ALTER CHECK, so we use triggers
+CREATE TRIGGER validate_plan_status_extended
+BEFORE INSERT ON plans
+WHEN NEW.status NOT IN ('draft', 'researched', 'ready', 'in_progress', 'blocked', 'completed', 'cancelled')
+BEGIN
+  SELECT RAISE(ABORT, 'Invalid plan status');
+END;
+
+-- 2. Add new tables (plan_file_backups, plan_batches)
+CREATE TABLE plan_file_backups (...);
+CREATE TABLE plan_batches (...);
+
+-- 3. Extend tasks table
+ALTER TABLE tasks ADD COLUMN batch_id TEXT;
+CREATE INDEX idx_tasks_batch ON tasks(batch_id) WHERE batch_id IS NOT NULL;
+```
+
+**Prevents Duplication:** Single migration path, extend existing tables, don't create parallel tables.
+
+---
+
+## Components to Remove/Refactor
+
+### Files to REFACTOR (Not Remove)
+
+| File | Current State | Refactoring Required |
+|------|---------------|----------------------|
+| `backend/src/types/plan.ts` | ✅ Exists | **Extend** with `TaskBatch`, `PlanDependency`, `PhaseMetadata` types |
+| `backend/src/services/plans.service.ts` | ✅ Exists | **Refactor** CRUD to file-first workflow (read/write files, backup to DB) |
+| `backend/src/services/planProgressCalculator.service.ts` | ✅ Exists | **Extend** with batch progress calculation |
+| `backend/src/services/planStatusUpdater.service.ts` | ✅ Exists | **Extend** with batch completion handling |
+| `backend/src/routes/dev-bots/plans.routes.ts` | ✅ Exists | **Add** validate/submit/batch endpoints |
+| `frontend/src/components/monitor/tabs/PlansTabContent.tsx` | ✅ Exists (stubs) | **Replace** stubs with API, add batch UI |
+
+### Code to REMOVE
+
+| Location | Code to Remove | Reason |
+|----------|----------------|--------|
+| `PlansTabContent.tsx:29-86` | `const STUB_PLANS: Plan[] = [...]` | **Remove** - No longer needed once API connected |
+| `PlansTabContent.tsx:99` | `const [plans] = useState<Plan[]>(STUB_PLANS)` | **Replace** with `const { plans } = usePlans()` |
+| Any database-first assumptions | Manual metadata updates | **Replace** with file edit + validate/submit workflow |
+
+### Database Migration Path
+
+**Migration 021** (Existing - Keep):
+- ✅ Created `plans` table
+- ✅ Added indexes
+- ✅ Added `plan_id` to tasks
+
+**Migration 022** (New - Add):
+- Add `plan_file_backups` table
+- Add `plan_batches` table
+- Add `batch_id` column to tasks
+- Extend `plans.status` CHECK constraint with new values
+- Add triggers for validation
+
+**NO Migration 021B or Parallel Tables:** Single migration path forward.
+
+---
+
+## Preventing Feature Duplication Checklist
+
+- [ ] **Single plans table** - Extend existing, don't create new
+- [ ] **Single routes file** - Add endpoints to existing `plans.routes.ts`
+- [ ] **Single service layer** - Refactor existing services, don't duplicate
+- [ ] **Single event bus** - Add new event types to existing system
+- [ ] **Single UI component** - Replace `PlansTabContent.tsx` stubs, don't create new tab
+- [ ] **Single task linkage** - Use `plan_id` + `batch_id`, don't create alternate linkage
+- [ ] **Single progress calculation** - Extend `PlanProgressCalculator`, don't create new service
+- [ ] **Single API client** - Add methods to existing `api.ts`, don't create new client
+- [ ] **Remove stub data** - Delete `STUB_PLANS` once API connected
+- [ ] **Remove old status values** - Update CHECK constraint, don't support both
+
+---
+
 ## Design Principles
 
 ### Event-Driven Architecture (No Cron Jobs!)
