@@ -29,14 +29,13 @@ interface LogEntry {
 }
 
 interface Diagnosis {
-  shouldCreateTask: boolean;
-  reason?: string;
   errorMessage?: string;
   stackTrace?: string;
   component?: string;
   route?: string;
-  severity?: 'low' | 'medium' | 'high' | 'critical';
-  fingerprint?: string;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  fingerprint: string;
+  foundErrors: boolean;
 }
 
 export class IssueTriageService {
@@ -59,56 +58,48 @@ export class IssueTriageService {
 
   /**
    * Main triage loop - process all pending issues
+   *
+   * Note: ALL user-reported issues create tasks, even if no errors found in logs.
+   * UI bugs (broken layouts, wrong behavior) are just as important as errors.
    */
   async triagePendingIssues(): Promise<{
     processed: number;
     tasksCreated: number;
     duplicates: number;
-    wontFix: number;
   }> {
     const pending = this.issueStorage.getPendingIssues();
 
     let tasksCreated = 0;
     let duplicates = 0;
-    let wontFix = 0;
 
     for (const issue of pending) {
       try {
         const diagnosis = await this.diagnoseIssue(issue);
 
-        if (!diagnosis.shouldCreateTask) {
-          // Mark as won't fix
-          this.issueStorage.updateIssueStatus(issue.id, 'wont_fix', undefined, diagnosis.reason);
-          wontFix++;
+        // Add diagnosis info
+        this.issueStorage.addDiagnosis(issue.id, {
+          errorMessage: diagnosis.errorMessage,
+          component: diagnosis.component,
+          severity: diagnosis.severity,
+          fingerprint: diagnosis.fingerprint,
+        });
+
+        // Check for duplicates
+        const duplicate = this.issueStorage.findDuplicate(diagnosis.fingerprint);
+        if (duplicate) {
+          // Link to existing issue
+          this.issueStorage.addOccurrence(duplicate.id, issue.timestamp, issue.sessionId);
+          this.issueStorage.updateIssueStatus(
+            issue.id,
+            'wont_fix',
+            undefined,
+            `Duplicate of ${duplicate.id}`
+          );
+          duplicates++;
           continue;
         }
 
-        // Add diagnosis info
-        if (diagnosis.fingerprint) {
-          this.issueStorage.addDiagnosis(issue.id, {
-            errorMessage: diagnosis.errorMessage,
-            component: diagnosis.component,
-            severity: diagnosis.severity,
-            fingerprint: diagnosis.fingerprint,
-          });
-
-          // Check for duplicates
-          const duplicate = this.issueStorage.findDuplicate(diagnosis.fingerprint);
-          if (duplicate) {
-            // Link to existing issue
-            this.issueStorage.addOccurrence(duplicate.id, issue.timestamp, issue.sessionId);
-            this.issueStorage.updateIssueStatus(
-              issue.id,
-              'wont_fix',
-              undefined,
-              `Duplicate of ${duplicate.id}`
-            );
-            duplicates++;
-            continue;
-          }
-        }
-
-        // Create bugfix task
+        // ALWAYS create bugfix task - user reports are valid even without errors in logs
         const task = await this.createBugfixTask(issue as StoredIssue, diagnosis);
 
         if (task) {
@@ -129,12 +120,14 @@ export class IssueTriageService {
       processed: pending.length,
       tasksCreated,
       duplicates,
-      wontFix,
     };
   }
 
   /**
    * Diagnose an issue by searching logs
+   *
+   * Gathers diagnostic information to help developers fix the issue.
+   * Does NOT filter out issues - all user reports are valid bugs.
    */
   private async diagnoseIssue(issue: {
     id: string;
@@ -156,36 +149,45 @@ export class IssueTriageService {
       ? logs.filter(log => log.traceId === issue.traceId)
       : logs.filter(log => log.sessionId === issue.sessionId);
 
-    // 3. Find errors
+    // 3. Find errors (if any exist)
     const errors = relevantLogs.filter(log => log.level === 'error' || log.level === 'fatal');
 
-    if (errors.length === 0) {
+    // If we found errors in logs, extract details
+    if (errors.length > 0) {
+      const primaryError = errors[0];
+      const errorMessage = primaryError.error?.message || primaryError.message;
+      const stackTrace = primaryError.error?.stack;
+      const component = primaryError.scope || this.extractComponentFromStack(stackTrace);
+      const severity = this.calculateSeverity(errors, relevantLogs);
+      const fingerprint = this.generateFingerprint(errorMessage, component, issue.route);
+
       return {
-        shouldCreateTask: false,
-        reason: 'No errors found in logs around reported timestamp',
+        errorMessage,
+        stackTrace,
+        component,
+        route: issue.route,
+        severity,
+        fingerprint,
+        foundErrors: true,
       };
     }
 
-    // 4. Extract primary error
-    const primaryError = errors[0];
-    const errorMessage = primaryError.error?.message || primaryError.message;
-    const stackTrace = primaryError.error?.stack;
-    const component = primaryError.scope || this.extractComponentFromStack(stackTrace);
-
-    // 5. Calculate severity
-    const severity = this.calculateSeverity(errors, relevantLogs);
-
-    // 6. Generate fingerprint
-    const fingerprint = this.generateFingerprint(errorMessage, component, issue.route);
+    // No errors in logs - might be UI bug, incorrect behavior, etc.
+    // Still create a task, but with generic fingerprint based on route + description
+    const component = this.extractComponentFromRoute(issue.route);
+    const fingerprint = this.generateFingerprint(
+      issue.description || 'User-reported issue',
+      component,
+      issue.route
+    );
 
     return {
-      shouldCreateTask: true,
-      errorMessage,
-      stackTrace,
+      errorMessage: issue.description || 'User reported issue (no error logs found)',
       component,
       route: issue.route,
-      severity,
+      severity: 'medium', // Default severity for non-error issues
       fingerprint,
+      foundErrors: false,
     };
   }
 
@@ -280,6 +282,24 @@ export class IssueTriageService {
     }
 
     return 'Unknown';
+  }
+
+  /**
+   * Extract component name from route path
+   */
+  private extractComponentFromRoute(route: string): string {
+    // Remove query params and hash
+    const cleanRoute = route.split('?')[0].split('#')[0];
+
+    // Get the last segment of the path
+    const segments = cleanRoute.split('/').filter(s => s.length > 0);
+    if (segments.length > 0) {
+      const lastSegment = segments[segments.length - 1];
+      // Capitalize first letter to make it look like a component name
+      return lastSegment.charAt(0).toUpperCase() + lastSegment.slice(1);
+    }
+
+    return 'HomePage'; // Default for root route
   }
 
   /**
@@ -389,7 +409,9 @@ export class IssueTriageService {
     issue: StoredIssue,
     diagnosis: Diagnosis
   ): string {
-    return `Fix frontend error reported by user
+    const hasErrors = diagnosis.foundErrors;
+
+    return `Fix ${hasErrors ? 'frontend error' : 'frontend issue'} reported by user
 
 **Issue Report:**
 - ID: ${issue.id}
@@ -398,23 +420,33 @@ export class IssueTriageService {
 - User Description: ${issue.description || 'None provided'}
 
 **Automated Diagnosis:**
-- Error: ${diagnosis.errorMessage}
+- ${hasErrors ? 'Error' : 'Issue'}: ${diagnosis.errorMessage}
 - Component: ${diagnosis.component}
 - Severity: ${diagnosis.severity}
 - Trace ID: ${issue.traceId || 'N/A'}
+- Errors Found in Logs: ${hasErrors ? 'Yes' : 'No - may be UI/UX bug'}
 
 **Investigation:**
 1. Search logs for trace ID: \`grep "${issue.traceId}" logs/frontend/*.jsonl\`
-2. Examine error stack trace (see below)
+2. ${hasErrors ? 'Examine error stack trace (see below)' : 'Review user description and reproduce the issue'}
 3. Reproduce by navigating to route: ${issue.route}
-4. Fix the error
+4. ${hasErrors ? 'Fix the error' : 'Fix the UI/behavior issue'}
 5. Add test to prevent regression
 
-**Error Stack Trace:**
+${hasErrors ? `**Error Stack Trace:**
 \`\`\`
 ${diagnosis.stackTrace || 'Not available'}
 \`\`\`
+` : `**Note:**
+No error logs found for this issue. This may be a UI/UX bug that doesn't throw errors:
+- Incorrect layout or styling
+- Wrong data displayed
+- Unexpected behavior
+- Performance issue
+- Accessibility problem
 
+Focus on reproducing the issue based on the user's description and the route they were on.
+`}
 **Relevant Log Entries:**
 Search window: ${issue.timestamp} ±5 minutes
 Session ID: ${issue.sessionId}
