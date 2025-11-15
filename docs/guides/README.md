@@ -10,7 +10,6 @@ Practical guides for development, deployment, and operations.
 ## Task Management
 - [Task Examples](task-examples.md) - Example task configurations
 - [Task Execution Template](task-execution-template.md) - Task structure reference
-- [Tasks README](TASKS_README.md) - Complete task system documentation
 
 ## Development
 - [API Reference](api-reference.md) - Backend API endpoints
@@ -21,14 +20,12 @@ Practical guides for development, deployment, and operations.
 
 ## Deployment & Operations
 - [Production Deployment](PRODUCTION_DEPLOYMENT.md) - Deploy to production
-- [Deployment Checklist](deployment-checklist.md) - Pre-deploy verification
 - [Docker Optimization](docker-optimization.md) - Container optimization
 - [Cloudflare Tunnel](CLOUDFLARE_TUNNEL.md) - Remote access setup
 - [Google Cloud Logging](GOOGLE_CLOUD_LOGGING_PERMISSIONS.md) - Cloud logging setup
 
 ## Troubleshooting
 - [Failure Recovery Quick Start](failure-recovery-quick-start.md) - Handle task failures
-- [Migration Guide](MIGRATION_GUIDE.md) - Upgrade and migration procedures
 - [Worker Onboarding](worker-onboarding.md) - Add new dev-bot workers
 - [E2E Testing](e2e-testing-guide.md) - End-to-end test guide
 

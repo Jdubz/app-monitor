@@ -296,7 +296,6 @@ action: 'cache_miss'
 - **Technical Design:** `docs/technicalDesigns/dev-bot-context-management.md`
 - **API Reference:** `docs/guides/api-reference.md`
 - **Context Recipes:** `backend/config/context-recipes/*.yaml`
-- **Migration Guide:** `docs/guides/MIGRATION_GUIDE.md`
 
 ## CLI Usage
 

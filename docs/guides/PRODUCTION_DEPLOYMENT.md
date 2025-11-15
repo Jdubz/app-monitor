@@ -505,7 +505,6 @@ GITHUB_TOKEN=<github-personal-access-token>
 
 ## Related Documentation
 
-- [Deployment Checklist](./deployment-checklist.md) - Pre/post deployment tasks
 - [CI/CD Setup Guide](../setup/CI_CD_SETUP.md) - Pull-agent architecture
 
 **Scripts:**
