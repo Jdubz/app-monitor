@@ -35,7 +35,7 @@ describe('API Contract Compliance - Dev-Bots Endpoints', () => {
         completed: 0,
         failed: 0,
       }),
-      getSystemStatus: () => ({
+      getSystemStatus: async () => ({
         systemStatus: 'running' as const,
         workers: {},
         queueSize: 0,
