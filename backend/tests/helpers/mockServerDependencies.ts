@@ -406,6 +406,10 @@ class MockTaskQueue {
   getDatabase() {
     return {} as never;
   }
+
+  setPRSyncService(_prSyncService: any): void {
+    // Mock implementation - no-op for tests
+  }
 }
 
 class MockPRWorkflowOrchestrator {
