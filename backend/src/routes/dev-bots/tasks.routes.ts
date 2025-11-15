@@ -271,11 +271,12 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       
       // Validate at least task type is provided
       if (!payload.taskType) {
-        res.status(400).json({
-          error: 'Missing taskType',
-          message: 'taskType is required for preview'
-        });
-        return;
+        return sendError(
+          res,
+          'Missing taskType',
+          400,
+          { message: 'taskType is required for preview' }
+        );
       }
       
       const detected = await taskAutoDetectionService.detectFields(payload);
@@ -561,13 +562,11 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       const { reason } = req.body;
 
       if (!reason) {
-        return res.status(400).json({
-          error: 'Reason is required for manual timeout'
-        });
+        return sendError(res, 'Reason is required for manual timeout', 400);
       }
 
       devBotsManager.manuallyTimeoutTask(taskId, reason);
-      res.json({
+      sendSuccess(res, {
         success: true,
         message: `Task ${taskId} manually timed out`,
         reason
