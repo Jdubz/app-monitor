@@ -11,6 +11,7 @@
 import { Router, Request, Response } from 'express';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
 import { logger } from '../../utils/logger.js';
+import { sendSuccess, sendError } from '../../utils/apiResponse.js';
 import {
   buildInteractiveSessionState,
   getRequestUserEmail,
@@ -35,132 +36,131 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
   router.get('/interactive/session', (_req: Request, res: Response) => {
     try {
       const payload: DevBotsInteractiveSessionStateResponse['data'] = buildInteractiveSessionState(devBotsManager);
-      res.json({ success: true, data: payload });
+      sendSuccess(res, payload);
     } catch (error) {
       logger.error('Failed to fetch interactive session state', { error });
-      res.status(500).json({
-        success: false,
-        error: 'fetch_failed',
-        message: error instanceof Error ? error.message : 'Failed to fetch interactive session state',
-      });
+      sendError(
+        res,
+        'fetch_failed',
+        500,
+        { message: error instanceof Error ? error.message : 'Failed to fetch interactive session state' }
+      );
     }
   });
 
   /**
    * POST /interactive/session
-   * Start new interactive session
+   * Start a new interactive session
    */
   router.post('/interactive/session', async (req: Request, res: Response) => {
-    const payload = req.body as DevBotsInteractiveSessionStartPayload | undefined;
-    if (!payload || typeof payload.modelProvider !== 'string' || typeof payload.modelName !== 'string') {
-      return res.status(400).json({
-        success: false,
-        error: 'invalid_payload',
-        message: 'modelProvider and modelName are required',
-      });
-    }
     try {
-      await devBotsManager.launchInteractiveSession({
-        ownerEmail: getRequestUserEmail(req) ?? DEFAULT_INTERACTIVE_OWNER_EMAIL,
-        modelProvider: payload.modelProvider,
-        modelName: payload.modelName,
-        metadata: payload.metadata,
+      const payload = req.body as DevBotsInteractiveSessionStartPayload;
+      const ownerEmail = getRequestUserEmail(req) ?? DEFAULT_INTERACTIVE_OWNER_EMAIL;
+
+      if (!payload.modelOption) {
+        return sendError(res, 'invalid_params', 400, { message: 'modelOption is required' });
+      }
+
+      const state = await devBotsManager.startInteractiveSession({
+        modelOption: payload.modelOption,
+        ownerEmail,
       });
-      const state = buildInteractiveSessionState(devBotsManager);
-      res.status(201).json({ success: true, data: state });
+
+      sendSuccess(res, state, 201);
     } catch (error) {
-      logger.error('Failed to start interactive session', { error, payload });
-      res.status(500).json({
-        success: false,
-        error: 'interactive_session_failed',
-        message: error instanceof Error ? error.message : 'Failed to launch session',
-      });
+      sendError(
+        res,
+        'session_start_failed',
+        500,
+        { message: error instanceof Error ? error.message : 'Failed to start interactive session' }
+      );
     }
   });
 
   /**
    * DELETE /interactive/session
-   * End current interactive session
+   * Stop the current interactive session
    */
-  router.delete('/interactive/session', async (req: Request, res: Response) => {
-    let sessionId: string | undefined;
+  router.delete('/interactive/session', (_req: Request, res: Response) => {
     try {
-      const session = devBotsManager.getActiveInteractiveSession();
-      if (!session) {
-        return res.status(404).json({ success: false, error: 'not_found', message: 'No active interactive session' });
+      if (!devBotsManager.hasActiveInteractiveSession()) {
+        return sendError(res, 'not_found', 404, { message: 'No active interactive session' });
       }
-      sessionId = session.id;
-      await devBotsManager.endInteractiveSession(sessionId, 'Operator ended session');
+
+      devBotsManager.stopInteractiveSession();
       const payload: DevBotsInteractiveSessionStateResponse['data'] = buildInteractiveSessionState(devBotsManager);
-      res.json({ success: true, data: payload });
+      sendSuccess(res, payload);
     } catch (error) {
-      logger.error('Failed to end interactive session', { error, sessionId });
-      res.status(500).json({
-        success: false,
-        error: 'end_session_failed',
-        message: error instanceof Error ? error.message : 'Failed to end interactive session',
-      });
+      sendError(
+        res,
+        'session_stop_failed',
+        500,
+        { message: error instanceof Error ? error.message : 'Failed to stop interactive session' }
+      );
     }
   });
 
   /**
-   * POST /interactive/session/:sessionId/input
-   * Send input to interactive session
+   * POST /interactive/input
+   * Send input to an active interactive session
    */
-  router.post('/interactive/session/:sessionId/input', (req: Request, res: Response) => {
-    const { sessionId } = req.params;
+  router.post('/interactive/input', (req: Request, res: Response) => {
+    const { sessionId, input } = req.body as DevBotsInteractiveSessionInputPayload;
+
     if (!sessionId) {
-      return res.status(400).json({ success: false, error: 'invalid_params', message: 'sessionId is required' });
+      return sendError(res, 'invalid_params', 400, { message: 'sessionId is required' });
     }
-    const payload = req.body as DevBotsInteractiveSessionInputPayload | undefined;
-    if (!payload || typeof payload.data !== 'string' || payload.data.length === 0) {
-      return res.status(400).json({ success: false, error: 'invalid_payload', message: 'input data is required' });
+
+    if (!input) {
+      return sendError(res, 'invalid_payload', 400, { message: 'input data is required' });
     }
-    const session = devBotsManager.getInteractiveSession(sessionId);
-    if (!session || session.status === 'ended') {
-      return res.status(404).json({ success: false, error: 'not_found', message: 'Session not found or already ended' });
+
+    if (!devBotsManager.sendInteractiveInput(sessionId, input)) {
+      return sendError(res, 'not_found', 404, { message: 'Session not found or already ended' });
     }
-    devBotsManager.sendInteractiveInput(sessionId, payload.data);
-    res.json({ success: true, accepted: true });
+
+    sendSuccess(res, { accepted: true });
   });
 
   /**
    * POST /interactive/heartbeat
-   * Record heartbeat from client or agent
+   * Send heartbeat to keep session alive
    */
   router.post('/interactive/heartbeat', (req: Request, res: Response) => {
-    const payload = req.body as DevBotsInteractiveHeartbeatPayload | undefined;
-    if (!payload || typeof payload.sessionId !== 'string') {
-      return res.status(400).json({ success: false, error: 'invalid_payload', message: 'sessionId is required' });
+    const { sessionId } = req.body as DevBotsInteractiveHeartbeatPayload;
+
+    if (!sessionId) {
+      return sendError(res, 'invalid_payload', 400, { message: 'sessionId is required' });
     }
-    const session = devBotsManager.getInteractiveSession(payload.sessionId);
-    if (!session || session.status === 'ended') {
-      return res.status(404).json({ success: false, error: 'not_found', message: 'Session not found' });
+
+    if (!devBotsManager.recordInteractiveHeartbeat(sessionId)) {
+      return sendError(res, 'not_found', 404, { message: 'Session not found' });
     }
-    const source = payload.source === 'agent' ? 'agent' : 'user';
-    devBotsManager.recordInteractiveActivity(payload.sessionId, source);
-    res.json({ success: true, acknowledged: true });
+
+    sendSuccess(res, { acknowledged: true });
   });
 
   /**
    * POST /interactive/interrupt
-   * Send interrupt signal to interactive session
+   * Send interrupt signal to running interactive session
    */
   router.post('/interactive/interrupt', (req: Request, res: Response) => {
-    const payload = req.body as DevBotsInteractiveInterruptPayload | undefined;
-    if (!payload || typeof payload.sessionId !== 'string') {
-      return res.status(400).json({ success: false, error: 'invalid_payload', message: 'sessionId is required' });
+    const { sessionId } = req.body as DevBotsInteractiveInterruptPayload;
+
+    if (!sessionId) {
+      return sendError(res, 'invalid_payload', 400, { message: 'sessionId is required' });
     }
-    const session = devBotsManager.getInteractiveSession(payload.sessionId);
-    if (!session || session.status === 'ended') {
-      return res.status(404).json({
-        success: false,
-        error: 'not_found',
-        message: 'Session not found or already ended',
-      });
+
+    if (!devBotsManager.interruptInteractiveSession(sessionId)) {
+      return sendError(
+        res,
+        'not_found',
+        404,
+        { message: `Interactive session ${sessionId} not found or not running` }
+      );
     }
-    devBotsManager.sendInteractiveSignal(payload.sessionId, 'interrupt');
-    res.json({ success: true, data: { message: 'Interrupt signal sent' } });
+
+    sendSuccess(res, { message: 'Interrupt signal sent' });
   });
 
   return router;
