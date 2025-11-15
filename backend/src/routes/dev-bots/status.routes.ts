@@ -14,6 +14,7 @@
 import { Router, Request, Response } from 'express';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
 import { logger } from '../../utils/logger.js';
+import { sendSuccess, sendError } from '../../utils/apiResponse.js';
 import { mapTasksToContract } from './shared.js';
 
 /**
@@ -42,12 +43,14 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
             completed: mapTasksToContract(status.tasks.completed),
           },
         };
-        res.json({ data: normalizedStatus });
+        sendSuccess(res, normalizedStatus);
       } else {
-        res.status(503).json({
-          error: 'Dev-Bots coordinator is not available',
-          healthy: devBotsManager.isHealthy()
-        });
+        sendError(
+          res,
+          'Dev-Bots coordinator is not available',
+          503,
+          { details: { healthy: devBotsManager.isHealthy() } }
+        );
       }
     } catch (error) {
       logger.error({
@@ -56,10 +59,12 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting Dev-Bots status: ${error}`,
         error
       });
-      res.status(500).json({
-        error: 'Failed to get Dev-Bots status',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(
+        res,
+        'Failed to get Dev-Bots status',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
     }
   });
 

@@ -15,6 +15,7 @@ import { Router, Request, Response } from 'express';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
 import { logger } from '../../utils/logger.js';
 import type { LogEntry } from '../../utils/logger.js';
+import { sendSuccess, sendError } from '../../utils/apiResponse.js';
 import {
   validateTaskTemplate,
   formatValidationErrors,
@@ -582,7 +583,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         devBotsManager.getQueueMetrics(),
       ]);
       const summary = buildQueueSummary(tasks, metrics);
-      res.json({ success: true, data: summary });
+      sendSuccess(res, summary);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -590,11 +591,12 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         message: `Error getting queue summary: ${error}`,
         error,
       });
-      res.status(500).json({
-        success: false,
-        error: 'Failed to get queue summary',
-        message: error instanceof Error ? error.message : String(error),
-      });
+      sendError(
+        res,
+        'Failed to get queue summary',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
     }
   });
 
