@@ -7,7 +7,6 @@
  */
 
 import * as crypto from 'crypto';
-import type Database from 'better-sqlite3';
 import { IssueStorageService } from './issueStorageService.js';
 import type { StoredIssue } from './issueStorageService.js';
 import type { TaskQueueService, Task } from './taskQueue.sqlite.js';
@@ -206,7 +205,7 @@ export class IssueTriageService {
     const endTime = new Date(issueTime.getTime() + afterMs);
 
     // Query database for logs in time range (indexed, fast)
-    const db = (this.issueStorage as { db: Database.Database }).db;
+    const db = this.issueStorage.getDatabase();
     const stmt = db.prepare(`
       SELECT
         id, timestamp, level, message, scope, traceId, sessionId, route,

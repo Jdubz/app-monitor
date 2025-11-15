@@ -9,7 +9,6 @@
  */
 
 import { Router } from 'express';
-import type Database from 'better-sqlite3';
 import { DevBotsManager } from '../services/devBotsManager.js';
 import type { ConnectionManager } from '../services/connectionManager.js';
 import type { HealthCheckApiResponse } from '@app-monitor/api-contracts';
@@ -45,7 +44,7 @@ export function createApiRouter(deps: {
   // Initialize logs and issues routes with database and task queue from devBotsManager
   if (deps.devBotsManager) {
     const taskQueue = deps.devBotsManager.getTaskQueue();
-    const db = (taskQueue as { db: Database.Database }).db;
+    const db = taskQueue.getDatabase();
     initializeLogsRoutes(db);
     initializeIssuesRoutes(db, taskQueue);
   }

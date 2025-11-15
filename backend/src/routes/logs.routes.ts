@@ -5,7 +5,7 @@
  */
 
 import express, { Request, Response } from 'express';
-import { LogWriter } from '../services/logWriter.js';
+import { LogWriter, type LogEntry } from '../services/logWriter.js';
 import type Database from 'better-sqlite3';
 
 const router = express.Router();
@@ -80,7 +80,7 @@ router.post('/frontend', (req: Request, res: Response) => {
 
     // Handle log batch
     if (batch.type === 'log_batch' && batch.logs) {
-      logWriter.writeLogs(batch.logs);
+      logWriter.writeLogs(batch.logs as LogEntry[]);
     }
 
     res.json({

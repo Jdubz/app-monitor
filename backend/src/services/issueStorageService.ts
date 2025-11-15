@@ -211,4 +211,11 @@ export class IssueStorageService {
     const stmt = this.db.prepare('SELECT * FROM issues WHERE id = ?');
     return stmt.get(issueId) as StoredIssue | undefined;
   }
+
+  /**
+   * Get database instance (for internal queries)
+   */
+  getDatabase(): Database.Database {
+    return this.db;
+  }
 }
