@@ -242,6 +242,7 @@ Object.defineProperty(import.meta, 'env', {
     VITE_API_BASE_URL: 'http://localhost:5000',
     VITE_FEATURE_DEV_BOTS_LAYOUT: 'true',
     VITE_FEATURE_DEV_BOTS_INTERACTIVE_TAB: 'true',
+    VITE_FEATURE_TABBED_MONITOR_LAYOUT: 'true',
     NODE_ENV: 'test',
   },
   writable: true,
