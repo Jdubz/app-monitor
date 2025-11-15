@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc && vite build",
+    "build": "node build-with-logging.cjs",
     "preview": "vite preview",
     "test": "node safe-test-runner.cjs",
     "test:unit": "node safe-test-runner.cjs",
