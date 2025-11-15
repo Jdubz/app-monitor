@@ -306,6 +306,7 @@ export function useInteractiveSession(
     } catch (err) {
       if (!isMountedRef.current) return;
       const message = err instanceof Error ? err.message : 'Failed to load interactive session';
+      log.error('Failed to refresh interactive session', { error: err, message });
       setError(message);
       closeSocket({ suppressReconnect: true });
     } finally {
@@ -344,6 +345,7 @@ export function useInteractiveSession(
       } catch (err) {
         if (!isMountedRef.current) return;
         const message = err instanceof Error ? err.message : 'Unable to start interactive session';
+        log.error('Failed to start interactive session', { error: err, message, modelProvider, modelName });
         setError(message);
         appendLog({
           id: 'system-' + Date.now(),
@@ -381,6 +383,7 @@ export function useInteractiveSession(
     } catch (err) {
       if (!isMountedRef.current) return;
       const message = err instanceof Error ? err.message : 'Failed to end interactive session';
+      log.error('Failed to end interactive session', { error: err, message, sessionId: sessionIdRef.current });
       setError(message);
       appendLog({
         id: 'system-' + Date.now(),

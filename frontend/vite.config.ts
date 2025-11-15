@@ -15,6 +15,9 @@ export default defineConfig({
       logFile: './logs/frontend.log',
     }),
   ],
+  define: {
+    'BUILD_TIMESTAMP_VALUE': JSON.stringify(new Date().toISOString()),
+  },
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
