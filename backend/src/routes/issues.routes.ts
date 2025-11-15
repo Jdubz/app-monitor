@@ -29,10 +29,11 @@ const issueReportLimiter = rateLimit({
   message: { success: false, error: 'Too many issue reports. Please try again in an hour.' },
   standardHeaders: true,
   legacyHeaders: false,
+  skipFailedRequests: true, // Don't count failed requests (validation errors) toward rate limit
   keyGenerator: (req) => {
-    // Rate limit by sessionId from request body (or fall back to IP)
+    // Rate limit by sessionId from request body
     const body = req.body as IssueReport;
-    return body?.sessionId || req.ip || 'unknown';
+    return body?.sessionId ||  'no-session';
   },
   handler: (req, res) => {
     logger.warn({
