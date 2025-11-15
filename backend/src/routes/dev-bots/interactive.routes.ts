@@ -10,6 +10,7 @@
 
 import { Router, Request, Response } from 'express';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
+import { logger } from '../../utils/logger.js';
 import {
   buildInteractiveSessionState,
   getRequestUserEmail,
@@ -32,8 +33,17 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
    * Get current interactive session state
    */
   router.get('/interactive/session', (_req: Request, res: Response) => {
-    const payload: DevBotsInteractiveSessionStateResponse['data'] = buildInteractiveSessionState(devBotsManager);
-    res.json({ data: payload });
+    try {
+      const payload: DevBotsInteractiveSessionStateResponse['data'] = buildInteractiveSessionState(devBotsManager);
+      res.json({ success: true, data: payload });
+    } catch (error) {
+      logger.error('Failed to fetch interactive session state', { error });
+      res.status(500).json({
+        success: false,
+        error: 'fetch_failed',
+        message: error instanceof Error ? error.message : 'Failed to fetch interactive session state',
+      });
+    }
   });
 
   /**
@@ -59,6 +69,7 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
       const state = buildInteractiveSessionState(devBotsManager);
       res.status(201).json({ success: true, data: state });
     } catch (error) {
+      logger.error('Failed to start interactive session', { error, payload });
       res.status(500).json({
         success: false,
         error: 'interactive_session_failed',
@@ -72,13 +83,22 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
    * End current interactive session
    */
   router.delete('/interactive/session', async (req: Request, res: Response) => {
-    const session = devBotsManager.getActiveInteractiveSession();
-    if (!session) {
-      return res.status(404).json({ success: false, error: 'not_found', message: 'No active interactive session' });
+    try {
+      const session = devBotsManager.getActiveInteractiveSession();
+      if (!session) {
+        return res.status(404).json({ success: false, error: 'not_found', message: 'No active interactive session' });
+      }
+      await devBotsManager.endInteractiveSession(session.id, 'Operator ended session');
+      const payload: DevBotsInteractiveSessionStateResponse['data'] = buildInteractiveSessionState(devBotsManager);
+      res.json({ success: true, data: payload });
+    } catch (error) {
+      logger.error('Failed to end interactive session', { error });
+      res.status(500).json({
+        success: false,
+        error: 'end_session_failed',
+        message: error instanceof Error ? error.message : 'Failed to end interactive session',
+      });
     }
-    await devBotsManager.endInteractiveSession(session.id, 'Operator ended session');
-    const payload: DevBotsInteractiveSessionStateResponse['data'] = buildInteractiveSessionState(devBotsManager);
-    res.json({ data: { success: true, data: payload }});
   });
 
   /**
