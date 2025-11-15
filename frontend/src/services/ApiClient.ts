@@ -3,6 +3,8 @@
  * 
  * Replaces scattered API calls with a consistent, reusable client.
  * Provides error handling, request/response interceptors, and type safety.
+ * 
+ * Last updated: 2025-11-15T04:07:00Z - API key authentication
  */
 
 import axios, { AxiosInstance, AxiosRequestConfig, CreateAxiosDefaults } from 'axios';
