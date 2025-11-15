@@ -147,13 +147,25 @@ export async function createApp(options: CreateAppOptions = {}) {
     const webhookHandler = new GitHubWebhookHandler(taskQueue, prOrchestrator);
     setWebhookHandler(webhookHandler);
     
+    // Initialize PR sync service and wire it up
+    const { initializePRSyncService } = await import('./services/prSync.service.js');
+    const prSyncService = initializePRSyncService(taskQueue);
+    
+    // Reuse PullRequestHandler from webhook handler (avoids duplicate instances)
+    prSyncService.setPullRequestHandler(webhookHandler.getPullRequestHandler());
+    
+    // Inject PR sync service into task queue (dependency injection, not dynamic import)
+    taskQueue.setPRSyncService(prSyncService);
+    
     logger.info({
       category: 'system',
       action: 'webhook_handler_initialized',
       message: 'GitHub webhook handler configured and ready',
       details: {
         has_task_queue: !!taskQueue,
-        has_pr_orchestrator: !!prOrchestrator
+        has_pr_orchestrator: !!prOrchestrator,
+        pr_sync_enabled: config.prSync.enabled,
+        pr_sync_threshold: config.prSync.taskThreshold
       }
     });
   }

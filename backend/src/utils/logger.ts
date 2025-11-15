@@ -49,6 +49,7 @@ export type LogCategory =
   | 'metrics'
   | 'mirror_debug'
   | 'plan' // AI agent-managed planning system
+  | 'pr-sync' // PR sync service (event-driven)
   | 'pr-workflow'
   | 'process'
   | 'quality'

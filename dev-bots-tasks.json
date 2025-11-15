@@ -1,206 +1,337 @@
 [
   {
     "type": "feature",
-    "title": "Add blocked chain alert system",
-    "documentation": "Add high-signal alerts for blocked dev-bot chains (PR merge conflicts, stuck tasks >60min, review escalations). Alerts should appear prominently in the intervention panel and persist until resolved. Focus on actionable alerts only - no analytics.",
+    "title": "Create AlertManager service with basic alert CRUD operations",
+    "documentation": "Create new backend service alertManager.ts with methods: createAlert, getActiveAlerts, dismissAlert. Alerts stored in-memory for now (Map<string, Alert>). Simple Alert type with id, chainId, reason, timestamp, dismissed fields.",
     "acceptanceCriteria": [
-      "Alert appears when chain is blocked for >60 minutes",
-      "Alert shows blocker reason (merge conflict, gate failure, etc)",
-      "Alert includes one-click intervention actions",
-      "Alert dismisses when blocker is resolved",
-      "No false positives (verified blocked state)",
-      "Alert count badge in UI header"
+      "AlertManager class with create/get/dismiss methods",
+      "Alerts stored in Map with unique IDs",
+      "getActiveAlerts returns only non-dismissed alerts",
+      "Add unit tests for all methods"
     ],
-    "assignedAgent": "fullstack-specialist",
+    "assignedAgent": "backend-specialist",
     "files": [
-      "backend/src/services/alertManager.ts",
-      "backend/src/routes/dev-bots/alerts.routes.ts",
-      "frontend/src/components/dev-bots/AlertsPanel.tsx"
-    ],
-    "project": "app-monitor",
-    "priority": 9,
-    "estimatedEffort": {
-      "hours": 6,
-      "complexity": "medium",
-      "confidence": "high"
-    }
-  },
-  {
-    "type": "feature",
-    "title": "Add manual intervention controls to chain panel",
-    "documentation": "Add intervention controls to ChainStatusPanel: skip gate, retry task, update base branch, escalate to human. Each action should require confirmation and log the intervention reason. UI should be minimal and action-focused.",
-    "acceptanceCriteria": [
-      "Skip gate button with confirmation modal",
-      "Retry task button (resets failed task)",
-      "Update base branch button (triggers rebase)",
-      "Escalate button (pauses chain, notifies human)",
-      "All actions log intervention reason",
-      "Actions are one-click after confirmation"
-    ],
-    "assignedAgent": "fullstack-specialist",
-    "files": [
-      "backend/src/routes/dev-bots/interventions.routes.ts",
-      "backend/src/services/interventionLogger.ts",
-      "frontend/src/components/dev-bots/queue/ChainStatusPanel.tsx",
-      "frontend/src/components/dev-bots/queue/InterventionActions.tsx"
+      "backend/src/services/alertManager.ts"
     ],
     "project": "app-monitor",
     "priority": 8,
     "estimatedEffort": {
-      "hours": 8,
-      "complexity": "medium",
-      "confidence": "high"
-    }
-  },
-  {
-    "type": "feature",
-    "title": "Add queue pause/resume controls",
-    "documentation": "Add manual queue management controls to DevBotsLayout: pause queue (stops new task processing), resume queue, clear specific queue type (task/pr/review). Include confirmation for destructive actions.",
-    "acceptanceCriteria": [
-      "Pause button stops new task processing",
-      "Resume button restarts queue",
-      "Clear queue button with confirmation",
-      "Queue state persists across restarts",
-      "Visual indicator shows queue status (paused/active)",
-      "Action logs include operator name and reason"
-    ],
-    "assignedAgent": "backend-specialist",
-    "files": [
-      "backend/src/routes/dev-bots/queue.routes.ts",
-      "backend/src/services/queueManager.ts",
-      "frontend/src/components/dev-bots/queue/QueueControls.tsx"
-    ],
-    "project": "app-monitor",
-    "priority": 7,
-    "estimatedEffort": {
-      "hours": 4,
+      "hours": 1,
       "complexity": "simple",
       "confidence": "high"
     }
   },
   {
-    "type": "enhancement",
-    "title": "Add chain drill-down modal",
-    "documentation": "Add minimal chain details modal: PR link, blocker reason, task history (last 5 tasks), quick actions. Modal should be keyboard accessible (Esc to close). Focus on intervention, not analytics.",
+    "type": "feature",
+    "title": "Add stuck task detection to alertManager",
+    "documentation": "Add checkStuckTasks method to alertManager.ts that creates alerts for tasks running >60 minutes. Method should be called periodically. Alert includes task_id, duration, and reason='stuck_task'.",
     "acceptanceCriteria": [
-      "Modal opens from chain row click",
-      "Shows PR link (opens in new tab)",
-      "Shows current blocker with clear reason",
-      "Shows last 5 tasks with status",
-      "Includes intervention action buttons",
-      "Keyboard accessible (Esc closes, Tab navigation)"
+      "checkStuckTasks identifies tasks >60min old",
+      "Creates one alert per stuck task (no duplicates)",
+      "Alert includes task duration and ID",
+      "Add unit test with mock task data"
+    ],
+    "assignedAgent": "backend-specialist",
+    "files": [
+      "backend/src/services/alertManager.ts"
+    ],
+    "project": "app-monitor",
+    "priority": 8,
+    "estimatedEffort": {
+      "hours": 1,
+      "complexity": "simple",
+      "confidence": "high"
+    }
+  },
+  {
+    "type": "feature",
+    "title": "Add GET /api/dev-bots/alerts endpoint",
+    "documentation": "Create new route file alerts.routes.ts with single GET /alerts endpoint. Returns active alerts from alertManager. Simple route, no complex logic.",
+    "acceptanceCriteria": [
+      "GET /alerts returns active alerts as JSON",
+      "Response format matches Alert type",
+      "Route integrated into dev-bots router",
+      "Returns 200 with empty array if no alerts"
+    ],
+    "assignedAgent": "backend-specialist",
+    "files": [
+      "backend/src/routes/dev-bots/alerts.routes.ts"
+    ],
+    "project": "app-monitor",
+    "priority": 7,
+    "estimatedEffort": {
+      "hours": 0.5,
+      "complexity": "simple",
+      "confidence": "high"
+    }
+  },
+  {
+    "type": "feature",
+    "title": "Add POST /api/dev-bots/alerts/:id/dismiss endpoint",
+    "documentation": "Add POST /alerts/:id/dismiss endpoint to alerts.routes.ts. Calls alertManager.dismissAlert(id). Returns updated alert or 404 if not found.",
+    "acceptanceCriteria": [
+      "POST /alerts/:id/dismiss dismisses alert",
+      "Returns 404 if alert doesn't exist",
+      "Returns 200 with dismissed alert on success",
+      "Alert no longer in active alerts after dismiss"
+    ],
+    "assignedAgent": "backend-specialist",
+    "files": [
+      "backend/src/routes/dev-bots/alerts.routes.ts"
+    ],
+    "project": "app-monitor",
+    "priority": 7,
+    "estimatedEffort": {
+      "hours": 0.5,
+      "complexity": "simple",
+      "confidence": "high"
+    }
+  },
+  {
+    "type": "feature",
+    "title": "Create AlertsPanel component to display alerts",
+    "documentation": "Create new React component AlertsPanel.tsx that fetches and displays active alerts. Simple list with alert reason, timestamp, and dismiss button. No complex interactions yet.",
+    "acceptanceCriteria": [
+      "Component fetches from GET /api/dev-bots/alerts",
+      "Displays alerts in a list with reason and time",
+      "Each alert has dismiss button",
+      "Shows 'No alerts' when empty",
+      "Auto-refreshes every 30 seconds"
     ],
     "assignedAgent": "frontend-specialist",
     "files": [
-      "frontend/src/components/dev-bots/queue/ChainDetailsModal.tsx",
-      "frontend/src/components/dev-bots/queue/ChainStatusPanel.tsx"
+      "frontend/src/components/dev-bots/AlertsPanel.tsx"
     ],
     "project": "app-monitor",
     "priority": 6,
     "estimatedEffort": {
-      "hours": 4,
+      "hours": 1,
       "complexity": "simple",
       "confidence": "high"
     }
   },
   {
-    "type": "enhancement",
-    "title": "Add task retry with context preservation",
-    "documentation": "When retrying a failed task, preserve previous attempt's context (error logs, file changes attempted, failure reason). Pass context to new attempt so bot doesn't repeat same mistakes.",
+    "type": "feature",
+    "title": "Add alert count badge to DevBotsLayout header",
+    "documentation": "Add small badge to DevBotsLayout showing active alert count. Badge fetches count from alerts API. Red background when count > 0. Clicking opens alerts panel.",
     "acceptanceCriteria": [
-      "Failed task context saved to database",
-      "Retry includes previous context in prompt",
-      "Context includes: error logs, attempted files, failure reason",
-      "Bot acknowledges previous attempt in logs",
-      "Context preserved for up to 3 retry attempts",
-      "Old attempts queryable for debugging"
+      "Badge shows alert count in header",
+      "Badge red when count > 0, gray when 0",
+      "Count updates every 30 seconds",
+      "Badge hidden when count is 0"
+    ],
+    "assignedAgent": "frontend-specialist",
+    "files": [
+      "frontend/src/components/dev-bots/DevBotsLayout.tsx"
+    ],
+    "project": "app-monitor",
+    "priority": 6,
+    "estimatedEffort": {
+      "hours": 0.5,
+      "complexity": "simple",
+      "confidence": "high"
+    }
+  },
+  {
+    "type": "feature",
+    "title": "Add pause/resume state to taskQueue service",
+    "documentation": "Add isPaused boolean state to taskQueue.sqlite.ts. Add pause() and resume() methods. When paused, processNextTask should skip processing. State should persist to database.",
+    "acceptanceCriteria": [
+      "pause() method sets isPaused to true",
+      "resume() method sets isPaused to false",
+      "processNextTask skips when paused",
+      "Paused state persists to database",
+      "Add unit tests for pause/resume"
     ],
     "assignedAgent": "backend-specialist",
     "files": [
-      "backend/src/services/retryManager.ts",
-      "backend/src/services/taskContext.service.ts",
-      "backend/migrations/012_task_retry_context.sql"
+      "backend/src/services/taskQueue.sqlite.ts"
     ],
     "project": "app-monitor",
     "priority": 7,
     "estimatedEffort": {
-      "hours": 5,
-      "complexity": "medium",
-      "confidence": "medium"
-    }
-  },
-  {
-    "type": "enhancement",
-    "title": "Add worker health monitoring to console panel",
-    "documentation": "Enhance WorkerConsolePanel to show worker health: container status, last heartbeat, resource usage (CPU/memory). Alert when worker becomes unhealthy. Keep display minimal and actionable.",
-    "acceptanceCriteria": [
-      "Shows container status (running/stopped/error)",
-      "Shows last heartbeat timestamp",
-      "Shows CPU and memory usage",
-      "Red indicator when worker unhealthy (>5min no heartbeat)",
-      "Restart button for unhealthy workers",
-      "Updates every 30 seconds"
-    ],
-    "assignedAgent": "fullstack-specialist",
-    "files": [
-      "backend/src/services/workerHealthMonitor.service.ts",
-      "backend/src/routes/dev-bots/workers.routes.ts",
-      "frontend/src/components/dev-bots/workers/WorkerConsolePanel.tsx"
-    ],
-    "project": "app-monitor",
-    "priority": 6,
-    "estimatedEffort": {
-      "hours": 4,
+      "hours": 1,
       "complexity": "simple",
       "confidence": "high"
     }
   },
   {
-    "type": "bug-fix",
-    "title": "Fix interactive session context not persisting",
-    "documentation": "Interactive session context_snapshot column is not being updated during session. Context updates called but database not reflecting changes. Verify updateInteractiveContext method and database triggers.",
+    "type": "feature",
+    "title": "Add GET /api/dev-bots/queue/status endpoint",
+    "documentation": "Create queue.routes.ts with GET /queue/status endpoint. Returns queue state: isPaused, pendingCount, processingCount. Simple read-only endpoint.",
     "acceptanceCriteria": [
-      "Context updates persist to database",
-      "Context retrievable after session ends",
-      "Multiple context updates during session don't overwrite",
-      "Context includes timestamps",
-      "Existing tests pass"
+      "GET /queue/status returns isPaused boolean",
+      "Returns pending and processing task counts",
+      "Response format: {isPaused, pendingCount, processingCount}",
+      "Returns 200 always"
     ],
     "assignedAgent": "backend-specialist",
     "files": [
-      "backend/src/services/interactiveSession.service.ts",
-      "backend/src/services/database.ts"
+      "backend/src/routes/dev-bots/queue.routes.ts"
     ],
     "project": "app-monitor",
-    "priority": 8,
+    "priority": 6,
     "estimatedEffort": {
-      "hours": 2,
+      "hours": 0.5,
       "complexity": "simple",
       "confidence": "high"
     }
   },
   {
-    "type": "enhancement",
-    "title": "Add session resume button to interactive tab",
-    "documentation": "Add one-click session resume to InteractiveSessionTab. Show list of recent sessions (last 10) with context preview. Clicking resumes with previous context. Quick access to debugging ongoing issues.",
+    "type": "feature",
+    "title": "Add POST /api/dev-bots/queue/pause endpoint",
+    "documentation": "Add POST /queue/pause endpoint to queue.routes.ts. Calls taskQueue.pause(). Returns updated queue status.",
     "acceptanceCriteria": [
-      "Shows last 10 sessions with timestamps",
-      "Shows brief context preview (first 100 chars)",
-      "Resume button starts new session with inherited context",
-      "Context includes 'resumedFrom' session ID",
-      "Session list updates on new session start",
-      "List is keyboard navigable"
+      "POST /queue/pause calls taskQueue.pause()",
+      "Returns 200 with updated queue status",
+      "Subsequent tasks don't process after pause",
+      "Idempotent (calling twice is safe)"
     ],
-    "assignedAgent": "fullstack-specialist",
+    "assignedAgent": "backend-specialist",
     "files": [
-      "backend/src/routes/dev-bots/interactive.routes.ts",
-      "frontend/src/components/dev-bots/interactive/InteractiveSessionTab.tsx",
-      "frontend/src/components/dev-bots/interactive/SessionHistoryList.tsx"
+      "backend/src/routes/dev-bots/queue.routes.ts"
     ],
     "project": "app-monitor",
     "priority": 6,
     "estimatedEffort": {
-      "hours": 4,
+      "hours": 0.5,
+      "complexity": "simple",
+      "confidence": "high"
+    }
+  },
+  {
+    "type": "feature",
+    "title": "Add POST /api/dev-bots/queue/resume endpoint",
+    "documentation": "Add POST /queue/resume endpoint to queue.routes.ts. Calls taskQueue.resume(). Returns updated queue status.",
+    "acceptanceCriteria": [
+      "POST /queue/resume calls taskQueue.resume()",
+      "Returns 200 with updated queue status",
+      "Queue processes tasks after resume",
+      "Idempotent (calling twice is safe)"
+    ],
+    "assignedAgent": "backend-specialist",
+    "files": [
+      "backend/src/routes/dev-bots/queue.routes.ts"
+    ],
+    "project": "app-monitor",
+    "priority": 6,
+    "estimatedEffort": {
+      "hours": 0.5,
+      "complexity": "simple",
+      "confidence": "high"
+    }
+  },
+  {
+    "type": "feature",
+    "title": "Create QueueControls component with pause/resume buttons",
+    "documentation": "Create QueueControls.tsx component with pause and resume buttons. Fetches queue status and calls pause/resume endpoints. Shows current state (paused/active).",
+    "acceptanceCriteria": [
+      "Pause button calls POST /queue/pause",
+      "Resume button calls POST /queue/resume",
+      "Shows current queue state (paused/active)",
+      "Buttons disabled during API call",
+      "Status refreshes after action"
+    ],
+    "assignedAgent": "frontend-specialist",
+    "files": [
+      "frontend/src/components/dev-bots/queue/QueueControls.tsx"
+    ],
+    "project": "app-monitor",
+    "priority": 5,
+    "estimatedEffort": {
+      "hours": 1,
+      "complexity": "simple",
+      "confidence": "high"
+    }
+  },
+  {
+    "type": "feature",
+    "title": "Create ChainDetailsModal component skeleton",
+    "documentation": "Create minimal ChainDetailsModal.tsx component that opens when chain row is clicked. Modal shows chain ID, PR link, and close button. Keyboard accessible (Esc closes). No complex data yet.",
+    "acceptanceCriteria": [
+      "Modal opens from chain row click",
+      "Shows chain ID and PR link",
+      "Close button and Esc key close modal",
+      "Modal overlay dims background",
+      "Focus trapped in modal when open"
+    ],
+    "assignedAgent": "frontend-specialist",
+    "files": [
+      "frontend/src/components/dev-bots/queue/ChainDetailsModal.tsx"
+    ],
+    "project": "app-monitor",
+    "priority": 5,
+    "estimatedEffort": {
+      "hours": 1,
+      "complexity": "simple",
+      "confidence": "high"
+    }
+  },
+  {
+    "type": "feature",
+    "title": "Add task history section to ChainDetailsModal",
+    "documentation": "Extend ChainDetailsModal.tsx to show last 5 tasks for the chain. Display task title, status, and timestamp. Simple read-only list.",
+    "acceptanceCriteria": [
+      "Modal fetches last 5 tasks for chain",
+      "Displays task title, status, timestamp",
+      "Tasks ordered by timestamp descending",
+      "Shows 'No tasks' if chain has no tasks",
+      "Status badges color-coded (success=green, failed=red, etc)"
+    ],
+    "assignedAgent": "frontend-specialist",
+    "files": [
+      "frontend/src/components/dev-bots/queue/ChainDetailsModal.tsx"
+    ],
+    "project": "app-monitor",
+    "priority": 4,
+    "estimatedEffort": {
+      "hours": 1,
+      "complexity": "simple",
+      "confidence": "high"
+    }
+  },
+  {
+    "type": "feature",
+    "title": "Add GET /api/dev-bots/sessions/recent endpoint",
+    "documentation": "Add GET /sessions/recent endpoint to interactive.routes.ts. Returns last 10 interactive sessions with id, created_at, and context preview (first 100 chars). Ordered by created_at desc.",
+    "acceptanceCriteria": [
+      "GET /sessions/recent returns last 10 sessions",
+      "Each session includes id, created_at, context_preview",
+      "Context preview is first 100 chars of context_snapshot",
+      "Sessions ordered by created_at descending",
+      "Returns empty array if no sessions"
+    ],
+    "assignedAgent": "backend-specialist",
+    "files": [
+      "backend/src/routes/dev-bots/interactive.routes.ts"
+    ],
+    "project": "app-monitor",
+    "priority": 4,
+    "estimatedEffort": {
+      "hours": 0.5,
+      "complexity": "simple",
+      "confidence": "high"
+    }
+  },
+  {
+    "type": "feature",
+    "title": "Create SessionHistoryList component to display recent sessions",
+    "documentation": "Create SessionHistoryList.tsx that fetches and displays last 10 sessions from GET /sessions/recent. Shows timestamp and context preview. Each row clickable to resume session.",
+    "acceptanceCriteria": [
+      "Fetches from GET /sessions/recent",
+      "Displays sessions in list with timestamp and preview",
+      "Each row has 'Resume' button",
+      "Shows 'No recent sessions' when empty",
+      "List keyboard navigable with arrow keys"
+    ],
+    "assignedAgent": "frontend-specialist",
+    "files": [
+      "frontend/src/components/dev-bots/interactive/SessionHistoryList.tsx"
+    ],
+    "project": "app-monitor",
+    "priority": 3,
+    "estimatedEffort": {
+      "hours": 1,
       "complexity": "simple",
       "confidence": "high"
     }

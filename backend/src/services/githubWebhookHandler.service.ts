@@ -144,6 +144,14 @@ export class GitHubWebhookHandler {
       this.stats
     );
   }
+
+  /**
+   * Get pull request handler for PR sync service (avoids duplicate instances)
+   */
+  public getPullRequestHandler(): PullRequestHandler {
+    return this.pullRequestHandler;
+  }
+
   /**
    * Handle pull request webhook events
    * Delegates to modular PullRequestHandler
