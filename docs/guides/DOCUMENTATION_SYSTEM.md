@@ -76,7 +76,7 @@
 **Examples:**
 - `PRODUCTION_DEPLOYMENT.md` - How to deploy
 - `MINIMAL_TASK_SUBMISSION_GUIDE.md` - How to submit tasks
-- `worker-onboarding.md` - How to set up as new developer
+- `FRONTEND_DEVELOPMENT.md` - Frontend development workflow
 
 **Prohibited:**
 - "Why" explanations (link to architecture docs instead)
@@ -195,7 +195,7 @@ docs/
 │   └── system-overview.md
 ├── guides/                # Permanent operational how-tos
 │   ├── PRODUCTION_DEPLOYMENT.md
-│   └── worker-onboarding.md
+│   └── FRONTEND_DEVELOPMENT.md
 ├── plans/                 # DELETE when complete
 │   └── current-phase-plan.md
 ├── technicalDesigns/      # Specs for upcoming features
