@@ -11,6 +11,14 @@ import { createLogger } from '@/utils/logger';
 
 import { getApiBaseUrl } from '@/utils/apiBaseUrl';
 
+// Build timestamp for cache busting - updated automatically on each build
+const BUILD_TIMESTAMP = '__BUILD_TIMESTAMP__';
+
+// Runtime validation: ensure build script replaced the placeholder
+if (BUILD_TIMESTAMP === '__BUILD_TIMESTAMP__') {
+  console.warn('[ApiClient] BUILD_TIMESTAMP placeholder not replaced - build script may have failed');
+}
+
 export class ApiClient {
   private client: AxiosInstance;
   private log = createLogger('ApiClient');
@@ -21,6 +29,7 @@ export class ApiClient {
     this.log.debug('Initializing with base URL', fullBaseURL);
     this.log.debug('Resolved API base input', normalizedBaseUrl || '[current origin]');
     this.log.debug('Raw VITE_API_BASE_URL', import.meta.env.VITE_API_BASE_URL);
+    this.log.debug('Build timestamp', BUILD_TIMESTAMP);
 
     const apiKey = import.meta.env.VITE_API_KEY;
     

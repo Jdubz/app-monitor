@@ -485,6 +485,40 @@ export type DevBotsInteractiveSessionStateResponse = ApiSuccess<DevBotsInteracti
 export type DevBotsInteractiveSessionInputResponse = ApiSuccess<{ accepted: boolean }>;
 
 // -----------------------------------------------------------------------------
+// Dev-Bots Intervention Contracts
+// -----------------------------------------------------------------------------
+
+export interface DevBotsInterventionResponse {
+  message: string;
+  taskId?: string;
+  chainId?: string;
+  timestamp?: string;
+}
+
+export interface DevBotsRetryTaskPayload {
+  taskId: string;
+}
+
+export interface DevBotsSkipTaskPayload {
+  taskId: string;
+  reason?: string;
+}
+
+export interface DevBotsCancelTaskPayload {
+  taskId: string;
+}
+
+export interface DevBotsQuarantineChainPayload {
+  chainId: string;
+  reason: string;
+}
+
+export type DevBotsRetryTaskResponse = ApiSuccess<DevBotsInterventionResponse>;
+export type DevBotsSkipTaskResponse = ApiSuccess<DevBotsInterventionResponse>;
+export type DevBotsCancelTaskResponse = ApiSuccess<DevBotsInterventionResponse>;
+export type DevBotsQuarantineChainResponse = ApiSuccess<DevBotsInterventionResponse>;
+
+// -----------------------------------------------------------------------------
 // Plans System Contracts
 // -----------------------------------------------------------------------------
 

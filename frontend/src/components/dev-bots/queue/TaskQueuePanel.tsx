@@ -8,26 +8,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
+import { formatRelativeTime } from '@/utils/dateFormatters';
 
 type QueueBucket = 'pending' | 'active' | 'completed' | 'failed';
-
-const formatRelativeTime = (timestamp?: string) => {
-  if (!timestamp) {
-    return 'unknown';
-  }
-  const date = new Date(timestamp);
-  const diff = Date.now() - date.getTime();
-  if (Number.isNaN(diff)) {
-    return 'unknown';
-  }
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-};
 
 const getStatusBadgeVariant = (status: DevBotsTask['status']) => {
   switch (status) {

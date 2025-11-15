@@ -24,6 +24,11 @@ import type {
   DevBotsInteractiveSessionStartPayload,
   DevBotsInteractiveHeartbeatPayload,
   DevBotsInteractiveInterruptPayload,
+  DevBotsRetryTaskResponse,
+  DevBotsSkipTaskResponse,
+  DevBotsCancelTaskResponse,
+  DevBotsQuarantineChainResponse,
+  DevBotsInterventionResponse,
 } from '@/types/contracts';
 import type {
   DevBotsAgentComparison,
@@ -257,6 +262,41 @@ export const getDevBotsAgentComparison = async (): Promise<DevBotsAgentCompariso
   return data.comparison;
 };
 
+// Dev-Bots intervention endpoints
+export const retryDevBotsTask = async (taskId: string): Promise<DevBotsInterventionResponse> => {
+  const client = await getApiClient();
+  const response = await client.post<DevBotsRetryTaskResponse>(
+    `/dev-bots/tasks/${taskId}/retry`,
+  );
+  return ensureApiSuccess(response, `retrying task ${taskId}`);
+};
+
+export const skipDevBotsTask = async (taskId: string, reason?: string): Promise<DevBotsInterventionResponse> => {
+  const client = await getApiClient();
+  const response = await client.post<DevBotsSkipTaskResponse>(
+    `/dev-bots/tasks/${taskId}/skip`,
+    reason ? { reason } : undefined,
+  );
+  return ensureApiSuccess(response, `skipping task ${taskId}`);
+};
+
+export const cancelDevBotsTask = async (taskId: string): Promise<DevBotsInterventionResponse> => {
+  const client = await getApiClient();
+  const response = await client.post<DevBotsCancelTaskResponse>(
+    `/dev-bots/tasks/${taskId}/cancel`,
+  );
+  return ensureApiSuccess(response, `canceling task ${taskId}`);
+};
+
+export const quarantineDevBotsChain = async (chainId: string, reason: string): Promise<DevBotsInterventionResponse> => {
+  const client = await getApiClient();
+  const response = await client.post<DevBotsQuarantineChainResponse>(
+    `/dev-bots/chains/${chainId}/quarantine`,
+    { reason },
+  );
+  return ensureApiSuccess(response, `quarantining chain ${chainId}`);
+};
+
 export const handleApiError = (error: unknown): string => {
   if (isApiErrorPayload(error)) {
     return error.message || error.error;
@@ -314,6 +354,11 @@ export const api = {
   sendDevBotsInteractiveInterrupt,
   sendDevBotsInteractiveHeartbeat,
   getDevBotsInteractiveStreamUrl,
+  // Intervention endpoints
+  retryDevBotsTask,
+  skipDevBotsTask,
+  cancelDevBotsTask,
+  quarantineDevBotsChain,
   handleApiError,
   // Add HTTP methods for components that need them
   /**
