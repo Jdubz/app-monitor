@@ -387,7 +387,7 @@ This document provides comprehensive examples of different types of tasks that c
 
 - [API Reference](api-reference.md)
 - [Agent Personalities](agent-personalities.md)
-- [Task Execution Template](task-execution-template.md)
+- [Task Submission Guide](MINIMAL_TASK_SUBMISSION_GUIDE.md)
 
 ---
 
