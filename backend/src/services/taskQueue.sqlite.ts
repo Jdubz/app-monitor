@@ -233,7 +233,7 @@ export class TaskQueueService {
   /**
    * Set PR sync service (dependency injection to avoid circular dependency)
    */
-  setPRSyncService(prSyncService: any): void {
+  setPRSyncService(prSyncService: { syncAllTrackedPRs: () => Promise<void> }): void {
     this.prSyncService = prSyncService;
   }
 

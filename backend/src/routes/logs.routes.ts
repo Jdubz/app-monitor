@@ -80,7 +80,7 @@ router.post('/frontend', (req: Request, res: Response) => {
 
     // Handle log batch
     if (batch.type === 'log_batch' && batch.logs) {
-      logWriter.writeLogs(batch.logs as any);
+      logWriter.writeLogs(batch.logs);
     }
 
     res.json({
