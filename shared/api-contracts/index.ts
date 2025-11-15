@@ -495,6 +495,15 @@ export interface DevBotsInterventionResponse {
   timestamp?: string;
 }
 
+// Specific response types with appropriate required fields
+export interface DevBotsTaskInterventionResponse extends DevBotsInterventionResponse {
+  taskId: string; // Required for task-level interventions
+}
+
+export interface DevBotsChainInterventionResponse extends DevBotsInterventionResponse {
+  chainId: string; // Required for chain-level interventions
+}
+
 export interface DevBotsRetryTaskPayload {
   taskId: string;
 }
@@ -513,10 +522,10 @@ export interface DevBotsQuarantineChainPayload {
   reason: string;
 }
 
-export type DevBotsRetryTaskResponse = ApiSuccess<DevBotsInterventionResponse>;
-export type DevBotsSkipTaskResponse = ApiSuccess<DevBotsInterventionResponse>;
-export type DevBotsCancelTaskResponse = ApiSuccess<DevBotsInterventionResponse>;
-export type DevBotsQuarantineChainResponse = ApiSuccess<DevBotsInterventionResponse>;
+export type DevBotsRetryTaskResponse = ApiSuccess<DevBotsTaskInterventionResponse>;
+export type DevBotsSkipTaskResponse = ApiSuccess<DevBotsTaskInterventionResponse>;
+export type DevBotsCancelTaskResponse = ApiSuccess<DevBotsTaskInterventionResponse>;
+export type DevBotsQuarantineChainResponse = ApiSuccess<DevBotsChainInterventionResponse>;
 
 // -----------------------------------------------------------------------------
 // Plans System Contracts

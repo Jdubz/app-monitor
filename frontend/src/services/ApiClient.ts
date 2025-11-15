@@ -12,7 +12,8 @@ import { createLogger } from '@/utils/logger';
 import { getApiBaseUrl } from '@/utils/apiBaseUrl';
 
 // Build timestamp for cache busting - updated automatically on each build
-const BUILD_TIMESTAMP = '__BUILD_TIMESTAMP__';
+// Exported to ensure it affects bundle hash (must be in final bundle)
+export const BUILD_TIMESTAMP = '__BUILD_TIMESTAMP__';
 
 // Runtime validation: ensure build script replaced the placeholder
 if (BUILD_TIMESTAMP === '__BUILD_TIMESTAMP__') {

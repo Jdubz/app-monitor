@@ -12,9 +12,10 @@ let content = fs.readFileSync(filePath, 'utf8');
 
 const timestamp = new Date().toISOString();
 
-// Validate that placeholder exists before replacement
-if (!content.includes('BUILD_TIMESTAMP')) {
-  console.error(`❌ BUILD_TIMESTAMP constant not found in ${path.relative(process.cwd(), filePath)}`);
+// Validate that the constant declaration exists (not just the string)
+if (!/const\s+BUILD_TIMESTAMP\s*=/.test(content)) {
+  console.error(`❌ BUILD_TIMESTAMP constant declaration not found in ${path.relative(process.cwd(), filePath)}`);
+  console.error('   Expected format: const BUILD_TIMESTAMP = "...";');
   process.exit(1);
 }
 
