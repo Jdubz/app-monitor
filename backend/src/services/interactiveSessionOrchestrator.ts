@@ -80,7 +80,7 @@ export class InteractiveSessionOrchestrator {
    * 4. Clone repository into workspace
    */
   async start(session: InteractiveSessionRecord): Promise<string> {
-    const hostLogsDir = path.join(this.config.logsDirectory, session.id);
+    const hostLogsDir = path.resolve(path.join(this.config.logsDirectory, session.id));
     fs.mkdirSync(hostLogsDir, { recursive: true });
 
     logger.info({
