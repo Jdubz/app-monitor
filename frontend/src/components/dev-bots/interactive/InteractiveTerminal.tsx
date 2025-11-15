@@ -50,7 +50,7 @@ export function InteractiveTerminal({
     const handleResize = () => {
       try {
         fitAddon.fit();
-      } catch (error) {
+      } catch (error: unknown) {
         log.warn('Unable to fit terminal', { error });
       }
     };
@@ -126,7 +126,7 @@ export function InteractiveTerminal({
 
     try {
       fitAddonRef.current?.fit();
-    } catch (error) {
+    } catch (error: unknown) {
       log.warn('Unable to fit terminal after update', { error });
     }
   }, [logs]);

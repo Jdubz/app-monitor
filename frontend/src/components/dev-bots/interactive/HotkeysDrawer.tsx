@@ -66,7 +66,7 @@ export function HotkeysDrawer({
       setPendingAction(id);
       try {
         await handler();
-      } catch (error) {
+      } catch (error: unknown) {
         log.error('Hotkey action failed', { error, hotkeyId: id });
       } finally {
         setPendingAction(null);

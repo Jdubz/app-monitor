@@ -58,7 +58,7 @@ export function ChainStatusPanel() {
       if (storedName) {
         setOperatorName(storedName);
       }
-    } catch (err) {
+    } catch (err: unknown) {
       log.error('Failed to load operator name from storage', { error: err });
     }
   }, []);
@@ -68,7 +68,7 @@ export function ChainStatusPanel() {
     if (typeof window !== 'undefined') {
       try {
         window.localStorage.setItem(OPERATOR_NAME_STORAGE_KEY, value);
-      } catch (err) {
+      } catch (err: unknown) {
         log.error('Failed to persist operator name', { error: err });
       }
     }
@@ -92,7 +92,7 @@ export function ChainStatusPanel() {
       if (!response.ok) throw new Error('Failed to fetch blocked chains');
       const data = await response.json();
       setBlockedChains(data);
-    } catch (err) {
+    } catch (err: unknown) {
       log.error('Failed to fetch blocked chains', { error: err });
     }
   };

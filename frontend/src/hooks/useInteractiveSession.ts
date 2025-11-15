@@ -132,7 +132,7 @@ export function useInteractiveSession(
     try {
       socket.send(JSON.stringify(payload));
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       log.warn('Failed to send socket payload', { error });
       return false;
     }

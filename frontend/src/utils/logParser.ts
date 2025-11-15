@@ -29,10 +29,15 @@ export function parseLogEntry(rawEntry: unknown): ParsedLogEntry {
     ? rawEntry as Record<string, unknown>
     : {};
 
+  // Normalize and validate log level
+  const rawLevel = ((typeof entry.level === 'string' ? entry.level : undefined) || 'INFO').toUpperCase();
+  const isValidLevel = (l: string): l is LogLevel => ['ERROR', 'WARN', 'INFO', 'DEBUG', 'TRACE'].includes(l);
+  const level: LogLevel = isValidLevel(rawLevel) ? rawLevel : 'INFO';
+
   const logEntry: LogEntry = {
     id: (typeof entry.id === 'string' ? entry.id : undefined) || generateId(),
     timestamp: (typeof entry.timestamp === 'string' ? entry.timestamp : undefined) || new Date().toISOString(),
-    level: (typeof entry.level === 'string' ? entry.level : undefined) || 'INFO',
+    level,
     message: (typeof entry.message === 'string' ? entry.message : undefined) || '',
     service: (typeof entry.service === 'string' ? entry.service : undefined) || 'unknown',
     source: (typeof entry.source === 'string' ? entry.source : undefined) || 'stdout',
@@ -42,7 +47,6 @@ export function parseLogEntry(rawEntry: unknown): ParsedLogEntry {
   const parsedTimestamp = new Date(logEntry.timestamp);
   const formattedTime = formatTimestamp(parsedTimestamp);
   
-  const level = logEntry.level.toUpperCase() as LogLevel;
   const isError = level === 'ERROR';
   const isWarning = level === 'WARN';
   const isInfo = level === 'INFO';
