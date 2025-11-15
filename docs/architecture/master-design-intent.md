@@ -38,9 +38,10 @@
 - **WHY**: Prevents contamination, enables safe parallel execution
 
 ### Database as Source of Truth
-- **✅ DO**: Use SQLite (via `TaskQueueService`) for all task/chain state
-- **❌ NEVER**: In-memory arrays, local state that conflicts with DB
-- **WHY**: Single source of truth eliminates race conditions
+- **✅ DO**: Persist ALL state to SQLite database (via services)
+- **❌ NEVER**: In-memory caches, arrays, maps for state that must survive deployments
+- **WHY**: Blue-green deployments constantly roll over servers - in-memory data is lost
+- **EXCEPTION**: Single-request transient data (function-scoped variables only)
 
 ### Chain Concurrency Control
 - **✅ DO**: Limit concurrent *chains* (default: 3), block new implementations until chains complete
@@ -67,6 +68,12 @@
 - **❌ NEVER**: Manual deployments, worker-initiated deploys, direct production edits
 - **WHY**: Ensures blue-green process, health checks, automatic rollback, audit trail
 
+### Deployment-Safe Architecture
+- **✅ DO**: Design all features to survive server restarts and blue-green rollover
+- **❌ NEVER**: Rely on in-memory state, process uptime, or server continuity
+- **WHY**: Production deploys multiple times daily - architecture must assume ephemeral servers
+- **RULE**: If data matters beyond a single function call, persist it to the database
+
 ---
 
 ## Key Design Patterns
@@ -75,6 +82,9 @@
 - Zero-downtime deploys via two systemd services (ports 5001/5002)
 - Nginx upstream switches traffic after health checks
 - Shared data directory (`/opt/app-monitor/shared/`) persists across releases
+- **Frequent rollover**: Deploys happen multiple times daily
+- **Ephemeral servers**: Each release is a new Node.js process with clean memory
+- **State persistence required**: All critical state MUST be in database, not RAM
 
 ### Heartbeat-Based Monitoring
 - Workers heartbeat every 15s
@@ -146,7 +156,12 @@
 
 ---
 
-**Remember**: This document is your north star. When in doubt about a design decision, ask: "Does this align with autonomy, isolation, event-driven architecture, and minimalist UI?" If not, reconsider.
+**Remember**: This document is your north star. When in doubt about a design decision, ask:
+1. "Does this align with autonomy, isolation, event-driven architecture, and minimalist UI?"
+2. "Will this survive a blue-green deployment rollover?"
+3. "Is all critical state persisted to the database?"
+
+If any answer is NO → reconsider the design.
 
 ---
 
