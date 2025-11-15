@@ -21,6 +21,7 @@ export default defineConfig({
   },
   define: {
     'process.env.NODE_ENV': JSON.stringify('test'),
+    'BUILD_TIMESTAMP_VALUE': JSON.stringify(new Date().toISOString()),
   },
   test: {
     // Parallel execution with thread pool (much faster than forks)
