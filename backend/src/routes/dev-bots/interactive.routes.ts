@@ -121,7 +121,7 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
       return res.status(404).json({ success: false, error: 'not_found', message: 'Session not found or already ended' });
     }
     devBotsManager.sendInteractiveInput(sessionId, payload.data);
-    res.json({ data: { success: true, data: { accepted: true } }});
+    res.json({ success: true, data: { accepted: true } });
   });
 
   /**
@@ -139,7 +139,7 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
     }
     const source = payload.source === 'agent' ? 'agent' : 'user';
     devBotsManager.recordInteractiveActivity(payload.sessionId, source);
-    res.json({ data: { success: true, data: { acknowledged: true } }});
+    res.json({ success: true, data: { acknowledged: true } });
   });
 
   /**
