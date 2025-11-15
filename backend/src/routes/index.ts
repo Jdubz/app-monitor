@@ -41,11 +41,11 @@ export function createApiRouter(deps: {
 }) {
   const router = Router();
 
-  // Initialize issues routes with database from devBotsManager
+  // Initialize issues routes with database and task queue from devBotsManager
   if (deps.devBotsManager) {
     const taskQueue = deps.devBotsManager.getTaskQueue();
     const db = (taskQueue as any).db; // Access internal database
-    initializeIssuesRoutes(db);
+    initializeIssuesRoutes(db, taskQueue);
   }
 
   // Health check - no auth required

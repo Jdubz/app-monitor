@@ -157,11 +157,6 @@ export async function createApp(options: CreateAppOptions = {}) {
     // Inject PR sync service into task queue (dependency injection, not dynamic import)
     taskQueue.setPRSyncService(prSyncService);
 
-    // Initialize issue triage cron (autonomous bug report processing)
-    const { initializeIssueTriageCron } = await import('./services/issueTriageCron.js');
-    const db = (taskQueue as any).db; // Access internal database
-    initializeIssueTriageCron(taskQueue, db);
-
     logger.info({
       category: 'system',
       action: 'webhook_handler_initialized',
