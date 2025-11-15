@@ -31,12 +31,9 @@ export function DevBotsTabContent() {
 
   // For now, treat each task as a "chain" - in the future, group by chainId
   const chains = useMemo(() => {
-    console.log('[DevBotsTab] queueRows:', queueRows.length, queueRows);
-    console.log('[DevBotsTab] status:', status);
     const result = queueRows.map((row) => row.task);
-    console.log('[DevBotsTab] chains:', result.length, result);
     return result;
-  }, [queueRows, status]);
+  }, [queueRows]);
 
   // Use list selection hook for consistent auto-selection behavior
   const { selectedItem: selectedChain, selectItem: selectChain } = useListSelection(
@@ -46,7 +43,6 @@ export function DevBotsTabContent() {
   );
 
   const filteredChains = useMemo(() => {
-    console.log('[DevBotsTab] filtering with activeFilter:', activeFilter, 'chains:', chains.length);
     let result: DevBotsTask[];
     switch (activeFilter) {
       case 'blocked':
@@ -61,7 +57,6 @@ export function DevBotsTabContent() {
       default:
         result = chains;
     }
-    console.log('[DevBotsTab] filteredChains result:', result.length, result);
     return result;
   }, [chains, activeFilter]);
 

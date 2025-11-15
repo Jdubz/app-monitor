@@ -55,7 +55,7 @@ describe('Interactive Routes', () => {
       await route.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
 
       expect(mockDevBotsManager.sendInteractiveInput).toHaveBeenCalledWith('session-123', 'user input');
-      expect(responseJson).toEqual({ success: true, accepted: true });
+      expect(responseJson).toEqual({ success: true, data: { accepted: true } });
     });
   });
 
@@ -71,7 +71,7 @@ describe('Interactive Routes', () => {
       await route.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
 
       expect(mockDevBotsManager.recordInteractiveActivity).toHaveBeenCalledWith('session-123', 'user');
-      expect(responseJson).toEqual({ success: true, acknowledged: true });
+      expect(responseJson).toEqual({ success: true, data: { acknowledged: true } });
     });
   });
 });
