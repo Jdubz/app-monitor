@@ -48,7 +48,7 @@ export class SocketService {
   private connectionState: ConnectionState;
   private healthMetrics: HealthMetrics;
   private pingInterval?: NodeJS.Timeout;
-  private eventListeners: Map<string, Set<(...args: any[]) => void>> = new Map();
+  private eventListeners: Map<string, Set<(...args: unknown[]) => void>> = new Map();
 
   constructor(config: SocketConfig) {
     this.config = {
@@ -198,16 +198,19 @@ export class SocketService {
     });
 
     // Server migration notification (for zero-downtime deployments)
-    this.socket.on('system_event', (data: any) => {
-      if (data.type === 'server_migration') {
-        log.info('Server migration detected', data.message);
-        log.info(`Will automatically reconnect in ${data.reconnectDelay}ms`);
+    this.socket.on('system_event', (data: unknown) => {
+      if (typeof data === 'object' && data !== null) {
+        const event = data as { type?: string; message?: string; reconnectDelay?: number };
+        if (event.type === 'server_migration') {
+          log.info('Server migration detected', event.message);
+          log.info(`Will automatically reconnect in ${event.reconnectDelay}ms`);
 
-        // Emit migration event for UI notification
-        this.emit('server:migration', data);
+          // Emit migration event for UI notification
+          this.emit('server:migration', data);
 
-        // Socket.IO will automatically reconnect after disconnect
-        // No manual action needed - reconnection is handled automatically
+          // Socket.IO will automatically reconnect after disconnect
+          // No manual action needed - reconnection is handled automatically
+        }
       }
     });
   }
