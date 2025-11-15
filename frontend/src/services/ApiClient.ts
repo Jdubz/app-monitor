@@ -14,6 +14,11 @@ import { getApiBaseUrl } from '@/utils/apiBaseUrl';
 // Build timestamp for cache busting - updated automatically on each build
 const BUILD_TIMESTAMP = '__BUILD_TIMESTAMP__';
 
+// Runtime validation: ensure build script replaced the placeholder
+if (BUILD_TIMESTAMP === '__BUILD_TIMESTAMP__') {
+  console.warn('[ApiClient] BUILD_TIMESTAMP placeholder not replaced - build script may have failed');
+}
+
 export class ApiClient {
   private client: AxiosInstance;
   private log = createLogger('ApiClient');

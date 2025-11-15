@@ -11,6 +11,14 @@ const filePath = path.join(__dirname, '../frontend/src/services/ApiClient.ts');
 let content = fs.readFileSync(filePath, 'utf8');
 
 const timestamp = new Date().toISOString();
+
+// Validate that placeholder exists before replacement
+if (!content.includes('BUILD_TIMESTAMP')) {
+  console.error(`❌ BUILD_TIMESTAMP constant not found in ${path.relative(process.cwd(), filePath)}`);
+  process.exit(1);
+}
+
+// More robust regex with capturing group to preserve formatting
 const newContent = content.replace(
   /(const BUILD_TIMESTAMP\s*=\s*)['"].*?['"];/,
   `$1'${timestamp}';`
@@ -20,6 +28,7 @@ if (newContent !== content) {
   fs.writeFileSync(filePath, newContent, 'utf8');
   console.log(`✓ Updated BUILD_TIMESTAMP to ${timestamp} in ${path.relative(process.cwd(), filePath)}`);
 } else {
-  console.log(`⚠ BUILD_TIMESTAMP not found in ${path.relative(process.cwd(), filePath)}`);
+  console.error(`❌ Failed to replace BUILD_TIMESTAMP in ${path.relative(process.cwd(), filePath)}`);
+  console.error('   Check that the constant follows the expected format: const BUILD_TIMESTAMP = "...";');
   process.exit(1);
 }
