@@ -1,92 +1,5 @@
 [
   {
-    "type": "bug-fix",
-    "title": "Fix interactive session context_snapshot not persisting to database",
-    "documentation": "The context_snapshot column in interactive_sessions table is not being updated when updateInteractiveContext is called. Investigate and fix the database update logic in interactiveSession.service.ts",
-    "acceptanceCriteria": [
-      "updateInteractiveContext successfully writes to context_snapshot column",
-      "Context can be retrieved after update",
-      "Add test case verifying context persistence"
-    ],
-    "assignedAgent": "backend-specialist",
-    "files": [
-      "backend/src/services/interactiveSession.service.ts"
-    ],
-    "project": "app-monitor",
-    "priority": 9,
-    "estimatedEffort": {
-      "hours": 1,
-      "complexity": "simple",
-      "confidence": "high"
-    }
-  },
-  {
-    "type": "feature",
-    "title": "Add retry context storage to database schema",
-    "documentation": "Create migration to add retry_context table that stores previous attempt information (error logs, attempted files, failure reason) for failed tasks. Simple schema with task_id, attempt_number, context_json, created_at.",
-    "acceptanceCriteria": [
-      "Migration creates retry_context table",
-      "Table has proper indexes on task_id and attempt_number",
-      "Migration is reversible (has down migration)",
-      "Migration runs successfully on clean database"
-    ],
-    "assignedAgent": "backend-specialist",
-    "files": [
-      "backend/migrations/012_task_retry_context.sql"
-    ],
-    "project": "app-monitor",
-    "priority": 8,
-    "estimatedEffort": {
-      "hours": 0.5,
-      "complexity": "simple",
-      "confidence": "high"
-    }
-  },
-  {
-    "type": "feature",
-    "title": "Add saveRetryContext method to retryManager",
-    "documentation": "Extend retryManager.ts to save retry context when a task fails. Method should accept task_id, attempt_number, and context object (error logs, attempted files, failure reason). Store in retry_context table.",
-    "acceptanceCriteria": [
-      "saveRetryContext method saves to retry_context table",
-      "Method validates required context fields",
-      "Context stored as JSON",
-      "Add unit test for saveRetryContext"
-    ],
-    "assignedAgent": "backend-specialist",
-    "files": [
-      "backend/src/services/retryManager.ts"
-    ],
-    "project": "app-monitor",
-    "priority": 7,
-    "estimatedEffort": {
-      "hours": 1,
-      "complexity": "simple",
-      "confidence": "high"
-    }
-  },
-  {
-    "type": "feature",
-    "title": "Add getRetryContext method to retrieve previous attempt data",
-    "documentation": "Add method to retryManager.ts that retrieves retry context for a given task_id. Returns array of previous attempts ordered by attempt_number. Used when retrying a task to avoid repeating mistakes.",
-    "acceptanceCriteria": [
-      "getRetryContext retrieves all attempts for task_id",
-      "Returns empty array if no previous attempts",
-      "Attempts ordered by attempt_number ascending",
-      "Add unit test for getRetryContext"
-    ],
-    "assignedAgent": "backend-specialist",
-    "files": [
-      "backend/src/services/retryManager.ts"
-    ],
-    "project": "app-monitor",
-    "priority": 7,
-    "estimatedEffort": {
-      "hours": 0.5,
-      "complexity": "simple",
-      "confidence": "high"
-    }
-  },
-  {
     "type": "feature",
     "title": "Create AlertManager service with basic alert CRUD operations",
     "documentation": "Create new backend service alertManager.ts with methods: createAlert, getActiveAlerts, dismissAlert. Alerts stored in-memory for now (Map<string, Alert>). Simple Alert type with id, chainId, reason, timestamp, dismissed fields.",
@@ -101,7 +14,7 @@
       "backend/src/services/alertManager.ts"
     ],
     "project": "app-monitor",
-    "priority": 6,
+    "priority": 8,
     "estimatedEffort": {
       "hours": 1,
       "complexity": "simple",
@@ -123,7 +36,7 @@
       "backend/src/services/alertManager.ts"
     ],
     "project": "app-monitor",
-    "priority": 6,
+    "priority": 8,
     "estimatedEffort": {
       "hours": 1,
       "complexity": "simple",
@@ -145,7 +58,7 @@
       "backend/src/routes/dev-bots/alerts.routes.ts"
     ],
     "project": "app-monitor",
-    "priority": 6,
+    "priority": 7,
     "estimatedEffort": {
       "hours": 0.5,
       "complexity": "simple",
@@ -167,7 +80,7 @@
       "backend/src/routes/dev-bots/alerts.routes.ts"
     ],
     "project": "app-monitor",
-    "priority": 5,
+    "priority": 7,
     "estimatedEffort": {
       "hours": 0.5,
       "complexity": "simple",
@@ -190,7 +103,7 @@
       "frontend/src/components/dev-bots/AlertsPanel.tsx"
     ],
     "project": "app-monitor",
-    "priority": 5,
+    "priority": 6,
     "estimatedEffort": {
       "hours": 1,
       "complexity": "simple",
@@ -212,7 +125,7 @@
       "frontend/src/components/dev-bots/DevBotsLayout.tsx"
     ],
     "project": "app-monitor",
-    "priority": 4,
+    "priority": 6,
     "estimatedEffort": {
       "hours": 0.5,
       "complexity": "simple",
@@ -235,7 +148,7 @@
       "backend/src/services/taskQueue.sqlite.ts"
     ],
     "project": "app-monitor",
-    "priority": 6,
+    "priority": 7,
     "estimatedEffort": {
       "hours": 1,
       "complexity": "simple",
@@ -257,7 +170,7 @@
       "backend/src/routes/dev-bots/queue.routes.ts"
     ],
     "project": "app-monitor",
-    "priority": 5,
+    "priority": 6,
     "estimatedEffort": {
       "hours": 0.5,
       "complexity": "simple",
@@ -279,7 +192,7 @@
       "backend/src/routes/dev-bots/queue.routes.ts"
     ],
     "project": "app-monitor",
-    "priority": 5,
+    "priority": 6,
     "estimatedEffort": {
       "hours": 0.5,
       "complexity": "simple",
@@ -301,7 +214,7 @@
       "backend/src/routes/dev-bots/queue.routes.ts"
     ],
     "project": "app-monitor",
-    "priority": 5,
+    "priority": 6,
     "estimatedEffort": {
       "hours": 0.5,
       "complexity": "simple",
@@ -324,7 +237,7 @@
       "frontend/src/components/dev-bots/queue/QueueControls.tsx"
     ],
     "project": "app-monitor",
-    "priority": 4,
+    "priority": 5,
     "estimatedEffort": {
       "hours": 1,
       "complexity": "simple",
@@ -347,7 +260,7 @@
       "frontend/src/components/dev-bots/queue/ChainDetailsModal.tsx"
     ],
     "project": "app-monitor",
-    "priority": 4,
+    "priority": 5,
     "estimatedEffort": {
       "hours": 1,
       "complexity": "simple",
@@ -370,7 +283,7 @@
       "frontend/src/components/dev-bots/queue/ChainDetailsModal.tsx"
     ],
     "project": "app-monitor",
-    "priority": 3,
+    "priority": 4,
     "estimatedEffort": {
       "hours": 1,
       "complexity": "simple",
@@ -414,29 +327,6 @@
     "assignedAgent": "frontend-specialist",
     "files": [
       "frontend/src/components/dev-bots/interactive/SessionHistoryList.tsx"
-    ],
-    "project": "app-monitor",
-    "priority": 3,
-    "estimatedEffort": {
-      "hours": 1,
-      "complexity": "simple",
-      "confidence": "high"
-    }
-  },
-  {
-    "type": "feature",
-    "title": "Add session resume functionality to InteractiveSessionTab",
-    "documentation": "Add resume button handler to InteractiveSessionTab.tsx. When clicked, starts new session with 'resumedFrom' metadata pointing to previous session ID. Inherits context from previous session.",
-    "acceptanceCriteria": [
-      "Resume button calls POST /session with resumedFrom ID",
-      "New session inherits context from previous session",
-      "New session metadata includes resumedFrom field",
-      "Session list updates after resume",
-      "Resume disabled if session already active"
-    ],
-    "assignedAgent": "frontend-specialist",
-    "files": [
-      "frontend/src/components/dev-bots/interactive/InteractiveSessionTab.tsx"
     ],
     "project": "app-monitor",
     "priority": 3,
