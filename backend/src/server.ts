@@ -147,32 +147,15 @@ export async function createApp(options: CreateAppOptions = {}) {
     const webhookHandler = new GitHubWebhookHandler(taskQueue, prOrchestrator);
     setWebhookHandler(webhookHandler);
     
-    // Wire up PR sync service with pull request handler for delta resolution
-    const { getPRSyncService } = await import('./services/prSync.service.js');
-    const { PullRequestHandler } = await import('./services/webhookHandlers/pullRequestHandler.js');
-    const { ReviewCommentTracker } = await import('./services/reviewCommentTracker.service.js');
-    const { TaskVerificationService } = await import('./services/taskVerification.service.js');
-    const { PRConditionStateService } = await import('./services/prConditionState.service.js');
-    const { getDatabase } = await import('./services/database.js');
+    // Initialize PR sync service and wire it up
+    const { initializePRSyncService } = await import('./services/prSync.service.js');
+    const prSyncService = initializePRSyncService(taskQueue);
     
-    const prSyncService = getPRSyncService(taskQueue);
+    // Reuse PullRequestHandler from webhook handler (avoids duplicate instances)
+    prSyncService.setPullRequestHandler(webhookHandler.getPullRequestHandler());
     
-    // Create pull request handler instance for PR sync (shares same dependencies as webhook handler)
-    const reviewCommentTracker = new ReviewCommentTracker(getDatabase());
-    const taskVerification = new TaskVerificationService();
-    const prConditionState = new PRConditionStateService(taskQueue);
-    const stats = (webhookHandler as any).stats; // Access stats object
-    
-    const pullRequestHandler = new PullRequestHandler(
-      taskQueue,
-      prOrchestrator,
-      prConditionState,
-      reviewCommentTracker,
-      taskVerification,
-      stats
-    );
-    
-    prSyncService.setPullRequestHandler(pullRequestHandler);
+    // Inject PR sync service into task queue (dependency injection, not dynamic import)
+    taskQueue.setPRSyncService(prSyncService);
     
     logger.info({
       category: 'system',
@@ -181,7 +164,8 @@ export async function createApp(options: CreateAppOptions = {}) {
       details: {
         has_task_queue: !!taskQueue,
         has_pr_orchestrator: !!prOrchestrator,
-        pr_sync_enabled: config.prSync.enabled
+        pr_sync_enabled: config.prSync.enabled,
+        pr_sync_threshold: config.prSync.taskThreshold
       }
     });
   }

@@ -199,6 +199,7 @@ export class TaskQueueService {
   private readonly metricsService: TaskQueueMetricsService; // Metrics and analytics
   private taskCompletionCount = 0; // PR sync counter (event-driven trigger)
   private readonly PR_SYNC_THRESHOLD: number; // Every N task completions
+  private prSyncService: { syncAllTrackedPRs: () => Promise<void> } | null = null; // PRSyncService (set after construction)
 
   constructor(dbPath: string) {
     this.dbPath = dbPath;
@@ -215,7 +216,7 @@ export class TaskQueueService {
     this.metricsService = new TaskQueueMetricsService(this.db);
 
     // Initialize PR sync threshold from config
-    this.PR_SYNC_THRESHOLD = config.prSync.taskThreshold;
+    this.PR_SYNC_THRESHOLD = Math.max(1, config.prSync.taskThreshold);
 
     logger.info({
       category: 'process',
@@ -227,6 +228,13 @@ export class TaskQueueService {
         prSyncThreshold: this.PR_SYNC_THRESHOLD
       }
     });
+  }
+
+  /**
+   * Set PR sync service (dependency injection to avoid circular dependency)
+   */
+  setPRSyncService(prSyncService: any): void {
+    this.prSyncService = prSyncService;
   }
 
   private ensureDirectory(): void {
@@ -1213,8 +1221,8 @@ export class TaskQueueService {
    * Event-driven trigger - no timers or cron jobs (aligns with master design intent)
    */
   private incrementTaskCompletionCounter(): void {
-    // Skip if PR sync disabled
-    if (!config.prSync.enabled) {
+    // Skip if PR sync disabled or not initialized
+    if (!config.prSync.enabled || !this.prSyncService) {
       return;
     }
 
@@ -1230,31 +1238,13 @@ export class TaskQueueService {
       });
 
       // Fire and forget - don't block task completion
-      this.triggerPRSync().catch(err => {
+      this.prSyncService.syncAllTrackedPRs().catch((err: Error) => {
         logger.error({
           category: 'pr-sync',
           action: 'sync_trigger_failed',
           message: 'PR sync trigger failed',
           error: err
         });
-      });
-    }
-  }
-
-  /**
-   * Trigger PR sync (imported dynamically to avoid circular dependencies)
-   */
-  private async triggerPRSync(): Promise<void> {
-    try {
-      const { getPRSyncService } = await import('./prSync.service.js');
-      const prSyncService = getPRSyncService(this);
-      await prSyncService.syncAllTrackedPRs();
-    } catch (error) {
-      logger.error({
-        category: 'pr-sync',
-        action: 'sync_execution_failed',
-        message: 'PR sync execution failed',
-        error
       });
     }
   }

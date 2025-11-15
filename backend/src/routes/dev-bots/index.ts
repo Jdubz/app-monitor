@@ -19,7 +19,6 @@ import { createAgentsRoutes } from './agents.routes.js';
 import { createInteractiveRoutes } from './interactive.routes.js';
 import { createTemplatesRoutes } from './templates.routes.js';
 import { createPlansRoutes } from './plans.routes.js';
-import { getPRSyncService } from '../../services/prSync.service.js';
 import { logger } from '../../utils/logger.js';
 import * as ErrorResponses from '../../utils/errorResponses.js';
 
@@ -95,14 +94,28 @@ export function createDevBotsRouter(devBotsManager: DevBotsManager): Router {
         message: 'Manual PR sync triggered via API endpoint'
       });
 
-      const taskQueue = devBotsManager.getTaskQueue();
-      const prSyncService = getPRSyncService(taskQueue);
+      const { getPRSyncService } = await import('../../services/prSync.service.js');
       
+      const prSyncService = getPRSyncService();
       await prSyncService.syncAllTrackedPRs();
+      
+      const stats = prSyncService.getStats();
 
       res.json({ 
         success: true,
-        data: { message: 'PR sync completed successfully' }
+        data: { 
+          message: 'PR sync completed successfully',
+          stats: {
+            syncs_triggered: stats.syncs_triggered,
+            syncs_completed: stats.syncs_completed,
+            syncs_failed: stats.syncs_failed,
+            total_prs_checked: stats.total_prs_checked,
+            total_stale_prs_found: stats.total_stale_prs_found,
+            total_deltas_resolved: stats.total_deltas_resolved,
+            github_api_calls: stats.github_api_calls,
+            last_sync: stats.last_sync_timestamp ? new Date(stats.last_sync_timestamp).toISOString() : null
+          }
+        }
       });
     } catch (error) {
       return ErrorResponses.internalError(
