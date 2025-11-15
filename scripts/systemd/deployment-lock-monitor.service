@@ -1,0 +1,25 @@
+[Unit]
+Description=App Monitor Deployment Lock Health Monitor
+Documentation=https://github.com/Jdubz/app-monitor
+After=network.target
+
+[Service]
+Type=oneshot
+User=jdubz
+Group=jdubz
+ExecStart=/opt/app-monitor/scripts/deployment-lock-manager.sh monitor
+
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/app-monitor /opt/app-monitor/shared
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=deployment-lock-monitor
+
+[Install]
+WantedBy=multi-user.target

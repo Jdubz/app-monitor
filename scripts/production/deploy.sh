@@ -61,26 +61,55 @@ log_error() {
     echo -e "${RED}[ERROR]${NC} $1"
 }
 
-# Deployment lock management
+# Deployment lock management with deadlock detection
 acquire_lock() {
-    # Try to acquire lock with 30 second timeout
+    # Try to acquire lock with enhanced deadlock detection
     local wait_time=0
-    local max_wait=30
+    local max_wait=60  # Increased to 60 seconds
+    local lock_check_interval=10
 
     while [ -f "${LOCK_FILE}" ]; do
         if [ $wait_time -ge $max_wait ]; then
             log_error "Another deployment is in progress (lock file exists: ${LOCK_FILE})"
-            log_error "If you're sure no deployment is running, remove: ${LOCK_FILE}"
+            log_error ""
+            
+            # Use lock manager to diagnose the issue
+            if [ -f "${SCRIPTS_DIR}/deployment-lock-manager.sh" ]; then
+                log_info "Running lock diagnostics..."
+                "${SCRIPTS_DIR}/deployment-lock-manager.sh" check
+                local check_result=$?
+                
+                if [ $check_result -eq 3 ]; then
+                    # Stale lock detected
+                    log_warn "Stale lock detected - attempting automatic cleanup..."
+                    if "${SCRIPTS_DIR}/deployment-lock-manager.sh" cleanup; then
+                        log_info "Lock cleaned up successfully, retrying acquisition..."
+                        # Don't exit - loop will retry
+                        wait_time=0
+                        continue
+                    fi
+                elif [ $check_result -eq 2 ]; then
+                    # Deadlock detected
+                    log_error "Deadlock detected - deployment has been running too long"
+                    log_error "Manual intervention required:"
+                    log_error "  1. Check logs: journalctl -u app-monitor-deploy-agent.service -n 100"
+                    log_error "  2. Force cleanup: ${SCRIPTS_DIR}/deployment-lock-manager.sh cleanup"
+                fi
+            else
+                log_error "Manual cleanup required: rm ${LOCK_FILE}"
+            fi
+            
             exit 1
         fi
-        log_warn "Waiting for existing deployment to complete..."
-        sleep 5
-        wait_time=$((wait_time + 5))
+        
+        log_warn "Waiting for existing deployment to complete... (${wait_time}/${max_wait}s)"
+        sleep $lock_check_interval
+        wait_time=$((wait_time + lock_check_interval))
     done
 
     # Create lock file with PID and timestamp
     echo "$$:$(date +%s)" > "${LOCK_FILE}"
-    log_info "Deployment lock acquired"
+    log_info "Deployment lock acquired (PID: $$)"
 }
 
 release_lock() {

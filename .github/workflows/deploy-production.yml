@@ -64,11 +64,23 @@ jobs:
       - name: Confirm manual deployment
         if: github.event_name == 'workflow_dispatch'
         run: |
-          if [ "${{ github.event.inputs.confirm }}" != "DEPLOY TO PRODUCTION" ]; then
+          CONFIRMATION="${{ github.event.inputs.confirm }}"
+          REQUIRED="DEPLOY TO PRODUCTION"
+          
+          if [ "$CONFIRMATION" != "$REQUIRED" ]; then
             echo "❌ ERROR: Deployment not confirmed"
-            echo "   You must type 'DEPLOY TO PRODUCTION' to confirm"
+            echo ""
+            echo "   Expected: '$REQUIRED'"
+            echo "   Received: '$CONFIRMATION'"
+            echo ""
+            echo "   You must type exactly 'DEPLOY TO PRODUCTION' to confirm"
+            echo ""
+            echo "   To trigger a production deployment, use:"
+            echo "   gh workflow run deploy-production.yml --ref main -f confirm=\"DEPLOY TO PRODUCTION\""
             exit 1
           fi
+          
+          echo "✅ Deployment confirmed by ${{ github.actor }}"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -246,14 +258,17 @@ jobs:
             const maxWaitMinutes = 10;
             const checkIntervalSeconds = 15;
             const maxChecks = (maxWaitMinutes * 60) / checkIntervalSeconds;
+            const stuckThresholdSeconds = 180; // 3 minutes - if no progress, likely stuck
             
             console.log(`⏳ Monitoring deployment ${deploymentId}...`);
             console.log(`Will check every ${checkIntervalSeconds}s for up to ${maxWaitMinutes} minutes`);
+            console.log(`Stuck threshold: ${stuckThresholdSeconds}s without progress`);
             
             let seenInProgress = false;
             let lastStatusState = 'unknown';
+            let lastStatusDescription = '';
             let statusUnchangedCount = 0;
-            const maxStatusUnchanged = 8; // ~2 minutes at 15s intervals
+            const maxStatusUnchanged = Math.ceil(stuckThresholdSeconds / checkIntervalSeconds);
 
             for (let i = 0; i < maxChecks; i++) {
               // Get more statuses to avoid missing failures due to pagination
@@ -273,12 +288,13 @@ jobs:
                 console.log(`[Check ${i + 1}/${maxChecks}] Status: ${state} - ${description}`);
                 console.log(`  Last updated: ${statusUpdated}`);
 
-                // Track if status is stuck
-                if (state === lastStatusState) {
+                // Track if status is stuck (same state AND same description)
+                if (state === lastStatusState && description === lastStatusDescription) {
                   statusUnchangedCount++;
                 } else {
                   statusUnchangedCount = 0;
                   lastStatusState = state;
+                  lastStatusDescription = description;
                 }
 
                 if (state === 'in_progress') {
@@ -286,7 +302,21 @@ jobs:
 
                   // Check if stuck in progress for too long
                   if (statusUnchangedCount >= maxStatusUnchanged) {
-                    core.setFailed(`❌ Deployment appears stuck in 'in_progress' state for ${statusUnchangedCount * checkIntervalSeconds}s. Last update: ${description}\n\nCheck server logs: journalctl -u app-monitor-deploy-agent.service -n 100`);
+                    const stuckTime = statusUnchangedCount * checkIntervalSeconds;
+                    core.setFailed(
+                      `❌ Deployment appears stuck in 'in_progress' state for ${stuckTime}s\n` +
+                      `Last update: ${description}\n` +
+                      `\n` +
+                      `Possible causes:\n` +
+                      `  - Deployment lock deadlock (process hung)\n` +
+                      `  - Deploy agent crashed\n` +
+                      `  - Network issues preventing status updates\n` +
+                      `\n` +
+                      `Troubleshooting:\n` +
+                      `  1. Check agent logs: journalctl -u app-monitor-deploy-agent.service -n 100\n` +
+                      `  2. Check for lock issues: /opt/app-monitor/scripts/deployment-lock-manager.sh check\n` +
+                      `  3. Force cleanup if needed: /opt/app-monitor/scripts/deployment-lock-manager.sh cleanup`
+                    );
                     return;
                   }
                 }
