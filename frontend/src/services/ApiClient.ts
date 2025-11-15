@@ -24,6 +24,11 @@ export class ApiClient {
 
     const apiKey = import.meta.env.VITE_API_KEY;
     
+    // Build-time validation: Fail fast if API key is missing
+    if (!apiKey && import.meta.env.MODE === 'production') {
+      throw new Error('VITE_API_KEY environment variable is required for production builds');
+    }
+    
     // Build headers for axios configuration
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
