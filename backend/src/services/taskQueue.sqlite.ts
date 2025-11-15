@@ -197,6 +197,8 @@ export class TaskQueueService {
   private readonly chainTracker: ChainTrackerService; // Chain lifecycle management (Phase 2)
   private readonly maxConcurrentChains: number; // Chain concurrency limit
   private readonly metricsService: TaskQueueMetricsService; // Metrics and analytics
+  private taskCompletionCount = 0; // PR sync counter (event-driven trigger)
+  private readonly PR_SYNC_THRESHOLD: number; // Every N task completions
 
   constructor(dbPath: string) {
     this.dbPath = dbPath;
@@ -212,11 +214,18 @@ export class TaskQueueService {
     // Initialize metrics service
     this.metricsService = new TaskQueueMetricsService(this.db);
 
+    // Initialize PR sync threshold from config
+    this.PR_SYNC_THRESHOLD = config.prSync.taskThreshold;
+
     logger.info({
       category: 'process',
       action: 'staged_queue_initialized',
       message: `Staged queue initialized with ${this.maxConcurrentChains} max concurrent chains`,
-      details: { maxConcurrentChains: this.maxConcurrentChains }
+      details: { 
+        maxConcurrentChains: this.maxConcurrentChains,
+        prSyncEnabled: config.prSync.enabled,
+        prSyncThreshold: this.PR_SYNC_THRESHOLD
+      }
     });
   }
 
@@ -1194,6 +1203,60 @@ export class TaskQueueService {
         error: error instanceof Error ? error : new Error(String(error)),
       });
     });
+
+    // Trigger PR sync every N completions (event-driven, not timer-based)
+    this.incrementTaskCompletionCounter();
+  }
+
+  /**
+   * Increment task completion counter and trigger PR sync when threshold reached
+   * Event-driven trigger - no timers or cron jobs (aligns with master design intent)
+   */
+  private incrementTaskCompletionCounter(): void {
+    // Skip if PR sync disabled
+    if (!config.prSync.enabled) {
+      return;
+    }
+
+    this.taskCompletionCount++;
+
+    if (this.taskCompletionCount >= this.PR_SYNC_THRESHOLD) {
+      this.taskCompletionCount = 0;
+
+      logger.debug({
+        category: 'pr-sync',
+        action: 'threshold_reached',
+        message: `Task completion threshold reached (${this.PR_SYNC_THRESHOLD}), triggering PR sync`
+      });
+
+      // Fire and forget - don't block task completion
+      this.triggerPRSync().catch(err => {
+        logger.error({
+          category: 'pr-sync',
+          action: 'sync_trigger_failed',
+          message: 'PR sync trigger failed',
+          error: err
+        });
+      });
+    }
+  }
+
+  /**
+   * Trigger PR sync (imported dynamically to avoid circular dependencies)
+   */
+  private async triggerPRSync(): Promise<void> {
+    try {
+      const { getPRSyncService } = await import('./prSync.service.js');
+      const prSyncService = getPRSyncService(this);
+      await prSyncService.syncAllTrackedPRs();
+    } catch (error) {
+      logger.error({
+        category: 'pr-sync',
+        action: 'sync_execution_failed',
+        message: 'PR sync execution failed',
+        error
+      });
+    }
   }
 
   /**

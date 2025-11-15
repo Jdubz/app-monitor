@@ -19,6 +19,9 @@ import { createAgentsRoutes } from './agents.routes.js';
 import { createInteractiveRoutes } from './interactive.routes.js';
 import { createTemplatesRoutes } from './templates.routes.js';
 import { createPlansRoutes } from './plans.routes.js';
+import { getPRSyncService } from '../../services/prSync.service.js';
+import { logger } from '../../utils/logger.js';
+import * as ErrorResponses from '../../utils/errorResponses.js';
 
 /**
  * Create main Dev-Bots router with all sub-routers mounted
@@ -72,6 +75,47 @@ export function createDevBotsRouter(devBotsManager: DevBotsManager): Router {
   // Includes: /plans, /plans/:planId, /plans/:planId/tasks,
   //           /plans/:planId/cancel, /plans/:planId/update-status
   router.use('/', createPlansRoutes(devBotsManager));
+
+  // ============================================================================
+  // PR Sync Endpoint (Manual Trigger for Debugging)
+  // ============================================================================
+
+  /**
+   * POST /pr-sync
+   * Manually trigger PR sync (for debugging)
+   * 
+   * Normally triggered automatically every N task completions (event-driven).
+   * This endpoint allows manual triggering for troubleshooting.
+   */
+  router.post('/pr-sync', async (_req: Request, res: Response) => {
+    try {
+      logger.info({
+        category: 'pr-sync',
+        action: 'manual_sync_triggered',
+        message: 'Manual PR sync triggered via API endpoint'
+      });
+
+      const taskQueue = devBotsManager.getTaskQueue();
+      const prSyncService = getPRSyncService(taskQueue);
+      
+      await prSyncService.syncAllTrackedPRs();
+
+      res.json({ 
+        success: true,
+        data: { message: 'PR sync completed successfully' }
+      });
+    } catch (error) {
+      return ErrorResponses.internalError(
+        res,
+        'Failed to execute PR sync',
+        {
+          category: 'pr-sync',
+          action: 'manual_sync_failed'
+        },
+        error
+      );
+    }
+  });
 
   return router;
 }

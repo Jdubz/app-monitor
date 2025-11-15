@@ -48,4 +48,12 @@ export const config = {
     cleanupTimeoutMs: parseInt(process.env.RECOVERY_CLEANUP_TIMEOUT_MS || '600000', 10),  // 10 minutes
     followupTimeoutMs: parseInt(process.env.RECOVERY_FOLLOWUP_TIMEOUT_MS || '900000', 10), // 15 minutes
   },
+
+  // PR Sync - Event-driven sync of PR state to detect stale data
+  prSync: {
+    // Enable PR sync (event-driven, triggered every N task completions)
+    enabled: process.env.PR_SYNC_ENABLED !== 'false', // Default true
+    // Number of task completions before triggering sync
+    taskThreshold: parseInt(process.env.PR_SYNC_TASK_THRESHOLD || '10', 10), // Default 10
+  },
 };
