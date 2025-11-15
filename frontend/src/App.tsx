@@ -2,12 +2,12 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { useServices } from './hooks/useServices';
 import { LogProvider } from './contexts/LogContext';
 import { Header, MainLayout } from './components/layout';
-import { DevBotsTab } from './components/tabs';
+import { DevMonitorShell } from './components/monitor/DevMonitorShell';
 import { ErrorBoundary } from './components/common';
 import { ThemeProvider } from './components/theme/ThemeProvider';
 import { PasswordGate } from './components/PasswordGate';
 
-// Simplified app - single dev-bots intervention panel
+// App content - tabbed monitor layout
 function AppContent() {
   const { socket } = useServices();
 
@@ -17,8 +17,9 @@ function AppContent() {
       <div className="flex flex-col gap-6">
         <div className="h-full">
           <Routes>
-            <Route path="/" element={<DevBotsTab socket={socket} />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="/monitor/*" element={<DevMonitorShell socket={socket} />} />
+            <Route path="/" element={<Navigate to="/monitor/dev-bots" replace />} />
+            <Route path="*" element={<Navigate to="/monitor/dev-bots" replace />} />
           </Routes>
         </div>
       </div>

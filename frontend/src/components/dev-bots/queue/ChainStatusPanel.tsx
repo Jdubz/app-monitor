@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import { createLogger } from '@/utils/logger';
+import { formatRelativeTime } from '@/utils/dateFormatters';
 
 const log = createLogger('ChainStatusPanel');
 
@@ -24,18 +25,6 @@ interface BlockedChain {
   blocked_by: string;
   task_count: number;
 }
-
-const formatRelativeTime = (timestamp: number) => {
-  const diff = Date.now() - timestamp;
-  if (diff < 0) return 'in the future';
-  const minutes = Math.floor(diff / 60000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ago`;
-};
 
 export function ChainStatusPanel() {
   const [stats, setStats] = useState<ChainStats | null>(null);
