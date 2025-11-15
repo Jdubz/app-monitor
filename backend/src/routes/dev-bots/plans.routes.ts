@@ -89,7 +89,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
           error: errorMessage,
           details: validation.errors,
         };
-        res.status(400).json(errorResponse);
+        sendError(res, errorResponse.error, 400, { message: errorResponse.message });
         return;
       }
 
@@ -104,7 +104,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
       });
 
       const response: PlanResponse = { success: true, data: plan };
-      res.status(201).json(response);
+      sendSuccess(res, response, 201);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -117,7 +117,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         error: 'Failed to create plan',
         message: error instanceof Error ? error.message : String(error),
       };
-      res.status(500).json(errorResponse);
+      sendError(res, errorResponse.error, 500, { message: errorResponse.message });
     }
   });
 
@@ -145,7 +145,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
           error: errorMessage,
           details: validation.errors,
         };
-        res.status(400).json(errorResponse);
+        sendError(res, errorResponse.error, 400, { message: errorResponse.message });
         return;
       }
 
@@ -183,7 +183,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         error: 'Failed to list plans',
         message: error instanceof Error ? error.message : String(error),
       };
-      res.status(500).json(errorResponse);
+      sendError(res, errorResponse.error, 500, { message: errorResponse.message });
     }
   });
 
@@ -202,7 +202,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
           error: 'Plan not found',
           message: `Plan ${planId} was not found`,
         };
-        res.status(404).json(errorResponse);
+        sendError(res, errorResponse.error, 404, { message: errorResponse.message });
         return;
       }
 
@@ -220,7 +220,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         error: 'Failed to get plan detail',
         message: error instanceof Error ? error.message : String(error),
       };
-      res.status(500).json(errorResponse);
+      sendError(res, errorResponse.error, 500, { message: errorResponse.message });
     }
   });
 
@@ -245,7 +245,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
           error: errorMessage,
           details: validation.errors,
         };
-        res.status(400).json(errorResponse);
+        sendError(res, errorResponse.error, 400, { message: errorResponse.message });
         return;
       }
 
@@ -257,7 +257,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
           error: 'Plan not found',
           message: `Plan ${planId} was not found`,
         };
-        res.status(404).json(errorResponse);
+        sendError(res, errorResponse.error, 404, { message: errorResponse.message });
         return;
       }
 
@@ -275,7 +275,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         error: 'Failed to update plan',
         message: error instanceof Error ? error.message : String(error),
       };
-      res.status(500).json(errorResponse);
+      sendError(res, errorResponse.error, 500, { message: errorResponse.message });
     }
   });
 
@@ -294,7 +294,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
           error: 'Plan not found',
           message: `Plan ${planId} was not found`,
         };
-        res.status(404).json(errorResponse);
+        sendError(res, errorResponse.error, 404, { message: errorResponse.message });
         return;
       }
 
@@ -319,7 +319,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         error: 'Failed to cancel plan',
         message: error instanceof Error ? error.message : String(error),
       };
-      res.status(500).json(errorResponse);
+      sendError(res, errorResponse.error, 500, { message: errorResponse.message });
     }
   });
 
@@ -342,7 +342,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
           deleted,
         },
       };
-      res.status(200).json(response);
+      sendSuccess(res, response);
     } catch (error) {
       logger.error({
         category: 'api',
@@ -355,7 +355,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         error: 'Failed to delete plan',
         message: error instanceof Error ? error.message : String(error),
       };
-      res.status(500).json(errorResponse);
+      sendError(res, errorResponse.error, 500, { message: errorResponse.message });
     }
   });
 
@@ -375,7 +375,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
           error: 'Plan not found',
           message: `Plan ${planId} was not found`,
         };
-        res.status(404).json(errorResponse);
+        sendError(res, errorResponse.error, 404, { message: errorResponse.message });
         return;
       }
 
@@ -395,7 +395,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         error: 'Failed to get plan tasks',
         message: error instanceof Error ? error.message : String(error),
       };
-      res.status(500).json(errorResponse);
+      sendError(res, errorResponse.error, 500, { message: errorResponse.message });
     }
   });
 
@@ -414,7 +414,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
           error: 'Plan not found',
           message: `Plan ${planId} was not found`,
         };
-        res.status(404).json(errorResponse);
+        sendError(res, errorResponse.error, 404, { message: errorResponse.message });
         return;
       }
 
@@ -441,7 +441,7 @@ export function createPlansRoutes(devBotsManager: DevBotsManager): Router {
         error: 'Failed to update plan status',
         message: error instanceof Error ? error.message : String(error),
       };
-      res.status(500).json(errorResponse);
+      sendError(res, errorResponse.error, 500, { message: errorResponse.message });
     }
   });
 
