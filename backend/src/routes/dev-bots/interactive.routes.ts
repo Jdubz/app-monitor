@@ -7,6 +7,10 @@ export function createInteractiveRoutes(_devBotsManager: DevBotsManager): Router
   const router = Router();
 
   // TODO: Re-enable when DevBotsManager interface is updated with proper methods
+  router.get('/interactive/session', (_req: Request, res: Response) => {
+    sendError(res, 'not_implemented', 501, { message: 'Interactive routes temporarily disabled' });
+  });
+
   router.post('/interactive/input', (_req: Request, res: Response) => {
     sendError(res, 'not_implemented', 501, { message: 'Interactive routes temporarily disabled' });
   });
