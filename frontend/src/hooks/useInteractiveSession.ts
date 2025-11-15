@@ -133,7 +133,7 @@ export function useInteractiveSession(
       socket.send(JSON.stringify(payload));
       return true;
     } catch (error) {
-      console.warn('[useInteractiveSession] Failed to send socket payload', error);
+      log.warn('Failed to send socket payload', { error });
       return false;
     }
   }, []);
@@ -273,7 +273,7 @@ export function useInteractiveSession(
         });
 
         socket.addEventListener('error', (event) => {
-          console.warn('[useInteractiveSession] websocket error', event);
+          log.warn('websocket error', { event });
           setConnectionState('disconnected');
         });
       } catch (err) {

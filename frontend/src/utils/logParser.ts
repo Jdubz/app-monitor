@@ -23,28 +23,33 @@ export type LogLevel = 'ERROR' | 'WARN' | 'INFO' | 'DEBUG' | 'TRACE';
 /**
  * Parse a raw log entry into a structured format
  */
-export function parseLogEntry(rawEntry: any): ParsedLogEntry {
-  const entry: LogEntry = {
-    id: rawEntry.id || generateId(),
-    timestamp: rawEntry.timestamp || new Date().toISOString(),
-    level: rawEntry.level || 'INFO',
-    message: rawEntry.message || '',
-    service: rawEntry.service || 'unknown',
-    source: rawEntry.source || 'stdout',
-    metadata: rawEntry.metadata || {}
+export function parseLogEntry(rawEntry: unknown): ParsedLogEntry {
+  // Type guard for object
+  const entry = (typeof rawEntry === 'object' && rawEntry !== null) 
+    ? rawEntry as Record<string, unknown>
+    : {};
+
+  const logEntry: LogEntry = {
+    id: (typeof entry.id === 'string' ? entry.id : undefined) || generateId(),
+    timestamp: (typeof entry.timestamp === 'string' ? entry.timestamp : undefined) || new Date().toISOString(),
+    level: (typeof entry.level === 'string' ? entry.level : undefined) || 'INFO',
+    message: (typeof entry.message === 'string' ? entry.message : undefined) || '',
+    service: (typeof entry.service === 'string' ? entry.service : undefined) || 'unknown',
+    source: (typeof entry.source === 'string' ? entry.source : undefined) || 'stdout',
+    metadata: (typeof entry.metadata === 'object' && entry.metadata !== null ? entry.metadata as Record<string, unknown> : undefined) || {}
   };
 
-  const parsedTimestamp = new Date(entry.timestamp);
+  const parsedTimestamp = new Date(logEntry.timestamp);
   const formattedTime = formatTimestamp(parsedTimestamp);
   
-  const level = entry.level.toUpperCase() as LogLevel;
+  const level = logEntry.level.toUpperCase() as LogLevel;
   const isError = level === 'ERROR';
   const isWarning = level === 'WARN';
   const isInfo = level === 'INFO';
   const isDebug = level === 'DEBUG';
 
   return {
-    ...entry,
+    ...logEntry,
     parsedTimestamp,
     formattedTime,
     isError,
@@ -57,7 +62,7 @@ export function parseLogEntry(rawEntry: any): ParsedLogEntry {
 /**
  * Parse multiple log entries
  */
-export function parseLogEntries(rawEntries: any[]): ParsedLogEntry[] {
+export function parseLogEntries(rawEntries: unknown[]): ParsedLogEntry[] {
   return rawEntries.map(parseLogEntry);
 }
 

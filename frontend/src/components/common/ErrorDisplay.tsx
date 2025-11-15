@@ -2,6 +2,7 @@ import React, { ReactNode } from "react";
 import { AlertTriangle, X } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { createLogger } from "@/utils/logger";
 
 interface ErrorDisplayProps {
   error: Error | string;
@@ -74,6 +75,8 @@ interface ErrorBoundaryProps {
 }
 
 export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  private log = createLogger('ErrorBoundary');
+
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false };
@@ -84,7 +87,11 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
   }
 
   override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("ErrorBoundary caught:", error, errorInfo);
+    this.log.error('Component error caught', {
+      error: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack,
+    });
   }
 
   reset = () => {
