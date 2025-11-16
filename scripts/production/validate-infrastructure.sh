@@ -94,7 +94,9 @@ validate_database_references() {
 
     # Find all .db file references (end of line or followed by non-letter)
     # Filter out comments (lines with : followed by optional whitespace then #)
-    local db_refs=$(grep -n '\.db\([^a-zA-Z]\|$\)' "${script}" | grep -v ':[[:space:]]*#' || true)
+    # Filter out escaped patterns like \\.db\\ which are JavaScript/regex patterns
+    # Filter out grep patterns (lines containing grep -E or grep -qE)
+    local db_refs=$(grep -n '\.db\([^a-zA-Z]\|$\)' "${script}" | grep -v ':[[:space:]]*#' | grep -v '\\\\.db\\\\' | grep -v 'grep -.*E.*\.db' || true)
 
     if [ -z "${db_refs}" ]; then
         log_info "  No database references found"
