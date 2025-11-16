@@ -265,6 +265,11 @@ export class PullRequestHandler extends BaseWebhookHandler {
         await this.taskQueue.updatePRNumber(task.id, prNumber);
       }
     }
+
+    // Evaluate PR conditions after creation to detect issues early
+    // Note: GitHub's mergeable status may be computing (null/UNKNOWN) initially
+    // If unknown, conditions marked 'not_ready' and re-evaluated on synchronize
+    await this.evaluateConditions(prNumber, 'pull_request_opened');
   }
 
   /**
