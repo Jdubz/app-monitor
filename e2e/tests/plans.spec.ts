@@ -356,7 +356,7 @@ test.describe('Plans - Plan Execution', () => {
       // Monitor for status updates
       const statusIndicator = page.locator('[class*="status"]').first();
       if (await statusIndicator.isVisible()) {
-        const initialStatus = await statusIndicator.textContent();
+        await statusIndicator.textContent();
         await page.waitForTimeout(3000);
         // Status might change or stay the same
         await expect(statusIndicator).toBeVisible();

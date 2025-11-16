@@ -201,7 +201,7 @@ test.describe('Interactive Terminal - Session Management', () => {
     await page.waitForTimeout(2000);
 
     // Get current sessions count
-    const sessionsBefore = await page.locator('[class*="session"]').count();
+    await page.locator('[class*="session"]').count();
 
     // Refresh page
     await page.reload();
@@ -568,7 +568,7 @@ test.describe('Interactive Terminal - Real-time Updates', () => {
     const outputArea = page.locator('[class*="output"], [class*="terminal"]').first();
 
     if (await outputArea.isVisible()) {
-      const initialContent = await outputArea.textContent();
+      await outputArea.textContent();
       await page.waitForTimeout(2000);
       // Content may or may not change
       await expect(outputArea).toBeVisible();

@@ -428,7 +428,7 @@ test.describe('Task Queue - Real-time Updates', () => {
 
     // Get initial counts
     const badges = page.locator('[class*="badge"]');
-    const initialCount = await badges.count();
+    await badges.count();
 
     await page.waitForTimeout(3000);
 

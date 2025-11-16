@@ -1,4 +1,4 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
 
 /**
  * Authentication and Authorization E2E Tests
@@ -525,7 +525,7 @@ test.describe('Session Security', () => {
       await page.waitForLoadState('networkidle');
 
       // Get session data
-      const sessionBefore = await page.evaluate(() => {
+      await page.evaluate(() => {
         return {
           local: Object.keys(window.localStorage).length,
           session: Object.keys(window.sessionStorage).length,
