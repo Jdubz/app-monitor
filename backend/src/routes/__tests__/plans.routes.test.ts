@@ -10,22 +10,10 @@ import request from 'supertest';
 import express, { Express } from 'express';
 import Database from 'better-sqlite3';
 import { createPlansRoutes } from '../dev-bots/plans.routes.js';
-import * as fs from 'fs';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
-const TEST_DB_PATH = path.join(__dirname, 'plans-routes-test.db');
 const TEST_API_KEY = 'test-api-key-123';
 
-function cleanupTestDb() {
-  [TEST_DB_PATH, TEST_DB_PATH + '-shm', TEST_DB_PATH + '-wal'].forEach((file) => {
-    if (fs.existsSync(file)) fs.unlinkSync(file);
-  });
-}
 
 function setupTestSchema(db: Database.Database) {
   // Create plans table
@@ -85,9 +73,7 @@ describe('Plans API Routes', () => {
   let app: Express;
   let db: Database.Database;
 
-  beforeEach(() => {
-    cleanupTestDb();
-    db = new Database(TEST_DB_PATH);
+  beforeEach(() => {    db = new Database(':memory:');
     setupTestSchema(db);
 
     app = express();
@@ -105,8 +91,11 @@ describe('Plans API Routes', () => {
   });
 
   afterEach(() => {
-    db.close();
-    cleanupTestDb();
+    try {
+      db.close();
+    } catch (err) {
+      // Ignore close errors in tests
+    }
   });
 
   describe('POST /api/dev-bots/plans', () => {

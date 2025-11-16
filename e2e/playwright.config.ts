@@ -31,7 +31,7 @@ export default defineConfig({
   // Test environment setup
   webServer: [
     {
-      command: 'PORT=3002 DATABASE_PATH=backend/data/e2e-test.db API_KEY=test-e2e-api-key-not-for-production NODE_ENV=test node backend/dist/index.js',
+      command: 'PORT=3002 DATABASE_PATH=:memory: API_KEY=test-e2e-api-key-not-for-production REQUIRE_AUTH=true NODE_ENV=test node backend/dist/index.js',
       cwd: '../',
       port: 3002,
       timeout: 120000,

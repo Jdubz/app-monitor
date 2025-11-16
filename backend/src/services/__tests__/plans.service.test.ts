@@ -7,22 +7,10 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { PlansService } from '../plans.service.js';
-import * as fs from 'fs';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 import type { CreatePlanInput } from '../../types/plan.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
-const TEST_DB_PATH = path.join(__dirname, 'plans-service-test.db');
 
-function cleanupTestDb() {
-  [TEST_DB_PATH, TEST_DB_PATH + '-shm', TEST_DB_PATH + '-wal'].forEach((file) => {
-    if (fs.existsSync(file)) fs.unlinkSync(file);
-  });
-}
 
 function setupTestSchema(db: Database.Database) {
   // Create plans table matching migration 021
@@ -73,16 +61,17 @@ describe('PlansService', () => {
   let db: Database.Database;
   let service: PlansService;
 
-  beforeEach(() => {
-    cleanupTestDb();
-    db = new Database(TEST_DB_PATH);
+  beforeEach(() => {    db = new Database(':memory:');
     setupTestSchema(db);
     service = new PlansService(db);
   });
 
   afterEach(() => {
-    db.close();
-    cleanupTestDb();
+    try {
+      db.close();
+    } catch (err) {
+      // Ignore close errors in tests
+    }
   });
 
   describe('createPlan', () => {
@@ -496,8 +485,11 @@ describe('PlansService', () => {
       expect(filtered[0].title).toBe('Feature P0');
     });
 
-    it('should sort by priority then created_at desc', () => {
+    it('should sort by priority then created_at desc', async () => {
       // Create plans with same priority at different times
+      // Wait 1ms to ensure different timestamps
+      await new Promise(resolve => setTimeout(resolve, 1));
+      
       service.createPlan({
         title: 'Second P0',
         plan_type: 'feature',

@@ -132,7 +132,7 @@ describe('EphemeralWorkerService - Context Copying', () => {
       );
     });
 
-    it.skip('should add context environment variables', async () => {
+    it('should add context environment variables', async () => {
       const task: Partial<Task> = {
         id: 'test-task-id',
         type: 'implementation',
@@ -151,7 +151,7 @@ describe('EphemeralWorkerService - Context Copying', () => {
         timeout_ms: null
       };
 
-      const result = await service.testContextMounting(task as Task);
+      const result = await service.testContextCopying(task as Task);
 
       expect(result.env).toContain('CONTEXT_BUNDLE_ID=test-bundle-id');
       expect(result.env).toContain('CONTEXT_CACHE_KEY=test-cache-key');

@@ -1,31 +1,16 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TaskQueueService } from '../taskQueue.sqlite';
-import * as fs from 'fs';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const TEST_DB_PATH = path.join(__dirname, 'staged-queue-test.db');
-
-function cleanupTestDb() {
-  [TEST_DB_PATH, TEST_DB_PATH + '-shm', TEST_DB_PATH + '-wal'].forEach((file) => {
-    if (fs.existsSync(file)) fs.unlinkSync(file);
-  });
-}
+import { createTestTaskQueue, closeTestDatabase } from '../../__tests__/testDb.js';
 
 describe('TaskQueueService Staged Queue API', () => {
   let taskQueue: TaskQueueService;
 
   beforeEach(() => {
-    cleanupTestDb();
-    taskQueue = new TaskQueueService(TEST_DB_PATH);
+    taskQueue = createTestTaskQueue();
   });
 
   afterEach(() => {
-    cleanupTestDb();
+    closeTestDatabase(taskQueue);
   });
 
   describe('createTask', () => {

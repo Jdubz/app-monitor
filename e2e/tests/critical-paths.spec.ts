@@ -59,17 +59,14 @@ test.describe('Task Queue - Critical Functionality', () => {
   });
 
   test('can view task queue page', async ({ page }) => {
-    // Navigate to task queue (might be default page)
-    await page.goto('/');
-
+    // beforeEach already navigated and bypassed password gate
     // Look for task queue elements (adjust selectors based on actual UI)
     const heading = page.getByRole('heading', { name: /task/i });
     await expect(heading).toBeVisible({ timeout: 10000 });
   });
 
   test('task counts are displayed', async ({ page }) => {
-    await page.goto('/');
-
+    // beforeEach already navigated and bypassed password gate
     // Wait for API response to load
     await page.waitForResponse(
       response => response.url().includes('/api/dev-bots/queue'),

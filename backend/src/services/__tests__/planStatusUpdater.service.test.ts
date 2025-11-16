@@ -10,21 +10,9 @@ import Database from 'better-sqlite3';
 import { PlanStatusUpdater } from '../planStatusUpdater.service.js';
 import { PlansService } from '../plans.service.js';
 import { PlanProgressCalculator } from '../planProgressCalculator.service.js';
-import * as fs from 'fs';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
-const TEST_DB_PATH = path.join(__dirname, 'plan-status-updater-test.db');
 
-function cleanupTestDb() {
-  [TEST_DB_PATH, TEST_DB_PATH + '-shm', TEST_DB_PATH + '-wal'].forEach((file) => {
-    if (fs.existsSync(file)) fs.unlinkSync(file);
-  });
-}
 
 function setupTestSchema(db: Database.Database) {
   // Create plans table
@@ -103,9 +91,7 @@ describe('PlanStatusUpdater', () => {
   let progressCalculator: PlanProgressCalculator;
   let statusUpdater: PlanStatusUpdater;
 
-  beforeEach(() => {
-    cleanupTestDb();
-    db = new Database(TEST_DB_PATH);
+  beforeEach(() => {    db = new Database(':memory:');
     setupTestSchema(db);
     plansService = new PlansService(db);
     progressCalculator = new PlanProgressCalculator(db);
@@ -113,8 +99,11 @@ describe('PlanStatusUpdater', () => {
   });
 
   afterEach(() => {
-    db.close();
-    cleanupTestDb();
+    try {
+      db.close();
+    } catch (err) {
+      // Ignore close errors in tests
+    }
   });
 
   describe('onTaskCreated', () => {
