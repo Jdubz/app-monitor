@@ -96,7 +96,8 @@ export class InteractiveSessionOrchestrator {
     // Use preset builder for interactive session
     const builder = DevBotContainerPresets.interactiveSession(session.id, session.ownerEmail)
       .label('dev-bot.model.provider', session.modelProvider)
-      .label('dev-bot.model.name', session.modelName);
+      .label('dev-bot.model.name', session.modelName)
+      .workingDirectory('/workspace');
 
     // Launch the selected agent in interactive mode
     const agentCommand = this.getAgentCommand(session.modelProvider, session.modelName);
@@ -257,8 +258,8 @@ export class InteractiveSessionOrchestrator {
       DEV_BOT_MODEL_PROVIDER: session.modelProvider,
       DEV_BOT_MODEL_NAME: session.modelName,
       DEV_BOT_MODE: 'interactive',
-      HOME: '/home/worker',
-      USER: 'worker',
+      HOME: '/home/node',
+      USER: 'node',
       SHELL: '/bin/bash',
     };
 
