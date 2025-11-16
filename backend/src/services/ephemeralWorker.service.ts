@@ -950,7 +950,13 @@ export class EphemeralWorkerService {
 
   /**
    * Generate task execution command with worker-specific logging
-   * Uses imagineer's pattern: copy credentials from temp mount, then run Claude
+   * 
+   * Note: Model versions are determined by CLI defaults, not explicitly specified:
+   * - claude CLI → claude-3-5-sonnet-20241022 (default)
+   * - codex CLI → gpt-5.1-codex (default)
+   * - gemini CLI → Gemini 2.5 Pro (default)
+   * 
+   * This ensures automatic updates when CLI packages are upgraded.
    */
   private generateTaskExecutionCommandWithLogging(task: Task, agent: AgentPersonality, logFile: string): string {
     // Escape the prompt for shell execution (single quotes to preserve special chars)

@@ -363,9 +363,9 @@ export class AgentPersonalityManager {
     });
 
     // Gemini Pro Specialist
-    this.personalities.set('gemini-1.5-pro', {
-      id: 'gemini-1.5-pro',
-      name: 'Gemini 1.5 Pro',
+    this.personalities.set('gemini-2.5-pro', {
+      id: 'gemini-2.5-pro',
+      name: 'Gemini 2.5 Pro',
       role: 'Advanced Development & Analysis',
       description: 'A powerful, next-generation model for complex development and analysis tasks.',
       specialties: [
