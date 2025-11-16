@@ -1,11 +1,13 @@
 # Legacy Task Execution Removal - COMPLETE ✅
 **Branch:** `bot/remove-legacy-task-execution`  
 **Date:** 2025-11-16  
-**Status:** COMPLETE - Ready for Review
+**Status:** COMPLETE - Bugs Fixed - Ready for Testing
 
 ## Summary
 
 Successfully removed the legacy `docker run` task execution pipeline and migrated to using `EphemeralWorkerService` exclusively.
+
+**CRITICAL:** Found and fixed 5 critical bugs during thorough analysis (see BUG_ANALYSIS_AND_FIXES.md)
 
 ## Changes Made
 
@@ -15,7 +17,7 @@ Successfully removed the legacy `docker run` task execution pipeline and migrate
 3. ✅ `getAgentDockerImage()` method (3 lines)
 4. ✅ All related credential validation logic (duplicated)
 
-### Code Updated (~35 lines)
+### Code Updated (~90 lines)
 1. ✅ Modified `assignNextTask()` to use `ephemeralWorkerService`:
    - `ephemeralWorkerService.createWorker(task, agent)`
    - `ephemeralWorkerService.executeTask(worker)`
@@ -23,13 +25,24 @@ Successfully removed the legacy `docker run` task execution pipeline and migrate
 2. ✅ Moved PR validation before worker creation (prevents wasted resources)
 3. ✅ Added proper error handling for worker execution
 4. ✅ Maintained circuit breaker protection
+5. ✅ **Added task completion logic** (completeTask + generateSessionSummary)
+6. ✅ **Added finally block for guaranteed cleanup**
+7. ✅ **Fixed variable scoping for circuit breaker**
+8. ✅ **Added execution duration tracking**
+
+### Bugs Fixed (CRITICAL)
+1. ✅ **Container Leak:** Worker cleanup now in finally block
+2. ✅ **Variable Scoping:** Worker/result declared outside try block
+3. ✅ **Task Completion:** Tasks now marked complete in database
+4. ✅ **Session Summary:** Documentation now generated
+5. ✅ **Circuit Breaker:** Result variable assignment fixed
 
 ### Final Stats
 - **Before:** 1458 lines
-- **After:** 951 lines  
-- **Removed:** 507 lines (35% reduction)
-- **Added:** 35 lines (new ephemeral worker calls)
-- **Net Change:** -620 lines
+- **After:** 903 lines  
+- **Removed:** 655 lines (45% reduction)
+- **Added:** 100 lines (new logic + bug fixes)
+- **Net Change:** -555 lines
 
 ## Migration Details
 
