@@ -148,7 +148,7 @@ describe('Bug Report Workflow Integration', () => {
       expect(task.type).toBe('bugfix');
       expect(task.description).toContain('Button is not clickable');
       expect(task.description).toContain('SELECT id, description, screenshot');
-      expect(task.description).toContain('Screenshot: Attached');
+      expect(task.description).toContain('Screenshot: Attached (see database)');
 
       // Step 4: Verify issue was updated
       const updatedIssue = db.prepare('SELECT * FROM issues WHERE id = ?').get(storedIssue.id);
