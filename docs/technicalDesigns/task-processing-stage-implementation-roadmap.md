@@ -12,6 +12,7 @@
 
 ### Approach
 1. Build entire 7-phase system from scratch
+   - **Note:** The original design had 8 phases, but Phase 5 (Fix Application) and Phase 6 (Verify Fix) have been merged into a single Phase 5 (Fix & Verify) to streamline the workflow and reduce unnecessary phase transitions. See `task-processing-stage-implementation-clarifications.md` for details.
 2. Remove ALL legacy REVIEW/FIX task creation logic
 3. Drop and rebuild database schema
 4. Deploy atomically when complete
