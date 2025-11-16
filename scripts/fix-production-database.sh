@@ -34,7 +34,7 @@ mkdir -p "$DATA_DIR"
 log "Cleaning up legacy database files..."
 
 # Remove all old database files from wrong locations
-find "$PROD_DIR" -name "dev-bots.db" -o -name "app-monitor.db" | while read -r db_file; do
+find "$PROD_DIR" \( -name "dev-bots.db" -o -name "app-monitor.db" \) | while read -r db_file; do
   if [[ "$db_file" != "${DATA_DIR}/app-monitor.db" ]]; then
     log "Removing legacy database: $db_file"
     rm -f "$db_file"
