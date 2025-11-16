@@ -26,7 +26,7 @@ import type { EphemeralWorkerService, EphemeralWorker, TaskExecutionResult } fro
 import type { FailurePattern } from './taskFailureGuards.js';
 import type { SimpleFailureRecovery } from './failureRecovery.js';
 import { resolveArtifactsDir } from '../utils/repoPaths.js';
-import { AgentSelector } from './agentSelector.js';
+import { AgentSelector, type AgentSelectionCriteria, type AgentAttempt } from './agentSelector.js';
 import { TaskClassifier } from './taskClassifier.js';
 import { TaskArtifactService } from './taskArtifact.service.js';
 import { SessionSummaryService } from './sessionSummary.service.js';
@@ -353,6 +353,90 @@ export class TaskExecutionService {
     return this.taskQueue.getQueueMetrics();
   }
 
+  /**
+   * Intelligent agent CLI type selection using AgentSelector
+   * Determines whether to use claude, codex, or gemini based on task characteristics
+   */
+  private async selectAgentCliType(task: Task): Promise<'claude' | 'codex' | 'gemini'> {
+    // Parse file patterns if available
+    let filePatterns: string[] | undefined;
+    try {
+      filePatterns = task.file_patterns ? JSON.parse(task.file_patterns) : undefined;
+    } catch (error) {
+      logger.warn({
+        category: 'automation',
+        action: 'json_parse_error',
+        message: 'Failed to parse file_patterns, using undefined',
+        details: {
+          taskId: task.id,
+          filePatterns: task.file_patterns,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      });
+      filePatterns = undefined;
+    }
+
+    // Build previous attempts from retry count and agent type
+    const previousAttempts: AgentAttempt[] = [];
+    if (task.retry_count > 0 && task.agent_type) {
+      previousAttempts.push({
+        agent: task.agent_type as 'claude' | 'codex' | 'gemini',
+        result: 'failure',
+        timestamp: Date.now()
+      });
+    }
+
+    // Build selection criteria
+    const criteria: AgentSelectionCriteria = {
+      taskCategory: task.task_category,
+      filePatterns,
+      complexity: task.estimated_complexity,
+      preferredAgent: task.preferred_agent as 'claude' | 'codex' | 'copilot' | 'gemini' | undefined,
+      previousAttempts,
+      taskTitle: task.title,
+      taskDescription: task.description
+    };
+
+    // Use AgentSelector for intelligent selection
+    const selection = await this.agentSelector.selectAgent(criteria, task);
+
+    // Handle copilot fallback (not yet supported in Docker execution)
+    let chosenAgent: 'claude' | 'codex' | 'gemini';
+    if (selection.agent === 'copilot') {
+      logger.warn({
+        category: 'automation',
+        action: 'copilot_fallback',
+        message: 'Copilot selected but not yet supported, using fallback',
+        details: {
+          taskId: task.id,
+          fallback: selection.fallbackAgent || 'claude'
+        }
+      });
+      chosenAgent = (selection.fallbackAgent || 'claude') as 'claude' | 'codex' | 'gemini';
+    } else {
+      chosenAgent = selection.agent as 'claude' | 'codex' | 'gemini';
+    }
+
+    // Log the intelligent selection
+    logger.info({
+      category: 'automation',
+      action: 'intelligent_agent_cli_selected',
+      message: `Selected ${chosenAgent} CLI for task: ${selection.reasoning}`,
+      details: {
+        taskId: task.id,
+        agentCli: chosenAgent,
+        reasoning: selection.reasoning,
+        confidence: selection.confidence,
+        category: task.task_category,
+        filePatterns,
+        complexity: task.estimated_complexity,
+        retryCount: task.retry_count
+      }
+    });
+
+    return chosenAgent;
+  }
+
   // ==========================================================================
   // Task Assignment
   // ==========================================================================
@@ -472,6 +556,9 @@ export class TaskExecutionService {
 
     nextTask.prompt = this.templateManager.generatePrompt(taskContext);
 
+    // Perform intelligent agent CLI type selection (claude/codex/gemini)
+    const agentCliType = await this.selectAgentCliType(nextTask);
+
     // Track worker for cleanup
     let worker: EphemeralWorker | undefined;
     let result: TaskExecutionResult | undefined;
@@ -482,17 +569,17 @@ export class TaskExecutionService {
       logger.info({
         category: 'process',
         action: 'creating_ephemeral_worker',
-        message: `Creating ephemeral worker for task ${nextTask.id}`
+        message: `Creating ephemeral worker for task ${nextTask.id} with ${agentCliType} CLI`
       });
 
       if (this.dockerCircuitBreaker) {
         await this.dockerCircuitBreaker.execute(async () => {
-          worker = await this.ephemeralWorkerService.createWorker(nextTask, agent);
+          worker = await this.ephemeralWorkerService.createWorker(nextTask, agent, agentCliType);
           result = await this.ephemeralWorkerService.executeTask(worker);
         });
       } else {
         // Fallback if circuit breaker not initialized
-        worker = await this.ephemeralWorkerService.createWorker(nextTask, agent);
+        worker = await this.ephemeralWorkerService.createWorker(nextTask, agent, agentCliType);
         result = await this.ephemeralWorkerService.executeTask(worker);
       }
 
