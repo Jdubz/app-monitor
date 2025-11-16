@@ -66,11 +66,23 @@ export class CheckRunHandler extends BaseWebhookHandler {
     checkRun: { conclusion: string | null },
     repository: { owner: { login: string }; name: string; full_name: string }
   ): Promise<void> {
-    if (!this.prConditionState) {
+    if (!this.taskQueue || !this.prConditionState) {
       logger.debug({
         category: 'api',
         action: 'check_run_handler_not_ready',
-        message: 'PR condition state service not available'
+        message: 'Task queue or PR condition state service not available'
+      });
+      return;
+    }
+
+    // Find associated tasks - only process if PR is tracked in our system
+    const tasks = await this.taskQueue.findByPRNumber(prNumber);
+    if (tasks.length === 0) {
+      logger.debug({
+        category: 'api',
+        action: 'check_run_no_tasks',
+        message: `No tasks found for PR #${prNumber} - skipping check run processing`,
+        details: { pr_number: prNumber }
       });
       return;
     }
@@ -82,6 +94,7 @@ export class CheckRunHandler extends BaseWebhookHandler {
       details: {
         pr_number: prNumber,
         conclusion: checkRun.conclusion,
+        task_ids: tasks.map(t => t.id),
         repository: repository.full_name
       }
     });
