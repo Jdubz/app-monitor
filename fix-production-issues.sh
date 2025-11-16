@@ -1,8 +1,24 @@
 #!/bin/bash
 set -e
 
-API_KEY="hs8RixMMgo8a7vvO17D6cDvkugmqGfTzpbFOqLjAznE="
+# Production issue resolution script
+# SECURITY: Uses environment variable for API key
+#
+# Usage:
+#   export APP_MONITOR_API_KEY="your-api-key-here"
+#   ./fix-production-issues.sh
+
+API_KEY="${APP_MONITOR_API_KEY:-}"
 BASE_URL="https://app-monitor.joshwentworth.com"
+
+if [ -z "$API_KEY" ]; then
+  echo "❌ Error: APP_MONITOR_API_KEY environment variable not set"
+  echo ""
+  echo "Usage:"
+  echo "  export APP_MONITOR_API_KEY=\"your-api-key-here\""
+  echo "  ./fix-production-issues.sh"
+  exit 1
+fi
 
 echo "=== Production Issue Resolution Script ==="
 echo ""
@@ -56,4 +72,3 @@ echo "Next steps:"
 echo "1. If credentials missing, run: ssh jdubz@app-monitor.joshwentworth.com 'gemini login'"
 echo "2. Monitor queue: curl -H 'X-API-Key: $API_KEY' $BASE_URL/api/dev-bots/queue | jq '.data.counts'"
 echo "3. Check for failures: curl -H 'X-API-Key: $API_KEY' $BASE_URL/api/dev-bots/queue | jq '.data.items[] | select(.task.status==\"failed\") | .task.error' | head -5"
-
