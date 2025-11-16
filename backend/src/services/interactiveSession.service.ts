@@ -34,15 +34,15 @@ export type ActivityKind = 'user' | 'agent';
 
 const DEFAULT_ALLOWED_MODELS: AllowedInteractiveModel[] = [
   {
-    provider: 'claude',
-    name: 'claude-3-5-sonnet',
-    displayName: 'Claude 3.5 Sonnet',
+    provider: 'codex',
+    name: 'gpt-5.1-codex',
+    displayName: 'Codex GPT-5.1',
     default: true,
   },
   {
-    provider: 'codex',
-    name: 'gpt-4o-mini',
-    displayName: 'Codex GPT-4o mini',
+    provider: 'claude',
+    name: 'claude-3-5-sonnet',
+    displayName: 'Claude 3.5 Sonnet',
   },
 ];
 
