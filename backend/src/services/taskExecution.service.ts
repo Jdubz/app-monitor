@@ -633,9 +633,8 @@ export class TaskExecutionService {
         const output = result.output || '';
         const stderr = result.errorOutput || '';
 
-        // Complete task in SQLite with agent type for tracking
-        const agentType = agent.id as 'claude' | 'codex' | 'gemini';
-        this.taskQueue.completeTask(nextTask.id, output, agentType);
+        // Complete task in SQLite with agent CLI type for tracking
+        this.taskQueue.completeTask(nextTask.id, output, agentCliType);
 
         // Generate session summary for documentation
         await this.generateSessionSummary(nextTask, result.exitCode || 0, output, stderr, Date.now());
