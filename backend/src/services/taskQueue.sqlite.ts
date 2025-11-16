@@ -293,7 +293,7 @@ export class TaskQueueService {
       });
 
       this.db.exec(`
-        ALTER TABLE tasks ADD COLUMN agent_type TEXT CHECK(agent_type IN ('claude', 'codex'));
+        ALTER TABLE tasks ADD COLUMN agent_type TEXT CHECK(agent_type IN ('claude', 'codex', 'gemini'));
       `);
 
       this.db.exec(`
@@ -770,7 +770,7 @@ export class TaskQueueService {
         completed_at INTEGER,
         assigned_agent TEXT NOT NULL,
         assigned_worker TEXT,
-        agent_type TEXT CHECK(agent_type IN ('claude', 'codex')),
+        agent_type TEXT CHECK(agent_type IN ('claude', 'codex', 'gemini')),
         prompt TEXT,
         output TEXT,
         error TEXT,
@@ -1359,7 +1359,7 @@ export class TaskQueueService {
         WHERE id = ?
       `);
 
-      updateStmt.run(output, now, agentType || null, taskId);
+      updateStmt.run(output, now, agentType, taskId);
 
       // Update execution record
       const executionStmt = this.db.prepare(`
