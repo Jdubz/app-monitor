@@ -36,13 +36,18 @@ export type LogCategory =
   | 'alerts' // Alert management system
   | 'api'
   | 'artifact' // Task artifact tracking
+  | 'automation' // Agent selection and automation
   | 'build'
   | 'circuit-breaker'
+  | 'classification' // Task classification for intelligent agent selection
   | 'cloud'
+  | 'codex-log-parser' // Codex log parsing
   | 'context' // Context bundle generation and caching
   | 'copilot-throttle' // Copilot throttle management
   | 'database'
+  | 'delegation' // Copilot delegation
   | 'docker'
+  | 'interactive_terminal' // Interactive terminal sessions
   | 'issue-triage' // Autonomous issue triage and resolution
   | 'lint_error'
   | 'log_format'
@@ -51,6 +56,7 @@ export type LogCategory =
   | 'metrics'
   | 'mirror_debug'
   | 'plan' // AI agent-managed planning system
+  | 'port-manager' // Port management operations
   | 'pr-sync' // PR sync service (event-driven)
   | 'pr-workflow'
   | 'process'
@@ -58,9 +64,6 @@ export type LogCategory =
   | 'quality-gates'
   | 'quality-improvement'
   | 'quality-observation'
-  | 'classification' // Task classification for intelligent agent selection
-  | 'automation' // Agent selection and automation
-  | 'delegation' // Copilot delegation
   | 'recovery'
   | 'safety' // Safety mechanisms for git operations
   | 'scripts'
@@ -72,9 +75,7 @@ export type LogCategory =
   | 'token-tracking'
   | 'utility'
   | 'verification'
-  | 'workspace'
-  | 'port-manager' // Port management operations
-  | 'codex-log-parser'; // Codex log parsing
+  | 'workspace';
 
 export interface LogEntry {
   category: LogCategory;

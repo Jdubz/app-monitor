@@ -160,9 +160,9 @@ export function ListDetailLayout<TItem, TFilter extends string>({
 
       {/* Filter Tabs */}
       <Tabs value={activeFilter} onValueChange={onFilterChange as (value: string) => void}>
-        <TabsList className="w-full">
+        <TabsList className="w-full min-w-0 overflow-x-auto sm:snap-x">
           {filterTabs.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value} className="flex-1">
+            <TabsTrigger key={tab.value} value={tab.value} className="flex-1 min-w-[80px] sm:min-w-[100px] snap-start">
               {tab.label}
               {tab.count !== undefined && (
                 <span className="ml-1.5 text-xs opacity-70">({tab.count})</span>
@@ -172,7 +172,7 @@ export function ListDetailLayout<TItem, TFilter extends string>({
         </TabsList>
 
         {/* List Content */}
-        <TabsContent value={activeFilter} className="mt-4">
+        <TabsContent value={activeFilter} className="mt-4 h-full">
           {items.length === 0 ? (
             <div className="flex items-center justify-center rounded-md border border-dashed border-muted-foreground/30 p-8 text-center">
               <p className="text-sm text-muted-foreground">{emptyMessage}</p>

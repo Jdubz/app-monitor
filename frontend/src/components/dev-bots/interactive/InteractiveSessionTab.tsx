@@ -187,7 +187,7 @@ export function InteractiveSessionTab() {
               Launch an on-demand admin shell session without interrupting the automation queue.
             </CardDescription>
           </div>
-          <div className="flex flex-wrap items-center gap-3 text-sm">
+          <div className="grid grid-cols-1 gap-3 text-sm md:grid-cols-2 lg:flex lg:flex-wrap lg:items-center">
             <div className="flex flex-col gap-1">
               <Label className="text-xs uppercase tracking-[0.3em] text-muted-foreground">Model</Label>
               <Select
@@ -195,7 +195,7 @@ export function InteractiveSessionTab() {
                 onValueChange={setSelectedModelKey}
                 disabled={availableModels.length === 0 || Boolean(activeSession)}
               >
-                <SelectTrigger className="w-[240px]">
+                <SelectTrigger className="w-full sm:w-60">
                   <SelectValue placeholder="Choose a model" />
                 </SelectTrigger>
                 <SelectContent>
@@ -254,8 +254,8 @@ export function InteractiveSessionTab() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-        <Card className="flex flex-col border-border/70 bg-card/80">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[2fr_1fr]">
+        <Card className="flex min-w-0 flex-col border-border/70 bg-card/80">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base font-semibold">
               <Send className="h-4 w-4" /> Terminal

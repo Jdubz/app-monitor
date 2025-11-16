@@ -82,7 +82,7 @@ export function assertApiErrorWithDetails(
   
   const apiError = response as ApiError;
   if (expectedValue !== undefined) {
-    expect((apiError as Record<string, unknown>)[detailKey]).toBe(expectedValue);
+    expect((apiError as unknown as Record<string, unknown>)[detailKey]).toBe(expectedValue);
   } else {
     expect(apiError).toHaveProperty(detailKey);
   }

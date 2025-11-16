@@ -99,7 +99,7 @@ export class TestDatabase {
     return {
       getConnection: () => db,
       close: () => db.close()
-    } as DevBotsDatabase;
+    } as unknown as DevBotsDatabase;
   }
 }
 

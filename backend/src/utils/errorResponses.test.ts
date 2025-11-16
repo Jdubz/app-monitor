@@ -27,9 +27,9 @@ describe('Error Response Helpers', () => {
     statusMock = vi.fn().mockReturnValue({ json: jsonMock });
     setHeaderMock = vi.fn();
     mockRes = {
-      status: statusMock,
-      json: jsonMock,
-      setHeader: setHeaderMock
+      status: statusMock as any,
+      json: jsonMock as any,
+      setHeader: setHeaderMock as any
     };
     vi.clearAllMocks();
   });
@@ -99,7 +99,7 @@ describe('Error Response Helpers', () => {
       errorResponses.unauthorized(
         mockRes as Response,
         'API key required',
-        { category: 'auth', action: 'verify' },
+        { category: 'api', action: 'verify' },
         false
       );
 
@@ -118,7 +118,7 @@ describe('Error Response Helpers', () => {
       errorResponses.unauthorized(
         mockRes as Response,
         'Invalid API key',
-        { category: 'auth', action: 'verify' },
+        { category: 'api', action: 'verify' },
         true
       );
 
@@ -424,7 +424,7 @@ describe('Error Response Helpers', () => {
       errorResponses.unauthorized(
         mockRes as Response,
         'API key required',
-        { category: 'auth', action: 'verify' },
+        { category: 'api', action: 'verify' },
         false
       );
 

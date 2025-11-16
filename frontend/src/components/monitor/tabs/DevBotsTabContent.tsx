@@ -6,6 +6,9 @@ import { ListDetailLayout } from '@/components/layout/ListDetailLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
 import type { DevBotsTask } from '@/types/dev-bots';
 import { getTaskStatusIcon, getTaskStatusColor } from '@/utils/statusHelpers';
@@ -22,12 +25,22 @@ type ChainFilter = 'all' | 'blocked' | 'quarantined';
  * - Filterable list (all, blocked, quarantined)
  * - Detail view with intervention controls
  */
+type DialogState =
+  | { type: 'none' }
+  | { type: 'retry'; taskId: string }
+  | { type: 'skip'; taskId: string; reason: string }
+  | { type: 'cancel'; taskId: string }
+  | { type: 'quarantine'; chainId: string; reason: string }
+  | { type: 'success'; message: string }
+  | { type: 'error'; message: string };
+
 export function DevBotsTabContent() {
   const { status, queueRows, isLoading, refreshStatus } = useDevBotsStore();
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState<ChainFilter>('all');
   const [interventionLoading, setInterventionLoading] = useState<string | null>(null);
   const [interventionError, setInterventionError] = useState<string | null>(null);
+  const [dialogState, setDialogState] = useState<DialogState>({ type: 'none' });
 
   // For now, treat each task as a "chain" - in the future, group by chainId
   const chains = useMemo(() => {
@@ -86,95 +99,93 @@ export function DevBotsTabContent() {
 
   // Intervention action handlers
   const handleRetryTask = async (taskId: string) => {
-    if (!window.confirm('Are you sure you want to retry this task?')) {
-      return;
-    }
+    setDialogState({ type: 'retry', taskId });
+  };
 
+  const confirmRetryTask = async (taskId: string) => {
+    setDialogState({ type: 'none' });
     setInterventionLoading('retry');
     setInterventionError(null);
 
     try {
       const result = await api.retryDevBotsTask(taskId);
-      alert(`Success: ${result.message}`);
-      // Refresh data after successful retry
+      setDialogState({ type: 'success', message: result.message });
       refreshStatus();
     } catch (error) {
       const errorMessage = api.handleApiError(error);
       setInterventionError(errorMessage);
-      alert(`Error: ${errorMessage}`);
+      setDialogState({ type: 'error', message: errorMessage });
     } finally {
       setInterventionLoading(null);
     }
   };
 
   const handleSkipTask = async (taskId: string) => {
-    const reason = window.prompt('Optional: Provide a reason for skipping this task');
+    setDialogState({ type: 'skip', taskId, reason: '' });
+  };
 
-    if (reason === null) {
-      // User cancelled
-      return;
-    }
-
+  const confirmSkipTask = async (taskId: string, reason: string) => {
+    setDialogState({ type: 'none' });
     setInterventionLoading('skip');
     setInterventionError(null);
 
     try {
       const result = await api.skipDevBotsTask(taskId, reason || undefined);
-      alert(`Success: ${result.message}`);
+      setDialogState({ type: 'success', message: result.message });
       refreshStatus();
     } catch (error) {
       const errorMessage = api.handleApiError(error);
       setInterventionError(errorMessage);
-      alert(`Error: ${errorMessage}`);
+      setDialogState({ type: 'error', message: errorMessage });
     } finally {
       setInterventionLoading(null);
     }
   };
 
   const handleCancelTask = async (taskId: string) => {
-    if (!window.confirm('Are you sure you want to CANCEL this task? This action cannot be undone.')) {
-      return;
-    }
+    setDialogState({ type: 'cancel', taskId });
+  };
 
+  const confirmCancelTask = async (taskId: string) => {
+    setDialogState({ type: 'none' });
     setInterventionLoading('cancel');
     setInterventionError(null);
 
     try {
       const result = await api.cancelDevBotsTask(taskId);
-      alert(`Success: ${result.message}`);
+      setDialogState({ type: 'success', message: result.message });
       refreshStatus();
     } catch (error) {
       const errorMessage = api.handleApiError(error);
       setInterventionError(errorMessage);
-      alert(`Error: ${errorMessage}`);
+      setDialogState({ type: 'error', message: errorMessage });
     } finally {
       setInterventionLoading(null);
     }
   };
 
   const handleQuarantineChain = async (chainId: string) => {
-    const reason = window.prompt('Provide a reason for quarantining this chain (required):');
+    setDialogState({ type: 'quarantine', chainId, reason: '' });
+  };
 
-    if (!reason) {
-      alert('Reason is required to quarantine a chain.');
+  const confirmQuarantineChain = async (chainId: string, reason: string) => {
+    if (!reason.trim()) {
+      setDialogState({ type: 'error', message: 'Reason is required to quarantine a chain.' });
       return;
     }
 
-    if (!window.confirm(`Are you sure you want to QUARANTINE this chain? Reason: ${reason}`)) {
-      return;
-    }
-
+    setDialogState({ type: 'none' });
     setInterventionLoading('quarantine');
     setInterventionError(null);
 
     try {
       const result = await api.quarantineDevBotsChain(chainId, reason);
-      alert(`Success: ${result.message}`);
+      setDialogState({ type: 'success', message: result.message });
       refreshStatus();
     } catch (error) {
       const errorMessage = api.handleApiError(error);
       setInterventionError(errorMessage);
-      alert(`Error: ${errorMessage}`);
+      setDialogState({ type: 'error', message: errorMessage });
     } finally {
       setInterventionLoading(null);
     }
@@ -392,18 +403,139 @@ export function DevBotsTabContent() {
   }
 
   return (
-    <ListDetailLayout<DevBotsTask, ChainFilter>
-      summaryCards={summaryCards}
-      filterTabs={filterTabs}
-      activeFilter={activeFilter}
-      onFilterChange={setActiveFilter}
-      items={filteredChains}
-      selectedItem={selectedChain}
-      onSelectItem={selectChain}
-      renderListItem={renderListItem}
-      renderDetail={renderDetail}
-      getItemKey={(chain) => chain.id}
-      emptyMessage="No chains found for this filter"
-    />
+    <>
+      <ListDetailLayout<DevBotsTask, ChainFilter>
+        summaryCards={summaryCards}
+        filterTabs={filterTabs}
+        activeFilter={activeFilter}
+        onFilterChange={setActiveFilter}
+        items={filteredChains}
+        selectedItem={selectedChain}
+        onSelectItem={selectChain}
+        renderListItem={renderListItem}
+        renderDetail={renderDetail}
+        getItemKey={(chain) => chain.id}
+        emptyMessage="No chains found for this filter"
+      />
+
+      {/* Retry Confirmation Dialog */}
+      <Dialog open={dialogState.type === 'retry'} onOpenChange={() => setDialogState({ type: 'none' })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Retry Task</DialogTitle>
+            <DialogDescription>Are you sure you want to retry this task?</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogState({ type: 'none' })}>Cancel</Button>
+            <Button onClick={() => dialogState.type === 'retry' && confirmRetryTask(dialogState.taskId)}>
+              Retry
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Skip Task Dialog */}
+      <Dialog open={dialogState.type === 'skip'} onOpenChange={() => setDialogState({ type: 'none' })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Skip Task</DialogTitle>
+            <DialogDescription>Optionally provide a reason for skipping this task.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="skip-reason">Reason (optional)</Label>
+              <Input
+                id="skip-reason"
+                value={dialogState.type === 'skip' ? dialogState.reason : ''}
+                onChange={(e) => dialogState.type === 'skip' && setDialogState({ ...dialogState, reason: e.target.value })}
+                placeholder="Enter reason..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogState({ type: 'none' })}>Cancel</Button>
+            <Button onClick={() => dialogState.type === 'skip' && confirmSkipTask(dialogState.taskId, dialogState.reason)}>
+              Skip Task
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Cancel Task Dialog */}
+      <Dialog open={dialogState.type === 'cancel'} onOpenChange={() => setDialogState({ type: 'none' })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancel Task</DialogTitle>
+            <DialogDescription className="text-destructive">
+              Are you sure you want to CANCEL this task? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogState({ type: 'none' })}>Go Back</Button>
+            <Button variant="destructive" onClick={() => dialogState.type === 'cancel' && confirmCancelTask(dialogState.taskId)}>
+              Cancel Task
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quarantine Chain Dialog */}
+      <Dialog open={dialogState.type === 'quarantine'} onOpenChange={() => setDialogState({ type: 'none' })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Quarantine Chain</DialogTitle>
+            <DialogDescription>Provide a reason for quarantining this chain (required).</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid gap-2">
+              <Label htmlFor="quarantine-reason">Reason *</Label>
+              <Input
+                id="quarantine-reason"
+                value={dialogState.type === 'quarantine' ? dialogState.reason : ''}
+                onChange={(e) => dialogState.type === 'quarantine' && setDialogState({ ...dialogState, reason: e.target.value })}
+                placeholder="Enter reason..."
+                required
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogState({ type: 'none' })}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={() => dialogState.type === 'quarantine' && confirmQuarantineChain(dialogState.chainId, dialogState.reason)}
+              disabled={dialogState.type === 'quarantine' && !dialogState.reason.trim()}
+            >
+              Quarantine
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Success Dialog */}
+      <Dialog open={dialogState.type === 'success'} onOpenChange={() => setDialogState({ type: 'none' })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Success</DialogTitle>
+            <DialogDescription>{dialogState.type === 'success' && dialogState.message}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setDialogState({ type: 'none' })}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Error Dialog */}
+      <Dialog open={dialogState.type === 'error'} onOpenChange={() => setDialogState({ type: 'none' })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Error</DialogTitle>
+            <DialogDescription>{dialogState.type === 'error' && dialogState.message}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button onClick={() => setDialogState({ type: 'none' })}>OK</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
