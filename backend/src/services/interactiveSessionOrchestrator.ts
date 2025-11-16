@@ -130,8 +130,6 @@ export class InteractiveSessionOrchestrator {
    * Stop an interactive session container
    */
   async stop(containerId: string): Promise<void> {
-    // Find worker ID for this container
-    let workerId: string | undefined;
     // Find the worker and session ID in a single pass
     let workerId: string | undefined;
     let sessionIdToDelete: string | undefined;
