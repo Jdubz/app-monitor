@@ -397,8 +397,13 @@ describe('TaskPromptTemplateManager', () => {
         documentation: 'Minimal docs',
         acceptance_criteria: ['Minimal criteria'],
         status: 'pending',
+        priority: 1,
         created_at: Date.now(),
         assigned_agent: 'backend-specialist',
+        can_retry: true,
+        retry_count: 0,
+        max_retries: 3,
+        timeout_ms: null,
       };
 
       const context: TaskContext = {
@@ -1399,9 +1404,14 @@ describe('TaskPromptTemplateManager', () => {
         documentation: 'Read all the docs',
         notes: 'Additional notes',
         status: 'pending',
+        priority: 1,
         created_at: Date.now(),
         assigned_agent: 'backend-specialist',
         assigned_worker: 'worker-a',
+        can_retry: true,
+        retry_count: 0,
+        max_retries: 3,
+        timeout_ms: null,
         files: ['src/file.ts'],
         dependencies: ['dep-1'],
         acceptance_criteria: ['Criteria 1'],

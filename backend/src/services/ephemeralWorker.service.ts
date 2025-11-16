@@ -44,6 +44,7 @@ export interface EphemeralWorker {
   id: string;
   containerId: string;
   agent: AgentPersonality;
+  agentCliType: 'claude' | 'codex' | 'gemini'; // Which CLI tool is used
   task: Task;
   status: 'starting' | 'running' | 'completing' | 'completed' | 'failed' | 'destroyed';
   createdAt: string;
@@ -164,6 +165,23 @@ export class EphemeralWorkerService {
   }
 
   /**
+   * Infer CLI type from agent personality ID (fallback logic)
+   * Checks agent.id for common patterns to determine which CLI to use
+   */
+  private inferCliTypeFromAgent(agent: AgentPersonality): 'claude' | 'codex' | 'gemini' {
+    const agentId = agent.id.toLowerCase();
+
+    if (agentId.includes('gemini') || agentId.startsWith('gemini')) {
+      return 'gemini';
+    } else if (agentId.includes('codex') || agentId.startsWith('codex')) {
+      return 'codex';
+    } else {
+      // Default to claude for all other agents
+      return 'claude';
+    }
+  }
+
+  /**
    * Check if we can create a new worker (under concurrency limit)
    */
   canCreateWorker(): boolean {
@@ -178,17 +196,36 @@ export class EphemeralWorkerService {
    * Create a new ephemeral Docker container for a task
    * Uses imagineer-style approach: create container, copy workspace in, then start
    */
-  async createWorker(task: Task, agent: AgentPersonality): Promise<EphemeralWorker> {
+  async createWorker(
+    task: Task,
+    agent: AgentPersonality,
+    agentCliType?: 'claude' | 'codex' | 'gemini'
+  ): Promise<EphemeralWorker> {
     const activeWorkers = this.getActiveWorkers();
 
     if (activeWorkers.length >= this.config.maxConcurrentWorkers) {
       throw new Error('Maximum concurrent dev-bots are already active');
     }
 
+    // Determine CLI tool to use (intelligent selection or fallback to agent.id)
+    const cliType = agentCliType || this.inferCliTypeFromAgent(agent);
+
     // No git branch creation - work directly on staging
-    const workspaceId = `${agent.id}-${task.id}-${Date.now()}`;
-    const workerId = `bot-${agent.id}-${Date.now()}`;
+    const workspaceId = `${cliType}-${agent.id}-${task.id}-${Date.now()}`;
+    const workerId = `bot-${cliType}-${agent.id}-${Date.now()}`;
     const containerName = `dev-bot-${workerId}`;
+
+    logger.info({
+      category: 'process',
+      action: 'worker_cli_type_selected',
+      message: `Using ${cliType} CLI for task ${task.id}`,
+      details: {
+        taskId: task.id,
+        agentId: agent.id,
+        cliType,
+        intelligentSelection: !!agentCliType
+      }
+    });
 
     try {
       // Determine branch to work on
@@ -410,7 +447,9 @@ export class EphemeralWorkerService {
           AutoRemove: true,
           Binds: binds,
           Tmpfs: {
-            '/home/worker/.claude': 'uid=1001,gid=1001'  // Writable temp for Claude CLI
+            '/home/worker/.claude': 'uid=1000,gid=1000',  // Writable temp for Claude CLI (matches node user)
+            '/home/worker/.gemini': 'uid=1000,gid=1000',  // Writable temp for Gemini CLI (matches node user)
+            '/home/worker/.codex': 'uid=1000,gid=1000'    // Writable temp for Codex CLI (matches node user)
           }
         },
         Labels: {
@@ -447,6 +486,7 @@ export class EphemeralWorkerService {
         id: workerId,
         containerId: container.id,
         agent,
+        agentCliType: cliType,
         task,
         status: 'starting',
         createdAt: new Date().toISOString(),
@@ -783,7 +823,12 @@ export class EphemeralWorkerService {
       const logFile = `/app/logs/${sanitizedId}.log`;
 
       // Generate task execution command with logging
-      const executionCommand = this.generateTaskExecutionCommandWithLogging(worker.task, worker.agent, logFile);
+      const executionCommand = this.generateTaskExecutionCommandWithLogging(
+        worker.task,
+        worker.agent,
+        worker.agentCliType,
+        logFile
+      );
 
       // Execute task in container
       const exec = await container.exec({
@@ -958,15 +1003,20 @@ export class EphemeralWorkerService {
    * 
    * This ensures automatic updates when CLI packages are upgraded.
    */
-  private generateTaskExecutionCommandWithLogging(task: Task, agent: AgentPersonality, logFile: string): string {
+  private generateTaskExecutionCommandWithLogging(
+    task: Task,
+    agent: AgentPersonality,
+    cliType: 'claude' | 'codex' | 'gemini',
+    logFile: string
+  ): string {
     // Escape the prompt for shell execution (single quotes to preserve special chars)
     const escapedPrompt = (task.prompt || task.description || task.title)
       .replace(/'/g, "'\\''");  // Escape single quotes for shell
 
     let agentCommand: string;
-    if (agent.id.startsWith('gemini')) {
+    if (cliType === 'gemini') {
       agentCommand = `gemini --print --dangerously-skip-permissions --output-format json --workingDirectory /workspace '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
-    } else if (agent.id.startsWith('codex')) {
+    } else if (cliType === 'codex') {
       agentCommand = `codex --print --dangerously-skip-permissions --output-format json --workingDirectory /workspace '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
     } else {
       agentCommand = `claude --print --dangerously-skip-permissions --output-format json --workingDirectory /workspace '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
@@ -974,14 +1024,14 @@ export class EphemeralWorkerService {
 
     // Create a wrapper command that logs to the worker-specific file
     // Following imagineer's pattern: copy credentials then run agent CLI
-    // Set up credentials based on agent type
+    // Set up credentials based on CLI type
     let credentialSetup: string[];
-    if (agent.id.startsWith('gemini')) {
+    if (cliType === 'gemini') {
       credentialSetup = [
         'cp /tmp/host-creds.json /home/worker/.gemini/.credentials.json',
         'echo "Gemini credentials: $(test -f ~/.gemini/.credentials.json && echo found || echo missing)" >> ' + logFile
       ];
-    } else if (agent.id.startsWith('codex')) {
+    } else if (cliType === 'codex') {
       credentialSetup = [
         'cp /tmp/host-creds.json /home/worker/.codex/.credentials.json',
         'echo "Codex credentials: $(test -f ~/.codex/.credentials.json && echo found || echo missing)" >> ' + logFile

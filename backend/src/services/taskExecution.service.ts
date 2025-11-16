@@ -353,6 +353,90 @@ export class TaskExecutionService {
     return this.taskQueue.getQueueMetrics();
   }
 
+  /**
+   * Intelligent agent CLI type selection using AgentSelector
+   * Determines whether to use claude, codex, or gemini based on task characteristics
+   */
+  private async selectAgentCliType(task: Task): Promise<'claude' | 'codex' | 'gemini'> {
+    // Parse file patterns if available
+    let filePatterns: string[] | undefined;
+    try {
+      filePatterns = task.file_patterns ? JSON.parse(task.file_patterns) : undefined;
+    } catch (error) {
+      logger.warn({
+        category: 'automation',
+        action: 'json_parse_error',
+        message: 'Failed to parse file_patterns, using undefined',
+        details: {
+          taskId: task.id,
+          filePatterns: task.file_patterns,
+          error: error instanceof Error ? error.message : String(error)
+        }
+      });
+      filePatterns = undefined;
+    }
+
+    // Build previous attempts from retry count and agent type
+    const previousAttempts: AgentAttempt[] = [];
+    if (task.retry_count > 0 && task.agent_type) {
+      previousAttempts.push({
+        agent: task.agent_type as 'claude' | 'codex' | 'gemini',
+        result: 'failure',
+        timestamp: Date.now()
+      });
+    }
+
+    // Build selection criteria
+    const criteria: AgentSelectionCriteria = {
+      taskCategory: task.task_category,
+      filePatterns,
+      complexity: task.estimated_complexity,
+      preferredAgent: task.preferred_agent as 'claude' | 'codex' | 'copilot' | 'gemini' | undefined,
+      previousAttempts,
+      taskTitle: task.title,
+      taskDescription: task.description
+    };
+
+    // Use AgentSelector for intelligent selection
+    const selection = await this.agentSelector.selectAgent(criteria, task);
+
+    // Handle copilot fallback (not yet supported in Docker execution)
+    let chosenAgent: 'claude' | 'codex' | 'gemini';
+    if (selection.agent === 'copilot') {
+      logger.warn({
+        category: 'automation',
+        action: 'copilot_fallback',
+        message: 'Copilot selected but not yet supported, using fallback',
+        details: {
+          taskId: task.id,
+          fallback: selection.fallbackAgent || 'claude'
+        }
+      });
+      chosenAgent = (selection.fallbackAgent || 'claude') as 'claude' | 'codex' | 'gemini';
+    } else {
+      chosenAgent = selection.agent as 'claude' | 'codex' | 'gemini';
+    }
+
+    // Log the intelligent selection
+    logger.info({
+      category: 'automation',
+      action: 'intelligent_agent_cli_selected',
+      message: `Selected ${chosenAgent} CLI for task: ${selection.reasoning}`,
+      details: {
+        taskId: task.id,
+        agentCli: chosenAgent,
+        reasoning: selection.reasoning,
+        confidence: selection.confidence,
+        category: task.task_category,
+        filePatterns,
+        complexity: task.estimated_complexity,
+        retryCount: task.retry_count
+      }
+    });
+
+    return chosenAgent;
+  }
+
   // ==========================================================================
   // Task Assignment
   // ==========================================================================
@@ -421,6 +505,45 @@ export class TaskExecutionService {
 
     // NOTE: WorkspaceOrchestrator.initialize() removed - Docker cp approach doesn't need git mirrors
 
+    // Check for manual intervention / escalation tasks
+    if (nextTask.assigned_agent === 'human') {
+      logger.warn({
+        category: 'escalation',
+        action: 'manual_intervention_required',
+        message: `Task ${nextTask.id} requires manual intervention - skipping automated execution`,
+        details: {
+          taskId: nextTask.id,
+          taskType: nextTask.type,
+          title: nextTask.title,
+          description: nextTask.description?.substring(0, 200)
+        }
+      });
+
+      // Mark task as awaiting manual intervention (not failed, not running)
+      this.taskQueue.updateTask(nextTask.id, {
+        status: 'pending',
+        notes: (nextTask.notes || '') + `\n[${new Date().toISOString()}] Escalated to human - awaiting manual intervention`
+      });
+
+      // TODO: Send alert/notification when alerting system is implemented
+      // For now, log as high-priority warning that monitoring should catch
+      logger.warn({
+        category: 'alerts',
+        action: 'escalation_awaiting_human',
+        message: `ALERT: Task ${nextTask.id} requires manual intervention`,
+        details: {
+          taskId: nextTask.id,
+          title: nextTask.title,
+          priority: nextTask.priority,
+          type: nextTask.type
+        }
+      });
+
+      // Try next task
+      if (onTaskAssigned) onTaskAssigned();
+      return;
+    }
+
     // Get agent personality
     const requestedAgent = this.agentManager.getPersonality(nextTask.assigned_agent);
     if (!requestedAgent) {
@@ -472,6 +595,9 @@ export class TaskExecutionService {
 
     nextTask.prompt = this.templateManager.generatePrompt(taskContext);
 
+    // Perform intelligent agent CLI type selection (claude/codex/gemini)
+    const agentCliType = await this.selectAgentCliType(nextTask);
+
     // Track worker for cleanup
     let worker: EphemeralWorker | undefined;
     let result: TaskExecutionResult | undefined;
@@ -482,17 +608,17 @@ export class TaskExecutionService {
       logger.info({
         category: 'process',
         action: 'creating_ephemeral_worker',
-        message: `Creating ephemeral worker for task ${nextTask.id}`
+        message: `Creating ephemeral worker for task ${nextTask.id} with ${agentCliType} CLI`
       });
 
       if (this.dockerCircuitBreaker) {
         await this.dockerCircuitBreaker.execute(async () => {
-          worker = await this.ephemeralWorkerService.createWorker(nextTask, agent);
+          worker = await this.ephemeralWorkerService.createWorker(nextTask, agent, agentCliType);
           result = await this.ephemeralWorkerService.executeTask(worker);
         });
       } else {
         // Fallback if circuit breaker not initialized
-        worker = await this.ephemeralWorkerService.createWorker(nextTask, agent);
+        worker = await this.ephemeralWorkerService.createWorker(nextTask, agent, agentCliType);
         result = await this.ephemeralWorkerService.executeTask(worker);
       }
 
@@ -507,9 +633,8 @@ export class TaskExecutionService {
         const output = result.output || '';
         const stderr = result.errorOutput || '';
 
-        // Complete task in SQLite with agent type for tracking
-        const agentType = agent.id as 'claude' | 'codex' | 'gemini';
-        this.taskQueue.completeTask(nextTask.id, output, agentType);
+        // Complete task in SQLite with agent CLI type for tracking
+        this.taskQueue.completeTask(nextTask.id, output, agentCliType);
 
         // Generate session summary for documentation
         await this.generateSessionSummary(nextTask, result.exitCode || 0, output, stderr, Date.now());
