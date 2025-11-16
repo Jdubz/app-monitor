@@ -22,7 +22,7 @@ import type { TaskQueueService } from './taskQueue.sqlite.js';
 import type { AgentPersonality, AgentPersonalityManager } from './agentPersonalities.js';
 import type { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplates.js';
 // WorkspaceOrchestrator removed - we use Docker cp for file systems, not git mirrors
-import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
+import type { EphemeralWorkerService, EphemeralWorker, TaskExecutionResult } from './ephemeralWorker.service.js';
 // TaskPersistence removed - using SQLite directly
 import { isTaskStuck, detectFailurePattern, type FailurePattern } from './taskFailureGuards.js';
 import type { SimpleFailureRecovery } from './failureRecovery.js';
@@ -475,6 +475,11 @@ export class TaskExecutionService {
 
     nextTask.prompt = this.templateManager.generatePrompt(taskContext);
 
+    // Track worker for cleanup
+    let worker: EphemeralWorker | undefined;
+    let result: TaskExecutionResult | undefined;
+    const executionStartTime = Date.now();
+
     try {
       // Execute task using ephemeral worker service (replaces legacy docker run)
       logger.info({
@@ -482,9 +487,6 @@ export class TaskExecutionService {
         action: 'creating_ephemeral_worker',
         message: `Creating ephemeral worker for task ${nextTask.id}`
       });
-
-      let worker;
-      let result;
 
       if (this.dockerCircuitBreaker) {
         await this.dockerCircuitBreaker.execute(async () => {
@@ -501,19 +503,34 @@ export class TaskExecutionService {
         throw new Error('No execution result returned from ephemeral worker');
       }
 
+      const executionDuration = Date.now() - executionStartTime;
+
       if (result.success) {
+        // Task succeeded - mark as complete
+        const output = result.output || '';
+        const stderr = result.errorOutput || '';
+
+        // Complete task in SQLite with agent type for tracking
+        this.taskQueue.completeTask(nextTask.id, output, agent.id);
+
+        // Generate session summary for documentation
+        await this.generateSessionSummary(nextTask, result.exitCode || 0, output, stderr, new Date().toISOString());
+
         logger.info({
           category: 'process',
-          action: 'task_execution_completed',
-          message: `Task execution completed successfully: ${nextTask.id}`
+          action: 'task_completed_successfully',
+          message: `Task ${nextTask.id} completed successfully in ${Math.floor(executionDuration / 60000)}m ${Math.floor((executionDuration % 60000) / 1000)}s`,
+          details: {
+            taskId: nextTask.id,
+            agent: agent.id,
+            durationMs: executionDuration,
+            exitCode: result.exitCode
+          }
         });
       } else {
-        throw new Error(result.error?.message || result.errorOutput || 'Task execution failed');
-      }
-
-      // Cleanup worker
-      if (worker) {
-        await this.ephemeralWorkerService.destroyWorker(worker.id);
+        // Task failed - throw error to trigger recovery
+        const errorMsg = result.error?.message || result.errorOutput || 'Task execution failed';
+        throw new Error(errorMsg);
       }
 
     } catch (error) {
@@ -530,8 +547,8 @@ export class TaskExecutionService {
       } else {
         logger.error({
           category: 'process',
-          action: 'failed_to_create_ephemeral_worker',
-          message: `Failed to create ephemeral worker for task ${nextTask.id}:`,
+          action: 'task_execution_failed',
+          message: `Task execution failed for ${nextTask.id}:`,
           error: error
         });
       }
@@ -548,6 +565,27 @@ export class TaskExecutionService {
 
       // Try next task
       if (onTaskAssigned) onTaskAssigned();
+    } finally {
+      // CRITICAL: Always cleanup worker to prevent container leaks
+      if (worker) {
+        try {
+          await this.ephemeralWorkerService.destroyWorker(worker.id);
+          logger.debug({
+            category: 'process',
+            action: 'worker_cleanup_success',
+            message: `Cleaned up worker ${worker.id}`,
+            details: { workerId: worker.id, taskId: nextTask.id }
+          });
+        } catch (cleanupError) {
+          logger.error({
+            category: 'process',
+            action: 'worker_cleanup_failed',
+            message: `Failed to cleanup worker ${worker.id}`,
+            error: cleanupError,
+            details: { workerId: worker.id, taskId: nextTask.id }
+          });
+        }
+      }
     }
   }
 
