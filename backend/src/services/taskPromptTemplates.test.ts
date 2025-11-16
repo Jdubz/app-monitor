@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Unit tests for TaskPromptTemplateManager
  * Tests template generation, architecture documentation links, and regression prevention

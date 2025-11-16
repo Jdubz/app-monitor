@@ -5,14 +5,17 @@
  * All mocks are self-contained and don't require external dependencies.
  */
 
+import { vi } from 'vitest';
 import type {
-  ContextRecipe,
   ContextBundle,
   BundleCacheEntry,
-  ProfileContent,
+  ProfileContent
+} from '../../../../types/contextBundle.js';
+import type {
+  ContextRecipe,
   RecipeSource,
   RecipeTaskType
-} from '../../../types/contextBundle.js';
+} from '../../../../types/contextRecipe.js';
 
 /**
  * Create a mock context recipe
@@ -41,7 +44,6 @@ export function mockRecipe(overrides?: Partial<ContextRecipe>): ContextRecipe {
     },
     investigationSteps: ['Review the code', 'Check the logs'],
     constraints: ['Stay within scope', 'Follow coding standards'],
-    dependencies: [],
     required: false,
     ttl: 3600,
     ...overrides

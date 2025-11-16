@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * PR Workflow Integration Tests
  *

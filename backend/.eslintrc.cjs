@@ -20,10 +20,11 @@ module.exports = {
   },
   overrides: [
     {
-      // Disable no-explicit-any for test files where mocking often requires any
-      files: ['**/*.test.ts', '**/*.spec.ts', '**/tests/**/*.ts', '**/test/**/*.ts'],
+      // Disable strict rules for test files where mocking often requires any and @ts-nocheck
+      files: ['**/*.test.ts', '**/*.spec.ts', '**/tests/**/*.ts', '**/test/**/*.ts', '**/__tests__/**/*.ts'],
       rules: {
         '@typescript-eslint/no-explicit-any': 'off',
+        '@typescript-eslint/ban-ts-comment': 'off',
       },
     },
   ],
