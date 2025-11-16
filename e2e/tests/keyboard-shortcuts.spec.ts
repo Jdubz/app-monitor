@@ -15,7 +15,7 @@ async function bypassPasswordGate(page: Page) {
 test.describe('Keyboard Shortcuts', () => {
   test.beforeEach(async ({ page }) => {
     await bypassPasswordGate(page);
-    await page.getByRole('tab', { name: /local/i }).click();
+    await page.getByRole('tab', { name: /dev-bots/i }).click();
   });
 
   test('should show keyboard shortcuts help with ?', async ({ page }) => {
@@ -134,10 +134,10 @@ test.describe('Loading States', () => {
     await page.waitForLoadState('networkidle');
     
     // Switch tabs to test transitions
-    await page.getByRole('tab', { name: /scripts/i }).click();
+    await page.getByRole('tab', { name: /task-queue/i }).click();
     await page.waitForTimeout(500);
     
-    await page.getByRole('tab', { name: /health/i }).click();
+    await page.getByRole('tab', { name: /dev-bots/i }).click();
     await page.waitForTimeout(500);
     
     // Should not have any console errors

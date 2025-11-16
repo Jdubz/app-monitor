@@ -15,7 +15,8 @@ async function bypassPasswordGate(page: Page) {
 test.describe('Local Services', () => {
   test.beforeEach(async ({ page }) => {
     await bypassPasswordGate(page);
-    await page.getByRole('tab', { name: /local/i }).click();
+    // Navigate to dev-bots tab (the main monitoring tab)
+    await page.getByRole('tab', { name: /dev-bots/i }).click();
   });
 
   test('should display service list', async ({ page }) => {
@@ -55,7 +56,8 @@ test.describe('Local Services', () => {
 test.describe('System Health', () => {
   test.beforeEach(async ({ page }) => {
     await bypassPasswordGate(page);
-    await page.getByRole('tab', { name: /health/i }).click();
+    // Health monitoring is now part of dev-bots tab
+    await page.getByRole('tab', { name: /dev-bots/i }).click();
   });
 
   test('should display system metrics', async ({ page }) => {
@@ -82,7 +84,8 @@ test.describe('System Health', () => {
 test.describe('Scripts Panel', () => {
   test.beforeEach(async ({ page }) => {
     await bypassPasswordGate(page);
-    await page.getByRole('tab', { name: /scripts/i }).click();
+    // Task queue tab might have scripts functionality
+    await page.getByRole('tab', { name: /task-queue/i }).click();
   });
 
   test('should display scripts list or empty state', async ({ page }) => {
