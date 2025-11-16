@@ -86,6 +86,24 @@ export class CheckSuiteHandler extends BaseWebhookHandler {
       return;
     }
 
+    // Only process if tasks were created by dev-bots (not manual PRs from humans)
+    const hasDevBotTasks = tasks.some(task => 
+      task.owner_email && task.owner_email.includes('bot@')
+    );
+    
+    if (!hasDevBotTasks) {
+      logger.debug({
+        category: 'api',
+        action: 'check_suite_not_devbot_pr',
+        message: `PR #${prNumber} has tasks but they are not dev-bot tasks, skipping`,
+        details: { 
+          pr_number: prNumber,
+          task_owners: tasks.map(t => t.owner_email || 'unknown')
+        }
+      });
+      return;
+    }
+
     const conclusion = checkSuite.conclusion;
     const owner = repository.owner.login;
     const repo = repository.name;
