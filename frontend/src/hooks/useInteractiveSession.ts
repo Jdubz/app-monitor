@@ -303,8 +303,18 @@ export function useInteractiveSession(
       } else {
         closeSocket({ suppressReconnect: true });
       }
-    } catch (err) {
+    } catch (err: unknown) {
       if (!isMountedRef.current) return;
+      
+      // Check if this is a 501 Not Implemented error - feature is disabled
+      const errorObj = err as { error?: { error?: string } };
+      if (errorObj?.error?.error === 'not_implemented') {
+        // Silently disable the feature - no logging spam
+        closeSocket({ suppressReconnect: true });
+        setIsFetching(false);
+        return;
+      }
+      
       const message = err instanceof Error ? err.message : 'Failed to load interactive session';
       log.error('Failed to refresh interactive session', { error: err, message });
       setError(message);

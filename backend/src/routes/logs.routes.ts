@@ -75,12 +75,24 @@ router.post('/frontend', (req: Request, res: Response) => {
 
     // Handle session start
     if (batch.type === 'session_start' && batch.meta) {
-      logWriter.writeSessionStart(batch.meta);
+      try {
+        logWriter.writeSessionStart(batch.meta);
+      } catch (error) {
+        // If session_metadata table doesn't exist, silently continue
+        // Migration will be applied on next server restart
+        console.warn('[LogsAPI] Failed to write session metadata (table may not exist yet):', error);
+      }
     }
 
     // Handle log batch
     if (batch.type === 'log_batch' && batch.logs) {
-      logWriter.writeLogs(batch.logs as LogEntry[]);
+      try {
+        logWriter.writeLogs(batch.logs as LogEntry[]);
+      } catch (error) {
+        // If frontend_logs table doesn't exist, silently continue
+        // Migration will be applied on next server restart
+        console.warn('[LogsAPI] Failed to write logs (table may not exist yet):', error);
+      }
     }
 
     res.json({
