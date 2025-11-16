@@ -183,7 +183,7 @@ describe('Logs Routes', () => {
       expect(response.status).toBe(200);
 
       // Verify data was stored as JSON
-      const log = db.prepare('SELECT * FROM frontend_logs WHERE id = ?').get('log-3');
+      const log = db.prepare('SELECT * FROM frontend_logs WHERE id = ?').get('log-3') as any;
       expect(log.data).toBeDefined();
       const parsedData = JSON.parse(log.data);
       expect(parsedData.action).toBe('click');
@@ -213,7 +213,7 @@ describe('Logs Routes', () => {
 
       expect(response.status).toBe(200);
 
-      const storedLogs = db.prepare('SELECT level FROM frontend_logs ORDER BY id').all();
+      const storedLogs = db.prepare('SELECT level FROM frontend_logs ORDER BY id').all() as any[];
       expect(storedLogs).toHaveLength(6);
       expect(storedLogs.map((l) => l.level)).toEqual(levels);
     });
@@ -412,13 +412,13 @@ describe('Logs Routes', () => {
       expect(response.status).toBe(200);
 
       // Verify logs can be queried by traceId
-      const traceLogs = db.prepare('SELECT * FROM frontend_logs WHERE traceId = ?').all(traceId);
+      const traceLogs = db.prepare('SELECT * FROM frontend_logs WHERE traceId = ?').all(traceId) as any[];
       expect(traceLogs).toHaveLength(2);
       expect(traceLogs[0].traceId).toBe(traceId);
       expect(traceLogs[1].traceId).toBe(traceId);
 
       // Verify logs can be queried by sessionId
-      const sessionLogs = db.prepare('SELECT * FROM frontend_logs WHERE sessionId = ?').all(sessionId);
+      const sessionLogs = db.prepare('SELECT * FROM frontend_logs WHERE sessionId = ?').all(sessionId) as any[];
       expect(sessionLogs).toHaveLength(2);
     });
   });
