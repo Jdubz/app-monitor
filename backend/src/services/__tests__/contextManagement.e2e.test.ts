@@ -66,9 +66,9 @@ describe('Context Management E2E', () => {
         expect(recipes).toContain('failure-recovery.md');
         expect(recipes).toContain('deployment.md');
       } catch (err) {
-        // If directory doesn't exist, skip this validation
-        // Context recipes may be stored elsewhere or not needed
-        expect(err).toBeDefined();
+        // If directory doesn't exist, skip this validation by logging a warning.
+        // The test will pass without running assertions, which is clearer than asserting an error.
+        console.warn(`Skipping context bundle validation: ${(err as Error).message}`);
       }
     });
 
@@ -85,8 +85,8 @@ describe('Context Management E2E', () => {
         expect(content).toContain('## Constraints');
         expect(content.length).toBeGreaterThan(100);
       } catch (err) {
-        // If file doesn't exist, skip validation
-        expect(err).toBeDefined();
+        // If file doesn't exist, skip validation by logging a warning.
+        console.warn(`Skipping markdown recipe validation: ${(err as Error).message}`);
       }
     });
   });

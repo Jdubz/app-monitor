@@ -253,11 +253,33 @@ export class DevBotsDatabase {
     // Migration 021: Plans Table
     // Creates plans table and adds plan_id column to tasks (if tasks table exists)
     this.applyMigration('021_plans_table', () => {
-      // Execute the migration SQL (creates plans table)
-      this.db.exec(fs.readFileSync(
-        path.join(__dirname, '..', '..', 'migrations', '021_plans_table.sql'),
-        'utf-8'
-      ));
+      // Create plans table (inline for in-memory database compatibility)
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS plans (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          description TEXT,
+          markdown_ref TEXT,
+          plan_type TEXT NOT NULL CHECK(plan_type IN ('feature', 'refactor', 'fix', 'investigation')),
+          priority TEXT NOT NULL CHECK(priority IN ('p0', 'p1', 'p2', 'p3')),
+          status TEXT NOT NULL CHECK(status IN ('planning', 'in_progress', 'blocked', 'completed', 'cancelled')),
+          created_at INTEGER NOT NULL,
+          started_at INTEGER,
+          completed_at INTEGER,
+          cancelled_at INTEGER,
+          created_by TEXT,
+          assigned_to TEXT,
+          success_criteria TEXT,
+          scope_boundaries TEXT,
+          estimated_effort_hours INTEGER,
+          metadata TEXT
+        );
+        CREATE INDEX IF NOT EXISTS idx_plans_status ON plans(status);
+        CREATE INDEX IF NOT EXISTS idx_plans_priority ON plans(priority);
+        CREATE INDEX IF NOT EXISTS idx_plans_type ON plans(plan_type);
+        CREATE INDEX IF NOT EXISTS idx_plans_created_at ON plans(created_at);
+        CREATE INDEX IF NOT EXISTS idx_plans_status_priority ON plans(status, priority);
+      `);
 
       // Add plan_id column to tasks table if it exists
       // The tasks table is managed by TaskQueueService and may not exist in test contexts
@@ -280,10 +302,94 @@ export class DevBotsDatabase {
     // Migration 022: Issues Table
     // Creates storage for user-reported issues and autonomous triage
     this.applyMigration('022_issues_table', () => {
-      this.db.exec(fs.readFileSync(
-        path.join(__dirname, '..', '..', 'migrations', '022_issues_table.sql'),
-        'utf-8'
-      ));
+      try {
+        this.db.exec(fs.readFileSync(
+          path.join(__dirname, '..', '..', 'migrations', '022_issues_table.sql'),
+          'utf-8'
+        ));
+      } catch (err) {
+        // Fallback for in-memory or when file not accessible
+        this.db.exec(`
+          CREATE TABLE IF NOT EXISTS issues (
+            id TEXT PRIMARY KEY,
+            timestamp TEXT NOT NULL,
+            sessionId TEXT,
+            traceId TEXT,
+            route TEXT,
+            userAgent TEXT,
+            description TEXT,
+            status TEXT DEFAULT 'pending',
+            taskId TEXT,
+            fingerprint TEXT,
+            severity TEXT,
+            errorMessage TEXT,
+            component TEXT,
+            created TEXT NOT NULL,
+            resolved TEXT,
+            resolution TEXT,
+            prNumber INTEGER
+          );
+          CREATE INDEX IF NOT EXISTS idx_status ON issues(status);
+          CREATE INDEX IF NOT EXISTS idx_trace ON issues(traceId);
+          CREATE INDEX IF NOT EXISTS idx_timestamp ON issues(timestamp);
+          CREATE INDEX IF NOT EXISTS idx_fingerprint ON issues(fingerprint);
+          CREATE INDEX IF NOT EXISTS idx_created ON issues(created);
+          CREATE TABLE IF NOT EXISTS issue_occurrences (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            issueId TEXT NOT NULL,
+            timestamp TEXT NOT NULL,
+            sessionId TEXT,
+            FOREIGN KEY (issueId) REFERENCES issues(id)
+          );
+          CREATE INDEX IF NOT EXISTS idx_occurrence_issue ON issue_occurrences(issueId);
+          CREATE INDEX IF NOT EXISTS idx_occurrence_timestamp ON issue_occurrences(timestamp);
+        `);
+      }
+    });
+
+    // Migration 023: Frontend Logs Table
+    // Creates storage for frontend log aggregation
+    this.applyMigration('023_frontend_logs_table', () => {
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS frontend_logs (
+          id TEXT PRIMARY KEY,
+          timestamp TEXT NOT NULL,
+          level TEXT NOT NULL CHECK(level IN ('trace', 'debug', 'info', 'warn', 'error', 'fatal')),
+          message TEXT NOT NULL,
+          scope TEXT,
+          traceId TEXT,
+          sessionId TEXT NOT NULL,
+          route TEXT,
+          userId TEXT,
+          data TEXT,
+          errorName TEXT,
+          errorMessage TEXT,
+          errorStack TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_frontend_logs_timestamp ON frontend_logs(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_frontend_logs_traceId ON frontend_logs(traceId);
+        CREATE INDEX IF NOT EXISTS idx_frontend_logs_sessionId ON frontend_logs(sessionId);
+        CREATE INDEX IF NOT EXISTS idx_frontend_logs_level ON frontend_logs(level);
+        CREATE INDEX IF NOT EXISTS idx_frontend_logs_session_time ON frontend_logs(sessionId, timestamp);
+        CREATE INDEX IF NOT EXISTS idx_frontend_logs_triage ON frontend_logs(timestamp, sessionId, traceId);
+      `);
+    });
+
+    // Migration 024: Session Metadata Table
+    // Creates storage for session tracking metadata
+    this.applyMigration('024_session_metadata_table', () => {
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS session_metadata (
+          session_id TEXT PRIMARY KEY,
+          user_agent TEXT NOT NULL,
+          viewport_width INTEGER NOT NULL,
+          viewport_height INTEGER NOT NULL,
+          start_time TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+        CREATE INDEX IF NOT EXISTS idx_session_metadata_start_time ON session_metadata(start_time);
+      `);
     });
   }
 
