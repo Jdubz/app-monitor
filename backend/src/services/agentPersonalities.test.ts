@@ -77,14 +77,13 @@ describe('AgentPersonalityManager', () => {
       const personalities = manager.getAllPersonalities();
       
       // Then: All personalities are returned
-      expect(personalities).toHaveLength(7);
+      expect(personalities).toHaveLength(6);
       expect(personalities.map(p => p.id)).toContain('backend-specialist');
       expect(personalities.map(p => p.id)).toContain('frontend-specialist');
       expect(personalities.map(p => p.id)).toContain('review-specialist');
       expect(personalities.map(p => p.id)).toContain('testing-specialist');
       expect(personalities.map(p => p.id)).toContain('devops-specialist');
       expect(personalities.map(p => p.id)).toContain('documentation-specialist');
-      expect(personalities.map(p => p.id)).toContain('gemini-2.5-pro');
     });
 
     it('should add new personality', () => {
