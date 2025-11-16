@@ -33,6 +33,7 @@ if (!fs.existsSync(LOGS_DIR)) {
 type LogLevel = 'debug' | 'info' | 'warning' | 'error';
 type LogSeverity = 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR';
 export type LogCategory =
+  | 'alerts' // Alert management operations
   | 'api'
   | 'artifact' // Task artifact tracking
   | 'build'
