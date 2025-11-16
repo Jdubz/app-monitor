@@ -270,10 +270,14 @@
 - [ ] Handle Phase 5 internal loop counter
   - Track iterations in `phase_attempts`
   - Don't create new task_stage_runs for internal loops (just increment attempts)
+- [ ] Implement partial progress tracking
+  - Store test results in `phase_payload` between iterations
+  - Enrich agent prompt with previous coverage/failures
 - [ ] Test Phase 5 loop end-to-end
 
 **Files:**
 - `backend/src/services/ephemeralWorker.service.ts` (Phase 5 logic)
+- `backend/src/services/phaseContextEnricher.ts` (NEW - context resumption)
 
 ---
 
@@ -286,11 +290,17 @@
 - [ ] Update `TaskQueueService.pullNextTask()`
   - Remove `queue_stage` filtering (DELETE)
   - Use `phase_status` and `phase_index` instead
-  - Priority: tasks in Phase 1 (new work) vs. Phase 3+ (in-progress)
+  - Implement phase-based priority (favor later phases to complete chains)
+  - Priority order: Phase 7 > 6 > 5 > 4 > 3 > 2 > 1
 - [ ] Update `ChainTrackerService`
   - Chain completes when task reaches Phase 7 complete (not when child tasks done)
   - Remove references to REVIEW/FIX child tasks
   - Update chain status based on phase_status
+  - Track phase distribution in active chains
+- [ ] Implement `WorkerPoolManager` (if needed)
+  - Track active workers per phase
+  - Metrics: worker phase distribution, queued phase distribution
+  - No specialized pools (multi-agent image handles all phases)
 - [ ] Remove ALL legacy child task creation logic
   - Search codebase for "REVIEW", "FIX", "COMPLETE" task types
   - Delete every instance of child task spawning
@@ -299,6 +309,7 @@
 **Files:**
 - `backend/src/services/taskQueue.sqlite.ts` (MAJOR CLEANUP)
 - `backend/src/services/chainTracker.service.ts` (UPDATE)
+- `backend/src/services/workerPoolManager.service.ts` (NEW - if implementing metrics)
 - MANY files with legacy code (DELETE)
 
 #### Day 15: Frontend Integration
@@ -347,21 +358,38 @@
 - `docs/architecture/*.md` (UPDATE)
 - `docs/technicalDesigns/*.md` (DELETE obsolete)
 
-#### Day 17: Script Updates
-**Goal:** Update monitoring and analysis scripts
+#### Day 17: Telemetry & Observability
+**Goal:** Phase metrics and event system
 
 **Tasks:**
-- [ ] Update `monitor-tasks.js`
-  - Read `phase_index` instead of task type
-  - Display phase progress
-  - Show phase attempts
-- [ ] Update `analyze-tasks.js`
-  - Phase-based analytics
-  - Loop iteration metrics
-  - Recovery success rates
-- [ ] Update any other scripts referencing old task types
+- [ ] Create `PhaseMetricsService`
+  - Query `task_stage_runs` for phase timing/success rates
+  - Calculate loop iteration metrics
+  - Track recovery invocation/success rates
+  - Cache metrics in-memory (5-minute TTL)
+- [ ] Add phase lifecycle events
+  - Emit from PhaseOrchestrator: phase:started, phase:completed, phase:failed
+  - Emit from RecoveryAgent: recovery:started, recovery:diagnosed
+  - Emit loop events: phase:loop_iteration, phase:loop_max_attempts
+- [ ] Create metrics API endpoint
+  - `GET /api/metrics/phases` - aggregate phase metrics
+  - `GET /api/metrics/phases/:phaseIndex` - specific phase details
+- [ ] Add SLA breach detection
+  - Define phase timeout thresholds
+  - Alert when phases exceed SLA
+- [ ] Create alerting rules service
+  - Monitor phase success rates, recovery escalation rates
+  - Emit alerts on critical thresholds
+  - Actions: notify, escalate, pause task queue
+- [ ] Update scripts
+  - `monitor-tasks.js` - Read `phase_index`, show phase progress
+  - `analyze-tasks.js` - Phase analytics, loop metrics, recovery rates
 
 **Files:**
+- `backend/src/services/phaseMetrics.service.ts` (NEW)
+- `backend/src/routes/metrics.routes.ts` (NEW or UPDATE)
+- `backend/src/services/phaseOrchestrator.service.ts` (add events)
+- `backend/src/services/recoveryAgent.service.ts` (add events)
 - `monitor-tasks.js`
 - `analyze-tasks.js`
 

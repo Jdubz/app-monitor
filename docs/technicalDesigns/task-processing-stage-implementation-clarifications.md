@@ -653,6 +653,329 @@ if (!allIssuesAddressed) {
 
 ---
 
+## Telemetry & Observability
+
+### Phase-Level Metrics
+
+**Decision:** Extend existing metrics system with phase-specific tracking
+
+**Metrics to Track:**
+```typescript
+interface PhaseMetrics {
+  // Phase execution metrics
+  phaseExecutionTime: Record<number, { min: number, max: number, avg: number, p95: number }>;
+  phaseSuccessRate: Record<number, number>; // % of attempts that pass validation
+  phaseRetryRate: Record<number, number>; // Average attempts before success
+  
+  // Loop metrics
+  reviewFixLoopIterations: { min: number, max: number, avg: number };
+  testCoverageLoopIterations: { min: number, max: number, avg: number };
+  
+  // Recovery metrics
+  recoveryInvocationRate: number; // % of phases that trigger recovery
+  recoverySuccessRate: Record<string, number>; // Success rate per category
+  recoveryEscalationRate: number; // % that escalate to human
+  
+  // Throughput
+  phaseThroughput: Record<number, number>; // Phases completed per hour
+  taskCompletionTime: { min: number, max: number, avg: number, p95: number };
+  
+  // SLA tracking
+  phaseSLABreaches: Record<number, number>; // Count of phases exceeding timeout
+}
+```
+
+**Implementation:**
+- Store phase timing in `task_stage_runs` (created_at, completed_at)
+- Query metrics from `task_stage_runs` table on-demand
+- Cache metrics in-memory with 5-minute TTL
+- Expose via `/api/metrics/phases` endpoint
+
+**SLA Thresholds (Initial):**
+- Phase 1 (Planning): 5 minutes
+- Phase 2 (Implementation): 30 minutes
+- Phase 3 (Review): 10 minutes
+- Phase 4 (Fixes): 20 minutes
+- Phase 5 (Tests): 15 minutes
+- Phase 6 (Cleanup): 5 minutes
+- Phase 7 (PR Shepherding): Variable (depends on external reviews)
+
+### Event System
+
+**Decision:** Emit granular events for phase lifecycle
+
+**New Events:**
+```typescript
+// Phase lifecycle events
+'phase:started' - { taskId, phaseIndex, phaseName, attempt }
+'phase:validating' - { taskId, phaseIndex, validationStart }
+'phase:validation_passed' - { taskId, phaseIndex, artifacts }
+'phase:validation_failed' - { taskId, phaseIndex, errors }
+'phase:recovering' - { taskId, phaseIndex, recoveryAgent }
+'phase:completed' - { taskId, phaseIndex, duration, nextPhase }
+'phase:failed' - { taskId, phaseIndex, reason, escalated }
+
+// Loop events
+'phase:loop_iteration' - { taskId, loopType: '3-4' | '5', iteration, maxIterations }
+'phase:loop_completed' - { taskId, loopType, totalIterations }
+'phase:loop_max_attempts' - { taskId, loopType, escalated }
+
+// Recovery events
+'recovery:started' - { taskId, phaseIndex, validationErrors }
+'recovery:diagnosed' - { taskId, category, diagnosis }
+'recovery:action_taken' - { taskId, action: 'retry' | 'context_update' | 'blocked' }
+'recovery:failed' - { taskId, recoveryAttempt, escalated }
+
+// Task completion events (existing - extend)
+'task:phase_advanced' - { taskId, fromPhase, toPhase }
+'task:chain_completed' - { taskId, chainId, totalPhases: 7 }
+```
+
+**Event Consumers:**
+1. **Frontend WebSocket** - Real-time UI updates
+2. **MetricsEmitter** - Aggregate for metrics endpoint
+3. **AlertManager** - Escalation notifications
+4. **TaskLogger** - Structured logging
+
+**Implementation:**
+- Use existing `EventEmitter` pattern in backend
+- Add phase events to `phaseOrchestrator.service.ts`
+- Add recovery events to `recoveryAgent.service.ts`
+- WebSocket gateway broadcasts to connected clients
+
+### Alerting Rules
+
+**Decision:** Alert on critical phase failures and SLA breaches
+
+**Alert Conditions:**
+```typescript
+interface AlertRule {
+  name: string;
+  condition: (metrics: PhaseMetrics) => boolean;
+  severity: 'warning' | 'critical';
+  action: 'notify' | 'escalate' | 'pause';
+}
+
+const PHASE_ALERT_RULES: AlertRule[] = [
+  {
+    name: 'phase_5_high_failure_rate',
+    condition: (m) => m.phaseSuccessRate[5] < 0.5, // <50% success
+    severity: 'warning',
+    action: 'notify'
+  },
+  {
+    name: 'recovery_escalation_spike',
+    condition: (m) => m.recoveryEscalationRate > 0.3, // >30% escalate
+    severity: 'critical',
+    action: 'escalate'
+  },
+  {
+    name: 'phase_loop_excessive',
+    condition: (m) => m.reviewFixLoopIterations.avg > 3,
+    severity: 'warning',
+    action: 'notify'
+  },
+  {
+    name: 'task_completion_time_breach',
+    condition: (m) => m.taskCompletionTime.p95 > 7200000, // >2 hours p95
+    severity: 'critical',
+    action: 'escalate'
+  }
+];
+```
+
+**Alert Actions:**
+- **notify**: Log to console, emit WebSocket event
+- **escalate**: Send notification (future: email, Slack)
+- **pause**: Temporarily stop pulling new tasks from queue
+
+---
+
+## Worker Pool & Container Management
+
+### Phase-Specific Container Requirements
+
+**Decision:** Single multi-agent container supports all phases, but Phase 5 needs additional tooling
+
+**Container Image Layers:**
+```dockerfile
+# Base layer (all phases)
+FROM node:20-alpine
+RUN apk add --no-cache git bash curl
+
+# Agent CLIs (all phases)
+RUN npm install -g @anthropic-ai/claude-code-cli
+RUN npm install -g @openai/codex-cli  
+RUN npm install -g @google/gemini-cli
+
+# Test infrastructure (Phase 5 only, but included in base image)
+RUN npm install -g nyc lcov-parse
+RUN apk add --no-cache chromium # For e2e tests
+
+# Coverage tools
+COPY scripts/coverage-delta.sh /scripts/
+COPY scripts/run-tests.sh /workspace/
+
+RUN chmod +x /scripts/*.sh /workspace/*.sh
+
+WORKDIR /workspace
+```
+
+**Container Lifecycle per Phase:**
+```typescript
+// Phase 1-4, 6-7: Standard execution
+container.start() → agent.execute() → validate() → destroy()
+
+// Phase 5: Extended lifecycle with script execution
+container.start()
+  → runTestsScript() // BEFORE agent
+  → checkResults()
+  → if (fail) agent.execute() → runTestsScript() // LOOP
+  → validate()
+  → destroy()
+
+// Recovery (any phase): Inject into existing container
+// Container already running from phase execution
+  → injectRecoveryAgent(container)
+  → agent.execute(recoveryPrompt)
+  → parseRecoveryResult()
+  → destroy() // Now destroy
+```
+
+### Worker Pool Capacity Management
+
+**Decision:** Maintain existing 3-worker limit, but track phase distribution
+
+**Worker Assignment Strategy:**
+```typescript
+interface WorkerPoolMetrics {
+  activeWorkers: number; // Current count (max 3)
+  workerPhaseDistribution: Record<number, number>; // Count per phase
+  queuedPhaseDistribution: Record<number, number>; // Pending per phase
+}
+
+class WorkerPoolManager {
+  async assignNextTask(): Promise<Task | null> {
+    if (this.activeWorkers.length >= 3) return null;
+    
+    // Priority: Favor completing in-progress chains over new work
+    const inProgressTasks = await this.getTasksInPhase([3, 4, 5, 6, 7]);
+    const newTasks = await this.getTasksInPhase([1, 2]);
+    
+    // Prefer tasks in later phases (closer to completion)
+    const prioritized = [
+      ...inProgressTasks.filter(t => t.phase_index === 7),
+      ...inProgressTasks.filter(t => t.phase_index === 6),
+      ...inProgressTasks.filter(t => t.phase_index === 5),
+      ...inProgressTasks.filter(t => t.phase_index === 4),
+      ...inProgressTasks.filter(t => t.phase_index === 3),
+      ...newTasks.filter(t => t.phase_index === 2),
+      ...newTasks.filter(t => t.phase_index === 1),
+    ];
+    
+    return prioritized[0] || null;
+  }
+}
+```
+
+**No Phase Capabilities Needed:**
+- All workers can handle all phases (multi-agent image)
+- Phase 5 test script is part of base image
+- No need for specialized worker pools
+
+---
+
+## Partial Implementation Handling
+
+### Context Preservation Across Phase Retries
+
+**Decision:** Store partial progress in `phase_payload` for resumption
+
+**Phase 2 (Implementation) Partial Completions:**
+```typescript
+// Agent realizes it can't complete in one session
+phase_payload: {
+  partial: true,
+  completed_files: ['backend/src/auth.ts', 'backend/src/types/auth.ts'],
+  pending_files: ['frontend/src/components/Login.tsx', 'frontend/src/hooks/useAuth.ts'],
+  todo: [
+    'Complete frontend login component',
+    'Add useAuth hook',
+    'Update API client with auth headers'
+  ],
+  commits: ['abc123', 'def456'] // Already pushed
+}
+
+// Next attempt prompt includes:
+"Previous attempt completed 2 of 4 files. Resume from TODO list:
+1. Complete frontend login component
+2. Add useAuth hook  
+3. Update API client with auth headers
+
+Already committed changes in: backend/src/auth.ts, backend/src/types/auth.ts
+Branch: feature/auth-system (commits: abc123, def456)"
+```
+
+**Phase 5 (Tests) Incremental Progress:**
+```typescript
+phase_payload: {
+  iteration: 2,
+  previous_coverage: 75.3,
+  current_coverage: 78.1,
+  tests_added: [
+    'backend/src/__tests__/auth.test.ts',
+    'frontend/src/components/__tests__/Login.test.tsx'
+  ],
+  remaining_uncovered: [
+    'backend/src/auth.ts:42-56 (password hashing)',
+    'frontend/src/hooks/useAuth.ts:18-24 (token refresh)'
+  ],
+  test_failures: [] // All passing after iteration 2
+}
+```
+
+### Resumption Strategy
+
+**Decision:** Phase retries receive enriched context from previous attempts
+
+**Context Enrichment:**
+```typescript
+class PhaseContextEnricher {
+  enrichPrompt(task: Task, phase: number): string {
+    const basePrompt = task.prompt;
+    const payload = JSON.parse(task.phase_payload || '{}');
+    
+    // Get previous stage runs for this phase
+    const previousAttempts = this.getPreviousStageRuns(task.id, phase);
+    
+    let enrichedPrompt = basePrompt;
+    
+    if (payload.partial) {
+      enrichedPrompt += `\n\n## Previous Progress\n`;
+      enrichedPrompt += `Completed: ${payload.completed_files.join(', ')}\n`;
+      enrichedPrompt += `Pending: ${payload.pending_files.join(', ')}\n`;
+      enrichedPrompt += `\nTODO:\n${payload.todo.map((t, i) => `${i+1}. ${t}`).join('\n')}`;
+    }
+    
+    if (previousAttempts.length > 0) {
+      enrichedPrompt += `\n\n## Previous Attempts\n`;
+      previousAttempts.forEach((attempt, i) => {
+        enrichedPrompt += `\nAttempt ${i + 1} (${attempt.status}):\n`;
+        if (attempt.recovery_diagnosis) {
+          const recovery = JSON.parse(attempt.recovery_diagnosis);
+          enrichedPrompt += `Recovery diagnosis: ${recovery.diagnosis}\n`;
+          enrichedPrompt += `Suggested action: ${recovery.suggested_action}\n`;
+        }
+      });
+    }
+    
+    return enrichedPrompt;
+  }
+}
+```
+
+---
+
 ## Cleanup Tasks
 
 ### Code Removal
