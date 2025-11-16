@@ -9,6 +9,7 @@
 import { logger } from '../../utils/logger.js';
 import { BaseWebhookHandler } from './baseHandler.js';
 import type { GitHubCheckRunPayload } from './types.js';
+import type { Task } from '../taskQueue.sqlite.js';
 
 /**
  * Handler for GitHub check_run webhook events
@@ -94,7 +95,9 @@ export class CheckRunHandler extends BaseWebhookHandler {
     const owner = repository.owner.login;
     const repo = repository.name;
     
-    // Check if the PR branches match dev-bot patterns
+    let tasks: Task[] = [];
+    
+    // Check if the PR branches match dev-bot patterns and attempt data recovery
     try {
       const githubPR = this.prOrchestrator?.getGitHubPRService();
       if (githubPR) {
@@ -113,6 +116,57 @@ export class CheckRunHandler extends BaseWebhookHandler {
           });
           return;
         }
+
+        // Extract task ID from branch name for data recovery
+        const taskIdFromBranch = this.extractTaskIdFromBranchOrTitle(prStatus.head_ref, '');
+        
+        // Find associated tasks - only process if PR is tracked in our system
+        tasks = await this.taskQueue.findByPRNumber(prNumber);
+        
+        // Self-healing: If no tasks found but we have a task ID from the branch,
+        // try to find the task by ID (data recovery for orphaned PRs)
+        if (tasks.length === 0 && taskIdFromBranch) {
+          logger.info({
+            category: 'api',
+            action: 'check_run_data_recovery_attempt',
+            message: `No tasks found for PR #${prNumber}, attempting data recovery using task ID from branch`,
+            details: {
+              pr_number: prNumber,
+              task_id_from_branch: taskIdFromBranch,
+              head_ref: prStatus.head_ref
+            }
+          });
+
+          const taskById = await this.taskQueue.findByTaskId(taskIdFromBranch);
+          if (taskById) {
+            logger.info({
+              category: 'api',
+              action: 'check_run_data_recovered',
+              message: `Found task ${taskIdFromBranch} via data recovery, associating with PR #${prNumber}`,
+              details: {
+                pr_number: prNumber,
+                task_id: taskIdFromBranch
+              }
+            });
+            tasks.push(taskById);
+            
+            // Update task with PR number to prevent future mismatches
+            if (!taskById.pr_number) {
+              await this.taskQueue.updateTask(taskIdFromBranch, { pr_number: prNumber });
+            }
+          }
+        }
+
+        // If still no tasks, skip processing
+        if (tasks.length === 0) {
+          logger.debug({
+            category: 'api',
+            action: 'check_run_no_tasks',
+            message: `No tasks found for PR #${prNumber} - skipping check run processing`,
+            details: { pr_number: prNumber }
+          });
+          return;
+        }
       }
     } catch (error) {
       logger.warn({
@@ -120,18 +174,6 @@ export class CheckRunHandler extends BaseWebhookHandler {
         action: 'check_run_pr_fetch_failed',
         message: `Failed to fetch PR #${prNumber} details, skipping to be safe`,
         error,
-        details: { pr_number: prNumber }
-      });
-      return;
-    }
-
-    // Find associated tasks - only process if PR is tracked in our system
-    const tasks = await this.taskQueue.findByPRNumber(prNumber);
-    if (tasks.length === 0) {
-      logger.debug({
-        category: 'api',
-        action: 'check_run_no_tasks',
-        message: `No tasks found for PR #${prNumber} - skipping check run processing`,
         details: { pr_number: prNumber }
       });
       return;
