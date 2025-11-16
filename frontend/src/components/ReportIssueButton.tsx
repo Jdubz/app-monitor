@@ -12,7 +12,19 @@ import { createPortal } from 'react-dom';
 import html2canvas from 'html2canvas';
 import { logger } from '../utils/observability/logger';
 import type { IssueReportRequest, IssueReportApiResponse } from '../../../shared/api-contracts';
-import { AlertCircle, CheckCircle, X, Pen } from 'lucide-react';
+import { AlertCircle, CheckCircle, X, Pen, Square, Circle, Type, Undo } from 'lucide-react';
+
+// Annotation types
+type AnnotationTool = 'rectangle' | 'circle' | 'text';
+
+interface Annotation {
+  type: AnnotationTool;
+  x: number;
+  y: number;
+  width?: number;
+  height?: number;
+  text?: string;
+}
 
 interface ReportIssueModalProps {
   isOpen: boolean;
@@ -30,9 +42,20 @@ function ReportIssueModal({ isOpen, onClose, onSubmit }: ReportIssueModalProps) 
   const [annotatedScreenshot, setAnnotatedScreenshot] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
-  const [isDrawing, setIsDrawing] = useState(false);
+
+  // Annotation state
+  const [currentTool, setCurrentTool] = useState<AnnotationTool>('rectangle');
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [isDrawingShape, setIsDrawingShape] = useState(false);
+  const [startPoint, setStartPoint] = useState<{ x: number; y: number } | null>(null);
+  const [currentShape, setCurrentShape] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [isAddingText, setIsAddingText] = useState(false);
+  const [textInput, setTextInput] = useState('');
+  const [textPosition, setTextPosition] = useState<{ x: number; y: number } | null>(null);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
+  const textInputRef = useRef<HTMLInputElement>(null);
 
   // Reset state when modal closes
   useEffect(() => {
@@ -46,6 +69,14 @@ function ReportIssueModal({ isOpen, onClose, onSubmit }: ReportIssueModalProps) 
       setAnnotatedScreenshot(null);
       setIsSubmitting(false);
       setSubmitError(null);
+      setAnnotations([]);
+      setCurrentTool('rectangle');
+      setIsDrawingShape(false);
+      setStartPoint(null);
+      setCurrentShape(null);
+      setIsAddingText(false);
+      setTextInput('');
+      setTextPosition(null);
     }
   }, [isOpen]);
 
@@ -104,59 +135,174 @@ function ReportIssueModal({ isOpen, onClose, onSubmit }: ReportIssueModalProps) 
     }
   }, [isOpen, screenshot, isCapturing, captureScreenshot]);
 
-  // Load screenshot into canvas for annotation
-  useEffect(() => {
-    if (isAnnotating && screenshot && canvasRef.current) {
-      const canvas = canvasRef.current;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
+  // Render canvas with screenshot and annotations
+  const renderCanvas = useCallback(() => {
+    if (!canvasRef.current || !screenshot) return;
 
-      const img = new Image();
-      img.onload = () => {
-        canvas.width = img.width;
-        canvas.height = img.height;
-        ctx.drawImage(img, 0, 0);
-      };
-      img.src = screenshot;
-    }
-  }, [isAnnotating, screenshot]);
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isAnnotating || !canvasRef.current) return;
-    setIsDrawing(true);
-    const rect = canvasRef.current.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (canvasRef.current.width / rect.width);
-    const y = (e.clientY - rect.top) * (canvasRef.current.height / rect.height);
+    const img = new Image();
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
 
-    const ctx = canvasRef.current.getContext('2d');
-    if (ctx) {
-      ctx.beginPath();
-      ctx.moveTo(x, y);
+      // Draw screenshot
+      ctx.drawImage(img, 0, 0);
+
+      // Draw all annotations
       ctx.strokeStyle = '#ff0000';
       ctx.lineWidth = 3;
-      ctx.lineCap = 'round';
-    }
-  };
+      ctx.fillStyle = '#ff0000';
+      ctx.font = '24px sans-serif';
 
-  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || !canvasRef.current) return;
+      annotations.forEach(annotation => {
+        if (annotation.type === 'rectangle' && annotation.width && annotation.height) {
+          ctx.strokeRect(annotation.x, annotation.y, annotation.width, annotation.height);
+        } else if (annotation.type === 'circle' && annotation.width && annotation.height) {
+          const centerX = annotation.x + annotation.width / 2;
+          const centerY = annotation.y + annotation.height / 2;
+          const radiusX = Math.abs(annotation.width / 2);
+          const radiusY = Math.abs(annotation.height / 2);
+
+          ctx.beginPath();
+          ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
+          ctx.stroke();
+        } else if (annotation.type === 'text' && annotation.text) {
+          ctx.fillText(annotation.text, annotation.x, annotation.y);
+        }
+      });
+
+      // Draw current shape being drawn
+      if (currentShape && currentTool !== 'text') {
+        if (currentTool === 'rectangle') {
+          ctx.strokeRect(currentShape.x, currentShape.y, currentShape.width, currentShape.height);
+        } else if (currentTool === 'circle') {
+          const centerX = currentShape.x + currentShape.width / 2;
+          const centerY = currentShape.y + currentShape.height / 2;
+          const radiusX = Math.abs(currentShape.width / 2);
+          const radiusY = Math.abs(currentShape.height / 2);
+
+          ctx.beginPath();
+          ctx.ellipse(centerX, centerY, radiusX, radiusY, 0, 0, 2 * Math.PI);
+          ctx.stroke();
+        }
+      }
+    };
+    img.src = screenshot;
+  }, [screenshot, annotations, currentShape, currentTool]);
+
+  // Load screenshot and render canvas when annotating
+  useEffect(() => {
+    if (isAnnotating) {
+      renderCanvas();
+    }
+  }, [isAnnotating, renderCanvas]);
+
+  // Get canvas coordinates from mouse event
+  const getCanvasCoords = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!canvasRef.current) return { x: 0, y: 0 };
     const rect = canvasRef.current.getBoundingClientRect();
-    const x = (e.clientX - rect.left) * (canvasRef.current.width / rect.width);
-    const y = (e.clientY - rect.top) * (canvasRef.current.height / rect.height);
+    return {
+      x: (e.clientX - rect.left) * (canvasRef.current.width / rect.width),
+      y: (e.clientY - rect.top) * (canvasRef.current.height / rect.height),
+    };
+  };
 
-    const ctx = canvasRef.current.getContext('2d');
-    if (ctx) {
-      ctx.lineTo(x, y);
-      ctx.stroke();
+  // Handle mouse down for shape drawing
+  const handleMouseDown = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isAnnotating || isAddingText) return;
+
+    const coords = getCanvasCoords(e);
+
+    if (currentTool === 'text') {
+      // Place text annotation
+      setTextPosition(coords);
+      setIsAddingText(true);
+      setTimeout(() => textInputRef.current?.focus(), 0);
+    } else {
+      // Start drawing shape
+      setIsDrawingShape(true);
+      setStartPoint(coords);
+      setCurrentShape({ x: coords.x, y: coords.y, width: 0, height: 0 });
     }
   };
 
+  // Handle mouse move for shape drawing
+  const handleMouseMove = (e: React.MouseEvent<HTMLCanvasElement>) => {
+    if (!isDrawingShape || !startPoint) return;
+
+    const coords = getCanvasCoords(e);
+    const width = coords.x - startPoint.x;
+    const height = coords.y - startPoint.y;
+
+    setCurrentShape({
+      x: width < 0 ? coords.x : startPoint.x,
+      y: height < 0 ? coords.y : startPoint.y,
+      width: Math.abs(width),
+      height: Math.abs(height),
+    });
+
+    renderCanvas();
+  };
+
+  // Handle mouse up to finish shape
   const handleMouseUp = () => {
-    if (isDrawing && canvasRef.current) {
-      setIsDrawing(false);
-      setAnnotatedScreenshot(canvasRef.current.toDataURL('image/png'));
+    if (!isDrawingShape || !currentShape || !startPoint) return;
+
+    // Only add shape if it has meaningful size
+    if (Math.abs(currentShape.width) > 5 && Math.abs(currentShape.height) > 5) {
+      setAnnotations([...annotations, {
+        type: currentTool,
+        x: currentShape.x,
+        y: currentShape.y,
+        width: currentShape.width,
+        height: currentShape.height,
+      }]);
+    }
+
+    setIsDrawingShape(false);
+    setStartPoint(null);
+    setCurrentShape(null);
+  };
+
+  // Handle text input completion
+  const handleTextSubmit = () => {
+    if (!textInput.trim() || !textPosition) {
+      setIsAddingText(false);
+      setTextInput('');
+      setTextPosition(null);
+      return;
+    }
+
+    setAnnotations([...annotations, {
+      type: 'text',
+      x: textPosition.x,
+      y: textPosition.y,
+      text: textInput.trim(),
+    }]);
+
+    setIsAddingText(false);
+    setTextInput('');
+    setTextPosition(null);
+  };
+
+  // Handle undo
+  const handleUndo = () => {
+    if (annotations.length > 0) {
+      setAnnotations(annotations.slice(0, -1));
     }
   };
+
+  // Update annotated screenshot when annotations change
+  useEffect(() => {
+    if (isAnnotating && canvasRef.current && annotations.length > 0) {
+      setAnnotatedScreenshot(canvasRef.current.toDataURL('image/png'));
+    } else if (annotations.length === 0) {
+      setAnnotatedScreenshot(null);
+    }
+  }, [annotations, isAnnotating]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -312,28 +458,134 @@ function ReportIssueModal({ isOpen, onClose, onSubmit }: ReportIssueModalProps) 
                           </button>
                         </div>
                       ) : (
-                        <div className="space-y-2">
-                          <div className="border border-gray-200 dark:border-gray-700 rounded-md overflow-auto max-h-[600px] bg-gray-50 dark:bg-gray-800">
+                        <div className="space-y-3">
+                          {/* Tool Selector */}
+                          <div className="flex items-center gap-2 p-2 bg-gray-100 dark:bg-gray-800 rounded-md border border-gray-200 dark:border-gray-700">
+                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400 mr-1">Tools:</span>
+                            <button
+                              type="button"
+                              onClick={() => setCurrentTool('rectangle')}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${
+                                currentTool === 'rectangle'
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                              }`}
+                              title="Draw rectangle"
+                            >
+                              <Square className="w-3.5 h-3.5" />
+                              Rectangle
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCurrentTool('circle')}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${
+                                currentTool === 'circle'
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                              }`}
+                              title="Draw circle/oval"
+                            >
+                              <Circle className="w-3.5 h-3.5" />
+                              Circle
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setCurrentTool('text')}
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded transition-colors ${
+                                currentTool === 'text'
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
+                              }`}
+                              title="Add text"
+                            >
+                              <Type className="w-3.5 h-3.5" />
+                              Text
+                            </button>
+                            <div className="flex-1" />
+                            <button
+                              type="button"
+                              onClick={handleUndo}
+                              disabled={annotations.length === 0}
+                              className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium rounded transition-colors bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Undo last annotation"
+                            >
+                              <Undo className="w-3.5 h-3.5" />
+                              Undo
+                            </button>
+                          </div>
+
+                          {/* Canvas */}
+                          <div className="relative border border-gray-200 dark:border-gray-700 rounded-md overflow-auto max-h-[600px] bg-gray-50 dark:bg-gray-800">
                             <canvas
                               ref={canvasRef}
                               onMouseDown={handleMouseDown}
                               onMouseMove={handleMouseMove}
                               onMouseUp={handleMouseUp}
                               onMouseLeave={handleMouseUp}
-                              className="cursor-crosshair"
+                              className={currentTool === 'text' ? 'cursor-text' : 'cursor-crosshair'}
                               style={{ display: 'block', width: '100%', height: 'auto' }}
                             />
+
+                            {/* Text Input Overlay */}
+                            {isAddingText && textPosition && (
+                              <div
+                                className="absolute"
+                                style={{
+                                  left: `${(textPosition.x / (canvasRef.current?.width || 1)) * 100}%`,
+                                  top: `${(textPosition.y / (canvasRef.current?.height || 1)) * 100}%`,
+                                  transform: 'translate(-50%, -100%)',
+                                }}
+                              >
+                                <input
+                                  ref={textInputRef}
+                                  type="text"
+                                  value={textInput}
+                                  onChange={(e) => setTextInput(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      handleTextSubmit();
+                                    } else if (e.key === 'Escape') {
+                                      setIsAddingText(false);
+                                      setTextInput('');
+                                      setTextPosition(null);
+                                    }
+                                  }}
+                                  onBlur={handleTextSubmit}
+                                  placeholder="Type text..."
+                                  className="px-2 py-1 text-sm border-2 border-red-500 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-red-500"
+                                  style={{ minWidth: '150px' }}
+                                />
+                              </div>
+                            )}
                           </div>
+
+                          {/* Instructions */}
+                          <div className="flex items-start gap-2 p-2 bg-blue-50 dark:bg-blue-900/20 rounded-md">
+                            <div className="text-xs text-blue-800 dark:text-blue-200">
+                              {currentTool === 'rectangle' && (
+                                <p><strong>Rectangle:</strong> Click and drag to draw a red rectangle outline</p>
+                              )}
+                              {currentTool === 'circle' && (
+                                <p><strong>Circle:</strong> Click and drag to draw a red circle/oval outline</p>
+                              )}
+                              {currentTool === 'text' && (
+                                <p><strong>Text:</strong> Click where you want to place text, then type and press Enter</p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Action Buttons */}
                           <div className="flex gap-2">
                             <button
                               type="button"
                               onClick={() => {
                                 setIsAnnotating(false);
+                                setAnnotations([]);
                                 setAnnotatedScreenshot(null);
                               }}
-                              className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                              className="px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors"
                             >
-                              Cancel Annotations
+                              Clear & Cancel
                             </button>
                             <button
                               type="button"
@@ -343,9 +595,6 @@ function ReportIssueModal({ isOpen, onClose, onSubmit }: ReportIssueModalProps) 
                               Done Annotating
                             </button>
                           </div>
-                          <p className="text-xs text-gray-600 dark:text-gray-400">
-                            Click and drag to draw red annotations highlighting the issue
-                          </p>
                         </div>
                       )}
                     </>
