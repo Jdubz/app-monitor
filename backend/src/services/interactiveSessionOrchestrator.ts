@@ -96,7 +96,13 @@ export class InteractiveSessionOrchestrator {
     // Use preset builder for interactive session
     const builder = DevBotContainerPresets.interactiveSession(session.id, session.ownerEmail)
       .label('dev-bot.model.provider', session.modelProvider)
-      .label('dev-bot.model.name', session.modelName);
+      .label('dev-bot.model.name', session.modelName)
+      // Launch Claude in interactive mode (not just bash shell)
+      .command([
+        'claude',
+        '--dangerously-skip-permissions',
+        '--disable-update-check'
+      ]);
 
     // Mount work-target specific log directories for troubleshooting
     // Interactive sessions default to 'dev-bots' work target
