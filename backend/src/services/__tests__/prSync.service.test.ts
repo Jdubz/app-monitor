@@ -138,7 +138,7 @@ describe('PRSyncService', () => {
         head: { ref: 'test', sha: 'abc123' },
         base: { ref: 'main', sha: 'def456' },
         merged: true,
-        mergeable: null,
+        mergeable: 'UNKNOWN',
         checks: []
       });
 
@@ -172,7 +172,7 @@ describe('PRSyncService', () => {
         head: { ref: 'test', sha: 'abc123' },
         base: { ref: 'main', sha: 'def456' },
         merged: true,
-        mergeable: null,
+        mergeable: 'UNKNOWN',
         checks: []
       });
 
@@ -197,7 +197,7 @@ describe('PRSyncService', () => {
         head: { ref: 'test', sha: 'abc123' },
         base: { ref: 'main', sha: 'def456' },
         merged: true,
-        mergeable: null,
+        mergeable: 'UNKNOWN',
         checks: []
       });
 
@@ -238,7 +238,7 @@ describe('PRSyncService', () => {
         head: { ref: 'test', sha: 'abc123' },
         base: { ref: 'main', sha: 'def456' },
         merged: true,
-        mergeable: null,
+        mergeable: 'UNKNOWN',
         checks: []
       });
 
@@ -261,7 +261,7 @@ describe('PRSyncService', () => {
         head: { ref: 'test', sha: 'abc123' },
         base: { ref: 'main', sha: 'def456' },
         merged: true,
-        mergeable: null,
+        mergeable: 'UNKNOWN',
         checks: []
       });
 
@@ -301,7 +301,7 @@ describe('PRSyncService', () => {
         head: { ref: 'staging', sha: 'abc123' },
         base: { ref: 'main', sha: 'def456' },
         merged: true,
-        mergeable: null,
+        mergeable: 'UNKNOWN',
         checks: []
       });
 
@@ -331,7 +331,7 @@ describe('PRSyncService', () => {
         head: { ref: 'test', sha: 'abc123' },
         base: { ref: 'main', sha: 'def456' },
         merged: false,
-        mergeable: null,
+        mergeable: 'UNKNOWN',
         checks: []
       });
 
@@ -358,7 +358,7 @@ describe('PRSyncService', () => {
         head: { ref: 'test', sha: 'abc123' },
         base: { ref: 'main', sha: 'def456' },
         merged: false,
-        mergeable: true,
+        mergeable: 'MERGEABLE',
         checks: []
       });
 
@@ -430,7 +430,7 @@ describe('PRSyncService', () => {
           head: { ref: 'test', sha: 'abc123' },
           base: { ref: 'main', sha: 'def456' },
           merged: true,
-          mergeable: null,
+          mergeable: 'UNKNOWN',
           checks: []
         })
         .mockResolvedValueOnce({
@@ -441,7 +441,7 @@ describe('PRSyncService', () => {
           head: { ref: 'test', sha: 'abc123' },
           base: { ref: 'main', sha: 'def456' },
           merged: true,
-          mergeable: null,
+          mergeable: 'UNKNOWN',
           checks: []
         });
 
@@ -465,7 +465,7 @@ describe('PRSyncService', () => {
         head: { ref: 'test', sha: 'abc123' },
         base: { ref: 'main', sha: 'def456' },
         merged: true,
-        mergeable: null,
+        mergeable: 'UNKNOWN',
         checks: []
       });
 

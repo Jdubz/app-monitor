@@ -124,7 +124,7 @@ describe('Issues Routes', () => {
       await new Promise(resolve => setTimeout(resolve, 50));
 
       // Verify issue was stored and triaged in database
-      const issue = db.prepare('SELECT * FROM issues WHERE id = ?').get(response.body.data.issueId);
+      const issue = db.prepare('SELECT * FROM issues WHERE id = ?').get(response.body.data.issueId) as any;
       expect(issue).toBeDefined();
       expect(issue.route).toBe('/dashboard');
       // Issue should be triaged and assigned (since triage runs immediately)
@@ -494,7 +494,7 @@ describe('Issues Routes', () => {
 
       // Verify screenshot was stored in database
       await new Promise(resolve => setTimeout(resolve, 50));
-      const issue = db.prepare('SELECT * FROM issues WHERE id = ?').get(response.body.data.issueId);
+      const issue = db.prepare('SELECT * FROM issues WHERE id = ?').get(response.body.data.issueId) as any;
       expect(issue.screenshot).toBe(screenshot);
     });
 
@@ -514,7 +514,7 @@ describe('Issues Routes', () => {
 
       // Verify screenshot error was stored
       await new Promise(resolve => setTimeout(resolve, 50));
-      const issue = db.prepare('SELECT * FROM issues WHERE id = ?').get(response.body.data.issueId);
+      const issue = db.prepare('SELECT * FROM issues WHERE id = ?').get(response.body.data.issueId) as any;
       expect(issue.screenshot_error).toBe('Permission denied: Cannot capture screen');
     });
 
@@ -540,7 +540,7 @@ describe('Issues Routes', () => {
 
       // Verify meta was stored as JSON
       await new Promise(resolve => setTimeout(resolve, 50));
-      const issue = db.prepare('SELECT * FROM issues WHERE id = ?').get(response.body.data.issueId);
+      const issue = db.prepare('SELECT * FROM issues WHERE id = ?').get(response.body.data.issueId) as any;
       expect(JSON.parse(issue.meta)).toEqual(meta);
     });
 
@@ -565,7 +565,7 @@ describe('Issues Routes', () => {
 
       // Verify all fields stored
       await new Promise(resolve => setTimeout(resolve, 50));
-      const issue = db.prepare('SELECT * FROM issues WHERE id = ?').get(response.body.data.issueId);
+      const issue = db.prepare('SELECT * FROM issues WHERE id = ?').get(response.body.data.issueId) as any;
       expect(issue.screenshot).toBe(screenshot);
       expect(JSON.parse(issue.meta)).toEqual(meta);
       expect(issue.description).toBe('Full feature test');
