@@ -174,8 +174,18 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
       return sendError(res, 'invalid_payload', 400, { message: 'sessionId is required' });
     }
 
-    devBotsManager.recordInteractiveActivity(sessionId, 'user');
-    sendSuccess(res, { acknowledged: true });
+    try {
+      devBotsManager.recordInteractiveActivity(sessionId, 'user');
+      sendSuccess(res, { acknowledged: true });
+    } catch (error) {
+      logger.warn({
+        category: 'api',
+        action: 'interactive_heartbeat_failed',
+        message: `Heartbeat for non-existent session: ${sessionId}`,
+        error,
+      });
+      sendError(res, 'not_found', 404, { message: `Session ${sessionId} not found` });
+    }
   });
 
   /**

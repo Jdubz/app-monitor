@@ -21,7 +21,7 @@ describe('AgentPersonalityManager', () => {
       // When: Manager is initialized
       // Then: Default personalities are loaded
       const personalities = manager.getAllPersonalities();
-      expect(personalities).toHaveLength(7); // backend-specialist, frontend-specialist, review-specialist, testing-specialist, devops-specialist, documentation-specialist, gemini-1.5-pro
+      expect(personalities).toHaveLength(6); // backend-specialist, frontend-specialist, review-specialist, testing-specialist, devops-specialist, documentation-specialist
 
       // And: Each personality has required fields
       personalities.forEach(personality => {

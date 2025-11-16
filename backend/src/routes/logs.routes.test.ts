@@ -46,11 +46,11 @@ describe('Logs Routes', () => {
       CREATE INDEX idx_frontend_logs_sessionId ON frontend_logs(sessionId);
 
       CREATE TABLE session_metadata (
-        sessionId TEXT PRIMARY KEY,
-        userAgent TEXT NOT NULL,
-        viewportWidth INTEGER,
-        viewportHeight INTEGER,
-        startTime TEXT NOT NULL,
+        session_id TEXT PRIMARY KEY,
+        user_agent TEXT NOT NULL,
+        viewport_width INTEGER,
+        viewport_height INTEGER,
+        start_time TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT (datetime('now'))
       );
     `);
@@ -88,12 +88,12 @@ describe('Logs Routes', () => {
       expect(response.body.message).toBe('Logs received');
 
       // Verify session metadata was stored
-      const session = db.prepare('SELECT * FROM session_metadata WHERE sessionId = ?')
+      const session = db.prepare('SELECT * FROM session_metadata WHERE session_id = ?')
         .get('session-1234567890-abc123');
       expect(session).toBeDefined();
-      expect(session.userAgent).toBe('Mozilla/5.0 (Test Browser)');
-      expect(session.viewportWidth).toBe(1920);
-      expect(session.viewportHeight).toBe(1080);
+      expect(session.user_agent).toBe('Mozilla/5.0 (Test Browser)');
+      expect(session.viewport_width).toBe(1920);
+      expect(session.viewport_height).toBe(1080);
     });
   });
 
@@ -268,7 +268,7 @@ describe('Logs Routes', () => {
       expect(response.body.success).toBe(true);
 
       // Verify session was NOT stored (meta was missing)
-      const session = db.prepare('SELECT * FROM session_metadata WHERE sessionId = ?')
+      const session = db.prepare('SELECT * FROM session_metadata WHERE session_id = ?')
         .get('session-1234567890-abc123');
       expect(session).toBeUndefined();
     });
@@ -310,7 +310,7 @@ describe('Logs Routes', () => {
         });
 
       // Verify both were stored
-      const session = db.prepare('SELECT * FROM session_metadata WHERE sessionId = ?')
+      const session = db.prepare('SELECT * FROM session_metadata WHERE session_id = ?')
         .get('session-1234567890-abc123');
       expect(session).toBeDefined();
 
