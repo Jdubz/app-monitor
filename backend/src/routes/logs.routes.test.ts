@@ -90,7 +90,7 @@ describe('Logs Routes', () => {
 
       // Verify session metadata was stored
       const session = db.prepare('SELECT * FROM session_metadata WHERE session_id = ?')
-        .get('session-1234567890-abc123');
+        .get('session-1234567890-abc123') as any;
       expect(session).toBeDefined();
       expect(session.user_agent).toBe('Mozilla/5.0 (Test Browser)');
       expect(session.viewport_width).toBe(1920);
@@ -139,7 +139,7 @@ describe('Logs Routes', () => {
       expect(response.body.success).toBe(true);
 
       // Verify logs were stored in database
-      const logs = db.prepare('SELECT * FROM frontend_logs ORDER BY timestamp').all();
+      const logs = db.prepare('SELECT * FROM frontend_logs ORDER BY timestamp').all() as any[];
       expect(logs).toHaveLength(2);
 
       expect(logs[0].id).toBe('log-1');
@@ -183,7 +183,7 @@ describe('Logs Routes', () => {
       expect(response.status).toBe(200);
 
       // Verify data was stored as JSON
-      const log = db.prepare('SELECT * FROM frontend_logs WHERE id = ?').get('log-3');
+      const log = db.prepare('SELECT * FROM frontend_logs WHERE id = ?').get('log-3') as any;
       expect(log.data).toBeDefined();
       const parsedData = JSON.parse(log.data);
       expect(parsedData.action).toBe('click');
@@ -213,7 +213,7 @@ describe('Logs Routes', () => {
 
       expect(response.status).toBe(200);
 
-      const storedLogs = db.prepare('SELECT level FROM frontend_logs ORDER BY id').all();
+      const storedLogs = db.prepare('SELECT level FROM frontend_logs ORDER BY id').all() as any[];
       expect(storedLogs).toHaveLength(6);
       expect(storedLogs.map((l) => l.level)).toEqual(levels);
     });
@@ -270,7 +270,7 @@ describe('Logs Routes', () => {
 
       // Verify session was NOT stored (meta was missing)
       const session = db.prepare('SELECT * FROM session_metadata WHERE session_id = ?')
-        .get('session-1234567890-abc123');
+        .get('session-1234567890-abc123') as any;
       expect(session).toBeUndefined();
     });
   });
@@ -312,7 +312,7 @@ describe('Logs Routes', () => {
 
       // Verify both were stored
       const session = db.prepare('SELECT * FROM session_metadata WHERE session_id = ?')
-        .get('session-1234567890-abc123');
+        .get('session-1234567890-abc123') as any;
       expect(session).toBeDefined();
 
       const logs = db.prepare('SELECT * FROM frontend_logs WHERE sessionId = ?')
@@ -412,13 +412,13 @@ describe('Logs Routes', () => {
       expect(response.status).toBe(200);
 
       // Verify logs can be queried by traceId
-      const traceLogs = db.prepare('SELECT * FROM frontend_logs WHERE traceId = ?').all(traceId);
+      const traceLogs = db.prepare('SELECT * FROM frontend_logs WHERE traceId = ?').all(traceId) as any[];
       expect(traceLogs).toHaveLength(2);
       expect(traceLogs[0].traceId).toBe(traceId);
       expect(traceLogs[1].traceId).toBe(traceId);
 
       // Verify logs can be queried by sessionId
-      const sessionLogs = db.prepare('SELECT * FROM frontend_logs WHERE sessionId = ?').all(sessionId);
+      const sessionLogs = db.prepare('SELECT * FROM frontend_logs WHERE sessionId = ?').all(sessionId) as any[];
       expect(sessionLogs).toHaveLength(2);
     });
   });
