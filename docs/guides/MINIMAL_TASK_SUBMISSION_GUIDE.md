@@ -294,7 +294,7 @@ action: 'cache_miss'
 ## Related Documentation
 
 - **Technical Design:** `docs/technicalDesigns/dev-bot-context-management.md`
-- **API Reference:** `docs/guides/api-reference.md`
+- **API Reference:** `docs/guides/API_REFERENCE.md`
 - **Context Recipes:** `backend/config/context-recipes/*.yaml`
 
 ## CLI Usage

@@ -10,7 +10,7 @@ Complete setup guides for app-monitor.
 
 ## Additional Setup
 
-- [API Authentication](../guides/API_AUTHENTICATION.md) - API key configuration
+- [API Reference](../guides/API_REFERENCE.md) - Complete API documentation
 - [GitHub Webhooks](../guides/GITHUB_WEBHOOKS.md) - Webhook configuration
 
 ## Quick Start
