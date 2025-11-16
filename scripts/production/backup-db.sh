@@ -9,10 +9,10 @@ set -euo pipefail
 # Configuration
 DEPLOY_DIR="/opt/app-monitor"
 SHARED_DIR="${DEPLOY_DIR}/shared"
-DB_PATH="${SHARED_DIR}/data/dev-bots.db"
+DB_PATH="${SHARED_DIR}/backend/data/app-monitor.db"
 BACKUP_DIR="${SHARED_DIR}/backups/database"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-BACKUP_FILE="${BACKUP_DIR}/dev-bots_${TIMESTAMP}.db"
+BACKUP_FILE="${BACKUP_DIR}/app-monitor_${TIMESTAMP}.db"
 MAX_BACKUPS=10
 
 # Colors
@@ -78,9 +78,9 @@ main() {
     log_info "Cleaning up old backups (keeping last ${MAX_BACKUPS})..."
     cd "${BACKUP_DIR}"
     # Sort by filename (timestamp) in reverse order, skip first MAX_BACKUPS, delete rest
-    ls -1 dev-bots_*.db 2>/dev/null | sort -r | tail -n +$((MAX_BACKUPS + 1)) | xargs -r rm -f
+    ls -1 app-monitor_*.db 2>/dev/null | sort -r | tail -n +$((MAX_BACKUPS + 1)) | xargs -r rm -f
 
-    local backup_count=$(ls -1 dev-bots_*.db 2>/dev/null | wc -l)
+    local backup_count=$(ls -1 app-monitor_*.db 2>/dev/null | wc -l)
     log_info "Current backup count: ${backup_count}"
 
     log_info "Database backup completed successfully"
