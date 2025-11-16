@@ -82,3 +82,41 @@ npm run build:backend    # Build backend only
 - ESLint for linting
 - Functional programming patterns preferred
 - Write tests for new features
+
+## Testing Guidelines
+
+### Database Testing
+
+All tests automatically use in-memory databases (configured in `vitest.config.ts`).
+
+**Always use standard helpers from `backend/src/__tests__/testDb.ts`:**
+
+```typescript
+import { createTestTaskQueue, closeTestDatabase } from '../__tests__/testDb.js';
+
+describe('My Service', () => {
+  let taskQueue: TaskQueueService;
+
+  beforeEach(() => {
+    taskQueue = createTestTaskQueue();
+  });
+
+  afterEach(() => {
+    closeTestDatabase(taskQueue);
+  });
+});
+```
+
+**Available Helpers:**
+- `createTestDatabase()` - Raw Database instance with `:memory:`
+- `createTestTaskQueue()` - TaskQueueService with `:memory:`
+- `closeTestDatabase(db)` - Safe cleanup (catches errors)
+- `setupTestSchema(db, schema)` - Apply custom schema
+- `TEST_SCHEMAS` - Common schemas for reuse
+
+**Rules:**
+1. Always use helpers from `__tests__/testDb.ts`
+2. Never manually create file-based databases in tests
+3. Always cleanup with `closeTestDatabase()`
+4. If you need custom schema, use `createTestDatabaseWithSchema()`
+5. Trust the environment variable - tests automatically use `:memory:`
