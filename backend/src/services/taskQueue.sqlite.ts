@@ -547,6 +547,176 @@ export class TaskQueueService {
         message: 'Context bundle columns added successfully for context management integration'
       });
     }
+
+    // Migration 021: Create plans table (for in-memory databases and missing production tables)
+    const plansTableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='plans'`).get();
+    if (!plansTableExists) {
+      logger.info({
+        category: 'process',
+        action: 'creating_plans_table',
+        message: 'Creating plans table for plan management'
+      });
+
+      this.db.exec(`
+        CREATE TABLE plans (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          description TEXT,
+          markdown_ref TEXT,
+          plan_type TEXT NOT NULL CHECK(plan_type IN ('feature', 'refactor', 'fix', 'investigation')),
+          priority TEXT NOT NULL CHECK(priority IN ('p0', 'p1', 'p2', 'p3')),
+          status TEXT NOT NULL CHECK(status IN ('planning', 'in_progress', 'blocked', 'completed', 'cancelled')),
+          created_at INTEGER NOT NULL,
+          started_at INTEGER,
+          completed_at INTEGER,
+          cancelled_at INTEGER,
+          created_by TEXT,
+          assigned_to TEXT,
+          success_criteria TEXT,
+          scope_boundaries TEXT,
+          estimated_effort_hours INTEGER,
+          metadata TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_plans_status ON plans(status);
+        CREATE INDEX IF NOT EXISTS idx_plans_priority ON plans(priority);
+        CREATE INDEX IF NOT EXISTS idx_plans_type ON plans(plan_type);
+        CREATE INDEX IF NOT EXISTS idx_plans_created_at ON plans(created_at);
+        CREATE INDEX IF NOT EXISTS idx_plans_status_priority ON plans(status, priority);
+      `);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'Plans table created successfully'
+      });
+    }
+
+    // Migration 022: Create issues and issue_occurrences tables (for error tracking)
+    const issuesTableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='issues'`).get();
+    if (!issuesTableExists) {
+      logger.info({
+        category: 'process',
+        action: 'creating_issues_tables',
+        message: 'Creating issues and issue_occurrences tables for error tracking'
+      });
+
+      this.db.exec(`
+        CREATE TABLE issues (
+          id TEXT PRIMARY KEY,
+          timestamp TEXT NOT NULL,
+          sessionId TEXT,
+          traceId TEXT,
+          route TEXT,
+          userAgent TEXT,
+          description TEXT,
+          status TEXT DEFAULT 'pending',
+          taskId TEXT,
+          fingerprint TEXT,
+          severity TEXT,
+          errorMessage TEXT,
+          component TEXT,
+          created TEXT NOT NULL,
+          resolved TEXT,
+          resolution TEXT,
+          prNumber INTEGER
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_status ON issues(status);
+        CREATE INDEX IF NOT EXISTS idx_trace ON issues(traceId);
+        CREATE INDEX IF NOT EXISTS idx_timestamp ON issues(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_fingerprint ON issues(fingerprint);
+        CREATE INDEX IF NOT EXISTS idx_created ON issues(created);
+
+        CREATE TABLE issue_occurrences (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          issueId TEXT NOT NULL,
+          timestamp TEXT NOT NULL,
+          sessionId TEXT,
+          FOREIGN KEY (issueId) REFERENCES issues(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_occurrence_issue ON issue_occurrences(issueId);
+        CREATE INDEX IF NOT EXISTS idx_occurrence_timestamp ON issue_occurrences(timestamp);
+      `);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'Issues tables created successfully'
+      });
+    }
+
+    // Migration 023: Create frontend_logs table (for frontend logging)
+    const frontendLogsTableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='frontend_logs'`).get();
+    if (!frontendLogsTableExists) {
+      logger.info({
+        category: 'process',
+        action: 'creating_frontend_logs_table',
+        message: 'Creating frontend_logs table for frontend logging'
+      });
+
+      this.db.exec(`
+        CREATE TABLE frontend_logs (
+          id TEXT PRIMARY KEY,
+          timestamp TEXT NOT NULL,
+          level TEXT NOT NULL CHECK(level IN ('trace', 'debug', 'info', 'warn', 'error', 'fatal')),
+          message TEXT NOT NULL,
+          scope TEXT,
+          traceId TEXT,
+          sessionId TEXT NOT NULL,
+          route TEXT,
+          userId TEXT,
+          data TEXT,
+          errorName TEXT,
+          errorMessage TEXT,
+          errorStack TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_frontend_logs_timestamp ON frontend_logs(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_frontend_logs_traceId ON frontend_logs(traceId);
+        CREATE INDEX IF NOT EXISTS idx_frontend_logs_sessionId ON frontend_logs(sessionId);
+        CREATE INDEX IF NOT EXISTS idx_frontend_logs_level ON frontend_logs(level);
+        CREATE INDEX IF NOT EXISTS idx_frontend_logs_session_time ON frontend_logs(sessionId, timestamp);
+        CREATE INDEX IF NOT EXISTS idx_frontend_logs_triage ON frontend_logs(timestamp, sessionId, traceId);
+      `);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'Frontend logs table created successfully'
+      });
+    }
+
+    // Migration 024: Create session_metadata table (for user session tracking)
+    const sessionMetadataTableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='session_metadata'`).get();
+    if (!sessionMetadataTableExists) {
+      logger.info({
+        category: 'process',
+        action: 'creating_session_metadata_table',
+        message: 'Creating session_metadata table for session tracking'
+      });
+
+      this.db.exec(`
+        CREATE TABLE session_metadata (
+          session_id TEXT PRIMARY KEY,
+          user_agent TEXT NOT NULL,
+          viewport_width INTEGER NOT NULL,
+          viewport_height INTEGER NOT NULL,
+          start_time TEXT NOT NULL,
+          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_session_metadata_start_time ON session_metadata(start_time);
+      `);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'Session metadata table created successfully'
+      });
+    }
   }
 
   private createSchema(): void {
