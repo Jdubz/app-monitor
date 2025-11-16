@@ -512,7 +512,7 @@ export class TaskExecutionService {
         this.taskQueue.completeTask(nextTask.id, output, agentType);
 
         // Generate session summary for documentation
-        await this.generateSessionSummary(nextTask, result.exitCode || 0, output, stderr, new Date().toISOString());
+        await this.generateSessionSummary(nextTask, result.exitCode || 0, output, stderr, Date.now());
 
         logger.info({
           category: 'process',
