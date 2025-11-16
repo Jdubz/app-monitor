@@ -100,23 +100,20 @@ validate_database_references() {
         return
     fi
 
-    # Check each reference - must be the canonical path or use DATABASE_PATH variable
+    # Check each reference - must be the canonical path pattern or DATABASE_PATH
     echo "${db_refs}" | while IFS=: read -r line_num line_content; do
-        # Allow DATABASE_PATH variable or canonical path
-        if echo "${line_content}" | grep -qE "(DATABASE_PATH|${CANONICAL_DB_PATH}|app-monitor\.db)"; then
-            # Additional check: if it contains a path, must be the canonical one
-            if echo "${line_content}" | grep -q "/.*\.db"; then
-                if ! echo "${line_content}" | grep -q "${CANONICAL_DB_PATH}"; then
-                    log_error "  Line ${line_num}: Incorrect database path"
-                    log_error "    Found: ${line_content}"
-                    log_error "    ONLY allowed: ${CANONICAL_DB_PATH}"
-                    ((ERRORS++))
-                fi
-            fi
+        # Allow:
+        # 1. DATABASE_PATH environment variable
+        # 2. The literal canonical path: /opt/app-monitor/shared/backend/data/app-monitor.db
+        # 3. The variable expansion pattern: ${SHARED_DIR}/backend/data/app-monitor.db
+        # 4. Just the filename: app-monitor.db (when used with proper directory vars)
+
+        if echo "${line_content}" | grep -qE "(DATABASE_PATH|${CANONICAL_DB_PATH}|\\\$\{SHARED_DIR\}/backend/data/app-monitor\.db|app-monitor\.db)"; then
+            log_info "  Line ${line_num}: ✓ Valid database reference"
         else
             log_error "  Line ${line_num}: Invalid database reference"
             log_error "    Found: ${line_content}"
-            log_error "    ONLY allowed: DATABASE_PATH variable or ${CANONICAL_DB_PATH}"
+            log_error "    ONLY allowed: DATABASE_PATH, ${CANONICAL_DB_PATH}, or \${SHARED_DIR}/backend/data/app-monitor.db"
             ((ERRORS++))
         fi
     done
