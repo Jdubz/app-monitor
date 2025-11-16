@@ -98,6 +98,12 @@ jobs:
             shared/api-contracts/node_modules
           key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
 
+      - name: Validate infrastructure configuration
+        run: |
+          echo "🔍 Validating infrastructure paths and configuration..."
+          chmod +x ./scripts/production/validate-infrastructure.sh
+          ./scripts/production/validate-infrastructure.sh .
+
       - name: Run deployment smoke test
         run: |
           echo "🧪 Running deployment smoke test..."

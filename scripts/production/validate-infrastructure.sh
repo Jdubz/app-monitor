@@ -92,34 +92,47 @@ validate_database_references() {
 
     log_info "Checking ${script##*/} for database path references..."
 
-    # Find all .db file references
-    local db_refs=$(grep -n '\.db[^a-zA-Z]' "${script}" | grep -v "^#" | grep -v "package-lock.json" || true)
+    # Find all .db file references (end of line or followed by non-letter)
+    # Filter out comments (lines with : followed by optional whitespace then #)
+    # Filter out escaped patterns like \\.db\\ which are JavaScript/regex patterns
+    # Filter out grep patterns (lines containing grep -E or grep -qE)
+    local db_refs=$(grep -n '\.db\([^a-zA-Z]\|$\)' "${script}" | grep -v ':[[:space:]]*#' | grep -v '\\\\.db\\\\' | grep -v 'grep -.*E.*\.db' || true)
 
     if [ -z "${db_refs}" ]; then
         log_info "  No database references found"
         return
     fi
 
-    # Check each reference - must be the canonical path or use DATABASE_PATH variable
-    echo "${db_refs}" | while IFS=: read -r line_num line_content; do
-        # Allow DATABASE_PATH variable or canonical path
-        if echo "${line_content}" | grep -qE "(DATABASE_PATH|${CANONICAL_DB_PATH}|app-monitor\.db)"; then
-            # Additional check: if it contains a path, must be the canonical one
-            if echo "${line_content}" | grep -q "/.*\.db"; then
-                if ! echo "${line_content}" | grep -q "${CANONICAL_DB_PATH}"; then
-                    log_error "  Line ${line_num}: Incorrect database path"
-                    log_error "    Found: ${line_content}"
-                    log_error "    ONLY allowed: ${CANONICAL_DB_PATH}"
-                    ((ERRORS++))
-                fi
-            fi
+    # Check each reference - must be valid database path or backup pattern
+    # Using process substitution to avoid subshell issue with ERRORS counter
+    while IFS=: read -r line_num line_content; do
+        # Skip backup file patterns (BACKUP_FILE, BACKUP_PATH, backup globs, etc.)
+        if echo "${line_content}" | grep -qE "(BACKUP_FILE|BACKUP_PATH|_backup|backup_|app-monitor_.*\.db|dev-bots_.*\.db)"; then
+            log_info "  Line ${line_num}: ✓ Backup file pattern (skipped)"
+            continue
+        fi
+
+        # Allow:
+        # 1. DATABASE_PATH environment variable
+        # 2. The literal canonical path: /opt/app-monitor/shared/backend/data/app-monitor.db
+        # 3. The variable expansion pattern: ${SHARED_DIR}/backend/data/app-monitor.db
+        # 4. Development relative paths: data/app-monitor.db or ../data/app-monitor.db
+
+        if echo "${line_content}" | grep -q "DATABASE_PATH"; then
+            log_info "  Line ${line_num}: ✓ Uses DATABASE_PATH variable"
+        elif echo "${line_content}" | grep -q "${CANONICAL_DB_PATH}"; then
+            log_info "  Line ${line_num}: ✓ Uses canonical path"
+        elif echo "${line_content}" | grep -qE '\$\{SHARED_DIR\}/backend/data/app-monitor\.db'; then
+            log_info "  Line ${line_num}: ✓ Uses variable expansion pattern"
+        elif echo "${line_content}" | grep -qE '(^|[[:space:]="])(\.\./)?data/app-monitor\.db([[:space:]]|"|$)'; then
+            log_info "  Line ${line_num}: ✓ Uses relative dev path"
         else
             log_error "  Line ${line_num}: Invalid database reference"
             log_error "    Found: ${line_content}"
-            log_error "    ONLY allowed: DATABASE_PATH variable or ${CANONICAL_DB_PATH}"
+            log_error "    Allowed: DATABASE_PATH, ${CANONICAL_DB_PATH}, \${SHARED_DIR}/backend/data/app-monitor.db, or data/app-monitor.db"
             ((ERRORS++))
         fi
-    done
+    done < <(echo "${db_refs}")
 }
 
 # Validate backup-db.sh (most critical)

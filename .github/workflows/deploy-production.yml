@@ -93,13 +93,7 @@ jobs:
 
       # NOTE: Critical validations (lock files, migrations, smoke tests) run in PR CI
       # This workflow assumes all validation passed before merge to main
-      # We only do quick sanity checks here for defense-in-depth
-
-      - name: Validate infrastructure configuration
-        run: |
-          echo "🔍 Validating infrastructure paths and configuration..."
-          chmod +x ./scripts/production/validate-infrastructure.sh
-          ./scripts/production/validate-infrastructure.sh .
+      # Infrastructure validation runs in CI/PR checks
 
       - name: Dependency audit
         run: |
