@@ -1,0 +1,66 @@
+[
+  {
+    "title": "Test Task 1: Add Simple Utility Function",
+    "description": "Add a simple date formatting utility function to backend/src/utils/dateHelpers.ts",
+    "project": "job-finder-app-manager",
+    "priority": "low",
+    "architectureReferences": ["backend/src/utils/"],
+    "acceptanceCriteria": [
+      "Create or update backend/src/utils/dateHelpers.ts",
+      "Add function formatDateShort(date: Date): string that returns YYYY-MM-DD format",
+      "Export the function",
+      "No other changes"
+    ],
+    "technicalGuidelines": [
+      "Use TypeScript strict typing",
+      "Keep function simple and pure",
+      "No external dependencies needed"
+    ],
+    "successCriteria": [
+      "Function exists and is exported",
+      "TypeScript compiles without errors"
+    ]
+  },
+  {
+    "title": "Test Task 2: Update README Badge",
+    "description": "Add a build status badge to the main README.md file",
+    "project": "job-finder-app-manager",
+    "priority": "low",
+    "architectureReferences": ["README.md"],
+    "acceptanceCriteria": [
+      "Add a badge to README.md under the title",
+      "Use format: ![Build](https://img.shields.io/badge/build-passing-brightgreen)",
+      "Keep existing content intact"
+    ],
+    "technicalGuidelines": [
+      "Add badge on a new line after the main title",
+      "Use shields.io badge format",
+      "No other changes to README"
+    ],
+    "successCriteria": [
+      "Badge appears in README.md",
+      "Markdown syntax is valid"
+    ]
+  },
+  {
+    "title": "Test Task 3: Add JSDoc Comment",
+    "description": "Add JSDoc documentation to an existing function in backend/src/services/database.ts",
+    "project": "job-finder-app-manager",
+    "priority": "low",
+    "architectureReferences": ["backend/src/services/database.ts"],
+    "acceptanceCriteria": [
+      "Add JSDoc comment to the initDatabase function",
+      "Include @description, @returns, and @throws tags",
+      "Keep function implementation unchanged"
+    ],
+    "technicalGuidelines": [
+      "Use proper JSDoc format",
+      "Document what the function does",
+      "No code changes, only documentation"
+    ],
+    "successCriteria": [
+      "JSDoc comment exists above initDatabase",
+      "TypeScript compiles without errors"
+    ]
+  }
+]

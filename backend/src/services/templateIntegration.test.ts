@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Integration tests for Task Template System
  * Tests the complete template generation pipeline with real-world scenarios

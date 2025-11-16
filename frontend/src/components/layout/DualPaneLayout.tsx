@@ -42,21 +42,21 @@ export function DualPaneLayout({
   return (
     <div
       className={cn(
-        'grid gap-4',
+        'grid min-w-0 gap-4 overflow-x-hidden',
         'grid-cols-1',
-        'lg:grid-cols-[minmax(0,_5fr)_minmax(0,_7fr)]',
-        'h-full',
+        'lg:grid-cols-[minmax(0,5fr)_minmax(0,7fr)]',
+        'h-full min-h-[calc(100vh-220px)]',
         className
       )}
     >
-      <PaneWrapper className={cn(asCards && 'flex flex-col overflow-hidden')}>
-        <ScrollArea className="flex-1">
+      <PaneWrapper className={cn(asCards && 'flex min-w-0 flex-col overflow-hidden')}>
+        <ScrollArea className="w-full flex-1">
           {left}
         </ScrollArea>
       </PaneWrapper>
 
-      <PaneWrapper className={cn(asCards && 'flex flex-col overflow-hidden')}>
-        <ScrollArea className="flex-1">
+      <PaneWrapper className={cn(asCards && 'flex min-w-0 flex-col overflow-hidden')}>
+        <ScrollArea className="w-full flex-1">
           {right}
         </ScrollArea>
       </PaneWrapper>
