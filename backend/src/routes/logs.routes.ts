@@ -7,6 +7,7 @@
 import express, { Request, Response } from 'express';
 import { LogWriter, type LogEntry } from '../services/logWriter.js';
 import type Database from 'better-sqlite3';
+import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
@@ -80,7 +81,12 @@ router.post('/frontend', (req: Request, res: Response) => {
       } catch (error) {
         // If session_metadata table doesn't exist, silently continue
         // Migration will be applied on next server restart
-        console.warn('[LogsAPI] Failed to write session metadata (table may not exist yet):', error);
+        logger.warn({
+          category: 'api',
+          action: 'write_session_metadata_failed',
+          message: 'Failed to write session metadata (table may not exist yet)',
+          error
+        });
       }
     }
 
@@ -91,7 +97,12 @@ router.post('/frontend', (req: Request, res: Response) => {
       } catch (error) {
         // If frontend_logs table doesn't exist, silently continue
         // Migration will be applied on next server restart
-        console.warn('[LogsAPI] Failed to write logs (table may not exist yet):', error);
+        logger.warn({
+          category: 'api',
+          action: 'write_logs_failed',
+          message: 'Failed to write logs (table may not exist yet)',
+          error
+        });
       }
     }
 
@@ -100,7 +111,12 @@ router.post('/frontend', (req: Request, res: Response) => {
       message: 'Logs received',
     });
   } catch (error) {
-    console.error('[LogsAPI] Error processing logs:', error);
+    logger.error({
+      category: 'api',
+      action: 'process_logs_failed',
+      message: 'Error processing logs',
+      error
+    });
     res.status(500).json({
       success: false,
       error: 'Failed to process logs',

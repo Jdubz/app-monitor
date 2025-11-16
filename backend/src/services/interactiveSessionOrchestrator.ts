@@ -98,6 +98,10 @@ export class InteractiveSessionOrchestrator {
       .label('dev-bot.model.provider', session.modelProvider)
       .label('dev-bot.model.name', session.modelName);
 
+    // Launch the selected agent in interactive mode
+    const agentCommand = this.getAgentCommand(session.modelProvider, session.modelName);
+    builder.command(agentCommand);
+
     // Mount work-target specific log directories for troubleshooting
     // Interactive sessions default to 'dev-bots' work target
     const workTarget = 'dev-bots';
@@ -200,6 +204,47 @@ export class InteractiveSessionOrchestrator {
    */
   async stop(containerId: string): Promise<void> {
     await this.lifecycle.stopAndRemove(containerId, 5);
+  }
+
+  /**
+   * Get the command to launch the selected agent
+   */
+  private getAgentCommand(provider: string, modelName: string): string[] {
+    switch (provider.toLowerCase()) {
+      case 'claude':
+        return [
+          'claude',
+          '--dangerously-skip-permissions',
+          '--disable-update-check'
+        ];
+      
+      case 'codex':
+        return [
+          'codex',
+          '--dangerously-skip-permissions',
+          '--disable-update-check'
+        ];
+      
+      case 'gemini':
+        return [
+          'gemini',
+          '--dangerously-skip-permissions',
+          '--disable-update-check'
+        ];
+      
+      default:
+        logger.warn({
+          category: 'system',
+          action: 'unknown_agent_provider',
+          message: `Unknown agent provider '${provider}', defaulting to codex`,
+          details: { provider, modelName }
+        });
+        return [
+          'codex',
+          '--dangerously-skip-permissions',
+          '--disable-update-check'
+        ];
+    }
   }
 
   /**

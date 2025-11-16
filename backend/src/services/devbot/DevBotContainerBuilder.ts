@@ -70,7 +70,8 @@ export class DevBotContainerBuilder {
       volumes: [],
       tmpfs: [
         // Writable temp for Claude CLI session data
-        { containerPath: '/home/worker/.claude', options: 'uid=1001,gid=1001' }
+        // uid=1001 (worker user) gid=1001 (worker group) mode=0700
+        { containerPath: '/home/worker/.claude', options: 'size=100m,uid=1001,gid=1001,mode=0700' }
       ],
       resources: {
         memoryMB: 512,

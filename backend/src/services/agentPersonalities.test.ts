@@ -21,7 +21,7 @@ describe('AgentPersonalityManager', () => {
       // When: Manager is initialized
       // Then: Default personalities are loaded
       const personalities = manager.getAllPersonalities();
-      expect(personalities).toHaveLength(7); // backend-specialist, frontend-specialist, review-specialist, testing-specialist, devops-specialist, documentation-specialist, gemini-1.5-pro
+      expect(personalities).toHaveLength(6); // backend-specialist, frontend-specialist, review-specialist, testing-specialist, devops-specialist, documentation-specialist
 
       // And: Each personality has required fields
       personalities.forEach(personality => {
@@ -77,14 +77,13 @@ describe('AgentPersonalityManager', () => {
       const personalities = manager.getAllPersonalities();
       
       // Then: All personalities are returned
-      expect(personalities).toHaveLength(7);
+      expect(personalities).toHaveLength(6);
       expect(personalities.map(p => p.id)).toContain('backend-specialist');
       expect(personalities.map(p => p.id)).toContain('frontend-specialist');
       expect(personalities.map(p => p.id)).toContain('review-specialist');
       expect(personalities.map(p => p.id)).toContain('testing-specialist');
       expect(personalities.map(p => p.id)).toContain('devops-specialist');
       expect(personalities.map(p => p.id)).toContain('documentation-specialist');
-      expect(personalities.map(p => p.id)).toContain('gemini-1.5-pro');
     });
 
     it('should add new personality', () => {

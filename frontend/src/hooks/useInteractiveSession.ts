@@ -17,6 +17,13 @@ const DEFAULT_LOG_CAPACITY = 2000;
 const SOCKET_RECONNECT_DELAY_MS = 3000;
 const log = createLogger('useInteractiveSession');
 
+// Type guard for NotImplementedError (501 response)
+function isNotImplementedError(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false;
+  const err = error as { error?: { error?: string } };
+  return err.error?.error === 'not_implemented';
+}
+
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 type LogSource = 'system' | 'agent' | 'user';
 
@@ -305,16 +312,15 @@ export function useInteractiveSession(
       }
     } catch (err: unknown) {
       if (!isMountedRef.current) return;
-      
+
       // Check if this is a 501 Not Implemented error - feature is disabled
-      const errorObj = err as { error?: { error?: string } };
-      if (errorObj?.error?.error === 'not_implemented') {
+      if (isNotImplementedError(err)) {
         // Silently disable the feature - no logging spam
         closeSocket({ suppressReconnect: true });
         setIsFetching(false);
         return;
       }
-      
+
       const message = err instanceof Error ? err.message : 'Failed to load interactive session';
       log.error('Failed to refresh interactive session', { error: err, message });
       setError(message);

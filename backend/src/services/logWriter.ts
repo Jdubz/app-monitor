@@ -73,7 +73,7 @@ export class LogWriter {
     try {
       const stmt = this.db.prepare(`
         INSERT OR IGNORE INTO session_metadata (
-          sessionId, userAgent, viewportWidth, viewportHeight, startTime
+          session_id, user_agent, viewport_width, viewport_height, start_time
         ) VALUES (?, ?, ?, ?, ?)
       `);
 
