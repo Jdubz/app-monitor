@@ -153,6 +153,13 @@ export class GitHubWebhookHandler {
   }
 
   /**
+   * Get PR condition state service for PR sync service
+   */
+  public getPRConditionStateService(): PRConditionStateService {
+    return this.prConditionState;
+  }
+
+  /**
    * Handle pull request webhook events
    * Delegates to modular PullRequestHandler
    */

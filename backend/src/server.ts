@@ -154,6 +154,9 @@ export async function createApp(options: CreateAppOptions = {}) {
     // Reuse PullRequestHandler from webhook handler (avoids duplicate instances)
     prSyncService.setPullRequestHandler(webhookHandler.getPullRequestHandler());
     
+    // Inject PR condition state service for accessing pr_condition_states table
+    prSyncService.setPRConditionStateService(webhookHandler.getPRConditionStateService());
+    
     // Inject PR sync service into task queue (dependency injection, not dynamic import)
     taskQueue.setPRSyncService(prSyncService);
 

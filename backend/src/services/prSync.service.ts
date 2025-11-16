@@ -14,12 +14,14 @@ import { GitHubPRService, getGitHubPRService } from './githubPR.service.js';
 import type { PullRequestHandler } from './webhookHandlers/pullRequestHandler.js';
 import type { GitHubPullRequestPayload } from './webhookHandlers/types.js';
 import { config } from '../config.js';
+import type { PRConditionStateService } from './prConditionState.service.js';
 
 interface PRSyncDelta {
   prNumber: number;
   expectedState: 'open' | 'unknown';
   actualState: 'open' | 'closed' | 'merged' | 'deleted';
   tasksAffected: string[];
+  source: 'tasks' | 'pr_conditions';
 }
 
 interface PRSyncStats {
@@ -36,13 +38,18 @@ interface PRSyncStats {
 /**
  * PR Sync Service
  * 
- * Syncs PR state from GitHub to detect stale task data.
+ * Syncs PR state from GitHub to detect stale PR data.
+ * Checks BOTH:
+ * 1. Tasks with pr_number (legacy/backup)
+ * 2. pr_condition_states table (primary source of truth)
+ * 
  * Triggered every N task completions (event-driven, not timer-based).
  */
 export class PRSyncService {
   private readonly taskQueue: TaskQueueService;
   private readonly githubPR: GitHubPRService;
   private pullRequestHandler: PullRequestHandler | null = null;
+  private prConditionStateService: PRConditionStateService | null = null;
   private stats: PRSyncStats = {
     syncs_triggered: 0,
     syncs_completed: 0,
@@ -67,6 +74,13 @@ export class PRSyncService {
   }
 
   /**
+   * Set PR condition state service for accessing tracked PRs
+   */
+  setPRConditionStateService(service: PRConditionStateService): void {
+    this.prConditionStateService = service;
+  }
+
+  /**
    * Get sync statistics
    */
   getStats(): PRSyncStats {
@@ -74,21 +88,24 @@ export class PRSyncService {
   }
 
   /**
-   * Sync all PRs tracked in pending/running tasks
+   * Sync all tracked PRs from BOTH sources:
+   * 1. pr_condition_states table (primary)
+   * 2. tasks table with pr_number (backup/legacy)
+   * 
    * Logs deltas and resolves differences
    */
   async syncAllTrackedPRs(): Promise<void> {
     this.stats.syncs_triggered++;
     
     try {
-      // 1. Get unique PR numbers from pending/running tasks (single query)
+      // 1. Get unique PR numbers from BOTH sources
       const prTasksMap = await this.getTrackedPRsWithTasks();
 
       if (prTasksMap.size === 0) {
         logger.debug({
           category: 'pr-sync',
           action: 'sync_skipped',
-          message: 'No PRs to sync (no pending/running tasks with pr_number)'
+          message: 'No PRs to sync (no tracked PRs in pr_condition_states or tasks)'
         });
         this.stats.syncs_completed++;
         return;
@@ -119,6 +136,7 @@ export class PRSyncService {
             deltas: deltas.map(d => ({
               prNumber: d.prNumber,
               actualState: d.actualState,
+              source: d.source,
               taskCount: d.tasksAffected.length
             }))
           }
@@ -161,22 +179,73 @@ export class PRSyncService {
   }
 
   /**
-   * Get tracked PR numbers with their associated tasks (single DB query)
-   * Fixes N+1 query problem
+   * Get tracked PR numbers from BOTH sources:
+   * 1. pr_condition_states table (primary - the source of truth)
+   * 2. tasks table with pr_number (backup - may include tasks referencing PRs)
+   * 
+   * Returns a map of PR number to associated tasks (or empty array for condition-tracked PRs)
+   * 
+   * NOTE: Includes failed/pending/running tasks since failed tasks may have merged PRs.
    */
   private async getTrackedPRsWithTasks(): Promise<Map<number, Task[]>> {
+    const prTasksMap = new Map<number, Task[]>();
+
+    // Source 1: Get PR numbers from pr_condition_states (primary)
+    if (this.prConditionStateService) {
+      try {
+        const trackedPRNumbers = await this.prConditionStateService.getAllTrackedPRNumbers();
+        
+        logger.debug({
+          category: 'pr-sync',
+          action: 'pr_condition_states_loaded',
+          message: `Found ${trackedPRNumbers.length} PRs in pr_condition_states`,
+          details: { count: trackedPRNumbers.length }
+        });
+
+        // Initialize map with empty task arrays
+        for (const prNumber of trackedPRNumbers) {
+          prTasksMap.set(prNumber, []);
+        }
+      } catch (error) {
+        logger.error({
+          category: 'pr-sync',
+          action: 'load_pr_conditions_failed',
+          message: 'Failed to load PRs from pr_condition_states',
+          error
+        });
+      }
+    } else {
+      logger.warn({
+        category: 'pr-sync',
+        action: 'pr_condition_service_missing',
+        message: 'PR condition state service not set - cannot check pr_condition_states table'
+      });
+    }
+
+    // Source 2: Get tasks with pr_number (backup/additional)
     const pendingTasks = await this.taskQueue.getTasksByStatus('pending');
     const runningTasks = await this.taskQueue.getTasksByStatus('running');
-    const allTasks = [...pendingTasks, ...runningTasks];
+    const failedTasks = await this.taskQueue.getTasksByStatus('failed');
+    const allTasks = [...pendingTasks, ...runningTasks, ...failedTasks];
 
-    const prTasksMap = new Map<number, Task[]>();
+    let tasksWithPRCount = 0;
     for (const task of allTasks) {
       if (task.pr_number) {
+        tasksWithPRCount++;
         if (!prTasksMap.has(task.pr_number)) {
           prTasksMap.set(task.pr_number, []);
         }
         prTasksMap.get(task.pr_number)!.push(task);
       }
+    }
+
+    if (tasksWithPRCount > 0) {
+      logger.debug({
+        category: 'pr-sync',
+        action: 'tasks_with_pr_loaded',
+        message: `Found ${tasksWithPRCount} tasks with pr_number`,
+        details: { count: tasksWithPRCount }
+      });
     }
 
     return prTasksMap;
@@ -232,16 +301,28 @@ export class PRSyncService {
   /**
    * Check if PR state differs from expected
    * Returns delta if PR is stale, null if in sync
+   * 
+   * NOTE: PRs can come from two sources:
+   * 1. pr_condition_states (no tasks) - always check
+   * 2. tasks table (with tasks) - check if tasks are pending/running/failed
    */
   private async checkPRDelta(prNumber: number, tasks: Task[]): Promise<PRSyncDelta | null> {
-    const hasPendingTasks = tasks.some(t => 
-      t.status === 'pending' || t.status === 'running'
-    );
+    // Determine source: if no tasks, it's from pr_condition_states
+    const source = tasks.length === 0 ? 'pr_conditions' : 'tasks';
 
-    if (!hasPendingTasks) {
-      // All tasks complete, no need to sync
-      return null;
+    // For task-based PRs, only check if tasks need sync
+    if (source === 'tasks') {
+      const hasTasksNeedingSync = tasks.some(t => 
+        t.status === 'pending' || t.status === 'running' || t.status === 'failed'
+      );
+
+      if (!hasTasksNeedingSync) {
+        // All tasks completed/cancelled/timeout, no need to sync
+        return null;
+      }
     }
+
+    // For pr_conditions-based PRs, always check (they're actively tracked)
 
     // Fetch actual PR state from GitHub
     try {
@@ -253,7 +334,8 @@ export class PRSyncService {
           prNumber,
           expectedState: 'open',
           actualState: prStatus.state === 'MERGED' ? 'merged' : 'closed',
-          tasksAffected: tasks.map(t => t.id)
+          tasksAffected: tasks.map(t => t.id),
+          source
         };
       }
 
@@ -294,7 +376,8 @@ export class PRSyncService {
           prNumber,
           expectedState: 'open',
           actualState: 'deleted',
-          tasksAffected: tasks.map(t => t.id)
+          tasksAffected: tasks.map(t => t.id),
+          source
         };
       }
       
@@ -303,7 +386,9 @@ export class PRSyncService {
   }
 
   /**
-   * Resolve deltas by calling existing webhook handlers
+   * Resolve deltas by:
+   * 1. Calling webhook handlers to clean up tasks
+   * 2. Cleaning up pr_condition_states if source is pr_conditions
    */
   private async resolveDeltas(deltas: PRSyncDelta[]): Promise<void> {
     if (!this.pullRequestHandler) {
@@ -321,10 +406,11 @@ export class PRSyncService {
         logger.info({
           category: 'pr-sync',
           action: 'resolving_delta',
-          message: `PR #${delta.prNumber} is ${delta.actualState}, cleaning up ${delta.tasksAffected.length} tasks`,
+          message: `PR #${delta.prNumber} is ${delta.actualState} (source: ${delta.source}), cleaning up`,
           details: {
             prNumber: delta.prNumber,
             actualState: delta.actualState,
+            source: delta.source,
             tasksAffected: delta.tasksAffected
           }
         });
@@ -332,7 +418,7 @@ export class PRSyncService {
         // Create properly typed payload for pull request handler
         const payload = this.createSyncPayload(delta.prNumber, delta.actualState === 'merged');
 
-        // Delegate to existing pull request handler
+        // Delegate to existing pull request handler (handles task cleanup + pr_condition_states cleanup)
         await this.pullRequestHandler.handle(payload);
 
         this.stats.total_deltas_resolved++;
@@ -341,7 +427,7 @@ export class PRSyncService {
           category: 'pr-sync',
           action: 'delta_resolved',
           message: `PR #${delta.prNumber} delta resolved successfully`,
-          details: { prNumber: delta.prNumber }
+          details: { prNumber: delta.prNumber, source: delta.source }
         });
 
       } catch (error) {
