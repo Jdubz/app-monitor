@@ -98,6 +98,21 @@ export abstract class BaseWebhookHandler {
   }
 
   /**
+   * Check if PR branch names match dev-bot patterns
+   * Used to filter out manual PRs that don't follow bot naming conventions
+   */
+  protected isDevBotManagedBranch(headRef: string, baseRef: string): boolean {
+    // Dev-bot branches follow pattern: task-{type}-{uuid}
+    // e.g., task-implementation-abc123, task-bugfix-def456
+    const devBotBranchPattern = /^task-(implementation|investigation|bugfix|feature|refactor|docs|review|fix)-[a-f0-9-]{8,}/i;
+    
+    // Base branch should be staging or main (not feature branches)
+    const validBaseBranches = ['staging', 'main'];
+    
+    return devBotBranchPattern.test(headRef) && validBaseBranches.includes(baseRef);
+  }
+
+  /**
    * Update stats timestamp
    */
   protected updateStatsTimestamp(): void {

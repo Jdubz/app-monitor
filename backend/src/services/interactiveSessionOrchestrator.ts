@@ -1,5 +1,3 @@
-import type Docker from 'dockerode';
-
 import { logger } from '../utils/logger.js';
 import type { InteractiveSessionRecord } from './database.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
@@ -12,15 +10,12 @@ import type { AgentPersonality } from './agentPersonalities.js';
  * Delegates container lifecycle to the worker service to avoid code duplication.
  */
 export class InteractiveSessionOrchestrator {
-  private readonly docker: Docker;
   private readonly workerService: EphemeralWorkerService;
   private readonly sessionWorkers = new Map<string, string>(); // sessionId -> workerId
 
   constructor(
-    docker: Docker,
     workerService: EphemeralWorkerService,
   ) {
-    this.docker = docker;
     this.workerService = workerService;
   }
 
@@ -69,6 +64,8 @@ export class InteractiveSessionOrchestrator {
       created_at: session.startedAt,
       agent_id: interactiveAgent.id,
       owner_email: session.ownerEmail,
+      model_provider: session.modelProvider,
+      model_name: session.modelName,
       // Additional fields required by EphemeralWorkerService.createWorker
       is_repair_bot: false,
       pr_number: null,

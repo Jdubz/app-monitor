@@ -604,7 +604,7 @@ export class TaskQueueService {
       this.db.exec(`
         CREATE TABLE issues (
           id TEXT PRIMARY KEY,
-          timestamp TEXT NOT NULL,
+          timestamp INTEGER NOT NULL,
           sessionId TEXT,
           traceId TEXT,
           route TEXT,
@@ -616,8 +616,8 @@ export class TaskQueueService {
           severity TEXT,
           errorMessage TEXT,
           component TEXT,
-          created TEXT NOT NULL,
-          resolved TEXT,
+          created INTEGER NOT NULL,
+          resolved INTEGER,
           resolution TEXT,
           prNumber INTEGER
         );
@@ -631,7 +631,7 @@ export class TaskQueueService {
         CREATE TABLE issue_occurrences (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           issueId TEXT NOT NULL,
-          timestamp TEXT NOT NULL,
+          timestamp INTEGER NOT NULL,
           sessionId TEXT,
           FOREIGN KEY (issueId) REFERENCES issues(id)
         );
@@ -659,7 +659,7 @@ export class TaskQueueService {
       this.db.exec(`
         CREATE TABLE frontend_logs (
           id TEXT PRIMARY KEY,
-          timestamp TEXT NOT NULL,
+          timestamp INTEGER NOT NULL,
           level TEXT NOT NULL CHECK(level IN ('trace', 'debug', 'info', 'warn', 'error', 'fatal')),
           message TEXT NOT NULL,
           scope TEXT,
@@ -671,7 +671,7 @@ export class TaskQueueService {
           errorName TEXT,
           errorMessage TEXT,
           errorStack TEXT,
-          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+          created_at INTEGER NOT NULL DEFAULT (unixepoch())
         );
 
         CREATE INDEX IF NOT EXISTS idx_frontend_logs_timestamp ON frontend_logs(timestamp);
@@ -704,8 +704,8 @@ export class TaskQueueService {
           user_agent TEXT NOT NULL,
           viewport_width INTEGER NOT NULL,
           viewport_height INTEGER NOT NULL,
-          start_time TEXT NOT NULL,
-          created_at TEXT NOT NULL DEFAULT (datetime('now'))
+          start_time INTEGER NOT NULL,
+          created_at INTEGER NOT NULL DEFAULT (unixepoch())
         );
 
         CREATE INDEX IF NOT EXISTS idx_session_metadata_start_time ON session_metadata(start_time);

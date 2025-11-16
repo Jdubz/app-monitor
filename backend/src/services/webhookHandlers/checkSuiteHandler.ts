@@ -58,34 +58,6 @@ export class CheckSuiteHandler extends BaseWebhookHandler {
   }
 
   /**
-   * Check if PR branches match dev-bot or copilot patterns
-   * 
-   * Valid patterns based on actual GitHub history:
-   * - Dev-bot PRs: task-* -> main (task-implementation-, task-fix-, task-bugfix-, etc.)
-   * - Dev-bot PRs: task-* -> staging (for testing)
-   * - Copilot sub-PRs: copilot/sub-pr-{number} -> task-implementation-{uuid}
-   * - Copilot PRs: copilot/sub-pr-{number} -> staging
-   * 
-   * Invalid patterns (should be ignored):
-   * - staging -> main (manual release PRs)
-   * - feature/* -> main/staging (manual feature PRs)
-   * - fix/* -> main/staging (manual fix PRs)
-   * - refactor/* -> staging (manual refactoring PRs)
-   * - pr-{number} -> main/staging (manual PRs)
-   */
-  private isDevBotManagedBranch(headRef: string, baseRef: string): boolean {
-    // Dev-bot task branches (task-implementation-, task-fix-, task-bugfix-, etc.)
-    const isTaskBranch = headRef.startsWith('task-') && 
-                        (baseRef === 'main' || baseRef === 'staging');
-    
-    // Copilot sub-PRs targeting task implementation branches or staging
-    const isCopilotPR = headRef.startsWith('copilot/sub-pr-') && 
-                       (baseRef.startsWith('task-') || baseRef === 'staging');
-    
-    return isTaskBranch || isCopilotPR;
-  }
-
-  /**
    * Process check suite completion for a specific PR
    */
   private async processCheckSuiteForPR(

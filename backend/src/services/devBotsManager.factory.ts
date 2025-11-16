@@ -183,7 +183,6 @@ export async function createDevBotsManagerDependencies(
   });
 
   const interactiveSessionOrchestrator = new InteractiveSessionOrchestrator(
-    docker,
     ephemeralWorkerService,
   );
 

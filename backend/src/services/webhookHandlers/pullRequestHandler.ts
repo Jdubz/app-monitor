@@ -17,22 +17,6 @@ import { getPlanStatusUpdater } from '../planStatusUpdater.singleton.js';
  */
 export class PullRequestHandler extends BaseWebhookHandler {
   /**
-   * Check if PR branches match dev-bot or copilot patterns
-   * 
-   * Valid patterns based on actual GitHub history:
-   * - Dev-bot PRs: task-* -> main/staging
-   * - Copilot sub-PRs: copilot/sub-pr-{number} -> task-*
-   * - Copilot PRs: copilot/sub-pr-{number} -> staging
-   */
-  private isDevBotManagedBranch(headRef: string, baseRef: string): boolean {
-    const isTaskBranch = headRef.startsWith('task-') && 
-                        (baseRef === 'main' || baseRef === 'staging');
-    const isCopilotPR = headRef.startsWith('copilot/sub-pr-') && 
-                       (baseRef.startsWith('task-') || baseRef === 'staging');
-    return isTaskBranch || isCopilotPR;
-  }
-
-  /**
    * Handle pull_request webhook event
    */
   async handle(payload: GitHubPullRequestPayload): Promise<void> {
