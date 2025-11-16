@@ -195,10 +195,8 @@ export class SystemInitializationService {
     // Start interactive session idle watchdog
     this.startInteractiveIdleWatchdog();
 
-    // Auto-start the dev-bots system after initialization (if configured)
-    if (process.env.AUTO_START_SYSTEM !== 'false') {
-      this.components.systemLifecycleService.startSystem();
-    }
+    // Always start the dev-bots system after initialization
+    this.components.systemLifecycleService.startSystem();
   }
 
   /**
