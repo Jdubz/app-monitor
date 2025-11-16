@@ -132,31 +132,21 @@ describe('EphemeralWorkerService - Context Copying', () => {
       );
     });
 
-    it.skip('should add context environment variables', async () => {
-      const task: Partial<Task> = {
-        id: 'test-task-id',
-        type: 'implementation',
-        title: 'Test task',
-        context_bundle_id: 'test-bundle-id',
-        context_cache_key: 'test-cache-key',
-        context_profiles: ['scope-control', 'pr-workflow'],
-        risk_level: 'high',
-        files: ['docker/Dockerfile'],
-        assigned_agent: 'backend-specialist',
-        status: 'pending',
-        created_at: Date.now(),
-        can_retry: true,
-        retry_count: 0,
-        max_retries: 3,
-        timeout_ms: null
-      };
-
-      const result = await service.testContextMounting(task as Task);
-
-      expect(result.env).toContain('CONTEXT_BUNDLE_ID=test-bundle-id');
-      expect(result.env).toContain('CONTEXT_CACHE_KEY=test-cache-key');
-      expect(result.env).toContain('CONTEXT_PROFILES=["scope-control","pr-workflow"]');
-      expect(result.env).toContain('TASK_RISK_LEVEL=high');
+    it.skip('should add context environment variables (test helper not implemented)', async () => {
+      // TODO: Implement testContextMounting() helper method or rewrite test
+      // to test the actual public API instead of internal methods
+      
+      // Test data for when this is implemented:
+      // - task with context_bundle_id: 'test-bundle-id'
+      // - context_cache_key: 'test-cache-key'
+      // - context_profiles: ['scope-control', 'pr-workflow']
+      // - risk_level: 'high'
+      
+      // Expected environment variables:
+      // - CONTEXT_BUNDLE_ID=test-bundle-id
+      // - CONTEXT_CACHE_KEY=test-cache-key
+      // - CONTEXT_PROFILES=["scope-control","pr-workflow"]
+      // - TASK_RISK_LEVEL=high
     });
 
     it('should skip copying when no context_cache_key', async () => {
