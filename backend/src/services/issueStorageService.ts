@@ -145,9 +145,10 @@ export class IssueStorageService {
     traceId?: string;
     route: string;
     description?: string;
+    screenshot?: string | null;
   }> {
     const stmt = this.db.prepare(`
-      SELECT id, timestamp, sessionId, traceId, route, description
+      SELECT id, timestamp, sessionId, traceId, route, description, screenshot
       FROM issues
       WHERE status = 'pending'
       ORDER BY created ASC
@@ -160,6 +161,7 @@ export class IssueStorageService {
       traceId?: string;
       route: string;
       description?: string;
+      screenshot?: string | null;
     }>;
   }
 
