@@ -89,7 +89,7 @@ const code = fs.readFileSync('${SMOKE_TEST_DIR}/backend/dist/services/taskQueue.
 // Look for the problematic pattern: CREATE INDEX on context_bundle_id within createSchema's SQL
 // The bug was: createSchema() had SQL like 'CREATE INDEX idx_tasks_context_bundle_id...'
 // But context_bundle_id column is added by migrations, not in the initial schema
-const createSchemaMatch = code.match(/createSchema.*?this\\.db\\.exec\\(\`([^\`]+)\`\\)/s); // JS method call not db file
+const createSchemaMatch = code.match(/createSchema.*?this\\.db\\.exec\\(\`([^\`]+)\`\\)/s); // JS method call, not db file
 if (!createSchemaMatch) {
   // Can't find the pattern, skip validation
   console.log('Schema validation skipped: could not parse createSchema SQL');
