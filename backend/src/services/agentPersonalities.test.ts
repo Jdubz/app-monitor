@@ -84,7 +84,7 @@ describe('AgentPersonalityManager', () => {
       expect(personalities.map(p => p.id)).toContain('testing-specialist');
       expect(personalities.map(p => p.id)).toContain('devops-specialist');
       expect(personalities.map(p => p.id)).toContain('documentation-specialist');
-      expect(personalities.map(p => p.id)).toContain('gemini-1.5-pro');
+      expect(personalities.map(p => p.id)).toContain('gemini-2.5-pro');
     });
 
     it('should add new personality', () => {
