@@ -35,9 +35,8 @@ EXPECTED_SHARED_DIR_PATTERN="\${DEPLOY_DIR}/shared"
 EXPECTED_DB_PATH_PATTERN="\${SHARED_DIR}/backend/data/app-monitor.db"
 EXPECTED_BACKUP_DIR_PATTERN="\${SHARED_DIR}/backups/database"
 
-# Forbidden patterns that indicate incorrect paths
-FORBIDDEN_DB_PATH_PATTERN="/data/dev-bots.db"
-FORBIDDEN_DB_PATH_PATTERN2="/shared/data/"
+# Single source of truth - ONLY allow this database path
+CANONICAL_DB_PATH="/opt/app-monitor/shared/backend/data/app-monitor.db"
 
 # Source directory (for pre-deployment validation)
 SOURCE_DIR="${1:-$(pwd)}"
@@ -83,24 +82,44 @@ check_script_path() {
     fi
 }
 
-# Function to check for hardcoded incorrect paths
-check_for_incorrect_paths() {
+# Function to validate database path - ONLY allow canonical path
+validate_database_references() {
     local script="$1"
-    local incorrect_pattern="$2"
-    local description="$3"
 
     if [ ! -f "${script}" ]; then
         return
     fi
 
-    if grep -q "${incorrect_pattern}" "${script}"; then
-        log_error "Found incorrect path pattern in ${script##*/}: ${description}"
-        log_error "  Pattern: ${incorrect_pattern}"
-        grep -n "${incorrect_pattern}" "${script}" | while read -r line; do
-            log_error "  Line: ${line}"
-        done
-        ((ERRORS++))
+    log_info "Checking ${script##*/} for database path references..."
+
+    # Find all .db file references
+    local db_refs=$(grep -n '\.db[^a-zA-Z]' "${script}" | grep -v "^#" | grep -v "package-lock.json" || true)
+
+    if [ -z "${db_refs}" ]; then
+        log_info "  No database references found"
+        return
     fi
+
+    # Check each reference - must be the canonical path or use DATABASE_PATH variable
+    echo "${db_refs}" | while IFS=: read -r line_num line_content; do
+        # Allow DATABASE_PATH variable or canonical path
+        if echo "${line_content}" | grep -qE "(DATABASE_PATH|${CANONICAL_DB_PATH}|app-monitor\.db)"; then
+            # Additional check: if it contains a path, must be the canonical one
+            if echo "${line_content}" | grep -q "/.*\.db"; then
+                if ! echo "${line_content}" | grep -q "${CANONICAL_DB_PATH}"; then
+                    log_error "  Line ${line_num}: Incorrect database path"
+                    log_error "    Found: ${line_content}"
+                    log_error "    ONLY allowed: ${CANONICAL_DB_PATH}"
+                    ((ERRORS++))
+                fi
+            fi
+        else
+            log_error "  Line ${line_num}: Invalid database reference"
+            log_error "    Found: ${line_content}"
+            log_error "    ONLY allowed: DATABASE_PATH variable or ${CANONICAL_DB_PATH}"
+            ((ERRORS++))
+        fi
+    done
 }
 
 # Validate backup-db.sh (most critical)
@@ -111,27 +130,16 @@ check_script_path "${BACKUP_SCRIPT}" "DEPLOY_DIR" "${EXPECTED_DEPLOY_DIR_PATTERN
 check_script_path "${BACKUP_SCRIPT}" "SHARED_DIR" "${EXPECTED_SHARED_DIR_PATTERN}" "Shared directory"
 check_script_path "${BACKUP_SCRIPT}" "DB_PATH" "${EXPECTED_DB_PATH_PATTERN}" "Database path"
 check_script_path "${BACKUP_SCRIPT}" "BACKUP_DIR" "${EXPECTED_BACKUP_DIR_PATTERN}" "Backup directory"
+validate_database_references "${BACKUP_SCRIPT}"
 
-# Check for forbidden path patterns
-check_for_incorrect_paths "${BACKUP_SCRIPT}" "${FORBIDDEN_DB_PATH_PATTERN}" "Forbidden database path pattern (${FORBIDDEN_DB_PATH_PATTERN})"
-
-# Validate deploy.sh
+# Validate all production scripts for database references
 log_info ""
-log_info "=== Validating deploy.sh ==="
-DEPLOY_SCRIPT="${SCRIPTS_DIR}/deploy.sh"
-if [ -f "${DEPLOY_SCRIPT}" ]; then
-    check_for_incorrect_paths "${DEPLOY_SCRIPT}" "${FORBIDDEN_DB_PATH_PATTERN}" "Forbidden path pattern"
-    log_info "✓ deploy.sh validated"
-fi
-
-# Validate health-check.sh
-log_info ""
-log_info "=== Validating health-check.sh ==="
-HEALTH_SCRIPT="${SCRIPTS_DIR}/health-check.sh"
-if [ -f "${HEALTH_SCRIPT}" ]; then
-    check_for_incorrect_paths "${HEALTH_SCRIPT}" "${FORBIDDEN_DB_PATH_PATTERN}" "Forbidden path pattern"
-    log_info "✓ health-check.sh validated"
-fi
+log_info "=== Validating all scripts for database path compliance ==="
+for script in "${SCRIPTS_DIR}"/*.sh; do
+    if [ -f "${script}" ]; then
+        validate_database_references "${script}"
+    fi
+done
 
 # Summary
 log_info ""
