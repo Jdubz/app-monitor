@@ -48,7 +48,7 @@ test.describe('PR Tracking - Navigation and Layout', () => {
 
   test('should show loading state initially', async ({ page }) => {
     await page.goto('/monitor/prs');
-    const loadingIndicator = page.locator('[class*="loading"], [class*="spinner"]').first();
+    page.locator('[class*="loading"], [class*="spinner"]').first();
     // Loading might be quick, so just verify page loads eventually
     await expect(page.locator('body')).toBeVisible();
   });
@@ -84,9 +84,6 @@ test.describe('PR Tracking - PR List Display', () => {
 
     // Look for common PR metadata elements
     const pageContent = await page.content();
-
-    // If there are PRs, they should show metadata
-    const hasPRContent = pageContent.includes('pull') || pageContent.includes('PR');
 
     // Just verify page loaded successfully
     expect(pageContent).toContain('root');
@@ -340,7 +337,7 @@ test.describe('PR Tracking - Error States', () => {
 
     // Should show error message or fallback UI
     const errorMessage = page.getByText(/error|failed|unavailable/i);
-    const hasError = await errorMessage.isVisible().catch(() => false);
+    await errorMessage.isVisible().catch(() => false);
 
     // App should handle this gracefully
     await expect(page.locator('#root')).toBeVisible();

@@ -230,15 +230,8 @@ main() {
         log_warn "No scripts/production directory found in source, skipping script update"
     fi
 
-    # Phase 3: Database backup
-    log_info "Phase 3: Creating database backup"
-    if ! "${SCRIPTS_DIR}/backup-db.sh"; then
-        log_error "Database backup failed"
-        exit 1
-    fi
-
-    # Phase 4: Create new release
-    log_info "Phase 4: Creating new release in ${RELEASE_DIR}"
+    # Phase 3: Create new release
+    log_info "Phase 3: Creating new release in ${RELEASE_DIR}"
     log_info "Source directory: ${SOURCE_DIR}"
     mkdir -p "${RELEASE_DIR}"
 
@@ -378,8 +371,8 @@ main() {
     # Fix ownership of build artifacts (prevent 403 errors from nginx)
     sudo chown -R jdubz:jdubz dist/
 
-    # Phase 6: Deploy to target port
-    log_info "Phase 6: Deploying to target port ${TARGET_PORT}"
+    # Phase 5: Deploy to target port
+    log_info "Phase 5: Deploying to target port ${TARGET_PORT}"
 
     # Stop target port service if running
     if systemctl is-active --quiet "app-monitor-backend@${TARGET_PORT}.service"; then
@@ -419,8 +412,8 @@ main() {
         log_warn "Service startup timeout (${max_wait}s), proceeding to health checks..."
     fi
 
-    # Phase 7: Health checks
-    log_info "Phase 7: Running health checks"
+    # Phase 6: Health checks
+    log_info "Phase 6: Running health checks"
     if ! PORT=${TARGET_PORT} "${SCRIPTS_DIR}/health-check.sh"; then
         log_error "Health checks failed on port ${TARGET_PORT}"
         log_info "Starting rollback..."
@@ -430,9 +423,9 @@ main() {
 
     log_info "Health checks passed!"
 
-    # Phase 8: Switch traffic with connection drain period
+    # Phase 7: Switch traffic with connection drain period
     if [ "$ACTIVE_PORT" != "none" ]; then
-        log_info "Phase 8: Switching traffic from ${ACTIVE_PORT} to ${TARGET_PORT}"
+        log_info "Phase 7: Switching traffic from ${ACTIVE_PORT} to ${TARGET_PORT}"
         update_nginx_upstream "${TARGET_PORT}"
 
         # Connection drain period - keep old service running
@@ -462,7 +455,7 @@ main() {
 
         log_info "Old service stopped after ${stop_wait} seconds"
     else
-        log_info "Phase 8: Configuring nginx for port ${TARGET_PORT}"
+        log_info "Phase 7: Configuring nginx for port ${TARGET_PORT}"
         update_nginx_upstream "${TARGET_PORT}"
     fi
 
@@ -471,8 +464,8 @@ main() {
     echo "${TARGET_PORT}" > "${SHARED_DIR}/config/active-port"
     log_info "Active port saved: ${TARGET_PORT}"
 
-    # Phase 9: Cleanup old releases (keep last 5)
-    log_info "Phase 9: Cleaning up old releases"
+    # Phase 8: Cleanup old releases (keep last 5)
+    log_info "Phase 8: Cleaning up old releases"
     cd "${RELEASES_DIR}"
     # Sort by filename (timestamp) in reverse order, skip first 5, delete rest
     ls -1 | grep -E '^[0-9]{8}_[0-9]{6}$' | sort -r | tail -n +6 | xargs -r rm -rf

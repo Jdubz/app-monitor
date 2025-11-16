@@ -233,7 +233,7 @@ test.describe('WebSocket Reconnection', () => {
     await page.waitForTimeout(2000);
 
     // Get current state
-    const contentBefore = await page.content();
+    await page.content();
 
     // Simulate disconnect and reconnect
     await page.context().setOffline(true);
@@ -276,7 +276,7 @@ test.describe('Real-time Task Queue Updates', () => {
 
     // Get initial counts
     const countBadges = page.locator('[class*="badge"]');
-    const initialCount = await countBadges.count();
+    await countBadges.count();
 
     await page.waitForTimeout(5000);
 
@@ -289,7 +289,7 @@ test.describe('Real-time Task Queue Updates', () => {
     await page.waitForTimeout(2000);
 
     // Get initial task count
-    const initialTasks = await page.locator('[class*="task"]').count();
+    await page.locator('[class*="task"]').count();
 
     // Wait for potential new tasks
     await page.waitForTimeout(5000);
@@ -336,7 +336,7 @@ test.describe('Real-time Logs Streaming', () => {
     const hasLogs = await logArea.isVisible().catch(() => false);
 
     if (hasLogs) {
-      const initialContent = await logArea.textContent();
+      await logArea.textContent();
       await page.waitForTimeout(3000);
 
       // Logs may stream in real-time
@@ -350,7 +350,7 @@ test.describe('Real-time Logs Streaming', () => {
     const logArea = page.locator('[class*="log"], [class*="output"]').first();
 
     if (await logArea.isVisible()) {
-      const initialContent = await logArea.textContent();
+      await logArea.textContent();
       await page.waitForTimeout(3000);
       const laterContent = await logArea.textContent();
 
@@ -574,7 +574,7 @@ test.describe('WebSocket Performance', () => {
     await page.waitForTimeout(2000);
 
     // Monitor memory usage (basic check)
-    const metrics1 = await page.evaluate(() => {
+    await page.evaluate(() => {
       if (performance.memory) {
         return performance.memory.usedJSHeapSize;
       }
@@ -599,7 +599,7 @@ test.describe('WebSocket Performance', () => {
     await page.waitForTimeout(2000);
 
     // Monitor frame rate
-    const startTime = Date.now();
+    Date.now();
     let frameCount = 0;
 
     const measureFrames = page.evaluate(() => {

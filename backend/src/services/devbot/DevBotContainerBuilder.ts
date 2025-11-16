@@ -69,9 +69,11 @@ export class DevBotContainerBuilder {
       },
       volumes: [],
       tmpfs: [
-        // Writable temp for Claude CLI session data
-        // uid=1001 (worker user) gid=1001 (worker group) mode=0700
-        { containerPath: '/home/worker/.claude', options: 'size=100m,uid=1001,gid=1001,mode=0700' }
+        // Writable temp for agent CLI session data
+        // uid=1000 (node user) gid=1000 (node group) mode=0700
+        { containerPath: '/home/node/.claude', options: 'size=100m,uid=1000,gid=1000,mode=0700' },
+        { containerPath: '/home/node/.codex', options: 'size=100m,uid=1000,gid=1000,mode=0700' },
+        { containerPath: '/home/node/.gemini', options: 'size=100m,uid=1000,gid=1000,mode=0700' }
       ],
       resources: {
         memoryMB: 512,
