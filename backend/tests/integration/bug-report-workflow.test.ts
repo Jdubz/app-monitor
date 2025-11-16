@@ -351,8 +351,7 @@ describe('Bug Report Workflow Integration', () => {
       expect(taskDescription).toContain(`FROM issues WHERE id = '${issue.id}'`);
 
       // Should mention screenshot availability
-      expect(taskDescription).toContain('Screenshot: Attached');
-      expect(taskDescription).toContain('base64 data URL');
+      expect(taskDescription).toContain('Screenshot: Attached (see database)');
     });
   });
 });

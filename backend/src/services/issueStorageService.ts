@@ -215,7 +215,20 @@ export class IssueStorageService {
    */
   getIssueById(issueId: string): StoredIssue | undefined {
     const stmt = this.db.prepare('SELECT * FROM issues WHERE id = ?');
-    return stmt.get(issueId) as StoredIssue | undefined;
+    const row = stmt.get(issueId) as any;
+    
+    if (!row) return undefined;
+    
+    // Parse JSON fields
+    if (row.meta && typeof row.meta === 'string') {
+      try {
+        row.meta = JSON.parse(row.meta);
+      } catch {
+        row.meta = null;
+      }
+    }
+    
+    return row as StoredIssue;
   }
 
   /**
