@@ -235,6 +235,7 @@ export interface DevBotsTaskCollections {
   pending: DevBotsTask[];
   active: DevBotsTask[];
   completed: DevBotsTask[];
+  failed: DevBotsTask[];
 }
 
 export interface DevBotsWorkerStatus {
