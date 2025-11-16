@@ -44,7 +44,10 @@ describe('Issues Routes', () => {
         component TEXT,
         severity TEXT,
         fingerprint TEXT,
-        prNumber INTEGER
+        prNumber INTEGER,
+        screenshot TEXT,
+        screenshot_error TEXT,
+        meta TEXT
       );
 
       CREATE TABLE issue_occurrences (
@@ -467,6 +470,104 @@ describe('Issues Routes', () => {
       expect(response.status).toBe(500);
       expect(response.body.success).toBe(false);
       expect(response.body.error).toContain('Failed to process issue report');
+    });
+  });
+
+  describe('POST /api/issues - Screenshot and Meta Support', () => {
+    it('should accept issue with screenshot (base64 data URL)', async () => {
+      const screenshot = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+      const response = await request(app)
+        .post('/api/issues')
+        .send({
+          timestamp: new Date().toISOString(),
+          sessionId: 'session-1234567890-abc123',
+          route: '/dashboard',
+          userAgent: 'Mozilla/5.0',
+          description: 'UI issue with screenshot',
+          screenshot,
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+
+      // Verify screenshot was stored in database
+      await new Promise(resolve => setTimeout(resolve, 50));
+      const issue = db.prepare('SELECT * FROM issues WHERE id = ?').get(response.body.data.issueId);
+      expect(issue.screenshot).toBe(screenshot);
+    });
+
+    it('should accept issue with screenshot error', async () => {
+      const response = await request(app)
+        .post('/api/issues')
+        .send({
+          timestamp: new Date().toISOString(),
+          sessionId: 'session-1234567890-abc123',
+          route: '/home',
+          userAgent: 'Mozilla/5.0',
+          screenshotError: 'Permission denied: Cannot capture screen',
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+
+      // Verify screenshot error was stored
+      await new Promise(resolve => setTimeout(resolve, 50));
+      const issue = db.prepare('SELECT * FROM issues WHERE id = ?').get(response.body.data.issueId);
+      expect(issue.screenshot_error).toBe('Permission denied: Cannot capture screen');
+    });
+
+    it('should accept issue with flexible metadata (JSON)', async () => {
+      const meta = {
+        browserInfo: { name: 'Chrome', version: '120.0' },
+        viewport: { width: 1920, height: 1080 },
+        customField: 'test value',
+      };
+
+      const response = await request(app)
+        .post('/api/issues')
+        .send({
+          timestamp: new Date().toISOString(),
+          sessionId: 'session-1234567890-abc123',
+          route: '/profile',
+          userAgent: 'Mozilla/5.0',
+          meta,
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+
+      // Verify meta was stored as JSON
+      await new Promise(resolve => setTimeout(resolve, 50));
+      const issue = db.prepare('SELECT * FROM issues WHERE id = ?').get(response.body.data.issueId);
+      expect(JSON.parse(issue.meta)).toEqual(meta);
+    });
+
+    it('should accept issue with all enhanced fields', async () => {
+      const screenshot = 'data:image/png;base64,ABC123DEF456';
+      const meta = { theme: 'dark', language: 'en-US' };
+
+      const response = await request(app)
+        .post('/api/issues')
+        .send({
+          timestamp: new Date().toISOString(),
+          sessionId: 'session-1234567890-abc123',
+          route: '/settings',
+          userAgent: 'Mozilla/5.0',
+          description: 'Full feature test',
+          screenshot,
+          meta,
+        });
+
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+
+      // Verify all fields stored
+      await new Promise(resolve => setTimeout(resolve, 50));
+      const issue = db.prepare('SELECT * FROM issues WHERE id = ?').get(response.body.data.issueId);
+      expect(issue.screenshot).toBe(screenshot);
+      expect(JSON.parse(issue.meta)).toEqual(meta);
+      expect(issue.description).toBe('Full feature test');
     });
   });
 });

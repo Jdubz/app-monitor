@@ -17,6 +17,9 @@ export interface IssueReport {
   route: string;
   userAgent: string;
   description?: string;
+  screenshot?: string | null;
+  screenshotError?: string;
+  meta?: Record<string, unknown>;
 }
 
 export interface StoredIssue extends IssueReport {
@@ -60,8 +63,8 @@ export class IssueStorageService {
     const stmt = this.db.prepare(`
       INSERT INTO issues (
         id, timestamp, sessionId, traceId, route, userAgent,
-        description, status, created
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        description, status, created, screenshot, screenshot_error, meta
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -73,7 +76,10 @@ export class IssueStorageService {
       issue.userAgent,
       issue.description || null,
       issue.status,
-      issue.created
+      issue.created,
+      issue.screenshot || null,
+      issue.screenshotError || null,
+      issue.meta ? JSON.stringify(issue.meta) : null
     );
 
     return issue;

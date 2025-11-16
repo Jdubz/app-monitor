@@ -51,10 +51,10 @@
   },
   "lint-staged": {
     "backend/**/*.ts": [
-      "eslint --fix"
+      "npx eslint --fix"
     ],
     "frontend/**/*.{ts,tsx}": [
-      "eslint --fix"
+      "npx eslint --fix"
     ]
   }
 }

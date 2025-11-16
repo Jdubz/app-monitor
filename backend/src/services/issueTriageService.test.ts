@@ -45,7 +45,10 @@ describe('IssueTriageService', () => {
         component TEXT,
         severity TEXT,
         fingerprint TEXT,
-        prNumber INTEGER
+        prNumber INTEGER,
+        screenshot TEXT,
+        screenshot_error TEXT,
+        meta TEXT
       );
 
       CREATE TABLE issue_occurrences (
