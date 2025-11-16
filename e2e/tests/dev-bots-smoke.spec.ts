@@ -100,10 +100,22 @@ const mockStatus = {
   },
 };
 
+async function bypassPasswordGate(page: Page) {
+  await page.goto('/');
+  const passwordInput = page.getByPlaceholder('Password');
+  const isPasswordGateVisible = await passwordInput.isVisible().catch(() => false);
+
+  if (isPasswordGateVisible) {
+    await passwordInput.fill('e2e-test-password');
+    await page.getByRole('button', { name: 'Enter' }).click();
+    await page.waitForLoadState('networkidle');
+  }
+}
+
 test.describe('Dev Bots Command Center', () => {
   test.beforeEach(async ({ page }) => {
     await mockDevBotsApi(page);
-    await page.goto('/');
+    await bypassPasswordGate(page);
     await page.getByRole('link', { name: /Dev-Bots/i }).click();
     await expect(page.getByRole('heading', { name: /Dev Bots Command Center/i })).toBeVisible();
   });

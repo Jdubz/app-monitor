@@ -8,21 +8,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { PlanProgressCalculator } from '../planProgressCalculator.service.js';
-import * as fs from 'fs';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
-const TEST_DB_PATH = path.join(__dirname, 'plan-progress-calculator-test.db');
 
-function cleanupTestDb() {
-  [TEST_DB_PATH, TEST_DB_PATH + '-shm', TEST_DB_PATH + '-wal'].forEach((file) => {
-    if (fs.existsSync(file)) fs.unlinkSync(file);
-  });
-}
 
 function setupTestSchema(db: Database.Database) {
   // Create plans table
@@ -93,16 +81,17 @@ describe('PlanProgressCalculator', () => {
   let db: Database.Database;
   let calculator: PlanProgressCalculator;
 
-  beforeEach(() => {
-    cleanupTestDb();
-    db = new Database(TEST_DB_PATH);
+  beforeEach(() => {    db = new Database(':memory:');
     setupTestSchema(db);
     calculator = new PlanProgressCalculator(db);
   });
 
   afterEach(() => {
-    db.close();
-    cleanupTestDb();
+    try {
+      db.close();
+    } catch (err) {
+      // Ignore close errors in tests
+    }
   });
 
   describe('computeStatus', () => {
