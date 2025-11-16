@@ -1053,6 +1053,7 @@ export interface StoredQualityObservation {
 export type InteractiveSessionStatus =
   | 'starting'
   | 'running'
+  | 'disconnected'
   | 'disconnecting'
   | 'terminating'
   | 'ended'
