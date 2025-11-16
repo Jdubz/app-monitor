@@ -268,8 +268,19 @@ export class PullRequestHandler extends BaseWebhookHandler {
 
     // Evaluate PR conditions after creation to detect issues early
     // Note: GitHub's mergeable status may be computing (null/UNKNOWN) initially
-    // If unknown, conditions marked 'not_ready' and re-evaluated on synchronize
+    // Start async polling in background to re-check until status is determined
     await this.evaluateConditions(prNumber, 'pull_request_opened');
+
+    // Start background polling for mergeable status (don't await - runs async)
+    this.pollForMergeableStatus(prNumber).catch(error => {
+      logger.warn({
+        category: 'pr-workflow',
+        action: 'mergeable_polling_failed',
+        message: `Failed to poll mergeable status for PR #${prNumber}`,
+        error,
+        details: { pr_number: prNumber }
+      });
+    });
   }
 
   /**
@@ -601,6 +612,95 @@ export class PullRequestHandler extends BaseWebhookHandler {
   }
 
   /**
+   * Poll GitHub API for mergeable status until determined or timeout
+   * GitHub computes mergeable status asynchronously (5-30 seconds typical)
+   * Polls every 30s for up to 5 minutes
+   */
+  private async pollForMergeableStatus(prNumber: number): Promise<void> {
+    const POLL_INTERVAL_MS = 30000; // 30 seconds
+    const MAX_POLLS = 10; // 5 minutes (10 * 30s)
+    const POLL_START_DELAY_MS = 10000; // Wait 10s before first poll (GitHub needs time)
+
+    if (!this.prOrchestrator) {
+      logger.debug({
+        category: 'pr-workflow',
+        action: 'polling_skipped',
+        message: `Skipping mergeable polling for PR #${prNumber} - no orchestrator`,
+        details: { pr_number: prNumber }
+      });
+      return;
+    }
+
+    // Wait before starting polls to give GitHub time to compute
+    await new Promise(resolve => setTimeout(resolve, POLL_START_DELAY_MS));
+
+    const githubPR = this.prOrchestrator.getGitHubPRService();
+
+    for (let attempt = 1; attempt <= MAX_POLLS; attempt++) {
+      try {
+        const prStatus = await githubPR.getPRStatus(prNumber);
+
+        if (prStatus.mergeable !== 'UNKNOWN') {
+          // Status determined! Re-evaluate conditions with actual status
+          logger.info({
+            category: 'pr-workflow',
+            action: 'mergeable_status_determined',
+            message: `PR #${prNumber} mergeable status determined after ${attempt} poll(s)`,
+            details: {
+              pr_number: prNumber,
+              mergeable: prStatus.mergeable,
+              attempts: attempt,
+              elapsed_seconds: (POLL_START_DELAY_MS / 1000) + (attempt * POLL_INTERVAL_MS / 1000)
+            }
+          });
+
+          // Re-evaluate conditions now that status is known
+          await this.evaluateConditions(prNumber, 'pull_request_opened');
+          return;
+        }
+
+        // Still UNKNOWN - log and continue polling
+        logger.debug({
+          category: 'pr-workflow',
+          action: 'mergeable_status_still_unknown',
+          message: `PR #${prNumber} mergeable status still UNKNOWN (poll ${attempt}/${MAX_POLLS})`,
+          details: { pr_number: prNumber, attempt, max_attempts: MAX_POLLS }
+        });
+
+        // Wait before next poll (skip if last attempt)
+        if (attempt < MAX_POLLS) {
+          await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+        }
+      } catch (error) {
+        logger.warn({
+          category: 'pr-workflow',
+          action: 'mergeable_poll_error',
+          message: `Error polling mergeable status for PR #${prNumber} (attempt ${attempt})`,
+          error,
+          details: { pr_number: prNumber, attempt }
+        });
+
+        // Continue polling even on error (transient API issues)
+        if (attempt < MAX_POLLS) {
+          await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+        }
+      }
+    }
+
+    // Timed out - status still unknown after 5 minutes
+    logger.warn({
+      category: 'pr-workflow',
+      action: 'mergeable_polling_timeout',
+      message: `PR #${prNumber} mergeable status still UNKNOWN after ${MAX_POLLS} polls (5 minutes)`,
+      details: {
+        pr_number: prNumber,
+        total_attempts: MAX_POLLS,
+        total_time_seconds: (POLL_START_DELAY_MS / 1000) + (MAX_POLLS * POLL_INTERVAL_MS / 1000)
+      }
+    });
+  }
+
+  /**
    * Evaluate PR conditions with error handling
    */
   private async evaluateConditions(prNumber: number, trigger: string): Promise<void> {
@@ -614,7 +714,8 @@ export class PullRequestHandler extends BaseWebhookHandler {
       'task_completion',
       'manual_restart',
       'pull_request_reopened',
-      'pull_request_ready_for_review'
+      'pull_request_ready_for_review',
+      'pull_request_opened'
     ] as const;
 
     type ValidTrigger = typeof validTriggers[number];

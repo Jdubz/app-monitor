@@ -126,7 +126,7 @@ export class PRConditionStateService {
    */
   async evaluateConditions(
     prNumber: number,
-    eventType: 'check_suite' | 'pull_request_review' | 'pull_request_synchronize' | 'push' | 'task_completion' | 'manual_restart' | 'pull_request_reopened' | 'pull_request_ready_for_review'
+    eventType: 'check_suite' | 'pull_request_review' | 'pull_request_synchronize' | 'push' | 'task_completion' | 'manual_restart' | 'pull_request_reopened' | 'pull_request_ready_for_review' | 'pull_request_opened'
   ): Promise<void> {
     // Check for existing evaluation in progress
     const existingLock = this.evaluationLocks.get(prNumber);
@@ -172,7 +172,7 @@ export class PRConditionStateService {
    */
   private async _evaluateConditionsInternal(
     prNumber: number,
-    eventType: 'check_suite' | 'pull_request_review' | 'pull_request_synchronize' | 'push' | 'task_completion' | 'manual_restart' | 'pull_request_reopened' | 'pull_request_ready_for_review'
+    eventType: 'check_suite' | 'pull_request_review' | 'pull_request_synchronize' | 'push' | 'task_completion' | 'manual_restart' | 'pull_request_reopened' | 'pull_request_ready_for_review' | 'pull_request_opened'
   ): Promise<void> {
     logger.info({
       category: 'pr-workflow',
@@ -229,6 +229,44 @@ export class PRConditionStateService {
         await this.evaluateAndHandleSynchronize(prNumber, state);
         await this.evaluateAndHandleBranchUpdate(prNumber, state);
         // Task verification and Copilot review will be checked in checkMergeReadiness
+        break;
+
+      case 'pull_request_opened':
+        // INITIAL EVALUATION: Check all code-related conditions (conflicts, comments, checks)
+        // Note: CI checks may not be ready yet, mergeable status may be UNKNOWN
+        logger.info({
+          category: 'pr-workflow',
+          action: 'pr_opened_initial_evaluation',
+          message: `Initial condition evaluation for new PR #${prNumber}`
+        });
+        await this.evaluateAndHandleCIChecks(prNumber, state);
+        await this.evaluateAndHandleReview(prNumber, state);
+        await this.evaluateAndHandleSynchronize(prNumber, state);
+        break;
+
+      case 'pull_request_reopened':
+        // PR REOPENED: Re-evaluate all conditions (similar to opened)
+        logger.info({
+          category: 'pr-workflow',
+          action: 'pr_reopened_evaluation',
+          message: `Re-evaluating conditions for reopened PR #${prNumber}`
+        });
+        await this.evaluateAndHandleCIChecks(prNumber, state);
+        await this.evaluateAndHandleReview(prNumber, state);
+        await this.evaluateAndHandleSynchronize(prNumber, state);
+        await this.evaluateAndHandleBranchUpdate(prNumber, state);
+        break;
+
+      case 'pull_request_ready_for_review':
+        // PR READY FOR REVIEW: Evaluate all conditions (draft → ready)
+        logger.info({
+          category: 'pr-workflow',
+          action: 'pr_ready_for_review_evaluation',
+          message: `Evaluating conditions for PR #${prNumber} now ready for review`
+        });
+        await this.evaluateAndHandleCIChecks(prNumber, state);
+        await this.evaluateAndHandleReview(prNumber, state);
+        await this.evaluateAndHandleSynchronize(prNumber, state);
         break;
     }
 
