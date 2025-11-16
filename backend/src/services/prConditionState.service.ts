@@ -239,9 +239,7 @@ export class PRConditionStateService {
           action: 'pr_opened_initial_evaluation',
           message: `Initial condition evaluation for new PR #${prNumber}`
         });
-        await this.evaluateAndHandleCIChecks(prNumber, state);
-        await this.evaluateAndHandleReview(prNumber, state);
-        await this.evaluateAndHandleSynchronize(prNumber, state);
+        await this.evaluateCommonConditions(prNumber, state, false);
         break;
 
       case 'pull_request_reopened':
@@ -251,10 +249,7 @@ export class PRConditionStateService {
           action: 'pr_reopened_evaluation',
           message: `Re-evaluating conditions for reopened PR #${prNumber}`
         });
-        await this.evaluateAndHandleCIChecks(prNumber, state);
-        await this.evaluateAndHandleReview(prNumber, state);
-        await this.evaluateAndHandleSynchronize(prNumber, state);
-        await this.evaluateAndHandleBranchUpdate(prNumber, state);
+        await this.evaluateCommonConditions(prNumber, state, true);
         break;
 
       case 'pull_request_ready_for_review':
@@ -264,9 +259,7 @@ export class PRConditionStateService {
           action: 'pr_ready_for_review_evaluation',
           message: `Evaluating conditions for PR #${prNumber} now ready for review`
         });
-        await this.evaluateAndHandleCIChecks(prNumber, state);
-        await this.evaluateAndHandleReview(prNumber, state);
-        await this.evaluateAndHandleSynchronize(prNumber, state);
+        await this.evaluateCommonConditions(prNumber, state, false);
         break;
     }
 
@@ -308,6 +301,25 @@ export class PRConditionStateService {
 
     // Evaluate conditions to see if issue was fixed
     await this.evaluateConditions(prNumber, 'task_completion');
+  }
+
+  /**
+   * Evaluate common PR conditions (CI checks, reviews, conflicts)
+   * Used by multiple event types: opened, reopened, ready_for_review
+   * @param includeBranchUpdate - Whether to also evaluate branch update condition
+   */
+  private async evaluateCommonConditions(
+    prNumber: number,
+    state: PRConditionState,
+    includeBranchUpdate: boolean
+  ): Promise<void> {
+    await this.evaluateAndHandleCIChecks(prNumber, state);
+    await this.evaluateAndHandleReview(prNumber, state);
+    await this.evaluateAndHandleSynchronize(prNumber, state);
+
+    if (includeBranchUpdate) {
+      await this.evaluateAndHandleBranchUpdate(prNumber, state);
+    }
   }
 
   /**

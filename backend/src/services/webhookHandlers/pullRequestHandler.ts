@@ -16,6 +16,8 @@ import { getPlanStatusUpdater } from '../planStatusUpdater.singleton.js';
  * Handler for GitHub pull_request webhook events
  */
 export class PullRequestHandler extends BaseWebhookHandler {
+  private pollingTrackerMap: Map<number, boolean> = new Map();
+
   /**
    * Handle pull_request webhook event
    */
@@ -614,12 +616,14 @@ export class PullRequestHandler extends BaseWebhookHandler {
   /**
    * Poll GitHub API for mergeable status until determined or timeout
    * GitHub computes mergeable status asynchronously (5-30 seconds typical)
-   * Polls every 30s for up to 5 minutes
+   * Uses exponential backoff: 10s, 20s, 40s, 60s, 60s...
    */
   private async pollForMergeableStatus(prNumber: number): Promise<void> {
-    const POLL_INTERVAL_MS = 30000; // 30 seconds
-    const MAX_POLLS = 10; // 5 minutes (10 * 30s)
-    const POLL_START_DELAY_MS = 10000; // Wait 10s before first poll (GitHub needs time)
+    const INITIAL_POLL_DELAY_MS = 10000; // Wait 10s before first poll (GitHub needs time)
+    const BASE_INTERVAL_MS = 10000; // Base interval: 10 seconds
+    const MAX_INTERVAL_MS = 60000; // Max interval: 60 seconds
+    const MAX_POLLS = 8; // Total attempts
+    const MAX_TOTAL_TIME_MS = 5 * 60 * 1000; // 5 minutes max
 
     if (!this.prOrchestrator) {
       logger.debug({
@@ -631,12 +635,38 @@ export class PullRequestHandler extends BaseWebhookHandler {
       return;
     }
 
-    // Wait before starting polls to give GitHub time to compute
-    await new Promise(resolve => setTimeout(resolve, POLL_START_DELAY_MS));
+    // Check if already polling for this PR
+    if (this.pollingTrackerMap.get(prNumber)) {
+      logger.debug({
+        category: 'pr-workflow',
+        action: 'polling_already_active',
+        message: `Polling already in progress for PR #${prNumber}`,
+        details: { pr_number: prNumber }
+      });
+      return;
+    }
 
-    const githubPR = this.prOrchestrator.getGitHubPRService();
+    // Mark as polling
+    this.pollingTrackerMap.set(prNumber, true);
 
-    for (let attempt = 1; attempt <= MAX_POLLS; attempt++) {
+    try {
+      // Wait before starting polls to give GitHub time to compute
+      await new Promise(resolve => setTimeout(resolve, INITIAL_POLL_DELAY_MS));
+
+      const githubPR = this.prOrchestrator.getGitHubPRService();
+      const startTime = Date.now();
+
+      for (let attempt = 1; attempt <= MAX_POLLS; attempt++) {
+        // Check timeout
+        if (Date.now() - startTime > MAX_TOTAL_TIME_MS) {
+          logger.warn({
+            category: 'pr-workflow',
+            action: 'mergeable_polling_timeout',
+            message: `PR #${prNumber} polling timeout after ${Math.floor((Date.now() - startTime) / 1000)}s`,
+            details: { pr_number: prNumber, attempts: attempt - 1 }
+          });
+          break;
+        }
       try {
         const prStatus = await githubPR.getPRStatus(prNumber);
 
@@ -659,7 +689,7 @@ export class PullRequestHandler extends BaseWebhookHandler {
           return;
         }
 
-        // Still UNKNOWN - log and continue polling
+        // Still UNKNOWN - log and continue polling with exponential backoff
         logger.debug({
           category: 'pr-workflow',
           action: 'mergeable_status_still_unknown',
@@ -667,9 +697,17 @@ export class PullRequestHandler extends BaseWebhookHandler {
           details: { pr_number: prNumber, attempt, max_attempts: MAX_POLLS }
         });
 
-        // Wait before next poll (skip if last attempt)
+        // Exponential backoff before next poll (skip if last attempt)
         if (attempt < MAX_POLLS) {
-          await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+          // Calculate exponential backoff: 10s, 20s, 40s, 60s (capped)
+          const backoffInterval = Math.min(BASE_INTERVAL_MS * Math.pow(2, attempt - 1), MAX_INTERVAL_MS);
+          logger.debug({
+            category: 'pr-workflow',
+            action: 'polling_backoff',
+            message: `Waiting ${backoffInterval / 1000}s before next poll`,
+            details: { pr_number: prNumber, backoff_seconds: backoffInterval / 1000 }
+          });
+          await new Promise(resolve => setTimeout(resolve, backoffInterval));
         }
       } catch (error) {
         logger.warn({
@@ -681,23 +719,16 @@ export class PullRequestHandler extends BaseWebhookHandler {
         });
 
         // Continue polling even on error (transient API issues)
-        if (attempt < MAX_POLLS) {
-          await new Promise(resolve => setTimeout(resolve, POLL_INTERVAL_MS));
+        if (attempt < MAX_POLLS && Date.now() - startTime < MAX_TOTAL_TIME_MS) {
+          const backoffInterval = Math.min(BASE_INTERVAL_MS * Math.pow(2, attempt - 1), MAX_INTERVAL_MS);
+          await new Promise(resolve => setTimeout(resolve, backoffInterval));
         }
       }
-    }
-
-    // Timed out - status still unknown after 5 minutes
-    logger.warn({
-      category: 'pr-workflow',
-      action: 'mergeable_polling_timeout',
-      message: `PR #${prNumber} mergeable status still UNKNOWN after ${MAX_POLLS} polls (5 minutes)`,
-      details: {
-        pr_number: prNumber,
-        total_attempts: MAX_POLLS,
-        total_time_seconds: (POLL_START_DELAY_MS / 1000) + (MAX_POLLS * POLL_INTERVAL_MS / 1000)
       }
-    });
+    } finally {
+      // Always remove from polling tracker
+      this.pollingTrackerMap.delete(prNumber);
+    }
   }
 
   /**
