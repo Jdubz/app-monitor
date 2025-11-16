@@ -58,6 +58,19 @@ export class CheckRunHandler extends BaseWebhookHandler {
   }
 
   /**
+   * Check if PR branches match dev-bot or copilot patterns
+   * 
+   * Valid patterns:
+   * - Dev-bot PRs: task-implementation-{uuid} -> main
+   * - Copilot sub-PRs: subPR-{number} -> task-implementation-{uuid}
+   */
+  private isDevBotManagedBranch(headRef: string, baseRef: string): boolean {
+    const isTaskBranch = headRef.startsWith('task-implementation-') && baseRef === 'main';
+    const isSubPR = headRef.startsWith('subPR-') && baseRef.startsWith('task-implementation-');
+    return isTaskBranch || isSubPR;
+  }
+
+  /**
    * Process check run completion for a specific PR
    * Uses same logic as check suite since workflow is identical
    */
@@ -71,6 +84,40 @@ export class CheckRunHandler extends BaseWebhookHandler {
         category: 'api',
         action: 'check_run_handler_not_ready',
         message: 'Task queue or PR condition state service not available'
+      });
+      return;
+    }
+
+    const owner = repository.owner.login;
+    const repo = repository.name;
+    
+    // Check if the PR branches match dev-bot patterns
+    try {
+      const githubPR = this.prOrchestrator?.getGitHubPRService();
+      if (githubPR) {
+        const prStatus = await githubPR.getPRStatus(prNumber, owner, repo);
+        
+        if (!this.isDevBotManagedBranch(prStatus.head_ref, prStatus.base_ref)) {
+          logger.debug({
+            category: 'api',
+            action: 'check_run_non_devbot_branch',
+            message: `PR #${prNumber} does not match dev-bot branch patterns, skipping`,
+            details: {
+              pr_number: prNumber,
+              head_ref: prStatus.head_ref,
+              base_ref: prStatus.base_ref
+            }
+          });
+          return;
+        }
+      }
+    } catch (error) {
+      logger.warn({
+        category: 'api',
+        action: 'check_run_pr_fetch_failed',
+        message: `Failed to fetch PR #${prNumber} details, skipping to be safe`,
+        error,
+        details: { pr_number: prNumber }
       });
       return;
     }

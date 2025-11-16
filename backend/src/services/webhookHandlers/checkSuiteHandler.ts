@@ -58,6 +58,28 @@ export class CheckSuiteHandler extends BaseWebhookHandler {
   }
 
   /**
+   * Check if PR branches match dev-bot or copilot patterns
+   * 
+   * Valid patterns:
+   * - Dev-bot PRs: task-implementation-{uuid} -> main
+   * - Copilot sub-PRs: subPR-{number} -> task-implementation-{uuid}
+   * 
+   * Invalid patterns (should be ignored):
+   * - staging -> main
+   * - any other branch -> main
+   * - any branch -> non-task branch
+   */
+  private isDevBotManagedBranch(headRef: string, baseRef: string): boolean {
+    // Dev-bot task implementation branches targeting main
+    const isTaskBranch = headRef.startsWith('task-implementation-') && baseRef === 'main';
+    
+    // Copilot sub-PRs targeting task implementation branches
+    const isSubPR = headRef.startsWith('subPR-') && baseRef.startsWith('task-implementation-');
+    
+    return isTaskBranch || isSubPR;
+  }
+
+  /**
    * Process check suite completion for a specific PR
    */
   private async processCheckSuiteForPR(
@@ -70,6 +92,39 @@ export class CheckSuiteHandler extends BaseWebhookHandler {
         category: 'api',
         action: 'check_suite_handler_not_ready',
         message: 'Task queue or PR orchestrator not available'
+      });
+      return;
+    }
+
+    const conclusion = checkSuite.conclusion;
+    const owner = repository.owner.login;
+    const repo = repository.name;
+    
+    // First, check if the PR branches match dev-bot patterns
+    try {
+      const githubPR = this.prOrchestrator.getGitHubPRService();
+      const prStatus = await githubPR.getPRStatus(prNumber, owner, repo);
+      
+      if (!this.isDevBotManagedBranch(prStatus.head_ref, prStatus.base_ref)) {
+        logger.debug({
+          category: 'api',
+          action: 'check_suite_non_devbot_branch',
+          message: `PR #${prNumber} does not match dev-bot branch patterns, skipping`,
+          details: {
+            pr_number: prNumber,
+            head_ref: prStatus.head_ref,
+            base_ref: prStatus.base_ref
+          }
+        });
+        return;
+      }
+    } catch (error) {
+      logger.warn({
+        category: 'api',
+        action: 'check_suite_pr_fetch_failed',
+        message: `Failed to fetch PR #${prNumber} details, skipping to be safe`,
+        error,
+        details: { pr_number: prNumber }
       });
       return;
     }
@@ -87,10 +142,6 @@ export class CheckSuiteHandler extends BaseWebhookHandler {
       });
       return;
     }
-
-    const conclusion = checkSuite.conclusion;
-    const owner = repository.owner.login;
-    const repo = repository.name;
     
     logger.info({
       category: 'pr-workflow',

@@ -17,6 +17,19 @@ import { getPlanStatusUpdater } from '../planStatusUpdater.singleton.js';
  */
 export class PullRequestHandler extends BaseWebhookHandler {
   /**
+   * Check if PR branches match dev-bot or copilot patterns
+   * 
+   * Valid patterns:
+   * - Dev-bot PRs: task-implementation-{uuid} -> main
+   * - Copilot sub-PRs: subPR-{number} -> task-implementation-{uuid}
+   */
+  private isDevBotManagedBranch(headRef: string, baseRef: string): boolean {
+    const isTaskBranch = headRef.startsWith('task-implementation-') && baseRef === 'main';
+    const isSubPR = headRef.startsWith('subPR-') && baseRef.startsWith('task-implementation-');
+    return isTaskBranch || isSubPR;
+  }
+
+  /**
    * Handle pull_request webhook event
    */
   async handle(payload: GitHubPullRequestPayload): Promise<void> {
@@ -26,6 +39,23 @@ export class PullRequestHandler extends BaseWebhookHandler {
     const { action, pull_request, repository } = payload;
     const prNumber = pull_request.number;
     const branchName = pull_request.head.ref;
+    const baseRef = pull_request.base.ref;
+
+    // Filter out PRs that don't match dev-bot branch patterns
+    if (!this.isDevBotManagedBranch(branchName, baseRef)) {
+      logger.debug({
+        category: 'api',
+        action: 'pr_non_devbot_branch',
+        message: `PR #${prNumber} does not match dev-bot branch patterns, ignoring webhook`,
+        details: {
+          pr_number: prNumber,
+          head_ref: branchName,
+          base_ref: baseRef,
+          action
+        }
+      });
+      return;
+    }
 
     // Extract task ID from branch or title
     const taskId = this.extractTaskIdFromBranchOrTitle(branchName, pull_request.title);
