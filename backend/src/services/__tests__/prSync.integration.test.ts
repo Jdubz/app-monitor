@@ -1,33 +1,26 @@
 /**
  * Integration tests for PR Sync Service
  * Tests the PR recovery workflow focusing on failed task detection.
- * 
- * NOTE: Temporarily skipped due to segfault during database cleanup.
- * Unit tests provide comprehensive coverage. Integration tests will be
- * re-enabled after investigating the SQLite cleanup issue.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TaskQueueService } from '../taskQueue.sqlite.js';
-import fs from 'fs';
-import path from 'path';
 
-describe.skip('PRSyncService Integration Tests', () => {
-  const testDbPath = path.join(__dirname, 'test-pr-sync.db');
+describe('PRSyncService Integration Tests', () => {
   let taskQueue: TaskQueueService;
 
   beforeEach(() => {
-    if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);
-    if (fs.existsSync(`${testDbPath}-shm`)) fs.unlinkSync(`${testDbPath}-shm`);
-    if (fs.existsSync(`${testDbPath}-wal`)) fs.unlinkSync(`${testDbPath}-wal`);
-    taskQueue = new TaskQueueService(testDbPath);
+    // Use in-memory database to avoid file cleanup issues
+    taskQueue = new TaskQueueService(':memory:');
   });
 
   afterEach(() => {
-    taskQueue.close();
-    if (fs.existsSync(testDbPath)) fs.unlinkSync(testDbPath);
-    if (fs.existsSync(`${testDbPath}-shm`)) fs.unlinkSync(`${testDbPath}-shm`);
-    if (fs.existsSync(`${testDbPath}-wal`)) fs.unlinkSync(`${testDbPath}-wal`);
+    // Close database connection
+    try {
+      taskQueue.close();
+    } catch (err) {
+      // Ignore close errors in tests
+    }
   });
 
   it('should detect PRs from failed tasks', async () => {

@@ -1391,6 +1391,10 @@ export class TaskQueueService {
         fields.push('notes = ?');
         values.push(updates.notes);
       }
+      if (updates.pr_number !== undefined) {
+        fields.push('pr_number = ?');
+        values.push(updates.pr_number);
+      }
 
       if (fields.length === 0) {
         return task; // No updates needed
