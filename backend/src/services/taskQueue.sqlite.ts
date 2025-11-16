@@ -717,6 +717,34 @@ export class TaskQueueService {
         message: 'Session metadata table created successfully'
       });
     }
+
+    // Migration 025: Update existing workers with new heartbeat timeout
+    // Only update if workers table exists and has old timeout value
+    const workersTableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='workers'`).get();
+    if (workersTableExists) {
+      const workersNeedingUpdate = this.db.prepare(`SELECT COUNT(*) as count FROM workers WHERE heartbeat_timeout_ms < 90000 OR heartbeat_timeout_ms IS NULL`).get() as { count: number };
+      
+      if (workersNeedingUpdate.count > 0) {
+        logger.info({
+          category: 'process',
+          action: 'updating_worker_heartbeat_timeouts',
+          message: `Updating ${workersNeedingUpdate.count} worker(s) with new heartbeat timeout (30s -> 90s)`,
+          details: { workers_to_update: workersNeedingUpdate.count }
+        });
+
+        this.db.exec(`
+          UPDATE workers 
+          SET heartbeat_timeout_ms = 90000 
+          WHERE heartbeat_timeout_ms < 90000 OR heartbeat_timeout_ms IS NULL;
+        `);
+
+        logger.info({
+          category: 'process',
+          action: 'migration_complete',
+          message: 'Worker heartbeat timeouts updated successfully'
+        });
+      }
+    }
   }
 
   private createSchema(): void {

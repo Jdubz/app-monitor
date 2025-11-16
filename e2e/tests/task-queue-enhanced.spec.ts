@@ -43,21 +43,47 @@ test.describe('Task Queue - Navigation and Layout', () => {
   });
 
   test('should display task queue header and controls', async ({ page }) => {
-    // Wait for page to load
-    await page.waitForTimeout(3000);
+    // Wait for content to load using network idle
+    await page.waitForLoadState('networkidle');
 
     // Task Queue tab shows either task queue content, loading state, or empty state
-    const hasLoading = await page.getByText(/loading/i).isVisible().catch(() => false);
-    const hasHeading = await page.getByText(/Task Queue/i).isVisible().catch(() => false);
-    const hasTasks = await page.getByText(/task-|id:/i).isVisible().catch(() => false);
-    const hasEmptyState = await page.getByText(/no.*tasks/i).isVisible().catch(() => false);
+    // Use explicit try-catch for better error handling
+    let hasLoading = false;
+    let hasHeading = false;
+    let hasTasks = false;
+    let hasEmptyState = false;
+
+    try {
+      hasLoading = await page.getByText(/loading/i).isVisible({ timeout: 1000 });
+    } catch {
+      // Element not found, that's ok
+    }
+
+    try {
+      hasHeading = await page.getByText(/Task Queue/i).isVisible({ timeout: 1000 });
+    } catch {
+      // Element not found, that's ok
+    }
+
+    try {
+      hasTasks = await page.getByText(/task-|id:/i).isVisible({ timeout: 1000 });
+    } catch {
+      // Element not found, that's ok
+    }
+
+    try {
+      hasEmptyState = await page.getByText(/no tasks|empty/i).isVisible({ timeout: 1000 });
+    } catch {
+      // Element not found, that's ok
+    }
 
     // Test passes if page shows any task queue content
     expect(hasLoading || hasHeading || hasTasks || hasEmptyState).toBe(true);
   });
 
   test('should show task count badges for different states', async ({ page }) => {
-    await page.waitForTimeout(2000);
+    // Wait for content using network idle instead of hardcoded timeout
+    await page.waitForLoadState('networkidle');
 
     // Look for state badges (pending, active, completed, failed)
     const badges = page.locator('[class*="badge"]');

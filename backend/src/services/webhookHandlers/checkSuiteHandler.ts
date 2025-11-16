@@ -79,11 +79,12 @@ export class CheckSuiteHandler extends BaseWebhookHandler {
     const repo = repository.name;
     
     let tasks: Task[] = [];
+    let prStatus: any; // Store PR status to avoid duplicate fetch
     
     // First, check if the PR branches match dev-bot patterns and attempt data recovery
     try {
       const githubPR = this.prOrchestrator.getGitHubPRService();
-      const prStatus = await githubPR.getPRStatus(prNumber, owner, repo);
+      prStatus = await githubPR.getPRStatus(prNumber, owner, repo);
       
       if (!this.isDevBotManagedBranch(prStatus.head_ref, prStatus.base_ref)) {
         logger.debug({
@@ -179,9 +180,8 @@ export class CheckSuiteHandler extends BaseWebhookHandler {
       const prMonitor = this.prOrchestrator.getPRMonitor();
       const githubPR = this.prOrchestrator.getGitHubPRService();
       
-      // Get PR status
-      const prStatus = await githubPR.getPRStatus(prNumber, owner, repo);
-
+      // Reuse PR status from earlier fetch (avoid duplicate API call)
+      
       // Auto-update branch if PR is behind base (before evaluating conditions)
       if (prStatus.mergeable_state === 'behind' && prStatus.state === 'OPEN') {
         await this.autoUpdateBranch(prNumber, owner, repo, githubPR);

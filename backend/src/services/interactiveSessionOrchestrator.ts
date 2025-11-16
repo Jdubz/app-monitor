@@ -132,23 +132,23 @@ export class InteractiveSessionOrchestrator {
   async stop(containerId: string): Promise<void> {
     // Find worker ID for this container
     let workerId: string | undefined;
-    for (const wid of this.sessionWorkers.values()) {
+    // Find the worker and session ID in a single pass
+    let workerId: string | undefined;
+    let sessionIdToDelete: string | undefined;
+    
+    for (const [sid, wid] of this.sessionWorkers.entries()) {
       const worker = this.workerService.getWorker(wid);
       if (worker?.containerId === containerId) {
         workerId = wid;
+        sessionIdToDelete = sid;
         break;
       }
     }
 
-    if (workerId) {
+    if (workerId && sessionIdToDelete) {
       await this.workerService.destroyWorker(workerId);
       // Remove from tracking
-      for (const [sid, wid] of this.sessionWorkers.entries()) {
-        if (wid === workerId) {
-          this.sessionWorkers.delete(sid);
-          break;
-        }
-      }
+      this.sessionWorkers.delete(sessionIdToDelete);
     } else {
       logger.warn({
         category: 'system',

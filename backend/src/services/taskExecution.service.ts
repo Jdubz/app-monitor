@@ -884,7 +884,7 @@ export class TaskExecutionService {
     const DOCKER_PROCESS_GRACE_TIMEOUT = 5 * 60 * 1000; // 5 minutes - failsafe if Docker doesn't signal properly
 
     // Periodic heartbeat update even if no output (every 20 seconds)
-    // Timeout is 90s, giving 4.5x buffer for event loop delays
+    // Timeout is 90s (4.5x the 20s interval), providing 70s buffer for event loop delays
     logger.info({
       category: 'process',
       action: 'heartbeat_monitoring_started',
