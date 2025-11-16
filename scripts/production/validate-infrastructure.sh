@@ -104,8 +104,8 @@ validate_database_references() {
     # Check each reference - must be valid database path or backup pattern
     # Using process substitution to avoid subshell issue with ERRORS counter
     while IFS=: read -r line_num line_content; do
-        # Skip backup file patterns (BACKUP_FILE, BACKUP_PATH, etc.)
-        if echo "${line_content}" | grep -qE "(BACKUP_FILE|BACKUP_PATH|_backup|backup_)"; then
+        # Skip backup file patterns (BACKUP_FILE, BACKUP_PATH, backup globs, etc.)
+        if echo "${line_content}" | grep -qE "(BACKUP_FILE|BACKUP_PATH|_backup|backup_|app-monitor_.*\.db|dev-bots_.*\.db)"; then
             log_info "  Line ${line_num}: ✓ Backup file pattern (skipped)"
             continue
         fi
