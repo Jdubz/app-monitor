@@ -505,6 +505,45 @@ export class TaskExecutionService {
 
     // NOTE: WorkspaceOrchestrator.initialize() removed - Docker cp approach doesn't need git mirrors
 
+    // Check for manual intervention / escalation tasks
+    if (nextTask.assigned_agent === 'human') {
+      logger.warn({
+        category: 'escalation',
+        action: 'manual_intervention_required',
+        message: `Task ${nextTask.id} requires manual intervention - skipping automated execution`,
+        details: {
+          taskId: nextTask.id,
+          taskType: nextTask.type,
+          title: nextTask.title,
+          description: nextTask.description?.substring(0, 200)
+        }
+      });
+
+      // Mark task as awaiting manual intervention (not failed, not running)
+      this.taskQueue.updateTask(nextTask.id, {
+        status: 'pending',
+        notes: (nextTask.notes || '') + `\n[${new Date().toISOString()}] Escalated to human - awaiting manual intervention`
+      });
+
+      // TODO: Send alert/notification when alerting system is implemented
+      // For now, log as high-priority warning that monitoring should catch
+      logger.warn({
+        category: 'alerts',
+        action: 'escalation_awaiting_human',
+        message: `ALERT: Task ${nextTask.id} requires manual intervention`,
+        details: {
+          taskId: nextTask.id,
+          title: nextTask.title,
+          priority: nextTask.priority,
+          type: nextTask.type
+        }
+      });
+
+      // Try next task
+      if (onTaskAssigned) onTaskAssigned();
+      return;
+    }
+
     // Get agent personality
     const requestedAgent = this.agentManager.getPersonality(nextTask.assigned_agent);
     if (!requestedAgent) {

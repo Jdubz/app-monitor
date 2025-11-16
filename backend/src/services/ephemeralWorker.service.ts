@@ -447,7 +447,7 @@ export class EphemeralWorkerService {
           AutoRemove: true,
           Binds: binds,
           Tmpfs: {
-            '/home/worker/.claude': 'uid=1001,gid=1001'  // Writable temp for Claude CLI
+            '/home/worker/.claude': 'uid=1000,gid=1000'  // Writable temp for Claude CLI (matches node user)
           }
         },
         Labels: {
