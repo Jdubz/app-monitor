@@ -547,6 +547,204 @@ export class TaskQueueService {
         message: 'Context bundle columns added successfully for context management integration'
       });
     }
+
+    // Migration 021: Create plans table (for in-memory databases and missing production tables)
+    const plansTableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='plans'`).get();
+    if (!plansTableExists) {
+      logger.info({
+        category: 'process',
+        action: 'creating_plans_table',
+        message: 'Creating plans table for plan management'
+      });
+
+      this.db.exec(`
+        CREATE TABLE plans (
+          id TEXT PRIMARY KEY,
+          title TEXT NOT NULL,
+          description TEXT,
+          markdown_ref TEXT,
+          plan_type TEXT NOT NULL CHECK(plan_type IN ('feature', 'refactor', 'fix', 'investigation')),
+          priority TEXT NOT NULL CHECK(priority IN ('p0', 'p1', 'p2', 'p3')),
+          status TEXT NOT NULL CHECK(status IN ('planning', 'in_progress', 'blocked', 'completed', 'cancelled')),
+          created_at INTEGER NOT NULL,
+          started_at INTEGER,
+          completed_at INTEGER,
+          cancelled_at INTEGER,
+          created_by TEXT,
+          assigned_to TEXT,
+          success_criteria TEXT,
+          scope_boundaries TEXT,
+          estimated_effort_hours INTEGER,
+          metadata TEXT
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_plans_status ON plans(status);
+        CREATE INDEX IF NOT EXISTS idx_plans_priority ON plans(priority);
+        CREATE INDEX IF NOT EXISTS idx_plans_type ON plans(plan_type);
+        CREATE INDEX IF NOT EXISTS idx_plans_created_at ON plans(created_at);
+        CREATE INDEX IF NOT EXISTS idx_plans_status_priority ON plans(status, priority);
+      `);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'Plans table created successfully'
+      });
+    }
+
+    // Migration 022: Create issues and issue_occurrences tables (for error tracking)
+    const issuesTableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='issues'`).get();
+    if (!issuesTableExists) {
+      logger.info({
+        category: 'process',
+        action: 'creating_issues_tables',
+        message: 'Creating issues and issue_occurrences tables for error tracking'
+      });
+
+      this.db.exec(`
+        CREATE TABLE issues (
+          id TEXT PRIMARY KEY,
+          timestamp INTEGER NOT NULL,
+          sessionId TEXT,
+          traceId TEXT,
+          route TEXT,
+          userAgent TEXT,
+          description TEXT,
+          status TEXT DEFAULT 'pending',
+          taskId TEXT,
+          fingerprint TEXT,
+          severity TEXT,
+          errorMessage TEXT,
+          component TEXT,
+          created INTEGER NOT NULL,
+          resolved INTEGER,
+          resolution TEXT,
+          prNumber INTEGER
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_status ON issues(status);
+        CREATE INDEX IF NOT EXISTS idx_trace ON issues(traceId);
+        CREATE INDEX IF NOT EXISTS idx_timestamp ON issues(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_fingerprint ON issues(fingerprint);
+        CREATE INDEX IF NOT EXISTS idx_created ON issues(created);
+
+        CREATE TABLE issue_occurrences (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          issueId TEXT NOT NULL,
+          timestamp INTEGER NOT NULL,
+          sessionId TEXT,
+          FOREIGN KEY (issueId) REFERENCES issues(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_occurrence_issue ON issue_occurrences(issueId);
+        CREATE INDEX IF NOT EXISTS idx_occurrence_timestamp ON issue_occurrences(timestamp);
+      `);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'Issues tables created successfully'
+      });
+    }
+
+    // Migration 023: Create frontend_logs table (for frontend logging)
+    const frontendLogsTableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='frontend_logs'`).get();
+    if (!frontendLogsTableExists) {
+      logger.info({
+        category: 'process',
+        action: 'creating_frontend_logs_table',
+        message: 'Creating frontend_logs table for frontend logging'
+      });
+
+      this.db.exec(`
+        CREATE TABLE frontend_logs (
+          id TEXT PRIMARY KEY,
+          timestamp INTEGER NOT NULL,
+          level TEXT NOT NULL CHECK(level IN ('trace', 'debug', 'info', 'warn', 'error', 'fatal')),
+          message TEXT NOT NULL,
+          scope TEXT,
+          traceId TEXT,
+          sessionId TEXT NOT NULL,
+          route TEXT,
+          userId TEXT,
+          data TEXT,
+          errorName TEXT,
+          errorMessage TEXT,
+          errorStack TEXT,
+          created_at INTEGER NOT NULL DEFAULT (unixepoch())
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_frontend_logs_timestamp ON frontend_logs(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_frontend_logs_traceId ON frontend_logs(traceId);
+        CREATE INDEX IF NOT EXISTS idx_frontend_logs_sessionId ON frontend_logs(sessionId);
+        CREATE INDEX IF NOT EXISTS idx_frontend_logs_level ON frontend_logs(level);
+        CREATE INDEX IF NOT EXISTS idx_frontend_logs_session_time ON frontend_logs(sessionId, timestamp);
+        CREATE INDEX IF NOT EXISTS idx_frontend_logs_triage ON frontend_logs(timestamp, sessionId, traceId);
+      `);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'Frontend logs table created successfully'
+      });
+    }
+
+    // Migration 024: Create session_metadata table (for user session tracking)
+    const sessionMetadataTableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='session_metadata'`).get();
+    if (!sessionMetadataTableExists) {
+      logger.info({
+        category: 'process',
+        action: 'creating_session_metadata_table',
+        message: 'Creating session_metadata table for session tracking'
+      });
+
+      this.db.exec(`
+        CREATE TABLE session_metadata (
+          session_id TEXT PRIMARY KEY,
+          user_agent TEXT NOT NULL,
+          viewport_width INTEGER NOT NULL,
+          viewport_height INTEGER NOT NULL,
+          start_time INTEGER NOT NULL,
+          created_at INTEGER NOT NULL DEFAULT (unixepoch())
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_session_metadata_start_time ON session_metadata(start_time);
+      `);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'Session metadata table created successfully'
+      });
+    }
+
+    // Migration 025: Update existing workers with new heartbeat timeout
+    // Only update if workers table exists and has old timeout value
+    const workersTableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='workers'`).get();
+    if (workersTableExists) {
+      const workersNeedingUpdate = this.db.prepare(`SELECT COUNT(*) as count FROM workers WHERE heartbeat_timeout_ms < 90000 OR heartbeat_timeout_ms IS NULL`).get() as { count: number };
+      
+      if (workersNeedingUpdate.count > 0) {
+        logger.info({
+          category: 'process',
+          action: 'updating_worker_heartbeat_timeouts',
+          message: `Updating ${workersNeedingUpdate.count} worker(s) with new heartbeat timeout (30s -> 90s)`,
+          details: { workers_to_update: workersNeedingUpdate.count }
+        });
+
+        this.db.exec(`
+          UPDATE workers 
+          SET heartbeat_timeout_ms = 90000 
+          WHERE heartbeat_timeout_ms < 90000 OR heartbeat_timeout_ms IS NULL;
+        `);
+
+        logger.info({
+          category: 'process',
+          action: 'migration_complete',
+          message: 'Worker heartbeat timeouts updated successfully'
+        });
+      }
+    }
   }
 
   private createSchema(): void {
@@ -640,7 +838,7 @@ export class TaskQueueService {
         current_task_id TEXT,
         created_at INTEGER NOT NULL,
         last_heartbeat INTEGER NOT NULL,
-        heartbeat_timeout_ms INTEGER DEFAULT 30000,
+        heartbeat_timeout_ms INTEGER DEFAULT 90000,
 
         FOREIGN KEY (current_task_id) REFERENCES tasks(id) ON DELETE SET NULL
       );
@@ -1427,21 +1625,28 @@ export class TaskQueueService {
   /**
    * Detect and handle stalled workers
    * Returns array of stalled worker IDs
+   * 
+   * Timeout: 90 seconds (4.5x the 20s heartbeat interval)
+   * This provides buffer for event loop delays and output buffering
    */
   detectStalledWorkers(): string[] {
     return this.transaction(() => {
-      const timeout = Date.now() - 30000; // 30 seconds
+      const HEARTBEAT_TIMEOUT_MS = 90000; // 90 seconds (increased from 30s to reduce false positives)
+      const timeout = Date.now() - HEARTBEAT_TIMEOUT_MS;
+      const now = Date.now();
 
       const stmt = this.db.prepare(`
-        SELECT id, current_task_id
+        SELECT id, current_task_id, last_heartbeat
         FROM workers
         WHERE status = 'running'
         AND last_heartbeat < ?
       `);
 
-      const stalledWorkers = stmt.all(timeout) as { id: string; current_task_id: string }[];
+      const stalledWorkers = stmt.all(timeout) as { id: string; current_task_id: string; last_heartbeat: number }[];
 
       for (const worker of stalledWorkers) {
+        const timeSinceLastHeartbeat = now - worker.last_heartbeat;
+        
         if (worker.current_task_id) {
           const updateTaskStmt = this.db.prepare(`
             UPDATE tasks
@@ -1451,7 +1656,7 @@ export class TaskQueueService {
             WHERE id = ?
           `);
 
-          updateTaskStmt.run(Date.now(), worker.current_task_id);
+          updateTaskStmt.run(now, worker.current_task_id);
         }
 
         const updateWorkerStmt = this.db.prepare('UPDATE workers SET status = \'stopped\' WHERE id = ?');
@@ -1460,7 +1665,14 @@ export class TaskQueueService {
         logger.warn({
           category: 'process',
           action: 'stalled_worker_detected',
-          message: `Worker ${worker.id} stalled, marked task ${worker.current_task_id} as failed`
+          message: `Worker ${worker.id} stalled (no heartbeat for ${Math.round(timeSinceLastHeartbeat / 1000)}s), marked task ${worker.current_task_id} as failed`,
+          details: {
+            workerId: worker.id,
+            taskId: worker.current_task_id,
+            lastHeartbeat: worker.last_heartbeat,
+            timeSinceLastHeartbeat_ms: timeSinceLastHeartbeat,
+            timeout_ms: HEARTBEAT_TIMEOUT_MS
+          }
         });
       }
 

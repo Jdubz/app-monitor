@@ -20,7 +20,7 @@ export const config = {
   
   // Simple API Key Authentication
   apiKey: process.env.API_KEY || 'dev-key-change-in-production',
-  requireAuth: process.env.REQUIRE_AUTH !== 'false' && process.env.NODE_ENV === 'production', // Only require in production
+  requireAuth: process.env.REQUIRE_AUTH === 'true' || process.env.NODE_ENV === 'production', // Require if explicitly enabled or in production
 
   // GitHub Webhook Secret for HMAC signature verification
   githubWebhookSecret: process.env.GITHUB_WEBHOOK_SECRET || '',

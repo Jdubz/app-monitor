@@ -845,29 +845,38 @@ export class TaskExecutionService {
 
     let stdout = '';
     let stderr = '';
+    let heartbeatCount = 0;
     
     // Update heartbeat on any output to prove container is alive
-    const updateHeartbeat = () => {
+    const updateHeartbeat = (source: 'stdout' | 'stderr' | 'periodic' = 'periodic') => {
       try {
         this.taskQueue.updateWorkerHeartbeat(workerId);
-      } catch (error) {
-        // Ignore heartbeat errors - they shouldn't fail the task
+        heartbeatCount++;
+        
         logger.debug({
           category: 'process',
+          action: 'heartbeat_updated',
+          message: `Heartbeat #${heartbeatCount} sent for ${workerId} (source: ${source})`,
+          details: { workerId, taskId: task.id, source, count: heartbeatCount }
+        });
+      } catch (error) {
+        logger.warn({
+          category: 'process',
           action: 'heartbeat_update_failed',
-          message: `Failed to update heartbeat for ${workerId}: ${error instanceof Error ? error.message : String(error)}`
+          message: `Failed to update heartbeat for ${workerId}: ${error instanceof Error ? error.message : String(error)}`,
+          details: { workerId, taskId: task.id, source, error }
         });
       }
     };
 
     dockerProcess.stdout.on('data', (data) => {
       stdout += data.toString();
-      updateHeartbeat();
+      updateHeartbeat('stdout');
     });
 
     dockerProcess.stderr.on('data', (data) => {
       stderr += data.toString();
-      updateHeartbeat();
+      updateHeartbeat('stderr');
     });
 
     // Track task start time for stuck detection
@@ -875,7 +884,17 @@ export class TaskExecutionService {
     const DOCKER_PROCESS_GRACE_TIMEOUT = 5 * 60 * 1000; // 5 minutes - failsafe if Docker doesn't signal properly
 
     // Periodic heartbeat update even if no output (every 20 seconds)
-    const heartbeatInterval = setInterval(updateHeartbeat, 20000);
+    // Timeout is 90s (4.5x the 20s interval), providing 70s buffer for event loop delays
+    logger.info({
+      category: 'process',
+      action: 'heartbeat_monitoring_started',
+      message: `Started heartbeat monitoring for ${workerId} (interval: 20s, timeout: 90s)`,
+      details: { workerId, taskId: task.id, interval_ms: 20000, timeout_ms: 90000 }
+    });
+    
+    const heartbeatInterval = setInterval(() => {
+      updateHeartbeat('periodic');
+    }, 20000);
 
     // Wait for completion with multiple safety mechanisms
     const exitCode = await Promise.race([
@@ -982,6 +1001,9 @@ export class TaskExecutionService {
         exitCode,
         executionDuration_ms: executionDuration,
         executionDuration_human: `${Math.floor(executionDuration / 60000)}m ${Math.floor((executionDuration % 60000) / 1000)}s`,
+        heartbeatCount,
+        heartbeat_interval_ms: 20000,
+        heartbeat_timeout_ms: 90000,
         stdoutLength: stdout.length,
         stderrLength: stderr.length,
         stdoutLog: stdout.length > 0 ? stdoutLogPath : null,

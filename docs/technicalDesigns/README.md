@@ -18,11 +18,6 @@ Automated detection and self-healing for common failure patterns.
 ### [Frontend Tabbed Intervention Panel](FRONTEND_TABBED_INTERVENTION_PANEL_PLAN.md)
 Unified intervention UI for managing bot tasks and chains.
 
-## Implemented (Reference Only)
-
-### [Staged Task Queue](staged-task-queue.md)
-Queue architecture with chain management (implemented, kept for architecture reference).
-
 ## Design Lifecycle
 
 1. **Draft** - Initial design, needs refinement

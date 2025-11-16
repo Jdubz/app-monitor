@@ -12,7 +12,7 @@
 ### 📖 Common Tasks
 - **Setup:** [Environment Setup](setup/ENVIRONMENT_SETUP.md) | [Production Deployment](guides/PRODUCTION_DEPLOYMENT.md)
 - **Development:** [Task Submission](guides/MINIMAL_TASK_SUBMISSION_GUIDE.md) | [Frontend Dev](guides/FRONTEND_DEVELOPMENT.md)
-- **Reference:** [API Docs](guides/api-reference.md) | [Agent Personalities](guides/agent-personalities.md)
+- **Reference:** [API Docs](guides/API_REFERENCE.md) | [Agent Personalities](guides/agent-personalities.md)
 
 ## Documentation Structure
 

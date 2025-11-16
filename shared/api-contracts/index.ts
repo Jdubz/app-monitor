@@ -705,6 +705,9 @@ export interface IssueReportRequest {
   route: string;
   userAgent: string;
   description?: string;
+  screenshot?: string | null; // base64 data URL
+  screenshotError?: string;
+  meta?: Record<string, unknown>; // Flexible JSON for any additional context
 }
 
 export interface IssueReportResponse {

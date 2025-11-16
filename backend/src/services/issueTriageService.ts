@@ -406,6 +406,7 @@ export class IssueTriageService {
 - Timestamp: ${issue.timestamp}
 - Route: ${issue.route}
 - User Description: ${issue.description || 'None provided'}
+- Screenshot: ${issue.screenshot ? 'Attached (see database)' : 'None'}
 
 **Automated Diagnosis:**
 - ${hasErrors ? 'Error' : 'Issue'}: ${diagnosis.errorMessage}
@@ -414,12 +415,23 @@ export class IssueTriageService {
 - Trace ID: ${issue.traceId || 'N/A'}
 - Errors Found in Logs: ${hasErrors ? 'Yes' : 'No - may be UI/UX bug'}
 
-**Investigation:**
-1. Search logs for trace ID: \`grep "${issue.traceId}" logs/frontend/*.jsonl\`
-2. ${hasErrors ? 'Examine error stack trace (see below)' : 'Review user description and reproduce the issue'}
-3. Reproduce by navigating to route: ${issue.route}
-4. ${hasErrors ? 'Fix the error' : 'Fix the UI/behavior issue'}
-5. Add test to prevent regression
+**Investigation Steps:**
+1. Query issue details (including screenshot if available):
+   \`\`\`sql
+   SELECT id, description, screenshot, screenshot_error, meta
+   FROM issues WHERE id = '${issue.id}';
+   \`\`\`
+2. Query frontend logs from database:
+   \`\`\`sql
+   SELECT * FROM frontend_logs
+   WHERE sessionId = '${issue.sessionId}'
+   ${issue.traceId ? `OR traceId = '${issue.traceId}'` : ''}
+   ORDER BY timestamp DESC;
+   \`\`\`
+3. ${hasErrors ? 'Examine error stack trace (see below)' : 'Review user description and reproduce the issue'}
+4. Reproduce by navigating to route: ${issue.route}
+5. ${hasErrors ? 'Fix the error' : 'Fix the UI/behavior issue'}
+6. Add test to prevent regression
 
 ${hasErrors ? `**Error Stack Trace:**
 \`\`\`
@@ -435,10 +447,13 @@ No error logs found for this issue. This may be a UI/UX bug that doesn't throw e
 
 Focus on reproducing the issue based on the user's description and the route they were on.
 `}
-**Relevant Log Entries:**
-Search window: ${issue.timestamp} ±5 minutes
-Session ID: ${issue.sessionId}
-Trace ID: ${issue.traceId || 'N/A'}
+**Context:**
+- Session ID: ${issue.sessionId}
+- Trace ID: ${issue.traceId || 'N/A'}
+- Screenshot available in \`issues\` table (base64 data URL, can be viewed in browser)
+- Console logs available in \`frontend_logs\` table (query by sessionId or traceId)
+- Network requests logged in \`frontend_logs\` table (correlate by trace_id)
+- All frontend activity for this session can be queried from the database
 `;
   }
 }

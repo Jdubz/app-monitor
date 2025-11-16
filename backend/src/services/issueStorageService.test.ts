@@ -41,7 +41,10 @@ describe('IssueStorageService', () => {
         component TEXT,
         severity TEXT,
         fingerprint TEXT,
-        prNumber INTEGER
+        prNumber INTEGER,
+        screenshot TEXT,
+        screenshot_error TEXT,
+        meta TEXT
       );
 
       CREATE TABLE issue_occurrences (
@@ -476,6 +479,130 @@ describe('IssueStorageService', () => {
       expect(retrieved!.component).toBe('TestComponent');
       expect(retrieved!.severity).toBe('critical');
       expect(retrieved!.fingerprint).toBe('abc123');
+    });
+  });
+
+  describe('Screenshot and Meta Storage', () => {
+    it('should store issue with screenshot (base64 data URL)', () => {
+      const screenshot = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+      const report: IssueReport = {
+        timestamp: new Date().toISOString(),
+        sessionId: 'session-123',
+        route: '/home',
+        userAgent: 'Mozilla/5.0',
+        screenshot,
+      };
+
+      const issue = service.storeIssue(report);
+
+      expect(issue.screenshot).toBe(screenshot);
+
+      // Verify stored in database
+      const stored = db.prepare('SELECT * FROM issues WHERE id = ?').get(issue.id);
+      expect(stored.screenshot).toBe(screenshot);
+    });
+
+    it('should store issue with screenshot error message', () => {
+      const report: IssueReport = {
+        timestamp: new Date().toISOString(),
+        sessionId: 'session-123',
+        route: '/home',
+        userAgent: 'Mozilla/5.0',
+        screenshotError: 'Failed to capture: Permission denied',
+      };
+
+      const issue = service.storeIssue(report);
+
+      expect(issue.screenshotError).toBe('Failed to capture: Permission denied');
+
+      const stored = db.prepare('SELECT * FROM issues WHERE id = ?').get(issue.id);
+      expect(stored.screenshot_error).toBe('Failed to capture: Permission denied');
+    });
+
+    it('should store issue with flexible metadata (JSON)', () => {
+      const meta = {
+        browserInfo: { name: 'Chrome', version: '120.0' },
+        screenSize: { width: 1920, height: 1080 },
+        customField: 'custom value',
+      };
+
+      const report: IssueReport = {
+        timestamp: new Date().toISOString(),
+        sessionId: 'session-123',
+        route: '/home',
+        userAgent: 'Mozilla/5.0',
+        meta,
+      };
+
+      const issue = service.storeIssue(report);
+
+      expect(issue.meta).toEqual(meta);
+
+      // Verify stored as JSON string
+      const stored = db.prepare('SELECT * FROM issues WHERE id = ?').get(issue.id);
+      expect(JSON.parse(stored.meta)).toEqual(meta);
+    });
+
+    it('should store issue with all enhanced fields', () => {
+      const screenshot = 'data:image/png;base64,ABC123';
+      const meta = { viewport: '1920x1080', theme: 'dark' };
+
+      const report: IssueReport = {
+        timestamp: new Date().toISOString(),
+        sessionId: 'session-123',
+        route: '/dashboard',
+        userAgent: 'Mozilla/5.0',
+        description: 'Button not working',
+        screenshot,
+        meta,
+      };
+
+      const issue = service.storeIssue(report);
+
+      expect(issue.screenshot).toBe(screenshot);
+      expect(issue.meta).toEqual(meta);
+      expect(issue.description).toBe('Button not working');
+
+      // Verify retrieval includes all fields
+      const retrieved = service.getIssueById(issue.id);
+      expect(retrieved!.screenshot).toBe(screenshot);
+    });
+
+    it('should handle large screenshots (size validation)', () => {
+      // Create a large base64 screenshot (simulate 1MB)
+      const largeScreenshot = 'data:image/png;base64,' + 'A'.repeat(1000000);
+
+      const report: IssueReport = {
+        timestamp: new Date().toISOString(),
+        sessionId: 'session-123',
+        route: '/home',
+        userAgent: 'Mozilla/5.0',
+        screenshot: largeScreenshot,
+      };
+
+      const issue = service.storeIssue(report);
+
+      expect(issue.screenshot).toBe(largeScreenshot);
+      expect(issue.screenshot!.length).toBeGreaterThan(1000000);
+    });
+
+    it('should retrieve issue with screenshot via getIssueById', () => {
+      const screenshot = 'data:image/png;base64,TESTDATA123';
+
+      const report: IssueReport = {
+        timestamp: new Date().toISOString(),
+        sessionId: 'session-123',
+        route: '/home',
+        userAgent: 'Mozilla/5.0',
+        screenshot,
+      };
+
+      const stored = service.storeIssue(report);
+      const retrieved = service.getIssueById(stored.id);
+
+      expect(retrieved).toBeDefined();
+      expect(retrieved!.screenshot).toBe(screenshot);
     });
   });
 });

@@ -74,21 +74,95 @@ export class CheckSuiteHandler extends BaseWebhookHandler {
       return;
     }
 
-    // Find associated tasks
-    const tasks = await this.taskQueue.findByPRNumber(prNumber);
-    if (tasks.length === 0) {
-      logger.debug({
+    const conclusion = checkSuite.conclusion;
+    const owner = repository.owner.login;
+    const repo = repository.name;
+    
+    let tasks: Task[] = [];
+    let prStatus: any; // Store PR status to avoid duplicate fetch
+    
+    // First, check if the PR branches match dev-bot patterns and attempt data recovery
+    try {
+      const githubPR = this.prOrchestrator.getGitHubPRService();
+      prStatus = await githubPR.getPRStatus(prNumber, owner, repo);
+      
+      if (!this.isDevBotManagedBranch(prStatus.head_ref, prStatus.base_ref)) {
+        logger.debug({
+          category: 'api',
+          action: 'check_suite_non_devbot_branch',
+          message: `PR #${prNumber} does not match dev-bot branch patterns, skipping`,
+          details: {
+            pr_number: prNumber,
+            head_ref: prStatus.head_ref,
+            base_ref: prStatus.base_ref
+          }
+        });
+        return;
+      }
+
+      // Extract task ID from branch name for data recovery
+      const taskIdFromBranch = this.extractTaskIdFromBranchOrTitle(prStatus.head_ref, '');
+      
+      // Find associated tasks
+      tasks = await this.taskQueue.findByPRNumber(prNumber);
+      
+      // Self-healing: If no tasks found but we have a task ID from the branch,
+      // try to find the task by ID (data recovery for orphaned PRs)
+      if (tasks.length === 0 && taskIdFromBranch) {
+        logger.info({
+          category: 'api',
+          action: 'check_suite_data_recovery_attempt',
+          message: `No tasks found for PR #${prNumber}, attempting data recovery using task ID from branch`,
+          details: {
+            pr_number: prNumber,
+            task_id_from_branch: taskIdFromBranch,
+            head_ref: prStatus.head_ref
+          }
+        });
+
+        const taskById = await this.taskQueue.findByTaskId(taskIdFromBranch);
+        if (taskById) {
+          logger.info({
+            category: 'api',
+            action: 'check_suite_data_recovered',
+            message: `Found task ${taskIdFromBranch} via data recovery, associating with PR #${prNumber}`,
+            details: {
+              pr_number: prNumber,
+              task_id: taskIdFromBranch
+            }
+          });
+          tasks.push(taskById);
+          
+          // Update task with PR number to prevent future mismatches
+          if (!taskById.pr_number) {
+            await this.taskQueue.updateTask(taskIdFromBranch, { pr_number: prNumber });
+          }
+        }
+      }
+      
+      // If still no tasks, skip processing
+      if (tasks.length === 0) {
+        logger.debug({
+          category: 'api',
+          action: 'check_suite_no_tasks',
+          message: `No tasks found for PR #${prNumber}, not a dev-bot managed PR`,
+          details: { 
+            pr_number: prNumber,
+            task_id_from_branch: taskIdFromBranch || 'none'
+          }
+        });
+        return;
+      }
+    } catch (error) {
+      logger.warn({
         category: 'api',
-        action: 'check_suite_no_tasks',
-        message: `No tasks found for PR #${prNumber}`,
+        action: 'check_suite_pr_fetch_failed',
+        message: `Failed to fetch PR #${prNumber} details, skipping to be safe`,
+        error,
         details: { pr_number: prNumber }
       });
       return;
     }
-
-    const conclusion = checkSuite.conclusion;
-    const owner = repository.owner.login;
-    const repo = repository.name;
     
     logger.info({
       category: 'pr-workflow',
@@ -106,9 +180,8 @@ export class CheckSuiteHandler extends BaseWebhookHandler {
       const prMonitor = this.prOrchestrator.getPRMonitor();
       const githubPR = this.prOrchestrator.getGitHubPRService();
       
-      // Get PR status
-      const prStatus = await githubPR.getPRStatus(prNumber, owner, repo);
-
+      // Reuse PR status from earlier fetch (avoid duplicate API call)
+      
       // Auto-update branch if PR is behind base (before evaluating conditions)
       if (prStatus.mergeable_state === 'behind' && prStatus.state === 'OPEN') {
         await this.autoUpdateBranch(prNumber, owner, repo, githubPR);

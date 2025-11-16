@@ -11,8 +11,7 @@ Practical guides for development, deployment, and operations.
 - [Task Examples](task-examples.md) - Example task configurations
 
 ## Development
-- [API Reference](api-reference.md) - Backend API endpoints
-- [API Authentication](API_AUTHENTICATION.md) - Authentication setup
+- [API Reference](API_REFERENCE.md) - Complete API documentation (endpoints, auth, errors)
 - [Component Style Guide](component-style-guide.md) - UI component standards
 - [GitHub Webhooks](GITHUB_WEBHOOKS.md) - Webhook integration
 
@@ -22,5 +21,4 @@ Practical guides for development, deployment, and operations.
 
 ## Reference
 - [Agent Personalities](agent-personalities.md) - Dev-bot agent specializations
-- [API Error Responses](api-error-responses.md) - API error handling
 - [Documentation System](DOCUMENTATION_SYSTEM.md) - Documentation guidelines

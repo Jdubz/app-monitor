@@ -183,21 +183,7 @@ export async function createDevBotsManagerDependencies(
   });
 
   const interactiveSessionOrchestrator = new InteractiveSessionOrchestrator(
-    docker,
-    {
-      dockerImage: 'dev-bot:latest',
-      logsDirectory: './data/logs/interactive',
-      envPassthroughKeys: [
-        'ANTHROPIC_API_KEY',
-        'CLAUDE_API_KEY',
-        'OPENAI_API_KEY',
-        'GITHUB_TOKEN',
-        'GIT_AUTHOR_NAME',
-        'GIT_AUTHOR_EMAIL',
-        'GIT_COMMITTER_NAME',
-        'GIT_COMMITTER_EMAIL',
-      ],
-    },
+    ephemeralWorkerService,
   );
 
   const interactiveSessionStreamManager = new InteractiveSessionStreamManager(docker, {

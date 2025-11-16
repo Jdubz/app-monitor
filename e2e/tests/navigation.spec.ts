@@ -18,7 +18,7 @@ test.describe('Dev Monitor - Basic Navigation', () => {
   });
 
   test('should load the application', async ({ page }) => {
-    await expect(page).toHaveTitle(/Dev Monitor/i);
+    await expect(page).toHaveTitle(/App Monitor/i);
   });
 
   test('should display header with logo', async ({ page }) => {
@@ -27,8 +27,8 @@ test.describe('Dev Monitor - Basic Navigation', () => {
   });
 
   test('should have all main tabs visible', async ({ page }) => {
-    const tabs = ['local', 'scripts', 'staging', 'production', 'health', 'claude-workers'];
-    
+    const tabs = ['Dev-Bots', 'PR Tracking', 'Task Queue', 'Plans', 'Interactive'];
+
     for (const tab of tabs) {
       const tabElement = page.getByRole('tab', { name: new RegExp(tab, 'i') });
       await expect(tabElement).toBeVisible();
@@ -36,13 +36,13 @@ test.describe('Dev Monitor - Basic Navigation', () => {
   });
 
   test('should switch between tabs', async ({ page }) => {
-    // Click on Scripts tab
-    await page.getByRole('tab', { name: /scripts/i }).click();
-    await expect(page.getByText(/scripts/i)).toBeVisible();
+    // Click on Task Queue tab
+    await page.getByRole('tab', { name: /task queue/i }).click();
+    await expect(page.getByText(/task queue|queue/i)).toBeVisible();
 
-    // Click on Health tab
-    await page.getByRole('tab', { name: /health/i }).click();
-    await expect(page.getByText(/system health/i)).toBeVisible();
+    // Click on Plans tab
+    await page.getByRole('tab', { name: /plans/i }).click();
+    await expect(page.getByText(/plans|plan/i)).toBeVisible();
   });
 
   test('should show loading state initially', async ({ page }) => {

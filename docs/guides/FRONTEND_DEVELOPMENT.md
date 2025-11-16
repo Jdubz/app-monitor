@@ -554,4 +554,4 @@ function TaskList({ tasks }: Props) {
 - [Vitest Documentation](https://vitest.dev/)
 - [React Performance Optimization](https://react.dev/learn/render-and-commit)
 - [Component Style Guide](./component-style-guide.md)
-- [API Reference](./api-reference.md)
+- [API Reference](./API_REFERENCE.md)

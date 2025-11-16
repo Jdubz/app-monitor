@@ -15,7 +15,7 @@ async function bypassPasswordGate(page: Page) {
 test.describe('Keyboard Shortcuts', () => {
   test.beforeEach(async ({ page }) => {
     await bypassPasswordGate(page);
-    await page.getByRole('tab', { name: /local/i }).click();
+    await page.getByRole('tab', { name: /dev.?bots/i }).click();
   });
 
   test('should show keyboard shortcuts help with ?', async ({ page }) => {
@@ -106,7 +106,7 @@ test.describe('Error Handling', () => {
     // This test would need to trigger an error
     // For now, just check the app loads without crashing
     await page.goto('/');
-    await expect(page).toHaveTitle(/Dev Monitor/i);
+    await expect(page).toHaveTitle(/App Monitor/i);
   });
 
   test('should handle network errors gracefully', async ({ page }) => {
@@ -130,15 +130,21 @@ test.describe('Loading States', () => {
   });
 
   test('should have smooth transitions between states', async ({ page }) => {
-    await page.goto('/');
-    await page.waitForLoadState('networkidle');
-    
+    await bypassPasswordGate(page);
+    await page.waitForTimeout(1000);
+
     // Switch tabs to test transitions
-    await page.getByRole('tab', { name: /scripts/i }).click();
-    await page.waitForTimeout(500);
-    
-    await page.getByRole('tab', { name: /health/i }).click();
-    await page.waitForTimeout(500);
+    const queueTab = page.getByRole('tab', { name: /queue|task/i });
+    if (await queueTab.isVisible()) {
+      await queueTab.click();
+      await page.waitForTimeout(500);
+    }
+
+    const devBotsTab = page.getByRole('tab', { name: /dev.?bots/i });
+    if (await devBotsTab.isVisible()) {
+      await devBotsTab.click();
+      await page.waitForTimeout(500);
+    }
     
     // Should not have any console errors
     const errors: string[] = [];

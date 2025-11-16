@@ -1,5 +1,9 @@
 # PR Sync Service Design
 
+**Status:** ✅ Implemented  
+**Implementation:** `backend/src/services/prSync.service.ts`  
+**Delete After:** Move key decisions to architecture docs, then delete this design doc
+
 ## Problem Statement
 
 Tasks are tracking PRs that may be closed/merged but we don't know about it because:

@@ -385,7 +385,7 @@ This document provides comprehensive examples of different types of tasks that c
 
 ## 📚 Related Documentation
 
-- [API Reference](api-reference.md)
+- [API Reference](API_REFERENCE.md)
 - [Agent Personalities](agent-personalities.md)
 - [Task Submission Guide](MINIMAL_TASK_SUBMISSION_GUIDE.md)
 

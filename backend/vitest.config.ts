@@ -41,8 +41,10 @@ export default defineConfig({
     environment: 'node',
     
     // Set NODE_ENV to test to disable auth
+    // Set DATABASE_PATH to :memory: to ensure all tests use in-memory database
     env: {
       NODE_ENV: 'test',
+      DATABASE_PATH: ':memory:',
     },
     
     // Coverage configuration

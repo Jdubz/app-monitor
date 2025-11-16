@@ -17,6 +17,9 @@ export interface IssueReport {
   route: string;
   userAgent: string;
   description?: string;
+  screenshot?: string | null;
+  screenshotError?: string;
+  meta?: Record<string, unknown>;
 }
 
 export interface StoredIssue extends IssueReport {
@@ -60,8 +63,8 @@ export class IssueStorageService {
     const stmt = this.db.prepare(`
       INSERT INTO issues (
         id, timestamp, sessionId, traceId, route, userAgent,
-        description, status, created
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        description, status, created, screenshot, screenshot_error, meta
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
     stmt.run(
@@ -73,7 +76,10 @@ export class IssueStorageService {
       issue.userAgent,
       issue.description || null,
       issue.status,
-      issue.created
+      issue.created,
+      issue.screenshot || null,
+      issue.screenshotError || null,
+      issue.meta ? JSON.stringify(issue.meta) : null
     );
 
     return issue;
@@ -139,9 +145,10 @@ export class IssueStorageService {
     traceId?: string;
     route: string;
     description?: string;
+    screenshot?: string | null;
   }> {
     const stmt = this.db.prepare(`
-      SELECT id, timestamp, sessionId, traceId, route, description
+      SELECT id, timestamp, sessionId, traceId, route, description, screenshot
       FROM issues
       WHERE status = 'pending'
       ORDER BY created ASC
@@ -154,6 +161,7 @@ export class IssueStorageService {
       traceId?: string;
       route: string;
       description?: string;
+      screenshot?: string | null;
     }>;
   }
 
@@ -209,7 +217,20 @@ export class IssueStorageService {
    */
   getIssueById(issueId: string): StoredIssue | undefined {
     const stmt = this.db.prepare('SELECT * FROM issues WHERE id = ?');
-    return stmt.get(issueId) as StoredIssue | undefined;
+    const row = stmt.get(issueId) as any;
+    
+    if (!row) return undefined;
+    
+    // Parse JSON fields
+    if (row.meta && typeof row.meta === 'string') {
+      try {
+        row.meta = JSON.parse(row.meta);
+      } catch {
+        row.meta = null;
+      }
+    }
+    
+    return row as StoredIssue;
   }
 
   /**
