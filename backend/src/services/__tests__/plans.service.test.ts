@@ -485,8 +485,11 @@ describe('PlansService', () => {
       expect(filtered[0].title).toBe('Feature P0');
     });
 
-    it('should sort by priority then created_at desc', () => {
+    it('should sort by priority then created_at desc', async () => {
       // Create plans with same priority at different times
+      // Wait 1ms to ensure different timestamps
+      await new Promise(resolve => setTimeout(resolve, 1));
+      
       service.createPlan({
         title: 'Second P0',
         plan_type: 'feature',

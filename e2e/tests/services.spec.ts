@@ -1,8 +1,20 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, Page } from '@playwright/test';
+
+async function bypassPasswordGate(page: Page) {
+  await page.goto('/');
+  const passwordInput = page.getByPlaceholder('Password');
+  const isPasswordGateVisible = await passwordInput.isVisible().catch(() => false);
+
+  if (isPasswordGateVisible) {
+    await passwordInput.fill('e2e-test-password');
+    await page.getByRole('button', { name: 'Enter' }).click();
+    await page.waitForLoadState('networkidle');
+  }
+}
 
 test.describe('Local Services', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await bypassPasswordGate(page);
     await page.getByRole('tab', { name: /local/i }).click();
   });
 
@@ -42,7 +54,7 @@ test.describe('Local Services', () => {
 
 test.describe('System Health', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await bypassPasswordGate(page);
     await page.getByRole('tab', { name: /health/i }).click();
   });
 
@@ -69,7 +81,7 @@ test.describe('System Health', () => {
 
 test.describe('Scripts Panel', () => {
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
+    await bypassPasswordGate(page);
     await page.getByRole('tab', { name: /scripts/i }).click();
   });
 

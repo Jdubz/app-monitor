@@ -19,6 +19,68 @@ async function bypassPasswordGate(page: Page) {
   }
 }
 
+// Helper to mock interactive session API (Docker disabled in test env)
+async function mockInteractiveSessionApi(page: Page) {
+  await page.route('**/api/dev-bots/interactive/**', async (route) => {
+    const url = new URL(route.request().url());
+    const pathname = url.pathname;
+    const method = route.request().method();
+
+    // Mock session state endpoint
+    if (pathname.endsWith('/interactive/session') && method === 'GET') {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: {
+            activeSession: null,
+            availableModels: [
+              { provider: 'claude', name: 'sonnet-4-5' },
+              { provider: 'claude', name: 'opus-4' }
+            ],
+            idleTimeoutMs: 300000
+          }
+        })
+      });
+    }
+
+    // Mock session creation
+    if (pathname.endsWith('/interactive/session') && method === 'POST') {
+      return route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: {
+            activeSession: {
+              id: 'mock-session-123',
+              modelProvider: 'claude',
+              modelName: 'sonnet-4-5',
+              status: 'active',
+              startTime: new Date().toISOString()
+            }
+          }
+        })
+      });
+    }
+
+    // Mock command input
+    if (pathname.includes('/interactive/input') || pathname.includes('/interactive/command')) {
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          success: true,
+          data: { acknowledged: true }
+        })
+      });
+    }
+
+    return route.continue();
+  });
+}
+
 test.describe('WebSocket Connection', () => {
   test.beforeEach(async ({ page }) => {
     await bypassPasswordGate(page);
@@ -374,6 +436,7 @@ test.describe('Real-time Worker Status Updates', () => {
 
 test.describe('Real-time Interactive Terminal', () => {
   test.beforeEach(async ({ page }) => {
+    await mockInteractiveSessionApi(page);
     await bypassPasswordGate(page);
     await page.goto('/monitor/interactive');
     await page.waitForLoadState('networkidle');

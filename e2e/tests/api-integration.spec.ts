@@ -224,7 +224,9 @@ test.describe('Dev-Bots Plans Endpoints', () => {
 });
 
 test.describe('Dev-Bots Interactive Session Endpoints', () => {
-  test('POST /api/dev-bots/interactive/session should create session', async ({ request }) => {
+  test('POST /api/dev-bots/interactive/session should validate input and return proper response', async ({ request }) => {
+    // NOTE: Interactive sessions require Docker which is disabled in non-prod environments.
+    // This test validates the endpoint exists and handles requests properly.
     const response = await request.post(`${API_BASE_URL}/api/dev-bots/interactive/session`, {
       headers,
       data: {
@@ -234,11 +236,20 @@ test.describe('Dev-Bots Interactive Session Endpoints', () => {
     }).catch(() => null);
 
     if (response) {
-      expect([200, 201, 404, 500]).toContain(response.status());
+      // In test env with Docker disabled, expect 500 (service unavailable)
+      // In prod with Docker enabled, expect 200/201 (success) or 400 (validation error)
+      expect([200, 201, 400, 500]).toContain(response.status());
 
       if (response.status() === 200 || response.status() === 201) {
         const data = await response.json();
         expect(data).toHaveProperty('success');
+        expect(data.success).toBe(true);
+      } else if (response.status() === 400) {
+        // Validation errors should have proper error response
+        const data = await response.json();
+        expect(data).toHaveProperty('success');
+        expect(data.success).toBe(false);
+        expect(data).toHaveProperty('error');
       }
     }
   });

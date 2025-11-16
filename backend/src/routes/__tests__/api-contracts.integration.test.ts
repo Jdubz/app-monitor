@@ -146,7 +146,7 @@ describe('API Contract Compliance - Dev-Bots Endpoints', () => {
   });
 
   describe('POST /api/dev-bots/tasks', () => {
-    it.skip('should return ApiSuccess with created task (environment-dependent)', async () => {
+    it('should handle task creation (adapts to environment)', async () => {
       const taskPayload = {
         type: 'implementation',
         title: 'Test Task',
@@ -158,16 +158,17 @@ describe('API Contract Compliance - Dev-Bots Endpoints', () => {
         .post('/api/dev-bots/tasks')
         .send(taskPayload);
       
-      // In test environment, task creation is blocked (403)
+      // In test environment, task creation may be blocked (403)
       // In production, it would return 200
       if (response.status === 403) {
         assertApiError(response.body);
         expect(response.body.error).toBeDefined();
       } else if (response.status === 200) {
         assertApiSuccess(response.body);
-        expect(response.body.data).toHaveProperty('id');
-        expect(response.body.data).toHaveProperty('type');
-        expect(response.body.data).toHaveProperty('status');
+        expect(response.body.data).toHaveProperty('task');
+        expect(response.body.data.task).toHaveProperty('id');
+        expect(response.body.data.task).toHaveProperty('type');
+        expect(response.body.data.task).toHaveProperty('status');
       } else {
         throw new Error(`Unexpected status: ${response.status}`);
       }
