@@ -47,6 +47,7 @@ export type LogCategory =
   | 'database'
   | 'delegation' // Copilot delegation
   | 'docker'
+  | 'escalation' // Manual intervention and escalation to humans
   | 'interactive_terminal' // Interactive terminal sessions
   | 'issue-triage' // Autonomous issue triage and resolution
   | 'lint_error'
