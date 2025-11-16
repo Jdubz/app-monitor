@@ -810,7 +810,7 @@ export class TaskQueueService {
         current_task_id TEXT,
         created_at INTEGER NOT NULL,
         last_heartbeat INTEGER NOT NULL,
-        heartbeat_timeout_ms INTEGER DEFAULT 30000,
+        heartbeat_timeout_ms INTEGER DEFAULT 90000,
 
         FOREIGN KEY (current_task_id) REFERENCES tasks(id) ON DELETE SET NULL
       );
@@ -1597,21 +1597,28 @@ export class TaskQueueService {
   /**
    * Detect and handle stalled workers
    * Returns array of stalled worker IDs
+   * 
+   * Timeout: 90 seconds (4.5x the 20s heartbeat interval)
+   * This provides buffer for event loop delays and output buffering
    */
   detectStalledWorkers(): string[] {
     return this.transaction(() => {
-      const timeout = Date.now() - 30000; // 30 seconds
+      const HEARTBEAT_TIMEOUT_MS = 90000; // 90 seconds (increased from 30s to reduce false positives)
+      const timeout = Date.now() - HEARTBEAT_TIMEOUT_MS;
+      const now = Date.now();
 
       const stmt = this.db.prepare(`
-        SELECT id, current_task_id
+        SELECT id, current_task_id, last_heartbeat
         FROM workers
         WHERE status = 'running'
         AND last_heartbeat < ?
       `);
 
-      const stalledWorkers = stmt.all(timeout) as { id: string; current_task_id: string }[];
+      const stalledWorkers = stmt.all(timeout) as { id: string; current_task_id: string; last_heartbeat: number }[];
 
       for (const worker of stalledWorkers) {
+        const timeSinceLastHeartbeat = now - worker.last_heartbeat;
+        
         if (worker.current_task_id) {
           const updateTaskStmt = this.db.prepare(`
             UPDATE tasks
@@ -1621,7 +1628,7 @@ export class TaskQueueService {
             WHERE id = ?
           `);
 
-          updateTaskStmt.run(Date.now(), worker.current_task_id);
+          updateTaskStmt.run(now, worker.current_task_id);
         }
 
         const updateWorkerStmt = this.db.prepare('UPDATE workers SET status = \'stopped\' WHERE id = ?');
@@ -1630,7 +1637,14 @@ export class TaskQueueService {
         logger.warn({
           category: 'process',
           action: 'stalled_worker_detected',
-          message: `Worker ${worker.id} stalled, marked task ${worker.current_task_id} as failed`
+          message: `Worker ${worker.id} stalled (no heartbeat for ${Math.round(timeSinceLastHeartbeat / 1000)}s), marked task ${worker.current_task_id} as failed`,
+          details: {
+            workerId: worker.id,
+            taskId: worker.current_task_id,
+            lastHeartbeat: worker.last_heartbeat,
+            timeSinceLastHeartbeat_ms: timeSinceLastHeartbeat,
+            timeout_ms: HEARTBEAT_TIMEOUT_MS
+          }
         });
       }
 

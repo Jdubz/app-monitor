@@ -4,23 +4,18 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TaskQueueService } from '../taskQueue.sqlite.js';
+import { createTestTaskQueue, closeTestDatabase } from '../../__tests__/testDb.js';
+import type { TaskQueueService } from '../taskQueue.sqlite.js';
 
 describe('PRSyncService Integration Tests', () => {
   let taskQueue: TaskQueueService;
 
   beforeEach(() => {
-    // Use in-memory database to avoid file cleanup issues
-    taskQueue = new TaskQueueService(':memory:');
+    taskQueue = createTestTaskQueue();
   });
 
   afterEach(() => {
-    // Close database connection
-    try {
-      taskQueue.close();
-    } catch (err) {
-      // Ignore close errors in tests
-    }
+    closeTestDatabase(taskQueue);
   });
 
   it('should detect PRs from failed tasks', async () => {
