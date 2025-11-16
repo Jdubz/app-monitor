@@ -1,21 +1,6 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import type { TokenUsage } from './database.js';
 import type { TokenBudget } from './tokenTracking.js';
-import * as fs from 'fs';
-import * as path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const TEST_DB_PATH = path.join(__dirname, 'token-tracking-test.db');
-
-// Skip the native better-sqlite3 backed suite in CI where the addon is unavailable.
-const shouldSkipNativeDbSuite =
-  process.env.CI === 'true' && process.env.FORCE_NATIVE_DB_TESTS !== '1';
-
-const describeNativeDb = shouldSkipNativeDbSuite ? describe.skip : describe;
 
 type DatabaseModule = typeof import('./database.js');
 type DevBotsDatabaseClass = DatabaseModule['DevBotsDatabase'];
@@ -24,19 +9,7 @@ type TokenTrackingModule = typeof import('./tokenTracking.js');
 type TokenTrackingServiceClass = TokenTrackingModule['TokenTrackingService'];
 type TokenTrackingServiceInstance = InstanceType<TokenTrackingServiceClass>;
 
-function cleanupTestDatabase(): void {
-  if (fs.existsSync(TEST_DB_PATH)) {
-    fs.unlinkSync(TEST_DB_PATH);
-  }
-  if (fs.existsSync(TEST_DB_PATH + '-shm')) {
-    fs.unlinkSync(TEST_DB_PATH + '-shm');
-  }
-  if (fs.existsSync(TEST_DB_PATH + '-wal')) {
-    fs.unlinkSync(TEST_DB_PATH + '-wal');
-  }
-}
-
-describeNativeDb('TokenTrackingService', () => {
+describe('TokenTrackingService', () => {
   let DevBotsDatabaseCtor: DevBotsDatabaseClass;
   let TokenTrackingServiceCtor: TokenTrackingServiceClass;
   let getTokenTrackingServiceFn: TokenTrackingModule['getTokenTrackingService'];
@@ -57,17 +30,19 @@ describeNativeDb('TokenTrackingService', () => {
   });
 
   beforeEach(() => {
-    cleanupTestDatabase();
-
-    db = new DevBotsDatabaseCtor(TEST_DB_PATH);
+    // Use in-memory database for test isolation
+    db = new DevBotsDatabaseCtor(':memory:');
     resetTokenTrackingServiceFn();
     service = new TokenTrackingServiceCtor({ database: db });
   });
 
   afterEach(() => {
     resetTokenTrackingServiceFn();
-    db.close();
-    cleanupTestDatabase();
+    try {
+      db.close();
+    } catch (err) {
+      // Ignore close errors in tests
+    }
   });
 
   describe('Budget Management', () => {

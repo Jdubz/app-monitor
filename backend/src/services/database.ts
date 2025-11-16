@@ -67,7 +67,10 @@ export class DevBotsDatabase {
 
   constructor(dbPath: string = DB_PATH) {
     this.db = new Database(dbPath);
-    this.db.pragma('journal_mode = WAL'); // Better concurrency
+    // WAL mode doesn't work with in-memory databases
+    if (dbPath !== ':memory:') {
+      this.db.pragma('journal_mode = WAL'); // Better concurrency
+    }
     this.initialize();
   }
 
@@ -272,6 +275,15 @@ export class DevBotsDatabase {
           this.db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_plan_id ON tasks(plan_id) WHERE plan_id IS NOT NULL');
         }
       }
+    });
+
+    // Migration 022: Issues Table
+    // Creates storage for user-reported issues and autonomous triage
+    this.applyMigration('022_issues_table', () => {
+      this.db.exec(fs.readFileSync(
+        path.join(__dirname, '..', '..', 'migrations', '022_issues_table.sql'),
+        'utf-8'
+      ));
     });
   }
 

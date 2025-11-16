@@ -245,8 +245,10 @@ export class TaskQueueService {
   }
 
   private initialize(): void {
-    // Enable WAL mode for better concurrency
-    this.db.pragma('journal_mode = WAL');
+    // Enable WAL mode for better concurrency (skip for in-memory databases)
+    if (this.dbPath !== ':memory:') {
+      this.db.pragma('journal_mode = WAL');
+    }
     this.db.pragma('synchronous = NORMAL');
     this.db.pragma('foreign_keys = ON');
     this.db.pragma('busy_timeout = 5000');
