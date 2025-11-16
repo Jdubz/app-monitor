@@ -43,6 +43,13 @@ Thumbs.db
 coverage/
 .nyc_output/
 
+# Playwright E2E tests
+test-results/
+playwright-report/
+e2e/test-results/
+e2e/playwright-report/
+e2e/results/
+
 # TypeScript build info
 *.tsbuildinfo
 
