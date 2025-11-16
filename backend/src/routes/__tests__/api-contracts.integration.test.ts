@@ -28,6 +28,7 @@ describe('API Contract Compliance - Dev-Bots Endpoints', () => {
         pending: [],
         active: [],
         completed: [],
+        failed: [],
       }),
       getQueueMetrics: () => ({
         pending: 0,
@@ -45,7 +46,7 @@ describe('API Contract Compliance - Dev-Bots Endpoints', () => {
         maxWorkers: 3,
         activeWorkerTypes: [],
         availableWorkerTypes: [],
-        tasks: { pending: [], active: [], completed: [] },
+        tasks: { pending: [], active: [], completed: [], failed: [] },
       }),
       getWorkers: () => ({}),
       getTaskQueue: () => mockTaskQueue,

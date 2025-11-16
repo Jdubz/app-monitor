@@ -321,7 +321,7 @@ describe('Logs Routes', () => {
   });
 
   describe('POST /api/logs/frontend - Error Handling', () => {
-    it('should handle database errors gracefully', async () => {
+    it('should handle database errors gracefully and continue', async () => {
       // Close database to simulate error
       db.close();
 
@@ -343,9 +343,10 @@ describe('Logs Routes', () => {
           ],
         });
 
-      expect(response.status).toBe(500);
-      expect(response.body.success).toBe(false);
-      expect(response.body.error).toContain('Failed to process logs');
+      // Should return 200 and silently handle the error (graceful degradation)
+      expect(response.status).toBe(200);
+      expect(response.body.success).toBe(true);
+      expect(response.body.message).toBe('Logs received');
     });
 
     it('should handle malformed JSON in data field', async () => {

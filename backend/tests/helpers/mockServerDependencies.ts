@@ -120,6 +120,7 @@ const devBotsStatus: DevBotsStatus = {
     pending: [baseTask],
     active: [],
     completed: [],
+    failed: [],
   },
 };
 

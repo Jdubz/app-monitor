@@ -93,10 +93,11 @@ validate_database_references() {
     log_info "Checking ${script##*/} for database path references..."
 
     # Find all .db file references (end of line or followed by non-letter)
+    # Exclude method calls (.db. or .db\ patterns) to avoid false positives like "this.db.exec" or regex "this\\.db\\.exec"
     # Filter out comments (lines with : followed by optional whitespace then #)
     # Filter out escaped patterns like \\.db\\ which are JavaScript/regex patterns
     # Filter out grep patterns (lines containing grep -E or grep -qE)
-    local db_refs=$(grep -n '\.db\([^a-zA-Z]\|$\)' "${script}" | grep -v ':[[:space:]]*#' | grep -v '\\\\.db\\\\' | grep -v 'grep -.*E.*\.db' || true)
+    local db_refs=$(grep -n '\.db\([^a-zA-Z.\\]\|$\)' "${script}" | grep -v ':[[:space:]]*#' | grep -v '\\\\.db\\\\' | grep -v 'grep -.*E.*\.db' || true)
 
     if [ -z "${db_refs}" ]; then
         log_info "  No database references found"
@@ -150,7 +151,10 @@ log_info ""
 log_info "=== Validating all scripts for database path compliance ==="
 for script in "${SCRIPTS_DIR}"/*.sh; do
     if [ -f "${script}" ]; then
-        validate_database_references "${script}"
+        # Skip validating the validation script itself to avoid false positives
+        if [ "${script}" != "${SCRIPTS_DIR}/validate-infrastructure.sh" ]; then
+            validate_database_references "${script}"
+        fi
     fi
 done
 

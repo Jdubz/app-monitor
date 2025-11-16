@@ -78,9 +78,11 @@ main() {
     log_info "Cleaning up old backups (keeping last ${MAX_BACKUPS})..."
     cd "${BACKUP_DIR}"
     # Sort by filename (timestamp) in reverse order, skip first MAX_BACKUPS, delete rest
-    ls -1 app-monitor_*.db 2>/dev/null | sort -r | tail -n +$((MAX_BACKUPS + 1)) | xargs -r rm -f
+    # Pattern matches backup files created by this script: app-monitor_TIMESTAMP.db
+    local backup_pattern="app-monitor_*.db"
+    ls -1 ${backup_pattern} 2>/dev/null | sort -r | tail -n +$((MAX_BACKUPS + 1)) | xargs -r rm -f
 
-    local backup_count=$(ls -1 app-monitor_*.db 2>/dev/null | wc -l)
+    local backup_count=$(ls -1 ${backup_pattern} 2>/dev/null | wc -l)
     log_info "Current backup count: ${backup_count}"
 
     log_info "Database backup completed successfully"

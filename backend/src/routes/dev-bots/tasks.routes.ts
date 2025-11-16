@@ -65,6 +65,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
           pending: mapTasksToContract(tasks.pending),
           active: mapTasksToContract(tasks.active),
           completed: mapTasksToContract(tasks.completed),
+          failed: mapTasksToContract(tasks.failed),
         });
       } else {
         sendError(
