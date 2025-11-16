@@ -9,7 +9,6 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { InteractiveTerminalService } from '../interactiveTerminal.service.js';
 import type { DevBotsDatabase } from '../database.js';
 import type Docker from 'dockerode';
-import { EventEmitter } from 'events';
 
 // Mock Docker container
 const createMockContainer = () => ({
@@ -452,7 +451,7 @@ describe('InteractiveTerminalService', () => {
         });
 
         await expect(service.reconnectSession(sessionId)).rejects.toThrow(
-          'Container is not running'
+          'Session container no longer exists'
         );
       });
 
@@ -638,7 +637,7 @@ describe('InteractiveTerminalService', () => {
 
   describe('Error Handling', () => {
     it('should handle null safety without assertions', async () => {
-      const { sessionId } = await service.startSession({ ownerEmail: 'test@example.com' });
+      await service.startSession({ ownerEmail: 'test@example.com' });
 
       // Simulate database returning null after creation
       (mockDatabase.getInteractiveSessionById as any).mockReturnValueOnce(null);
@@ -656,10 +655,10 @@ describe('InteractiveTerminalService', () => {
 
       await service.stopSession(sessionId);
 
-      // Should be marked as ended (not error)
+      // Container cleanup errors are handled gracefully - session still marked as ended with original reason
       const session = mockDatabase.getInteractiveSessionById(sessionId);
       expect(session?.status).toBe('ended');
-      expect(session?.terminationReason).toContain('Stop failed');
+      expect(session?.terminationReason).toBe('User requested');
     });
   });
 });

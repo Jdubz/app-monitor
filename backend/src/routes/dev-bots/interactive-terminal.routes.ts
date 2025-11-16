@@ -195,46 +195,6 @@ export function createInteractiveTerminalRoutes(
   });
 
   /**
-   * GET /interactive/:id
-   * Get interactive terminal session details
-   *
-   * Response:
-   * {
-   *   success: true,
-   *   data: InteractiveSessionRecord | null
-   * }
-   */
-  router.get('/interactive/:id', async (req: Request, res: Response) => {
-    try {
-      const sessionId = req.params.id;
-
-      const session = terminalService.getSession(sessionId);
-
-      if (!session) {
-        return ErrorResponses.notFound(res, 'Session not found', {
-          category: 'interactive_terminal',
-          action: 'session_not_found',
-        });
-      }
-
-      res.json({
-        success: true,
-        data: session,
-      });
-    } catch (error) {
-      return ErrorResponses.internalError(
-        res,
-        'Failed to get interactive terminal session',
-        {
-          category: 'interactive_terminal',
-          action: 'get_session_failed',
-        },
-        error
-      );
-    }
-  });
-
-  /**
    * GET /interactive/active
    * Get the currently active interactive terminal session (single-session mode)
    *
@@ -280,7 +240,14 @@ export function createInteractiveTerminalRoutes(
    */
   router.get('/interactive/sessions', async (req: Request, res: Response) => {
     try {
-      const limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+      let limit = req.query.limit ? parseInt(req.query.limit as string, 10) : 20;
+
+      // Validate and sanitize limit
+      if (isNaN(limit) || limit < 1) {
+        limit = 20; // Default
+      } else if (limit > 100) {
+        limit = 100; // Cap at 100
+      }
 
       const sessions = terminalService.listSessions(limit);
 
@@ -295,6 +262,46 @@ export function createInteractiveTerminalRoutes(
         {
           category: 'interactive_terminal',
           action: 'list_sessions_failed',
+        },
+        error
+      );
+    }
+  });
+
+  /**
+   * GET /interactive/:id
+   * Get interactive terminal session details
+   *
+   * Response:
+   * {
+   *   success: true,
+   *   data: InteractiveSessionRecord | null
+   * }
+   */
+  router.get('/interactive/:id', async (req: Request, res: Response) => {
+    try {
+      const sessionId = req.params.id;
+
+      const session = terminalService.getSession(sessionId);
+
+      if (!session) {
+        return ErrorResponses.notFound(res, 'Session not found', {
+          category: 'interactive_terminal',
+          action: 'session_not_found',
+        });
+      }
+
+      res.json({
+        success: true,
+        data: session,
+      });
+    } catch (error) {
+      return ErrorResponses.internalError(
+        res,
+        'Failed to get interactive terminal session',
+        {
+          category: 'interactive_terminal',
+          action: 'get_session_failed',
         },
         error
       );

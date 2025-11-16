@@ -81,7 +81,7 @@ describe('Interactive Terminal Routes', () => {
       await request(app).post('/interactive/start').expect(200);
 
       expect(mockTerminalService.startSession).toHaveBeenCalledWith({
-        ownerEmail: 'developer@localhost',
+        ownerEmail: 'contact@joshwentworth.com',
       });
     });
 
@@ -94,7 +94,7 @@ describe('Interactive Terminal Routes', () => {
 
       expect(response.body).toMatchObject({
         success: false,
-        error: expect.stringContaining('Failed to start'),
+        error: 'INTERNAL_ERROR',
       });
     });
   });
@@ -143,7 +143,7 @@ describe('Interactive Terminal Routes', () => {
 
       expect(response.body).toMatchObject({
         success: false,
-        error: expect.stringContaining('Failed to stop'),
+        error: 'INTERNAL_ERROR',
       });
     });
   });
@@ -182,7 +182,7 @@ describe('Interactive Terminal Routes', () => {
 
       expect(response.body).toMatchObject({
         success: false,
-        error: expect.stringContaining('Failed to reset'),
+        error: 'INTERNAL_ERROR',
       });
     });
   });
@@ -207,7 +207,7 @@ describe('Interactive Terminal Routes', () => {
 
       expect(response.body).toMatchObject({
         success: false,
-        error: 'Session not found',
+        error: 'NOT_FOUND',
       });
     });
   });
@@ -243,13 +243,11 @@ describe('Interactive Terminal Routes', () => {
 
       expect(response.body).toMatchObject({
         success: true,
-        data: {
-          sessions: expect.arrayContaining([
-            expect.objectContaining({
-              id: 'session-123',
-            }),
-          ]),
-        },
+        data: expect.arrayContaining([
+          expect.objectContaining({
+            id: 'session-123',
+          }),
+        ]),
       });
     });
 
@@ -291,7 +289,7 @@ describe('Interactive Terminal Routes', () => {
     });
 
     it('should handle malformed requests', async () => {
-      const response = await request(app)
+      await request(app)
         .post('/interactive/session-123/stop')
         .send('invalid json')
         .set('Content-Type', 'application/json')

@@ -28,7 +28,7 @@ const createMockSocket = (sessionId?: string): Socket => {
 // Mock Socket.IO Namespace
 const createMockNamespace = () => {
   const namespace = new EventEmitter() as any;
-  namespace.on = vi.fn((event: string, handler: Function) => {
+  namespace.on = vi.fn((event: string, handler: (...args: any[]) => void) => {
     if (event === 'connection') {
       namespace._connectionHandler = handler;
     }
@@ -213,7 +213,8 @@ describe('InteractiveTerminalGateway', () => {
 
       await new Promise((resolve) => setTimeout(resolve, 100));
 
-      const mockExec = createMockExec();
+      const mockContainer = (mockDocker.getContainer as any)();
+      const mockExec = await (mockContainer.exec as any).mock.results[0].value;
       expect(mockExec.start).toHaveBeenCalledWith(
         expect.objectContaining({
           Tty: true,
@@ -536,7 +537,6 @@ describe('InteractiveTerminalGateway', () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
 
       const stream = socket.data.stream;
-      const initialListenerCount = stream.listenerCount?.('data') || 0;
 
       const endHandler = stream._events.end[0] || stream._events.end;
       endHandler();
