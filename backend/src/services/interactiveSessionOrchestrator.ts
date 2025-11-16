@@ -215,22 +215,19 @@ export class InteractiveSessionOrchestrator {
       case 'claude':
         return [
           'claude',
-          '--dangerously-skip-permissions',
-          '--disable-update-check'
+          '--dangerously-skip-permissions'
         ];
       
       case 'codex':
         return [
           'codex',
-          '--dangerously-skip-permissions',
-          '--disable-update-check'
+          '--dangerously-skip-permissions'
         ];
       
       case 'gemini':
         return [
           'gemini',
-          '--dangerously-skip-permissions',
-          '--disable-update-check'
+          '--dangerously-skip-permissions'
         ];
       
       default:
@@ -242,8 +239,7 @@ export class InteractiveSessionOrchestrator {
         });
         return [
           'codex',
-          '--dangerously-skip-permissions',
-          '--disable-update-check'
+          '--dangerously-skip-permissions'
         ];
     }
   }

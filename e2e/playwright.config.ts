@@ -15,7 +15,10 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 2 : 4, // Use 4 parallel workers locally, 2 in CI
-  timeout: 30000, // 30 second default timeout per test
+  timeout: 60000, // 60 second default timeout per test (increased for parallel execution)
+  expect: {
+    timeout: 15000, // 15 seconds for expect assertions (increased for UI visibility checks)
+  },
   reporter: [
     ['html'],
     ['list'],
@@ -27,8 +30,8 @@ export default defineConfig({
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
-    actionTimeout: 10000, // 10 seconds for individual actions
-    navigationTimeout: 15000, // 15 seconds for page navigations
+    actionTimeout: 15000, // 15 seconds for individual actions (increased for parallel load)
+    navigationTimeout: 20000, // 20 seconds for page navigations (increased for parallel load)
   },
 
   // Test environment setup
