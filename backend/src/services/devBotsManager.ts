@@ -518,7 +518,7 @@ export class DevBotsManager extends EventEmitter {
    * Get tasks grouped by status
    * Delegated to StatusAggregationService
    */
-  async getTasks(): Promise<{ pending: Task[]; active: Task[]; completed: Task[] }> {
+  async getTasks(): Promise<{ pending: Task[]; active: Task[]; completed: Task[]; failed: Task[] }> {
     return await this.statusAggregationService.getTasks();
   }
 
