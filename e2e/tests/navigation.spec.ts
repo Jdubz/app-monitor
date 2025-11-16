@@ -27,7 +27,7 @@ test.describe('Dev Monitor - Basic Navigation', () => {
   });
 
   test('should have all main tabs visible', async ({ page }) => {
-    const tabs = ['dev-bots', 'pr-tracking', 'task-queue', 'plans', 'interactive'];
+    const tabs = ['Dev-Bots', 'PR Tracking', 'Task Queue', 'Plans', 'Interactive'];
 
     for (const tab of tabs) {
       const tabElement = page.getByRole('tab', { name: new RegExp(tab, 'i') });
@@ -37,7 +37,7 @@ test.describe('Dev Monitor - Basic Navigation', () => {
 
   test('should switch between tabs', async ({ page }) => {
     // Click on Task Queue tab
-    await page.getByRole('tab', { name: /task-queue/i }).click();
+    await page.getByRole('tab', { name: /task queue/i }).click();
     await expect(page.getByText(/task queue|queue/i)).toBeVisible();
 
     // Click on Plans tab

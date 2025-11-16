@@ -16,7 +16,7 @@ test.describe('Log Viewer', () => {
   test.beforeEach(async ({ page }) => {
     await bypassPasswordGate(page);
     // Navigate to Local tab where logs are shown
-    await page.getByRole('tab', { name: /dev-bots/i }).click();
+    await page.getByRole('tab', { name: /dev.?bots/i }).click();
   });
 
   test('should display log viewer controls', async ({ page }) => {

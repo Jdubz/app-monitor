@@ -60,14 +60,17 @@ export class CheckRunHandler extends BaseWebhookHandler {
   /**
    * Check if PR branches match dev-bot or copilot patterns
    * 
-   * Valid patterns:
-   * - Dev-bot PRs: task-implementation-{uuid} -> main
-   * - Copilot sub-PRs: subPR-{number} -> task-implementation-{uuid}
+   * Valid patterns based on actual GitHub history:
+   * - Dev-bot PRs: task-* -> main/staging
+   * - Copilot sub-PRs: copilot/sub-pr-{number} -> task-*
+   * - Copilot PRs: copilot/sub-pr-{number} -> staging
    */
   private isDevBotManagedBranch(headRef: string, baseRef: string): boolean {
-    const isTaskBranch = headRef.startsWith('task-implementation-') && baseRef === 'main';
-    const isSubPR = headRef.startsWith('subPR-') && baseRef.startsWith('task-implementation-');
-    return isTaskBranch || isSubPR;
+    const isTaskBranch = headRef.startsWith('task-') && 
+                        (baseRef === 'main' || baseRef === 'staging');
+    const isCopilotPR = headRef.startsWith('copilot/sub-pr-') && 
+                       (baseRef.startsWith('task-') || baseRef === 'staging');
+    return isTaskBranch || isCopilotPR;
   }
 
   /**
