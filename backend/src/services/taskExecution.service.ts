@@ -13,24 +13,21 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import * as os from 'os';
 import { promisify } from 'util';
 import { exec } from 'child_process';
 import { logger } from '../utils/logger.js';
 import type { Task } from './taskQueue.sqlite.js';
 import type { TaskQueueService } from './taskQueue.sqlite.js';
-import type { AgentPersonality, AgentPersonalityManager } from './agentPersonalities.js';
+import type { AgentPersonalityManager } from './agentPersonalities.js';
 import type { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplates.js';
 // WorkspaceOrchestrator removed - we use Docker cp for file systems, not git mirrors
 import type { EphemeralWorkerService, EphemeralWorker, TaskExecutionResult } from './ephemeralWorker.service.js';
 // TaskPersistence removed - using SQLite directly
-import { isTaskStuck, detectFailurePattern, type FailurePattern } from './taskFailureGuards.js';
+import type { FailurePattern } from './taskFailureGuards.js';
 import type { SimpleFailureRecovery } from './failureRecovery.js';
 import { resolveArtifactsDir } from '../utils/repoPaths.js';
-import { AgentSelector, type AgentSelectionCriteria, type AgentAttempt } from './agentSelector.js';
+import { AgentSelector } from './agentSelector.js';
 import { TaskClassifier } from './taskClassifier.js';
-import * as DockerConfig from './dockerConfig.js';
-import { config } from '../config.js';
 import { TaskArtifactService } from './taskArtifact.service.js';
 import { SessionSummaryService } from './sessionSummary.service.js';
 
@@ -511,7 +508,8 @@ export class TaskExecutionService {
         const stderr = result.errorOutput || '';
 
         // Complete task in SQLite with agent type for tracking
-        this.taskQueue.completeTask(nextTask.id, output, agent.id);
+        const agentType = agent.id as 'claude' | 'codex' | 'gemini';
+        this.taskQueue.completeTask(nextTask.id, output, agentType);
 
         // Generate session summary for documentation
         await this.generateSessionSummary(nextTask, result.exitCode || 0, output, stderr, new Date().toISOString());
