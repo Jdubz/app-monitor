@@ -680,7 +680,7 @@ export class PullRequestHandler extends BaseWebhookHandler {
               pr_number: prNumber,
               mergeable: prStatus.mergeable,
               attempts: attempt,
-              elapsed_seconds: (POLL_START_DELAY_MS / 1000) + (attempt * POLL_INTERVAL_MS / 1000)
+              elapsed_seconds: Math.floor((Date.now() - startTime) / 1000)
             }
           });
 
