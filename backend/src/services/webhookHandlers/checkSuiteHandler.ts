@@ -76,11 +76,13 @@ export class CheckSuiteHandler extends BaseWebhookHandler {
 
     // Find associated tasks
     const tasks = await this.taskQueue.findByPRNumber(prNumber);
+    
+    // If no tasks are associated, this PR is not managed by dev-bots
     if (tasks.length === 0) {
       logger.debug({
         category: 'api',
         action: 'check_suite_no_tasks',
-        message: `No tasks found for PR #${prNumber}`,
+        message: `No tasks found for PR #${prNumber}, not a dev-bot managed PR`,
         details: { pr_number: prNumber }
       });
       return;
@@ -89,39 +91,6 @@ export class CheckSuiteHandler extends BaseWebhookHandler {
     const conclusion = checkSuite.conclusion;
     const owner = repository.owner.login;
     const repo = repository.name;
-    
-    // Check if PR was created by a bot (GitHub identifies bot accounts)
-    // This prevents processing manual PRs from humans
-    try {
-      const githubPR = this.prOrchestrator?.getGitHubPRService();
-      if (githubPR) {
-        const prStatus = await githubPR.getPRStatus(prNumber, owner, repo);
-        const isHumanPR = prStatus.user && !prStatus.user.endsWith('[bot]');
-        
-        if (isHumanPR) {
-          logger.debug({
-            category: 'api',
-            action: 'check_suite_human_pr_skipped',
-            message: `PR #${prNumber} was created by a human, not processing check suite`,
-            details: { 
-              pr_number: prNumber,
-              pr_author: prStatus.user
-            }
-          });
-          return;
-        }
-      }
-    } catch (error) {
-      // If we can't determine, err on the side of not processing
-      logger.warn({
-        category: 'api',
-        action: 'check_suite_pr_check_failed',
-        message: `Could not verify if PR #${prNumber} is from a bot, skipping to be safe`,
-        error,
-        details: { pr_number: prNumber }
-      });
-      return;
-    }
     
     logger.info({
       category: 'pr-workflow',
