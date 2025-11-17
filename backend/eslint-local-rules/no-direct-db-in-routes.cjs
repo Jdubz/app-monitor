@@ -9,7 +9,8 @@
  *
  * Violations:
  * - Calling .getDatabase() followed by storing in a variable and using it for queries
- * - Calling .db.prepare() in route files
+ * - Calling db.prepare() in route files
+ * - Calling db.exec() in route files
  *
  * Exceptions:
  * - Service initialization (passing db to service constructors) - allowed
@@ -27,6 +28,7 @@ module.exports = {
     messages: {
       noDatabaseInRoutes: 'Routes should not access the database directly. Use service methods instead. Consider adding a method to TaskQueueService or the appropriate service layer.',
       noDatabasePrepare: 'Routes should not execute SQL queries directly. Move database logic to service layer.',
+      noDatabaseExec: 'Routes should not execute SQL statements directly. Move database logic to service layer.',
     },
     schema: [],
   },
@@ -64,7 +66,7 @@ module.exports = {
         }
       },
 
-      // Detect db.prepare() pattern
+      // Detect db.prepare() and db.exec() patterns
       CallExpression(node) {
         if (
           node.callee &&
@@ -72,13 +74,19 @@ module.exports = {
           node.callee.object &&
           node.callee.object.type === 'Identifier' &&
           node.callee.object.name === 'db' &&
-          node.callee.property &&
-          node.callee.property.name === 'prepare'
+          node.callee.property
         ) {
-          context.report({
-            node,
-            messageId: 'noDatabasePrepare',
-          });
+          if (node.callee.property.name === 'prepare') {
+            context.report({
+              node,
+              messageId: 'noDatabasePrepare',
+            });
+          } else if (node.callee.property.name === 'exec') {
+            context.report({
+              node,
+              messageId: 'noDatabaseExec',
+            });
+          }
         }
       },
     };

@@ -46,6 +46,7 @@ export function createApiRouter(deps: {
   // Initialize logs and issues routes with database and task queue from devBotsManager
   if (deps.devBotsManager) {
     const taskQueue = deps.devBotsManager.getTaskQueue();
+    // eslint-disable-next-line local-rules/no-direct-db-in-routes -- Safe: Only used for service initialization
     const db = taskQueue.getDatabase();
     initializeLogsRoutes(db);
     initializeIssuesRoutes(db, taskQueue);
