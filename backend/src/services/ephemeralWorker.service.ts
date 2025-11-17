@@ -34,6 +34,7 @@ import { PhaseOrchestratorService } from './phaseOrchestrator.service.js';
 import { RecoveryAgentService } from './recoveryAgent.service.js';
 import type { ValidationResult } from './phaseValidation/types.js';
 import { getConnectionManager } from './connectionManager.js';
+import { CONTAINER_MEMORY_LIMIT_BYTES, CONTAINER_CPU_QUOTA, WORKER_UID_GID } from '../constants/containers.js';
 
 export interface WorkspaceContext {
   id: string;
@@ -438,14 +439,14 @@ export class EphemeralWorkerService {
         Env: envVars,
         WorkingDir: `/workspace`,
         HostConfig: {
-          Memory: 512 * 1024 * 1024,
-          CpuQuota: 50000,
+          Memory: CONTAINER_MEMORY_LIMIT_BYTES,
+          CpuQuota: CONTAINER_CPU_QUOTA,
           AutoRemove: true,
           Binds: binds,
           Tmpfs: {
-            '/home/worker/.claude': 'uid=1000,gid=1000',  // Writable temp for Claude CLI (matches node user)
-            '/home/worker/.gemini': 'uid=1000,gid=1000',  // Writable temp for Gemini CLI (matches node user)
-            '/home/worker/.codex': 'uid=1000,gid=1000'    // Writable temp for Codex CLI (matches node user)
+            '/home/worker/.claude': WORKER_UID_GID,  // Writable temp for Claude CLI (matches node user)
+            '/home/worker/.gemini': WORKER_UID_GID,  // Writable temp for Gemini CLI (matches node user)
+            '/home/worker/.codex': WORKER_UID_GID    // Writable temp for Codex CLI (matches node user)
           }
         },
         Labels: {

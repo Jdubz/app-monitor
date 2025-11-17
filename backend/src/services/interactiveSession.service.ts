@@ -1,5 +1,6 @@
 import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
+import { WORKER_IDLE_TIMEOUT_MS } from '../constants/timeouts.js';
 
 import {
   getDatabase,
@@ -54,7 +55,7 @@ export class InteractiveSessionService extends EventEmitter {
 
   constructor(options: InteractiveSessionServiceOptions = {}) {
     super();
-    this.idleTimeoutMs = options.idleTimeoutMs ?? 5 * 60 * 1000;
+    this.idleTimeoutMs = options.idleTimeoutMs ?? WORKER_IDLE_TIMEOUT_MS;
     this.allowedModels =
       options.allowedModels && options.allowedModels.length > 0
         ? options.allowedModels

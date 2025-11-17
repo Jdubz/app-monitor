@@ -6,6 +6,7 @@
 
 import { Socket, Server as SocketIOServer } from 'socket.io';
 import { logger } from '../utils/logger.js';
+import { HEARTBEAT_INTERVAL_MS, HEARTBEAT_TIMEOUT_MS } from '../constants/timeouts.js';
 
 export interface ConnectionInfo {
   socketId: string;
@@ -19,8 +20,8 @@ export interface ConnectionInfo {
 
 export class ConnectionManager {
   private connections = new Map<string, ConnectionInfo>();
-  private heartbeatInterval = 30000; // 30 seconds
-  private heartbeatTimeout = 45000; // 45 seconds
+  private heartbeatInterval = HEARTBEAT_INTERVAL_MS;
+  private heartbeatTimeout = HEARTBEAT_TIMEOUT_MS;
   private intervalIds = new Map<string, NodeJS.Timeout>();
   private io?: SocketIOServer; // Socket.IO server instance for broadcasting
 
