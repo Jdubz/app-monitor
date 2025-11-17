@@ -121,16 +121,18 @@ describe('DevBotsManager Core Functionality', () => {
       };
 
       // When: Task is created using correct API
-      const task = await devBotsManager.addTask(
-        'feature',
-        'Test Task',
-        'A test task for development',
-        'Task should be completed successfully',
-        { assignedAgent: 'test-agent' }
-      );
+      const result = await devBotsManager.addTask({
+        type: 'feature',
+        title: 'Test Task',
+        description: 'A test task for development',
+        acceptanceCriteria: ['Task should be completed successfully'],
+        assignedAgent: 'test-agent'
+      });
 
       // Then: Task is created with correct properties
-      expect(task).toBeDefined();
+      expect(result).toBeDefined();
+      expect(result.task).toBeDefined();
+      const task = result.task;
       expect(task.id).toBeDefined();
       expect(task.status).toBe('pending');
       expect(task.assignedAgent).toBe('test-agent');
@@ -166,15 +168,16 @@ describe('DevBotsManager Core Functionality', () => {
       };
 
       // When: New task arrives
-      const task = await devBotsManager.addTask(
-        'feature',
-        'Third Task',
-        'This should be queued',
-        'Task should remain queued',
-        { assignedAgent: 'test-agent' }
-      );
+      const result = await devBotsManager.addTask({
+        type: 'feature',
+        title: 'Third Task',
+        description: 'This should be queued',
+        acceptanceCriteria: ['Task should remain queued'],
+        assignedAgent: 'test-agent'
+      });
 
       // Then: Task is queued, not assigned
+      const task = result.task;
       expect(task.status).toBe('pending');
       expect(devBotsManager['taskQueue']).toContain(task);
 
@@ -533,15 +536,16 @@ describe('DevBotsManager Core Functionality', () => {
   describe('Integration with External Services', () => {
     it('should integrate with workspace sync', async () => {
       // Given: Task requiring workspace sync
-      const taskData: Partial<Task> = {
+      const taskData = {
         type: 'feature',
         title: 'Sync Task',
         description: 'Task requiring workspace sync',
+        acceptanceCriteria: ['Workspace should be synced'],
         assignedAgent: 'test-agent'
       };
 
       // When: Task is created
-      await devBotsManager.addTask(taskData as Task);
+      await devBotsManager.addTask(taskData);
 
       // Then: Workspace sync is triggered
       expect(mockWorkspaceSyncManager.syncWorkspace).toHaveBeenCalled();
