@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import Database from 'better-sqlite3';
 import { PhaseOrchestratorService } from '../phaseOrchestrator.service';
 import { ValidatorRegistry } from '../phaseValidation/ValidatorRegistry';
 import { RecoveryAgentService } from '../recoveryAgent.service';
@@ -13,112 +14,143 @@ import { ValidationResult } from '../phaseValidation/types';
 import type { Task } from '../taskQueue.sqlite';
 
 describe('Phase Integration Tests', () => {
+  let db: Database.Database;
   let orchestrator: PhaseOrchestratorService;
   let validatorRegistry: ValidatorRegistry;
   let recoveryService: RecoveryAgentService;
 
   beforeEach(() => {
+    // Create in-memory SQLite database for testing
+    db = new Database(':memory:');
+
+    // Create tasks table with phase fields
+    db.exec(`
+      CREATE TABLE tasks (
+        id TEXT PRIMARY KEY,
+        phase_index INTEGER DEFAULT 1,
+        phase_name TEXT DEFAULT 'Planning',
+        phase_status TEXT DEFAULT 'ready',
+        phase_attempts INTEGER DEFAULT 1,
+        phase_payload TEXT,
+        status TEXT DEFAULT 'pending',
+        chain_status TEXT,
+        chain_id TEXT,
+        blocked_reason TEXT,
+        blocked_at INTEGER,
+        blocked_by TEXT
+      )
+    `);
+
     validatorRegistry = new ValidatorRegistry();
-    orchestrator = new PhaseOrchestratorService();
-    recoveryService = {} as RecoveryAgentService; // Mock for now
+    orchestrator = new PhaseOrchestratorService(db);
+    recoveryService = {} as RecoveryAgentService;
+  });
+
+  afterEach(() => {
+    db.close();
   });
 
   describe('Linear Phase Progression', () => {
     it('should advance through phases 1→2→3→5→6→7 when no issues found', () => {
       // Phase 1 (Planning) - clean
-      let nextPhase = orchestrator.determineNextPhase(1, {
+      let transition = orchestrator.determineNextPhase(1, {
         passed: true,
         errors: [],
         metadata: {}
       });
-      expect(nextPhase).toBe(2);
+      expect(transition.toPhase).toBe(2);
+      expect(transition.resetAttempts).toBe(true);
 
       // Phase 2 (Implementation) - PR created
-      nextPhase = orchestrator.determineNextPhase(2, {
+      transition = orchestrator.determineNextPhase(2, {
         passed: true,
         errors: [],
         metadata: { pr_created: true }
       });
-      expect(nextPhase).toBe(3);
+      expect(transition.toPhase).toBe(3);
 
       // Phase 3 (Review) - no issues
-      nextPhase = orchestrator.determineNextPhase(3, {
+      transition = orchestrator.determineNextPhase(3, {
         passed: true,
+        issuesFound: false,
         errors: [],
-        metadata: { issues_found: false, total_issues: 0 }
+        metadata: { total_issues: 0 }
       });
-      expect(nextPhase).toBe(5); // Skip Phase 4
+      expect(transition.toPhase).toBe(5); // Skip Phase 4
 
       // Phase 5 (Tests) - all passing
-      nextPhase = orchestrator.determineNextPhase(5, {
+      transition = orchestrator.determineNextPhase(5, {
         passed: true,
+        allGatesPassing: true,
         errors: [],
         metadata: { all_tests_passing: true, coverage_passing: true }
       });
-      expect(nextPhase).toBe(6);
+      expect(transition.toPhase).toBe(6);
 
       // Phase 6 (Cleanup) - docs updated
-      nextPhase = orchestrator.determineNextPhase(6, {
+      transition = orchestrator.determineNextPhase(6, {
         passed: true,
         errors: [],
         metadata: { docs_updated: true }
       });
-      expect(nextPhase).toBe(7);
+      expect(transition.toPhase).toBe(7);
 
       // Phase 7 (PR Shepherding) - merged
-      nextPhase = orchestrator.determineNextPhase(7, {
+      transition = orchestrator.determineNextPhase(7, {
         passed: true,
+        allGatesPassing: true,
         errors: [],
         metadata: { pr_merged: true }
       });
-      expect(nextPhase).toBe(null); // Complete
+      expect(transition.toPhase).toBe(7); // Stay in phase 7 (task marked complete elsewhere)
     });
   });
 
   describe('Phase 3↔4 Loop (Review/Fix)', () => {
     it('should loop between Phase 3 and 4 until issues resolved', () => {
       // Phase 3 - issues found
-      let nextPhase = orchestrator.determineNextPhase(3, {
+      let transition = orchestrator.determineNextPhase(3, {
         passed: false,
         errors: ['Issue 1', 'Issue 2'],
         metadata: { issues_found: true, total_issues: 2 }
       });
-      expect(nextPhase).toBe(4); // Go to fixes
+      expect(transition.toPhase).toBe(4); // Go to fixes
 
       // Phase 4 - fixes applied, go back to review
-      nextPhase = orchestrator.determineNextPhase(4, {
+      transition = orchestrator.determineNextPhase(4, {
         passed: true,
         errors: [],
         metadata: { all_issues_addressed: true }
       });
-      expect(nextPhase).toBe(3); // Re-review
+      expect(transition.toPhase).toBe(3); // Re-review
 
       // Phase 3 - clean now
-      nextPhase = orchestrator.determineNextPhase(3, {
+      transition = orchestrator.determineNextPhase(3, {
         passed: true,
         errors: [],
         metadata: { issues_found: false, total_issues: 0 }
       });
-      expect(nextPhase).toBe(5); // Proceed to tests
+      expect(transition.toPhase).toBe(5); // Proceed to tests
     });
 
     it('should stay in Phase 4 if not all issues addressed', () => {
-      const nextPhase = orchestrator.determineNextPhase(4, {
+      const transition = orchestrator.determineNextPhase(4, {
         passed: false,
         errors: ['Still 1 issue remaining'],
         metadata: { all_issues_addressed: false }
       });
-      expect(nextPhase).toBe(4); // Stay in fixes
+      expect(transition.toPhase).toBe(4); // Stay in fixes
     });
 
     it('should block after 4 review/fix iterations', () => {
-      const task: Partial<Task> = {
-        id: 'test-task',
-        phase_index: 3,
-        phase_attempts: 4
-      };
+      // Insert task into database
+      db.prepare(`
+        INSERT INTO tasks (id, phase_index, phase_attempts, status)
+        VALUES (?, ?, ?, ?)
+      `).run('test-task', 3, 4, 'running');
 
-      const shouldBlock = orchestrator.checkAttemptLimits(task as Task);
+      const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get('test-task') as Task;
+      const shouldBlock = orchestrator.checkAttemptLimits(task);
       expect(shouldBlock).toBe(true);
     });
   });
@@ -126,42 +158,45 @@ describe('Phase Integration Tests', () => {
   describe('Phase 5 Internal Loop (Tests)', () => {
     it('should loop within Phase 5 until tests pass', () => {
       // Phase 5 - tests failing
-      let nextPhase = orchestrator.determineNextPhase(5, {
+      let transition = orchestrator.determineNextPhase(5, {
         passed: false,
         errors: ['Test failure: auth.test.ts'],
         metadata: { all_tests_passing: false, coverage_passing: false }
       });
-      expect(nextPhase).toBe(5); // Stay in Phase 5
+      expect(transition.toPhase).toBe(5); // Stay in Phase 5
 
       // Phase 5 - tests passing now
-      nextPhase = orchestrator.determineNextPhase(5, {
+      transition = orchestrator.determineNextPhase(5, {
         passed: true,
+        allTestsPassing: true,
         errors: [],
         metadata: { all_tests_passing: true, coverage_passing: true }
       });
-      expect(nextPhase).toBe(6); // Advance to cleanup
+      expect(transition.toPhase).toBe(6); // Advance to cleanup
     });
 
     it('should block after 4 test iterations', () => {
-      const task: Partial<Task> = {
-        id: 'test-task',
-        phase_index: 5,
-        phase_attempts: 4
-      };
+      // Insert task into database
+      db.prepare(`
+        INSERT INTO tasks (id, phase_index, phase_attempts, status)
+        VALUES (?, ?, ?, ?)
+      `).run('test-task-5', 5, 4, 'running');
 
-      const shouldBlock = orchestrator.checkAttemptLimits(task as Task);
+      const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get('test-task-5') as Task;
+      const shouldBlock = orchestrator.checkAttemptLimits(task);
       expect(shouldBlock).toBe(true);
     });
   });
 
   describe('Phase 1 Early Termination', () => {
     it('should cancel task if marked obsolete in planning', () => {
-      const nextPhase = orchestrator.determineNextPhase(1, {
+      const transition = orchestrator.determineNextPhase(1, {
         passed: true,
+        taskObsolete: true,
         errors: [],
         metadata: { obsolete: true, obsolete_reason: 'Already implemented' }
       });
-      expect(nextPhase).toBe(null); // Cancel task
+      expect(transition.toPhase).toBe(null); // Cancel task
     });
 
     it('should update task context if realigned', () => {
@@ -174,8 +209,8 @@ describe('Phase Integration Tests', () => {
         }
       };
 
-      const nextPhase = orchestrator.determineNextPhase(1, result);
-      expect(nextPhase).toBe(2); // Continue but with updated context
+      const transition = orchestrator.determineNextPhase(1, result);
+      expect(transition.toPhase).toBe(2); // Continue but with updated context
       expect(result.metadata.task_realigned).toBe(true);
     });
   });
@@ -212,27 +247,46 @@ describe('Phase Integration Tests', () => {
     });
 
     it('should reset attempts when advancing to new phase', () => {
-      const task: Partial<Task> = {
-        id: 'test-task',
-        phase_index: 3,
-        phase_attempts: 3
-      };
+      // Insert task into database
+      db.prepare(`
+        INSERT INTO tasks (id, phase_index, phase_attempts, status)
+        VALUES (?, ?, ?, ?)
+      `).run('test-task-advance', 3, 3, 'running');
+
+      const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get('test-task-advance') as Task;
 
       // Advancing to Phase 5 (skipping 4) should reset attempts
-      const updatedTask = orchestrator.advancePhase(task as Task, 5);
-      expect(updatedTask.phase_attempts).toBe(1);
+      const validation: ValidationResult = {
+        passed: true,
+        errors: [],
+        metadata: { total_issues: 0 }
+      };
+      const transition = orchestrator.advancePhase(task, validation);
+
+      // Check the transition and verify attempts would be reset
+      expect(transition.toPhase).toBe(5);
+      expect(transition.resetAttempts).toBe(true);
     });
 
     it('should preserve attempts when looping within same phase', () => {
-      const task: Partial<Task> = {
-        id: 'test-task',
-        phase_index: 5,
-        phase_attempts: 2
-      };
+      // Insert task into database
+      db.prepare(`
+        INSERT INTO tasks (id, phase_index, phase_attempts, status)
+        VALUES (?, ?, ?, ?)
+      `).run('test-task-loop', 5, 2, 'running');
 
-      // Staying in Phase 5 should increment attempts
-      const updatedTask = orchestrator.advancePhase(task as Task, 5);
-      expect(updatedTask.phase_attempts).toBe(3);
+      const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get('test-task-loop') as Task;
+
+      // Staying in Phase 5 should not reset attempts
+      const validation: ValidationResult = {
+        passed: false,
+        errors: ['Test failure'],
+        metadata: { all_tests_passing: false }
+      };
+      const transition = orchestrator.advancePhase(task, validation);
+
+      expect(transition.toPhase).toBe(5);
+      expect(transition.resetAttempts).toBe(false);
     });
   });
 
@@ -264,9 +318,9 @@ describe('Phase Integration Tests', () => {
       // Track phase progression
       const trackPhase = (current: number, validation: ValidationResult): void => {
         phases.push(current);
-        const next = orchestrator.determineNextPhase(current, validation);
-        if (next !== null && next !== current) {
-          trackPhase(next, { passed: true, errors: [], metadata: {} });
+        const transition = orchestrator.determineNextPhase(current, validation);
+        if (transition.toPhase !== null && transition.toPhase !== current) {
+          trackPhase(transition.toPhase, { passed: true, errors: [], metadata: {} });
         }
       };
 
@@ -282,35 +336,37 @@ describe('Phase Integration Tests', () => {
       const progression: number[] = [currentPhase];
 
       // Phase 1 → 2
-      currentPhase = orchestrator.determineNextPhase(currentPhase, { passed: true, errors: [], metadata: {} })!;
+      currentPhase = orchestrator.determineNextPhase(currentPhase, { passed: true, errors: [], metadata: {} }).toPhase!;
       progression.push(currentPhase);
 
       // Phase 2 → 3
-      currentPhase = orchestrator.determineNextPhase(currentPhase, { passed: true, errors: [], metadata: { pr_created: true } })!;
+      currentPhase = orchestrator.determineNextPhase(currentPhase, { passed: true, errors: [], metadata: { pr_created: true } }).toPhase!;
       progression.push(currentPhase);
 
       // Phase 3 finds issues → 4
-      currentPhase = orchestrator.determineNextPhase(currentPhase, { 
-        passed: false, 
-        errors: ['Issue'], 
-        metadata: { issues_found: true, total_issues: 1 } 
-      })!;
+      currentPhase = orchestrator.determineNextPhase(currentPhase, {
+        passed: false,
+        issuesFound: true,
+        errors: ['Issue'],
+        metadata: { issues_found: true, total_issues: 1 }
+      }).toPhase!;
       progression.push(currentPhase);
 
       // Phase 4 fixes → 3 (re-review)
-      currentPhase = orchestrator.determineNextPhase(currentPhase, { 
-        passed: true, 
-        errors: [], 
-        metadata: { all_issues_addressed: true } 
-      })!;
+      currentPhase = orchestrator.determineNextPhase(currentPhase, {
+        passed: true,
+        errors: [],
+        metadata: { all_issues_addressed: true }
+      }).toPhase!;
       progression.push(currentPhase);
 
       // Phase 3 clean → 5
-      currentPhase = orchestrator.determineNextPhase(currentPhase, { 
-        passed: true, 
-        errors: [], 
-        metadata: { issues_found: false } 
-      })!;
+      currentPhase = orchestrator.determineNextPhase(currentPhase, {
+        passed: true,
+        issuesFound: false,
+        errors: [],
+        metadata: { issues_found: false }
+      }).toPhase!;
       progression.push(currentPhase);
 
       // Expected: 1 → 2 → 3 → 4 → 3 → 5

@@ -397,7 +397,8 @@ describe('PhaseOrchestratorService', () => {
     it('should return all phase names', () => {
       const names = PhaseOrchestratorService.getAllPhaseNames();
       expect(Object.keys(names)).toHaveLength(7);
-      expect(names[5]).toBe('Test & Validate');
+      expect(names[4]).toBe('Test Coverage & Validation');
+      expect(names[5]).toBe('Cleanup & Docs');
     });
   });
 });

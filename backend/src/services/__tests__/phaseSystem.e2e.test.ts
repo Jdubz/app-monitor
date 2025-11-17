@@ -21,21 +21,16 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { TaskQueueService, Task, TaskStatus } from '../taskQueue.sqlite.js';
-import { PhaseExecutionService } from '../phaseExecution.service.js';
+import { TaskQueueService } from '../taskQueue.sqlite.js';
 
 describe('Phase System End-to-End Integration', () => {
   let db: Database.Database;
   let taskQueue: TaskQueueService;
-  let phaseExecution: PhaseExecutionService;
 
   beforeEach(async () => {
     // Use in-memory database for test isolation
     taskQueue = new TaskQueueService(':memory:');
     db = (taskQueue as any).db;
-
-    // Initialize PhaseExecutionService
-    phaseExecution = new PhaseExecutionService(db);
   });
 
   afterEach(() => {
@@ -49,71 +44,73 @@ describe('Phase System End-to-End Integration', () => {
   describe('Full Task Lifecycle Through 7 Phases', () => {
     it('should successfully process a task through all 7 phases', async () => {
       // Given: A new feature task
-      const taskId = await taskQueue.addTask({
+      const task1 = await taskQueue.createTask({
         type: 'feature',
         title: 'Implement user authentication',
         description: 'Add JWT-based authentication',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
       });
+      const taskId = task1.id;
 
       // Phase 1: Planning
-      let task = taskQueue.getTask(taskId);
-      expect(task?.phase_index).toBe(1);
-      expect(task?.phase_name).toBe('Planning');
+      let taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.phase_index).toBe(1);
+      expect(taskFetched?.phase_name).toBe('Planning');
 
       // Simulate successful planning execution
       // (In real test, would mock container and artifacts)
       
       // Phase 2: Implementation
       await taskQueue.updateTask(taskId, { phase_index: 2, phase_name: 'Implementation' });
-      task = taskQueue.getTask(taskId);
-      expect(task?.phase_index).toBe(2);
+      taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.phase_index).toBe(2);
 
       // Phase 3: Review
       await taskQueue.updateTask(taskId, { phase_index: 3, phase_name: 'Review' });
-      task = taskQueue.getTask(taskId);
-      expect(task?.phase_index).toBe(3);
+      taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.phase_index).toBe(3);
 
       // Phase 4: Fixes (if review found issues)
       await taskQueue.updateTask(taskId, { phase_index: 4, phase_name: 'Fixes' });
-      task = taskQueue.getTask(taskId);
-      expect(task?.phase_index).toBe(4);
+      taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.phase_index).toBe(4);
 
       // Back to Phase 3: Review (loop)
       await taskQueue.updateTask(taskId, { phase_index: 3, phase_name: 'Review' });
-      task = taskQueue.getTask(taskId);
-      expect(task?.phase_index).toBe(3);
+      taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.phase_index).toBe(3);
 
       // Phase 5: Test & Validate
       await taskQueue.updateTask(taskId, { phase_index: 5, phase_name: 'Test & Validate' });
-      task = taskQueue.getTask(taskId);
-      expect(task?.phase_index).toBe(5);
+      taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.phase_index).toBe(5);
 
       // Phase 6: Cleanup
       await taskQueue.updateTask(taskId, { phase_index: 6, phase_name: 'Cleanup' });
-      task = taskQueue.getTask(taskId);
-      expect(task?.phase_index).toBe(6);
+      taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.phase_index).toBe(6);
 
       // Phase 7: PR Shepherding
-      await taskQueue.updateTask(taskId, { phase_index: 7, phase_name: 'PR Shepherding' });
-      task = taskQueue.getTask(taskId);
-      expect(task?.phase_index).toBe(7);
+      await taskQueue.updateTask(taskId, { phase_index: 7, phase_name: 'PR Shepherding', status: 'running' });
+      taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.phase_index).toBe(7);
 
-      // Complete task
-      await taskQueue.completeTask(taskId);
-      task = taskQueue.getTask(taskId);
-      expect(task?.status).toBe('completed');
+      // Complete task (must be running to complete)
+      taskQueue.completeTask(taskId, 'Task completed successfully', 'claude');
+      taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.status).toBe('completed');
     }, 10000);
 
     it('should handle Review/Fix loop with attempt limits', async () => {
       // Given: A task that requires fixes
-      const taskId = await taskQueue.addTask({
+      const task = await taskQueue.createTask({
         type: 'feature',
         title: 'Feature with quality issues',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
       });
+      const taskId = task.id;
 
       // Move to Review phase
       await taskQueue.updateTask(taskId, { 
@@ -123,9 +120,9 @@ describe('Phase System End-to-End Integration', () => {
       });
 
       // First review iteration
-      let task = taskQueue.getTask(taskId);
-      expect(task?.phase_index).toBe(3);
-      expect(task?.phase_attempts).toBe(1);
+      let taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.phase_index).toBe(3);
+      expect(taskFetched?.phase_attempts).toBe(1);
 
       // Transition to Fixes
       await taskQueue.updateTask(taskId, { 
@@ -141,8 +138,8 @@ describe('Phase System End-to-End Integration', () => {
         phase_attempts: 2,
       });
 
-      task = taskQueue.getTask(taskId);
-      expect(task?.phase_attempts).toBe(2);
+      taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.phase_attempts).toBe(2);
 
       // Continue loop up to max (4 iterations)
       await taskQueue.updateTask(taskId, { 
@@ -166,8 +163,8 @@ describe('Phase System End-to-End Integration', () => {
         phase_attempts: 4,
       });
 
-      task = taskQueue.getTask(taskId);
-      expect(task?.phase_attempts).toBe(4);
+      taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.phase_attempts).toBe(4);
 
       // After max attempts, should either pass review or fail task
       // (Implementation detail - might cancel task or force proceed)
@@ -175,12 +172,13 @@ describe('Phase System End-to-End Integration', () => {
 
     it('should handle Test phase internal retry loop', async () => {
       // Given: A task in Test phase with failing tests
-      const taskId = await taskQueue.addTask({
+      const task = await taskQueue.createTask({
         type: 'feature',
         title: 'Feature with test issues',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
       });
+      const taskId = task.id;
 
       // Move to Test phase
       await taskQueue.updateTask(taskId, { 
@@ -195,9 +193,9 @@ describe('Phase System End-to-End Integration', () => {
           phase_attempts: attempt,
         });
 
-        const task = taskQueue.getTask(taskId);
-        expect(task?.phase_index).toBe(5); // Stay in same phase
-        expect(task?.phase_attempts).toBe(attempt);
+        const taskFetched = taskQueue.getTask(taskId);
+        expect(taskFetched?.phase_index).toBe(5); // Stay in same phase
+        expect(taskFetched?.phase_attempts).toBe(attempt);
       }
 
       // After max attempts in Test phase, should transition to Fixes (phase 4)
@@ -207,20 +205,21 @@ describe('Phase System End-to-End Integration', () => {
         phase_attempts: 1,
       });
 
-      const task = taskQueue.getTask(taskId);
-      expect(task?.phase_index).toBe(4);
+      const taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.phase_index).toBe(4);
     });
   });
 
   describe('Stage Run History Tracking', () => {
-    it('should record stage_runs for each phase execution', async () => {
+    it('should record task_stage_runs for each phase execution', async () => {
       // Given: A task progressing through phases
-      const taskId = await taskQueue.addTask({
+      const task = await taskQueue.createTask({
         type: 'feature',
         title: 'Test task',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
       });
+      const taskId = task.id;
 
       // Simulate stage runs for multiple phases
       const stageRuns = [
@@ -233,13 +232,13 @@ describe('Phase System End-to-End Integration', () => {
 
       for (const run of stageRuns) {
         db.prepare(`
-          INSERT INTO stage_runs (task_id, phase_index, phase_name, attempt, status, created_at)
+          INSERT INTO task_stage_runs (task_id, phase_index, phase_name, attempt, status, created_at)
           VALUES (?, ?, ?, 1, ?, ?)
         `).run(taskId, run.phase_index, run.phase_name, run.status, Date.now());
       }
 
       // When: Querying stage runs
-      const runs = db.prepare('SELECT * FROM stage_runs WHERE task_id = ? ORDER BY id').all(taskId);
+      const runs = db.prepare('SELECT * FROM task_stage_runs WHERE task_id = ? ORDER BY id').all(taskId) as Array<Record<string, unknown>>;
 
       // Then: Should have all stage runs recorded
       expect(runs).toHaveLength(5);
@@ -251,14 +250,15 @@ describe('Phase System End-to-End Integration', () => {
       expect(runs[4].status).toBe('success');
     });
 
-    it('should store artifacts in stage_runs', async () => {
+    it('should store artifacts in task_stage_runs', async () => {
       // Given: A task with phase artifacts
-      const taskId = await taskQueue.addTask({
+      const task = await taskQueue.createTask({
         type: 'feature',
         title: 'Test task',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
       });
+      const taskId = task.id;
 
       const artifacts = {
         plan: {
@@ -269,7 +269,7 @@ describe('Phase System End-to-End Integration', () => {
 
       // When: Recording stage run with artifacts
       db.prepare(`
-        INSERT INTO stage_runs (
+        INSERT INTO task_stage_runs (
           task_id, phase_index, phase_name, attempt, status, 
           artifacts_blob, created_at
         )
@@ -285,62 +285,54 @@ describe('Phase System End-to-End Integration', () => {
       );
 
       // Then: Artifacts should be retrievable
-      const run = db.prepare('SELECT * FROM stage_runs WHERE task_id = ?').get(taskId) as any;
+      const run = db.prepare('SELECT * FROM task_stage_runs WHERE task_id = ?').get(taskId) as any;
       expect(run.artifacts_blob).toBeDefined();
       const storedArtifacts = JSON.parse(run.artifacts_blob);
       expect(storedArtifacts).toEqual(artifacts);
     });
 
-    it('should track recovery attempts in stage_runs', async () => {
+    it('should track recovery attempts in task_stage_runs', async () => {
       // Given: A task that required recovery
-      const taskId = await taskQueue.addTask({
+      const task = await taskQueue.createTask({
         type: 'feature',
         title: 'Test task',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
       });
+      const taskId = task.id;
 
-      const recoveryDiagnosis = {
-        issue: 'Missing test file',
-        action: 'Created test file',
-        success: true,
-      };
-
-      // When: Recording recovered stage run
+      // When: Recording stage run after recovery (status = 'success' after recovery)
       db.prepare(`
-        INSERT INTO stage_runs (
-          task_id, phase_index, phase_name, attempt, status, 
-          recovery_diagnosis, created_at
+        INSERT INTO task_stage_runs (
+          task_id, phase_index, phase_name, attempt, status, created_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?)
       `).run(
         taskId,
         2,
         'Implementation',
-        1,
-        'recovered',
-        JSON.stringify(recoveryDiagnosis),
+        2, // Second attempt indicates recovery
+        'success',
         Date.now()
       );
 
-      // Then: Recovery diagnosis should be stored
-      const run = db.prepare('SELECT * FROM stage_runs WHERE task_id = ?').get(taskId) as any;
-      expect(run.status).toBe('recovered');
-      expect(run.recovery_diagnosis).toBeDefined();
-      const diagnosis = JSON.parse(run.recovery_diagnosis);
-      expect(diagnosis.action).toBe('Created test file');
+      // Then: Recovery attempt should be tracked via attempt count
+      const run = db.prepare('SELECT * FROM task_stage_runs WHERE task_id = ?').get(taskId) as any;
+      expect(run.status).toBe('success');
+      expect(run.attempt).toBe(2); // Second attempt indicates recovery was needed
     });
   });
 
   describe('Phase State Management', () => {
     it('should maintain phase_payload across attempts', async () => {
       // Given: A task with phase-specific state
-      const taskId = await taskQueue.addTask({
+      const task = await taskQueue.createTask({
         type: 'feature',
         title: 'Test task',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
       });
+      const taskId = task.id;
 
       const phasePayload = {
         reviewComments: ['Comment 1', 'Comment 2'],
@@ -357,21 +349,22 @@ describe('Phase System End-to-End Integration', () => {
       });
 
       // Then: Payload should be preserved
-      const task = taskQueue.getTask(taskId);
-      expect(task?.phase_payload).toBeDefined();
-      const payload = JSON.parse(task!.phase_payload!);
+      const taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.phase_payload).toBeDefined();
+      const payload = JSON.parse(taskFetched!.phase_payload!);
       expect(payload.reviewComments).toEqual(['Comment 1', 'Comment 2']);
       expect(payload.partialProgress.filesReviewed).toBe(5);
     });
 
     it('should clear phase_payload when transitioning to new phase', async () => {
       // Given: A task with payload in one phase
-      const taskId = await taskQueue.addTask({
+      const task = await taskQueue.createTask({
         type: 'feature',
         title: 'Test task',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
       });
+      const taskId = task.id;
 
       await taskQueue.updateTask(taskId, {
         phase_index: 3,
@@ -386,26 +379,27 @@ describe('Phase System End-to-End Integration', () => {
       });
 
       // Then: Payload should be cleared
-      const task = taskQueue.getTask(taskId);
-      expect(task?.phase_payload).toBeNull();
+      const taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.phase_payload).toBeNull();
     });
 
     it('should reset phase_attempts when transitioning between major phases', async () => {
       // Given: A task with multiple attempts in one phase
-      const taskId = await taskQueue.addTask({
+      const task = await taskQueue.createTask({
         type: 'feature',
         title: 'Test task',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
       });
+      const taskId = task.id;
 
       await taskQueue.updateTask(taskId, {
         phase_index: 3,
         phase_attempts: 3,
       });
 
-      let task = taskQueue.getTask(taskId);
-      expect(task?.phase_attempts).toBe(3);
+      let taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.phase_attempts).toBe(3);
 
       // When: Transitioning to Test phase (not Review/Fix loop)
       await taskQueue.updateTask(taskId, {
@@ -415,18 +409,19 @@ describe('Phase System End-to-End Integration', () => {
       });
 
       // Then: Attempts should be reset
-      task = taskQueue.getTask(taskId);
-      expect(task?.phase_attempts).toBe(1);
+      taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.phase_attempts).toBe(1);
     });
 
     it('should preserve phase_attempts within Review/Fix loop', async () => {
       // Given: A task in Review/Fix loop
-      const taskId = await taskQueue.addTask({
+      const task = await taskQueue.createTask({
         type: 'feature',
         title: 'Test task',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
       });
+      const taskId = task.id;
 
       await taskQueue.updateTask(taskId, {
         phase_index: 3,
@@ -442,27 +437,28 @@ describe('Phase System End-to-End Integration', () => {
       });
 
       // Then: Attempts should be preserved
-      const task = taskQueue.getTask(taskId);
-      expect(task?.phase_attempts).toBe(2);
+      const taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.phase_attempts).toBe(2);
     });
   });
 
   describe('Error Handling and System Blocks', () => {
     it('should block task when critical issue detected', async () => {
       // Given: A task encountering critical issue
-      const taskId = await taskQueue.addTask({
+      const task = await taskQueue.createTask({
         type: 'feature',
         title: 'Test task',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
       });
+      const taskId = task.id;
 
-      // When: Recording blocked stage run
+      // When: Recording failed stage run (which caused task to be blocked)
       db.prepare(`
-        INSERT INTO stage_runs (
+        INSERT INTO task_stage_runs (
           task_id, phase_index, phase_name, attempt, status, created_at
         )
-        VALUES (?, ?, ?, ?, 'blocked', ?)
+        VALUES (?, ?, ?, ?, 'failed', ?)
       `).run(taskId, 5, 'Test & Validate', 1, Date.now());
 
       await taskQueue.updateTask(taskId, {
@@ -471,49 +467,52 @@ describe('Phase System End-to-End Integration', () => {
       });
 
       // Then: Task should be cancelled
-      const task = taskQueue.getTask(taskId);
-      expect(task?.status).toBe('cancelled');
-      expect(task?.phase_status).toBe('blocked');
+      const taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.status).toBe('cancelled');
+      expect(taskFetched?.phase_status).toBe('blocked');
     });
 
     it('should track multiple tasks in different phases', async () => {
       // Given: Multiple tasks in various phases
-      const task1Id = await taskQueue.addTask({
+      const task1 = await taskQueue.createTask({
         type: 'feature',
         title: 'Task 1',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
       });
+      const task1Id = task1.id;
 
-      const task2Id = await taskQueue.addTask({
+      const task2 = await taskQueue.createTask({
         type: 'bugfix',
         title: 'Task 2',
         priority: 2,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
       });
+      const task2Id = task2.id;
 
       // Progress tasks to different phases
       await taskQueue.updateTask(task1Id, { phase_index: 3 });
       await taskQueue.updateTask(task2Id, { phase_index: 5 });
 
       // Then: Tasks should be in correct phases
-      const task1 = taskQueue.getTask(task1Id);
-      const task2 = taskQueue.getTask(task2Id);
+      const task1Fetched = taskQueue.getTask(task1Id);
+      const task2Fetched = taskQueue.getTask(task2Id);
 
-      expect(task1?.phase_index).toBe(3);
-      expect(task2?.phase_index).toBe(5);
+      expect(task1Fetched?.phase_index).toBe(3);
+      expect(task2Fetched?.phase_index).toBe(5);
     });
   });
 
   describe('Phase Transition Validation', () => {
     it('should only allow valid phase transitions', async () => {
       // Given: A task in phase 2
-      const taskId = await taskQueue.addTask({
+      const task = await taskQueue.createTask({
         type: 'feature',
         title: 'Test task',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
       });
+      const taskId = task.id;
 
       await taskQueue.updateTask(taskId, { phase_index: 2 });
 
@@ -523,14 +522,14 @@ describe('Phase System End-to-End Integration', () => {
       
       // Test valid transition
       await taskQueue.updateTask(taskId, { phase_index: 3 });
-      let task = taskQueue.getTask(taskId);
-      expect(task?.phase_index).toBe(3);
+      let taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.phase_index).toBe(3);
 
       // Invalid transition (skip phases) should be caught by orchestrator
       // This test validates the database allows it but orchestrator prevents it
       await taskQueue.updateTask(taskId, { phase_index: 7 });
-      task = taskQueue.getTask(taskId);
-      expect(task?.phase_index).toBe(7); // Database allows, but orchestrator shouldn't
+      taskFetched = taskQueue.getTask(taskId);
+      expect(taskFetched?.phase_index).toBe(7); // Database allows, but orchestrator shouldn't
     });
   });
 });

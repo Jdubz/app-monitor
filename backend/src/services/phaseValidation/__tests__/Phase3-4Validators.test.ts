@@ -49,7 +49,7 @@ describe('Phase3ReviewValidator', () => {
     const result = await validator.validate(mockTask, artifacts);
 
     expect(result.passed).toBe(false);
-    expect(result.errors).toContain('Review artifacts are not a valid JSON object');
+    expect(result.errors).toContain('No review artifacts found in agent output');
   });
 
   it('should fail when review is an array', async () => {

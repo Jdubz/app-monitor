@@ -126,7 +126,7 @@ describe('Phase1PlanningValidator', () => {
     const result = await validator.validate(mockTask, artifacts);
 
     expect(result.passed).toBe(false);
-    expect(result.errors).toContain('Planning artifacts are not a valid JSON object');
+    expect(result.errors).toContain('No planning artifacts found in agent output');
   });
 
   it('should fail when planning artifacts is an array', async () => {

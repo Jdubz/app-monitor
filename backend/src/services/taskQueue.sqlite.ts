@@ -1049,7 +1049,7 @@ export class TaskQueueService {
       description: taskData.description,
       documentation: taskData.documentation,
       notes: taskData.notes,
-      status: 'pending',
+      status: taskData.status || 'pending',
       priority: taskData.priority || 5,
       created_at: now,
       assigned_agent: taskData.assigned_agent || 'backend-specialist',
@@ -1067,15 +1067,15 @@ export class TaskQueueService {
       estimated_complexity: estimatedComplexity,
       preferred_agent: taskData.preferred_agent,
       // Chain tracking
-      chain_status: 'pending',
+      chain_status: taskData.chain_status || 'pending',
       chain_id: chainId,
       chain_depth: taskData.chain_depth || 0,
-      // Phase system fields (all tasks start at Phase 1)
-      phase_index: 1,
-      phase_name: 'Planning',
-      phase_status: 'ready',
-      phase_attempts: 1,
-      phase_payload: undefined
+      // Phase system fields (default to Phase 1, but allow override for testing)
+      phase_index: taskData.phase_index || 1,
+      phase_name: taskData.phase_name || 'Planning',
+      phase_status: taskData.phase_status || 'ready',
+      phase_attempts: taskData.phase_attempts || 1,
+      phase_payload: taskData.phase_payload || undefined
     };
 
     return this.transaction(() => {
@@ -1629,6 +1629,26 @@ export class TaskQueueService {
       if (updates.pr_number !== undefined) {
         fields.push('pr_number = ?');
         values.push(updates.pr_number);
+      }
+      if (updates.phase_index !== undefined) {
+        fields.push('phase_index = ?');
+        values.push(updates.phase_index);
+      }
+      if (updates.phase_name !== undefined) {
+        fields.push('phase_name = ?');
+        values.push(updates.phase_name);
+      }
+      if (updates.phase_status !== undefined) {
+        fields.push('phase_status = ?');
+        values.push(updates.phase_status);
+      }
+      if (updates.phase_attempts !== undefined) {
+        fields.push('phase_attempts = ?');
+        values.push(updates.phase_attempts);
+      }
+      if (updates.phase_payload !== undefined) {
+        fields.push('phase_payload = ?');
+        values.push(updates.phase_payload);
       }
 
       if (fields.length === 0) {

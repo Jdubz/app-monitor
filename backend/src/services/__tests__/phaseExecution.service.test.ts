@@ -10,12 +10,10 @@
  * - Error handling and edge cases
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { PhaseExecutionService, PhaseExecutionResult } from '../phaseExecution.service.js';
-import type { Task } from '../taskQueue.sqlite.js';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { PhaseExecutionService } from '../phaseExecution.service.js';
 import Database from 'better-sqlite3';
-import * as fs from 'fs';
-import * as path from 'path';
+import type { Task } from '../taskQueue.sqlite.js';
 
 // Mock dependencies
 vi.mock('../utils/logger.js', () => ({
@@ -63,11 +61,25 @@ describe('PhaseExecutionService', () => {
         phase_index INTEGER NOT NULL,
         phase_name TEXT NOT NULL,
         attempt INTEGER NOT NULL DEFAULT 1,
-        status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'success', 'failed', 'skipped')),
+        status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'success', 'failed', 'skipped', 'recovered', 'blocked')),
         artifacts_blob TEXT,
         created_at INTEGER NOT NULL,
         completed_at INTEGER,
-        exit_code INTEGER
+        exit_code INTEGER,
+        recovery_diagnosis TEXT
+      )
+    `);
+
+    // Initialize tasks table (needed for advancePhase)
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id TEXT PRIMARY KEY,
+        phase_index INTEGER DEFAULT 1,
+        phase_name TEXT DEFAULT 'Planning',
+        phase_status TEXT DEFAULT 'ready',
+        phase_attempts INTEGER DEFAULT 1,
+        status TEXT DEFAULT 'pending',
+        completed_at INTEGER
       )
     `);
 
@@ -102,6 +114,12 @@ describe('PhaseExecutionService', () => {
 
       const containerId = 'container-123';
 
+      // Insert task into database
+      db.prepare(`
+        INSERT INTO tasks (id, phase_index, phase_name, phase_status, phase_attempts, status)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(task.id, task.phase_index, task.phase_name, task.phase_status, task.phase_attempts, task.status);
+
       // Mock artifact extraction
       const mockArtifactExtractor = {
         extractArtifacts: vi.fn().mockResolvedValue({
@@ -119,7 +137,6 @@ describe('PhaseExecutionService', () => {
           errors: [],
           warnings: [],
           criticalIssues: [],
-          recoverable: false,
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');
@@ -139,7 +156,7 @@ describe('PhaseExecutionService', () => {
       expect(mockValidator.validate).toHaveBeenCalled();
 
       // Verify stage run was recorded
-      const stageRuns = db.prepare('SELECT * FROM task_stage_runs WHERE task_id = ?').all(task.id);
+      const stageRuns = db.prepare('SELECT * FROM task_stage_runs WHERE task_id = ?').all(task.id) as Array<Record<string, unknown>>;
       expect(stageRuns).toHaveLength(1);
       expect(stageRuns[0].status).toBe('success');
       expect(stageRuns[0].phase_index).toBe(1);
@@ -181,7 +198,6 @@ describe('PhaseExecutionService', () => {
           errors: ['Missing test file'],
           warnings: [],
           criticalIssues: [],
-          recoverable: true,
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');
@@ -209,7 +225,7 @@ describe('PhaseExecutionService', () => {
       expect(mockRecoveryService.attemptRecovery).toHaveBeenCalled();
 
       // Verify stage run recorded as recovered
-      const stageRuns = db.prepare('SELECT * FROM task_stage_runs WHERE task_id = ?').all(task.id);
+      const stageRuns = db.prepare('SELECT * FROM task_stage_runs WHERE task_id = ?').all(task.id) as Array<Record<string, unknown>>;
       expect(stageRuns).toHaveLength(1);
       expect(stageRuns[0].status).toBe('recovered');
     });
@@ -241,7 +257,6 @@ describe('PhaseExecutionService', () => {
           errors: ['Code quality issues'],
           warnings: [],
           criticalIssues: [],
-          recoverable: false,
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');
@@ -292,7 +307,6 @@ describe('PhaseExecutionService', () => {
           errors: ['Persistent issues'],
           warnings: [],
           criticalIssues: [],
-          recoverable: false,
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');
@@ -340,7 +354,6 @@ describe('PhaseExecutionService', () => {
           errors: ['Build system broken'],
           warnings: [],
           criticalIssues: ['Build system broken'],
-          recoverable: false,
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');
@@ -363,7 +376,7 @@ describe('PhaseExecutionService', () => {
       expect(result.isSystemBlocked).toBe(true);
 
       // Verify stage run recorded as blocked
-      const stageRuns = db.prepare('SELECT * FROM task_stage_runs WHERE task_id = ?').all(task.id);
+      const stageRuns = db.prepare('SELECT * FROM task_stage_runs WHERE task_id = ?').all(task.id) as Array<Record<string, unknown>>;
       expect(stageRuns).toHaveLength(1);
       expect(stageRuns[0].status).toBe('blocked');
     });
@@ -440,7 +453,6 @@ describe('PhaseExecutionService', () => {
           errors: [],
           warnings: [],
           criticalIssues: [],
-          recoverable: false,
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');
@@ -479,6 +491,12 @@ describe('PhaseExecutionService', () => {
         phase_attempts: 1,
       };
 
+      // Insert task into database
+      db.prepare(`
+        INSERT INTO tasks (id, phase_index, phase_name, phase_status, phase_attempts, status)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(task.id, task.phase_index, task.phase_name, task.phase_status, task.phase_attempts, task.status);
+
       const mockArtifactExtractor = {
         extractArtifacts: vi.fn().mockResolvedValue({ pr: { number: 123 } }),
       };
@@ -491,7 +509,6 @@ describe('PhaseExecutionService', () => {
           errors: [],
           warnings: [],
           criticalIssues: [],
-          recoverable: false,
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');
@@ -502,10 +519,10 @@ describe('PhaseExecutionService', () => {
       // When: Executing phase workflow
       const result = await service.executePhaseWorkflow(task, 'container-final');
 
-      // Then: Should complete with no next phase
+      // Then: Should complete successfully
       expect(result.success).toBe(true);
       expect(result.validationPassed).toBe(true);
-      expect(result.nextPhase).toBe(null); // Task complete
+      expect(result.nextPhase).toBe(7); // Stay in phase 7 (task marked complete elsewhere)
     });
   });
 });
