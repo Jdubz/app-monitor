@@ -25,3 +25,9 @@ export { Phase4FixesValidator } from './Phase4FixesValidator.js';
 export { Phase5TestValidator } from './Phase5TestValidator.js';
 export { Phase6CleanupValidator } from './Phase6CleanupValidator.js';
 export { Phase7PRShepherdingValidator } from './Phase7PRShepherdingValidator.js';
+
+export { 
+  ValidatorRegistry, 
+  getValidatorRegistry, 
+  resetValidatorRegistry 
+} from './ValidatorRegistry.js';
