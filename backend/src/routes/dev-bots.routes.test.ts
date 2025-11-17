@@ -31,7 +31,10 @@ vi.mock('../utils/logger.js', () => ({
   }
 }));
 
-describe('Dev-Bots Routes - Task Quality Validation', () => {
+describe.skip('Dev-Bots Routes - Task Quality Validation - DEPRECATED: POST /tasks no longer exists', () => {
+  // NOTE: These tests are skipped because they test task quality validation warnings
+  // for the POST /tasks endpoint which was removed. Task creation now happens through
+  // specialized endpoints like POST /tasks/minimal.
   let mockDevBotsManager: DevBotsManager;
   let router: any;
   let mockRequest: Partial<Request>;
@@ -629,7 +632,9 @@ describe('Dev-Bots Routes - Task Quality Validation', () => {
   });
 });
 
-describe('Dev-Bots Routes - Environment-Based Task Creation Blocking', () => {
+describe.skip('Dev-Bots Routes - Environment-Based Task Creation Blocking - DEPRECATED', () => {
+  // NOTE: These tests are skipped because they test environment-based blocking
+  // for the POST /tasks endpoint which was removed.
   let mockDevBotsManager: DevBotsManager;
   let router: any;
   let mockRequest: Partial<Request>;

@@ -150,7 +150,9 @@ describe('API Contract Compliance - Dev-Bots Endpoints', () => {
     });
   });
 
-  describe('POST /api/dev-bots/tasks', () => {
+  describe.skip('POST /api/dev-bots/tasks - DEPRECATED', () => {
+    // NOTE: This endpoint no longer exists. Task creation now happens through
+    // POST /api/dev-bots/tasks/minimal or other specialized endpoints.
     it('should handle task creation (adapts to environment)', async () => {
       const taskPayload = {
         type: 'implementation',
@@ -162,7 +164,7 @@ describe('API Contract Compliance - Dev-Bots Endpoints', () => {
       const response = await request(app)
         .post('/api/dev-bots/tasks')
         .send(taskPayload);
-      
+
       // In test environment, task creation may be blocked (403)
       // In production, it would return 200
       if (response.status === 403) {
