@@ -1037,7 +1037,32 @@ export class EphemeralWorkerService {
         },
       });
 
-      // Step 3: Handle validation failure with recovery
+      // Step 3: Record stage run in database
+      const stageRunId = this.phaseOrchestrator.recordStageRun({
+        task_id: task.id,
+        phase_index: task.phase_index || 1,
+        phase_name: task.phase_name || `Phase ${task.phase_index || 1}`,
+        attempt: task.phase_attempts || 1,
+        status: validation.passed ? 'success' : 'failed',
+        artifacts_blob: validation.artifacts ? JSON.stringify(validation.artifacts) : undefined,
+        created_at: Date.now(),
+        completed_at: Date.now(),
+        exit_code: exitCode,
+      });
+
+      logger.info({
+        category: 'phase',
+        action: 'stage_run_recorded',
+        message: `Recorded stage run ${stageRunId} for task ${task.id}`,
+        details: {
+          stageRunId,
+          taskId: task.id,
+          phaseIndex: task.phase_index,
+          status: validation.passed ? 'success' : 'failed',
+        },
+      });
+
+      // Step 4: Handle validation failure with recovery
       if (!validation.passed) {
         logger.warn({
           category: 'phase',
@@ -1077,6 +1102,27 @@ export class EphemeralWorkerService {
           category: recoveryResult.category,
           diagnosis: recoveryResult.diagnosis,
         };
+
+        // Update stage run with recovery diagnosis
+        // Note: We'd need to add an update method to phaseOrchestrator for this
+        // For now, we'll record recovery in the validation result
+      }
+
+      // Step 5: Advance phase if validation passed
+      if (validation.passed) {
+        const transition = this.phaseOrchestrator.advancePhase(task, validation);
+        
+        logger.info({
+          category: 'phase',
+          action: 'phase_advanced',
+          message: `Task ${task.id} advanced from phase ${transition.fromPhase} to ${transition.toPhase}`,
+          details: {
+            taskId: task.id,
+            fromPhase: transition.fromPhase,
+            toPhase: transition.toPhase,
+            reason: transition.reason,
+          },
+        });
       }
 
       return validation;

@@ -629,27 +629,84 @@ export class TaskExecutionService {
       const executionDuration = Date.now() - executionStartTime;
 
       if (result.success) {
-        // Task succeeded - mark as complete
+        // Task succeeded - run phase validation and advancement
         const output = result.output || '';
         const stderr = result.errorOutput || '';
 
-        // Complete task in SQLite with agent CLI type for tracking
-        this.taskQueue.completeTask(nextTask.id, output, agentCliType);
-
-        // Generate session summary for documentation
-        await this.generateSessionSummary(nextTask, result.exitCode || 0, output, stderr, Date.now());
-
         logger.info({
           category: 'process',
-          action: 'task_completed_successfully',
-          message: `Task ${nextTask.id} completed successfully in ${Math.floor(executionDuration / 60000)}m ${Math.floor((executionDuration % 60000) / 1000)}s`,
+          action: 'task_execution_complete',
+          message: `Task ${nextTask.id} execution complete, running phase validation`,
           details: {
             taskId: nextTask.id,
-            agent: agent.id,
-            durationMs: executionDuration,
+            phaseIndex: nextTask.phase_index,
+            phaseName: nextTask.phase_name,
             exitCode: result.exitCode
           }
         });
+
+        // Phase system integration: Validate and advance phase
+        // NOTE: This keeps the container alive during validation
+        // Container is destroyed in the finally block
+        const phaseValidation = await this.ephemeralWorkerService.completePhaseExecution(
+          worker,
+          output,
+          stderr,
+          result.exitCode || 0
+        );
+
+        // Check if validation passed
+        if (phaseValidation.passed) {
+          // Phase validated successfully - complete task in legacy system
+          // TODO: Remove this once phase system fully replaces legacy completion
+          this.taskQueue.completeTask(nextTask.id, output, agentCliType);
+
+          // Generate session summary for documentation
+          await this.generateSessionSummary(nextTask, result.exitCode || 0, output, stderr, Date.now());
+
+          logger.info({
+            category: 'process',
+            action: 'task_completed_successfully',
+            message: `Task ${nextTask.id} completed successfully in ${Math.floor(executionDuration / 60000)}m ${Math.floor((executionDuration % 60000) / 1000)}s`,
+            details: {
+              taskId: nextTask.id,
+              agent: agent.id,
+              durationMs: executionDuration,
+              exitCode: result.exitCode,
+              phaseValidation: phaseValidation.passed
+            }
+          });
+        } else {
+          // Phase validation failed - check if recovery was attempted
+          if (phaseValidation.recovery?.attempted) {
+            logger.warn({
+              category: 'phase',
+              action: 'phase_validation_failed_with_recovery',
+              message: `Phase validation failed for task ${nextTask.id}, recovery was attempted`,
+              details: {
+                taskId: nextTask.id,
+                phaseIndex: nextTask.phase_index,
+                errors: phaseValidation.errors,
+                recoveryCategory: phaseValidation.recovery.category,
+                recoverySuccess: phaseValidation.recovery.success
+              }
+            });
+          } else {
+            logger.warn({
+              category: 'phase',
+              action: 'phase_validation_failed',
+              message: `Phase validation failed for task ${nextTask.id}`,
+              details: {
+                taskId: nextTask.id,
+                phaseIndex: nextTask.phase_index,
+                errors: phaseValidation.errors
+              }
+            });
+          }
+
+          // Task will be retried via phase system
+          // Don't mark as complete, let phase orchestrator handle next attempt
+        }
       } else {
         // Task failed - throw error to trigger recovery
         const errorMsg = result.error?.message || result.errorOutput || 'Task execution failed';
