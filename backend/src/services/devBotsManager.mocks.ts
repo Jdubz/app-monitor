@@ -139,6 +139,22 @@ export function createMockTaskQueue(): TaskQueueService {
     runRecoveryMigration: vi.fn().mockResolvedValue(undefined),
     recoverOrphanedTasks: vi.fn(() => []),
     checkDuplicateTask: vi.fn().mockResolvedValue(null),
+    getQueueMetrics: vi.fn().mockReturnValue({
+      pending: 0,
+      active: 0,
+      completed: 0,
+      failed: 0,
+      totalTasks: 0,
+      avgWaitTime: 0,
+      avgExecutionTime: 0
+    }),
+    getDatabase: vi.fn().mockReturnValue({
+      prepare: vi.fn().mockReturnValue({
+        all: vi.fn().mockReturnValue([]),
+        get: vi.fn().mockReturnValue(null),
+        run: vi.fn().mockReturnValue({ changes: 0 })
+      })
+    }),
   } as unknown as TaskQueueService;
 }
 
