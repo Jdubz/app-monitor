@@ -10,12 +10,9 @@
  * - Error handling and edge cases
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { PhaseExecutionService, PhaseExecutionResult } from '../phaseExecution.service.js';
-import type { Task } from '../taskQueue.sqlite.js';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { PhaseExecutionService } from '../phaseExecution.service.js';
 import Database from 'better-sqlite3';
-import * as fs from 'fs';
-import * as path from 'path';
 
 // Mock dependencies
 vi.mock('../utils/logger.js', () => ({
@@ -119,7 +116,6 @@ describe('PhaseExecutionService', () => {
           errors: [],
           warnings: [],
           criticalIssues: [],
-          recoverable: false,
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');
@@ -139,7 +135,7 @@ describe('PhaseExecutionService', () => {
       expect(mockValidator.validate).toHaveBeenCalled();
 
       // Verify stage run was recorded
-      const stageRuns = db.prepare('SELECT * FROM task_stage_runs WHERE task_id = ?').all(task.id);
+      const stageRuns = db.prepare('SELECT * FROM task_stage_runs WHERE task_id = ?').all(task.id) as Array<Record<string, unknown>>;
       expect(stageRuns).toHaveLength(1);
       expect(stageRuns[0].status).toBe('success');
       expect(stageRuns[0].phase_index).toBe(1);
@@ -181,7 +177,6 @@ describe('PhaseExecutionService', () => {
           errors: ['Missing test file'],
           warnings: [],
           criticalIssues: [],
-          recoverable: true,
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');
@@ -209,7 +204,7 @@ describe('PhaseExecutionService', () => {
       expect(mockRecoveryService.attemptRecovery).toHaveBeenCalled();
 
       // Verify stage run recorded as recovered
-      const stageRuns = db.prepare('SELECT * FROM task_stage_runs WHERE task_id = ?').all(task.id);
+      const stageRuns = db.prepare('SELECT * FROM task_stage_runs WHERE task_id = ?').all(task.id) as Array<Record<string, unknown>>;
       expect(stageRuns).toHaveLength(1);
       expect(stageRuns[0].status).toBe('recovered');
     });
@@ -241,7 +236,6 @@ describe('PhaseExecutionService', () => {
           errors: ['Code quality issues'],
           warnings: [],
           criticalIssues: [],
-          recoverable: false,
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');
@@ -292,7 +286,6 @@ describe('PhaseExecutionService', () => {
           errors: ['Persistent issues'],
           warnings: [],
           criticalIssues: [],
-          recoverable: false,
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');
@@ -340,7 +333,6 @@ describe('PhaseExecutionService', () => {
           errors: ['Build system broken'],
           warnings: [],
           criticalIssues: ['Build system broken'],
-          recoverable: false,
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');
@@ -363,7 +355,7 @@ describe('PhaseExecutionService', () => {
       expect(result.isSystemBlocked).toBe(true);
 
       // Verify stage run recorded as blocked
-      const stageRuns = db.prepare('SELECT * FROM task_stage_runs WHERE task_id = ?').all(task.id);
+      const stageRuns = db.prepare('SELECT * FROM task_stage_runs WHERE task_id = ?').all(task.id) as Array<Record<string, unknown>>;
       expect(stageRuns).toHaveLength(1);
       expect(stageRuns[0].status).toBe('blocked');
     });
@@ -440,7 +432,6 @@ describe('PhaseExecutionService', () => {
           errors: [],
           warnings: [],
           criticalIssues: [],
-          recoverable: false,
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');
@@ -491,7 +482,6 @@ describe('PhaseExecutionService', () => {
           errors: [],
           warnings: [],
           criticalIssues: [],
-          recoverable: false,
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');

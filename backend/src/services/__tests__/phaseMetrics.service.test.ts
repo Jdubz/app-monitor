@@ -9,7 +9,6 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { PhaseMetricsService } from '../phaseMetrics.service.js';
 import { PhaseOrchestratorService } from '../phaseOrchestrator.service.js';
-import type { Task } from '../taskQueue.sqlite.js';
 
 describe('PhaseMetricsService', () => {
   let db: Database.Database;
