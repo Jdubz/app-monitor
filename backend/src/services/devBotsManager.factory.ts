@@ -124,7 +124,8 @@ export async function createDevBotsManagerDependencies(
         'GIT_COMMITTER_NAME',
         'GIT_COMMITTER_EMAIL'
       ]
-    }
+    },
+    db.getDb() // Pass database instance
   );
 
   // Initialize status aggregation service

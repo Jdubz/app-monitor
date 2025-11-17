@@ -1226,7 +1226,7 @@ export class TaskQueueService {
 
       // Step 4: If no implementation task (or can't start new chain), try followup
       if (!task) {
-        task = this.dequeueFollowupTask();
+        task = this.dequeueImplementationTask();
         
         if (task) {
           logger.info({
@@ -1272,15 +1272,6 @@ export class TaskQueueService {
     `);
 
     return stmt.get() as Task | undefined;
-  }
-
-  /**
-   * Delegate to phase-based implementation task dequeue
-   * All tasks now use phase-based system
-   */
-  private dequeueFollowupTask(): Task | undefined {
-    // All tasks are now phase-based, no distinction between implementation/followup
-    return this.dequeueImplementationTask();
   }
 
   /**

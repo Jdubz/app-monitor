@@ -97,6 +97,7 @@ export class EphemeralWorkerService {
     docker: Docker,
     dockerManager: DockerManager,
     config: Partial<EphemeralWorkerServiceConfig> = {},
+    db?: Database,
     contextGenerator?: ContextBundleGenerator  // Optional for DI/testing
   ) {
     this.docker = docker;
@@ -105,7 +106,7 @@ export class EphemeralWorkerService {
     this.contextGenerator = contextGenerator || new ContextBundleGenerator();
     this.validatorRegistry = new ValidatorRegistry();
     this.artifactExtractor = new ArtifactExtractorService();
-    this.phaseOrchestrator = new PhaseOrchestratorService(getDatabase().getDb());
+    this.phaseOrchestrator = new PhaseOrchestratorService(db || getDatabase().getDb());
     this.recoveryAgent = new RecoveryAgentService();
 
     this.config = {
@@ -998,13 +999,9 @@ export class EphemeralWorkerService {
         action: 'artifacts_extracted',
         message: `Artifacts extracted for task ${task.id}`,
         details: {
-          hasPlanning: !!artifacts.planning,
-          hasImplementation: !!artifacts.implementation,
-          hasReview: !!artifacts.review,
-          hasFixes: !!artifacts.fixes,
-          hasTests: !!artifacts.tests,
-          hasCleanup: !!artifacts.cleanup,
-          hasPRShepherding: !!artifacts.prShepherding,
+          foundArtifacts: Object.keys(artifacts).filter(
+            (k) => artifacts[k as keyof typeof artifacts]
+          ),
         },
       });
 
@@ -1115,11 +1112,15 @@ export class EphemeralWorkerService {
         });
 
         // Enrich validation result with recovery information
-        validation.recovery = {
-          attempted: true,
-          success: recoveryResult.success,
-          category: recoveryResult.category,
-          diagnosis: recoveryResult.diagnosis,
+        // Add recovery info to validation result (immutably)
+        validation = {
+          ...validation,
+          recovery: {
+            attempted: true,
+            success: recoveryResult.success,
+            category: recoveryResult.category,
+            diagnosis: recoveryResult.diagnosis,
+          },
         };
 
         // Update stage run with recovery diagnosis
