@@ -476,4 +476,179 @@ describe('TaskQueueService - Phase Integration', () => {
       expect(task?.status).toBe('completed');
     });
   });
+
+  describe('Chain Tracking Delegation', () => {
+    it('should delegate blockChain to chainTracker service', () => {
+      // Given: Tasks in a chain
+      const task1Id = taskQueue.createTask({
+        type: 'feature',
+        title: 'Task 1',
+        priority: 1,
+        assigned_agent: 'claude-sonnet',
+        chain_id: 'test-chain-1',
+        chain_status: 'active',
+      }).id;
+
+      const task2Id = taskQueue.createTask({
+        type: 'feature',
+        title: 'Task 2',
+        priority: 1,
+        assigned_agent: 'claude-sonnet',
+        chain_id: 'test-chain-1',
+        chain_status: 'active',
+      }).id;
+
+      // When: Blocking the chain
+      taskQueue.blockChain('test-chain-1', 'CI failed', 'system:ci-monitor');
+
+      // Then: All tasks in chain should be blocked
+      const task1 = taskQueue.getTask(task1Id);
+      const task2 = taskQueue.getTask(task2Id);
+
+      expect(task1?.chain_status).toBe('blocked');
+      expect(task1?.blocked_reason).toBe('CI failed');
+      expect(task1?.blocked_by).toBe('system:ci-monitor');
+      expect(task1?.blocked_at).toBeDefined();
+
+      expect(task2?.chain_status).toBe('blocked');
+      expect(task2?.blocked_reason).toBe('CI failed');
+      expect(task2?.blocked_by).toBe('system:ci-monitor');
+    });
+
+    it('should delegate unblockChain to chainTracker service', () => {
+      // Given: A blocked chain
+      const taskId = taskQueue.createTask({
+        type: 'feature',
+        title: 'Blocked Task',
+        priority: 1,
+        assigned_agent: 'claude-sonnet',
+        chain_id: 'test-chain-2',
+        chain_status: 'active',
+      }).id;
+
+      taskQueue.blockChain('test-chain-2', 'CI failed', 'system:ci-monitor');
+
+      // Verify it's blocked
+      let task = taskQueue.getTask(taskId);
+      expect(task?.chain_status).toBe('blocked');
+
+      // When: Unblocking the chain
+      taskQueue.unblockChain('test-chain-2', 'user@example.com');
+
+      // Then: Task should be unblocked
+      task = taskQueue.getTask(taskId);
+      expect(task?.chain_status).toBe('active');
+      expect(task?.blocked_reason).toBeNull();
+      expect(task?.blocked_by).toBeNull();
+      expect(task?.blocked_at).toBeNull();
+    });
+
+    it('should handle multiple tasks in same chain when blocking', () => {
+      // Given: Multiple tasks in same chain across different phases
+      const taskIds = [
+        taskQueue.createTask({
+          type: 'feature',
+          title: 'Task Phase 1',
+          priority: 1,
+          assigned_agent: 'claude-sonnet',
+          chain_id: 'multi-task-chain',
+          chain_status: 'active',
+          phase_index: 1,
+        }).id,
+        taskQueue.createTask({
+          type: 'feature',
+          title: 'Task Phase 3',
+          priority: 1,
+          assigned_agent: 'claude-sonnet',
+          chain_id: 'multi-task-chain',
+          chain_status: 'active',
+          phase_index: 3,
+        }).id,
+        taskQueue.createTask({
+          type: 'feature',
+          title: 'Task Phase 5',
+          priority: 1,
+          assigned_agent: 'claude-sonnet',
+          chain_id: 'multi-task-chain',
+          chain_status: 'active',
+          phase_index: 5,
+        }).id,
+      ];
+
+      // When: Blocking the chain
+      taskQueue.blockChain('multi-task-chain', 'Blocked for testing', 'qa-team');
+
+      // Then: All tasks should be blocked regardless of phase
+      taskIds.forEach(taskId => {
+        const task = taskQueue.getTask(taskId);
+        expect(task?.chain_status).toBe('blocked');
+        expect(task?.blocked_reason).toBe('Blocked for testing');
+        expect(task?.blocked_by).toBe('qa-team');
+      });
+    });
+
+    it('should only affect tasks in the specified chain', () => {
+      // Given: Tasks in different chains
+      const chain1TaskId = taskQueue.createTask({
+        type: 'feature',
+        title: 'Chain 1 Task',
+        priority: 1,
+        assigned_agent: 'claude-sonnet',
+        chain_id: 'chain-1',
+        chain_status: 'active',
+      }).id;
+
+      const chain2TaskId = taskQueue.createTask({
+        type: 'feature',
+        title: 'Chain 2 Task',
+        priority: 1,
+        assigned_agent: 'claude-sonnet',
+        chain_id: 'chain-2',
+        chain_status: 'active',
+      }).id;
+
+      // When: Blocking only chain-1
+      taskQueue.blockChain('chain-1', 'Testing isolation', 'system:test');
+
+      // Then: Only chain-1 should be blocked
+      const chain1Task = taskQueue.getTask(chain1TaskId);
+      const chain2Task = taskQueue.getTask(chain2TaskId);
+
+      expect(chain1Task?.chain_status).toBe('blocked');
+      expect(chain2Task?.chain_status).toBe('active');
+    });
+
+    it('should preserve other task properties when blocking/unblocking', () => {
+      // Given: A task with various properties
+      const taskId = taskQueue.createTask({
+        type: 'bug',
+        title: 'Critical Bug Fix',
+        description: 'Fix critical issue',
+        priority: 10,
+        assigned_agent: 'claude-sonnet',
+        chain_id: 'preserve-test-chain',
+        chain_status: 'active',
+        phase_index: 3,
+        phase_name: 'Code Review',
+        phase_status: 'ready',
+      }).id;
+
+      const originalTask = taskQueue.getTask(taskId);
+
+      // When: Blocking and unblocking the chain
+      taskQueue.blockChain('preserve-test-chain', 'Test preservation', 'system:test');
+      taskQueue.unblockChain('preserve-test-chain', 'system:test');
+
+      // Then: All other properties should be preserved
+      const task = taskQueue.getTask(taskId);
+      expect(task?.type).toBe(originalTask?.type);
+      expect(task?.title).toBe(originalTask?.title);
+      expect(task?.description).toBe(originalTask?.description);
+      expect(task?.priority).toBe(originalTask?.priority);
+      expect(task?.assigned_agent).toBe(originalTask?.assigned_agent);
+      expect(task?.phase_index).toBe(originalTask?.phase_index);
+      expect(task?.phase_name).toBe(originalTask?.phase_name);
+      expect(task?.phase_status).toBe(originalTask?.phase_status);
+    });
+  });
 });
