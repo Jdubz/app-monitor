@@ -8,6 +8,7 @@
 import { logger } from '../utils/logger.js';
 import { DevBotsDatabase } from './database.js';
 import type { RetryAttempt } from './devBotsManager.js';
+import { MS_PER_DAY, MS_PER_HOUR } from '../constants/timeouts.js';
 
 export interface ShutdownState {
   timestamp: number;
@@ -152,7 +153,7 @@ export class ShutdownStateManager {
         FROM retry_history
         WHERE created_at > ? -- Only recent history (last 7 days)
         ORDER BY task_id, attempt_number
-      `).all(Date.now() - (7 * 24 * 60 * 60 * 1000));
+      `).all(Date.now() - (7 * MS_PER_DAY));
 
       for (const row of rows as Array<{
         task_id: string;
@@ -246,7 +247,7 @@ export class ShutdownStateManager {
         SELECT file_path, position
         FROM log_file_positions
         WHERE updated_at > ? -- Only recent positions (last 24 hours)
-      `).all(Date.now() - (24 * 60 * 60 * 1000));
+      `).all(Date.now() - (MS_PER_DAY));
 
       for (const row of rows as Array<{ file_path: string; position: number }>) {
         positions.set(row.file_path, row.position);
@@ -325,7 +326,7 @@ export class ShutdownStateManager {
         SELECT service_name, failure_count, last_failure_time, state
         FROM circuit_breaker_states
         WHERE updated_at > ? -- Only recent states (last hour)
-      `).all(Date.now() - (60 * 60 * 1000));
+      `).all(Date.now() - (MS_PER_HOUR));
 
       for (const row of rows as Array<{
         service_name: string;
@@ -364,7 +365,7 @@ export class ShutdownStateManager {
    */
   public async cleanup(): Promise<void> {
     try {
-      const cutoffTime = Date.now() - (7 * 24 * 60 * 60 * 1000); // 7 days
+      const cutoffTime = Date.now() - (7 * MS_PER_DAY); // 7 days
 
       const retryDeleted = this.db.getConnection().prepare(`
         DELETE FROM retry_history WHERE created_at < ?

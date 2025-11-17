@@ -9,6 +9,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type Database from 'better-sqlite3';
+import { MS_PER_DAY } from '../constants/timeouts.js';
 
 export interface LogEntry {
   id: string;
@@ -151,7 +152,7 @@ export class LogWriter {
   cleanupOldLogs(retentionDays: number = 30): void {
     const files = fs.readdirSync(this.logsDirectory);
     const now = Date.now();
-    const retentionMs = retentionDays * 24 * 60 * 60 * 1000;
+    const retentionMs = retentionDays * MS_PER_DAY;
 
     for (const file of files) {
       if (!file.endsWith('.jsonl')) {
