@@ -513,7 +513,7 @@ nyc merge coverage/ .nyc_output/coverage.json
     file: string;
     line: number;
     description: string;
-    blocking: boolean; // If true, this issue must be resolved before phase advancement; phase cannot proceed to Phase 5 until all blocking issues are addressed in Phase 4
+    blocking: boolean; // Must be resolved before advancing to Phase 5
   }>;
   total_issues: number;
   blocking_issues: number;
@@ -598,7 +598,7 @@ if (!allIssuesAddressed) {
 - ✅ `all_tests_passing: true`
 - ✅ Coverage on changed files must remain ≥80% (absolute threshold)
 - ✅ `coverage_delta >= -0.1` (allow tiny decrease from baseline)
-  > **Note:** Both the absolute coverage threshold (≥80%) and the delta check (≥-0.1%) must be satisfied. The delta check allows a tiny decrease from the baseline, but coverage on changed files must not fall below 80%. If coverage drops below 80%, validation fails regardless of delta.
+  > **Note:** Both the absolute coverage threshold (≥80%) and the delta check (≥-0.1) must be satisfied. The delta check allows a tiny decrease from the baseline, but coverage on changed files must not fall below 80%. If coverage drops below 80%, validation fails regardless of delta.
 - ✅ `lint_passing: true`
 - ✅ `type_check_passing: true`
 - ✅ `build_passing: true`

@@ -76,7 +76,7 @@ export interface Task {
   completed_at?: number;
   assigned_agent: string;
   assigned_worker?: string;
-  agent_type?: 'claude' | 'codex'; // Track which CLI tool executed the task
+  agent_type?: 'claude' | 'codex' | 'gemini'; // Track which CLI tool executed the task
   prompt?: string;
   output?: string;
   error?: string;
