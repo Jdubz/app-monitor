@@ -111,19 +111,21 @@ export class TaskQueueWorker {
       return;
     }
 
-    // Check if we've exceeded max consecutive failures
+    // Log warning if we have excessive consecutive failures, but DO NOT stop the worker
+    // Individual task failures should never stop the entire system
     if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
-      logger.error({
+      logger.warn({
         category: 'process',
-        action: 'worker_max_failures_exceeded',
-        message: `Task queue worker exceeded max consecutive failures (${this.maxConsecutiveFailures}). Stopping worker.`,
+        action: 'worker_high_failure_rate',
+        message: `Task queue worker has high failure rate (${this.consecutiveFailures} consecutive failures). System will continue running.`,
         details: {
           consecutiveFailures: this.consecutiveFailures,
-          maxConsecutiveFailures: this.maxConsecutiveFailures
+          maxConsecutiveFailures: this.maxConsecutiveFailures,
+          note: 'Worker continues polling - individual task failures should not stop the system'
         }
       });
-      this.running = false;
-      return;
+      // Reset counter to avoid log spam, but keep polling
+      this.consecutiveFailures = 0;
     }
 
     this.pollTimeout = setTimeout(() => {
