@@ -18,6 +18,7 @@ import { logger } from '../utils/logger.js';
 import type { Task } from './taskQueue.sqlite.js';
 import type { ValidationResult } from './phaseValidation/index.js';
 import Database from 'better-sqlite3';
+import { PHASE_NAMES, MAX_PHASE_ATTEMPTS, getPhaseNameByIndex } from './phaseConstants.js';
 
 export interface PhaseTransition {
   fromPhase: number;
@@ -40,17 +41,6 @@ export interface StageRun {
   exit_code?: number;
 }
 
-const PHASE_NAMES: Record<number, string> = {
-  1: 'Planning',
-  2: 'Implementation',
-  3: 'Review',
-  4: 'Fixes',
-  5: 'Test & Validate',
-  6: 'Cleanup',
-  7: 'PR Shepherding',
-};
-
-const MAX_ATTEMPTS = 4;
 
 export class PhaseOrchestratorService {
   private db: Database.Database;
@@ -219,7 +209,7 @@ export class PhaseOrchestratorService {
 
     // Handle phase advancement
     const newAttempts = transition.resetAttempts ? 1 : (task.phase_attempts ?? 1) + 1;
-    const newPhaseName = PHASE_NAMES[transition.toPhase];
+    const newPhaseName = getPhaseNameByIndex(transition.toPhase);
 
     this.db.prepare(`
       UPDATE tasks
@@ -302,11 +292,11 @@ export class PhaseOrchestratorService {
   checkAttemptLimits(task: Task): boolean {
     const attempts = task.phase_attempts ?? 1;
 
-    if (attempts >= MAX_ATTEMPTS) {
+    if (attempts >= MAX_PHASE_ATTEMPTS) {
       logger.warn({
         category: 'phase',
         action: 'attempt_limit_reached',
-        message: `Task ${task.id} reached max attempts (${MAX_ATTEMPTS}) for phase ${task.phase_index}`,
+        message: `Task ${task.id} reached max attempts (${MAX_PHASE_ATTEMPTS}) for phase ${task.phase_index}`,
         details: {
           taskId: task.id,
           phaseIndex: task.phase_index,
@@ -324,7 +314,7 @@ export class PhaseOrchestratorService {
             chain_status = 'blocked'
         WHERE id = ?
       `).run(
-        `Phase ${task.phase_index} (${task.phase_name}) exceeded ${MAX_ATTEMPTS} attempts`,
+        `Phase ${task.phase_index} (${task.phase_name}) exceeded ${MAX_PHASE_ATTEMPTS} attempts`,
         Date.now(),
         task.id
       );
@@ -364,7 +354,11 @@ export class PhaseOrchestratorService {
    * Get phase name from index.
    */
   static getPhaseName(phaseIndex: number): string {
-    return PHASE_NAMES[phaseIndex] ?? 'Unknown';
+    try {
+      return getPhaseNameByIndex(phaseIndex);
+    } catch {
+      return 'Unknown';
+    }
   }
 
   /**

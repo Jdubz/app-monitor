@@ -33,16 +33,19 @@
 
 **Role:** AI agents that execute tasks in isolated Docker containers
 
+**See:** `dev-bots-architecture.md` for complete execution details
+
 **Core Services:**
 
 | Service | Responsibility |
 |---------|---------------|
 | `DevBotsManager` | Orchestrates process, Docker, queue, completion, review, PR subsystems |
 | `TaskExecutionService` | Pulls work, selects agents, provisions containers, streams logs |
+| `PhaseOrchestrator` | Executes phases, runs validators, handles advancement/loops/recovery |
 | `AgentSelector` | Intelligent agent routing (Claude/Codex/Gemini/Copilot) |
 | `AgentEligibilityService` | Quota/risk/context checks for Gemini routing |
 | `EphemeralWorkerService` | Container lifecycle + context management, heartbeats every 15s |
-| `TaskCompletionService` | Quality gates, verification, PR registration |
+| `RecoveryAgent` | Diagnoses phase validation failures, suggests fixes |
 | `ScopeControlService` | Scope creep detection, context isolation, cleanup scheduling |
 | `InteractiveSessionService` | Human-in-the-loop shells with same isolation guarantees |
 
@@ -64,11 +67,14 @@
 
 **Role:** SQLite-backed authoritative task/workflow database
 
+**See:** `task-queue-architecture.md` for complete schema details
+
 **Database:** `/opt/app-monitor/shared/data/dev-bots.db` (SINGLE instance)
 
-**Schema:**
-- `tasks` - Task definitions and status
-- `task_executions` - Execution attempts and results
+**Key Tables:**
+- `tasks` - Task definitions with phase tracking
+- `task_stage_runs` - Historical phase execution records
+- `task_executions` - Legacy execution attempts
 - `task_acceptance_criteria` - Verification criteria
 - `task_files` - File associations
 - `workers` - Worker registration and heartbeats
@@ -86,38 +92,47 @@
 - Chain-aware concurrency (max 3 active chains)
 - New implementations blocked until chain slots available
 - Blocked chains excluded from cap, manually resumed via UI
+- **Phase progression within a chain doesn't consume additional slots**
 
 ---
 
-### Error Detection & Recovery
+### Phase System & Recovery
 
-**Role:** Never trust success - verify, review, fix, escalate
+**Role:** Guide tasks through 7-phase lifecycle with validation and automatic recovery
 
-**Components:**
+**See:** `phase-system-architecture.md` for complete details
 
-1. **TaskVerificationService**
-   - Mandatory on every task completion
-   - Checks acceptance criteria, coverage, scope
-   - Structured output feeds review chain
+**7-Phase Pipeline:**
 
-2. **Failure Pattern Detection**
-   - Regex/exit-code classifiers
-   - Categorizes CLI/infra issues
-   - Informs review planning
+1. **Planning** - Validate task relevance, gather requirements
+2. **Implementation** - Write code, create PR
+3. **Review** - Identify issues (loops to Phase 4 if found)
+4. **Fixes** - Correct issues (returns to Phase 3 for re-review)
+5. **Test Coverage & Validation** - Write tests, ensure passing (internal loop)
+6. **Cleanup & Docs** - Update docs, prune artifacts
+7. **PR Shepherding** - Monitor merge gates, auto-merge when ready
 
-3. **Review/Repair Pipeline**
-   - REVIEW: Analyzes prior attempts, verification output, decides action
-   - FIX: Conservative changes to address issues (max 4 attempts)
-   - COMPLETE: Finishes original goal after verification passes
-   - ESCALATE: 5th review blocks chain, alerts humans
+**Recovery Components:**
+
+1. **Phase Validators**
+   - Each phase has dedicated validator
+   - Checks phase completion criteria
+   - Determines next phase (advance, loop, or block)
+
+2. **Recovery Agent**
+   - Diagnoses validation failures
+   - Suggests fixes with confidence scores
+   - Decides retry vs. block
+
+3. **Phase Loops**
+   - Review↔Fixes (Phases 3-4): Up to 8 combined attempts
+   - Test internal loop (Phase 5): Up to 4 attempts
+   - Max 4 attempts per linear phase
 
 4. **Hung Task Monitor**
    - Heartbeat every 15s, timeout at 30s
    - Terminates unresponsive containers
-   - Immediately spawns REVIEW task
-
-5. **Scope/Context Control**
-   - Enforces defined boundaries per task
+   - Triggers recovery agent for diagnosis
    - Violation chains (≥3) trigger emergency cleanup
    - May block chain for human review
 

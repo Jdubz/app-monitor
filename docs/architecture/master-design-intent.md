@@ -2,22 +2,18 @@
 
 **Purpose:** Quick onboarding for new developers - the design philosophy and high-level restrictions that guide all decision-making.
 
-**Authority:** Only human-directed bots may edit this document. All autonomous agents must adhere to it.
 
 **Last Updated:** 2025-11-14
 
 ---
-
 ## Core Philosophy
 
 **Autonomy First**: After initial human planning/dispatch, the system (task queue → dev-bots → verification → PR tracking) operates autonomously. Manual input comes *only* when automation raises alerts or humans intentionally intervene.
 
-**Trust But Verify**: Never trust reported success. Every task flows through REVIEW → FIX → COMPLETE pipeline that verifies real-world outcomes.
 
 **Isolation Everywhere**: AI agents run in isolated Docker containers with ephemeral filesystems. No host writes, no shared state between bots.
 
 **Chain-Aware Processing**: Tasks belong to chains (implementation → review → fix → complete). Concurrency limits apply to chains, not individual tasks.
-
 ---
 
 ## High-Level Restrictions
