@@ -125,7 +125,7 @@ export async function createDevBotsManagerDependencies(
         'GIT_COMMITTER_EMAIL'
       ]
     },
-    db.getDb() // Pass database instance
+    taskQueue.getDatabase() // Pass database instance
   );
 
   // Initialize status aggregation service
@@ -203,6 +203,7 @@ export async function createDevBotsManagerDependencies(
     dockerManager,
     scopeControl,
     null, // processManager removed
+    null, // recovery system (simplified failure recovery not yet implemented)
     () => {} // emit function placeholder, will be bound by DevBotsManager
   );
 

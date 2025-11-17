@@ -149,12 +149,6 @@ export interface Task {
   context_cache_key?: string; // Git hash-based cache key for bundle lookup
   context_profiles?: string[]; // Array of profile names (e.g., ["scope-control", "pr-workflow"])
   risk_level?: 'minimal' | 'low' | 'medium' | 'high'; // Task risk classification
-  // Phase system fields (migration 026)
-  phase_index?: number; // Current phase (1-7)
-  phase_name?: string; // Human-readable phase name
-  phase_status?: 'ready' | 'running' | 'validating' | 'recovering' | 'complete' | 'blocked';
-  phase_attempts?: number; // Attempt counter for current phase
-  phase_payload?: string; // JSON for phase-specific state and partial progress
 }
 
 export interface Worker {
@@ -2472,34 +2466,4 @@ export class TaskQueueService {
     });
   }
 
-  /**
-   * Block an entire chain due to unrecoverable failure.
-   * Used when recovery categorizes as 'chain_blocked'.
-   */
-  blockChain(chainId: string, reason: string): void {
-    this.transaction(() => {
-      const now = Date.now();
-
-      // Block all tasks in the chain
-      this.db.prepare(`
-        UPDATE tasks
-        SET chain_status = 'blocked',
-            blocked_reason = ?,
-            blocked_at = ?,
-            blocked_by = 'recovery_agent'
-        WHERE chain_id = ?
-      `).run(reason, now, chainId);
-
-      logger.warn({
-        category: 'phase',
-        action: 'chain_blocked',
-        message: `Chain ${chainId} blocked due to recovery diagnosis`,
-        details: {
-          chainId,
-          reason,
-          blockedBy: 'recovery_agent',
-        },
-      });
-    });
-  }
 }

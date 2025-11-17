@@ -17,7 +17,8 @@ import type { TaskQueueService, Task } from './taskQueue.sqlite.js';
 import type { DockerManager } from './dockerManager.js';
 import type { ScopeControlService } from './scopeControl.service.js';
 import { TIME_BASED_GUARDS } from './taskFailureGuards.js';
-import type { SimpleFailureRecovery } from './failureRecovery.js';
+// import type { SimpleFailureRecovery } from './failureRecovery.js'; // Module not yet implemented
+type SimpleFailureRecovery = unknown; // Placeholder type
 
 export interface WorkerHealthMonitorConfig {
   heartbeatCheckInterval: number;  // Currently disabled
