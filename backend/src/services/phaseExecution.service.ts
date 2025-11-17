@@ -21,10 +21,11 @@ import Database from 'better-sqlite3';
 
 export interface PhaseExecutionResult {
   success: boolean;
-  nextPhase: number | null; // null means task cancelled
+  nextPhase: number | null; // null means task cancelled/blocked
   validationPassed: boolean;
   recoveryAttempted?: boolean;
   recoverySucceeded?: boolean;
+  isSystemBlocked?: boolean; // If true, pause ALL task processing globally
   errors?: string[];
   artifacts?: Record<string, unknown>;
 }
@@ -145,19 +146,24 @@ export class PhaseExecutionService {
               validationPassed: false,
               recoveryAttempted: true,
               recoverySucceeded: recoveryResult.success,
+              isSystemBlocked: recoveryResult.isSystemBlocked,
               errors: [recoveryResult.diagnosis],
               artifacts: validationResult.artifacts,
             };
           }
 
-          // Recovery says blocked - cannot auto-recover
+          // Recovery says blocked - determine if system-wide or task-specific
+          const blockType = recoveryResult.category === 'system_blocked' ? 'SYSTEM-WIDE' : 'task-specific';
           logger.warn({
             category: 'phase',
             action: 'recovery_blocked',
-            message: `Recovery blocked for task ${task.id}: ${recoveryResult.diagnosis}`,
+            message: `Recovery blocked (${blockType}) for task ${task.id}: ${recoveryResult.diagnosis}`,
             details: {
               taskId: task.id,
+              blockType,
+              category: recoveryResult.category,
               diagnosis: recoveryResult.diagnosis,
+              isSystemBlocked: recoveryResult.isSystemBlocked,
             },
           });
 
@@ -167,6 +173,7 @@ export class PhaseExecutionService {
             validationPassed: false,
             recoveryAttempted: true,
             recoverySucceeded: false,
+            isSystemBlocked: recoveryResult.isSystemBlocked,
             errors: [recoveryResult.diagnosis],
             artifacts: validationResult.artifacts,
           };

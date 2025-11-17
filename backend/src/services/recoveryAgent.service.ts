@@ -7,16 +7,21 @@
  * Recovery Categories:
  * - retry: Simple retry (e.g., network timeout, transient error)
  * - context_update: Update task context and retry
- * - blocked: Cannot auto-recover, needs human intervention
+ * - chain_blocked: Task-specific block, needs human intervention (task only)
+ * - system_blocked: System-wide issue, pause ALL tasks globally
  * 
- * Recovery Response Structure:
+ * Recovery Response Structure (from agent):
  * {
- *   "category": "retry" | "context_update" | "blocked",
+ *   "category": "retry" | "context_update" | "chain_blocked" | "system_blocked",
  *   "diagnosis": "Detailed explanation of failure",
  *   "recovery_action": "What was attempted",
  *   "success": boolean,
- *   "updated_context"?: { ... },  // Only for context_update
- *   "blocking_reason"?: string     // Only for blocked
+ *   "suggested_action"?: {
+ *     "prompt_update"?: "Updated task prompt",
+ *     "phase_override"?: 2,  // Jump to specific phase
+ *     "context_additions"?: ["Additional context..."]
+ *   },
+ *   "blocking_reason"?: string  // For blocked categories
  * }
  */
 
@@ -24,14 +29,20 @@ import { logger } from '../utils/logger.js';
 import type { Task } from './taskQueue.sqlite.js';
 import type { ValidationResult } from './phaseValidation/types.js';
 
-export type RecoveryCategory = 'retry' | 'context_update' | 'blocked';
+export type RecoveryCategory = 'retry' | 'context_update' | 'chain_blocked' | 'system_blocked';
+
+export interface SuggestedAction {
+  prompt_update?: string;
+  phase_override?: number;
+  context_additions?: string[];
+}
 
 export interface RecoveryResponse {
   category: RecoveryCategory;
   diagnosis: string;
   recovery_action: string;
   success: boolean;
-  updated_context?: Record<string, unknown>;
+  suggested_action?: SuggestedAction;
   blocking_reason?: string;
 }
 
@@ -40,8 +51,9 @@ export interface RecoveryResult {
   category: RecoveryCategory;
   shouldRetry: boolean;
   contextUpdated: boolean;
+  isSystemBlocked: boolean;
   diagnosis: string;
-  updatedContext?: Record<string, unknown>;
+  suggestedAction?: SuggestedAction;
 }
 
 export class RecoveryAgentService {
@@ -87,9 +99,10 @@ export class RecoveryAgentService {
 
       return {
         success: false,
-        category: 'blocked',
+        category: 'chain_blocked',
         shouldRetry: false,
         contextUpdated: false,
+        isSystemBlocked: false,
         diagnosis: `Recovery failed after ${this.maxRecoveryAttempts} attempts. Manual intervention required.`,
       };
     }
@@ -145,9 +158,10 @@ export class RecoveryAgentService {
 
       return {
         success: false,
-        category: 'blocked',
+        category: 'chain_blocked',
         shouldRetry: false,
         contextUpdated: false,
+        isSystemBlocked: false,
         diagnosis: `Recovery agent execution failed: ${error instanceof Error ? error.message : String(error)}`,
       };
     }
@@ -171,6 +185,7 @@ export class RecoveryAgentService {
         category: 'retry',
         shouldRetry: true,
         contextUpdated: false,
+        isSystemBlocked: false,
         diagnosis: 'Network or timeout error detected. Retrying...',
       };
     }
@@ -182,6 +197,7 @@ export class RecoveryAgentService {
         category: 'retry',
         shouldRetry: true,
         contextUpdated: false,
+        isSystemBlocked: false,
         diagnosis: 'Rate limit detected. Retrying with backoff...',
       };
     }
@@ -235,7 +251,9 @@ export class RecoveryAgentService {
           category: 'retry',
           shouldRetry: true,
           contextUpdated: false,
+          isSystemBlocked: false,
           diagnosis: response.diagnosis,
+          suggestedAction: response.suggested_action,
         };
 
       case 'context_update':
@@ -244,17 +262,41 @@ export class RecoveryAgentService {
           category: 'context_update',
           shouldRetry: true,
           contextUpdated: true,
+          isSystemBlocked: false,
           diagnosis: response.diagnosis,
-          updatedContext: response.updated_context,
+          suggestedAction: response.suggested_action,
         };
 
-      case 'blocked':
+      case 'chain_blocked':
         return {
           success: false,
-          category: 'blocked',
+          category: 'chain_blocked',
           shouldRetry: false,
           contextUpdated: false,
+          isSystemBlocked: false,
           diagnosis: response.blocking_reason || response.diagnosis,
+          suggestedAction: response.suggested_action,
+        };
+
+      case 'system_blocked':
+        logger.error({
+          category: 'recovery',
+          action: 'system_blocked',
+          message: 'CRITICAL: System-level block detected - all tasks should be paused',
+          details: {
+            diagnosis: response.diagnosis,
+            blockingReason: response.blocking_reason,
+          },
+        });
+
+        return {
+          success: false,
+          category: 'system_blocked',
+          shouldRetry: false,
+          contextUpdated: false,
+          isSystemBlocked: true,
+          diagnosis: response.blocking_reason || response.diagnosis,
+          suggestedAction: response.suggested_action,
         };
 
       default:
@@ -267,9 +309,10 @@ export class RecoveryAgentService {
 
         return {
           success: false,
-          category: 'blocked',
+          category: 'chain_blocked',
           shouldRetry: false,
           contextUpdated: false,
+          isSystemBlocked: false,
           diagnosis: `Unknown recovery category: ${response.category}`,
         };
     }
