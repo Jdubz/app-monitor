@@ -3,21 +3,8 @@ import request, { type Response as SupertestResponse } from 'supertest';
 import type { Server } from 'http';
 import type {
   HealthCheckApiResponse,
-  ServicesStatusResponse,
-  ServiceStatusResponse,
-  ServiceActionResponse,
   DockerInfoResponse,
   DockerActionResponse,
-  EnvironmentsApiResponse,
-  EnvironmentServicesApiResponse,
-  LogSourcesResponse,
-  LogConfigResponse,
-  LogReloadResponse,
-  ServiceLogsApiResponse,
-  CloudLogsApiResponse,
-  CloudLoggingStatusApiResponse,
-  PortStatusesResponse,
-  PortKillApiResponse,
   TokenSummariesResponse,
   TokenSummaryResponse,
   TokenBudgetResponse,
@@ -160,8 +147,8 @@ vi.mock('../../src/utils/portManager.js', () => ({
   killPortProcess: async () => true,
 }));
 
-vi.mock('child_process', () => {
-  const { EventEmitter } = require('events');
+vi.mock('child_process', async () => {
+  const { EventEmitter } = await import('events');
   return {
     spawn: () => {
       const proc = new EventEmitter();
@@ -178,15 +165,24 @@ vi.mock('child_process', () => {
       }
       return {} as unknown;
     },
+    execFile: (_file: string, _args: unknown, _options: unknown, callback?: (error: Error | null, stdout: string, stderr: string) => void) => {
+      if (typeof _args === 'function') {
+        (_args as (error: Error | null, stdout: string, stderr: string) => void)(null, '', '');
+      } else if (typeof _options === 'function') {
+        (_options as (error: Error | null, stdout: string, stderr: string) => void)(null, '', '');
+      } else if (callback) {
+        callback(null, '', '');
+      }
+      return {} as unknown;
+    },
   };
 });
 
 const verificationMocks = vi.hoisted(() => {
   const MOCK_TASK_ID = 'task-123';
-  const MOCK_PR_NUMBER = 42;
   const MOCK_SOCKET_ID = 'socket-test-1';
 
-  type VerificationResultPayload = {
+  interface _VerificationResultPayload {
     taskId: string;
     passed: boolean;
     acceptanceCriteria: {
@@ -214,9 +210,9 @@ const verificationMocks = vi.hoisted(() => {
     overallScore: number;
     timestamp: string;
     recommendations: string[];
-  };
+  }
 
-  const baseVerificationResult: VerificationResultPayload = {
+  const baseVerificationResult: _VerificationResultPayload = {
     taskId: MOCK_TASK_ID,
     passed: true,
     acceptanceCriteria: {
@@ -315,7 +311,6 @@ const verificationMocks = vi.hoisted(() => {
 
   return {
     MOCK_TASK_ID,
-    MOCK_PR_NUMBER,
     MOCK_SOCKET_ID,
     baseVerificationResult,
     verificationResults,
@@ -329,12 +324,10 @@ type VerificationResultPayload = ReturnType<typeof verificationMocks>['baseVerif
 
 const {
   MOCK_TASK_ID,
-  MOCK_PR_NUMBER,
   MOCK_SOCKET_ID,
   baseVerificationResult,
   verificationResults,
   mockDatabase,
-  mockTaskQueue,
   mockVerificationService,
 } = verificationMocks;
 
