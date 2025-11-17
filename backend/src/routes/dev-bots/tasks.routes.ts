@@ -1013,5 +1013,109 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
     }
   });
 
+  /**
+   * POST /:taskId/report-completion
+   * Internal endpoint for bots to self-report task completion status
+   * Only accessible from localhost/container network
+   *
+   * Body: { success: boolean, summary?: string }
+   */
+  router.post('/:taskId/report-completion', (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+      const { success, summary } = req.body;
+
+      // Security: Only allow from localhost/internal network
+      const clientIp = req.ip || req.socket.remoteAddress || '';
+      const isLocalhost = clientIp === '::1' || clientIp === '127.0.0.1' || clientIp === '::ffff:127.0.0.1';
+
+      if (!isLocalhost) {
+        logger.warn({
+          category: 'api',
+          action: 'blocked_external_completion_report',
+          message: `Blocked external completion report attempt from ${clientIp}`,
+          details: { taskId, clientIp }
+        });
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'This endpoint is only accessible from localhost'
+        });
+      }
+
+      // Validate input
+      if (!taskId || typeof taskId !== 'string') {
+        return res.status(400).json({
+          error: 'Invalid task ID',
+          message: 'taskId must be a non-empty string'
+        });
+      }
+
+      if (typeof success !== 'boolean') {
+        return res.status(400).json({
+          error: 'Invalid success field',
+          message: 'success must be a boolean value'
+        });
+      }
+
+      // Update task with bot-reported status
+      const taskQueue = devBotsManager.getTaskQueue();
+      const task = taskQueue.getTask(taskId);
+
+      if (!task) {
+        return res.status(404).json({
+          error: 'Task not found',
+          message: `Task ${taskId} does not exist`
+        });
+      }
+
+      // Store the bot-reported status in task metadata
+      // Note: task.metadata from DB is stored as TEXT (string), but interface expects Record<string, unknown>
+      const existingMetadata = typeof task.metadata === 'string'
+        ? JSON.parse(task.metadata)
+        : (task.metadata || {});
+
+      const metadata: Record<string, unknown> = {
+        ...existingMetadata,
+        bot_reported_success: success,
+        bot_reported_summary: summary || null,
+        bot_reported_at: Date.now()
+      };
+
+      // Direct database update since updateTask may not handle metadata
+      // Use the existing database connection from the taskQueue
+      const dbInstance = (taskQueue as unknown as { db: { prepare: (sql: string) => { run: (...args: unknown[]) => unknown } } }).db;
+      const stmt = dbInstance.prepare('UPDATE tasks SET metadata = ? WHERE id = ?');
+      stmt.run(JSON.stringify(metadata), taskId);
+
+      logger.info({
+        category: 'process',
+        action: 'bot_reported_completion',
+        message: `Bot reported ${success ? 'SUCCESS' : 'FAILURE'} for task ${taskId}`,
+        details: {
+          taskId,
+          success,
+          summary,
+          task_title: task.title
+        }
+      });
+
+      res.json({
+        success: true,
+        message: `Task completion status recorded: ${success ? 'SUCCESS' : 'FAILURE'}`,
+        taskId
+      });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_recording_completion_report',
+        message: `Error recording bot completion report: ${error}`,
+        error
+      });
+      sendError(res, 'Failed to record completion report', 500, {
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   return router;
 }

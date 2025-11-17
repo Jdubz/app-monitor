@@ -931,6 +931,26 @@ Before marking this task as complete, verify ALL of the following:
 - [ ] All assumptions were verified and documented
 - [ ] Time tracking: Actual time vs estimated documented
 
+## 📡 CRITICAL: Report Task Completion
+
+**AFTER you have completed all work (successfully OR unsuccessfully), you MUST report the result:**
+
+### If Task Completed Successfully:
+\`\`\`bash
+curl -X POST http://host.docker.internal:3000/api/dev-bots/tasks/{{task.id}}/report-completion \\
+  -H "Content-Type: application/json" \\
+  -d '{"success": true, "summary": "Brief 1-sentence description of what was accomplished"}'
+\`\`\`
+
+### If Task Failed:
+\`\`\`bash
+curl -X POST http://host.docker.internal:3000/api/dev-bots/tasks/{{task.id}}/report-completion \\
+  -H "Content-Type: application/json" \\
+  -d '{"success": false, "summary": "Brief 1-sentence description of what went wrong"}'
+\`\`\`
+
+**This reporting step is MANDATORY** - it allows the system to accurately track task completion regardless of exit codes or output parsing.
+
 ## 🎯 Agent Expertise Note
 As {{agent.name}}, you bring expertise in: {{agent.role}}
 

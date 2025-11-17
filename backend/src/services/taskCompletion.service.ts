@@ -112,6 +112,40 @@ export class TaskCompletionService {
       shouldPush = qualityValidation.passed;
     }
 
+    // Check if bot self-reported completion status
+    let botReportedSuccess: boolean | undefined;
+    let botReportedSummary: string | undefined;
+
+    try {
+      if (task.metadata) {
+        // Metadata is stored as TEXT in DB but typed as Record in interface
+        const metadataStr = typeof task.metadata === 'string' ? task.metadata : JSON.stringify(task.metadata);
+        const metadata = JSON.parse(metadataStr) as Record<string, unknown>;
+        botReportedSuccess = metadata.bot_reported_success as boolean | undefined;
+        botReportedSummary = metadata.bot_reported_summary as string | undefined;
+
+        if (typeof botReportedSuccess === 'boolean') {
+          logger.info({
+            category: 'process',
+            action: 'bot_self_reported_status',
+            message: `Bot self-reported ${botReportedSuccess ? 'SUCCESS' : 'FAILURE'} for task ${task.id}`,
+            details: {
+              taskId: task.id,
+              bot_reported_success: botReportedSuccess,
+              bot_reported_summary: botReportedSummary
+            }
+          });
+        }
+      }
+    } catch (error) {
+      logger.warn({
+        category: 'process',
+        action: 'failed_to_parse_bot_report',
+        message: `Failed to parse bot-reported status from task metadata`,
+        error
+      });
+    }
+
     // Detect task failure from exit code OR error patterns in output
     const hasAuthenticationError = this.detectAuthenticationError(output, errorOutput);
     const hasCriticalError = this.detectCriticalError(output, errorOutput);
@@ -133,7 +167,17 @@ export class TaskCompletionService {
       });
     }
 
-    let finalStatus: 'completed' | 'failed' = exitCode === 0 && !hasAuthenticationError && !hasCriticalError ? 'completed' : 'failed';
+    // Determine final status: prioritize bot self-report, fallback to exit code + error detection
+    let finalStatus: 'completed' | 'failed';
+    if (typeof botReportedSuccess === 'boolean') {
+      // Bot explicitly reported success/failure - trust it
+      finalStatus = botReportedSuccess ? 'completed' : 'failed';
+      shouldPush = botReportedSuccess; // Only push if bot reported success
+    } else {
+      // Fallback to exit code + error detection
+      finalStatus = exitCode === 0 && !hasAuthenticationError && !hasCriticalError ? 'completed' : 'failed';
+    }
+
     let failureReason: string | undefined;
 
     if (shouldPush) {
@@ -154,7 +198,11 @@ export class TaskCompletionService {
     } else {
       finalStatus = 'failed';
       failureReason =
-        hasAuthenticationError
+        botReportedSuccess === false && botReportedSummary
+          ? `Bot reported failure: ${botReportedSummary}`
+          : botReportedSuccess === false
+          ? 'Bot reported task failure'
+          : hasAuthenticationError
           ? 'Authentication failed - CLI could not authenticate with API'
           : hasCriticalError
           ? 'Critical error detected in task output'
