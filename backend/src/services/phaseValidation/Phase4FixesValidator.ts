@@ -19,8 +19,9 @@
  * }
  * 
  * Critical Logic:
- * - If all_issues_addressed === false: Stay in Phase 4, retry
- * - If all_issues_addressed === true: Return to Phase 3 for re-review
+ * - Phase 4 ALWAYS returns to Phase 3 for re-review (per PhaseOrchestrator)
+ * - The all_issues_addressed flag is informational only
+ * - Attempt counter is maintained across the Phase 3↔4 loop
  * 
  * This validator does NOT verify if fixes actually work - that's Phase 3's job.
  */
@@ -140,8 +141,8 @@ export class Phase4FixesValidator implements PhaseValidator {
     }
 
     // Determine routing
-    // CRITICAL: If all_issues_addressed is true, we return to Phase 3 for re-review
-    // If false, we stay in Phase 4 and retry
+    // CRITICAL: Phase 4 ALWAYS returns to Phase 3 for re-review (per PhaseOrchestrator)
+    // The all_issues_addressed flag is informational for logging/debugging only
     const allIssuesAddressed = fixes.all_issues_addressed;
 
     logger.info({
@@ -153,7 +154,7 @@ export class Phase4FixesValidator implements PhaseValidator {
         fixesApplied: fixes.fixes_applied.length,
         unresolvedCount: fixes.unresolved_fingerprints.length,
         allIssuesAddressed,
-        nextPhase: allIssuesAddressed ? 3 : 4, // 3 for re-review, 4 to retry fixes
+        nextPhase: 3, // Always return to Phase 3 for re-review
       },
     });
 
