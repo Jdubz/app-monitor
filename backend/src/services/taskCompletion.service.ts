@@ -112,7 +112,28 @@ export class TaskCompletionService {
       shouldPush = qualityValidation.passed;
     }
 
-    let finalStatus: 'completed' | 'failed' = exitCode === 0 ? 'completed' : 'failed';
+    // Detect task failure from exit code OR error patterns in output
+    const hasAuthenticationError = this.detectAuthenticationError(output, errorOutput);
+    const hasCriticalError = this.detectCriticalError(output, errorOutput);
+
+    // Never push if authentication or critical errors detected
+    if (hasAuthenticationError || hasCriticalError) {
+      shouldPush = false;
+
+      logger.warn({
+        category: 'process',
+        action: 'task_error_detected',
+        message: `Task ${task.id} has errors in output despite exit code ${exitCode}`,
+        details: {
+          taskId: task.id,
+          exitCode,
+          hasAuthenticationError,
+          hasCriticalError
+        }
+      });
+    }
+
+    let finalStatus: 'completed' | 'failed' = exitCode === 0 && !hasAuthenticationError && !hasCriticalError ? 'completed' : 'failed';
     let failureReason: string | undefined;
 
     if (shouldPush) {
@@ -133,7 +154,11 @@ export class TaskCompletionService {
     } else {
       finalStatus = 'failed';
       failureReason =
-        exitCode !== 0
+        hasAuthenticationError
+          ? 'Authentication failed - CLI could not authenticate with API'
+          : hasCriticalError
+          ? 'Critical error detected in task output'
+          : exitCode !== 0
           ? `Task exited with code ${exitCode}`
           : taskVerification && !taskVerification.passed
           ? `Task verification failed: ${taskVerification.recommendations?.join('; ') || 'See verification details'}`
@@ -637,5 +662,42 @@ export class TaskCompletionService {
         error
       });
     }
+  }
+
+  /**
+   * Detect authentication errors in CLI output
+   * Catches cases where CLI fails to authenticate but may return exit code 0
+   */
+  private detectAuthenticationError(output: string, errorOutput: string): boolean {
+    const combinedOutput = output + '\n' + errorOutput;
+    const authErrorPatterns = [
+      /401\s+Unauthorized/i,
+      /exceeded retry limit.*401/i,
+      /authentication\s+failed/i,
+      /invalid\s+api\s+key/i,
+      /invalid\s+credentials/i,
+      /API key.*invalid/i,
+      /credentials.*expired/i
+    ];
+
+    return authErrorPatterns.some(pattern => pattern.test(combinedOutput));
+  }
+
+  /**
+   * Detect critical errors in CLI output that indicate task failure
+   * Even if exit code is 0, certain error patterns indicate failure
+   */
+  private detectCriticalError(output: string, errorOutput: string): boolean {
+    const combinedOutput = output + '\n' + errorOutput;
+    const criticalErrorPatterns = [
+      /ERROR:.*exceeded retry limit/i,
+      /CRITICAL:/i,
+      /FATAL:/i,
+      /Connection refused/i,
+      /Network error.*retry/i,
+      /timeout.*exceeded/i
+    ];
+
+    return criticalErrorPatterns.some(pattern => pattern.test(combinedOutput));
   }
 }
