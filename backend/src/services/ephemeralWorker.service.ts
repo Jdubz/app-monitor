@@ -1015,13 +1015,17 @@ export class EphemeralWorkerService {
 
     let agentCommand: string;
     if (cliType === 'gemini') {
-      // Gemini does not support working directory flag
+      // Gemini does not support working directory flag (no --cd or --workingDirectory)
       agentCommand = `gemini --print --dangerously-skip-permissions --output-format json '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
     } else if (cliType === 'codex') {
-      // Codex uses --cd for working directory, not --workingDirectory
+      // Codex uses 'exec' subcommand for non-interactive mode (not --print)
+      // Uses --cd for working directory (not --workingDirectory)
+      // Uses --dangerously-bypass-approvals-and-sandbox (codex exec does NOT support --ask-for-approval)
+      // Note: codex exec does NOT support --output-format flag as of v5.1 - outputs text by default
+      // See cliFlags.ts line 113 and Codex CLI documentation for details
       agentCommand = `codex exec --cd /workspace --dangerously-bypass-approvals-and-sandbox '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
     } else {
-      // Claude does not support working directory flag
+      // Claude does not support working directory flag (no --cd or --workingDirectory)
       agentCommand = `claude --print --dangerously-skip-permissions --output-format json '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
     }
 
