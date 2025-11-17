@@ -155,6 +155,7 @@ export function createMockTaskQueue(): TaskQueueService {
         run: vi.fn().mockReturnValue({ changes: 0 })
       })
     }),
+    assignNextTask: vi.fn().mockReturnValue(null),
   } as unknown as TaskQueueService;
 }
 
@@ -565,7 +566,7 @@ export function createMockEphemeralWorkerService(): EphemeralWorkerService {
  */
 export function createMockTaskExecutionService(): TaskExecutionService {
   return {
-    assignNextTask: vi.fn().mockResolvedValue(undefined),
+    assignNextTask: vi.fn().mockReturnValue(null),
     setRecovery: vi.fn(),
   } as unknown as TaskExecutionService;
 }
