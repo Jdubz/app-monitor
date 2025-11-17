@@ -121,95 +121,113 @@ export class DevBotSimulator extends EventEmitter {
   }
 
   /**
-   * Execute task through all phases
+   * Execute task through all phases (REAL BACKEND MONITORING)
    */
   private async executePhases(taskId: string): Promise<TaskResult> {
-    const phases = [0, 1, 2, 3, 4, 5, 6]; // 7 phases
+    // Backend uses 1-indexed phases (1-7), not 0-indexed
+    // Phase 1: Planning, 2: Implementation, 3: Review, 4: Fixes,
+    // 5: Test & Validate, 6: Cleanup, 7: PR Shepherding
     
-    for (const phase of phases) {
-      this.instance.currentPhase = phase;
-      this.phaseHistory.push(phase);
-      this.emit('phase_change', phase);
+    let currentPhase = 1;
+    let pollCount = 0;
+    const maxPolls = 600; // 60 seconds timeout
+    
+    while (pollCount < maxPolls) {
+      // Get real task status from backend
+      const task = await this.getTaskStatus(taskId);
       
-      // Check for injected failures
-      if (this.config.failAtPhase === phase) {
-        await this.injectFailure(phase, this.config.failureType || 'validation_error');
-        // Retry logic would happen here in real implementation
+      if (!task) {
+        throw new Error(`Task ${taskId} not found in backend`);
       }
       
-      if (this.config.hangAtPhase === phase) {
-        await this.hangPhase(phase);
+      const backendPhase = task.phase_index || 1;
+      
+      // Detect phase change
+      if (backendPhase !== currentPhase) {
+        this.instance.currentPhase = backendPhase;
+        this.phaseHistory.push(backendPhase);
+        this.emit('phase_change', backendPhase);
+        
+        // Record phase attempt
+        this.attemptHistory.push({
+          phase: backendPhase,
+          attempt: task.phase_attempts || 1,
+          success: task.phase_status === 'complete'
+        });
+        
+        this.emit('phase_attempt', {
+          phase: backendPhase,
+          attempt: task.phase_attempts || 1,
+          success: task.phase_status === 'complete'
+        });
+        
+        currentPhase = backendPhase;
       }
       
-      if (this.config.crashAtPhase === phase) {
+      // Check for crash injection
+      if (this.config.crashAtPhase === backendPhase) {
         this.instance.status = 'crashed';
-        throw new Error(`Bot crashed at phase ${phase}`);
+        this.emit('crashed', { taskId, phase: backendPhase });
+        throw new Error(`Bot crashed at phase ${backendPhase} (injected)`);
       }
       
-      // Execute phase
-      const attempt = await this.executePhase(taskId, phase);
-      this.attemptHistory.push(attempt);
-      this.emit('phase_attempt', attempt);
-      
-      if (!attempt.success) {
-        // Phase failed, would trigger recovery in real implementation
-        this.emit('phase_failed', { phase, error: attempt.error });
+      // Check if task completed (phase 7 complete OR task status = completed)
+      if (task.status === 'completed' || (backendPhase === 7 && task.phase_status === 'complete')) {
+        this.instance.status = 'idle';
+        this.instance.currentTaskId = undefined;
+        this.instance.currentPhase = undefined;
+        
+        this.emit('task_completed', { taskId });
+        
+        return {
+          success: true,
+          taskId,
+          finalPhase: backendPhase,
+          prUrl: task.pr_url || undefined
+        };
       }
       
-      // Simulate phase execution time
+      // Check if task failed
+      if (task.status === 'failed') {
+        this.instance.status = 'idle';
+        this.instance.currentTaskId = undefined;
+        
+        this.emit('task_failed', { taskId, error: task.error });
+        
+        return {
+          success: false,
+          taskId,
+          finalPhase: backendPhase,
+          error: task.error || 'Task failed in backend'
+        };
+      }
+      
+      // Poll interval
       await this.delay(100);
+      pollCount++;
     }
     
-    // Task completed
-    this.instance.status = 'idle';
-    this.instance.currentTaskId = undefined;
-    this.instance.currentPhase = undefined;
-    
-    return {
-      success: true,
-      taskId,
-      finalPhase: 6,
-      prUrl: `https://github.com/test/repo/pull/${Math.floor(Math.random() * 1000)}`
-    };
+    // Timeout
+    throw new Error(`Task execution timeout after ${maxPolls * 100}ms - backend did not complete`);
   }
 
   /**
-   * Execute a single phase
+   * Execute a single phase (REMOVED - backend handles phase execution)
+   * E2E tests should monitor backend, not simulate phase execution
    */
-  private async executePhase(taskId: string, phase: number): Promise<PhaseAttempt> {
-    try {
-      // Call API to update phase
-      const response = await fetch(`${this.apiBaseUrl}/api/dev-bots/tasks/${taskId}/phase`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          botId: this.instance.id,
-          phase,
-          status: 'in_progress'
-        })
-      });
-      
-      if (!response.ok) {
-        throw new Error(`Phase ${phase} failed: ${response.statusText}`);
-      }
-      
-      return {
-        phase,
-        attempt: 1,
-        success: true
-      };
-    } catch (error: any) {
-      return {
-        phase,
-        attempt: 1,
-        success: false,
-        error: error.message
-      };
+  private async getTaskStatus(taskId: string): Promise<any> {
+    const response = await fetch(`${this.apiBaseUrl}/api/dev-bots/tasks/${taskId}/detail`);
+    
+    if (!response.ok) {
+      throw new Error(`Failed to get task status: ${response.statusText}`);
     }
+    
+    const result = await response.json();
+    return result.data || result;
   }
 
   /**
-   * Inject failure at specific phase
+   * Inject failure at specific phase (FOR TESTING ONLY)
    */
   async injectFailure(phase: number, type: string): Promise<void> {
     this.emit('failure_injected', { phase, type });

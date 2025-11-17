@@ -1,14 +1,16 @@
 /**
  * Phased Execution E2E Tests
  * 
- * Tests the 7-phase task execution system:
- * Phase 0: Initialization
- * Phase 1: Implementation
- * Phase 2: Verification
+ * Tests the 7-phase task execution system (backend uses 1-indexed phases):
+ * Phase 1: Planning
+ * Phase 2: Implementation
  * Phase 3: Review
  * Phase 4: Fixes
- * Phase 5: Testing
- * Phase 6: Completion
+ * Phase 5: Test Coverage & Validation
+ * Phase 6: Cleanup & Docs
+ * Phase 7: PR Shepherding
+ * 
+ * NOTE: Backend uses 1-7, not 0-6 as originally designed
  */
 
 import { test, expect } from '@playwright/test';
@@ -70,21 +72,21 @@ test.describe('Phased Execution - Core Flow', () => {
     await bot.waitForCompletion({ timeout: 60000 });
     console.log('Task completed');
     
-    // 6. Verify all phases executed
+    // 6. Verify all phases executed (backend uses 1-7, not 0-6)
     const phaseHistory = bot.getPhaseHistory();
     console.log('Phase history:', phaseHistory);
-    expect(phaseHistory).toEqual([0, 1, 2, 3, 4, 5, 6]);
+    expect(phaseHistory).toEqual([1, 2, 3, 4, 5, 6, 7]);
     
     // 7. Verify task marked as complete
     const finalTask = await getTask(task.id, API_BASE_URL);
     expect(finalTask.status).toBe('completed');
-    expect(finalTask.phase_index).toBe(6);
+    expect(finalTask.phase_index).toBe(7);
     
     // 8. Verify via assertions
-    await expectPhaseProgression(task.id, [0, 1, 2, 3, 4, 5, 6]);
+    await expectPhaseProgression(task.id, [1, 2, 3, 4, 5, 6, 7]);
     await expectTaskCompleted(task.id);
     
-    console.log('✅ Test 1 passed: All 7 phases executed successfully');
+    console.log('✅ Test 1 passed: All 7 phases executed successfully (1-7)');
   });
 
   test('Test 2: should retry failed phase and recover', async () => {
