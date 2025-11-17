@@ -27,6 +27,11 @@ import * as DockerConfig from './dockerConfig.js';
 import { getLogPaths } from './workTargetDocumentation.js';
 import { getGitHubPRService, type GitHubPRService } from './githubPR.service.js';
 import { ContextBundleGenerator } from './context/index.js';
+import { ValidatorRegistry } from './phaseValidation/ValidatorRegistry.js';
+import { ArtifactExtractorService } from './artifactExtractor.service.js';
+import { PhaseOrchestratorService } from './phaseOrchestrator.service.js';
+import { RecoveryAgentService } from './recoveryAgent.service.js';
+import type { ValidationResult } from './phaseValidation/types.js';
 
 export interface WorkspaceContext {
   id: string;
@@ -79,6 +84,10 @@ export class EphemeralWorkerService {
   private readonly dockerManager: DockerManager;
   private readonly githubPR: GitHubPRService;
   private readonly contextGenerator: ContextBundleGenerator;
+  private readonly validatorRegistry: ValidatorRegistry;
+  private readonly artifactExtractor: ArtifactExtractorService;
+  private readonly phaseOrchestrator: PhaseOrchestratorService;
+  private readonly recoveryAgent: RecoveryAgentService;
   private logStreams = new Map<string, fs.WriteStream>();
   private readonly devBotsLogPath: string;
 
@@ -92,6 +101,10 @@ export class EphemeralWorkerService {
     this.githubPR = getGitHubPRService();
     this.dockerManager = dockerManager;
     this.contextGenerator = contextGenerator || new ContextBundleGenerator();
+    this.validatorRegistry = new ValidatorRegistry();
+    this.artifactExtractor = new ArtifactExtractorService();
+    this.phaseOrchestrator = new PhaseOrchestratorService(this.validatorRegistry);
+    this.recoveryAgent = new RecoveryAgentService();
 
     this.config = {
       maxConcurrentWorkers: config.maxConcurrentWorkers ?? 2,
@@ -934,6 +947,156 @@ export class EphemeralWorkerService {
       return {
         success: false,
         error: error instanceof Error ? error : new Error(String(error))
+      };
+    }
+  }
+
+  /**
+   * Complete phase execution with validation and recovery
+   * This is the NEW phase-aware completion flow that:
+   * 1. Extracts artifacts from container
+   * 2. Runs phase validation
+   * 3. Handles recovery if validation fails
+   * 4. Only destroys container after validation/recovery complete
+   * 
+   * @param worker - Ephemeral worker
+   * @param output - Task execution output
+   * @param errorOutput - Task execution error output
+   * @param exitCode - Task execution exit code
+   * @returns Phase validation result
+   */
+  async completePhaseExecution(
+    worker: EphemeralWorker,
+    output: string,
+    errorOutput: string,
+    exitCode: number
+  ): Promise<ValidationResult> {
+    const task = worker.task;
+    const containerId = worker.containerId;
+
+    logger.info({
+      category: 'phase',
+      action: 'phase_completion_start',
+      message: `Starting phase completion for task ${task.id}, phase ${task.phase_index}`,
+      details: {
+        taskId: task.id,
+        phaseIndex: task.phase_index,
+        phaseName: task.phase_name,
+        exitCode,
+      },
+    });
+
+    try {
+      // Step 1: Extract artifacts from container BEFORE validation
+      logger.info({
+        category: 'phase',
+        action: 'extracting_artifacts',
+        message: `Extracting artifacts from container ${containerId}`,
+      });
+
+      const artifacts = await this.artifactExtractor.extractArtifacts({
+        containerId,
+        phaseIndex: task.phase_index || 1,
+        attempt: task.phase_attempts || 1,
+      });
+
+      logger.info({
+        category: 'phase',
+        action: 'artifacts_extracted',
+        message: `Artifacts extracted for task ${task.id}`,
+        details: {
+          hasPlanning: !!artifacts.planning,
+          hasImplementation: !!artifacts.implementation,
+          hasReview: !!artifacts.review,
+          hasFixes: !!artifacts.fixes,
+          hasTests: !!artifacts.tests,
+          hasCleanup: !!artifacts.cleanup,
+          hasPRShepherding: !!artifacts.prShepherding,
+        },
+      });
+
+      // Step 2: Run phase validation
+      logger.info({
+        category: 'phase',
+        action: 'validating_phase',
+        message: `Validating phase ${task.phase_index} for task ${task.id}`,
+      });
+
+      const validation = await this.validatorRegistry.validate(
+        task.phase_index || 1,
+        task,
+        artifacts
+      );
+
+      logger.info({
+        category: 'phase',
+        action: 'validation_complete',
+        message: `Phase validation ${validation.passed ? 'PASSED' : 'FAILED'} for task ${task.id}`,
+        details: {
+          passed: validation.passed,
+          errors: validation.errors,
+          warnings: validation.warnings,
+        },
+      });
+
+      // Step 3: Handle validation failure with recovery
+      if (!validation.passed) {
+        logger.warn({
+          category: 'phase',
+          action: 'validation_failed',
+          message: `Phase ${task.phase_index} validation failed, initiating recovery`,
+          details: {
+            taskId: task.id,
+            phaseIndex: task.phase_index,
+            errors: validation.errors,
+          },
+        });
+
+        // Run recovery agent in same container
+        const recoveryResult = await this.recoveryAgent.executeRecovery(
+          task,
+          containerId,
+          validation,
+          task.phase_attempts || 1
+        );
+
+        logger.info({
+          category: 'phase',
+          action: 'recovery_complete',
+          message: `Recovery ${recoveryResult.success ? 'succeeded' : 'failed'} for task ${task.id}`,
+          details: {
+            category: recoveryResult.category,
+            shouldRetry: recoveryResult.shouldRetry,
+            contextUpdated: recoveryResult.contextUpdated,
+            isSystemBlocked: recoveryResult.isSystemBlocked,
+          },
+        });
+
+        // Enrich validation result with recovery information
+        validation.recovery = {
+          attempted: true,
+          success: recoveryResult.success,
+          category: recoveryResult.category,
+          diagnosis: recoveryResult.diagnosis,
+        };
+      }
+
+      return validation;
+
+    } catch (error) {
+      logger.error({
+        category: 'phase',
+        action: 'phase_completion_error',
+        message: `Error during phase completion for task ${task.id}`,
+        error,
+      });
+
+      // Return failed validation on error
+      return {
+        passed: false,
+        errors: [
+          `Phase completion error: ${error instanceof Error ? error.message : String(error)}`
+        ],
       };
     }
   }

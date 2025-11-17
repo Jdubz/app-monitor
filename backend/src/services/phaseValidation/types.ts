@@ -16,6 +16,7 @@ import type { Task } from '../taskQueue.sqlite.js';
 export interface ValidationResult {
   passed: boolean;
   errors?: string[];
+  warnings?: string[]; // Non-blocking issues
   
   // Phase-specific results (used by PhaseOrchestrator to determine next phase)
   taskObsolete?: boolean; // Phase 1: Task no longer needed
@@ -24,6 +25,14 @@ export interface ValidationResult {
   allIssuesAddressed?: boolean; // Phase 4: All fixes applied
   allTestsPassing?: boolean; // Phase 5: All validation criteria met
   allGatesPassing?: boolean; // Phase 7: All merge gates passed
+  
+  // Recovery information (added after recovery attempt)
+  recovery?: {
+    attempted: boolean;
+    success: boolean;
+    category: 'retry' | 'context_update' | 'chain_blocked' | 'system_blocked';
+    diagnosis: string;
+  };
   
   // Additional context
   details?: Record<string, unknown>;
