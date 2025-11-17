@@ -18,8 +18,8 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { logger } from '../../utils/logger.js';
-import { config } from '../../config.js';
+import { logger } from '../utils/logger.js';
+import { config } from '../config.js';
 
 export interface ArtifactFile {
   name: string;
@@ -40,7 +40,7 @@ export class ArtifactStorageService {
   constructor(baseDir?: string) {
     // Default to shared artifacts directory in production, data/artifacts in development
     this.baseDir = baseDir ?? path.join(
-      config.isDevelopment 
+      config.nodeEnv !== 'production'
         ? path.join(process.cwd(), 'data', 'artifacts')
         : '/opt/app-monitor/shared/artifacts'
     );
