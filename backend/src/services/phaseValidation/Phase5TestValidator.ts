@@ -74,7 +74,7 @@ export class Phase5TestValidator implements PhaseValidator {
       errors.push('Missing or invalid coverage_delta');
     }
 
-    if (!tests.test_summary || typeof tests.test_summary !== 'object') {
+    if (!tests.test_summary || typeof tests.test_summary !== 'object' || Array.isArray(tests.test_summary)) {
       errors.push('Missing or invalid test_summary object');
     }
 
@@ -105,7 +105,7 @@ export class Phase5TestValidator implements PhaseValidator {
     for (const suite of requiredSuites) {
       const suiteData = tests.test_summary[suite as keyof typeof tests.test_summary];
       
-      if (!suiteData || typeof suiteData !== 'object') {
+      if (!suiteData || typeof suiteData !== 'object' || Array.isArray(suiteData)) {
         testSummaryErrors.push(`Missing or invalid ${suite} test suite data`);
         continue;
       }

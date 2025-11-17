@@ -68,7 +68,7 @@ export class Phase7PRShepherdingValidator implements PhaseValidator {
     // Validate required fields
     const errors: string[] = [];
 
-    if (!prShepherding.merge_gates || typeof prShepherding.merge_gates !== 'object') {
+    if (!prShepherding.merge_gates || typeof prShepherding.merge_gates !== 'object' || Array.isArray(prShepherding.merge_gates)) {
       errors.push('Missing or invalid merge_gates object');
     }
 

@@ -302,3 +302,59 @@ describe('Phase7PRShepherdingValidator', () => {
     expect(result.details?.passing_gates).toBe(6);
   });
 });
+
+  it('should fail when test_summary is an array', async () => {
+    const artifacts: PhaseArtifacts = {
+      tests: {
+        all_tests_passing: true,
+        coverage_delta: 5.0,
+        test_summary: [] as any, // Array instead of object!
+        lint_passing: true,
+        type_check_passing: true,
+        build_passing: true,
+        failures: [],
+      },
+    };
+
+    const result = await validator.validate(mockTask, artifacts);
+
+    expect(result.passed).toBe(false);
+    expect(result.errors).toContain('Missing or invalid test_summary object');
+  });
+
+  it('should fail when suiteData is an array', async () => {
+    const artifacts: PhaseArtifacts = {
+      tests: {
+        all_tests_passing: true,
+        coverage_delta: 5.0,
+        test_summary: {
+          unit: [] as any, // Array instead of object!
+          integration: { total: 5, passed: 5, failed: 0 },
+          e2e: { total: 3, passed: 3, failed: 0 },
+        },
+        lint_passing: true,
+        type_check_passing: true,
+        build_passing: true,
+        failures: [],
+      },
+    };
+
+    const result = await validator.validate(mockTask, artifacts);
+
+    expect(result.passed).toBe(false);
+    expect(result.errors?.some(e => e.includes('unit'))).toBe(true);
+  });
+
+  it('should fail when merge_gates is an array', async () => {
+    const artifacts: PhaseArtifacts = {
+      prShepherding: {
+        merge_gates: [] as any, // Array instead of object!
+        all_gates_passing: false,
+      },
+    };
+
+    const result = await validator.validate(mockTask, artifacts);
+
+    expect(result.passed).toBe(false);
+    expect(result.errors).toContain('Missing or invalid merge_gates object');
+  });
