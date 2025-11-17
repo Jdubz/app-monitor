@@ -925,11 +925,14 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       `).all(taskId);
 
       // Parse artifacts_blob and recovery_diagnosis JSON fields
-      const parsedHistory = phaseHistory.map((run: any) => ({
-        ...run,
-        artifacts: run.artifacts_blob ? JSON.parse(run.artifacts_blob) : null,
-        recovery: run.recovery_diagnosis ? JSON.parse(run.recovery_diagnosis) : null,
-      }));
+      const parsedHistory = phaseHistory.map((run: unknown) => {
+        const record = run as Record<string, unknown>;
+        return {
+          ...record,
+          artifacts: record.artifacts_blob ? JSON.parse(record.artifacts_blob as string) : null,
+          recovery: record.recovery_diagnosis ? JSON.parse(record.recovery_diagnosis as string) : null,
+        };
+      });
 
       sendSuccess(res, {
         taskId,

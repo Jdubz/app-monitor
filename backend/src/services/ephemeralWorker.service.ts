@@ -18,6 +18,7 @@ import os from 'os';
 import path from 'path';
 import tar from 'tar-fs';
 import type Docker from 'dockerode';
+import Database from 'better-sqlite3';
 import { logger } from '../utils/logger.js';
 import type { Task } from './taskQueue.sqlite.js';
 import type { AgentPersonality } from './agentPersonalities.js';
@@ -1020,7 +1021,7 @@ export class EphemeralWorkerService {
       }
 
       const validator = this.validatorRegistry.getValidator(task.phase_index);
-      const validation = await validator.validate(task, artifacts);
+      let validation = await validator.validate(task, artifacts);
 
       logger.info({
         category: 'phase',

@@ -27,7 +27,7 @@ export interface PhaseExecutionResult {
   recoverySucceeded?: boolean;
   isSystemBlocked?: boolean; // If true, pause ALL task processing globally
   errors?: string[];
-  artifacts?: Record<string, unknown>;
+  artifacts?: unknown;
 }
 
 export class PhaseExecutionService {
@@ -66,58 +66,18 @@ export class PhaseExecutionService {
     try {
       // Step 1: Extract artifacts from container
       const extractor = getArtifactExtractor();
-      const artifacts = await extractor.extractArtifacts(containerId, phaseIndex);
+      const artifacts = await extractor.extractArtifacts({
+        containerId,
+        phaseIndex,
+        attempt,
+      });
 
       // Step 2: Get validator for this phase
       const registry = getValidatorRegistry();
       const validator = registry.getValidator(phaseIndex);
 
       // Step 3: Validate artifacts
-      const rawValidationResult = await validator.validate(task, artifacts);
-
-      // Convert validator result to internal format
-      const validationResult = {
-        passed: rawValidationResult.isValid,
-        errors: rawValidationResult.errors || [],
-        warnings: rawValidationResult.warnings || [],
-        criticalIssues: rawValidationResult.criticalIssues || [],
-        artifacts,
-      };
-
-      // Step 4: Handle critical blocking issues first
-      if (validationResult.criticalIssues && validationResult.criticalIssues.length > 0) {
-        this.orchestrator.recordStageRun({
-          task_id: task.id,
-          phase_index: phaseIndex,
-          phase_name: task.phase_name,
-          attempt,
-          status: 'blocked',
-          artifacts_blob: JSON.stringify(artifacts),
-          created_at: Date.now(),
-          completed_at: Date.now(),
-          exit_code: artifacts.exitCode,
-        });
-
-        logger.error({
-          category: 'phase',
-          action: 'critical_issue_detected',
-          message: `Critical blocking issue detected for task ${task.id}: ${validationResult.criticalIssues.join(', ')}`,
-          details: {
-            taskId: task.id,
-            phaseIndex,
-            criticalIssues: validationResult.criticalIssues,
-          },
-        });
-
-        return {
-          success: false,
-          nextPhase: null, // Block task
-          validationPassed: false,
-          isSystemBlocked: true,
-          errors: validationResult.criticalIssues,
-          artifacts,
-        };
-      }
+      const validationResult = await validator.validate(task, artifacts);
 
       // Step 5: Record stage run in database
       const stageRunId = this.orchestrator.recordStageRun({
@@ -172,7 +132,7 @@ export class PhaseExecutionService {
 
         // Attempt recovery if available
         const recoveryService = getRecoveryService();
-        const canRecover = recoveryService && typeof recoveryService.attemptRecovery === 'function';
+        const canRecover = recoveryService && typeof recoveryService.executeRecovery === 'function';
 
         if (canRecover) {
           logger.info({
@@ -186,10 +146,10 @@ export class PhaseExecutionService {
             },
           });
 
-          const recoveryResult = await recoveryService.attemptRecovery(
+          const recoveryResult = await recoveryService.executeRecovery(
             task,
-            validationResult,
-            containerId
+            containerId,
+            validationResult
           );
 
           // Update stage run with recovery status

@@ -2476,34 +2476,5 @@ export class TaskQueueService {
     });
   }
 
-  /**
-   * Block an entire chain due to unrecoverable failure.
-   * Used when recovery categorizes as 'chain_blocked'.
-   */
-  blockChain(chainId: string, reason: string): void {
-    this.transaction(() => {
-      const now = Date.now();
-
-      // Block all tasks in the chain
-      this.db.prepare(`
-        UPDATE tasks
-        SET chain_status = 'blocked',
-            blocked_reason = ?,
-            blocked_at = ?,
-            blocked_by = 'recovery_agent'
-        WHERE chain_id = ?
-      `).run(reason, now, chainId);
-
-      logger.warn({
-        category: 'phase',
-        action: 'chain_blocked',
-        message: `Chain ${chainId} blocked due to recovery diagnosis`,
-        details: {
-          chainId,
-          reason,
-          blockedBy: 'recovery_agent',
-        },
-      });
-    });
-  }
+  // blockChain method removed - duplicate of the one at line 2387 which delegates to chainTracker
 }

@@ -39,7 +39,7 @@ vi.mock('../phaseValidation/index.js', () => ({
 
 vi.mock('../recoveryAgent.service.js', () => ({
   getRecoveryService: vi.fn(() => ({
-    attemptRecovery: vi.fn(),
+    executeRecovery: vi.fn(),
   })),
 }));
 
@@ -133,10 +133,9 @@ describe('PhaseExecutionService', () => {
       // Mock validation success
       const mockValidator = {
         validate: vi.fn().mockResolvedValue({
-          isValid: true,
+          passed: true,
           errors: [],
           warnings: [],
-          criticalIssues: [],
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');
@@ -152,7 +151,11 @@ describe('PhaseExecutionService', () => {
       expect(result.validationPassed).toBe(true);
       expect(result.nextPhase).toBe(2); // Should advance to Implementation
       expect(result.errors).toBeUndefined();
-      expect(mockArtifactExtractor.extractArtifacts).toHaveBeenCalledWith(containerId, 1);
+      expect(mockArtifactExtractor.extractArtifacts).toHaveBeenCalledWith({
+        containerId,
+        phaseIndex: 1,
+        attempt: 1,
+      });
       expect(mockValidator.validate).toHaveBeenCalled();
 
       // Verify stage run was recorded
@@ -194,10 +197,9 @@ describe('PhaseExecutionService', () => {
       // Mock validation failure (recoverable)
       const mockValidator = {
         validate: vi.fn().mockResolvedValue({
-          isValid: false,
+          passed: false,
           errors: ['Missing test file'],
           warnings: [],
-          criticalIssues: [],
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');
@@ -207,7 +209,7 @@ describe('PhaseExecutionService', () => {
 
       // Mock recovery success
       const mockRecoveryService = {
-        attemptRecovery: vi.fn().mockResolvedValue({
+        executeRecovery: vi.fn().mockResolvedValue({
           success: true,
           diagnosis: 'Added missing test file',
           actions: ['create_file'],
@@ -222,7 +224,7 @@ describe('PhaseExecutionService', () => {
       // Then: Should attempt recovery
       expect(result.recoveryAttempted).toBe(true);
       expect(result.recoverySucceeded).toBe(true);
-      expect(mockRecoveryService.attemptRecovery).toHaveBeenCalled();
+      expect(mockRecoveryService.executeRecovery).toHaveBeenCalled();
 
       // Verify stage run recorded as recovered
       const stageRuns = db.prepare('SELECT * FROM task_stage_runs WHERE task_id = ?').all(task.id) as Array<Record<string, unknown>>;
@@ -253,10 +255,9 @@ describe('PhaseExecutionService', () => {
       // Mock validation failure (not recoverable)
       const mockValidator = {
         validate: vi.fn().mockResolvedValue({
-          isValid: false,
+          passed: false,
           errors: ['Code quality issues'],
           warnings: [],
-          criticalIssues: [],
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');
@@ -303,10 +304,9 @@ describe('PhaseExecutionService', () => {
       // Mock validation failure
       const mockValidator = {
         validate: vi.fn().mockResolvedValue({
-          isValid: false,
+          passed: false,
           errors: ['Persistent issues'],
           warnings: [],
-          criticalIssues: [],
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');
@@ -327,8 +327,8 @@ describe('PhaseExecutionService', () => {
       expect(result.nextPhase).toBe(4); // Move to Fixes phase
     });
 
-    it('should handle critical blocking issues (cancel task)', async () => {
-      // Given: A task with critical blocking issue
+    it('should handle validation failure without recovery available', async () => {
+      // Given: A task with validation failure and no recovery available
       const task: Task = {
         id: 'task-blocked',
         type: 'feature',
@@ -350,10 +350,9 @@ describe('PhaseExecutionService', () => {
       // Mock validation with critical issue
       const mockValidator = {
         validate: vi.fn().mockResolvedValue({
-          isValid: false,
+          passed: false,
           errors: ['Build system broken'],
           warnings: [],
-          criticalIssues: ['Build system broken'],
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');
@@ -367,18 +366,22 @@ describe('PhaseExecutionService', () => {
       const { getArtifactExtractor } = await import('../artifactExtractor.service.js');
       vi.mocked(getArtifactExtractor).mockReturnValue(mockArtifactExtractor as any);
 
+      // Mock recovery service as not available
+      const { getRecoveryService } = await import('../recoveryAgent.service.js');
+      vi.mocked(getRecoveryService).mockReturnValue(null as any);
+
       // When: Executing phase workflow
       const result = await service.executePhaseWorkflow(task, 'container-blocked');
 
-      // Then: Should cancel task
+      // Then: Should stay in current phase (validation failed, no recovery)
       expect(result.success).toBe(false);
-      expect(result.nextPhase).toBe(null); // Task cancelled
-      expect(result.isSystemBlocked).toBe(true);
+      expect(result.nextPhase).toBe(5); // Stay in current phase for retry
+      expect(result.validationPassed).toBe(false);
 
-      // Verify stage run recorded as blocked
+      // Verify stage run recorded as failed
       const stageRuns = db.prepare('SELECT * FROM task_stage_runs WHERE task_id = ?').all(task.id) as Array<Record<string, unknown>>;
       expect(stageRuns).toHaveLength(1);
-      expect(stageRuns[0].status).toBe('blocked');
+      expect(stageRuns[0].status).toBe('failed');
     });
 
     it('should handle artifact extraction failure', async () => {
@@ -449,10 +452,9 @@ describe('PhaseExecutionService', () => {
 
       const mockValidator = {
         validate: vi.fn().mockResolvedValue({
-          isValid: true,
+          passed: true,
           errors: [],
           warnings: [],
-          criticalIssues: [],
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');
@@ -505,10 +507,9 @@ describe('PhaseExecutionService', () => {
 
       const mockValidator = {
         validate: vi.fn().mockResolvedValue({
-          isValid: true,
+          passed: true,
           errors: [],
           warnings: [],
-          criticalIssues: [],
         }),
       };
       const { getValidatorRegistry } = await import('../phaseValidation/index.js');

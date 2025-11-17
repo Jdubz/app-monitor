@@ -36,7 +36,7 @@ export interface ValidationResult {
   
   // Additional context
   details?: Record<string, unknown>;
-  artifacts?: PhaseArtifacts | Record<string, unknown>; // Structured artifacts to store in DB
+  artifacts?: unknown; // Structured artifacts to store in DB (can be PhaseArtifacts or specific types)
 }
 
 /**

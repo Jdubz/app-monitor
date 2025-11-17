@@ -24,9 +24,8 @@ import type { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplat
 import type { EphemeralWorkerService, EphemeralWorker, TaskExecutionResult } from './ephemeralWorker.service.js';
 // TaskPersistence removed - using SQLite directly
 import type { FailurePattern } from './taskFailureGuards.js';
-import type { SimpleFailureRecovery } from './failureRecovery.js';
 import { resolveArtifactsDir } from '../utils/repoPaths.js';
-import { AgentSelector } from './agentSelector.js';
+import { AgentSelector, AgentAttempt, AgentSelectionCriteria } from './agentSelector.js';
 import { TaskClassifier } from './taskClassifier.js';
 import { TaskArtifactService } from './taskArtifact.service.js';
 import { SessionSummaryService } from './sessionSummary.service.js';
@@ -67,7 +66,6 @@ export class TaskExecutionService {
   private readonly templateManager: TaskPromptTemplateManager;
   private readonly ephemeralWorkerService: EphemeralWorkerService;
   private readonly config: TaskExecutionServiceConfig;
-  private recovery?: SimpleFailureRecovery;
   private dockerCircuitBreaker?: { execute: <T>(fn: () => Promise<T>) => Promise<T> };
   private readonly agentSelector: AgentSelector; // Intelligent agent selection
   private readonly taskClassifier: TaskClassifier; // Task classification
@@ -238,9 +236,7 @@ export class TaskExecutionService {
   /**
    * Set the recovery service (called by DevBotsManager after initialization)
    */
-  public setRecovery(recovery: SimpleFailureRecovery): void {
-    this.recovery = recovery;
-  }
+  // Recovery is now handled within phase execution service
 
   // ==========================================================================
   // Helper Methods
@@ -253,7 +249,7 @@ export class TaskExecutionService {
   private async failTaskWithRecovery(
     task: Task,
     error: string,
-    context?: {
+    _context?: {
       stderr?: string;
       stdout?: string;
       exitCode?: number;
@@ -263,54 +259,7 @@ export class TaskExecutionService {
     // Mark task as failed in database
     this.taskQueue.failTask(task.id, error);
 
-    // Attempt recovery if enabled and recovery service is available
-    if (this.config.recovery.enabled && this.recovery && context) {
-      // Ensure we have a full FailurePattern for recovery
-      const failurePattern = this.normalizeFailurePattern(context.failurePattern);
-
-      try {
-        const recoveryResult = await this.recovery.attemptRecovery({
-          task: task as Task & { metadata?: Record<string, unknown> },
-          failurePattern,
-          stderr: context.stderr || error,
-          stdout: context.stdout || '',
-          exitCode: context.exitCode || 1
-        });
-
-        if (recoveryResult.recovered) {
-          logger.info({
-            category: 'recovery',
-            action: 'recovery_initiated',
-            message: `Initiated automatic recovery for task ${task.id}`,
-            details: {
-              taskId: task.id,
-              cleanupTaskId: recoveryResult.cleanupTaskId,
-              failurePattern: failurePattern.name
-            }
-          });
-        } else {
-          logger.info({
-            category: 'recovery',
-            action: 'recovery_not_attempted',
-            message: `Recovery was not attempted for task ${task.id}`,
-            details: {
-              taskId: task.id,
-              reason: 'Failure not recoverable or already has active repair'
-            }
-          });
-        }
-      } catch (recoveryError) {
-        logger.error({
-          category: 'recovery',
-          action: 'recovery_attempt_failed',
-          message: `Failed to attempt recovery for task ${task.id}: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`,
-          details: {
-            taskId: task.id,
-            error: recoveryError instanceof Error ? recoveryError.message : String(recoveryError)
-          }
-        });
-      }
-    }
+    // Recovery is now handled by phase execution service
   }
 
   private normalizeFailurePattern(input?: FailurePatternContext | null): FailurePattern {
@@ -675,6 +624,9 @@ export class TaskExecutionService {
         // Phase system integration: Validate and advance phase
         // NOTE: This keeps the container alive during validation
         // Container is destroyed in the finally block
+        if (!worker) {
+          throw new Error('Worker not initialized - cannot complete phase execution');
+        }
         const phaseValidation = await this.ephemeralWorkerService.completePhaseExecution(
           worker,
           output,
@@ -733,7 +685,7 @@ export class TaskExecutionService {
             } else if (recovery.category === 'chain_blocked') {
               // Block entire chain - requires human intervention
               if (nextTask.chain_id) {
-                this.taskQueue.blockChain(nextTask.chain_id, recovery.diagnosis || 'Unrecoverable failure');
+                this.taskQueue.blockChain(nextTask.chain_id, recovery.diagnosis || 'Unrecoverable failure', 'recovery_agent');
               }
             } else if (recovery.category === 'system_blocked') {
               // Global pause - emit event for system-wide handling
@@ -746,11 +698,7 @@ export class TaskExecutionService {
                   diagnosis: recovery.diagnosis,
                 },
               });
-              // Emit event for monitoring/alerting systems
-              this.emit('system:blocked', {
-                taskId: nextTask.id,
-                reason: recovery.diagnosis || 'System-wide issue detected',
-              });
+              // Note: system:blocked event would be emitted by DevBotsManager if needed
             }
           } else {
             logger.warn({

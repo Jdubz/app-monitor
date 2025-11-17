@@ -223,8 +223,7 @@ export class DevBotsManager extends EventEmitter {
       agentSelector
     );
 
-    // Wire recovery into task execution service
-    this.taskExecutionService.setRecovery(this.recovery);
+    // Recovery is handled within task execution service (no longer wired here)
 
     // Wire interactive stream events (delegated to SystemInitializationService)
     this.systemInitializationService.wireInteractiveStreamEvents();

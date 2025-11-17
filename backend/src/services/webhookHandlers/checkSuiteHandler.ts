@@ -79,7 +79,12 @@ export class CheckSuiteHandler extends BaseWebhookHandler {
     const repo = repository.name;
     
     let tasks: Task[] = [];
-    let prStatus: any; // Store PR status to avoid duplicate fetch
+    let prStatus: {
+      state: 'OPEN' | 'CLOSED' | 'MERGED';
+      mergeable_state?: string;
+      head_ref: string;
+      base_ref: string;
+    } | undefined; // Store PR status to avoid duplicate fetch
     
     // First, check if the PR branches match dev-bot patterns and attempt data recovery
     try {

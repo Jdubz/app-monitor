@@ -203,6 +203,7 @@ export async function createDevBotsManagerDependencies(
     dockerManager,
     scopeControl,
     null, // processManager removed
+    null, // recovery - will be handled by task execution service
     () => {} // emit function placeholder, will be bound by DevBotsManager
   );
 
@@ -269,7 +270,7 @@ export async function createDevBotsManagerDependencies(
     workspaceSyncManager,
     retryManager,
     // WorkspaceOrchestrator removed - using container isolation
-    recovery,
+    // Recovery removed - handled by task execution service
     // TaskPersistence removed - using SQLite directly
     scopeControl,
     ephemeralWorkerService,
