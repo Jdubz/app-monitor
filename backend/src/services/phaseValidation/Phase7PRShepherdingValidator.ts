@@ -34,7 +34,6 @@ import type {
   PhaseValidator, 
   ValidationResult, 
   PhaseArtifacts,
-  PRShepherdingArtifacts 
 } from './types.js';
 
 export class Phase7PRShepherdingValidator implements PhaseValidator {

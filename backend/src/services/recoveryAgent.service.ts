@@ -238,17 +238,21 @@ export class RecoveryAgentService {
 
       // Create script that writes prompt to temp file and executes agent
       // Using claude CLI as recovery agent (can be configured per task/agent)
+      // Use base64 encoding to avoid heredoc injection vulnerabilities
+      const promptBase64 = Buffer.from(recoveryPrompt).toString('base64');
       const recoveryScript = `
-        # Write recovery prompt to temp file
-        cat > /tmp/recovery-prompt.txt <<'RECOVERY_EOF'
-${recoveryPrompt}
-RECOVERY_EOF
+        # Write recovery prompt to secure in-memory temp file
+        # Use base64 to prevent command injection via heredoc
+        echo '${promptBase64}' | base64 -d > /dev/shm/recovery-prompt.txt
 
         # Execute recovery agent (claude CLI) with prompt
         # Output structured JSON response to artifacts
         mkdir -p /workspace/.artifacts
-        claude --no-stream < /tmp/recovery-prompt.txt > /workspace/.artifacts/recovery.json 2>&1
-        
+        claude --no-stream < /dev/shm/recovery-prompt.txt > /workspace/.artifacts/recovery.json 2>&1
+
+        # Cleanup recovery prompt file
+        rm -f /dev/shm/recovery-prompt.txt
+
         # Print the response for capture
         cat /workspace/.artifacts/recovery.json
       `;
@@ -265,13 +269,8 @@ RECOVERY_EOF
 
       // Capture output
       let output = '';
-      let errorOutput = '';
       stream.on('data', (chunk: Buffer) => {
         const text = chunk.toString();
-        // Docker multiplexes stdout/stderr - we collect both
-        if (text.includes('Error') || text.includes('error')) {
-          errorOutput += text;
-        }
         output += text;
       });
 

@@ -217,7 +217,7 @@ export class IssueStorageService {
    */
   getIssueById(issueId: string): StoredIssue | undefined {
     const stmt = this.db.prepare('SELECT * FROM issues WHERE id = ?');
-    const row = stmt.get(issueId) as any;
+    const row = stmt.get(issueId) as Record<string, unknown> | undefined;
     
     if (!row) return undefined;
     
@@ -230,7 +230,7 @@ export class IssueStorageService {
       }
     }
     
-    return row as StoredIssue;
+    return row as unknown as StoredIssue;
   }
 
   /**

@@ -27,7 +27,7 @@ export interface PhaseExecutionResult {
   recoverySucceeded?: boolean;
   isSystemBlocked?: boolean; // If true, pause ALL task processing globally
   errors?: string[];
-  artifacts?: Record<string, unknown>;
+  artifacts?: unknown;
 }
 
 export class PhaseExecutionService {
@@ -70,7 +70,6 @@ export class PhaseExecutionService {
         containerId,
         phaseIndex,
         attempt,
-        tempDir: `/tmp/phase-artifacts-${task.id}-${phaseIndex}-${attempt}`
       });
 
       // Step 2: Get validator for this phase
@@ -80,14 +79,14 @@ export class PhaseExecutionService {
       // Step 3: Validate artifacts
       const validationResult = await validator.validate(task, artifacts);
 
-      // Step 4: Record stage run in database
+      // Step 5: Record stage run in database
       const stageRunId = this.orchestrator.recordStageRun({
         task_id: task.id,
         phase_index: phaseIndex,
         phase_name: task.phase_name,
         attempt,
         status: validationResult.passed ? 'success' : 'failed',
-        artifacts_blob: JSON.stringify(this.serializeArtifacts(artifacts)),
+        artifacts_blob: JSON.stringify(artifacts),
         created_at: Date.now(),
         completed_at: Date.now(),
         exit_code: artifacts.exitCode,
@@ -106,7 +105,7 @@ export class PhaseExecutionService {
         },
       });
 
-      // Step 5: If validation failed, check for max attempts first
+      // Step 6: If validation failed, check for max attempts first
       if (!validationResult.passed) {
         // Check if we've reached max attempts in Phase 3 (Review)
         // If so, transition to Phase 4 (Fixes) instead of attempting recovery
@@ -127,7 +126,7 @@ export class PhaseExecutionService {
             nextPhase: 4, // Move to fixes phase
             validationPassed: false,
             errors: validationResult.errors,
-            artifacts: this.serializeArtifacts(artifacts),
+            artifacts,
           };
         }
 
@@ -150,22 +149,15 @@ export class PhaseExecutionService {
           const recoveryResult = await recoveryService.executeRecovery(
             task,
             containerId,
-            validationResult,
-            attempt
+            validationResult
           );
 
-          // Record recovery attempt (success/failure tracked in recovery result)
-          logger.info({
-            category: 'phase',
-            action: 'recovery_complete',
-            message: `Recovery ${recoveryResult.success ? 'succeeded' : 'failed'} for task ${task.id}`,
-            details: {
-              taskId: task.id,
-              phaseIndex,
-              recoverySuccess: recoveryResult.success,
-              diagnosis: recoveryResult.diagnosis,
-            },
-          });
+          // Update stage run with recovery status
+          this.orchestrator.updateStageRunWithRecovery(
+            stageRunId,
+            JSON.stringify(recoveryResult),
+            recoveryResult.success ? 'recovered' : 'failed'
+          );
 
           if (recoveryResult.success) {
             logger.info({
@@ -185,7 +177,7 @@ export class PhaseExecutionService {
               recoveryAttempted: true,
               recoverySucceeded: true,
               errors: validationResult.errors,
-              artifacts: this.serializeArtifacts(artifacts),
+              artifacts,
             };
           }
         }
@@ -196,7 +188,7 @@ export class PhaseExecutionService {
           nextPhase: phaseIndex, // Stay in current phase for retry
           validationPassed: false,
           errors: validationResult.errors,
-          artifacts: this.serializeArtifacts(artifacts),
+          artifacts,
         };
       }
 
@@ -272,30 +264,6 @@ export class PhaseExecutionService {
    */
   getCurrentPhase(taskId: string) {
     return this.orchestrator.getCurrentPhase(taskId);
-  }
-
-  /**
-   * Serialize PhaseArtifacts to a plain object for JSON storage.
-   * Converts Maps to objects and handles other non-serializable types.
-   */
-  private serializeArtifacts(artifacts: any): Record<string, unknown> {
-    if (!artifacts) return {};
-    
-    const serialized: Record<string, unknown> = {};
-    
-    for (const [key, value] of Object.entries(artifacts)) {
-      if (value instanceof Map) {
-        // Convert Map to plain object
-        serialized[key] = Object.fromEntries(value);
-      } else if (value && typeof value === 'object' && !Array.isArray(value)) {
-        // Recursively serialize nested objects
-        serialized[key] = this.serializeArtifacts(value);
-      } else {
-        serialized[key] = value;
-      }
-    }
-    
-    return serialized;
   }
 }
 

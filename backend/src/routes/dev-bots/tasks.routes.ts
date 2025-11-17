@@ -14,14 +14,7 @@
 import { Router, Request, Response } from 'express';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
 import { logger } from '../../utils/logger.js';
-import type { LogEntry } from '../../utils/logger.js';
 import { sendSuccess, sendError } from '../../utils/apiResponse.js';
-import {
-  validateTaskTemplate,
-  formatValidationErrors,
-  shouldValidateAsV3Template
-} from '../../services/taskTemplateValidator.js';
-import { config } from '../../config.js';
 import { WorkerLogLocator } from '../../services/taskLogLocator.js';
 import { getTaskContextService } from '../../services/taskContext.service.js';
 import { taskAutoDetectionService } from '../../services/taskAutoDetection.service.js';
@@ -37,9 +30,6 @@ import {
   buildQueueSummary,
   buildTaskHistoryEvents,
   streamLogFile,
-  TECHNICAL_TASK_TYPES,
-  MIN_DOCUMENTATION_LENGTH,
-  MIN_ACCEPTANCE_CRITERION_LENGTH,
   DEFAULT_WORK_TARGET,
   LOG_STREAM_TYPES,
   type ContractDevBotsTaskDetail,
@@ -935,11 +925,14 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       `).all(taskId);
 
       // Parse artifacts_blob and recovery_diagnosis JSON fields
-      const parsedHistory = phaseHistory.map((run: any) => ({
-        ...run,
-        artifacts: run.artifacts_blob ? JSON.parse(run.artifacts_blob) : null,
-        recovery: run.recovery_diagnosis ? JSON.parse(run.recovery_diagnosis) : null,
-      }));
+      const parsedHistory = phaseHistory.map((run: unknown) => {
+        const record = run as Record<string, unknown>;
+        return {
+          ...record,
+          artifacts: record.artifacts_blob ? JSON.parse(record.artifacts_blob as string) : null,
+          recovery: record.recovery_diagnosis ? JSON.parse(record.recovery_diagnosis as string) : null,
+        };
+      });
 
       sendSuccess(res, {
         taskId,

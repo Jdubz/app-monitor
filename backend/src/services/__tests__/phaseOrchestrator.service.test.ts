@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { PhaseOrchestratorService, type PhaseTransition } from '../phaseOrchestrator.service.js';
+import { PhaseOrchestratorService } from '../phaseOrchestrator.service.js';
 import type { ValidationResult } from '../phaseValidation/index.js';
 import type { Task } from '../taskQueue.sqlite.js';
 
@@ -397,8 +397,9 @@ describe('PhaseOrchestratorService', () => {
     it('should return all phase names', () => {
       const names = PhaseOrchestratorService.getAllPhaseNames();
       expect(Object.keys(names)).toHaveLength(7);
-      expect(names[4]).toBe('Test Coverage & Validation');
-      expect(names[5]).toBe('Cleanup & Docs');
+      expect(names[4]).toBe('Fixes');
+      expect(names[5]).toBe('Test Coverage & Validation');
+      expect(names[6]).toBe('Cleanup & Docs');
     });
   });
 });

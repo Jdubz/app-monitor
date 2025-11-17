@@ -135,47 +135,8 @@ export class SystemInitializationService {
         }
       });
 
-      // Attempt recovery for each orphaned task
-      for (const taskId of orphanedTaskIds) {
-        const task = this.components.taskQueue.getTask(taskId);
-        if (task && task.status === 'failed' && this.components.recovery) {
-          try {
-            const recoveryResult = await this.components.recovery.attemptRecovery({
-              task: task as Task & { metadata?: Record<string, unknown> },
-              failurePattern: {
-                name: 'server_restart',
-                description: 'Task was orphaned when server restarted or crashed',
-                patterns: [],
-                immediateFailure: false,
-                category: 'system_error',
-                suggestedFix: 'Task was orphaned due to server restart. Cleanup and retry.'
-              },
-              stderr: task.error || 'Task orphaned due to server restart',
-              stdout: '',
-              exitCode: -1
-            });
-
-            if (recoveryResult.recovered) {
-              logger.info({
-                category: 'recovery',
-                action: 'orphaned_task_recovery_initiated',
-                message: `Initiated recovery for orphaned task ${taskId}`,
-                details: {
-                  taskId,
-                  cleanupTaskId: recoveryResult.cleanupTaskId
-                }
-              });
-            }
-          } catch (error) {
-            logger.error({
-              category: 'recovery',
-              action: 'orphaned_task_recovery_failed',
-              message: `Failed to attempt recovery for orphaned task ${taskId}`,
-              error: error instanceof Error ? error.message : String(error)
-            });
-          }
-        }
-      }
+      // Note: Orphaned tasks are marked as failed during recoverOrphanedTasks()
+      // Recovery will be handled by the normal task execution flow if configured
     }
 
     logger.info({

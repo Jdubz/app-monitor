@@ -471,7 +471,7 @@ Comprehensive test suite with 17 tests covering:
 
 ## Related Documentation
 
-- `docs/technicalDesigns/task-processing-stage-implementation-roadmap.md` - Phase system architecture
+- `docs/architecture/phase-system-architecture.md` - Phase system architecture
 - `docs/architecture/master-design-intent.md` - Autonomy-first design principles
 - `backend/src/services/phaseMetrics.service.ts` - Aggregated metrics service
 - `backend/src/routes/metrics.routes.ts` - Metrics API endpoints

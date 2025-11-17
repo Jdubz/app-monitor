@@ -32,7 +32,6 @@ import type {
   PhaseValidator, 
   ValidationResult, 
   PhaseArtifacts,
-  TestArtifacts 
 } from './types.js';
 
 export class Phase5TestValidator implements PhaseValidator {

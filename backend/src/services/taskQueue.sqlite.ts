@@ -93,6 +93,8 @@ export interface Task {
   success_metrics?: string[];
   // PR workflow fields
   pr_number?: number; // GitHub PR number (foreign key reference only - fetch PR details from GitHub API on-demand)
+  followup_for_pr?: number; // PR number this task is a followup for
+  followup_tasks?: string[]; // Task IDs of followup tasks created for this task's PR
   // Orphaned PR handling
   is_orphaned_pr?: boolean; // True if this task was auto-adopted from orphaned system PR
   // Chain tracking
@@ -230,6 +232,14 @@ export class TaskQueueService {
    */
   setPRSyncService(prSyncService: { syncAllTrackedPRs: () => Promise<void> }): void {
     this.prSyncService = prSyncService;
+  }
+
+  /**
+   * Get the underlying database instance for dependency injection.
+   * Used by services that need direct database access (e.g., PhaseOrchestratorService).
+   */
+  getDb(): Database.Database {
+    return this.db;
   }
 
   private ensureDirectory(): void {
@@ -2466,4 +2476,5 @@ export class TaskQueueService {
     });
   }
 
+  // blockChain method removed - duplicate of the one at line 2387 which delegates to chainTracker
 }

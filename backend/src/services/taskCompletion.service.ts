@@ -35,7 +35,7 @@ import { getTokenTrackingService } from './tokenTracking.js';
 import { getQualityGateValidator, type QualityValidationResult } from './qualityGates.js';
 import { extractPRInfo, isValidPRInfo } from '../utils/prExtractor.js';
 import { getTaskVerificationService, type TaskVerificationResult } from './taskVerification.service.js';
-import { getQualityObservationService, type QualityObservation } from './qualityObservation.service.js';
+import { getQualityObservationService } from './qualityObservation.service.js';
 import { getDatabase } from './database.js';
 
 export interface TaskCompletionServiceConfig {

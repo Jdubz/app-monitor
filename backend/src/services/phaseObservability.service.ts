@@ -14,7 +14,6 @@
  */
 
 import Database from 'better-sqlite3';
-import { logger } from '../utils/logger.js';
 import {
   PhaseExecutionTrace,
   TaskExecutionTimeline,
@@ -26,16 +25,7 @@ import {
   DiagnosticQuery,
   DiagnosticQueryResult,
 } from '@app-monitor/api-contracts';
-
-const PHASE_NAMES: Record<number, string> = {
-  1: 'Planning',
-  2: 'Implementation',
-  3: 'Review',
-  4: 'Fixes',
-  5: 'Test & Validate',
-  6: 'Cleanup',
-  7: 'PR Shepherding',
-};
+import { PHASE_NAMES } from './phaseConstants.js';
 
 export class PhaseObservabilityService {
   private db: Database.Database;
@@ -128,14 +118,14 @@ export class PhaseObservabilityService {
     const currentPhase = task.phase_index ? {
       index: task.phase_index,
       name: PHASE_NAMES[task.phase_index] || `Phase ${task.phase_index}`,
-      status: task.phase_status as any,
+      status: task.phase_status as 'ready' | 'running' | 'validating' | 'recovering' | 'complete' | 'blocked',
       attempts: task.phase_attempts || 0,
     } : null;
 
     return {
       taskId: task.id,
       taskTitle: task.type,
-      taskStatus: task.status as any,
+      taskStatus: task.status as 'pending' | 'assigned' | 'active' | 'completed' | 'failed',
       totalDurationMs: totalDuration,
       createdAt: task.created_at,
       completedAt: task.completed_at,
@@ -167,7 +157,7 @@ export class PhaseObservabilityService {
       WHERE 1=1
     `;
     
-    const params: any[] = [];
+    const params: unknown[] = [];
 
     if (query.taskId) {
       sql += ` AND tsr.task_id = ?`;
@@ -229,7 +219,7 @@ export class PhaseObservabilityService {
       phaseName: PHASE_NAMES[row.phase_index] || `Phase ${row.phase_index}`,
       attempt: row.attempt,
       timestamp: row.timestamp,
-      level: row.level as any,
+      level: row.level as 'info' | 'warn' | 'error' | 'debug',
       category: row.category,
       action: row.action,
       message: row.message,
@@ -398,7 +388,7 @@ export class PhaseObservabilityService {
 
     let results: unknown[] = [];
     let summary = '';
-    let recommendations: string[] = [];
+    const recommendations: string[] = [];
 
     switch (queryId) {
       case 'slow_phases':

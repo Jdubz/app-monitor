@@ -118,7 +118,7 @@ export class PhaseOrchestratorService {
     // Phase 4: Fixes - Return to Phase 3 if all issues addressed, stay in Phase 4 otherwise
     if (currentPhase === 4) {
       // Check if all issues have been addressed (either explicitly or via passed flag)
-      const allIssuesAddressed = validation.metadata?.all_issues_addressed === true || validation.passed === true;
+      const allIssuesAddressed = validation.allIssuesAddressed === true || validation.passed === true;
 
       if (allIssuesAddressed) {
         return {
