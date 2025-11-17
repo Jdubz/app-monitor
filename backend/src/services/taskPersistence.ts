@@ -3,7 +3,7 @@ import path from 'path';
 
 import { logger } from '../utils/logger.js';
 import type { Task } from './taskQueue.sqlite.js';
-import { MS_PER_DAY } from '../constants/timeouts.js';
+import { daysAgo } from '../constants/timeouts.js';
 
 const STORAGE_VERSION = '1.0';
 
@@ -142,7 +142,7 @@ export class TaskPersistence {
     if (!retentionDays || retentionDays <= 0) {
       return tasks;
     }
-    const cutoff = Date.now() - retentionDays * MS_PER_DAY;
+    const cutoff = daysAgo(retentionDays).getTime();
     const filtered = tasks.filter((task) => {
       const completedAt = this.getCompletedTimestamp(task);
       return !completedAt || completedAt >= cutoff;

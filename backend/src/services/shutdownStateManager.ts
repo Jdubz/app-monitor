@@ -8,7 +8,7 @@
 import { logger } from '../utils/logger.js';
 import { DevBotsDatabase } from './database.js';
 import type { RetryAttempt } from './devBotsManager.js';
-import { MS_PER_DAY, MS_PER_HOUR } from '../constants/timeouts.js';
+import { daysAgo, MS_PER_DAY, MS_PER_HOUR } from '../constants/timeouts.js';
 
 export interface ShutdownState {
   timestamp: number;
@@ -153,7 +153,7 @@ export class ShutdownStateManager {
         FROM retry_history
         WHERE created_at > ? -- Only recent history (last 7 days)
         ORDER BY task_id, attempt_number
-      `).all(Date.now() - (7 * MS_PER_DAY));
+      `).all(daysAgo(7).getTime());
 
       for (const row of rows as Array<{
         task_id: string;
@@ -365,7 +365,7 @@ export class ShutdownStateManager {
    */
   public async cleanup(): Promise<void> {
     try {
-      const cutoffTime = Date.now() - (7 * MS_PER_DAY); // 7 days
+      const cutoffTime = daysAgo(7).getTime();
 
       const retryDeleted = this.db.getConnection().prepare(`
         DELETE FROM retry_history WHERE created_at < ?
