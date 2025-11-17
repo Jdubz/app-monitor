@@ -7,8 +7,7 @@ module.exports = {
   },
   plugins: [
     '@typescript-eslint',
-    // TODO: Fix eslint-plugin-local-rules loading issue
-    // 'local-rules',
+    'local-rules',
   ],
   extends: [
     'eslint:recommended',
@@ -21,8 +20,7 @@ module.exports = {
   rules: {
     '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
-    // TODO: Enable when local-rules plugin loading is fixed
-    // 'local-rules/no-direct-db-in-routes': 'error',
+    'local-rules/no-direct-db-in-routes': 'error',
   },
   overrides: [
     {

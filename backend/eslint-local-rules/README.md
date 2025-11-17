@@ -45,20 +45,21 @@ const plansService = new PlansService(db); // ✅ Passing to service constructor
 
 ## Status
 
-**⚠️ TODO**: The ESLint plugin loading is currently not working due to an issue with `eslint-plugin-local-rules` in ES module projects.
+**✅ WORKING**: The ESLint custom rule is fully functional and enforcing layered architecture.
 
-The rule has been implemented and is ready to use, but needs one of these solutions:
-1. Configure `eslint-plugin-local-rules` to work with ES modules
-2. Switch to using `--rulesdir` flag directly
-3. Create a proper npm package for the custom rules
-4. Use ESLint's flat config (eslint.config.js) instead of .eslintrc.cjs
+**Solution**: For ES module projects (package.json with `"type": "module"`):
+1. Create `eslint-local-rules.cjs` at project root (NOT `.js` - must be `.cjs`)
+2. Export rules with CommonJS syntax (module.exports)
+3. Use `.cjs` extension for all rule files in the subdirectory
+4. Reference subdirectory rules with relative path: `require('./eslint-local-rules/rule-name.cjs')`
 
-**Temporary Workaround**: Code reviews should manually check for direct database access in route files.
+**Why .cjs is required**: When package.json has `"type": "module"`, all `.js` files are treated as ES modules. The `eslint-plugin-local-rules` package uses CommonJS `require()`, so rule files must use `.cjs` extension to be loaded as CommonJS.
 
-## Installation (When Fixed)
+## Installation
 
-1. The custom rules are already in `eslint-local-rules/` directory
-2. `eslint-plugin-local-rules` is already installed
-3. `.eslintrc.cjs` is already configured to use the rule
+1. ✅ Custom rules are in `eslint-local-rules/` directory
+2. ✅ `eslint-plugin-local-rules` is installed
+3. ✅ `eslint-local-rules.cjs` is at backend root
+4. ✅ `.eslintrc.cjs` is configured to use the rule
 
-Once the plugin loading issue is resolved, the rule will automatically enforce these patterns during linting.
+The rule automatically runs during `npm run lint` and will fail CI if violations are detected.
