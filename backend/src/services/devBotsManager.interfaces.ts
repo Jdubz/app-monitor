@@ -16,7 +16,6 @@ import type { DockerManager } from './dockerManager.js';
 import type { RetryManager } from './retryManager.js';
 // TaskPersistence removed - using SQLite directly
 // WorkspaceOrchestrator removed - using container isolation
-import type { SimpleFailureRecovery } from './failureRecovery.js';
 import type { ScopeControlService } from './scopeControl.service.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskExecutionService } from './taskExecution.service.js';
@@ -53,10 +52,6 @@ export interface DevBotsManagerDependencies {
   guidelinesManager: TaskCreationGuidelinesManager;
   workspaceSyncManager: WorkspaceSyncManager;
   retryManager: RetryManager;
-  // WorkspaceOrchestrator removed - using container isolation
-  recovery: SimpleFailureRecovery;
-
-  // TaskPersistence removed - using SQLite directly
 
   // Scope control
   scopeControl: ScopeControlService;

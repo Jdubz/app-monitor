@@ -18,8 +18,7 @@ import { getPlanStatusUpdater } from './planStatusUpdater.singleton.js';
 export interface ChainStats {
   activeChains: number;
   blockedChains: number;
-  implementationQueueDepth: number;
-  followupQueueDepth: number;
+  phaseDistribution: Record<number, number>;
   maxConcurrentChains: number;
 }
 
@@ -74,25 +73,8 @@ export class ChainTrackerService {
    * Get queue depths by phase
    * Returns distribution of tasks across phases for monitoring
    */
-  getQueueDepths(): { implementation: number; followup: number; phaseDistribution: Record<number, number> } {
-    // Legacy implementation queue (deprecated)
-    const implResult = this.db.prepare(`
-      SELECT COUNT(*) as count
-      FROM tasks
-      WHERE queue_stage = 'implementation'
-      AND status = 'pending'
-    `).get() as { count: number };
-
-    // Legacy followup queue (deprecated)
-    const followupResult = this.db.prepare(`
-      SELECT COUNT(*) as count
-      FROM tasks
-      WHERE queue_stage = 'followup'
-      AND status = 'pending'
-      AND chain_status != 'blocked'
-    `).get() as { count: number };
-
-    // Phase distribution (new - primary metric)
+  getQueueDepths(): { phaseDistribution: Record<number, number> } {
+    // Phase distribution - tasks ready for execution
     const phaseDistResult = this.db.prepare(`
       SELECT phase_index, COUNT(*) as count
       FROM tasks
@@ -108,8 +90,6 @@ export class ChainTrackerService {
     }
 
     return {
-      implementation: implResult.count,
-      followup: followupResult.count,
       phaseDistribution
     };
   }
@@ -270,8 +250,7 @@ export class ChainTrackerService {
     return {
       activeChains,
       blockedChains,
-      implementationQueueDepth: depths.implementation,
-      followupQueueDepth: depths.followup,
+      phaseDistribution: depths.phaseDistribution,
       maxConcurrentChains
     };
   }

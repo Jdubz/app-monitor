@@ -93,28 +93,18 @@ export interface Task {
   architecture_references?: string[];
   validation_steps?: string[];
   success_metrics?: string[];
-  // Recovery system fields
-  is_repair_bot?: boolean; // True if this is a cleanup or follow-up bot
-  original_task_id?: string; // ID of the original failed task (for repair bots)
-  repair_stage?: 'cleanup' | 'followup'; // Which stage of recovery this bot represents
   // PR workflow fields
   pr_number?: number; // GitHub PR number (foreign key reference only - fetch PR details from GitHub API on-demand)
-  // Followup task linking
-  followup_for_pr?: number; // If this task fixes issues from a PR
-  followup_tasks?: string[]; // Child tasks created to fix PR issues
   // Orphaned PR handling
   is_orphaned_pr?: boolean; // True if this task was auto-adopted from orphaned system PR
-  // Chain tracking for fix task depth limiting
+  // Chain tracking
   chain_id?: string; // UUID identifying the chain this task belongs to
   chain_depth?: number; // Depth in the fix chain (0 = original, 1+ = fix attempts)
-  // Staged Queue System fields (DEPRECATED - replaced by phase system)
-  /** @deprecated Use phase_index instead - queue_stage is legacy */
-  queue_stage?: 'implementation' | 'followup'; // Queue stage for chain-aware scheduling
   chain_status?: 'pending' | 'active' | 'blocked' | 'closed'; // Chain lifecycle status
   blocked_reason?: string; // Reason chain was blocked (for manual intervention)
   blocked_at?: number; // Unix timestamp when chain was blocked
   blocked_by?: string; // User/system that blocked the chain
-  // Phase System fields (replaces queue_stage + REVIEW/FIX child tasks)
+  // Phase System fields (THE ONLY task processing system)
   phase_index?: number; // Current phase (1-7)
   phase_name?: string; // Human-readable phase name
   phase_status?: 'ready' | 'running' | 'validating' | 'recovering' | 'complete' | 'blocked';
@@ -372,42 +362,7 @@ export class TaskQueueService {
       });
     }
 
-    // Migration 3: Add repair bot / task recovery columns
-    const recoveryColumns = ['is_repair_bot', 'original_task_id', 'followup_for_pr', 'followup_tasks'];
-    const missingRecoveryColumns = recoveryColumns.filter(col => !columnNames.has(col));
-
-    if (missingRecoveryColumns.length > 0) {
-      logger.info({
-        category: 'process',
-        action: 'adding_recovery_columns',
-        message: `Adding ${missingRecoveryColumns.length} task recovery columns to tasks table`,
-        details: { columns: missingRecoveryColumns }
-      });
-
-      if (!columnNames.has('is_repair_bot')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN is_repair_bot INTEGER DEFAULT 0;`);
-      }
-      if (!columnNames.has('original_task_id')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN original_task_id TEXT;`);
-      }
-      if (!columnNames.has('followup_for_pr')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN followup_for_pr INTEGER;`);
-      }
-      if (!columnNames.has('followup_tasks')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN followup_tasks TEXT;`); // JSON array
-      }
-
-      // Create indexes
-      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_original_task_id ON tasks(original_task_id) WHERE original_task_id IS NOT NULL;`);
-      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_followup_for_pr ON tasks(followup_for_pr) WHERE followup_for_pr IS NOT NULL;`);
-      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_is_repair_bot ON tasks(is_repair_bot) WHERE is_repair_bot = 1;`);
-
-      logger.info({
-        category: 'process',
-        action: 'migration_complete',
-        message: 'Task recovery columns added successfully'
-      });
-    }
+    // Migration 3: REMOVED - repair bot/followup system deprecated
 
     // Migration 4: Add intelligent agent selection columns
     const classificationColumns = ['task_category', 'file_patterns', 'estimated_complexity', 'preferred_agent'];
@@ -478,21 +433,18 @@ export class TaskQueueService {
       });
     }
 
-    // Migration 012: Add staged queue / chain tracking columns
-    const stagedQueueColumns = ['queue_stage', 'chain_id', 'chain_status', 'chain_depth', 'blocked_reason', 'blocked_at', 'blocked_by'];
-    const missingStagedQueueColumns = stagedQueueColumns.filter(col => !columnNames.has(col));
+    // Migration 012: Add chain tracking columns (queue_stage removed - phase system only)
+    const chainColumns = ['chain_id', 'chain_status', 'chain_depth', 'blocked_reason', 'blocked_at', 'blocked_by'];
+    const missingChainColumns = chainColumns.filter(col => !columnNames.has(col));
 
-    if (missingStagedQueueColumns.length > 0) {
+    if (missingChainColumns.length > 0) {
       logger.info({
         category: 'process',
-        action: 'adding_staged_queue_columns',
-        message: `Adding ${missingStagedQueueColumns.length} staged queue columns for chain tracking`,
-        details: { columns: missingStagedQueueColumns }
+        action: 'adding_chain_columns',
+        message: `Adding ${missingChainColumns.length} chain tracking columns`,
+        details: { columns: missingChainColumns }
       });
 
-      if (!columnNames.has('queue_stage')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN queue_stage TEXT CHECK(queue_stage IN ('implementation', 'followup'));`);
-      }
       if (!columnNames.has('chain_id')) {
         this.db.exec(`ALTER TABLE tasks ADD COLUMN chain_id TEXT;`);
       }
@@ -515,12 +467,11 @@ export class TaskQueueService {
       // Create indexes for chain queries
       this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_chain_id ON tasks(chain_id) WHERE chain_id IS NOT NULL;`);
       this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_chain_status ON tasks(chain_status) WHERE chain_status IS NOT NULL;`);
-      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_queue_stage ON tasks(queue_stage) WHERE queue_stage IS NOT NULL;`);
 
       logger.info({
         category: 'process',
         action: 'migration_complete',
-        message: 'Staged queue columns added successfully for chain tracking'
+        message: 'Chain tracking columns added successfully'
       });
     }
 
@@ -811,15 +762,11 @@ export class TaskQueueService {
         pr_review_status TEXT,
         pr_created_at TEXT,
         pr_merged_at TEXT,
-        followup_for_pr INTEGER,
-        followup_tasks TEXT,
         -- Migration 011 columns
         chain_id TEXT,
         chain_depth INTEGER,
-        -- Migration 012 columns
-        queue_stage TEXT,
+        -- Migration 012 columns (queue_stage and original_task_id removed - phase system only)
         chain_status TEXT,
-        original_task_id TEXT,
         -- Migration 020 columns (context management)
         context_bundle_id TEXT,
         context_cache_key TEXT,
@@ -838,7 +785,6 @@ export class TaskQueueService {
       CREATE INDEX IF NOT EXISTS idx_tasks_pr_number ON tasks(pr_number) WHERE pr_number IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_tasks_chain_id ON tasks(chain_id) WHERE chain_id IS NOT NULL;
       CREATE INDEX IF NOT EXISTS idx_tasks_chain_status ON tasks(chain_status) WHERE chain_status IS NOT NULL;
-      CREATE INDEX IF NOT EXISTS idx_tasks_queue_stage ON tasks(queue_stage) WHERE queue_stage IS NOT NULL;
       -- Note: idx_tasks_context_bundle_id, idx_tasks_context_cache_key, idx_tasks_risk_level are created
       --       in the dynamic migration (runMigrations lines 521-523), not here in createSchema
       -- Note: idx_tasks_agent_type is created in migration, not here
@@ -998,23 +944,8 @@ export class TaskQueueService {
       });
     }
     
-    // Determine queue_stage and chain_id (Staged Queue System)
-    const isImplementation = !taskData.original_task_id && !taskData.is_repair_bot;
-    const queueStage = isImplementation ? 'implementation' : 'followup';
-    
-    // Chain ID determination
-    let chainId = taskData.chain_id;
-    if (!chainId) {
-      if (isImplementation) {
-        // Implementation tasks: chain_id = task id (set after insert)
-        chainId = taskData.id || generatedId;
-      } else if (taskData.original_task_id) {
-        // Follow-up tasks: inherit chain_id from original task
-        const originalStmt = this.db.prepare('SELECT chain_id FROM tasks WHERE id = ?');
-        const original = originalStmt.get(taskData.original_task_id) as { chain_id?: string } | undefined;
-        chainId = original?.chain_id || taskData.original_task_id;
-      }
-    }
+    // Chain ID determination - all new tasks start their own chain
+    const chainId = taskData.chain_id || taskData.id || generatedId;
     
     const task: Task = {
       id: taskData.id || generatedId,
@@ -1040,12 +971,11 @@ export class TaskQueueService {
       file_patterns: filePatterns,
       estimated_complexity: estimatedComplexity,
       preferred_agent: taskData.preferred_agent,
-      // Staged Queue fields (deprecated but kept for backward compatibility)
-      queue_stage: queueStage,
+      // Chain tracking
       chain_status: 'pending',
       chain_id: chainId,
       chain_depth: taskData.chain_depth || 0,
-      // Phase system fields (new - all tasks start at Phase 1)
+      // Phase system fields (all tasks start at Phase 1)
       phase_index: 1,
       phase_name: 'Planning',
       phase_status: 'ready',
@@ -1061,9 +991,9 @@ export class TaskQueueService {
           created_at, assigned_agent, prompt, can_retry, retry_count, max_retries,
           timeout_ms, fingerprint, estimated_hours, complexity,
           task_category, file_patterns, estimated_complexity, preferred_agent,
-          queue_stage, chain_status, chain_id, chain_depth,
+          chain_status, chain_id, chain_depth,
           phase_index, phase_name, phase_status, phase_attempts, phase_payload
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       stmt.run(
@@ -1072,7 +1002,7 @@ export class TaskQueueService {
         task.prompt, task.can_retry ? 1 : 0, task.retry_count, task.max_retries,
         task.timeout_ms, task.fingerprint, task.estimated_hours, task.complexity,
         task.task_category, task.file_patterns, task.estimated_complexity, task.preferred_agent,
-        task.queue_stage, task.chain_status, task.chain_id, task.chain_depth,
+        task.chain_status, task.chain_id, task.chain_depth,
         task.phase_index, task.phase_name, task.phase_status, task.phase_attempts, task.phase_payload
       );
 
@@ -2125,32 +2055,9 @@ export class TaskQueueService {
   }
 
   /**
-   * Check if a task already has a recovery attempt
+   * REMOVED: hasRecoveryAttempt() - repair bot system deprecated
+   * The phase system handles all task processing within a single task
    */
-  hasRecoveryAttempt(taskId: string): boolean {
-    try {
-      const result = this.db.prepare(`
-        SELECT COUNT(*) as count
-        FROM tasks
-        WHERE original_task_id = ?
-          AND is_repair_bot = 1
-      `).get(taskId) as { count: number };
-
-      return result.count > 0;
-    } catch (error) {
-      // Gracefully handle missing columns (e.g., original_task_id, is_repair_bot not yet migrated)
-      if (error instanceof Error && error.message.includes('no such column')) {
-        logger.debug({
-          category: 'process',
-          action: 'recovery_columns_not_migrated',
-          message: 'Task recovery columns not yet available - assuming no recovery attempt exists.',
-          error
-        });
-        return false;
-      }
-      throw error;
-    }
-  }
 
   /**
    * Recover orphaned tasks on server startup

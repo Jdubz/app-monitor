@@ -14,7 +14,6 @@ import { DockerManager, DockerValidationResult } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
 import { MetricsEmitter } from './metricsEmitter.js';
 
-import { SimpleFailureRecovery } from './failureRecovery.js';
 import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
 import type { ScopeControlService } from './scopeControl.service.js';
 import type { EphemeralWorkerService, EphemeralWorker as EphemeralWorkerType } from './ephemeralWorker.service.js';
@@ -76,7 +75,6 @@ export class DevBotsManager extends EventEmitter {
   private guidelinesManager!: TaskCreationGuidelinesManager;
   private workspaceSyncManager!: WorkspaceSyncManager;
   private retryManager!: RetryManager;
-  private recovery!: SimpleFailureRecovery;
   private scopeControl!: ScopeControlService;
   private ephemeralWorkerService!: EphemeralWorkerService;
   private taskExecutionService!: TaskExecutionService;
@@ -129,27 +127,11 @@ export class DevBotsManager extends EventEmitter {
     // Initialize maxWorkers from config
     this.maxWorkers = config.devBots.maxWorkers;
 
-    // Initialize SimpleFailureRecovery
-    this.recovery = new SimpleFailureRecovery(this);
-
-    // Type helper for dependency injection
+    // Update WorkerHealthMonitor with emit function
     interface WorkerHealthMonitorDeps {
-      recovery: SimpleFailureRecovery;
       emit: (event: string, data: unknown) => void;
     }
-
-    // Update WorkerHealthMonitor with recovery and emit function
-    // Note: WorkerHealthMonitor is injected but needs recovery instance from DevBotsManager
-    (this.workerHealthMonitor as unknown as WorkerHealthMonitorDeps).recovery = this.recovery;
     (this.workerHealthMonitor as unknown as WorkerHealthMonitorDeps).emit = this.emit.bind(this);
-
-    // Type helper for dependency injection
-    interface SystemInitDeps {
-      components: { recovery: SimpleFailureRecovery };
-    }
-
-    // Update SystemInitializationService with recovery instance
-    (this.systemInitializationService as unknown as SystemInitDeps).components.recovery = this.recovery;
 
     // Type helper for dependency injection
     interface RetryCoordinationDeps {
