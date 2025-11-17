@@ -466,6 +466,117 @@ export interface DevBotsReportCompletionResponse {
 
 export type DevBotsReportCompletionApiResponse = ApiSuccess<DevBotsReportCompletionResponse>;
 
+// -----------------------------------------------------------------------------
+// Phase Observability Contracts
+// -----------------------------------------------------------------------------
+
+export interface PhaseExecutionTrace {
+  taskId: string;
+  phaseIndex: number;
+  phaseName: string;
+  attempt: number;
+  status: 'success' | 'failed' | 'blocked' | 'recovered';
+  createdAt: string;
+  completedAt: string | null;
+  durationMs: number | null;
+  validatorResults: unknown | null;
+  recoveryDiagnosis: unknown | null;
+  error: string | null;
+}
+
+export interface TaskExecutionTimeline {
+  taskId: string;
+  taskTitle: string;
+  taskStatus: DevBotsTaskStatus;
+  totalDurationMs: number | null;
+  createdAt: string;
+  completedAt: string | null;
+  currentPhase: {
+    index: number;
+    name: string;
+    status: PhaseStatus;
+    attempts: number;
+  } | null;
+  phases: PhaseExecutionTrace[];
+  recoveryCount: number;
+  loopCount: number;
+  isStuck: boolean;
+}
+
+export interface PhaseLogEntry {
+  taskId: string;
+  phaseIndex: number;
+  phaseName: string;
+  attempt: number;
+  timestamp: string;
+  level: 'info' | 'warn' | 'error' | 'debug';
+  category: string;
+  action: string;
+  message: string;
+  details: unknown;
+}
+
+export interface PhaseLogsQuery {
+  taskId?: string;
+  phaseIndex?: number;
+  level?: string;
+  category?: string;
+  startTime?: string;
+  endTime?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface PhaseLogsResponse {
+  logs: PhaseLogEntry[];
+  total: number;
+  query: PhaseLogsQuery;
+}
+
+export interface TaskAnomalyDetection {
+  taskId: string;
+  anomalies: Array<{
+    type: 'stuck_loop' | 'excessive_recovery' | 'slow_phase' | 'validation_pattern';
+    severity: 'low' | 'medium' | 'high';
+    description: string;
+    details: unknown;
+  }>;
+  score: number;
+  isAnomaly: boolean;
+}
+
+export interface SystemAnomalies {
+  timestamp: string;
+  tasks: TaskAnomalyDetection[];
+  systemPatterns: Array<{
+    type: string;
+    description: string;
+    affectedTasks: string[];
+    severity: 'low' | 'medium' | 'high';
+  }>;
+}
+
+export interface DiagnosticQuery {
+  id: string;
+  name: string;
+  description: string;
+  category: 'performance' | 'failures' | 'loops' | 'recovery' | 'validation';
+}
+
+export interface DiagnosticQueryResult {
+  query: DiagnosticQuery;
+  executedAt: string;
+  results: unknown[];
+  summary: string;
+  recommendations: string[];
+}
+
+export type TaskTraceResponse = ApiSuccess<TaskExecutionTimeline>;
+export type PhaseLogsApiResponse = ApiSuccess<PhaseLogsResponse>;
+export type AnomalyDetectionResponse = ApiSuccess<SystemAnomalies>;
+export type DiagnosticQueriesResponse = ApiSuccess<DiagnosticQuery[]>;
+export type DiagnosticQueryResultResponse = ApiSuccess<DiagnosticQueryResult>;
+
 export interface DevBotsInteractiveSessionStartPayload {
   modelProvider: string;
   modelName: string;
