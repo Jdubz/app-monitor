@@ -4,7 +4,7 @@ import * as fs from 'fs'
 import * as path from 'path'
 
 describe('Logger', () => {
-  const testLogFile = path.join(__dirname, '../../../logs/dev-monitor-backend.log')
+  const testLogFile = path.join(__dirname, '../../data/logs/dev-monitor-backend.log')
 
   beforeEach(() => {
     // Clear any existing log file
