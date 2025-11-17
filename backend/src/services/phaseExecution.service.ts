@@ -16,12 +16,15 @@ import type { Task } from './taskQueue.sqlite.js';
 import { PhaseOrchestratorService } from './phaseOrchestrator.service.js';
 import { getValidatorRegistry } from './phaseValidation/index.js';
 import { getArtifactExtractor } from './artifactExtractor.service.js';
+import { getRecoveryService } from './recoveryAgent.service.js';
 import Database from 'better-sqlite3';
 
 export interface PhaseExecutionResult {
   success: boolean;
   nextPhase: number | null; // null means task cancelled
   validationPassed: boolean;
+  recoveryAttempted?: boolean;
+  recoverySucceeded?: boolean;
   errors?: string[];
   artifacts?: Record<string, unknown>;
 }
@@ -101,8 +104,75 @@ export class PhaseExecutionService {
         },
       });
 
-      // Step 5: If validation failed, return early
+      // Step 5: If validation failed, attempt recovery
       if (!validationResult.passed) {
+        const recoveryService = getRecoveryService();
+        
+        if (recoveryService.shouldAttemptRecovery(validationResult)) {
+          logger.info({
+            category: 'phase',
+            action: 'recovery_attempt',
+            message: `Attempting recovery for task ${task.id} phase ${phaseIndex}`,
+            details: {
+              taskId: task.id,
+              phaseIndex,
+              validationErrors: validationResult.errors,
+            },
+          });
+
+          const recoveryResult = await recoveryService.executeRecovery(
+            task,
+            containerId,
+            validationResult,
+            1 // First recovery attempt
+          );
+
+          if (recoveryResult.shouldRetry) {
+            logger.info({
+              category: 'phase',
+              action: 'recovery_retry',
+              message: `Recovery suggests retry for task ${task.id}`,
+              details: {
+                taskId: task.id,
+                category: recoveryResult.category,
+                diagnosis: recoveryResult.diagnosis,
+              },
+            });
+
+            return {
+              success: false,
+              nextPhase: phaseIndex, // Stay in current phase for retry
+              validationPassed: false,
+              recoveryAttempted: true,
+              recoverySucceeded: recoveryResult.success,
+              errors: [recoveryResult.diagnosis],
+              artifacts: validationResult.artifacts,
+            };
+          }
+
+          // Recovery says blocked - cannot auto-recover
+          logger.warn({
+            category: 'phase',
+            action: 'recovery_blocked',
+            message: `Recovery blocked for task ${task.id}: ${recoveryResult.diagnosis}`,
+            details: {
+              taskId: task.id,
+              diagnosis: recoveryResult.diagnosis,
+            },
+          });
+
+          return {
+            success: false,
+            nextPhase: null, // Task blocked
+            validationPassed: false,
+            recoveryAttempted: true,
+            recoverySucceeded: false,
+            errors: [recoveryResult.diagnosis],
+            artifacts: validationResult.artifacts,
+          };
+        }
+
+        // Validation failed, no recovery attempted
         return {
           success: false,
           nextPhase: phaseIndex, // Stay in current phase for retry
