@@ -63,6 +63,10 @@ export default defineConfig({
         ...devices['Desktop Chrome'],
         headless: true, // Explicitly enforce headless mode - ALWAYS run headless
         channel: 'chrome', // Use Chrome specifically
+        launchOptions: {
+          // Force headless mode at launch level - cannot be overridden by CLI
+          headless: true,
+        },
       },
     },
   ],

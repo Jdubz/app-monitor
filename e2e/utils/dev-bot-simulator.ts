@@ -7,6 +7,9 @@
 
 import { EventEmitter } from 'events';
 
+// API key for E2E tests (must match playwright.config.ts)
+const API_KEY = 'test-e2e-api-key-not-for-production';
+
 export interface SimulatorConfig {
   /** Docker image to use for bot */
   image?: string;
@@ -128,7 +131,10 @@ export class DevBotSimulator extends EventEmitter {
       `${this.apiBaseUrl}/api/dev-bots/tasks/${taskId}/simulate-phase-progression`,
       {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-API-Key': API_KEY
+        },
         body: JSON.stringify({ speed: 'fast' }) // 100ms per phase
       }
     );
@@ -240,7 +246,9 @@ export class DevBotSimulator extends EventEmitter {
    * E2E tests should monitor backend, not simulate phase execution
    */
   private async getTaskStatus(taskId: string): Promise<any> {
-    const response = await fetch(`${this.apiBaseUrl}/api/dev-bots/tasks/${taskId}/detail`);
+    const response = await fetch(`${this.apiBaseUrl}/api/dev-bots/tasks/${taskId}/detail`, {
+      headers: { 'X-API-Key': API_KEY }
+    });
     
     if (!response.ok) {
       throw new Error(`Failed to get task status: ${response.statusText}`);
@@ -422,7 +430,10 @@ export class DevBotSimulator extends EventEmitter {
     // Call API to assign task
     await fetch(`${this.apiBaseUrl}/api/dev-bots/tasks/${taskId}/assign`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-API-Key': API_KEY
+      },
       body: JSON.stringify({ botId: this.instance.id })
     });
   }
@@ -456,18 +467,32 @@ export async function createTask(
   },
   apiBaseUrl: string = 'http://localhost:3002'
 ): Promise<{ id: string }> {
-  const response = await fetch(`${apiBaseUrl}/api/dev-bots/tasks`, {
+  const response = await fetch(`${apiBaseUrl}/api/dev-bots/tasks/minimal`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(data)
+    headers: { 
+      'Content-Type': 'application/json',
+      'X-API-Key': API_KEY
+    },
+    body: JSON.stringify({
+      title: data.title,
+      taskType: data.type,
+      intent: data.prompt
+    })
   });
   
   if (!response.ok) {
-    throw new Error(`Failed to create task: ${response.statusText}`);
+    const errorText = await response.text();
+    throw new Error(`Failed to create task (${response.status}): ${response.statusText} - ${errorText}`);
   }
   
   const result = await response.json();
-  return { id: result.data.id };
+  console.log('Create task response:', JSON.stringify(result, null, 2));
+  
+  if (!result.success || !result.data || !result.data.task || !result.data.task.id) {
+    throw new Error(`Invalid task creation response: ${JSON.stringify(result)}`);
+  }
+  
+  return { id: result.data.task.id };
 }
 
 /**
@@ -477,7 +502,9 @@ export async function getTask(
   taskId: string,
   apiBaseUrl: string = 'http://localhost:3002'
 ): Promise<any> {
-  const response = await fetch(`${apiBaseUrl}/api/dev-bots/tasks/${taskId}`);
+  const response = await fetch(`${apiBaseUrl}/api/dev-bots/tasks/${taskId}`, {
+    headers: { 'X-API-Key': API_KEY }
+  });
   
   if (!response.ok) {
     throw new Error(`Failed to get task: ${response.statusText}`);
@@ -494,7 +521,9 @@ export async function getTaskLogs(
   taskId: string,
   apiBaseUrl: string = 'http://localhost:3002'
 ): Promise<string> {
-  const response = await fetch(`${apiBaseUrl}/api/dev-bots/tasks/${taskId}/logs`);
+  const response = await fetch(`${apiBaseUrl}/api/dev-bots/tasks/${taskId}/logs`, {
+    headers: { 'X-API-Key': API_KEY }
+  });
   
   if (!response.ok) {
     throw new Error(`Failed to get logs: ${response.statusText}`);

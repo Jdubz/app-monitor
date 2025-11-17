@@ -413,6 +413,74 @@ export function setupGitHubMock(webhookEndpoint?: string): GitHubAPIMock {
 }
 
 /**
+ * Helper to create a pull request
+ */
+export async function createPullRequest(
+  options: {
+    title?: string;
+    baseBranch?: string;
+    headBranch?: string;
+    baseBehind?: number;
+    hasConflicts?: boolean;
+    ciStatus?: 'success' | 'failure' | 'pending';
+    approvals?: number;
+    isDraft?: boolean;
+  },
+  mock: GitHubAPIMock
+): Promise<MockPRResponse> {
+  const prNumber = mock['prCounter']++;
+  
+  // Determine mergeable state based on options
+  let mergeableState: MockPRResponse['mergeable_state'] = 'clean';
+  if (options.hasConflicts) {
+    mergeableState = 'dirty';
+  } else if (options.ciStatus === 'pending') {
+    mergeableState = 'unstable';
+  } else if (options.ciStatus === 'failure') {
+    mergeableState = 'blocked';
+  }
+  
+  const pr: MockPRResponse = {
+    number: prNumber,
+    state: 'open',
+    title: options.title || `Test PR #${prNumber}`,
+    body: 'Test PR body',
+    user: { login: 'test-user' },
+    head: { 
+      ref: options.headBranch || 'feature/test',
+      sha: `sha-head-${prNumber}`
+    },
+    base: { 
+      ref: options.baseBranch || 'main',
+      sha: `sha-base-${prNumber}`
+    },
+    mergeable: !options.hasConflicts,
+    mergeable_state: mergeableState,
+    merged: false,
+    draft: options.isDraft || false,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+  
+  mock['pullRequests'].set(prNumber, pr);
+  
+  // Add check run if CI status specified
+  if (options.ciStatus) {
+    const checkRun: MockCheckRun = {
+      id: Date.now(),
+      status: options.ciStatus === 'pending' ? 'in_progress' : 'completed',
+      conclusion: options.ciStatus === 'pending' ? null : options.ciStatus,
+      name: 'CI',
+      started_at: new Date().toISOString(),
+      completed_at: options.ciStatus === 'pending' ? null : new Date().toISOString(),
+    };
+    mock['checkRuns'].set(prNumber, [checkRun]);
+  }
+  
+  return pr;
+}
+
+/**
  * Helper to wait for webhook delivery
  */
 export async function waitForWebhook(
