@@ -1,19 +1,25 @@
 /**
  * Codex CLI Log Parser
  *
- * NOTE: Codex CLI logs (~/.codex/sessions/) do not currently include detailed
- * usage/token information in the same way Claude does. This service provides
- * a framework for tracking Codex usage when data becomes available.
+ * @deprecated This parser has been consolidated into unifiedLogParser.ts
+ * Use unifiedLogParser.parseLog() instead with agentType: 'codex'
  *
- * Current Strategy:
- * 1. Track via response headers during API calls (see usageLimitsTracker.ts)
- * 2. Parse session metadata for basic tracking
- * 3. Manually record usage in database after each Codex execution
+ * This file is kept for reference only and will be removed in a future version.
+ * All functionality has been migrated to the unified parser which supports
+ * both Claude and Codex agents with a consistent interface.
  *
- * Future Enhancements:
- * - If Codex adds usage data to logs, update parseLogFile()
- * - Integrate with OpenAI Usage API if/when available
- * - Add cost estimation based on OpenAI pricing
+ * Migration guide:
+ * ```typescript
+ * // OLD:
+ * import { parseCodexLog } from './codexLogParser.js';
+ * const summary = await parseCodexLog(logPath);
+ *
+ * // NEW:
+ * import { parseLog } from './unifiedLogParser.js';
+ * const summary = await parseLog(logPath, 'codex');
+ * ```
+ *
+ * @see unifiedLogParser.ts for the current implementation
  */
 
 import * as fs from 'fs';

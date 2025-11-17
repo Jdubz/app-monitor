@@ -1,12 +1,25 @@
 /**
  * Claude Code Log Parser
  *
- * Parses Claude Code JSONL logs to extract usage data including:
- * - Input/output tokens
- * - Cache usage (read and creation)
- * - Model information
- * - Timestamps and session IDs
- * - Cost estimates
+ * @deprecated This parser has been consolidated into unifiedLogParser.ts
+ * Use unifiedLogParser.parseLog() instead with agentType: 'claude'
+ *
+ * This file is kept for reference only and will be removed in a future version.
+ * All functionality has been migrated to the unified parser which supports
+ * both Claude and Codex agents with a consistent interface.
+ *
+ * Migration guide:
+ * ```typescript
+ * // OLD:
+ * import { parseClaudeLog } from './claudeLogParser.js';
+ * const summary = await parseClaudeLog(logPath);
+ *
+ * // NEW:
+ * import { parseLog } from './unifiedLogParser.js';
+ * const summary = await parseLog(logPath, 'claude');
+ * ```
+ *
+ * @see unifiedLogParser.ts for the current implementation
  */
 
 import * as fs from 'fs';
