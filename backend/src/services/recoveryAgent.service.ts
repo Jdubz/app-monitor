@@ -220,24 +220,197 @@ export class RecoveryAgentService {
     task: Task,
     validationResult: ValidationResult
   ): Promise<RecoveryResponse> {
-    // TODO: Implement actual recovery agent execution
-    // This will be implemented in Day 10 (Multi-Agent Container Support)
-    // For now, return a placeholder response
-
-    logger.warn({
+    logger.info({
       category: 'recovery',
-      action: 'recovery_stub',
-      message: 'Recovery agent execution not yet implemented - using stub',
-      details: { taskId: task.id, containerId },
+      action: 'recovery_execute',
+      message: `Executing recovery agent in container ${containerId}`,
+      details: { taskId: task.id, containerId, errors: validationResult.errors },
     });
 
-    // Stub response - always suggests retry
-    return {
-      category: 'retry',
-      diagnosis: `Validation failed with ${validationResult.errors?.length || 0} errors. Stub recovery suggests retry.`,
-      recovery_action: 'No action taken (stub implementation)',
-      success: true,
-    };
+    // Build recovery prompt with validation failure context
+    const recoveryPrompt = this.buildRecoveryPrompt(task, validationResult);
+
+    try {
+      // Import Docker API to execute command in running container
+      const Docker = (await import('dockerode')).default;
+      const docker = new Docker();
+      const container = docker.getContainer(containerId);
+
+      // Create script that writes prompt to temp file and executes agent
+      // Using claude CLI as recovery agent (can be configured per task/agent)
+      const recoveryScript = `
+        # Write recovery prompt to temp file
+        cat > /tmp/recovery-prompt.txt <<'RECOVERY_EOF'
+${recoveryPrompt}
+RECOVERY_EOF
+
+        # Execute recovery agent (claude CLI) with prompt
+        # Output structured JSON response to artifacts
+        mkdir -p /workspace/.artifacts
+        claude --no-stream < /tmp/recovery-prompt.txt > /workspace/.artifacts/recovery.json 2>&1
+        
+        # Print the response for capture
+        cat /workspace/.artifacts/recovery.json
+      `;
+
+      // Execute recovery script in container
+      const exec = await container.exec({
+        Cmd: ['/bin/bash', '-c', recoveryScript],
+        AttachStdout: true,
+        AttachStderr: true,
+        WorkingDir: '/workspace'
+      });
+
+      const stream = await exec.start({ Detach: false, Tty: false });
+
+      // Capture output
+      let output = '';
+      let errorOutput = '';
+      stream.on('data', (chunk: Buffer) => {
+        const text = chunk.toString();
+        // Docker multiplexes stdout/stderr - we collect both
+        if (text.includes('Error') || text.includes('error')) {
+          errorOutput += text;
+        }
+        output += text;
+      });
+
+      // Wait for execution to complete
+      await new Promise<void>((resolve, reject) => {
+        stream.on('end', () => resolve());
+        stream.on('error', reject);
+      });
+
+      // Parse recovery response from agent output
+      const response = this.parseRecoveryResponse(output);
+
+      logger.info({
+        category: 'recovery',
+        action: 'recovery_complete',
+        message: `Recovery agent completed: ${response.category}`,
+        details: {
+          taskId: task.id,
+          category: response.category,
+          diagnosis: response.diagnosis
+        },
+      });
+
+      return response;
+
+    } catch (error) {
+      logger.error({
+        category: 'recovery',
+        action: 'recovery_execution_error',
+        message: `Failed to execute recovery agent: ${error instanceof Error ? error.message : String(error)}`,
+        details: { taskId: task.id, containerId, error },
+      });
+
+      // Return chain_blocked on execution error
+      return {
+        category: 'chain_blocked',
+        diagnosis: `Recovery agent execution failed: ${error instanceof Error ? error.message : String(error)}`,
+        recovery_action: 'Failed to execute',
+        success: false,
+        blocking_reason: 'Recovery agent could not be executed',
+      };
+    }
+  }
+
+  /**
+   * Build recovery prompt with validation failure context.
+   */
+  private buildRecoveryPrompt(task: Task, validation: ValidationResult): string {
+    const errors = validation.errors || [];
+    const phase = task.phase_name || `Phase ${task.phase_index}`;
+
+    return `You are a recovery agent diagnosing a validation failure for task: ${task.title}
+
+PHASE: ${phase} (Attempt ${task.phase_attempts || 1})
+
+VALIDATION ERRORS:
+${errors.map((e, i) => `${i + 1}. ${e}`).join('\n')}
+
+TASK CONTEXT:
+- Task ID: ${task.id}
+- Type: ${task.type}
+- Description: ${task.description || task.prompt?.substring(0, 200) || 'N/A'}
+
+Your job is to analyze the validation failure and categorize the appropriate recovery action.
+
+OUTPUT FORMAT (JSON):
+{
+  "category": "retry" | "context_update" | "chain_blocked" | "system_blocked",
+  "diagnosis": "Clear explanation of what went wrong",
+  "recovery_action": "What action should be taken",
+  "success": boolean,
+  "suggested_action": {
+    "prompt_update": "optional - updated task prompt if context needs updating",
+    "phase_override": optional_number,
+    "context_additions": ["optional", "additional context"]
+  },
+  "blocking_reason": "optional - reason if blocked"
+}
+
+CATEGORY GUIDELINES:
+- "retry": Transient error, safe to retry same phase (network, timeout, etc)
+- "context_update": Task needs more context/clarification, update prompt and retry
+- "chain_blocked": Task-specific issue, needs human intervention for this task only
+- "system_blocked": System-wide issue (API down, credentials invalid), pause ALL tasks
+
+Analyze the errors above and provide your diagnosis as JSON only.`;
+  }
+
+  /**
+   * Parse recovery agent response from output.
+   * Handles both structured JSON and unstructured text.
+   */
+  private parseRecoveryResponse(output: string): RecoveryResponse {
+    try {
+      // Try to extract JSON from output
+      // Agent may wrap it in markdown code blocks or include extra text
+      const jsonMatch = output.match(/\{[\s\S]*\}/);
+      
+      if (!jsonMatch) {
+        // No JSON found - treat as generic diagnosis
+        return {
+          category: 'retry',
+          diagnosis: output.substring(0, 500),
+          recovery_action: 'No structured response - defaulting to retry',
+          success: true,
+        };
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]);
+
+      // Validate required fields
+      if (!parsed.category || !parsed.diagnosis) {
+        throw new Error('Missing required fields: category, diagnosis');
+      }
+
+      // Validate category
+      const validCategories: RecoveryCategory[] = ['retry', 'context_update', 'chain_blocked', 'system_blocked'];
+      if (!validCategories.includes(parsed.category)) {
+        throw new Error(`Invalid category: ${parsed.category}`);
+      }
+
+      return parsed as RecoveryResponse;
+
+    } catch (parseError) {
+      logger.warn({
+        category: 'recovery',
+        action: 'parse_recovery_failed',
+        message: `Failed to parse recovery response: ${parseError instanceof Error ? parseError.message : String(parseError)}`,
+        details: { output: output.substring(0, 200), parseError },
+      });
+
+      // Fallback to retry with raw output as diagnosis
+      return {
+        category: 'retry',
+        diagnosis: `Parse error: ${parseError instanceof Error ? parseError.message : String(parseError)}. Raw output: ${output.substring(0, 200)}`,
+        recovery_action: 'Failed to parse - defaulting to retry',
+        success: false,
+      };
+    }
   }
 
   /**
