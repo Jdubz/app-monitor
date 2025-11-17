@@ -33,8 +33,10 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Resolve logs directory (utils -> src -> backend -> dev-monitor -> root -> logs)
-const LOGS_DIR = path.resolve(__dirname, '../../../../logs');
+// Centralized log directory - same location for dev and production
+// Development: <repo-root>/backend/data/logs
+// Production: /opt/app-monitor/shared/backend/data/logs
+const LOGS_DIR = process.env.LOGS_DIR || path.resolve(__dirname, '../../data/logs');
 
 type LogSeverity = 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR';
 

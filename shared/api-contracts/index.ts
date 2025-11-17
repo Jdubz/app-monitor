@@ -445,6 +445,27 @@ export interface DevBotsInteractiveSessionResponsePayload {
 
 export type DevBotsInteractiveSessionResponse = ApiSuccess<DevBotsInteractiveSessionResponsePayload>;
 
+/**
+ * Bot self-reporting payload
+ */
+export interface DevBotsReportCompletionPayload {
+  /** Whether the task completed successfully (true) or failed (false) */
+  success: boolean;
+  /** Optional brief summary of what was accomplished or what went wrong */
+  summary?: string;
+}
+
+/**
+ * Response from bot completion reporting endpoint
+ */
+export interface DevBotsReportCompletionResponse {
+  success: boolean;
+  message: string;
+  taskId: string;
+}
+
+export type DevBotsReportCompletionApiResponse = ApiSuccess<DevBotsReportCompletionResponse>;
+
 export interface DevBotsInteractiveSessionStartPayload {
   modelProvider: string;
   modelName: string;
@@ -563,10 +584,31 @@ export interface DevBotsQuarantineChainPayload {
   reason: string;
 }
 
+/**
+ * Bot Self-Reporting: Payload for bots to report task completion status
+ * POST /api/dev-bots/tasks/:taskId/report-completion
+ */
+export interface DevBotsReportCompletionPayload {
+  /** Whether the task completed successfully (true) or failed (false) */
+  success: boolean;
+  /** Optional brief summary of what was accomplished or what went wrong */
+  summary?: string;
+}
+
+/**
+ * Response from bot completion reporting endpoint
+ */
+export interface DevBotsReportCompletionResponse {
+  success: boolean;
+  message: string;
+  taskId: string;
+}
+
 export type DevBotsRetryTaskResponse = ApiSuccess<DevBotsTaskInterventionResponse>;
 export type DevBotsSkipTaskResponse = ApiSuccess<DevBotsTaskInterventionResponse>;
 export type DevBotsCancelTaskResponse = ApiSuccess<DevBotsTaskInterventionResponse>;
 export type DevBotsQuarantineChainResponse = ApiSuccess<DevBotsChainInterventionResponse>;
+export type DevBotsReportCompletionApiResponse = ApiSuccess<DevBotsReportCompletionResponse>;
 
 // -----------------------------------------------------------------------------
 // Plans System Contracts

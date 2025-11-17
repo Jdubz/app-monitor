@@ -28,6 +28,11 @@ server.listen(config.port, '0.0.0.0', () => {
   console.log(`📡 CORS enabled for: ${config.corsOrigin}`);
   console.log(`🌍 Environment: ${config.nodeEnv}`);
   console.log(`🔌 Socket.IO ready for connections`);
+
+  // Signal PM2 that the app is ready (for zero-downtime reloads)
+  if (process.send) {
+    process.send('ready');
+  }
 });
 
 // Graceful shutdown handling

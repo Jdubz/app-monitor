@@ -31,11 +31,15 @@ TimeoutStopSec=120
 KillMode=mixed
 KillSignal=SIGTERM
 
-# Restart policy - restart on any failure
-Restart=on-failure
+# Restart policy - always restart (protects against dev-bots killing the process)
+# This ensures the service restarts automatically when:
+# - Dev-bots send kill signals (SIGTERM/SIGKILL)
+# - Process crashes or exits unexpectedly
+# - Any other termination occurs
+Restart=always
 RestartSec=10
-StartLimitInterval=300
-StartLimitBurst=5
+StartLimitBurst=30
+StartLimitIntervalSec=0
 
 # Resource limits
 LimitNOFILE=65536
