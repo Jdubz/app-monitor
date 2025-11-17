@@ -9,10 +9,10 @@ module.exports = {
     max_memory_restart: '1G',
     env: {
       NODE_ENV: process.env.NODE_ENV || 'production',
-      LOGS_DIR: '/opt/app-monitor/shared/backend/data/logs'
+      LOGS_DIR: process.env.LOGS_DIR || '/opt/app-monitor/shared/backend/data/logs'
     },
-    error_file: '/opt/app-monitor/shared/backend/data/logs/pm2-error.log',
-    out_file: '/opt/app-monitor/shared/backend/data/logs/pm2-out.log',
+    error_file: process.env.LOGS_DIR ? `${process.env.LOGS_DIR}/pm2-error.log` : '/opt/app-monitor/shared/backend/data/logs/pm2-error.log',
+    out_file: process.env.LOGS_DIR ? `${process.env.LOGS_DIR}/pm2-out.log` : '/opt/app-monitor/shared/backend/data/logs/pm2-out.log',
     log_date_format: 'YYYY-MM-DD HH:mm:ss Z',
     merge_logs: true,
     min_uptime: '10s',
