@@ -608,7 +608,6 @@ export type DevBotsRetryTaskResponse = ApiSuccess<DevBotsTaskInterventionRespons
 export type DevBotsSkipTaskResponse = ApiSuccess<DevBotsTaskInterventionResponse>;
 export type DevBotsCancelTaskResponse = ApiSuccess<DevBotsTaskInterventionResponse>;
 export type DevBotsQuarantineChainResponse = ApiSuccess<DevBotsChainInterventionResponse>;
-export type DevBotsReportCompletionApiResponse = ApiSuccess<DevBotsReportCompletionResponse>;
 
 // -----------------------------------------------------------------------------
 // Plans System Contracts
