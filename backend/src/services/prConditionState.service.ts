@@ -788,7 +788,7 @@ export class PRConditionStateService {
     const baseConfig = {
       followup_for_pr: prNumber,
       priority: 9,
-      parent_initiative: parentTask?.id,
+      plan_id: parentTask?.plan_id, // Inherit plan from parent task
       chain_id: chainId,
       chain_depth: chainDepth
     };

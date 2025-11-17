@@ -122,7 +122,6 @@ export interface Task {
   estimated_complexity?: 'simple' | 'medium' | 'complex';
   preferred_agent?: 'claude' | 'codex' | 'copilot'; // Manual override for agent selection
   // Enhanced task fields for comprehensive task planning
-  parent_initiative?: string; // Legacy field - use plan_id instead
   plan_id?: string; // Links task to a plan in the plans table
   long_term_goals?: string[];
   related_tasks?: string[];
