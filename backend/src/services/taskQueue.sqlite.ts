@@ -471,6 +471,38 @@ export class TaskQueueService {
       });
     }
 
+    // Migration 013: Add phase system tracking columns
+    const phaseColumns = ['phase_index', 'phase_name', 'phase_attempts'];
+    const missingPhaseColumns = phaseColumns.filter(col => !columnNames.has(col));
+
+    if (missingPhaseColumns.length > 0) {
+      logger.info({
+        category: 'process',
+        action: 'adding_phase_columns',
+        message: `Adding ${missingPhaseColumns.length} phase system tracking columns`,
+        details: { columns: missingPhaseColumns }
+      });
+
+      if (!columnNames.has('phase_index')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN phase_index INTEGER DEFAULT 1;`);
+      }
+      if (!columnNames.has('phase_name')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN phase_name TEXT;`);
+      }
+      if (!columnNames.has('phase_attempts')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN phase_attempts INTEGER DEFAULT 1;`);
+      }
+
+      // Create index for phase queries
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_phase_index ON tasks(phase_index) WHERE phase_index IS NOT NULL;`);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'Phase system tracking columns added successfully'
+      });
+    }
+
     // Migration 020: Add context bundle fields (context management integration)
     const contextBundleColumns = ['context_bundle_id', 'context_cache_key', 'context_profiles', 'risk_level'];
     const missingContextBundleColumns = contextBundleColumns.filter(col => !columnNames.has(col));
@@ -705,6 +737,42 @@ export class TaskQueueService {
         });
       }
     }
+
+    // Migration 026: Create task_stage_runs table for phase system tracking
+    const stageRunsTableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='task_stage_runs'`).get();
+    if (!stageRunsTableExists) {
+      logger.info({
+        category: 'process',
+        action: 'creating_task_stage_runs_table',
+        message: 'Creating task_stage_runs table for phase system execution tracking'
+      });
+
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS task_stage_runs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          task_id TEXT NOT NULL,
+          phase_index INTEGER NOT NULL,
+          phase_name TEXT NOT NULL,
+          attempt INTEGER NOT NULL DEFAULT 1,
+          status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'success', 'failed', 'skipped')),
+          artifacts_blob TEXT,
+          created_at INTEGER NOT NULL,
+          completed_at INTEGER,
+          exit_code INTEGER,
+          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_task_stage_runs_task_id ON task_stage_runs(task_id);
+        CREATE INDEX IF NOT EXISTS idx_task_stage_runs_phase_index ON task_stage_runs(phase_index);
+        CREATE INDEX IF NOT EXISTS idx_task_stage_runs_status ON task_stage_runs(status);
+      `);
+
+      logger.info({
+        category: 'process',
+        action: 'migration_complete',
+        message: 'task_stage_runs table created successfully'
+      });
+    }
   }
 
   private createSchema(): void {
@@ -763,6 +831,10 @@ export class TaskQueueService {
         chain_depth INTEGER,
         -- Migration 012 columns (queue_stage and original_task_id removed - phase system only)
         chain_status TEXT,
+        -- Migration 013 columns (phase system)
+        phase_index INTEGER DEFAULT 1,
+        phase_name TEXT,
+        phase_attempts INTEGER DEFAULT 1,
         -- Migration 020 columns (context management)
         context_bundle_id TEXT,
         context_cache_key TEXT,
@@ -819,6 +891,26 @@ export class TaskQueueService {
 
       CREATE INDEX IF NOT EXISTS idx_executions_task_id ON task_executions(task_id);
       CREATE INDEX IF NOT EXISTS idx_executions_worker_id ON task_executions(worker_id);
+
+      -- Phase system tracking (task stage runs)
+      CREATE TABLE IF NOT EXISTS task_stage_runs (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        task_id TEXT NOT NULL,
+        phase_index INTEGER NOT NULL,
+        phase_name TEXT NOT NULL,
+        attempt INTEGER NOT NULL DEFAULT 1,
+        status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'success', 'failed', 'skipped')),
+        artifacts_blob TEXT,
+        created_at INTEGER NOT NULL,
+        completed_at INTEGER,
+        exit_code INTEGER,
+
+        FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_task_stage_runs_task_id ON task_stage_runs(task_id);
+      CREATE INDEX IF NOT EXISTS idx_task_stage_runs_phase_index ON task_stage_runs(phase_index);
+      CREATE INDEX IF NOT EXISTS idx_task_stage_runs_status ON task_stage_runs(status);
 
       -- Task files (for file locking)
       CREATE TABLE IF NOT EXISTS task_files (
