@@ -117,6 +117,28 @@ describe('Phase1PlanningValidator', () => {
     expect(result.details?.complexity).toBe('medium');
     expect(result.details?.dependencies).toEqual(['task-123', 'task-456']);
   });
+
+  it('should fail when planning artifacts is null', async () => {
+    const artifacts: PhaseArtifacts = {
+      planning: null as any,
+    };
+
+    const result = await validator.validate(mockTask, artifacts);
+
+    expect(result.passed).toBe(false);
+    expect(result.errors).toContain('Planning artifacts are not a valid JSON object');
+  });
+
+  it('should fail when planning artifacts is an array', async () => {
+    const artifacts: PhaseArtifacts = {
+      planning: [] as any,
+    };
+
+    const result = await validator.validate(mockTask, artifacts);
+
+    expect(result.passed).toBe(false);
+    expect(result.errors).toContain('Planning artifacts are not a valid JSON object');
+  });
 });
 
 describe('Phase2ImplementationValidator', () => {
@@ -223,25 +245,3 @@ describe('Phase2ImplementationValidator', () => {
     expect((result.artifacts as any).files_changed).toEqual([]);
   });
 });
-
-  it('should fail when planning artifacts is null', async () => {
-    const artifacts: PhaseArtifacts = {
-      planning: null as any,
-    };
-
-    const result = await validator.validate(mockTask, artifacts);
-
-    expect(result.passed).toBe(false);
-    expect(result.errors).toContain('Planning artifacts are not a valid JSON object');
-  });
-
-  it('should fail when planning artifacts is an array', async () => {
-    const artifacts: PhaseArtifacts = {
-      planning: [] as any,
-    };
-
-    const result = await validator.validate(mockTask, artifacts);
-
-    expect(result.passed).toBe(false);
-    expect(result.errors).toContain('Planning artifacts are not a valid JSON object');
-  });

@@ -17,6 +17,7 @@
  */
 
 import * as fs from 'fs';
+import * as fsPromises from 'fs/promises';
 import * as path from 'path';
 import { logger } from '../utils/logger.js';
 import { config } from '../config.js';
@@ -264,11 +265,11 @@ export class ArtifactStorageService {
    * Delete all artifacts for a task.
    * Use carefully - this is permanent!
    */
-  deleteTaskArtifacts(taskId: string): void {
+  async deleteTaskArtifacts(taskId: string): Promise<void> {
     const taskDir = path.join(this.baseDir, taskId);
 
     if (fs.existsSync(taskDir)) {
-      fs.rmSync(taskDir, { recursive: true, force: true });
+      await fsPromises.rm(taskDir, { recursive: true, force: true });
       
       logger.info({
         category: 'artifact',
@@ -281,7 +282,7 @@ export class ArtifactStorageService {
   /**
    * Calculate total size of artifacts for a task.
    */
-  getTaskArtifactsSize(taskId: string): number {
+  async getTaskArtifactsSize(taskId: string): Promise<number> {
     const taskDir = path.join(this.baseDir, taskId);
 
     if (!fs.existsSync(taskDir)) {
@@ -290,21 +291,22 @@ export class ArtifactStorageService {
 
     let totalSize = 0;
 
-    const calculateDirSize = (dir: string): void => {
-      const entries = fs.readdirSync(dir, { withFileTypes: true });
+    const calculateDirSize = async (dir: string): Promise<void> => {
+      const entries = await fsPromises.readdir(dir, { withFileTypes: true });
       
       for (const entry of entries) {
         const fullPath = path.join(dir, entry.name);
         
         if (entry.isFile()) {
-          totalSize += fs.statSync(fullPath).size;
+          const stats = await fsPromises.stat(fullPath);
+          totalSize += stats.size;
         } else if (entry.isDirectory() && !entry.isSymbolicLink()) {
-          calculateDirSize(fullPath);
+          await calculateDirSize(fullPath);
         }
       }
     };
 
-    calculateDirSize(taskDir);
+    await calculateDirSize(taskDir);
 
     return totalSize;
   }

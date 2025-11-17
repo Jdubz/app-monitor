@@ -28,7 +28,7 @@ import { promisify } from 'util';
 import { logger } from '../utils/logger.js';
 import type { PhaseArtifacts } from './phaseValidation/types.js';
 
-const execAsync = promisify(childProcess.exec);
+const execFileAsync = promisify(childProcess.execFile);
 
 export interface ArtifactExtractionOptions {
   containerId: string;
@@ -115,12 +115,12 @@ export class ArtifactExtractorService {
 
   /**
    * Copy files from container to host.
+   * Uses execFile to prevent command injection vulnerabilities.
    */
   private async copyFromContainer(containerId: string, containerPath: string, hostPath: string): Promise<void> {
     try {
-      // Use docker cp to copy from container
-      const command = `docker cp ${containerId}:${containerPath}/. ${hostPath}/`;
-      await execAsync(command);
+      // Use docker cp to copy from container (secure - no shell interpolation)
+      await execFileAsync('docker', ['cp', `${containerId}:${containerPath}/.`, hostPath]);
     } catch (error) {
       // If .artifacts directory doesn't exist in container, that's okay
       // Agent might not have created it yet
@@ -210,11 +210,11 @@ export class ArtifactExtractorService {
 
   /**
    * Check if container has artifacts directory.
+   * Uses execFile to prevent command injection vulnerabilities.
    */
   async hasArtifacts(containerId: string): Promise<boolean> {
     try {
-      const command = `docker exec ${containerId} test -d ${this.artifactsPath}`;
-      await execAsync(command);
+      await execFileAsync('docker', ['exec', containerId, 'test', '-d', this.artifactsPath]);
       return true;
     } catch {
       return false;
