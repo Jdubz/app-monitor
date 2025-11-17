@@ -11,6 +11,7 @@
 import Docker from 'dockerode';
 import fs from 'fs';
 import { logger } from '../../utils/logger.js';
+import { CONTAINER_CPU_QUOTA, WORKER_UID_GID } from '../../constants/containers.js';
 
 export interface ContainerLabels {
   [key: string]: string;
@@ -71,13 +72,13 @@ export class DevBotContainerBuilder {
       tmpfs: [
         // Writable temp for agent CLI session data
         // uid=1000 (node user) gid=1000 (node group) mode=0700
-        { containerPath: '/home/node/.claude', options: 'size=100m,uid=1000,gid=1000,mode=0700' },
-        { containerPath: '/home/node/.codex', options: 'size=100m,uid=1000,gid=1000,mode=0700' },
-        { containerPath: '/home/node/.gemini', options: 'size=100m,uid=1000,gid=1000,mode=0700' }
+        { containerPath: '/home/node/.claude', options: `size=100m,${WORKER_UID_GID},mode=0700` },
+        { containerPath: '/home/node/.codex', options: `size=100m,${WORKER_UID_GID},mode=0700` },
+        { containerPath: '/home/node/.gemini', options: `size=100m,${WORKER_UID_GID},mode=0700` }
       ],
       resources: {
         memoryMB: 512,
-        cpuQuota: 50000, // 50% of 1 CPU
+        cpuQuota: CONTAINER_CPU_QUOTA,
       },
       autoRemove: true,
       tty: true,
