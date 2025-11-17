@@ -1615,6 +1615,15 @@ export class TaskQueueService {
   }
 
   /**
+   * Update task metadata
+   * Provides a clean API for updating task metadata without exposing internal db access
+   */
+  updateTaskMetadata(taskId: string, metadata: Record<string, unknown>): void {
+    const stmt = this.db.prepare('UPDATE tasks SET metadata = ? WHERE id = ?');
+    stmt.run(JSON.stringify(metadata), taskId);
+  }
+
+  /**
    * Update worker heartbeat
    */
   updateWorkerHeartbeat(workerId: string): void {
