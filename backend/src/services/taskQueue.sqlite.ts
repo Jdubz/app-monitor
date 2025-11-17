@@ -43,6 +43,7 @@ import {
   type AgentComparisonMetrics,
 } from './taskQueueMetrics.service.js';
 import { getPlanStatusUpdater } from './planStatusUpdater.singleton.js';
+import { getPhaseMetricsService, type PhaseMetricsSnapshot, type PhaseStats } from './phaseMetrics.service.js';
 
 export type { ChainStats, BlockedChain };
 
@@ -2515,4 +2516,181 @@ export class TaskQueueService {
   }
 
   // blockChain method removed - duplicate of the one at line 2387 which delegates to chainTracker
+
+  /**
+   * Get stage runs for a task (phase execution history)
+   * Encapsulates database access - routes should call this instead of direct DB queries
+   *
+   * @param taskId Task ID
+   * @returns Array of stage run records
+   */
+  getStageRuns(taskId: string): Array<{
+    id: string;
+    task_id: string;
+    stage_index: number;
+    stage_name: string;
+    status: string;
+    created_at: number;
+    completed_at?: number;
+    error_message?: string;
+  }> {
+    return this.db.prepare(`
+      SELECT * FROM task_stage_runs
+      WHERE task_id = ?
+      ORDER BY created_at DESC
+    `).all(taskId) as Array<{
+      id: string;
+      task_id: string;
+      stage_index: number;
+      stage_name: string;
+      status: string;
+      created_at: number;
+      completed_at?: number;
+      error_message?: string;
+    }>;
+  }
+
+  /**
+   * Get phase execution history for a task
+   * Returns detailed phase run information including artifacts
+   *
+   * @param taskId Task ID
+   * @returns Array of phase run records with artifacts
+   */
+  getPhaseHistory(taskId: string): Array<{
+    run_id: string;
+    task_id: string;
+    phase_index: number;
+    phase_name: string;
+    status: string;
+    started_at: string;
+    completed_at?: string;
+    artifacts_blob?: string;
+    validation_result?: string;
+    error_message?: string;
+  }> {
+    return this.db.prepare(`
+      SELECT * FROM phase_runs
+      WHERE task_id = ?
+      ORDER BY started_at DESC
+    `).all(taskId) as Array<{
+      run_id: string;
+      task_id: string;
+      phase_index: number;
+      phase_name: string;
+      status: string;
+      started_at: string;
+      completed_at?: string;
+      artifacts_blob?: string;
+      validation_result?: string;
+      error_message?: string;
+    }>;
+  }
+
+  /**
+   * Get validation report for a task
+   * Returns the latest validation report if it exists
+   *
+   * @param taskId Task ID
+   * @returns Validation report or null if not found
+   */
+  getValidationReport(taskId: string): {
+    task_id: string;
+    report_data: string;
+    created_at: number;
+    pr_number?: number;
+  } | null {
+    const report = this.db.prepare(`
+      SELECT * FROM validation_reports
+      WHERE task_id = ?
+      ORDER BY created_at DESC
+      LIMIT 1
+    `).get(taskId);
+
+    return report as {
+      task_id: string;
+      report_data: string;
+      created_at: number;
+      pr_number?: number;
+    } | null;
+  }
+
+  /**
+   * Get phase logs for a task
+   * Returns logs from specific phase execution
+   *
+   * @param taskId Task ID
+   * @param phaseIndex Optional phase index to filter
+   * @returns Array of log entries
+   */
+  getPhaseLogs(taskId: string, phaseIndex?: number): Array<{
+    id: string;
+    task_id: string;
+    phase_index: number;
+    level: 'info' | 'warn' | 'error' | 'debug';
+    message: string;
+    timestamp: string;
+    metadata?: string;
+  }> {
+    const query = phaseIndex !== undefined
+      ? this.db.prepare(`
+          SELECT * FROM phase_logs
+          WHERE task_id = ? AND phase_index = ?
+          ORDER BY timestamp DESC
+        `)
+      : this.db.prepare(`
+          SELECT * FROM phase_logs
+          WHERE task_id = ?
+          ORDER BY timestamp DESC
+        `);
+
+    const logs = phaseIndex !== undefined
+      ? query.all(taskId, phaseIndex)
+      : query.all(taskId);
+
+    return logs as Array<{
+      id: string;
+      task_id: string;
+      phase_index: number;
+      level: 'info' | 'warn' | 'error' | 'debug';
+      message: string;
+      timestamp: string;
+      metadata?: string;
+    }>;
+  }
+
+  // ============================================================
+  // Phase Metrics Service Proxy Methods
+  // ============================================================
+
+  /**
+   * Get comprehensive phase metrics
+   * Proxies to PhaseMetricsService - routes should call this instead of accessing PhaseMetricsService directly
+   * @returns Complete phase metrics snapshot (cached for 5 minutes)
+   */
+  getPhaseMetrics(): PhaseMetricsSnapshot {
+    const metricsService = getPhaseMetricsService(this.db);
+    return metricsService.getMetrics();
+  }
+
+  /**
+   * Get metrics for a specific phase
+   * Proxies to PhaseMetricsService - routes should call this instead of accessing PhaseMetricsService directly
+   * @param phaseIndex Phase index (1-7)
+   * @returns Phase statistics or null if not found
+   */
+  getPhaseSpecificMetrics(phaseIndex: number): PhaseStats | null {
+    const metricsService = getPhaseMetricsService(this.db);
+    return metricsService.getPhaseMetrics(phaseIndex);
+  }
+
+  /**
+   * Clear the phase metrics cache
+   * Proxies to PhaseMetricsService - routes should call this instead of accessing PhaseMetricsService directly
+   * Forces fresh calculation on next metrics request
+   */
+  clearPhaseMetricsCache(): void {
+    const metricsService = getPhaseMetricsService(this.db);
+    metricsService.clearCache();
+  }
 }
