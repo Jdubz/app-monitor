@@ -134,7 +134,7 @@ export function InteractiveTerminal({
   return (
     <div
       ref={containerRef}
-      className="h-[420px] w-full rounded-lg border border-border/60 bg-background/95"
+      className="min-h-[300px] h-[420px] w-full rounded-lg border border-border/60 bg-background/95 sm:min-h-[420px]"
       data-connection-state={connectionState}
     />
   );

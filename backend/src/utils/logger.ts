@@ -23,7 +23,11 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const LOGS_DIR = path.resolve(__dirname, '../../../logs');
+
+// Centralized log directory - same location for dev and production
+// Development: <repo-root>/backend/data/logs
+// Production: /opt/app-monitor/shared/backend/data/logs
+const LOGS_DIR = process.env.LOGS_DIR || path.resolve(__dirname, '../../data/logs');
 
 // Ensure logs directory exists
 if (!fs.existsSync(LOGS_DIR)) {
@@ -36,13 +40,19 @@ export type LogCategory =
   | 'alerts' // Alert management system
   | 'api'
   | 'artifact' // Task artifact tracking
+  | 'automation' // Agent selection and automation
   | 'build'
   | 'circuit-breaker'
+  | 'classification' // Task classification for intelligent agent selection
   | 'cloud'
+  | 'codex-log-parser' // Codex log parsing
   | 'context' // Context bundle generation and caching
   | 'copilot-throttle' // Copilot throttle management
   | 'database'
+  | 'delegation' // Copilot delegation
   | 'docker'
+  | 'escalation' // Manual intervention and escalation to humans
+  | 'interactive_terminal' // Interactive terminal sessions
   | 'issue-triage' // Autonomous issue triage and resolution
   | 'lint_error'
   | 'log_format'
@@ -51,6 +61,7 @@ export type LogCategory =
   | 'metrics'
   | 'mirror_debug'
   | 'plan' // AI agent-managed planning system
+  | 'port-manager' // Port management operations
   | 'pr-sync' // PR sync service (event-driven)
   | 'pr-workflow'
   | 'process'
@@ -58,9 +69,6 @@ export type LogCategory =
   | 'quality-gates'
   | 'quality-improvement'
   | 'quality-observation'
-  | 'classification' // Task classification for intelligent agent selection
-  | 'automation' // Agent selection and automation
-  | 'delegation' // Copilot delegation
   | 'recovery'
   | 'safety' // Safety mechanisms for git operations
   | 'scripts'
@@ -72,9 +80,7 @@ export type LogCategory =
   | 'token-tracking'
   | 'utility'
   | 'verification'
-  | 'workspace'
-  | 'port-manager' // Port management operations
-  | 'codex-log-parser'; // Codex log parsing
+  | 'workspace';
 
 export interface LogEntry {
   category: LogCategory;

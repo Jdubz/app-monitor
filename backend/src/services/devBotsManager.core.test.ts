@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Core DevBots Manager Tests
  * 

@@ -76,7 +76,7 @@ export interface Task {
   completed_at?: number;
   assigned_agent: string;
   assigned_worker?: string;
-  agent_type?: 'claude' | 'codex'; // Track which CLI tool executed the task
+  agent_type?: 'claude' | 'codex' | 'gemini'; // Track which CLI tool executed the task
   prompt?: string;
   output?: string;
   error?: string;
@@ -293,7 +293,7 @@ export class TaskQueueService {
       });
 
       this.db.exec(`
-        ALTER TABLE tasks ADD COLUMN agent_type TEXT CHECK(agent_type IN ('claude', 'codex'));
+        ALTER TABLE tasks ADD COLUMN agent_type TEXT CHECK(agent_type IN ('claude', 'codex', 'gemini'));
       `);
 
       this.db.exec(`
@@ -770,7 +770,7 @@ export class TaskQueueService {
         completed_at INTEGER,
         assigned_agent TEXT NOT NULL,
         assigned_worker TEXT,
-        agent_type TEXT CHECK(agent_type IN ('claude', 'codex')),
+        agent_type TEXT CHECK(agent_type IN ('claude', 'codex', 'gemini')),
         prompt TEXT,
         output TEXT,
         error TEXT,
@@ -1328,7 +1328,7 @@ export class TaskQueueService {
   /**
    * Complete a task (idempotent)
    */
-  completeTask(taskId: string, output: string, agentType?: 'claude' | 'codex' | 'gemini'): void {
+  completeTask(taskId: string, output: string, agentType: 'claude' | 'codex' | 'gemini'): void {
     this.transaction(() => {
       const taskStmt = this.db.prepare('SELECT status FROM tasks WHERE id = ?');
       const task = taskStmt.get(taskId) as { status: TaskStatus } | undefined;
@@ -1359,7 +1359,7 @@ export class TaskQueueService {
         WHERE id = ?
       `);
 
-      updateStmt.run(output, now, agentType || null, taskId);
+      updateStmt.run(output, now, agentType, taskId);
 
       // Update execution record
       const executionStmt = this.db.prepare(`
@@ -1612,6 +1612,15 @@ export class TaskQueueService {
 
       return this.getTask(taskId);
     });
+  }
+
+  /**
+   * Update task metadata
+   * Provides a clean API for updating task metadata without exposing internal db access
+   */
+  updateTaskMetadata(taskId: string, metadata: Record<string, unknown>): void {
+    const stmt = this.db.prepare('UPDATE tasks SET metadata = ? WHERE id = ?');
+    stmt.run(JSON.stringify(metadata), taskId);
   }
 
   /**

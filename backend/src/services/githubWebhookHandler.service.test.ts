@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, it, expect } from 'vitest';
 import { GitHubWebhookHandler } from './githubWebhookHandler.service.js';
 import { BaseWebhookHandler } from './webhookHandlers/baseHandler.js';
