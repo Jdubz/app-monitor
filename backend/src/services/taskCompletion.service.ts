@@ -96,8 +96,8 @@ export class TaskCompletionService {
     let taskVerification: TaskVerificationResult | undefined;
     let shouldPush = exitCode === 0;
 
-    // Run comprehensive task verification first (if enabled)
-    if (shouldPush && this.config.enableTaskVerification) {
+    // Run comprehensive task verification first (if enabled and workspace is on host)
+    if (shouldPush && this.config.enableTaskVerification && workspacePath) {
       taskVerification = await this.runTaskVerification(task, workspacePath, output);
       shouldPush = taskVerification.passed;
 
@@ -115,12 +115,32 @@ export class TaskCompletionService {
           }
         });
       }
+    } else if (this.config.enableTaskVerification && !workspacePath) {
+      logger.info({
+        category: 'verification',
+        action: 'task_verification_skipped',
+        message: `Task verification skipped for ${task.id} - workspace not on host filesystem (Docker cp mode)`,
+        details: {
+          taskId: task.id,
+          reason: 'Workspace is inside container only, cannot run host-side verification'
+        }
+      });
     }
 
-    // Run quality gates (if verification passed and quality gates enabled)
-    if (shouldPush && this.config.enableQualityGates) {
+    // Run quality gates (if verification passed, quality gates enabled, and workspace on host)
+    if (shouldPush && this.config.enableQualityGates && workspacePath) {
       qualityValidation = await this.runQualityGateValidation(task, workspacePath);
       shouldPush = qualityValidation.passed;
+    } else if (this.config.enableQualityGates && !workspacePath) {
+      logger.info({
+        category: 'verification',
+        action: 'quality_gates_skipped',
+        message: `Quality gate validation skipped for ${task.id} - workspace not on host filesystem`,
+        details: {
+          taskId: task.id,
+          reason: 'Workspace is inside container only, cannot run host-side quality gates'
+        }
+      });
     }
 
     // Check if bot self-reported completion status
