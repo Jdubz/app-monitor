@@ -102,7 +102,7 @@ describe('Phase Integration Tests', () => {
         errors: [],
         metadata: { pr_merged: true }
       });
-      expect(transition.toPhase).toBe(null); // Complete
+      expect(transition.toPhase).toBe(7); // Stay in phase 7 (task marked complete elsewhere)
     });
   });
 

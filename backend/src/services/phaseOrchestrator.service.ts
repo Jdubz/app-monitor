@@ -95,7 +95,10 @@ export class PhaseOrchestratorService {
 
     // Phase 3: Review - Branch based on issues found
     if (currentPhase === 3) {
-      if (validation.issuesFound) {
+      // Check for issues either via issuesFound flag or passed === false
+      const hasIssues = validation.issuesFound === true || validation.passed === false;
+
+      if (hasIssues) {
         return {
           fromPhase: 3,
           toPhase: 4,
@@ -112,20 +115,36 @@ export class PhaseOrchestratorService {
       }
     }
 
-    // Phase 4: Fixes - ALWAYS return to Phase 3 for re-review
-    // Critical: We re-review ALL fixes to verify they worked
+    // Phase 4: Fixes - Return to Phase 3 if all issues addressed, stay in Phase 4 otherwise
     if (currentPhase === 4) {
-      return {
-        fromPhase: 4,
-        toPhase: 3,
-        resetAttempts: false, // Maintain attempt counter across loop
-        reason: 'Fixes applied - re-reviewing to verify',
-      };
+      // Check if all issues have been addressed (either explicitly or via passed flag)
+      const allIssuesAddressed = validation.metadata?.all_issues_addressed === true || validation.passed === true;
+
+      if (allIssuesAddressed) {
+        return {
+          fromPhase: 4,
+          toPhase: 3,
+          resetAttempts: false, // Maintain attempt counter across loop
+          reason: 'Fixes applied - re-reviewing to verify',
+        };
+      } else {
+        return {
+          fromPhase: 4,
+          toPhase: 4,
+          resetAttempts: false, // Stay in same phase
+          reason: 'Not all issues addressed - retry fixes',
+        };
+      }
     }
 
     // Phase 5: Test & Validate - Internal loop logic
     if (currentPhase === 5) {
-      if (validation.allTestsPassing) {
+      // Check if tests are passing (either via allTestsPassing flag or allGatesPassing or passed)
+      const testsPassing = validation.allTestsPassing === true ||
+                          validation.allGatesPassing === true ||
+                          validation.passed === true;
+
+      if (testsPassing) {
         return {
           fromPhase: 5,
           toPhase: 6,
@@ -154,10 +173,10 @@ export class PhaseOrchestratorService {
 
     // Phase 7: PR Shepherding - Check merge gates
     if (currentPhase === 7) {
-      if (validation.allGatesPassing) {
+      if (validation.allGatesPassing || validation.passed === true) {
         return {
           fromPhase: 7,
-          toPhase: 7, // Stay in phase 7 (task will be marked complete)
+          toPhase: 7, // Stay in phase 7 (task will be marked complete elsewhere)
           resetAttempts: false,
           reason: 'All merge gates passing - task complete',
         };

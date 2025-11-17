@@ -13,6 +13,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { PhaseExecutionService } from '../phaseExecution.service.js';
 import Database from 'better-sqlite3';
+import type { Task } from '../taskQueue.sqlite.js';
 
 // Mock dependencies
 vi.mock('../utils/logger.js', () => ({
@@ -60,11 +61,25 @@ describe('PhaseExecutionService', () => {
         phase_index INTEGER NOT NULL,
         phase_name TEXT NOT NULL,
         attempt INTEGER NOT NULL DEFAULT 1,
-        status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'success', 'failed', 'skipped')),
+        status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'success', 'failed', 'skipped', 'recovered', 'blocked')),
         artifacts_blob TEXT,
         created_at INTEGER NOT NULL,
         completed_at INTEGER,
-        exit_code INTEGER
+        exit_code INTEGER,
+        recovery_diagnosis TEXT
+      )
+    `);
+
+    // Initialize tasks table (needed for advancePhase)
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS tasks (
+        id TEXT PRIMARY KEY,
+        phase_index INTEGER DEFAULT 1,
+        phase_name TEXT DEFAULT 'Planning',
+        phase_status TEXT DEFAULT 'ready',
+        phase_attempts INTEGER DEFAULT 1,
+        status TEXT DEFAULT 'pending',
+        completed_at INTEGER
       )
     `);
 
@@ -98,6 +113,12 @@ describe('PhaseExecutionService', () => {
       };
 
       const containerId = 'container-123';
+
+      // Insert task into database
+      db.prepare(`
+        INSERT INTO tasks (id, phase_index, phase_name, phase_status, phase_attempts, status)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(task.id, task.phase_index, task.phase_name, task.phase_status, task.phase_attempts, task.status);
 
       // Mock artifact extraction
       const mockArtifactExtractor = {
@@ -470,6 +491,12 @@ describe('PhaseExecutionService', () => {
         phase_attempts: 1,
       };
 
+      // Insert task into database
+      db.prepare(`
+        INSERT INTO tasks (id, phase_index, phase_name, phase_status, phase_attempts, status)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(task.id, task.phase_index, task.phase_name, task.phase_status, task.phase_attempts, task.status);
+
       const mockArtifactExtractor = {
         extractArtifacts: vi.fn().mockResolvedValue({ pr: { number: 123 } }),
       };
@@ -492,10 +519,10 @@ describe('PhaseExecutionService', () => {
       // When: Executing phase workflow
       const result = await service.executePhaseWorkflow(task, 'container-final');
 
-      // Then: Should complete with no next phase
+      // Then: Should complete successfully
       expect(result.success).toBe(true);
       expect(result.validationPassed).toBe(true);
-      expect(result.nextPhase).toBe(null); // Task complete
+      expect(result.nextPhase).toBe(7); // Stay in phase 7 (task marked complete elsewhere)
     });
   });
 });

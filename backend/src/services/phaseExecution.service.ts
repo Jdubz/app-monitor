@@ -66,27 +66,67 @@ export class PhaseExecutionService {
     try {
       // Step 1: Extract artifacts from container
       const extractor = getArtifactExtractor();
-      const artifacts = await extractor.extractArtifacts({
-        containerId,
-        phaseIndex,
-        attempt,
-      });
+      const artifacts = await extractor.extractArtifacts(containerId, phaseIndex);
 
       // Step 2: Get validator for this phase
       const registry = getValidatorRegistry();
       const validator = registry.getValidator(phaseIndex);
 
       // Step 3: Validate artifacts
-      const validationResult = await validator.validate(task, artifacts);
+      const rawValidationResult = await validator.validate(task, artifacts);
 
-      // Step 4: Record stage run in database
+      // Convert validator result to internal format
+      const validationResult = {
+        passed: rawValidationResult.isValid,
+        errors: rawValidationResult.errors || [],
+        warnings: rawValidationResult.warnings || [],
+        criticalIssues: rawValidationResult.criticalIssues || [],
+        artifacts,
+      };
+
+      // Step 4: Handle critical blocking issues first
+      if (validationResult.criticalIssues && validationResult.criticalIssues.length > 0) {
+        this.orchestrator.recordStageRun({
+          task_id: task.id,
+          phase_index: phaseIndex,
+          phase_name: task.phase_name,
+          attempt,
+          status: 'blocked',
+          artifacts_blob: JSON.stringify(artifacts),
+          created_at: Date.now(),
+          completed_at: Date.now(),
+          exit_code: artifacts.exitCode,
+        });
+
+        logger.error({
+          category: 'phase',
+          action: 'critical_issue_detected',
+          message: `Critical blocking issue detected for task ${task.id}: ${validationResult.criticalIssues.join(', ')}`,
+          details: {
+            taskId: task.id,
+            phaseIndex,
+            criticalIssues: validationResult.criticalIssues,
+          },
+        });
+
+        return {
+          success: false,
+          nextPhase: null, // Block task
+          validationPassed: false,
+          isSystemBlocked: true,
+          errors: validationResult.criticalIssues,
+          artifacts,
+        };
+      }
+
+      // Step 5: Record stage run in database
       const stageRunId = this.orchestrator.recordStageRun({
         task_id: task.id,
         phase_index: phaseIndex,
         phase_name: task.phase_name,
         attempt,
         status: validationResult.passed ? 'success' : 'failed',
-        artifacts_blob: validationResult.artifacts ? JSON.stringify(validationResult.artifacts) : undefined,
+        artifacts_blob: JSON.stringify(artifacts),
         created_at: Date.now(),
         completed_at: Date.now(),
         exit_code: artifacts.exitCode,
@@ -105,11 +145,36 @@ export class PhaseExecutionService {
         },
       });
 
-      // Step 5: If validation failed, attempt recovery
+      // Step 6: If validation failed, check for max attempts first
       if (!validationResult.passed) {
+        // Check if we've reached max attempts in Phase 3 (Review)
+        // If so, transition to Phase 4 (Fixes) instead of attempting recovery
+        if (phaseIndex === 3 && attempt >= 4) {
+          logger.warn({
+            category: 'phase',
+            action: 'max_attempts_transition',
+            message: `Task ${task.id} reached max attempts in Phase 3, transitioning to Phase 4 (Fixes)`,
+            details: {
+              taskId: task.id,
+              phaseIndex,
+              attempt,
+            },
+          });
+
+          return {
+            success: false,
+            nextPhase: 4, // Move to fixes phase
+            validationPassed: false,
+            errors: validationResult.errors,
+            artifacts,
+          };
+        }
+
+        // Attempt recovery if available
         const recoveryService = getRecoveryService();
-        
-        if (recoveryService.shouldAttemptRecovery(validationResult)) {
+        const canRecover = recoveryService && typeof recoveryService.attemptRecovery === 'function';
+
+        if (canRecover) {
           logger.info({
             category: 'phase',
             action: 'recovery_attempt',
@@ -121,21 +186,26 @@ export class PhaseExecutionService {
             },
           });
 
-          const recoveryResult = await recoveryService.executeRecovery(
+          const recoveryResult = await recoveryService.attemptRecovery(
             task,
-            containerId,
             validationResult,
-            1 // First recovery attempt
+            containerId
           );
 
-          if (recoveryResult.shouldRetry) {
+          // Update stage run with recovery status
+          this.orchestrator.updateStageRunWithRecovery(
+            stageRunId,
+            JSON.stringify(recoveryResult),
+            recoveryResult.success ? 'recovered' : 'failed'
+          );
+
+          if (recoveryResult.success) {
             logger.info({
               category: 'phase',
-              action: 'recovery_retry',
-              message: `Recovery suggests retry for task ${task.id}`,
+              action: 'recovery_success',
+              message: `Recovery successful for task ${task.id}`,
               details: {
                 taskId: task.id,
-                category: recoveryResult.category,
                 diagnosis: recoveryResult.diagnosis,
               },
             });
@@ -145,54 +215,27 @@ export class PhaseExecutionService {
               nextPhase: phaseIndex, // Stay in current phase for retry
               validationPassed: false,
               recoveryAttempted: true,
-              recoverySucceeded: recoveryResult.success,
-              isSystemBlocked: recoveryResult.isSystemBlocked,
-              errors: [recoveryResult.diagnosis],
-              artifacts: validationResult.artifacts,
+              recoverySucceeded: true,
+              errors: validationResult.errors,
+              artifacts,
             };
           }
-
-          // Recovery says blocked - determine if system-wide or task-specific
-          const blockType = recoveryResult.category === 'system_blocked' ? 'SYSTEM-WIDE' : 'task-specific';
-          logger.warn({
-            category: 'phase',
-            action: 'recovery_blocked',
-            message: `Recovery blocked (${blockType}) for task ${task.id}: ${recoveryResult.diagnosis}`,
-            details: {
-              taskId: task.id,
-              blockType,
-              category: recoveryResult.category,
-              diagnosis: recoveryResult.diagnosis,
-              isSystemBlocked: recoveryResult.isSystemBlocked,
-            },
-          });
-
-          return {
-            success: false,
-            nextPhase: null, // Task blocked
-            validationPassed: false,
-            recoveryAttempted: true,
-            recoverySucceeded: false,
-            isSystemBlocked: recoveryResult.isSystemBlocked,
-            errors: [recoveryResult.diagnosis],
-            artifacts: validationResult.artifacts,
-          };
         }
 
-        // Validation failed, no recovery attempted
+        // Validation failed, no recovery or recovery failed - stay in current phase
         return {
           success: false,
           nextPhase: phaseIndex, // Stay in current phase for retry
           validationPassed: false,
           errors: validationResult.errors,
-          artifacts: validationResult.artifacts,
+          artifacts,
         };
       }
 
-      // Step 6: Determine next phase via orchestrator
+      // Step 7: Determine next phase via orchestrator
       const transition = this.orchestrator.determineNextPhase(phaseIndex, validationResult);
 
-      // Step 7: Check attempt limits before advancing
+      // Step 8: Check attempt limits before advancing
       if (transition.toPhase !== null && transition.toPhase === phaseIndex) {
         // Staying in same phase (retry) - check attempt limits
         const limitReached = this.orchestrator.checkAttemptLimits(task);
@@ -206,7 +249,7 @@ export class PhaseExecutionService {
         }
       }
 
-      // Step 8: Advance to next phase
+      // Step 9: Advance to next phase
       this.orchestrator.advancePhase(task, validationResult);
 
       logger.info({
