@@ -33,6 +33,7 @@ import { PhaseOrchestratorService } from './phaseOrchestrator.service.js';
 import { RecoveryAgentService } from './recoveryAgent.service.js';
 import type { ValidationResult } from './phaseValidation/types.js';
 import { getDatabase } from './database.js';
+import { getConnectionManager } from './connectionManager.js';
 
 export interface WorkspaceContext {
   id: string;
@@ -104,7 +105,7 @@ export class EphemeralWorkerService {
     this.contextGenerator = contextGenerator || new ContextBundleGenerator();
     this.validatorRegistry = new ValidatorRegistry();
     this.artifactExtractor = new ArtifactExtractorService();
-    this.phaseOrchestrator = new PhaseOrchestratorService(getDatabase());
+    this.phaseOrchestrator = new PhaseOrchestratorService(getDatabase().getDb());
     this.recoveryAgent = new RecoveryAgentService();
 
     this.config = {
@@ -967,6 +968,17 @@ export class EphemeralWorkerService {
       },
     });
 
+    // Emit phase:started event
+    const connManager = getConnectionManager();
+    if (connManager) {
+      connManager.broadcastToAll('phase:started', {
+        taskId: task.id,
+        phaseIndex: task.phase_index,
+        phaseName: task.phase_name,
+        attempt: task.phase_attempts,
+      });
+    }
+
     try {
       // Step 1: Extract artifacts from container BEFORE validation
       logger.info({
@@ -977,8 +989,8 @@ export class EphemeralWorkerService {
 
       const artifacts = await this.artifactExtractor.extractArtifacts({
         containerId,
-        phaseIndex: task.phase_index || 1,
-        attempt: task.phase_attempts || 1,
+        phaseIndex: task.phase_index,
+        attempt: task.phase_attempts,
       });
 
       logger.info({
@@ -1003,7 +1015,15 @@ export class EphemeralWorkerService {
         message: `Validating phase ${task.phase_index} for task ${task.id}`,
       });
 
-      const validator = this.validatorRegistry.getValidator(task.phase_index || 1);
+      // Emit phase:validating event
+      if (connManager) {
+        connManager.broadcastToAll('phase:validating', {
+          taskId: task.id,
+          phaseIndex: task.phase_index,
+        });
+      }
+
+      const validator = this.validatorRegistry.getValidator(task.phase_index);
       const validation = await validator.validate(task, artifacts);
 
       logger.info({
@@ -1017,12 +1037,23 @@ export class EphemeralWorkerService {
         },
       });
 
+      // Emit phase:validation_failed or phase:validation_passed event
+      if (connManager) {
+        if (!validation.passed) {
+          connManager.broadcastToAll('phase:validation_failed', {
+            taskId: task.id,
+            phaseIndex: task.phase_index,
+            errors: validation.errors,
+          });
+        }
+      }
+
       // Step 3: Record stage run in database
       const stageRunId = this.phaseOrchestrator.recordStageRun({
         task_id: task.id,
-        phase_index: task.phase_index || 1,
-        phase_name: task.phase_name || `Phase ${task.phase_index || 1}`,
-        attempt: task.phase_attempts || 1,
+        phase_index: task.phase_index,
+        phase_name: task.phase_name,
+        attempt: task.phase_attempts,
         status: validation.passed ? 'success' : 'failed',
         artifacts_blob: validation.artifacts ? JSON.stringify(validation.artifacts) : undefined,
         created_at: Date.now(),
@@ -1055,12 +1086,20 @@ export class EphemeralWorkerService {
           },
         });
 
+        // Emit phase:recovering event
+        if (connManager) {
+          connManager.broadcastToAll('phase:recovering', {
+            taskId: task.id,
+            phaseIndex: task.phase_index,
+          });
+        }
+
         // Run recovery agent in same container
         const recoveryResult = await this.recoveryAgent.executeRecovery(
           task,
           containerId,
           validation,
-          task.phase_attempts || 1
+          task.phase_attempts
         );
 
         logger.info({
@@ -1084,8 +1123,11 @@ export class EphemeralWorkerService {
         };
 
         // Update stage run with recovery diagnosis
-        // Note: We'd need to add an update method to phaseOrchestrator for this
-        // For now, we'll record recovery in the validation result
+        this.phaseOrchestrator.updateStageRunWithRecovery(
+          stageRunId,
+          JSON.stringify(recoveryResult),
+          recoveryResult.success ? 'recovered' : 'failed'
+        );
       }
 
       // Step 5: Advance phase if validation passed
@@ -1103,6 +1145,16 @@ export class EphemeralWorkerService {
             reason: transition.reason,
           },
         });
+
+        // Emit phase:completed event
+        if (connManager) {
+          connManager.broadcastToAll('phase:completed', {
+            taskId: task.id,
+            phaseIndex: transition.fromPhase,
+            nextPhase: transition.toPhase,
+            reason: transition.reason,
+          });
+        }
       }
 
       return validation;

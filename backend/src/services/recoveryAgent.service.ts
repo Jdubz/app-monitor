@@ -321,11 +321,11 @@ RECOVERY_EOF
    */
   private buildRecoveryPrompt(task: Task, validation: ValidationResult): string {
     const errors = validation.errors || [];
-    const phase = task.phase_name || `Phase ${task.phase_index}`;
+    const phase = task.phase_name;
 
     return `You are a recovery agent diagnosing a validation failure for task: ${task.title}
 
-PHASE: ${phase} (Attempt ${task.phase_attempts || 1})
+PHASE: ${phase} (Attempt ${task.phase_attempts})
 
 VALIDATION ERRORS:
 ${errors.map((e, i) => `${i + 1}. ${e}`).join('\n')}

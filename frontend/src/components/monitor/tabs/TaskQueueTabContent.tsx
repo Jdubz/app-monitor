@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, Loader2 } from 'lucide-react';
 import { useDevBotsStore } from '@/contexts/devBotsStore';
 import { ListDetailLayout } from '@/components/layout/ListDetailLayout';
 import { Badge } from '@/components/ui/badge';
@@ -8,6 +8,9 @@ import { cn } from '@/lib/utils';
 import type { DevBotsTask } from '@/types/dev-bots';
 import { getTaskStatusIcon, getTaskStatusColor } from '@/utils/statusHelpers';
 import { useListSelection } from '@/hooks/common';
+import { PhaseBadge, PhaseProgressBar } from '@/components/dev-bots/queue/PhaseProgress';
+import { TaskPhaseHistory } from '@/components/dev-bots/tasks/TaskPhaseHistory';
+import { usePhaseUpdates } from '@/hooks/usePhaseUpdates';
 
 type QueueFilter = 'pending' | 'active' | 'completed' | 'failed';
 
@@ -103,6 +106,8 @@ export function TaskQueueTabContent() {
 
   // Render detail pane
   const renderDetail = (task: DevBotsTask | null) => {
+    const livePhase = usePhaseUpdates(task?.id);
+    
     if (!task) {
       return (
         <Card>
@@ -127,6 +132,49 @@ export function TaskQueueTabContent() {
             <CardDescription>ID: {task.id}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* Phase Progress */}
+            {task.phaseIndex && task.phaseName && (
+              <div className="space-y-3 rounded-lg bg-muted/50 p-4">
+                <h4 className="text-sm font-semibold">Current Phase</h4>
+                <PhaseBadge
+                  phaseIndex={task.phaseIndex}
+                  phaseName={task.phaseName}
+                  phaseStatus={task.phaseStatus}
+                  phaseAttempts={task.phaseAttempts}
+                />
+                <PhaseProgressBar currentPhase={task.phaseIndex} />
+                
+                {/* Live status indicators */}
+                {livePhase && (
+                  <div className="mt-3 flex items-center gap-2 text-sm">
+                    {livePhase.status === 'validating' && (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin text-amber-500" />
+                        <span className="text-amber-500">Validating phase {livePhase.phase}...</span>
+                      </>
+                    )}
+                    {livePhase.status === 'recovering' && (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin text-yellow-500" />
+                        <span className="text-yellow-500">Recovery agent analyzing...</span>
+                      </>
+                    )}
+                    {livePhase.status === 'running' && (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                        <span className="text-blue-500">Executing phase {livePhase.phase}...</span>
+                      </>
+                    )}
+                    {livePhase.status === 'complete' && (
+                      <>
+                        <span className="text-emerald-500">✓ Phase {livePhase.phase} complete</span>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
             <div>
               <h4 className="text-sm font-semibold mb-2">Type</h4>
               <Badge variant="default">{task.type}</Badge>
@@ -200,6 +248,9 @@ export function TaskQueueTabContent() {
             )}
           </CardContent>
         </Card>
+
+        {/* Phase History */}
+        {task.phaseIndex && <TaskPhaseHistory taskId={task.id} />}
 
         {task.canRetry && task.status === 'failed' && (
           <Card>

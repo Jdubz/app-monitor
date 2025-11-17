@@ -1,7 +1,19 @@
 /**
  * TaskCompletionService
- *
- * Handles the final lifecycle stage of ephemeral worker tasks:
+ * 
+ * ⚠️ DEPRECATED - PENDING REMOVAL
+ * 
+ * This service is superseded by the 7-phase system:
+ * - Phase validation handled by PhaseValidatorRegistry
+ * - Quality gates handled by Phase 3 (Review) and Phase 5 (Test & Validate)
+ * - Task completion handled by PhaseOrchestratorService.advancePhase()
+ * - Recovery handled by RecoveryAgentService
+ * 
+ * Status: Instantiated in DevBotsManager but completeEphemeralTask() is NEVER CALLED.
+ * 
+ * Action Required: Remove this service entirely once confirmed no hidden dependencies.
+ * 
+ * Original functionality (now distributed across phase system):
  * - Token usage tracking
  * - Quality gate validation
  * - Workspace sealing and commit pushing

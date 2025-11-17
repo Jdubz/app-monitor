@@ -103,11 +103,11 @@ export interface Task {
   blocked_at?: number; // Unix timestamp when chain was blocked
   blocked_by?: string; // User/system that blocked the chain
   // Phase System fields (THE ONLY task processing system)
-  phase_index?: number; // Current phase (1-7)
-  phase_name?: string; // Human-readable phase name
-  phase_status?: 'ready' | 'running' | 'validating' | 'recovering' | 'complete' | 'blocked';
-  phase_attempts?: number; // Retry attempts within current phase
-  phase_payload?: string; // JSON for phase-specific state and partial progress
+  phase_index: number; // Current phase (1-7) - DEFAULT 1 in DB
+  phase_name: string; // Human-readable phase name - DEFAULT 'Planning' in DB
+  phase_status: 'ready' | 'running' | 'validating' | 'recovering' | 'complete' | 'blocked'; // DEFAULT 'ready' in DB
+  phase_attempts: number; // Retry attempts within current phase - DEFAULT 1 in DB
+  phase_payload?: string; // JSON for phase-specific state and partial progress (nullable)
   // Task verification fields (PR workflow quality gates)
   verification_passed?: boolean; // True if task verification succeeded (>= 80% criteria met)
   verification_results?: string; // JSON stringified TaskVerificationResult
@@ -472,7 +472,7 @@ export class TaskQueueService {
     }
 
     // Migration 013: Add phase system tracking columns
-    const phaseColumns = ['phase_index', 'phase_name', 'phase_attempts'];
+    const phaseColumns = ['phase_index', 'phase_name', 'phase_status', 'phase_attempts', 'phase_payload'];
     const missingPhaseColumns = phaseColumns.filter(col => !columnNames.has(col));
 
     if (missingPhaseColumns.length > 0) {
@@ -489,12 +489,19 @@ export class TaskQueueService {
       if (!columnNames.has('phase_name')) {
         this.db.exec(`ALTER TABLE tasks ADD COLUMN phase_name TEXT;`);
       }
+      if (!columnNames.has('phase_status')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN phase_status TEXT DEFAULT 'ready';`);
+      }
       if (!columnNames.has('phase_attempts')) {
         this.db.exec(`ALTER TABLE tasks ADD COLUMN phase_attempts INTEGER DEFAULT 1;`);
       }
+      if (!columnNames.has('phase_payload')) {
+        this.db.exec(`ALTER TABLE tasks ADD COLUMN phase_payload TEXT;`);
+      }
 
-      // Create index for phase queries
+      // Create indexes for phase queries
       this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_phase_index ON tasks(phase_index) WHERE phase_index IS NOT NULL;`);
+      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_phase_status ON tasks(phase_status) WHERE phase_status IS NOT NULL;`);
 
       logger.info({
         category: 'process',
@@ -2369,5 +2376,110 @@ export class TaskQueueService {
    */
   getBlockedChains() {
     return this.chainTracker.getBlockedChains();
+  }
+
+  // ==========================================================================
+  // Phase System Methods
+  // ==========================================================================
+
+  /**
+   * Requeue a task for phase retry after validation failure.
+   * Increments phase_attempts and resets to 'pending' status.
+   */
+  requeueTaskForPhaseRetry(taskId: string): void {
+    this.transaction(() => {
+      const task = this.getTask(taskId);
+      if (!task) {
+        throw new Error(`Task ${taskId} not found`);
+      }
+
+      const newAttempts = task.phase_attempts + 1;
+
+      this.db.prepare(`
+        UPDATE tasks
+        SET status = 'pending',
+            phase_status = 'ready',
+            phase_attempts = ?,
+            assigned_worker = NULL,
+            assigned_at = NULL,
+            started_at = NULL
+        WHERE id = ?
+      `).run(newAttempts, taskId);
+
+      logger.info({
+        category: 'phase',
+        action: 'task_requeued_for_retry',
+        message: `Task ${taskId} requeued for phase ${task.phase_index} retry (attempt ${newAttempts})`,
+        details: {
+          taskId,
+          phaseIndex: task.phase_index,
+          phaseName: task.phase_name,
+          attempt: newAttempts,
+        },
+      });
+    });
+  }
+
+  /**
+   * Update task context/prompt with additional information from recovery.
+   * Used when recovery suggests context_update category.
+   */
+  updateTaskContext(taskId: string, contextUpdate: string): void {
+    this.transaction(() => {
+      const task = this.getTask(taskId);
+      if (!task) {
+        throw new Error(`Task ${taskId} not found`);
+      }
+
+      // Append context update to existing prompt
+      const updatedPrompt = `${task.prompt}\n\n## Recovery Context Update\n${contextUpdate}`;
+
+      this.db.prepare(`
+        UPDATE tasks
+        SET prompt = ?
+        WHERE id = ?
+      `).run(updatedPrompt, taskId);
+
+      logger.info({
+        category: 'phase',
+        action: 'task_context_updated',
+        message: `Updated task ${taskId} context from recovery`,
+        details: {
+          taskId,
+          contextUpdateLength: contextUpdate.length,
+        },
+      });
+    });
+  }
+
+  /**
+   * Block an entire chain due to unrecoverable failure.
+   * Used when recovery categorizes as 'chain_blocked'.
+   */
+  blockChain(chainId: string, reason: string): void {
+    this.transaction(() => {
+      const now = Date.now();
+
+      // Block all tasks in the chain
+      this.db.prepare(`
+        UPDATE tasks
+        SET chain_status = 'blocked',
+            blocked_reason = ?,
+            blocked_at = ?,
+            blocked_by = 'recovery_agent'
+        WHERE chain_id = ?
+      `).run(reason, now, chainId);
+
+      logger.warn({
+        category: 'phase',
+        action: 'chain_blocked',
+        message: `Chain ${chainId} blocked due to recovery diagnosis`,
+        details: {
+          chainId,
+          reason,
+          blockedBy: 'recovery_agent',
+        },
+      });
+    });
   }
 }

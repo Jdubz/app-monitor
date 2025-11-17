@@ -272,6 +272,30 @@ export class PhaseOrchestratorService {
   }
 
   /**
+   * Update a stage run with recovery diagnosis and status.
+   * Called when recovery agent completes its diagnosis.
+   */
+  updateStageRunWithRecovery(stageRunId: number, recoveryDiagnosis: string, status: 'recovered' | 'failed' = 'recovered'): void {
+    this.db.prepare(`
+      UPDATE task_stage_runs
+      SET recovery_diagnosis = ?,
+          status = ?,
+          completed_at = ?
+      WHERE id = ?
+    `).run(recoveryDiagnosis, status, Date.now(), stageRunId);
+
+    logger.info({
+      category: 'phase',
+      action: 'stage_run_recovery_updated',
+      message: `Updated stage run ${stageRunId} with recovery diagnosis`,
+      details: {
+        stageRunId,
+        status,
+      },
+    });
+  }
+
+  /**
    * Check if task has exceeded attempt limits for current phase.
    * Returns true if should escalate to human intervention.
    */

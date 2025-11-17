@@ -47,8 +47,8 @@ export class PhaseExecutionService {
    * @returns Phase execution result with next phase information
    */
   async executePhaseWorkflow(task: Task, containerId: string): Promise<PhaseExecutionResult> {
-    const phaseIndex = task.phase_index ?? 1;
-    const attempt = task.phase_attempts ?? 1;
+    const phaseIndex = task.phase_index;
+    const attempt = task.phase_attempts;
 
     logger.info({
       category: 'phase',
@@ -83,7 +83,7 @@ export class PhaseExecutionService {
       const stageRunId = this.orchestrator.recordStageRun({
         task_id: task.id,
         phase_index: phaseIndex,
-        phase_name: task.phase_name ?? `Phase ${phaseIndex}`,
+        phase_name: task.phase_name,
         attempt,
         status: validationResult.passed ? 'success' : 'failed',
         artifacts_blob: validationResult.artifacts ? JSON.stringify(validationResult.artifacts) : undefined,

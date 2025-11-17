@@ -74,6 +74,14 @@ export class DevBotsDatabase {
     this.initialize();
   }
 
+  /**
+   * Get the underlying better-sqlite3 database instance.
+   * Used by services that need direct database access.
+   */
+  getDb(): Database.Database {
+    return this.db;
+  }
+
   private initialize(): void {
     // Run migrations
     this.runMigrations();

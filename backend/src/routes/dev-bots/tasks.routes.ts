@@ -25,6 +25,7 @@ import { config } from '../../config.js';
 import { WorkerLogLocator } from '../../services/taskLogLocator.js';
 import { getTaskContextService } from '../../services/taskContext.service.js';
 import { taskAutoDetectionService } from '../../services/taskAutoDetection.service.js';
+import { getPhaseMetricsService } from '../../services/phaseMetrics.service.js';
 import type { MinimalTaskPayload } from '@app-monitor/api-contracts';
 import {
   mapTasksToContract,
@@ -556,6 +557,36 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   });
 
   /**
+   * GET /tasks/:id/stage-runs
+   * Get historical phase execution records for a task
+   */
+  router.get('/tasks/:id/stage-runs', (req: Request, res: Response) => {
+    try {
+      const { id: taskId } = req.params;
+      const taskQueue = devBotsManager.getTaskQueue();
+      const db = taskQueue.getDatabase();
+
+      const stageRuns = db.prepare(`
+        SELECT * FROM task_stage_runs
+        WHERE task_id = ?
+        ORDER BY created_at DESC
+      `).all(taskId);
+
+      sendSuccess(res, { stageRuns });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_stage_runs',
+        message: `Error getting stage runs for task: ${error}`,
+        error
+      });
+      sendError(res, 'Failed to get stage runs', 500, {
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  /**
    * GET /tasks/:id/runs
    * Get all automation runs for a task
    */
@@ -764,6 +795,158 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       });
       sendError(res, 'Failed to unblock chain', 500, { message: error instanceof Error ? error.message : String(error),
        });
+    }
+  });
+
+  // ============================================================================
+  // Phase System Endpoints
+  // ============================================================================
+
+  /**
+   * GET /tasks/:taskId/phases
+   * Get phase execution history for a task
+   */
+  router.get('/tasks/:taskId/phases', async (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+
+      const taskQueue = devBotsManager.getTaskQueue();
+      const db = taskQueue.getDatabase();
+
+      // Get task info
+      const task = taskQueue.getTask(taskId);
+      if (!task) {
+        sendError(res, 'Task not found', 404);
+        return;
+      }
+
+      // Get phase history from task_stage_runs
+      const phaseHistory = db.prepare(`
+        SELECT * FROM task_stage_runs
+        WHERE task_id = ?
+        ORDER BY phase_index ASC, attempt ASC
+      `).all(taskId);
+
+      // Parse artifacts_blob and recovery_diagnosis JSON fields
+      const parsedHistory = phaseHistory.map((run: any) => ({
+        ...run,
+        artifacts: run.artifacts_blob ? JSON.parse(run.artifacts_blob) : null,
+        recovery: run.recovery_diagnosis ? JSON.parse(run.recovery_diagnosis) : null,
+      }));
+
+      sendSuccess(res, {
+        taskId,
+        currentPhase: {
+          index: task.phase_index,
+          name: task.phase_name,
+          status: task.phase_status,
+          attempts: task.phase_attempts,
+        },
+        history: parsedHistory,
+      });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_phase_history',
+        message: `Error getting phase history: ${error}`,
+        error
+      });
+      sendError(res, 'Failed to get phase history', 500, { 
+        message: error instanceof Error ? error.message : String(error) 
+      });
+    }
+  });
+
+  /**
+   * GET /phases/metrics
+   * Get aggregated phase system metrics
+   */
+  router.get('/phases/metrics', async (_req: Request, res: Response) => {
+    try {
+      const taskQueue = devBotsManager.getTaskQueue();
+      const db = taskQueue.getDatabase();
+      const metricsService = getPhaseMetricsService(db);
+
+      const metrics = metricsService.getMetrics();
+
+      sendSuccess(res, metrics);
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_phase_metrics',
+        message: `Error getting phase metrics: ${error}`,
+        error
+      });
+      sendError(res, 'Failed to get phase metrics', 500, { 
+        message: error instanceof Error ? error.message : String(error) 
+      });
+    }
+  });
+
+  /**
+   * GET /phases/:phaseIndex/metrics
+   * Get metrics for a specific phase
+   */
+  router.get('/phases/:phaseIndex/metrics', async (req: Request, res: Response) => {
+    try {
+      const phaseIndex = parseInt(req.params.phaseIndex, 10);
+
+      if (isNaN(phaseIndex) || phaseIndex < 1 || phaseIndex > 7) {
+        sendError(res, 'Invalid phase index. Must be between 1 and 7.', 400);
+        return;
+      }
+
+      const taskQueue = devBotsManager.getTaskQueue();
+      const db = taskQueue.getDatabase();
+      const metricsService = getPhaseMetricsService(db);
+
+      const phaseMetrics = metricsService.getPhaseMetrics(phaseIndex);
+
+      if (!phaseMetrics) {
+        sendError(res, 'No metrics available for this phase', 404);
+        return;
+      }
+
+      sendSuccess(res, phaseMetrics);
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_phase_specific_metrics',
+        message: `Error getting phase-specific metrics: ${error}`,
+        error
+      });
+      sendError(res, 'Failed to get phase metrics', 500, { 
+        message: error instanceof Error ? error.message : String(error) 
+      });
+    }
+  });
+
+  /**
+   * POST /phases/metrics/refresh
+   * Clear the metrics cache to force fresh calculation
+   */
+  router.post('/phases/metrics/refresh', async (_req: Request, res: Response) => {
+    try {
+      const taskQueue = devBotsManager.getTaskQueue();
+      const db = taskQueue.getDatabase();
+      const metricsService = getPhaseMetricsService(db);
+
+      metricsService.clearCache();
+
+      sendSuccess(res, { 
+        message: 'Phase metrics cache cleared',
+        timestamp: Date.now()
+      });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_refreshing_phase_metrics',
+        message: `Error refreshing phase metrics: ${error}`,
+        error
+      });
+      sendError(res, 'Failed to refresh phase metrics', 500, { 
+        message: error instanceof Error ? error.message : String(error) 
+      });
     }
   });
 

@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/utils/dateFormatters';
+import { PhaseProgressBar, PhaseBadge } from './PhaseProgress';
 
 type QueueBucket = 'pending' | 'active' | 'completed' | 'failed';
 
@@ -158,18 +159,26 @@ export function TaskQueuePanel() {
                       </Badge>
                     )}
                   </div>
+
+                  {/* Phase Progress - Enhanced */}
+                  {task.phaseIndex && task.phaseName && (
+                    <div className="flex flex-col gap-1.5">
+                      <PhaseBadge
+                        phaseIndex={task.phaseIndex}
+                        phaseName={task.phaseName}
+                        phaseStatus={task.phaseStatus}
+                        phaseAttempts={task.phaseAttempts}
+                      />
+                      <PhaseProgressBar currentPhase={task.phaseIndex} />
+                    </div>
+                  )}
+
                   <p className="line-clamp-2 text-xs text-muted-foreground">
                     {bucketCopy[bucket].helper}
                   </p>
                   <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
                     <span className="font-mono">{task.assignedWorker || 'Unassigned worker'}</span>
                     <span className="font-mono">{task.assignedAgent}</span>
-                    {task.phaseIndex && task.phaseName && (
-                      <span className="font-medium text-primary">
-                        Phase {task.phaseIndex}/7: {task.phaseName}
-                        {task.phaseAttempts && task.phaseAttempts > 1 && ` (attempt ${task.phaseAttempts})`}
-                      </span>
-                    )}
                     <span>Created {formatRelativeTime(task.createdAt)}</span>
                     {task.completedAt && <span>Completed {formatRelativeTime(task.completedAt)}</span>}
                   </div>

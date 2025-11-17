@@ -24,6 +24,7 @@ import verificationRoutes from './verification.routes.js';
 import githubWebhooksRoutes from './github-webhooks.routes.js';
 import logsRoutes, { initializeLogsRoutes } from './logs.routes.js';
 import issuesRoutes, { initializeIssuesRoutes } from './issues.routes.js';
+import metricsRoutes from './metrics.routes.js';
 
 /**
  * Create the main API router with all sub-routes
@@ -109,6 +110,7 @@ export function createApiRouter(deps: {
   router.use('/token-tracking', requireApiKey, tokenTrackingRoutes);
   router.use('/quality-gates', requireApiKey, qualityGatesRoutes);
   router.use('/verification', requireApiKey, verificationRoutes);
+  router.use('/metrics', requireApiKey, metricsRoutes);
 
   // Logs and issues endpoints - no auth required (frontend logs and issue reports)
   router.use('/logs', logsRoutes);

@@ -203,6 +203,11 @@ export const mapTaskToContract = (task: Task): DevBotsTask => ({
   maxRetries: task.max_retries,
   canRetry: task.can_retry,
   notes: task.notes,
+  // Phase system fields
+  phaseIndex: task.phase_index,
+  phaseName: task.phase_name,
+  phaseStatus: task.phase_status,
+  phaseAttempts: task.phase_attempts,
 });
 
 /**

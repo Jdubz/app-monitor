@@ -690,6 +690,41 @@ export class TaskExecutionService {
                 recoverySuccess: phaseValidation.recovery.success
               }
             });
+
+            // Apply recovery action based on category
+            const recovery = phaseValidation.recovery;
+
+            if (recovery.category === 'retry') {
+              // Simple retry - increment attempts and requeue
+              this.taskQueue.requeueTaskForPhaseRetry(nextTask.id);
+            } else if (recovery.category === 'context_update') {
+              // Update task prompt with additional context
+              if (recovery.diagnosis) {
+                this.taskQueue.updateTaskContext(nextTask.id, recovery.diagnosis);
+              }
+              this.taskQueue.requeueTaskForPhaseRetry(nextTask.id);
+            } else if (recovery.category === 'chain_blocked') {
+              // Block entire chain - requires human intervention
+              if (nextTask.chain_id) {
+                this.taskQueue.blockChain(nextTask.chain_id, recovery.diagnosis || 'Unrecoverable failure');
+              }
+            } else if (recovery.category === 'system_blocked') {
+              // Global pause - emit event for system-wide handling
+              logger.error({
+                category: 'phase',
+                action: 'system_blocked',
+                message: 'Recovery agent detected system-wide issue',
+                details: {
+                  taskId: nextTask.id,
+                  diagnosis: recovery.diagnosis,
+                },
+              });
+              // Emit event for monitoring/alerting systems
+              this.emit('system:blocked', {
+                taskId: nextTask.id,
+                reason: recovery.diagnosis || 'System-wide issue detected',
+              });
+            }
           } else {
             logger.warn({
               category: 'phase',
@@ -701,6 +736,9 @@ export class TaskExecutionService {
                 errors: phaseValidation.errors
               }
             });
+
+            // No recovery attempted - mark task as failed
+            this.taskQueue.failTask(nextTask.id, `Phase ${nextTask.phase_index} validation failed: ${phaseValidation.errors?.join(', ') || 'Unknown error'}`);
           }
 
           // Task will be retried via phase system
