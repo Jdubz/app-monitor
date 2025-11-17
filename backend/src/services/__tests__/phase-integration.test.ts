@@ -5,11 +5,10 @@
  * Tests complete task flows through all 7 phases including loops and recovery.
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { PhaseOrchestratorService } from '../phaseOrchestrator.service';
 import { ValidatorRegistry } from '../phaseValidation/ValidatorRegistry';
-import { RecoveryAgentService } from '../recoveryAgent.service';
 import { ValidationResult } from '../phaseValidation/types';
 import type { Task } from '../taskQueue.sqlite';
 
@@ -17,7 +16,6 @@ describe('Phase Integration Tests', () => {
   let db: Database.Database;
   let orchestrator: PhaseOrchestratorService;
   let validatorRegistry: ValidatorRegistry;
-  let recoveryService: RecoveryAgentService;
 
   beforeEach(() => {
     // Create in-memory SQLite database for testing
@@ -43,7 +41,6 @@ describe('Phase Integration Tests', () => {
 
     validatorRegistry = new ValidatorRegistry();
     orchestrator = new PhaseOrchestratorService(db);
-    recoveryService = {} as RecoveryAgentService;
   });
 
   afterEach(() => {

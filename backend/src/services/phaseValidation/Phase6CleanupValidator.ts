@@ -25,7 +25,6 @@ import type {
   PhaseValidator, 
   ValidationResult, 
   PhaseArtifacts,
-  CleanupArtifacts 
 } from './types.js';
 
 export class Phase6CleanupValidator implements PhaseValidator {

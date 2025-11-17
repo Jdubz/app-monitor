@@ -14,14 +14,7 @@
 import { Router, Request, Response } from 'express';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
 import { logger } from '../../utils/logger.js';
-import type { LogEntry } from '../../utils/logger.js';
 import { sendSuccess, sendError } from '../../utils/apiResponse.js';
-import {
-  validateTaskTemplate,
-  formatValidationErrors,
-  shouldValidateAsV3Template
-} from '../../services/taskTemplateValidator.js';
-import { config } from '../../config.js';
 import { WorkerLogLocator } from '../../services/taskLogLocator.js';
 import { getTaskContextService } from '../../services/taskContext.service.js';
 import { taskAutoDetectionService } from '../../services/taskAutoDetection.service.js';
@@ -37,9 +30,6 @@ import {
   buildQueueSummary,
   buildTaskHistoryEvents,
   streamLogFile,
-  TECHNICAL_TASK_TYPES,
-  MIN_DOCUMENTATION_LENGTH,
-  MIN_ACCEPTANCE_CRITERION_LENGTH,
   DEFAULT_WORK_TARGET,
   LOG_STREAM_TYPES,
   type ContractDevBotsTaskDetail,

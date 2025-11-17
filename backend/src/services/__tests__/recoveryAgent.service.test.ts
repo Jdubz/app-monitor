@@ -8,8 +8,8 @@
  * - Integration with validation system
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
-import { RecoveryAgentService, RecoveryResult } from '../recoveryAgent.service.js';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { RecoveryAgentService } from '../recoveryAgent.service.js';
 import type { ValidationResult } from '../phaseValidation/index.js';
 import type { Task } from '../taskQueue.sqlite.js';
 

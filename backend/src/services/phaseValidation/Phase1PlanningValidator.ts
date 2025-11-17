@@ -20,11 +20,10 @@
 
 import { logger } from '../../utils/logger.js';
 import type { Task } from '../taskQueue.sqlite.js';
-import type { 
-  PhaseValidator, 
-  ValidationResult, 
-  PhaseArtifacts,
-  PlanningArtifacts 
+import type {
+  PhaseValidator,
+  ValidationResult,
+  PhaseArtifacts
 } from './types.js';
 
 export class Phase1PlanningValidator implements PhaseValidator {
