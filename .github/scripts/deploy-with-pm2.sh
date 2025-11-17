@@ -21,7 +21,7 @@ echo "🔄 Updating PM2 to use new release: $RELEASE_DIR"
 cd "$RELEASE_DIR/backend"
 
 # Update PM2 process with zero-downtime reload (start if not running)
-pm2 startOrReload ecosystem.config.cjs --update-env
+pm2 startOrRestart ecosystem.config.cjs --update-env
 
 echo "✅ PM2 started or reloaded with new release"
 pm2 status app-monitor-backend
