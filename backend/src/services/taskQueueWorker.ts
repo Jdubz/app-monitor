@@ -12,23 +12,29 @@ export interface TaskQueueWorkerConfig {
   pollIntervalMs: number;
   enabled: boolean;
   maxConsecutiveFailures: number;
+  maxPollIntervalMs?: number; // Maximum poll interval for exponential backoff
 }
 
 export class TaskQueueWorker {
   private running = false;
   private pollIntervalMs: number;
+  private basePollIntervalMs: number; // Store original interval
+  private maxPollIntervalMs: number; // Maximum interval for backoff
   private enabled: boolean;
   private maxConsecutiveFailures: number;
   private consecutiveFailures = 0;
   private taskExecutionService: TaskExecutionService;
   private pollTimeout: NodeJS.Timeout | null = null;
+  private isHealthDegraded = false; // Track health status
 
   constructor(
     taskExecutionService: TaskExecutionService,
     config: Partial<TaskQueueWorkerConfig> = {}
   ) {
     this.taskExecutionService = taskExecutionService;
-    this.pollIntervalMs = config.pollIntervalMs ?? 5000; // 5 seconds default
+    this.basePollIntervalMs = config.pollIntervalMs ?? 5000; // 5 seconds default
+    this.pollIntervalMs = this.basePollIntervalMs;
+    this.maxPollIntervalMs = config.maxPollIntervalMs ?? 60000; // 60 seconds max backoff
     this.enabled = config.enabled ?? true;
     this.maxConsecutiveFailures = config.maxConsecutiveFailures ?? 10;
   }
@@ -112,20 +118,43 @@ export class TaskQueueWorker {
     }
 
     // Log warning if we have excessive consecutive failures, but DO NOT stop the worker
-    // Individual task failures should never stop the entire system
+    // Implement exponential backoff to reduce system load during sustained failures
     if (this.consecutiveFailures >= this.maxConsecutiveFailures) {
-      logger.warn({
-        category: 'process',
-        action: 'worker_high_failure_rate',
-        message: `Task queue worker has high failure rate (${this.consecutiveFailures} consecutive failures). System will continue running.`,
-        details: {
-          consecutiveFailures: this.consecutiveFailures,
-          maxConsecutiveFailures: this.maxConsecutiveFailures,
-          note: 'Worker continues polling - individual task failures should not stop the system'
-        }
-      });
-      // Reset counter to avoid log spam, but keep polling
-      this.consecutiveFailures = 0;
+      // Mark worker as degraded for health monitoring
+      if (!this.isHealthDegraded) {
+        this.isHealthDegraded = true;
+        logger.error({
+          category: 'process',
+          action: 'worker_health_degraded',
+          message: `Task queue worker health degraded after ${this.consecutiveFailures} consecutive failures. Implementing exponential backoff.`,
+          details: {
+            consecutiveFailures: this.consecutiveFailures,
+            maxConsecutiveFailures: this.maxConsecutiveFailures,
+            currentPollInterval_ms: this.pollIntervalMs,
+            maxPollInterval_ms: this.maxPollIntervalMs,
+            alert: 'CRITICAL - Worker experiencing sustained polling failures. Check database, Docker, and system resources.'
+          }
+        });
+      }
+
+      // Apply exponential backoff (double interval, up to max)
+      const newInterval = Math.min(this.pollIntervalMs * 2, this.maxPollIntervalMs);
+      if (newInterval > this.pollIntervalMs) {
+        logger.warn({
+          category: 'process',
+          action: 'worker_backoff_increased',
+          message: `Increasing poll interval from ${this.pollIntervalMs}ms to ${newInterval}ms due to sustained failures`,
+          details: {
+            previousInterval_ms: this.pollIntervalMs,
+            newInterval_ms: newInterval,
+            consecutiveFailures: this.consecutiveFailures
+          }
+        });
+        this.pollIntervalMs = newInterval;
+      }
+
+      // DO NOT reset counter - it will only reset on successful poll
+      // This ensures the failure rate is accurately tracked
     }
 
     this.pollTimeout = setTimeout(() => {
@@ -156,14 +185,32 @@ export class TaskQueueWorker {
         });
       });
 
-      // Reset failure counter on success
+      // Reset failure counter and restore normal polling on success
       if (this.consecutiveFailures > 0) {
         logger.info({
           category: 'process',
           action: 'worker_recovered',
-          message: `Task queue worker recovered after ${this.consecutiveFailures} failures`
+          message: `Task queue worker recovered after ${this.consecutiveFailures} failures`,
+          details: {
+            previousFailures: this.consecutiveFailures,
+            healthRestored: this.isHealthDegraded
+          }
         });
         this.consecutiveFailures = 0;
+
+        // Restore health status and normal poll interval
+        if (this.isHealthDegraded) {
+          this.isHealthDegraded = false;
+          this.pollIntervalMs = this.basePollIntervalMs;
+          logger.info({
+            category: 'process',
+            action: 'worker_health_restored',
+            message: 'Task queue worker health fully restored',
+            details: {
+              pollInterval_ms: this.pollIntervalMs
+            }
+          });
+        }
       }
 
     } catch (error) {
@@ -177,7 +224,9 @@ export class TaskQueueWorker {
         details: {
           consecutiveFailures: this.consecutiveFailures,
           maxConsecutiveFailures: this.maxConsecutiveFailures,
-          willRetry: this.consecutiveFailures < this.maxConsecutiveFailures
+          willRetry: true, // Always true - worker never stops
+          currentPollInterval_ms: this.pollIntervalMs,
+          healthDegraded: this.isHealthDegraded
         }
       });
     }
@@ -191,12 +240,14 @@ export class TaskQueueWorker {
     enabled: boolean;
     consecutiveFailures: number;
     pollIntervalMs: number;
+    healthStatus: 'healthy' | 'degraded';
   } {
     return {
       running: this.running,
       enabled: this.enabled,
       consecutiveFailures: this.consecutiveFailures,
-      pollIntervalMs: this.pollIntervalMs
+      pollIntervalMs: this.pollIntervalMs,
+      healthStatus: this.isHealthDegraded ? 'degraded' : 'healthy'
     };
   }
 }
