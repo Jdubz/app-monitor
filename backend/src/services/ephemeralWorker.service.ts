@@ -35,6 +35,7 @@ import { RecoveryAgentService } from './recoveryAgent.service.js';
 import type { ValidationResult } from './phaseValidation/types.js';
 import { getConnectionManager } from './connectionManager.js';
 import { CONTAINER_MEMORY_LIMIT_BYTES, CONTAINER_CPU_QUOTA, WORKER_UID_GID } from '../constants/containers.js';
+import { DEFAULT_EPHEMERAL_WORKER_CONFIG } from '../config/defaults.js';
 
 export interface WorkspaceContext {
   id: string;
@@ -108,21 +109,8 @@ export class EphemeralWorkerService {
     this.phaseOrchestrator = new PhaseOrchestratorService(db);  // Use injected database instance
     this.recoveryAgent = new RecoveryAgentService();
 
-    this.config = {
-      maxConcurrentWorkers: config.maxConcurrentWorkers ?? 2,
-      dockerImage: config.dockerImage ?? 'dev-bot:latest',
-      logsDirectory: config.logsDirectory ?? './data/logs',
-      envPassthroughKeys: config.envPassthroughKeys ?? [
-        'ANTHROPIC_API_KEY',
-        'CLAUDE_API_KEY',
-        'OPENAI_API_KEY',
-        'GITHUB_TOKEN',
-        'GIT_AUTHOR_NAME',
-        'GIT_AUTHOR_EMAIL',
-        'GIT_COMMITTER_NAME',
-        'GIT_COMMITTER_EMAIL'
-      ]
-    };
+    // Merge provided config with defaults
+    this.config = { ...DEFAULT_EPHEMERAL_WORKER_CONFIG, ...config };
 
     // Dev-bots consolidated log file for real-time monitoring
     const devBotsLogDir = path.join(process.cwd(), 'dev-bots', 'logs');
