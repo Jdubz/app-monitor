@@ -32,6 +32,7 @@ import { ArtifactExtractorService } from './artifactExtractor.service.js';
 import { PhaseOrchestratorService } from './phaseOrchestrator.service.js';
 import { RecoveryAgentService } from './recoveryAgent.service.js';
 import type { ValidationResult } from './phaseValidation/types.js';
+import { getDatabase } from './database.js';
 
 export interface WorkspaceContext {
   id: string;
@@ -103,7 +104,7 @@ export class EphemeralWorkerService {
     this.contextGenerator = contextGenerator || new ContextBundleGenerator();
     this.validatorRegistry = new ValidatorRegistry();
     this.artifactExtractor = new ArtifactExtractorService();
-    this.phaseOrchestrator = new PhaseOrchestratorService(this.validatorRegistry);
+    this.phaseOrchestrator = new PhaseOrchestratorService(getDatabase());
     this.recoveryAgent = new RecoveryAgentService();
 
     this.config = {
@@ -1022,11 +1023,8 @@ export class EphemeralWorkerService {
         message: `Validating phase ${task.phase_index} for task ${task.id}`,
       });
 
-      const validation = await this.validatorRegistry.validate(
-        task.phase_index || 1,
-        task,
-        artifacts
-      );
+      const validator = this.validatorRegistry.getValidator(task.phase_index || 1);
+      const validation = await validator.validate(task, artifacts);
 
       logger.info({
         category: 'phase',
