@@ -46,8 +46,8 @@ export class Phase1PlanningValidator implements PhaseValidator {
       };
     }
 
-    // Validate JSON structure
-    if (typeof planning !== 'object') {
+    // Validate JSON structure (must be object, not null or array)
+    if (typeof planning !== 'object' || planning === null || Array.isArray(planning)) {
       return {
         passed: false,
         errors: ['Planning artifacts are not a valid JSON object'],
