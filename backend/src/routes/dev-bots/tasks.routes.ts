@@ -25,7 +25,11 @@ import { config } from '../../config.js';
 import { WorkerLogLocator } from '../../services/taskLogLocator.js';
 import { getTaskContextService } from '../../services/taskContext.service.js';
 import { taskAutoDetectionService } from '../../services/taskAutoDetection.service.js';
-import type { MinimalTaskPayload } from '@app-monitor/api-contracts';
+import type {
+  MinimalTaskPayload,
+  DevBotsReportCompletionPayload,
+  DevBotsReportCompletionResponse
+} from '@app-monitor/api-contracts';
 import {
   mapTasksToContract,
   mapTaskToContract,
@@ -1023,7 +1027,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   router.post('/:taskId/report-completion', (req: Request, res: Response) => {
     try {
       const { taskId } = req.params;
-      const { success, summary } = req.body;
+      const { success, summary } = req.body as DevBotsReportCompletionPayload;
 
       // Security: Only allow from localhost/internal network
       const clientIp = req.ip || req.socket.remoteAddress || '';
@@ -1099,11 +1103,13 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         }
       });
 
-      res.json({
+      const response: DevBotsReportCompletionResponse = {
         success: true,
         message: `Task completion status recorded: ${success ? 'SUCCESS' : 'FAILURE'}`,
         taskId
-      });
+      };
+
+      res.json(response);
     } catch (error) {
       logger.error({
         category: 'api',
