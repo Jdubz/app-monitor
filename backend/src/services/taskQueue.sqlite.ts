@@ -107,12 +107,19 @@ export interface Task {
   // Chain tracking for fix task depth limiting
   chain_id?: string; // UUID identifying the chain this task belongs to
   chain_depth?: number; // Depth in the fix chain (0 = original, 1+ = fix attempts)
-  // Staged Queue System fields
+  // Staged Queue System fields (DEPRECATED - replaced by phase system)
+  /** @deprecated Use phase_index instead - queue_stage is legacy */
   queue_stage?: 'implementation' | 'followup'; // Queue stage for chain-aware scheduling
   chain_status?: 'pending' | 'active' | 'blocked' | 'closed'; // Chain lifecycle status
   blocked_reason?: string; // Reason chain was blocked (for manual intervention)
   blocked_at?: number; // Unix timestamp when chain was blocked
   blocked_by?: string; // User/system that blocked the chain
+  // Phase System fields (replaces queue_stage + REVIEW/FIX child tasks)
+  phase_index?: number; // Current phase (1-7)
+  phase_name?: string; // Human-readable phase name
+  phase_status?: 'ready' | 'running' | 'validating' | 'recovering' | 'complete' | 'blocked';
+  phase_attempts?: number; // Retry attempts within current phase
+  phase_payload?: string; // JSON for phase-specific state and partial progress
   // Task verification fields (PR workflow quality gates)
   verification_passed?: boolean; // True if task verification succeeded (>= 80% criteria met)
   verification_results?: string; // JSON stringified TaskVerificationResult
@@ -1033,23 +1040,30 @@ export class TaskQueueService {
       file_patterns: filePatterns,
       estimated_complexity: estimatedComplexity,
       preferred_agent: taskData.preferred_agent,
-      // Staged Queue fields
+      // Staged Queue fields (deprecated but kept for backward compatibility)
       queue_stage: queueStage,
       chain_status: 'pending',
       chain_id: chainId,
-      chain_depth: taskData.chain_depth || 0
+      chain_depth: taskData.chain_depth || 0,
+      // Phase system fields (new - all tasks start at Phase 1)
+      phase_index: 1,
+      phase_name: 'Planning',
+      phase_status: 'ready',
+      phase_attempts: 1,
+      phase_payload: undefined
     };
 
     return this.transaction(() => {
-      // Insert main task with classification and staged queue fields
+      // Insert main task with classification and phase system fields
       const stmt = this.db.prepare(`
         INSERT INTO tasks (
           id, type, title, description, documentation, notes, status, priority,
           created_at, assigned_agent, prompt, can_retry, retry_count, max_retries,
           timeout_ms, fingerprint, estimated_hours, complexity,
           task_category, file_patterns, estimated_complexity, preferred_agent,
-          queue_stage, chain_status, chain_id, chain_depth
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          queue_stage, chain_status, chain_id, chain_depth,
+          phase_index, phase_name, phase_status, phase_attempts, phase_payload
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       stmt.run(
@@ -1058,7 +1072,8 @@ export class TaskQueueService {
         task.prompt, task.can_retry ? 1 : 0, task.retry_count, task.max_retries,
         task.timeout_ms, task.fingerprint, task.estimated_hours, task.complexity,
         task.task_category, task.file_patterns, task.estimated_complexity, task.preferred_agent,
-        task.queue_stage, task.chain_status, task.chain_id, task.chain_depth
+        task.queue_stage, task.chain_status, task.chain_id, task.chain_depth,
+        task.phase_index, task.phase_name, task.phase_status, task.phase_attempts, task.phase_payload
       );
 
       // Insert related data
@@ -1214,15 +1229,20 @@ export class TaskQueueService {
   }
 
   /**
-   * Dequeue next implementation task (new chain)
+   * Dequeue next task using phase-based priority system.
+   * Priority order: Phase 7 > 6 > 5 > 4 > 3 > 2 > 1 (complete chains first)
    */
   private dequeueImplementationTask(): Task | undefined {
+    // Query for pending tasks ordered by phase (later phases first to complete chains)
     const stmt = this.db.prepare(`
       SELECT * FROM tasks
       WHERE status = 'pending'
-      AND queue_stage = 'implementation'
-      AND chain_status = 'pending'
-      ORDER BY priority DESC, created_at ASC
+      AND phase_status = 'ready'
+      AND chain_status != 'blocked'
+      ORDER BY 
+        phase_index DESC,  -- Favor later phases (complete chains first)
+        priority DESC,      -- Then by priority
+        created_at ASC      -- Then FIFO
       LIMIT 1
     `);
 
@@ -1231,18 +1251,12 @@ export class TaskQueueService {
 
   /**
    * Dequeue next followup task (existing chain, skip blocked chains)
+   * @deprecated This method is deprecated - use dequeueImplementationTask which now handles all phases
    */
   private dequeueFollowupTask(): Task | undefined {
-    const stmt = this.db.prepare(`
-      SELECT * FROM tasks
-      WHERE status = 'pending'
-      AND queue_stage = 'followup'
-      AND chain_status != 'blocked'
-      ORDER BY priority DESC, created_at ASC
-      LIMIT 1
-    `);
-
-    return stmt.get() as Task | undefined;
+    // For backward compatibility, delegate to implementation task
+    // All tasks are now phase-based, no distinction between implementation/followup
+    return this.dequeueImplementationTask();
   }
 
   /**
