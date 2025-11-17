@@ -20,7 +20,7 @@ export default defineConfig({
     timeout: 15000, // 15 seconds for expect assertions (increased for UI visibility checks)
   },
   reporter: [
-    ['html'],
+    ['html', { open: 'never' }], // Generate HTML report but never auto-open
     ['list'],
     ['junit', { outputFile: 'results/junit.xml' }]
   ],
@@ -59,7 +59,11 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { 
+        ...devices['Desktop Chrome'],
+        headless: true, // Explicitly enforce headless mode - ALWAYS run headless
+        channel: 'chrome', // Use Chrome specifically
+      },
     },
   ],
 });
