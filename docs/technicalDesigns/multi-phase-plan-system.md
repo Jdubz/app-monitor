@@ -1246,23 +1246,28 @@ Admin Bot (Planning Phase - Autonomous):
 6. Saves plan (triggers validation → persists to database)
 7. Marks plan as "ready" (waiting for human approval)
 
-Human (Execution Phase - Batch-by-Batch):
+Human (Execution Phase - Batch-by-Batch Approval):
 8. Reviews plan details in UI
-9. Clicks "Import Batch" on first batch (batch-infra)
-10. Tasks from batch-infra imported into task queue
-11. Waits for batch-infra to complete (automatic monitoring)
-12. When complete, "Import Batch" enabled for batch-middleware
-13. Clicks "Import Batch" on next batch
-14. Repeats until all batches imported and executed
+9. Clicks "Import Batch" button on first batch (batch-infra)
+10. System imports batch-infra tasks to queue automatically
+11. System monitors task execution automatically
+12. Waits for batch-infra to complete (automatic task execution and monitoring)
+13. When complete, UI enables "Import Batch" button for batch-middleware
+14. Human clicks "Import Batch" button on next batch
+15. Repeats steps 10-14 until all batches imported and executed
 
-System (Autonomous Execution):
-15. Tasks execute from queue
-16. Monitors task completion (event-driven)
-17. Updates batch status automatically (pending → in_progress → completed)
-18. Updates plan progress automatically
-19. Marks plan complete when all batches done
+System (Autonomous Task Execution - NOT Batch Import):
+16. Dev-bots pick up tasks from queue automatically
+17. Tasks execute autonomously (implementation → review → fixes → testing)
+18. System monitors task completion (event-driven)
+19. Updates batch status automatically (pending → in_progress → completed)
+20. Updates plan progress automatically
+21. Marks plan complete when all batches done
+22. **NEVER** automatically imports next batch (requires human approval)
 
-Human involvement: Steps 1, 8, 9, 13 (goal, review, approve batches).
+Human involvement: Steps 1, 8, 9, 14 (goal, review, approve each batch individually).
+Admin bot involvement: Steps 2-7 (planning, research, task breakdown).
+System automation: Steps 10-13, 16-21 (task execution, monitoring, status tracking).
 ```
 
 ### Batch Dependency Enforcement
@@ -1284,7 +1289,7 @@ Plan X blocks_on Plan Y
 → First batch in Plan X cannot be imported until Plan Y done
 ```
 
-**No automatic batch progression.** Human must click "Import Batch" for each one.
+**CRITICAL: No automatic batch progression.** Human must click "Import Batch" button for each batch. System does NOT auto-import subsequent batches when dependencies are satisfied.
 
 ### File ↔ Database Flow
 
@@ -1854,52 +1859,70 @@ curl -X POST $PLANS_API_URL/plan-caching-layer/submit \
   -d '{"message": "Plan broken down into 3 batches, ready for execution"}'
 ```
 
-### Phase 3: Submit Batch to Queue (Autonomous)
+### Phase 3: Batch Approval (Human-Triggered)
+
+**CRITICAL:** Batches are **NOT** automatically submitted. Each batch requires explicit human approval.
 
 ```bash
-# User: "Start executing the plan"
+# User reviews plan in UI and clicks "Import Batch" button
 
-# Admin bot autonomously:
-# 1. Check batch dependencies
-# 2. Submit first ready batch
-curl -X POST $PLANS_API_URL/plan-caching-layer/batches/batch-infra/submit
+# UI triggers API call:
+curl -X POST $PLANS_API_URL/plan-caching-layer/batches/batch-infra/import
 # → Creates 3 tasks in queue
 # → Links tasks to plan via plan_id + batch_id
-# → Updates batch status to 'queued'
+# → Updates batch status to 'in_progress'
 # → Updates plan status to 'in_progress'
-
-# 3. Monitor for batch completion event
-# 4. When batch completes, auto-submit next batch if dependencies met
-# 5. Continue until all batches submitted
 ```
 
-### Phase 4: Autonomous Monitoring & Progression
+**Workflow:**
+1. Human reviews batch details in UI
+2. Human clicks "Import Batch" button (one batch at a time)
+3. System imports batch to task queue
+4. Tasks execute automatically (dev-bots pick up from queue)
+5. System monitors task completion
+6. When all tasks in batch complete → batch status = 'completed'
+7. UI enables "Import Batch" button for next dependent batch
+8. Human clicks "Import Batch" on next batch
+9. Repeat until all batches imported
 
-**Admin bot continuously monitors** (event-driven, not polling):
+### Phase 4: Autonomous Task Execution (NOT Batch Submission)
+
+**System continuously monitors task completion** (event-driven, not polling):
 
 ```typescript
-// Bot subscribes to events:
-@on('plan:batch_completed')
-async handleBatchComplete(planId: string, batchId: string) {
-  // Load plan file
-  const plan = await planFileService.readPlan(planId);
+// System subscribes to task completion events:
+@on('task:completed')
+async handleTaskComplete(taskId: string) {
+  const task = await db.getTask(taskId);
+  if (!task.batch_id) return;
   
-  // Find next ready batches (dependencies satisfied)
-  const readyBatches = plan.task_batches.filter(batch => 
-    batch.status === 'pending' && 
-    batch.depends_on.every(depId => 
-      plan.task_batches.find(b => b.id === depId)?.status === 'completed'
-    )
-  );
+  // Check if batch is now complete
+  const batchComplete = await this.checkBatchComplete(task.batch_id);
   
-  // Auto-submit ready batches
-  for (const batch of readyBatches) {
-    await batchSubmissionService.submitBatch(planId, batch.id);
+  if (batchComplete) {
+    // Update batch status in database
+    await db.updateBatch(task.batch_id, { 
+      status: 'completed',
+      completed_at: Date.now()
+    });
+    
+    // Emit event for UI updates
+    eventBus.emit('plan:batch_completed', {
+      plan_id: task.plan_id,
+      batch_id: task.batch_id
+    });
+    
+    // Check if all batches complete → plan complete
+    const allBatchesComplete = await this.checkAllBatchesComplete(task.plan_id);
+    if (allBatchesComplete) {
+      await db.updatePlan(task.plan_id, { status: 'completed' });
+      eventBus.emit('plan:completed', { plan_id: task.plan_id });
+    }
   }
 }
 ```
 
-**Human involvement:** None. Bot handles progression autonomously.
+**Human involvement:** Required for EACH batch import. No automatic batch progression.
 
 ---
 
