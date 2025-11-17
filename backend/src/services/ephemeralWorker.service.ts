@@ -404,7 +404,6 @@ export class EphemeralWorkerService {
         `WORKSPACE_BRANCH=${baseBranch}`,
         `WORKSPACE_ID=${workspaceId}`,
         `HOME=/home/node`,  // Explicitly set HOME for gh CLI to find config
-        ...(task.is_repair_bot ? [`IS_IMPROVEMENT_TASK=true`, `PARENT_TASK_ID=${task.original_task_id}`] : []),
         // Context management environment variables
         ...(task.context_bundle_id ? [`CONTEXT_BUNDLE_ID=${task.context_bundle_id}`] : []),
         ...(task.context_cache_key ? [`CONTEXT_CACHE_KEY=${task.context_cache_key}`] : []),

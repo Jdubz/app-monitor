@@ -54,8 +54,7 @@ describe('PRMonitorService', () => {
       findByPRNumber: vi.fn(() => Promise.resolve([])),
       hasFollowupFingerprint: vi.fn(() => false),
       addFollowupFingerprint: vi.fn(),
-      clearFollowupFingerprints: vi.fn(),
-      getRepairBotsForTask: vi.fn(() => [])
+      clearFollowupFingerprints: vi.fn()
     };
 
     service = new PRMonitorService(mockTaskQueue as TaskQueueService);

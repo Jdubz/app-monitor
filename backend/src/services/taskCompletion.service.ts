@@ -24,7 +24,6 @@ import { getQualityGateValidator, type QualityValidationResult } from './quality
 import { extractPRInfo, isValidPRInfo } from '../utils/prExtractor.js';
 import { getTaskVerificationService, type TaskVerificationResult } from './taskVerification.service.js';
 import { getQualityObservationService, type QualityObservation } from './qualityObservation.service.js';
-import { getQualityImprovementTaskGenerator } from './qualityImprovementTaskGenerator.js';
 import { getDatabase } from './database.js';
 
 export interface TaskCompletionServiceConfig {
@@ -528,11 +527,6 @@ export class TaskCompletionService {
         }
       });
 
-      // Generate improvement tasks if needed
-      if (observation.improvementOpportunities.length > 0 && !task.is_repair_bot) {
-        await this.generateImprovementTasks(task, observation);
-      }
-
       // Emit observation event for UI updates
       this.emit('quality_observation_created', {
         taskId: task.id,
@@ -547,76 +541,6 @@ export class TaskCompletionService {
         error
       });
       // Don't throw - observation failure shouldn't block task completion
-    }
-  }
-
-  /**
-   * Generate improvement tasks from quality observation
-   */
-  private async generateImprovementTasks(
-    parentTask: Task,
-    observation: QualityObservation
-  ): Promise<void> {
-    try {
-      // Get task queue from TaskCompletionService dependencies
-      // Note: We need access to taskQueue, but it's not directly available here.
-      // For now, we'll get it through the database initialization path.
-      // TODO: Consider refactoring to inject taskQueue as dependency
-
-      const { getTaskQueueService } = await import('./taskQueue.factory.js');
-      const taskQueue = getTaskQueueService();
-
-      const generator = getQualityImprovementTaskGenerator(taskQueue);
-
-      // Check if we should generate improvements
-      if (!generator.shouldGenerateImprovements(parentTask, observation)) {
-        logger.debug({
-          category: 'quality-improvement',
-          action: 'skip_improvement_generation',
-          message: `Skipping improvement task generation for ${parentTask.id}`,
-          details: { taskId: parentTask.id }
-        });
-        return;
-      }
-
-      // Limit opportunities to top 5
-      const limitedOpportunities = {
-        ...observation,
-        improvementOpportunities: generator.getLimitedOpportunities(observation.improvementOpportunities)
-      };
-
-      // Generate improvement tasks
-      const generatedTasks = await generator.generateImprovementTasks(
-        parentTask,
-        limitedOpportunities
-      );
-
-      logger.info({
-        category: 'quality-improvement',
-        action: 'improvement_tasks_generated',
-        message: `Generated ${generatedTasks.length} improvement tasks for ${parentTask.id}`,
-        details: {
-          parentTaskId: parentTask.id,
-          tasksGenerated: generatedTasks.length,
-          taskIds: generatedTasks.map(t => t.task.id)
-        }
-      });
-
-      // Emit event for UI updates
-      this.emit('improvement_tasks_generated', {
-        parentTaskId: parentTask.id,
-        tasks: generatedTasks.map(t => t.task),
-        observation
-      });
-
-    } catch (error) {
-      logger.error({
-        category: 'quality-improvement',
-        action: 'improvement_task_generation_failed',
-        message: `Failed to generate improvement tasks for ${parentTask.id}`,
-        error
-      });
-      // Don't throw - improvement task generation failure shouldn't block completion
     }
   }
 

@@ -8,7 +8,7 @@
 /* eslint-disable no-useless-escape */
 
 import { logger } from '../utils/logger.js';
-import { Task } from './devBotsManager.js';
+import { Task } from './taskQueue.sqlite.js';
 import { AgentPersonality } from './agentPersonalities.js';
 import { getGuidelinesForTaskType, formatGuidelinesAsMarkdown } from './taskTypeGuidelines.js';
 import { formatDocumentationForPrompt } from './workTargetDocumentation.js';

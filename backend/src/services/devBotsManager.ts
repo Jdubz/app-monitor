@@ -45,16 +45,13 @@ export interface RetryAttempt {
 }
 
 // TaskStatus and Task interface now imported from taskQueue.sqlite.ts (canonical source per Stabilization Plan)
-// Re-export for compatibility with existing imports
 export type TaskStatus = SQLiteTaskStatus;
 export type { Task } from './taskQueue.sqlite.js';
 
 // EphemeralWorker now managed by EphemeralWorkerService
-// Re-export for backward compatibility
 export type EphemeralWorker = EphemeralWorkerType;
 
 // WorkerStatus and DevBotsStatus moved to statusAggregation.service.ts
-// Re-export for backward compatibility
 export type { WorkerStatus, DevBotsStatus } from './statusAggregation.service.js';
 
 // Scope control classes moved to scopeControl.service.ts
@@ -408,19 +405,6 @@ export class DevBotsManager extends EventEmitter {
    */
   async assignNextTask(): Promise<void> {
     await this.taskExecutionService.assignNextTask(() => this.assignNextTask());
-  }
-
-  /**
-   * Complete worker onboarding (no-op for ephemeral workers)
-   * Ephemeral workers are created fresh for each task and don't require onboarding
-   * @deprecated Kept for API compatibility but not used with ephemeral workers
-   */
-  public completeWorkerOnboarding(workerId: string): void {
-    logger.info({
-      category: 'process',
-      action: 'worker_onboarding_noop',
-      message: `Worker onboarding called for ${workerId} (no-op for ephemeral workers)`
-    });
   }
 
   /**

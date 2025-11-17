@@ -44,10 +44,8 @@ import {
 } from './taskQueueMetrics.service.js';
 import { getPlanStatusUpdater } from './planStatusUpdater.singleton.js';
 
-// Re-export chain types for convenience
 export type { ChainStats, BlockedChain };
 
-// Re-export metrics types and functions for backward compatibility
 export type {
   AgentMetrics,
   AgentTaskTypeBreakdown,
@@ -278,7 +276,7 @@ export class TaskQueueService {
     // const migrationManager = new MigrationManager(this.db);
     // const result = await migrationManager.runMigrations();
     
-    // Keep legacy inline migrations (these work synchronously)
+    // Inline migrations for schema updates
     this.runLegacyMigrations();
   }
 
@@ -361,8 +359,6 @@ export class TaskQueueService {
         message: 'PR workflow columns added successfully'
       });
     }
-
-    // Migration 3: REMOVED - repair bot/followup system deprecated
 
     // Migration 4: Add intelligent agent selection columns
     const classificationColumns = ['task_category', 'file_patterns', 'estimated_complexity', 'preferred_agent'];
@@ -1124,7 +1120,7 @@ export class TaskQueueService {
             category: 'process',
             action: 'new_chain_started',
             message: `Started new chain ${task.chain_id}`,
-            details: { chainId: task.chain_id, taskId: task.id, queueStage: task.queue_stage }
+            details: { chainId: task.chain_id, taskId: task.id, phaseIndex: task.phase_index }
           });
         }
       }
@@ -1138,7 +1134,7 @@ export class TaskQueueService {
             category: 'process',
             action: 'followup_task_dequeued',
             message: `Dequeued followup task for chain ${task.chain_id}`,
-            details: { chainId: task.chain_id, taskId: task.id, queueStage: task.queue_stage }
+            details: { chainId: task.chain_id, taskId: task.id, phaseIndex: task.phase_index }
           });
         }
       }
@@ -1180,11 +1176,10 @@ export class TaskQueueService {
   }
 
   /**
-   * Dequeue next followup task (existing chain, skip blocked chains)
-   * @deprecated This method is deprecated - use dequeueImplementationTask which now handles all phases
+   * Delegate to phase-based implementation task dequeue
+   * All tasks now use phase-based system
    */
   private dequeueFollowupTask(): Task | undefined {
-    // For backward compatibility, delegate to implementation task
     // All tasks are now phase-based, no distinction between implementation/followup
     return this.dequeueImplementationTask();
   }
@@ -1263,7 +1258,7 @@ export class TaskQueueService {
       category: 'process',
       action: 'task_assigned',
       message: `Assigned task ${task.id} to worker ${workerId}`,
-      details: { taskId: task.id, workerId, chainId: task.chain_id, queueStage: task.queue_stage }
+      details: { taskId: task.id, workerId, chainId: task.chain_id, phaseIndex: task.phase_index }
     });
 
     return {
@@ -2013,53 +2008,6 @@ export class TaskQueueService {
   }
 
   /**
-   * Count running repair bots (cleanup and follow-up bots)
-   */
-  countRunningRepairBots(): number {
-    const result = this.db.prepare(`
-      SELECT COUNT(*) as count
-      FROM tasks
-      WHERE status = 'running'
-        AND is_repair_bot = 1
-    `).get() as { count: number };
-
-    return result.count;
-  }
-
-  /**
-   * Get all repair bots for a specific task
-   */
-  getRepairBotsForTask(originalTaskId: string): Task[] {
-    try {
-      const rows = this.db.prepare(`
-        SELECT * FROM tasks
-        WHERE original_task_id = ?
-          AND is_repair_bot = 1
-        ORDER BY created_at ASC
-      `).all(originalTaskId) as Task[];
-
-      return rows;
-    } catch (error) {
-      // Gracefully handle missing columns (e.g., original_task_id, is_repair_bot not yet migrated)
-      if (error instanceof Error && error.message.includes('no such column')) {
-        logger.warn({
-          category: 'process',
-          action: 'recovery_columns_not_migrated',
-          message: 'Task recovery columns not yet available - cannot retrieve repair bots. Run migrations to enable task recovery.',
-          error
-        });
-        return [];
-      }
-      throw error;
-    }
-  }
-
-  /**
-   * REMOVED: hasRecoveryAttempt() - repair bot system deprecated
-   * The phase system handles all task processing within a single task
-   */
-
-  /**
    * Recover orphaned tasks on server startup
    * Finds tasks that were marked as 'running' but have no active container
    *
@@ -2176,7 +2124,6 @@ export class TaskQueueService {
   // and their associated tables (recovery_attempts, recovery_safety_checks) are NO LONGER USED.
   // They were part of the complex recovery orchestrator that has been replaced with SimpleFailureRecovery.
   // The simplified system only uses task metadata (is_repair_bot, original_task_id, repair_stage) for tracking.
-  // These methods are kept for backwards compatibility with existing databases, but are not called by the new system.
 
   // ==========================================================================
   // PR Workflow Methods

@@ -7,7 +7,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { TaskPromptTemplateManager, TaskContext } from '../taskPromptTemplates.js';
-import type { Task } from '../devBotsManager.js';
+import type { Task } from '../taskQueue.sqlite.js';
 import type { AgentPersonality } from '../agentPersonalities.js';
 
 describe('TaskPromptTemplateManager - Context Bundle', () => {

@@ -604,7 +604,7 @@ export class TaskExecutionService {
     const executionStartTime = Date.now();
 
     try {
-      // Execute task using ephemeral worker service (replaces legacy docker run)
+      // Execute task using ephemeral worker service
       logger.info({
         category: 'process',
         action: 'creating_ephemeral_worker',
@@ -657,8 +657,7 @@ export class TaskExecutionService {
 
         // Check if validation passed
         if (phaseValidation.passed) {
-          // Phase validated successfully - complete task in legacy system
-          // TODO: Remove this once phase system fully replaces legacy completion
+          // Phase validated successfully - complete task
           this.taskQueue.completeTask(nextTask.id, output, agentCliType);
 
           // Generate session summary for documentation

@@ -203,7 +203,6 @@ export const mapTaskToContract = (task: Task): DevBotsTask => ({
   maxRetries: task.max_retries,
   canRetry: task.can_retry,
   notes: task.notes,
-  isPeriodicCleanup: task.is_repair_bot ?? false,
 });
 
 /**
@@ -362,7 +361,7 @@ export const writeSseEvent = (res: Response, event: string, data: unknown) => {
 
 /**
  * Stream log file with SSE, handling follower limits
- * NOTE: Log streaming functionality deprecated - keeping stub for compatibility
+ * Log streaming has been removed - use task logs API instead
  */
 export const streamLogFile = async ({ res }: LogStreamOptions) => {
   // Log streaming removed - return not implemented

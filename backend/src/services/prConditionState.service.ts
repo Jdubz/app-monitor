@@ -50,7 +50,7 @@ import type {
 // Types & Interfaces
 // ============================================================================
 
-// Re-export types from modular prConditions for backward compatibility
+// Re-export types from modular prConditions
 export type {
   ConditionStatus,
   ConditionState,

@@ -327,10 +327,6 @@ export class TaskCreationService {
       validation_steps: normalizedData.validationSteps,
       success_metrics: normalizedData.successMetrics,
       fingerprint,
-      // Recovery metadata fields
-      is_repair_bot: ('metadata' in originalData && originalData.metadata?.isRepairBot) || false,
-      original_task_id: ('metadata' in originalData && originalData.metadata?.originalTaskId) || undefined,
-      repair_stage: ('metadata' in originalData && originalData.metadata?.repairStage) || undefined,
       // Context bundle fields (migration 020)
       context_bundle_id: contextBundle?.id,
       context_cache_key: contextBundle?.cacheKey,

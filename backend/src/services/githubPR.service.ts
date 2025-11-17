@@ -365,9 +365,8 @@ export class GitHubPRService {
   }
 
   /**
-   * Check if PR can be auto-merged (synchronous version - DEPRECATED)
-   * Use canAutoMergeAsync instead which checks unresolved comments
-   * @deprecated Use canAutoMergeAsync for complete validation including comment resolution
+   * Check if PR can be auto-merged (synchronous basic checks)
+   * For complete validation including comment resolution, use canAutoMergeAsync
    */
   canAutoMerge(status: PRStatus, copilotAnalysis: CopilotReviewAnalysis): {
     canMerge: boolean;

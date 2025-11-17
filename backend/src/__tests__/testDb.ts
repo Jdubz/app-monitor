@@ -69,13 +69,17 @@ export function createTestDatabaseWithSchema(schema: string): Database.Database 
  */
 export const TEST_SCHEMAS = {
   /**
-   * Basic tasks table schema
+   * Basic tasks table schema with phase system
    */
   tasks: `
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY,
       status TEXT NOT NULL,
-      queue_stage TEXT,
+      phase_index INTEGER DEFAULT 1,
+      phase_name TEXT,
+      phase_status TEXT DEFAULT 'ready',
+      phase_attempts INTEGER DEFAULT 1,
+      phase_payload TEXT,
       chain_status TEXT,
       chain_id TEXT,
       chain_depth INTEGER DEFAULT 0,

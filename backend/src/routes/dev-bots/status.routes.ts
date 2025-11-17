@@ -4,9 +4,8 @@
  * Endpoints for system health, metrics, and infrastructure management:
  * - System status and health checks
  * - Performance metrics and agent comparison
- * - Projects and data import/export
+ * - Projects and workspace synchronization
  * - Docker integration and management
- * - Workspace synchronization
  * - Cleanup and maintenance
  * - Emergency recovery
  */
@@ -180,65 +179,6 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         error
       });
       sendError(res, 'Failed to get projects', 500, { message: error instanceof Error ? error.message : String(error) });
-    }
-  });
-
-  // ============================================================================
-  // Data Import/Export
-  // ============================================================================
-
-  /**
-   * POST /export
-   * DEPRECATED: Export system data to file
-   * Task persistence layer removed in favor of SQLite
-   */
-  router.post('/export', async (_req: Request, res: Response) => {
-    sendError(
-      res,
-      'Export functionality deprecated',
-      410,
-      { message: 'Task export/import functionality removed - tasks are now stored in SQLite database' }
-    );
-  });
-
-  /**
-   * POST /import
-   * DEPRECATED: Import system data from file
-   * Task persistence layer removed in favor of SQLite
-   */
-  router.post('/import', async (_req: Request, res: Response) => {
-    sendError(
-      res,
-      'Import functionality deprecated',
-      410,
-      { message: 'Task export/import functionality removed - tasks are now stored in SQLite database' }
-    );
-  });
-
-  // ============================================================================
-  // Onboarding
-  // ============================================================================
-
-  /**
-   * POST /onboarding/complete
-   * Mark worker onboarding as complete
-   */
-  router.post('/onboarding/complete', async (req: Request, res: Response) => {
-    try {
-      const { workerId } = req.body;
-      if (!workerId) {
-        return sendError(res, 'Worker ID is required', 400);
-      }
-      devBotsManager.completeWorkerOnboarding(workerId);
-      sendSuccess(res, { message: 'Onboarding completed' });
-    } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'error_completing_onboarding_error',
-        message: `Error completing onboarding: ${error}`,
-        error
-      });
-      sendError(res, 'Failed to complete onboarding', 500, { message: error instanceof Error ? error.message : String(error) });
     }
   });
 
