@@ -11,26 +11,20 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { TaskQueueService } from '../taskQueue.sqlite.js';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 
 describe('TaskQueueService - Phase Integration', () => {
   let taskQueue: TaskQueueService;
-  let tempDir: string;
-  let dbPath: string;
 
   beforeEach(() => {
-    // Create temporary directory for test database
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'task-queue-phase-test-'));
-    dbPath = path.join(tempDir, 'test-queue.db');
-    taskQueue = new TaskQueueService(dbPath);
+    // Use in-memory database for test isolation
+    taskQueue = new TaskQueueService(':memory:');
   });
 
   afterEach(() => {
-    taskQueue.close();
-    if (tempDir && fs.existsSync(tempDir)) {
-      fs.rmSync(tempDir, { recursive: true, force: true });
+    try {
+      taskQueue.close();
+    } catch (err) {
+      // Ignore close errors in tests
     }
   });
 

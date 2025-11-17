@@ -23,24 +23,15 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { TaskQueueService, Task, TaskStatus } from '../taskQueue.sqlite.js';
 import { PhaseExecutionService } from '../phaseExecution.service.js';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
 
 describe('Phase System End-to-End Integration', () => {
   let db: Database.Database;
-  let dbPath: string;
   let taskQueue: TaskQueueService;
   let phaseExecution: PhaseExecutionService;
-  let tempDir: string;
 
   beforeEach(async () => {
-    // Create temporary directory for test database
-    tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'phase-e2e-test-'));
-    dbPath = path.join(tempDir, 'test-queue.db');
-
-    // Initialize TaskQueueService (creates schema)
-    taskQueue = new TaskQueueService(dbPath);
+    // Use in-memory database for test isolation
+    taskQueue = new TaskQueueService(':memory:');
     db = (taskQueue as any).db;
 
     // Initialize PhaseExecutionService
@@ -48,10 +39,10 @@ describe('Phase System End-to-End Integration', () => {
   });
 
   afterEach(() => {
-    db?.close();
-    // Clean up temp directory
-    if (tempDir && fs.existsSync(tempDir)) {
-      fs.rmSync(tempDir, { recursive: true, force: true });
+    try {
+      db?.close();
+    } catch (err) {
+      // Ignore close errors in tests
     }
   });
 
