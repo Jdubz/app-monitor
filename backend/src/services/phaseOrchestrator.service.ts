@@ -16,23 +16,8 @@
 
 import { logger } from '../utils/logger.js';
 import type { Task } from './taskQueue.sqlite.js';
+import type { ValidationResult } from './phaseValidation/index.js';
 import Database from 'better-sqlite3';
-
-export interface ValidationResult {
-  passed: boolean;
-  errors?: string[];
-  
-  // Phase-specific results
-  taskObsolete?: boolean; // Phase 1: Task no longer needed
-  taskRealigned?: boolean; // Phase 1: Task needs prompt update
-  issuesFound?: boolean; // Phase 3: Review found issues
-  allIssuesAddressed?: boolean; // Phase 4: All fixes applied
-  allTestsPassing?: boolean; // Phase 5: All validation criteria met
-  allGatesPassing?: boolean; // Phase 7: All merge gates passed
-  
-  // Additional context
-  details?: Record<string, unknown>;
-}
 
 export interface PhaseTransition {
   fromPhase: number;

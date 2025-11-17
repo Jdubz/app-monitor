@@ -6,7 +6,8 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { PhaseOrchestratorService, type ValidationResult, type PhaseTransition } from '../phaseOrchestrator.service.js';
+import { PhaseOrchestratorService, type PhaseTransition } from '../phaseOrchestrator.service.js';
+import type { ValidationResult } from '../phaseValidation/index.js';
 import type { Task } from '../taskQueue.sqlite.js';
 
 describe('PhaseOrchestratorService', () => {
