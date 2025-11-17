@@ -29,11 +29,21 @@ export default defineConfig({
     },
   ],
 
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5174',
-    reuseExistingServer: !process.env.CI,
-    stdout: 'ignore',
-    stderr: 'pipe',
-  },
+  webServer: [
+    {
+      command: 'cd .. && npm run dev:backend',
+      url: 'http://localhost:5000/api/health',
+      reuseExistingServer: !process.env.CI,
+      stdout: 'ignore',
+      stderr: 'pipe',
+      timeout: 120000,
+    },
+    {
+      command: 'npm run dev',
+      url: 'http://localhost:5174',
+      reuseExistingServer: !process.env.CI,
+      stdout: 'ignore',
+      stderr: 'pipe',
+    },
+  ],
 });
