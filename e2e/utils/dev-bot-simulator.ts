@@ -106,10 +106,10 @@ export class DevBotSimulator extends EventEmitter {
     this.emit('task_started', { taskId, botId: this.instance.id });
 
     try {
-      // Assign task to bot via API
-      await this.assignTaskToBot(taskId);
+      // Trigger simulated phase progression in backend (test-only endpoint)
+      await this.triggerBackendPhaseExecution(taskId);
       
-      // Execute through phases
+      // Monitor backend for phase progression
       const result = await this.executePhases(taskId);
       
       return result;
@@ -117,6 +117,30 @@ export class DevBotSimulator extends EventEmitter {
       this.instance.status = 'crashed';
       this.emit('crashed', { taskId, error: error.message });
       throw error;
+    }
+  }
+
+  /**
+   * Trigger backend phase execution (uses test-only simulation endpoint)
+   */
+  private async triggerBackendPhaseExecution(taskId: string): Promise<void> {
+    const response = await fetch(
+      `${this.apiBaseUrl}/api/dev-bots/tasks/${taskId}/simulate-phase-progression`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ speed: 'fast' }) // 100ms per phase
+      }
+    );
+
+    if (!response.ok) {
+      throw new Error(`Failed to start phase execution: ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    
+    if (!result.success) {
+      throw new Error(`Backend rejected phase execution: ${result.message}`);
     }
   }
 

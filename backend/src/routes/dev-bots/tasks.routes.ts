@@ -1057,5 +1057,150 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
     }
   });
 
+  // ============================================================================
+  // Test-Only Endpoints (E2E Testing)
+  // ============================================================================
+
+  /**
+   * POST /tasks/:taskId/simulate-phase-progression
+   * Test-only endpoint to simulate phase execution without Docker
+   * 
+   * Security: Only available in test/development environments
+   * 
+   * Simulates a task progressing through all 7 phases with realistic delays.
+   * Used by E2E tests to validate phase tracking without spinning up dev-bots.
+   */
+  router.post('/tasks/:taskId/simulate-phase-progression', async (req: Request, res: Response) => {
+    // Security: Only allow in test/development environment
+    if (process.env.NODE_ENV === 'production') {
+      return sendError(res, 'This endpoint is only available in test/development environments', 403);
+    }
+
+    const { taskId } = req.params;
+    const { speed = 'normal' } = req.body as { speed?: 'fast' | 'normal' | 'slow' };
+
+    try {
+      const taskQueue = devBotsManager.getTaskQueue();
+      const task = taskQueue.getTask(taskId);
+
+      if (!task) {
+        return sendError(res, `Task ${taskId} not found`, 404);
+      }
+
+      logger.info({
+        category: 'test',
+        action: 'simulate_phase_progression_start',
+        message: `Starting simulated phase progression for task ${taskId}`,
+        details: { taskId, speed, currentPhase: task.phase_index }
+      });
+
+      // Start async phase progression (don't await - return immediately)
+      simulatePhaseProgression(taskId, taskQueue, speed).catch((error) => {
+        logger.error({
+          category: 'test',
+          action: 'simulate_phase_progression_error',
+          message: `Error in phase simulation for ${taskId}: ${error}`,
+          error,
+          details: { taskId }
+        });
+      });
+
+      sendSuccess(res, {
+        message: 'Phase progression simulation started',
+        taskId,
+        speed,
+        currentPhase: task.phase_index
+      });
+
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_starting_phase_simulation',
+        message: `Error starting phase simulation: ${error}`,
+        error
+      });
+      sendError(res, 'Failed to start phase simulation', 500, {
+        message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
   return router;
+}
+
+/**
+ * Helper function to simulate phase progression for testing
+ * Progresses task through phases 1-7 with realistic delays
+ */
+async function simulatePhaseProgression(
+  taskId: string,
+  taskQueue: any,
+  speed: 'fast' | 'normal' | 'slow'
+): Promise<void> {
+  const delays = {
+    fast: 100,    // 100ms per phase
+    normal: 500,  // 500ms per phase
+    slow: 2000    // 2s per phase
+  };
+
+  const phaseDelay = delays[speed];
+  const db = taskQueue.getDatabase();
+
+  // Phase names (1-7)
+  const phaseNames = [
+    'Planning',
+    'Implementation',
+    'Review',
+    'Fixes',
+    'Test Coverage & Validation',
+    'Cleanup & Docs',
+    'PR Shepherding'
+  ];
+
+  for (let phaseIndex = 1; phaseIndex <= 7; phaseIndex++) {
+    const phaseName = phaseNames[phaseIndex - 1];
+
+    // Update task to new phase
+    db.prepare(`
+      UPDATE tasks
+      SET phase_index = ?,
+          phase_name = ?,
+          phase_status = 'running',
+          phase_attempts = 1
+      WHERE id = ?
+    `).run(phaseIndex, phaseName, taskId);
+
+    logger.info({
+      category: 'test',
+      action: 'simulate_phase_update',
+      message: `Task ${taskId} now in phase ${phaseIndex}: ${phaseName}`,
+      details: { taskId, phaseIndex, phaseName }
+    });
+
+    // Wait before next phase
+    await new Promise(resolve => setTimeout(resolve, phaseDelay));
+
+    // Mark phase as complete
+    db.prepare(`
+      UPDATE tasks
+      SET phase_status = 'complete'
+      WHERE id = ?
+    `).run(taskId);
+  }
+
+  // Mark task as completed
+  db.prepare(`
+    UPDATE tasks
+    SET status = 'completed',
+        phase_status = 'complete',
+        completed_at = ?
+    WHERE id = ?
+  `).run(Date.now(), taskId);
+
+  logger.info({
+    category: 'test',
+    action: 'simulate_phase_progression_complete',
+    message: `Task ${taskId} completed all 7 phases`,
+    details: { taskId }
+  });
 }
