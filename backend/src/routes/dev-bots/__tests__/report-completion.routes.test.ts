@@ -30,7 +30,7 @@ describe('Bot Self-Reporting Endpoint', () => {
   let responseJson: any;
   let responseStatus: number;
   let mockTask: Task;
-  let mockDb: any;
+  let mockTaskQueue: any;
 
   beforeEach(() => {
     // Reset mocks
@@ -50,18 +50,11 @@ describe('Bot Self-Reporting Endpoint', () => {
       created_at: Date.now()
     } as Task;
 
-    // Mock database
-    mockDb = {
-      prepare: vi.fn().mockReturnValue({
-        run: vi.fn()
-      })
-    };
-
     // Mock TaskQueue
-    const mockTaskQueue = {
+    mockTaskQueue = {
       getTask: vi.fn().mockReturnValue(mockTask),
       updateTask: vi.fn(),
-      db: mockDb
+      updateTaskMetadata: vi.fn()
     };
 
     // Mock DevBotsManager
@@ -125,9 +118,14 @@ describe('Bot Self-Reporting Endpoint', () => {
         })
       );
 
-      // Verify database update was called
-      expect(mockDb.prepare).toHaveBeenCalledWith(
-        'UPDATE tasks SET metadata = ? WHERE id = ?'
+      // Verify metadata update was called
+      expect(mockTaskQueue.updateTaskMetadata).toHaveBeenCalledWith(
+        'test-task-123',
+        expect.objectContaining({
+          bot_reported_success: true,
+          bot_reported_summary: 'Task completed successfully with all tests passing',
+          bot_reported_at: expect.any(Number)
+        })
       );
     });
 
@@ -336,18 +334,15 @@ describe('Bot Self-Reporting Endpoint', () => {
         await route.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
       }
 
-      // Verify the metadata structure stored in the database
-      const dbRun = mockDb.prepare().run;
-      expect(dbRun).toHaveBeenCalled();
-
-      const metadataString = (dbRun as any).mock.calls[0][0];
-      const storedMetadata = JSON.parse(metadataString);
-
-      expect(storedMetadata).toMatchObject({
-        bot_reported_success: true,
-        bot_reported_summary: 'All tests passed successfully',
-        bot_reported_at: expect.any(Number)
-      });
+      // Verify the metadata structure
+      expect(mockTaskQueue.updateTaskMetadata).toHaveBeenCalledWith(
+        'test-task-123',
+        expect.objectContaining({
+          bot_reported_success: true,
+          bot_reported_summary: 'All tests passed successfully',
+          bot_reported_at: expect.any(Number)
+        })
+      );
     });
 
     it('should merge with existing metadata', async () => {
@@ -374,17 +369,17 @@ describe('Bot Self-Reporting Endpoint', () => {
         await route.route.stack[0].handle(mockRequest as Request, mockResponse as Response);
       }
 
-      const dbRun = mockDb.prepare().run;
-      const metadataString = (dbRun as any).mock.calls[0][0];
-      const storedMetadata = JSON.parse(metadataString);
-
-      expect(storedMetadata).toMatchObject({
-        existing_field: 'existing_value',
-        other_data: 123,
-        bot_reported_success: false,
-        bot_reported_summary: 'Build failed',
-        bot_reported_at: expect.any(Number)
-      });
+      // Verify metadata was merged correctly
+      expect(mockTaskQueue.updateTaskMetadata).toHaveBeenCalledWith(
+        'test-task-123',
+        expect.objectContaining({
+          existing_field: 'existing_value',
+          other_data: 123,
+          bot_reported_success: false,
+          bot_reported_summary: 'Build failed',
+          bot_reported_at: expect.any(Number)
+        })
+      );
     });
   });
 });

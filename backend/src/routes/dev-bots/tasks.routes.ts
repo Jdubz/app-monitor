@@ -1085,11 +1085,8 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         bot_reported_at: Date.now()
       };
 
-      // Direct database update since updateTask may not handle metadata
-      // Use the existing database connection from the taskQueue
-      const dbInstance = (taskQueue as unknown as { db: { prepare: (sql: string) => { run: (...args: unknown[]) => unknown } } }).db;
-      const stmt = dbInstance.prepare('UPDATE tasks SET metadata = ? WHERE id = ?');
-      stmt.run(JSON.stringify(metadata), taskId);
+      // Update task metadata using the public method to maintain encapsulation
+      taskQueue.updateTaskMetadata(taskId, metadata);
 
       logger.info({
         category: 'process',

@@ -147,8 +147,9 @@ export class TaskCompletionService {
     }
 
     // Detect task failure from exit code OR error patterns in output
-    const hasAuthenticationError = this.detectAuthenticationError(output, errorOutput);
-    const hasCriticalError = this.detectCriticalError(output, errorOutput);
+    const combinedOutput = output + '\n' + errorOutput;
+    const hasAuthenticationError = this.detectAuthenticationError(combinedOutput);
+    const hasCriticalError = this.detectCriticalError(combinedOutput);
 
     // Never push if authentication or critical errors detected
     if (hasAuthenticationError || hasCriticalError) {
@@ -167,15 +168,15 @@ export class TaskCompletionService {
       });
     }
 
-    // Determine final status: prioritize bot self-report, fallback to exit code + error detection
-    let finalStatus: 'completed' | 'failed';
+    // Determine initial status: prioritize bot self-report, fallback to exit code + error detection
+    let taskStatus: 'completed' | 'failed';
     if (typeof botReportedSuccess === 'boolean') {
       // Bot explicitly reported success/failure - trust it
-      finalStatus = botReportedSuccess ? 'completed' : 'failed';
+      taskStatus = botReportedSuccess ? 'completed' : 'failed';
       shouldPush = botReportedSuccess; // Only push if bot reported success
     } else {
       // Fallback to exit code + error detection
-      finalStatus = exitCode === 0 && !hasAuthenticationError && !hasCriticalError ? 'completed' : 'failed';
+      taskStatus = exitCode === 0 && !hasAuthenticationError && !hasCriticalError ? 'completed' : 'failed';
     }
 
     let failureReason: string | undefined;
@@ -184,7 +185,7 @@ export class TaskCompletionService {
       // NOTE: Git commit/push already handled by Claude Code CLI inside the Docker container
       // The CLI automatically commits changes and pushes to the configured branch
       // We just mark the task as completed and extract PR info from the output
-      finalStatus = 'completed';
+      taskStatus = 'completed';
 
       logger.info({
         category: 'process',
@@ -196,7 +197,7 @@ export class TaskCompletionService {
         }
       });
     } else {
-      finalStatus = 'failed';
+      taskStatus = 'failed';
       failureReason =
         botReportedSuccess === false && botReportedSummary
           ? `Bot reported failure: ${botReportedSummary}`
@@ -228,7 +229,7 @@ export class TaskCompletionService {
       });
     }
 
-    task.status = finalStatus;
+    task.status = taskStatus;
     task.completed_at = Date.now();
 
     if (failureReason) {
@@ -240,7 +241,7 @@ export class TaskCompletionService {
     this.taskPersistence.saveCompletedTasks([task]);
 
     // Create quality observation and generate improvement tasks (if task completed successfully)
-    if (finalStatus === 'completed') {
+    if (taskStatus === 'completed') {
       await this.createQualityObservationAndImprovements(task, taskVerification, qualityValidation);
 
       // Trigger PR condition evaluation if this is a followup task for a PR (continuous self-healing)
@@ -278,7 +279,7 @@ export class TaskCompletionService {
 
     await this.ephemeralWorkerService.destroyWorker(worker.id);
 
-    if (finalStatus === 'completed') {
+    if (taskStatus === 'completed') {
       logger.info({
         category: 'process',
         action: 'task_completed_worker_task_id',
@@ -288,7 +289,7 @@ export class TaskCompletionService {
       logger.warn({
         category: 'process',
         action: 'task_failed_to_push',
-        message: `Task ${task.id} finished with status ${finalStatus}`,
+        message: `Task ${task.id} finished with status ${taskStatus}`,
         details: { failureReason }
       });
     }
@@ -716,8 +717,7 @@ export class TaskCompletionService {
    * Detect authentication errors in CLI output
    * Catches cases where CLI fails to authenticate but may return exit code 0
    */
-  private detectAuthenticationError(output: string, errorOutput: string): boolean {
-    const combinedOutput = output + '\n' + errorOutput;
+  private detectAuthenticationError(combinedOutput: string): boolean {
     const authErrorPatterns = [
       /401\s+Unauthorized/i,
       /exceeded retry limit.*401/i,
@@ -735,8 +735,7 @@ export class TaskCompletionService {
    * Detect critical errors in CLI output that indicate task failure
    * Even if exit code is 0, certain error patterns indicate failure
    */
-  private detectCriticalError(output: string, errorOutput: string): boolean {
-    const combinedOutput = output + '\n' + errorOutput;
+  private detectCriticalError(combinedOutput: string): boolean {
     const criticalErrorPatterns = [
       /ERROR:.*exceeded retry limit/i,
       /CRITICAL:/i,
