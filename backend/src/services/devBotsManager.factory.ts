@@ -125,7 +125,7 @@ export async function createDevBotsManagerDependencies(
         'GIT_COMMITTER_EMAIL'
       ]
     },
-    db.getDb() // Pass database instance
+    taskQueue.getDb() // Pass database instance from TaskQueueService
   );
 
   // Initialize status aggregation service

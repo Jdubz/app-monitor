@@ -32,7 +32,6 @@ import { ArtifactExtractorService } from './artifactExtractor.service.js';
 import { PhaseOrchestratorService } from './phaseOrchestrator.service.js';
 import { RecoveryAgentService } from './recoveryAgent.service.js';
 import type { ValidationResult } from './phaseValidation/types.js';
-import { getDatabase } from './database.js';
 import { getConnectionManager } from './connectionManager.js';
 
 export interface WorkspaceContext {
@@ -97,7 +96,7 @@ export class EphemeralWorkerService {
     docker: Docker,
     dockerManager: DockerManager,
     config: Partial<EphemeralWorkerServiceConfig> = {},
-    db?: Database,
+    db: Database.Database,  // Required - ensures consistent database connection
     contextGenerator?: ContextBundleGenerator  // Optional for DI/testing
   ) {
     this.docker = docker;
@@ -106,7 +105,7 @@ export class EphemeralWorkerService {
     this.contextGenerator = contextGenerator || new ContextBundleGenerator();
     this.validatorRegistry = new ValidatorRegistry();
     this.artifactExtractor = new ArtifactExtractorService();
-    this.phaseOrchestrator = new PhaseOrchestratorService(db || getDatabase().getDb());
+    this.phaseOrchestrator = new PhaseOrchestratorService(db);  // Use injected database instance
     this.recoveryAgent = new RecoveryAgentService();
 
     this.config = {
@@ -999,8 +998,8 @@ export class EphemeralWorkerService {
         action: 'artifacts_extracted',
         message: `Artifacts extracted for task ${task.id}`,
         details: {
-          foundArtifacts: Object.keys(artifacts).filter(
-            (k) => artifacts[k as keyof typeof artifacts]
+          artifactTypes: Object.keys(artifacts).filter(
+            (k) => artifacts[k as keyof typeof artifacts] && !['stdout', 'stderr', 'exitCode'].includes(k)
           ),
         },
       });

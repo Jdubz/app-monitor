@@ -14,7 +14,6 @@
  */
 
 import Database from 'better-sqlite3';
-import { logger } from '../utils/logger.js';
 import {
   PhaseExecutionTrace,
   TaskExecutionTimeline,
@@ -26,16 +25,7 @@ import {
   DiagnosticQuery,
   DiagnosticQueryResult,
 } from '@app-monitor/api-contracts';
-
-const PHASE_NAMES: Record<number, string> = {
-  1: 'Planning',
-  2: 'Implementation',
-  3: 'Review',
-  4: 'Fixes',
-  5: 'Test & Validate',
-  6: 'Cleanup',
-  7: 'PR Shepherding',
-};
+import { PHASE_NAMES } from './phaseConstants.js';
 
 export class PhaseObservabilityService {
   private db: Database.Database;
@@ -398,7 +388,7 @@ export class PhaseObservabilityService {
 
     let results: unknown[] = [];
     let summary = '';
-    let recommendations: string[] = [];
+    const recommendations: string[] = [];
 
     switch (queryId) {
       case 'slow_phases':

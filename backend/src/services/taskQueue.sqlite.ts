@@ -149,12 +149,6 @@ export interface Task {
   context_cache_key?: string; // Git hash-based cache key for bundle lookup
   context_profiles?: string[]; // Array of profile names (e.g., ["scope-control", "pr-workflow"])
   risk_level?: 'minimal' | 'low' | 'medium' | 'high'; // Task risk classification
-  // Phase system fields (migration 026)
-  phase_index?: number; // Current phase (1-7)
-  phase_name?: string; // Human-readable phase name
-  phase_status?: 'ready' | 'running' | 'validating' | 'recovering' | 'complete' | 'blocked';
-  phase_attempts?: number; // Attempt counter for current phase
-  phase_payload?: string; // JSON for phase-specific state and partial progress
 }
 
 export interface Worker {
@@ -236,6 +230,14 @@ export class TaskQueueService {
    */
   setPRSyncService(prSyncService: { syncAllTrackedPRs: () => Promise<void> }): void {
     this.prSyncService = prSyncService;
+  }
+
+  /**
+   * Get the underlying database instance for dependency injection.
+   * Used by services that need direct database access (e.g., PhaseOrchestratorService).
+   */
+  getDb(): Database.Database {
+    return this.db;
   }
 
   private ensureDirectory(): void {

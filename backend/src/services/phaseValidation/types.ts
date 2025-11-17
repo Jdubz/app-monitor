@@ -159,14 +159,59 @@ export interface PhaseValidator {
    * @returns ValidationResult with pass/fail and phase-specific flags
    */
   validate(task: Task, artifacts: PhaseArtifacts): Promise<ValidationResult>;
-  
+
   /**
    * Phase index this validator handles (1-7).
    */
   readonly phaseIndex: number;
-  
+
   /**
    * Phase name for logging/debugging.
    */
   readonly phaseName: string;
+}
+
+/**
+ * Interface for the validator registry.
+ * Central registry that maps phase indices to their validators.
+ */
+export interface PhaseValidatorRegistry {
+  /**
+   * Register a phase validator.
+   * @param validator - The validator to register
+   */
+  register(validator: PhaseValidator): void;
+
+  /**
+   * Get validator for a specific phase.
+   * @param phaseIndex - Phase number (1-7)
+   * @returns The registered validator
+   * @throws Error if no validator registered for phase
+   */
+  getValidator(phaseIndex: number): PhaseValidator;
+
+  /**
+   * Check if validator exists for phase.
+   * @param phaseIndex - Phase number (1-7)
+   * @returns True if validator is registered
+   */
+  hasValidator(phaseIndex: number): boolean;
+
+  /**
+   * Get all registered phase indexes.
+   * @returns Sorted array of phase indices
+   */
+  getRegisteredPhases(): number[];
+
+  /**
+   * Get count of registered validators.
+   * @returns Number of registered validators
+   */
+  getValidatorCount(): number;
+
+  /**
+   * Get all validators as a map indexed by phase number.
+   * @returns Record mapping phase index to validator
+   */
+  getAllValidators(): Record<number, PhaseValidator>;
 }

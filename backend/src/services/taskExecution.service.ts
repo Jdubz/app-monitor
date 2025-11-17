@@ -140,6 +140,33 @@ export class TaskExecutionService {
     }
   }
 
+  /**
+   * Format validation errors into a user-friendly error message.
+   * Extracts error details from various error formats and creates a consistent message.
+   *
+   * @param errors - Array of error strings or undefined
+   * @param defaultMessage - Fallback message if no errors provided
+   * @returns Formatted error message
+   */
+  private formatValidationErrors(errors: string[] | undefined, defaultMessage: string = 'Unknown error'): string {
+    if (!errors || errors.length === 0) {
+      return defaultMessage;
+    }
+    return errors.join(', ');
+  }
+
+  /**
+   * Format task execution error message.
+   * Extracts error message from various error sources in a consistent way.
+   *
+   * @param result - Task execution result
+   * @param defaultMessage - Fallback message if no error found
+   * @returns Formatted error message
+   */
+  private formatExecutionError(result: TaskExecutionResult, defaultMessage: string = 'Task execution failed'): string {
+    return result.error?.message || result.errorOutput || defaultMessage;
+  }
+
   // ==========================================================================
   // Public Methods
   // ==========================================================================
@@ -738,7 +765,8 @@ export class TaskExecutionService {
             });
 
             // No recovery attempted - mark task as failed
-            this.taskQueue.failTask(nextTask.id, `Phase ${nextTask.phase_index} validation failed: ${phaseValidation.errors?.join(', ') || 'Unknown error'}`);
+            const errorDetails = this.formatValidationErrors(phaseValidation.errors);
+            this.taskQueue.failTask(nextTask.id, `Phase ${nextTask.phase_index} validation failed: ${errorDetails}`);
           }
 
           // Task will be retried via phase system
@@ -746,7 +774,7 @@ export class TaskExecutionService {
         }
       } else {
         // Task failed - throw error to trigger recovery
-        const errorMsg = result.error?.message || result.errorOutput || 'Task execution failed';
+        const errorMsg = this.formatExecutionError(result);
         throw new Error(errorMsg);
       }
 
