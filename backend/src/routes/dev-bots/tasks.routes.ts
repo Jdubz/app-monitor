@@ -25,6 +25,7 @@ import { config } from '../../config.js';
 import { WorkerLogLocator } from '../../services/taskLogLocator.js';
 import { getTaskContextService } from '../../services/taskContext.service.js';
 import { taskAutoDetectionService } from '../../services/taskAutoDetection.service.js';
+import { getPhaseMetricsService } from '../../services/phaseMetrics.service.js';
 import type {
   MinimalTaskPayload,
   DevBotsReportCompletionPayload,
@@ -311,252 +312,6 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
     }
   });
 
-  // ============================================================================
-  // Legacy Task Creation (DEPRECATED - use /tasks/minimal)
-  // ============================================================================
-
-  /**
-   * POST /tasks
-   * Create a new task (LEGACY ENDPOINT - DEPRECATED)
-   *
-   * @deprecated Use POST /tasks/minimal instead
-   * This endpoint will be removed in a future version.
-   *
-   * SECURITY: Dev-bots can only spawn other dev-bots in production environments.
-   * In non-production environments, this returns a stubbed response to prevent
-   * infinite recursion or uncontrolled task spawning during development/testing.
-   */
-  router.post('/tasks', async (req: Request, res: Response) => {
-    try {
-      const {
-        type,
-        title,
-        documentation,
-        description,
-        acceptanceCriteria,
-        files,
-        dependencies,
-        repository,
-        project,
-        assignedAgent,
-        notes,
-        architectureReferences,
-        validationSteps,
-        successMetrics,
-        estimatedEffort,
-      } = req.body;
-
-      // Accept either 'documentation' or 'description' field
-      const taskDescription = documentation || description;
-
-      if (!type || !title || !taskDescription || !acceptanceCriteria) {
-        return sendError(res, 'Type, title, description, and acceptanceCriteria are required', 400);
-      }
-
-      // Validate assignedAgent if provided
-      if (assignedAgent) {
-        const validAgents = devBotsManager.getValidAgents();
-        if (!validAgents.includes(assignedAgent)) {
-          return sendError(
-            res,
-            `Invalid agent: ${assignedAgent}. Valid agents: ${validAgents.join(', ')}`,
-            400
-          );
-        }
-      }
-
-      // SECURITY: Prevent dev-bots from spawning other dev-bots in non-production environments
-      // This prevents infinite recursion and uncontrolled task spawning during development/testing
-      if (config.nodeEnv !== 'production') {
-        logger.warn({
-          category: 'api',
-          action: 'task_creation_blocked_non_production',
-          message: `Task creation blocked in ${config.nodeEnv} environment`,
-          details: {
-            environment: config.nodeEnv,
-            taskType: type,
-            taskTitle: title,
-            note: 'Dev-bots can only create tasks in production to prevent recursive spawning'
-          }
-        });
-
-        // Return stubbed success response
-        return sendSuccess(res, {
-          task: {
-            id: `stub-${Date.now()}-${Math.random().toString(36).substring(7)}`,
-            type,
-            title,
-            description: taskDescription,
-            status: 'pending',
-            createdAt: new Date().toISOString(),
-            stubbed: true,
-            reason: 'Task creation is disabled in non-production environments'
-          },
-          validation: {
-            isValid: true,
-            warnings: ['Task not created - dev-bot task spawning is disabled in non-production environments'],
-            suggestions: []
-          },
-          message: 'Task creation stubbed (non-production environment)'
-        });
-      }
-
-      // V3 Template Validation (PE-API-VALIDATION-001)
-      // If the request body matches v3 template structure, enforce validation
-      if (shouldValidateAsV3Template(req.body)) {
-        const validationResult = validateTaskTemplate(req.body);
-
-        // Log validation warnings even if template passes
-        if (validationResult.warnings.length > 0) {
-          logger.warn({
-            category: 'api',
-            action: 'v3_template_warnings',
-            message: 'V3 template validation warnings',
-            details: {
-              taskTitle: title,
-              warnings: validationResult.warnings
-            }
-          });
-        }
-
-        // Return error if template is invalid
-        if (!validationResult.isValid) {
-          logger.error({
-            category: 'api',
-            action: 'v3_template_validation_failed',
-            message: 'V3 template validation failed',
-            details: {
-              taskTitle: title,
-              errors: validationResult.errors,
-              warnings: validationResult.warnings
-            }
-          });
-
-          return res.status(400).json({
-            error: 'Task template validation failed',
-            details: formatValidationErrors(validationResult),
-            errors: validationResult.errors,
-            warnings: validationResult.warnings
-          });
-        }
-
-        logger.info({
-          category: 'api',
-          action: 'v3_template_validated',
-          message: 'V3 template passed validation',
-          details: { taskTitle: title }
-        });
-      }
-
-      if (TECHNICAL_TASK_TYPES.has(type)) {
-        const warnings: Array<Pick<LogEntry, 'category' | 'action' | 'message' | 'details'>> = [];
-
-        if (!Array.isArray(files) || files.length === 0) {
-          warnings.push({
-            category: 'api',
-            action: 'task_missing_files_array',
-            message: `Technical task type '${type}' created without files array`,
-            details: { taskId: title },
-          });
-        }
-
-        const documentationLength = typeof taskDescription === 'string' ? taskDescription.trim().length : 0;
-        if (documentationLength < MIN_DOCUMENTATION_LENGTH) {
-          warnings.push({
-            category: 'api',
-            action: 'task_missing_description',
-            message: `Technical task type '${type}' created without detailed description`,
-            details: { taskId: title },
-          });
-        }
-
-        const criteriaArray = Array.isArray(acceptanceCriteria)
-          ? acceptanceCriteria
-          : typeof acceptanceCriteria === 'string'
-          ? [acceptanceCriteria]
-          : [];
-
-        if (criteriaArray.length === 1) {
-          const rawCriterion = criteriaArray[0];
-          const criterionText = typeof rawCriterion === 'string' ? rawCriterion : '';
-          if (criterionText.trim().length > 0 && criterionText.trim().length < MIN_ACCEPTANCE_CRITERION_LENGTH) {
-            warnings.push({
-              category: 'api',
-              action: 'vague_acceptance_criteria',
-              message: `Task has vague acceptance criteria: "${criterionText}"`,
-              details: { taskId: title },
-            });
-          }
-        }
-
-        warnings.forEach((warning) => logger.warn(warning));
-      }
-
-      // Add timeout protection to prevent API from hanging indefinitely
-      const TASK_CREATION_TIMEOUT_MS = 10000; // 10 seconds
-      const taskCreationStartTime = Date.now();
-
-      const result = await Promise.race([
-        devBotsManager.addTask({
-          type,
-          title,
-          description: taskDescription,
-          acceptanceCriteria: Array.isArray(acceptanceCriteria) ? acceptanceCriteria : [acceptanceCriteria],
-          files,
-          dependencies,
-          project: project || repository, // Accept either 'project' or 'repository'
-          assignedAgent,
-          notes,
-          architectureReferences,
-          validationSteps,
-          successMetrics,
-          estimatedEffort
-        }),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error('Task creation timeout - operation took longer than 10 seconds')),
-            TASK_CREATION_TIMEOUT_MS
-          )
-        )
-      ]);
-
-      const taskCreationDuration = Date.now() - taskCreationStartTime;
-
-      // Log slow task creation for monitoring
-      if (taskCreationDuration > 1000) {
-        logger.warn({
-          category: 'api',
-          action: 'slow_task_creation',
-          message: `Task creation took ${taskCreationDuration}ms (expected < 1000ms)`,
-          details: {
-            durationMs: taskCreationDuration,
-            taskId: result.task.id,
-            taskTitle: title
-          }
-        });
-      }
-
-      sendSuccess(res, {
-        task: result.task,
-        validation: result.validation,
-        message: 'Task added successfully'
-      });
-    } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'error_adding_claude_workers_task_error',
-        message: `Error adding Dev-Bots task: ${error}`,
-        error
-      });
-      sendError(
-        res,
-        'Failed to add task',
-        500,
-        { message: error instanceof Error ? error.message : String(error) }
-      );
-    }
-  });
-
   /**
    * POST /tasks/:taskId/timeout
    * Manually timeout a task after verification
@@ -802,6 +557,36 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       });
       sendError(res, 'Failed to get task context', 500, { message: error instanceof Error ? error.message : String(error),
        });
+    }
+  });
+
+  /**
+   * GET /tasks/:id/stage-runs
+   * Get historical phase execution records for a task
+   */
+  router.get('/tasks/:id/stage-runs', (req: Request, res: Response) => {
+    try {
+      const { id: taskId } = req.params;
+      const taskQueue = devBotsManager.getTaskQueue();
+      const db = taskQueue.getDatabase();
+
+      const stageRuns = db.prepare(`
+        SELECT * FROM task_stage_runs
+        WHERE task_id = ?
+        ORDER BY created_at DESC
+      `).all(taskId);
+
+      sendSuccess(res, { stageRuns });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_stage_runs',
+        message: `Error getting stage runs for task: ${error}`,
+        error
+      });
+      sendError(res, 'Failed to get stage runs', 500, {
+        message: error instanceof Error ? error.message : String(error),
+      });
     }
   });
 
@@ -1116,6 +901,158 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       });
       sendError(res, 'Failed to record completion report', 500, {
         message: error instanceof Error ? error.message : String(error)
+      });
+    }
+  });
+
+  // ============================================================================
+  // Phase System Endpoints
+  // ============================================================================
+
+  /**
+   * GET /tasks/:taskId/phases
+   * Get phase execution history for a task
+   */
+  router.get('/tasks/:taskId/phases', async (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+
+      const taskQueue = devBotsManager.getTaskQueue();
+      const db = taskQueue.getDatabase();
+
+      // Get task info
+      const task = taskQueue.getTask(taskId);
+      if (!task) {
+        sendError(res, 'Task not found', 404);
+        return;
+      }
+
+      // Get phase history from task_stage_runs
+      const phaseHistory = db.prepare(`
+        SELECT * FROM task_stage_runs
+        WHERE task_id = ?
+        ORDER BY phase_index ASC, attempt ASC
+      `).all(taskId);
+
+      // Parse artifacts_blob and recovery_diagnosis JSON fields
+      const parsedHistory = phaseHistory.map((run: any) => ({
+        ...run,
+        artifacts: run.artifacts_blob ? JSON.parse(run.artifacts_blob) : null,
+        recovery: run.recovery_diagnosis ? JSON.parse(run.recovery_diagnosis) : null,
+      }));
+
+      sendSuccess(res, {
+        taskId,
+        currentPhase: {
+          index: task.phase_index,
+          name: task.phase_name,
+          status: task.phase_status,
+          attempts: task.phase_attempts,
+        },
+        history: parsedHistory,
+      });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_phase_history',
+        message: `Error getting phase history: ${error}`,
+        error
+      });
+      sendError(res, 'Failed to get phase history', 500, { 
+        message: error instanceof Error ? error.message : String(error) 
+      });
+    }
+  });
+
+  /**
+   * GET /phases/metrics
+   * Get aggregated phase system metrics
+   */
+  router.get('/phases/metrics', async (_req: Request, res: Response) => {
+    try {
+      const taskQueue = devBotsManager.getTaskQueue();
+      const db = taskQueue.getDatabase();
+      const metricsService = getPhaseMetricsService(db);
+
+      const metrics = metricsService.getMetrics();
+
+      sendSuccess(res, metrics);
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_phase_metrics',
+        message: `Error getting phase metrics: ${error}`,
+        error
+      });
+      sendError(res, 'Failed to get phase metrics', 500, { 
+        message: error instanceof Error ? error.message : String(error) 
+      });
+    }
+  });
+
+  /**
+   * GET /phases/:phaseIndex/metrics
+   * Get metrics for a specific phase
+   */
+  router.get('/phases/:phaseIndex/metrics', async (req: Request, res: Response) => {
+    try {
+      const phaseIndex = parseInt(req.params.phaseIndex, 10);
+
+      if (isNaN(phaseIndex) || phaseIndex < 1 || phaseIndex > 7) {
+        sendError(res, 'Invalid phase index. Must be between 1 and 7.', 400);
+        return;
+      }
+
+      const taskQueue = devBotsManager.getTaskQueue();
+      const db = taskQueue.getDatabase();
+      const metricsService = getPhaseMetricsService(db);
+
+      const phaseMetrics = metricsService.getPhaseMetrics(phaseIndex);
+
+      if (!phaseMetrics) {
+        sendError(res, 'No metrics available for this phase', 404);
+        return;
+      }
+
+      sendSuccess(res, phaseMetrics);
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_getting_phase_specific_metrics',
+        message: `Error getting phase-specific metrics: ${error}`,
+        error
+      });
+      sendError(res, 'Failed to get phase metrics', 500, { 
+        message: error instanceof Error ? error.message : String(error) 
+      });
+    }
+  });
+
+  /**
+   * POST /phases/metrics/refresh
+   * Clear the metrics cache to force fresh calculation
+   */
+  router.post('/phases/metrics/refresh', async (_req: Request, res: Response) => {
+    try {
+      const taskQueue = devBotsManager.getTaskQueue();
+      const db = taskQueue.getDatabase();
+      const metricsService = getPhaseMetricsService(db);
+
+      metricsService.clearCache();
+
+      sendSuccess(res, { 
+        message: 'Phase metrics cache cleared',
+        timestamp: Date.now()
+      });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_refreshing_phase_metrics',
+        message: `Error refreshing phase metrics: ${error}`,
+        error
+      });
+      sendError(res, 'Failed to refresh phase metrics', 500, { 
+        message: error instanceof Error ? error.message : String(error) 
       });
     }
   });

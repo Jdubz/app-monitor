@@ -8,7 +8,7 @@
  * - Interactive Sessions (interactive.routes.ts)
  * - Templates & Guidelines (templates.routes.ts)
  *
- * All routes maintain flat URL structure (no nested prefixes) for backward compatibility.
+ * All routes maintain flat URL structure (no nested prefixes)
  */
 
 import { Router, Request, Response, NextFunction } from 'express';

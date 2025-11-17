@@ -20,7 +20,6 @@ import { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import { resolveArtifactsDir } from '../utils/repoPaths.js';
 import { TaskExecutionService } from './taskExecution.service.js';
 import { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
-import { SimpleFailureRecovery } from './failureRecovery.js';
 import { TaskCompletionService } from './taskCompletion.service.js';
 import { InteractiveSessionService } from './interactiveSession.service.js';
 import { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
@@ -191,20 +190,18 @@ export async function createDevBotsManagerDependencies(
     shellCommand: ['/bin/bash'],
   });
 
-  // Note: SimpleFailureRecovery, TaskCompletionService, and WorkerHealthMonitor require DevBotsManager instance
+  // Note: TaskCompletionService and WorkerHealthMonitor require DevBotsManager instance
   // They will be created/initialized after DevBotsManager is instantiated
   // For now, create placeholders that will be replaced
-  const recovery = null as unknown as SimpleFailureRecovery; // Will be set by DevBotsManager
   const taskCompletionService = null as unknown as TaskCompletionService; // Will be set by DevBotsManager
 
-  // Create WorkerHealthMonitor (will be given recovery instance by DevBotsManager)
+  // Create WorkerHealthMonitor
   const workerHealthMonitor = new WorkerHealthMonitor(
     ephemeralWorkerService,
     taskQueue,
     dockerManager,
     scopeControl,
     null, // processManager removed
-    null, // recovery will be set by DevBotsManager
     () => {} // emit function placeholder, will be bound by DevBotsManager
   );
 
@@ -221,12 +218,10 @@ export async function createDevBotsManagerDependencies(
   );
 
   // Create SystemInitializationService (callbacks will be bound by DevBotsManager)
-  // Note: recovery will be set by DevBotsManager after instantiation
   const systemInitializationService = new SystemInitializationService(
     {
       dockerManager,
       taskQueue,
-      recovery: null as unknown as SimpleFailureRecovery, // Will be set by DevBotsManager
       taskExecutionService,
       ephemeralWorkerService,
       interactiveSessionService,

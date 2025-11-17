@@ -18,8 +18,7 @@ import { getPlanStatusUpdater } from './planStatusUpdater.singleton.js';
 export interface ChainStats {
   activeChains: number;
   blockedChains: number;
-  implementationQueueDepth: number;
-  followupQueueDepth: number;
+  phaseDistribution: Record<number, number>;
   maxConcurrentChains: number;
 }
 
@@ -71,27 +70,27 @@ export class ChainTrackerService {
   }
 
   /**
-   * Get queue depths
+   * Get queue depths by phase
+   * Returns distribution of tasks across phases for monitoring
    */
-  getQueueDepths(): { implementation: number; followup: number } {
-    const implResult = this.db.prepare(`
-      SELECT COUNT(*) as count
+  getQueueDepths(): { phaseDistribution: Record<number, number> } {
+    // Phase distribution - tasks ready for execution
+    const phaseDistResult = this.db.prepare(`
+      SELECT phase_index, COUNT(*) as count
       FROM tasks
-      WHERE queue_stage = 'implementation'
-      AND status = 'pending'
-    `).get() as { count: number };
+      WHERE status = 'pending'
+      AND phase_status = 'ready'
+      AND phase_index IS NOT NULL
+      GROUP BY phase_index
+    `).all() as Array<{ phase_index: number; count: number }>;
 
-    const followupResult = this.db.prepare(`
-      SELECT COUNT(*) as count
-      FROM tasks
-      WHERE queue_stage = 'followup'
-      AND status = 'pending'
-      AND chain_status != 'blocked'
-    `).get() as { count: number };
+    const phaseDistribution: Record<number, number> = {};
+    for (const row of phaseDistResult) {
+      phaseDistribution[row.phase_index] = row.count;
+    }
 
     return {
-      implementation: implResult.count,
-      followup: followupResult.count
+      phaseDistribution
     };
   }
 
@@ -99,8 +98,9 @@ export class ChainTrackerService {
    * Check if chains are complete and mark them closed
    * 
    * Complete means:
-   * 1. PR is merged (pr_status = 'merged')
-   * 2. No pending/active tasks in the chain
+   * 1. Task reached Phase 7 (PR Shepherding) with phase_status = 'complete'
+   * 2. PR is merged (pr_status = 'merged')
+   * 3. No pending/active tasks in the chain
    * 
    * Returns number of chains closed
    */
@@ -112,7 +112,13 @@ export class ChainTrackerService {
         SELECT DISTINCT t1.chain_id
         FROM tasks t1
         WHERE t1.chain_id IS NOT NULL
-        AND t1.pr_status = 'merged'
+        AND (
+          -- New phase system: Phase 7 complete
+          (t1.phase_index = 7 AND t1.phase_status = 'complete')
+          OR 
+          -- Legacy: PR merged
+          (t1.pr_status = 'merged')
+        )
         AND NOT EXISTS (
           SELECT 1 FROM tasks t2
           WHERE t2.chain_id = t1.chain_id
@@ -244,8 +250,7 @@ export class ChainTrackerService {
     return {
       activeChains,
       blockedChains,
-      implementationQueueDepth: depths.implementation,
-      followupQueueDepth: depths.followup,
+      phaseDistribution: depths.phaseDistribution,
       maxConcurrentChains
     };
   }

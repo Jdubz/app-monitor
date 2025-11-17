@@ -26,7 +26,7 @@ import type { EphemeralWorkerService, EphemeralWorker, TaskExecutionResult } fro
 import type { FailurePattern } from './taskFailureGuards.js';
 import type { SimpleFailureRecovery } from './failureRecovery.js';
 import { resolveArtifactsDir } from '../utils/repoPaths.js';
-import { AgentSelector, type AgentSelectionCriteria, type AgentAttempt } from './agentSelector.js';
+import { AgentSelector } from './agentSelector.js';
 import { TaskClassifier } from './taskClassifier.js';
 import { TaskArtifactService } from './taskArtifact.service.js';
 import { SessionSummaryService } from './sessionSummary.service.js';
@@ -604,7 +604,7 @@ export class TaskExecutionService {
     const executionStartTime = Date.now();
 
     try {
-      // Execute task using ephemeral worker service (replaces legacy docker run)
+      // Execute task using ephemeral worker service
       logger.info({
         category: 'process',
         action: 'creating_ephemeral_worker',
@@ -629,27 +629,121 @@ export class TaskExecutionService {
       const executionDuration = Date.now() - executionStartTime;
 
       if (result.success) {
-        // Task succeeded - mark as complete
+        // Task succeeded - run phase validation and advancement
         const output = result.output || '';
         const stderr = result.errorOutput || '';
 
-        // Complete task in SQLite with agent CLI type for tracking
-        this.taskQueue.completeTask(nextTask.id, output, agentCliType);
-
-        // Generate session summary for documentation
-        await this.generateSessionSummary(nextTask, result.exitCode || 0, output, stderr, Date.now());
-
         logger.info({
           category: 'process',
-          action: 'task_completed_successfully',
-          message: `Task ${nextTask.id} completed successfully in ${Math.floor(executionDuration / 60000)}m ${Math.floor((executionDuration % 60000) / 1000)}s`,
+          action: 'task_execution_complete',
+          message: `Task ${nextTask.id} execution complete, running phase validation`,
           details: {
             taskId: nextTask.id,
-            agent: agent.id,
-            durationMs: executionDuration,
+            phaseIndex: nextTask.phase_index,
+            phaseName: nextTask.phase_name,
             exitCode: result.exitCode
           }
         });
+
+        // Phase system integration: Validate and advance phase
+        // NOTE: This keeps the container alive during validation
+        // Container is destroyed in the finally block
+        const phaseValidation = await this.ephemeralWorkerService.completePhaseExecution(
+          worker,
+          output,
+          stderr,
+          result.exitCode || 0
+        );
+
+        // Check if validation passed
+        if (phaseValidation.passed) {
+          // Phase validated successfully - complete task
+          this.taskQueue.completeTask(nextTask.id, output, agentCliType);
+
+          // Generate session summary for documentation
+          await this.generateSessionSummary(nextTask, result.exitCode || 0, output, stderr, Date.now());
+
+          logger.info({
+            category: 'process',
+            action: 'task_completed_successfully',
+            message: `Task ${nextTask.id} completed successfully in ${Math.floor(executionDuration / 60000)}m ${Math.floor((executionDuration % 60000) / 1000)}s`,
+            details: {
+              taskId: nextTask.id,
+              agent: agent.id,
+              durationMs: executionDuration,
+              exitCode: result.exitCode,
+              phaseValidation: phaseValidation.passed
+            }
+          });
+        } else {
+          // Phase validation failed - check if recovery was attempted
+          if (phaseValidation.recovery?.attempted) {
+            logger.warn({
+              category: 'phase',
+              action: 'phase_validation_failed_with_recovery',
+              message: `Phase validation failed for task ${nextTask.id}, recovery was attempted`,
+              details: {
+                taskId: nextTask.id,
+                phaseIndex: nextTask.phase_index,
+                errors: phaseValidation.errors,
+                recoveryCategory: phaseValidation.recovery.category,
+                recoverySuccess: phaseValidation.recovery.success
+              }
+            });
+
+            // Apply recovery action based on category
+            const recovery = phaseValidation.recovery;
+
+            if (recovery.category === 'retry') {
+              // Simple retry - increment attempts and requeue
+              this.taskQueue.requeueTaskForPhaseRetry(nextTask.id);
+            } else if (recovery.category === 'context_update') {
+              // Update task prompt with additional context
+              if (recovery.diagnosis) {
+                this.taskQueue.updateTaskContext(nextTask.id, recovery.diagnosis);
+              }
+              this.taskQueue.requeueTaskForPhaseRetry(nextTask.id);
+            } else if (recovery.category === 'chain_blocked') {
+              // Block entire chain - requires human intervention
+              if (nextTask.chain_id) {
+                this.taskQueue.blockChain(nextTask.chain_id, recovery.diagnosis || 'Unrecoverable failure');
+              }
+            } else if (recovery.category === 'system_blocked') {
+              // Global pause - emit event for system-wide handling
+              logger.error({
+                category: 'phase',
+                action: 'system_blocked',
+                message: 'Recovery agent detected system-wide issue',
+                details: {
+                  taskId: nextTask.id,
+                  diagnosis: recovery.diagnosis,
+                },
+              });
+              // Emit event for monitoring/alerting systems
+              this.emit('system:blocked', {
+                taskId: nextTask.id,
+                reason: recovery.diagnosis || 'System-wide issue detected',
+              });
+            }
+          } else {
+            logger.warn({
+              category: 'phase',
+              action: 'phase_validation_failed',
+              message: `Phase validation failed for task ${nextTask.id}`,
+              details: {
+                taskId: nextTask.id,
+                phaseIndex: nextTask.phase_index,
+                errors: phaseValidation.errors
+              }
+            });
+
+            // No recovery attempted - mark task as failed
+            this.taskQueue.failTask(nextTask.id, `Phase ${nextTask.phase_index} validation failed: ${phaseValidation.errors?.join(', ') || 'Unknown error'}`);
+          }
+
+          // Task will be retried via phase system
+          // Don't mark as complete, let phase orchestrator handle next attempt
+        }
       } else {
         // Task failed - throw error to trigger recovery
         const errorMsg = result.error?.message || result.errorOutput || 'Task execution failed';

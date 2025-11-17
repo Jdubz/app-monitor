@@ -1,20 +1,134 @@
 # Task Queue & Chain Architecture
 
-**Purpose:** Comprehensive architecture of the staged task queue, chain tracking, and concurrency control system.
+**Purpose:** Comprehensive architecture of the task processing system with 7-phase lifecycle.
 
-**Status:** Production (v0.2.0)
+**Status:** Production (v0.3.0) - Phase System Active
+
+**Last Updated:** 2025-11-17
+
+---
+
+## 🆕 Phase System (v0.3.0)
+
+### Overview
+
+Tasks now progress through a **7-phase lifecycle** within a single task entity (no child tasks). Each phase validates completion before advancing, with automatic recovery on failure.
+
+**Key Changes from Legacy System:**
+- ❌ **REMOVED**: Separate REVIEW/FIX/COMPLETE child tasks
+- ✅ **NEW**: 7-phase pipeline with in-task state tracking
+- ✅ **NEW**: Validation before phase advancement
+- ✅ **NEW**: Recovery agent for automatic failure diagnosis
+- ✅ **NEW**: Phase loops (3↔4 for review/fix, 5 internal for tests)
+
+### 7-Phase Pipeline
+
+| Phase | Name | Purpose | Max Attempts | Loop Behavior |
+|-------|------|---------|--------------|---------------|
+| **1** | Planning | Validate task relevance, gather requirements | 4 | Linear (can cancel task if obsolete) |
+| **2** | Implementation | Write code, create PR | 4 | Linear |
+| **3** | Review | Identify code issues with fingerprints | 4 | Loops to Phase 4 if issues found |
+| **4** | Fixes | Correct issues from review | 4 | Returns to Phase 3 for re-review |
+| **5** | Test Coverage & Validation | Write tests, run suite, fix failures | 4 | Internal loop (stays in Phase 5) |
+| **6** | Cleanup & Docs | Update docs, prune artifacts | 4 | Linear |
+| **7** | PR Shepherding | Monitor merge gates, auto-merge | N/A | Completes when PR merged |
+
+**Phase Status Values:**
+- `ready` - Phase can start
+- `running` - Phase in progress
+- `validating` - Checking phase completion
+- `recovering` - Recovery agent diagnosing failure
+- `complete` - Phase passed validation
+- `blocked` - Max attempts reached, human intervention needed
+
+### Phase Database Schema
+
+**New Columns in `tasks` Table:**
+```sql
+ALTER TABLE tasks ADD COLUMN phase_index INTEGER DEFAULT 1;
+ALTER TABLE tasks ADD COLUMN phase_name TEXT DEFAULT 'Planning';
+ALTER TABLE tasks ADD COLUMN phase_status TEXT DEFAULT 'ready' 
+  CHECK(phase_status IN ('ready', 'running', 'validating', 'recovering', 'complete', 'blocked'));
+ALTER TABLE tasks ADD COLUMN phase_attempts INTEGER DEFAULT 1;
+ALTER TABLE tasks ADD COLUMN phase_payload TEXT; -- JSON for phase-specific state
+```
+
+**New Table: `task_stage_runs`**
+```sql
+CREATE TABLE task_stage_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  task_id TEXT NOT NULL,
+  phase_index INTEGER NOT NULL,
+  phase_name TEXT NOT NULL,
+  attempt INTEGER NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('success', 'failed', 'recovered', 'blocked')),
+  artifacts_blob TEXT, -- JSON structured data (planning, review issues, test results)
+  created_at INTEGER NOT NULL,
+  completed_at INTEGER,
+  recovery_diagnosis TEXT, -- JSON recovery agent response
+  exit_code INTEGER,
+  FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
+);
+```
+
+### Phase Transitions
+
+**Linear Progression (no issues):**
+```
+Phase 1 → Phase 2 → Phase 3 → Phase 5 → Phase 6 → Phase 7 → MERGED
+```
+
+**With Review/Fix Loop:**
+```
+Phase 3 (finds 5 issues) → Phase 4 (fixes all 5) → 
+Phase 3 (finds 2 more) → Phase 4 (fixes 2) →
+Phase 3 (clean!) → Phase 5
+```
+
+**With Test Failures (Phase 5 Internal Loop):**
+```
+Phase 5 (tests fail) → agent fixes → Phase 5 (still failing) → 
+agent fixes more → Phase 5 (passing!) → Phase 6
+```
+
+**Phase Validation Failure → Recovery:**
+```
+Phase N fails validation →
+  ↓
+Recovery Agent diagnoses in same container →
+  ↓
+  ┌─────────────────┬──────────────────────────────┐
+  │ Category        │ Action                       │
+  ├─────────────────┼──────────────────────────────┤
+  │ retry           │ Requeue phase, increment     │
+  │ context_update  │ Update prompt, requeue       │
+  │ chain_blocked   │ Block task, alert human      │
+  │ system_blocked  │ Pause ALL tasks globally     │
+  └─────────────────┴──────────────────────────────┘
+```
+
+### Legacy System (Deprecated)
+
+The original system used separate child tasks for REVIEW, FIX, and COMPLETE stages. This has been replaced by the 7-phase system. Legacy columns (`queue_stage`, `original_task_id`) remain for backward compatibility but are no longer used for new tasks.
+
+**Migration Status:**
+- Migration 026 adds phase system columns
+- Legacy columns retained but marked deprecated
+- New tasks use `phase_index` instead of `queue_stage`
+- Agent selection now fully delegated to `AgentSelector` service
 
 ---
 
 ## Overview
 
-The task queue is an SQLite-backed authoritative system that manages all development work through the app-monitor. It implements staged queue management, task chains with depth limits, and concurrency control to prevent PR explosion.
+The task queue is an SQLite-backed authoritative system that manages all development work through the app-monitor. It implements the 7-phase processing pipeline, task chains with depth limits, and concurrency control to prevent PR explosion.
 
 **Key Principles:**
 - **Single source of truth** - Database is authoritative
 - **Chain-aware concurrency** - Limit concurrent chains, not tasks
 - **ACID compliance** - SQLite transactions for consistency
 - **Event-driven** - No polling, all updates via events
+- **Validate-then-advance** - Each phase validates before progression
 
 ---
 

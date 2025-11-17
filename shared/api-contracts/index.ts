@@ -197,6 +197,8 @@ export interface DevBotsTaskScope {
   };
 }
 
+export type PhaseStatus = 'ready' | 'running' | 'validating' | 'recovering' | 'complete' | 'blocked';
+
 export interface DevBotsTask {
   id: string;
   type: string;
@@ -229,6 +231,11 @@ export interface DevBotsTask {
   chainId?: string;
   scopeViolations?: Array<{ type: string; severity: string }>;
   isPeriodicCleanup?: boolean;
+  // Phase system fields
+  phaseIndex?: number;
+  phaseName?: string;
+  phaseStatus?: PhaseStatus;
+  phaseAttempts?: number;
 }
 
 export interface DevBotsTaskCollections {
@@ -437,6 +444,27 @@ export interface DevBotsInteractiveSessionResponsePayload {
 }
 
 export type DevBotsInteractiveSessionResponse = ApiSuccess<DevBotsInteractiveSessionResponsePayload>;
+
+/**
+ * Bot self-reporting payload
+ */
+export interface DevBotsReportCompletionPayload {
+  /** Whether the task completed successfully (true) or failed (false) */
+  success: boolean;
+  /** Optional brief summary of what was accomplished or what went wrong */
+  summary?: string;
+}
+
+/**
+ * Response from bot completion reporting endpoint
+ */
+export interface DevBotsReportCompletionResponse {
+  success: boolean;
+  message: string;
+  taskId: string;
+}
+
+export type DevBotsReportCompletionApiResponse = ApiSuccess<DevBotsReportCompletionResponse>;
 
 export interface DevBotsInteractiveSessionStartPayload {
   modelProvider: string;

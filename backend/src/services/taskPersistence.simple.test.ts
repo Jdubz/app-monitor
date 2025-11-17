@@ -8,7 +8,7 @@
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { TaskPersistence, TaskStorageConfig } from './taskPersistence.js';
-import { Task } from './devBotsManager.js';
+import { Task } from './taskQueue.sqlite.js';
 import { logger } from '../utils/logger.js';
 import * as fs from 'fs';
 import * as path from 'path';

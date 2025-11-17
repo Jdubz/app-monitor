@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 
 import { logger } from '../utils/logger.js';
-import type { Task } from './devBotsManager.js';
+import type { Task } from './taskQueue.sqlite.js';
 
 const STORAGE_VERSION = '1.0';
 

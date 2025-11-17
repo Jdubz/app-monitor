@@ -27,6 +27,13 @@ import * as DockerConfig from './dockerConfig.js';
 import { getLogPaths } from './workTargetDocumentation.js';
 import { getGitHubPRService, type GitHubPRService } from './githubPR.service.js';
 import { ContextBundleGenerator } from './context/index.js';
+import { ValidatorRegistry } from './phaseValidation/ValidatorRegistry.js';
+import { ArtifactExtractorService } from './artifactExtractor.service.js';
+import { PhaseOrchestratorService } from './phaseOrchestrator.service.js';
+import { RecoveryAgentService } from './recoveryAgent.service.js';
+import type { ValidationResult } from './phaseValidation/types.js';
+import { getDatabase } from './database.js';
+import { getConnectionManager } from './connectionManager.js';
 
 export interface WorkspaceContext {
   id: string;
@@ -79,6 +86,10 @@ export class EphemeralWorkerService {
   private readonly dockerManager: DockerManager;
   private readonly githubPR: GitHubPRService;
   private readonly contextGenerator: ContextBundleGenerator;
+  private readonly validatorRegistry: ValidatorRegistry;
+  private readonly artifactExtractor: ArtifactExtractorService;
+  private readonly phaseOrchestrator: PhaseOrchestratorService;
+  private readonly recoveryAgent: RecoveryAgentService;
   private logStreams = new Map<string, fs.WriteStream>();
   private readonly devBotsLogPath: string;
 
@@ -92,6 +103,10 @@ export class EphemeralWorkerService {
     this.githubPR = getGitHubPRService();
     this.dockerManager = dockerManager;
     this.contextGenerator = contextGenerator || new ContextBundleGenerator();
+    this.validatorRegistry = new ValidatorRegistry();
+    this.artifactExtractor = new ArtifactExtractorService();
+    this.phaseOrchestrator = new PhaseOrchestratorService(getDatabase().getDb());
+    this.recoveryAgent = new RecoveryAgentService();
 
     this.config = {
       maxConcurrentWorkers: config.maxConcurrentWorkers ?? 2,
@@ -228,37 +243,18 @@ export class EphemeralWorkerService {
     });
 
     try {
-      // Determine branch to work on
-      let baseBranch = 'staging';  // Default to staging
+      // Determine branch to work on - default to staging
+      const baseBranch = 'staging';
 
-      // For improvement tasks (repair bots) with PR context, fetch branch from GitHub
-      if (task.is_repair_bot && (task.pr_number || task.followup_for_pr)) {
-        const prNum = task.followup_for_pr || task.pr_number;
-        if (prNum) {
-          try {
-            const prStatus = await this.githubPR.getPRStatus(prNum);
-            baseBranch = prStatus.head_ref;
-            logger.info({
-              category: 'process',
-              action: 'improvement_task_branch',
-              message: `Improvement task will work on branch: ${baseBranch}`,
-              details: {
-                taskId: task.id,
-                parentTaskId: task.original_task_id,
-                prNumber: prNum,
-                branch: baseBranch
-              }
-            });
-          } catch (error) {
-            logger.warn({
-              category: 'process',
-              action: 'branch_fetch_failed',
-              message: `Failed to fetch PR branch, using default: ${baseBranch}`,
-              details: { prNumber: prNum, error }
-            });
-          }
+      logger.info({
+        category: 'process',
+        action: 'base_branch_selected',
+        message: `Task will work on branch: ${baseBranch}`,
+        details: {
+          taskId: task.id,
+          branch: baseBranch
         }
-      }
+      });
 
       // Container will clone fresh repository internally
       logger.info({
@@ -409,7 +405,6 @@ export class EphemeralWorkerService {
         `WORKSPACE_BRANCH=${baseBranch}`,
         `WORKSPACE_ID=${workspaceId}`,
         `HOME=/home/node`,  // Explicitly set HOME for gh CLI to find config
-        ...(task.is_repair_bot ? [`IS_IMPROVEMENT_TASK=true`, `PARENT_TASK_ID=${task.original_task_id}`] : []),
         // Context management environment variables
         ...(task.context_bundle_id ? [`CONTEXT_BUNDLE_ID=${task.context_bundle_id}`] : []),
         ...(task.context_cache_key ? [`CONTEXT_CACHE_KEY=${task.context_cache_key}`] : []),
@@ -934,6 +929,250 @@ export class EphemeralWorkerService {
       return {
         success: false,
         error: error instanceof Error ? error : new Error(String(error))
+      };
+    }
+  }
+
+  /**
+   * Complete phase execution with validation and recovery
+   * This is the NEW phase-aware completion flow that:
+   * 1. Extracts artifacts from container
+   * 2. Runs phase validation
+   * 3. Handles recovery if validation fails
+   * 4. Only destroys container after validation/recovery complete
+   * 
+   * @param worker - Ephemeral worker
+   * @param output - Task execution output
+   * @param errorOutput - Task execution error output
+   * @param exitCode - Task execution exit code
+   * @returns Phase validation result
+   */
+  async completePhaseExecution(
+    worker: EphemeralWorker,
+    output: string,
+    errorOutput: string,
+    exitCode: number
+  ): Promise<ValidationResult> {
+    const task = worker.task;
+    const containerId = worker.containerId;
+
+    logger.info({
+      category: 'phase',
+      action: 'phase_completion_start',
+      message: `Starting phase completion for task ${task.id}, phase ${task.phase_index}`,
+      details: {
+        taskId: task.id,
+        phaseIndex: task.phase_index,
+        phaseName: task.phase_name,
+        exitCode,
+      },
+    });
+
+    // Emit phase:started event
+    const connManager = getConnectionManager();
+    if (connManager) {
+      connManager.broadcastToAll('phase:started', {
+        taskId: task.id,
+        phaseIndex: task.phase_index,
+        phaseName: task.phase_name,
+        attempt: task.phase_attempts,
+      });
+    }
+
+    try {
+      // Step 1: Extract artifacts from container BEFORE validation
+      logger.info({
+        category: 'phase',
+        action: 'extracting_artifacts',
+        message: `Extracting artifacts from container ${containerId}`,
+      });
+
+      const artifacts = await this.artifactExtractor.extractArtifacts({
+        containerId,
+        phaseIndex: task.phase_index,
+        attempt: task.phase_attempts,
+      });
+
+      logger.info({
+        category: 'phase',
+        action: 'artifacts_extracted',
+        message: `Artifacts extracted for task ${task.id}`,
+        details: {
+          hasPlanning: !!artifacts.planning,
+          hasImplementation: !!artifacts.implementation,
+          hasReview: !!artifacts.review,
+          hasFixes: !!artifacts.fixes,
+          hasTests: !!artifacts.tests,
+          hasCleanup: !!artifacts.cleanup,
+          hasPRShepherding: !!artifacts.prShepherding,
+        },
+      });
+
+      // Step 2: Run phase validation
+      logger.info({
+        category: 'phase',
+        action: 'validating_phase',
+        message: `Validating phase ${task.phase_index} for task ${task.id}`,
+      });
+
+      // Emit phase:validating event
+      if (connManager) {
+        connManager.broadcastToAll('phase:validating', {
+          taskId: task.id,
+          phaseIndex: task.phase_index,
+        });
+      }
+
+      const validator = this.validatorRegistry.getValidator(task.phase_index);
+      const validation = await validator.validate(task, artifacts);
+
+      logger.info({
+        category: 'phase',
+        action: 'validation_complete',
+        message: `Phase validation ${validation.passed ? 'PASSED' : 'FAILED'} for task ${task.id}`,
+        details: {
+          passed: validation.passed,
+          errors: validation.errors,
+          warnings: validation.warnings,
+        },
+      });
+
+      // Emit phase:validation_failed or phase:validation_passed event
+      if (connManager) {
+        if (!validation.passed) {
+          connManager.broadcastToAll('phase:validation_failed', {
+            taskId: task.id,
+            phaseIndex: task.phase_index,
+            errors: validation.errors,
+          });
+        }
+      }
+
+      // Step 3: Record stage run in database
+      const stageRunId = this.phaseOrchestrator.recordStageRun({
+        task_id: task.id,
+        phase_index: task.phase_index,
+        phase_name: task.phase_name,
+        attempt: task.phase_attempts,
+        status: validation.passed ? 'success' : 'failed',
+        artifacts_blob: validation.artifacts ? JSON.stringify(validation.artifacts) : undefined,
+        created_at: Date.now(),
+        completed_at: Date.now(),
+        exit_code: exitCode,
+      });
+
+      logger.info({
+        category: 'phase',
+        action: 'stage_run_recorded',
+        message: `Recorded stage run ${stageRunId} for task ${task.id}`,
+        details: {
+          stageRunId,
+          taskId: task.id,
+          phaseIndex: task.phase_index,
+          status: validation.passed ? 'success' : 'failed',
+        },
+      });
+
+      // Step 4: Handle validation failure with recovery
+      if (!validation.passed) {
+        logger.warn({
+          category: 'phase',
+          action: 'validation_failed',
+          message: `Phase ${task.phase_index} validation failed, initiating recovery`,
+          details: {
+            taskId: task.id,
+            phaseIndex: task.phase_index,
+            errors: validation.errors,
+          },
+        });
+
+        // Emit phase:recovering event
+        if (connManager) {
+          connManager.broadcastToAll('phase:recovering', {
+            taskId: task.id,
+            phaseIndex: task.phase_index,
+          });
+        }
+
+        // Run recovery agent in same container
+        const recoveryResult = await this.recoveryAgent.executeRecovery(
+          task,
+          containerId,
+          validation,
+          task.phase_attempts
+        );
+
+        logger.info({
+          category: 'phase',
+          action: 'recovery_complete',
+          message: `Recovery ${recoveryResult.success ? 'succeeded' : 'failed'} for task ${task.id}`,
+          details: {
+            category: recoveryResult.category,
+            shouldRetry: recoveryResult.shouldRetry,
+            contextUpdated: recoveryResult.contextUpdated,
+            isSystemBlocked: recoveryResult.isSystemBlocked,
+          },
+        });
+
+        // Enrich validation result with recovery information
+        validation.recovery = {
+          attempted: true,
+          success: recoveryResult.success,
+          category: recoveryResult.category,
+          diagnosis: recoveryResult.diagnosis,
+        };
+
+        // Update stage run with recovery diagnosis
+        this.phaseOrchestrator.updateStageRunWithRecovery(
+          stageRunId,
+          JSON.stringify(recoveryResult),
+          recoveryResult.success ? 'recovered' : 'failed'
+        );
+      }
+
+      // Step 5: Advance phase if validation passed
+      if (validation.passed) {
+        const transition = this.phaseOrchestrator.advancePhase(task, validation);
+        
+        logger.info({
+          category: 'phase',
+          action: 'phase_advanced',
+          message: `Task ${task.id} advanced from phase ${transition.fromPhase} to ${transition.toPhase}`,
+          details: {
+            taskId: task.id,
+            fromPhase: transition.fromPhase,
+            toPhase: transition.toPhase,
+            reason: transition.reason,
+          },
+        });
+
+        // Emit phase:completed event
+        if (connManager) {
+          connManager.broadcastToAll('phase:completed', {
+            taskId: task.id,
+            phaseIndex: transition.fromPhase,
+            nextPhase: transition.toPhase,
+            reason: transition.reason,
+          });
+        }
+      }
+
+      return validation;
+
+    } catch (error) {
+      logger.error({
+        category: 'phase',
+        action: 'phase_completion_error',
+        message: `Error during phase completion for task ${task.id}`,
+        error,
+      });
+
+      // Return failed validation on error
+      return {
+        passed: false,
+        errors: [
+          `Phase completion error: ${error instanceof Error ? error.message : String(error)}`
+        ],
       };
     }
   }

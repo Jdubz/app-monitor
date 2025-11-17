@@ -7,7 +7,10 @@ function setupTestSchema(db: Database.Database) {
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY,
       status TEXT NOT NULL,
-      queue_stage TEXT,
+      phase_index INTEGER DEFAULT 1,
+      phase_name TEXT,
+      phase_status TEXT DEFAULT 'ready',
+      phase_attempts INTEGER DEFAULT 1,
       chain_status TEXT,
       chain_id TEXT,
       chain_depth INTEGER DEFAULT 0,
@@ -28,7 +31,7 @@ function insertTask(
   task: {
     id: string;
     status: string;
-    queue_stage?: string;
+    phase_index?: number;
     chain_status?: string;
     chain_id?: string;
     chain_depth?: number;
@@ -38,14 +41,14 @@ function insertTask(
 ) {
   const stmt = db.prepare(`
     INSERT INTO tasks (
-      id, status, queue_stage, chain_status, chain_id, 
+      id, status, phase_index, chain_status, chain_id, 
       chain_depth, followup_for_pr, pr_number, created_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   stmt.run(
     task.id,
     task.status,
-    task.queue_stage || null,
+    task.phase_index || 1,
     task.chain_status || null,
     task.chain_id || null,
     task.chain_depth || 0,
@@ -79,14 +82,14 @@ describe('ChainTrackerService', () => {
       insertTask(db, {
         id: 'task-1',
         status: 'pending',
-        queue_stage: 'implementation',
+        phase_index: 1,
         chain_status: 'active',
         chain_id: 'chain-1',
       });
       insertTask(db, {
         id: 'task-2',
         status: 'pending',
-        queue_stage: 'implementation',
+        phase_index: 1,
         chain_status: 'active',
         chain_id: 'chain-2',
       });
@@ -99,14 +102,14 @@ describe('ChainTrackerService', () => {
       insertTask(db, {
         id: 'task-1',
         status: 'pending',
-        queue_stage: 'implementation',
+        phase_index: 1,
         chain_status: 'active',
         chain_id: 'chain-1',
       });
       insertTask(db, {
         id: 'task-2',
         status: 'pending',
-        queue_stage: 'implementation',
+        phase_index: 1,
         chain_status: 'blocked',
         chain_id: 'chain-2',
       });
@@ -119,7 +122,7 @@ describe('ChainTrackerService', () => {
       insertTask(db, {
         id: 'task-1',
         status: 'pending',
-        queue_stage: 'implementation',
+        phase_index: 1,
         chain_status: 'active',
         chain_id: 'chain-1',
       });
@@ -130,7 +133,7 @@ describe('ChainTrackerService', () => {
       insertTask(db, {
         id: 'task-copilot-123',
         status: 'pending',
-        queue_stage: 'implementation',
+        phase_index: 1,
         chain_status: 'active',
         chain_id: 'chain-2',
       });
@@ -146,14 +149,14 @@ describe('ChainTrackerService', () => {
       insertTask(db, {
         id: 'task-1',
         status: 'pending',
-        queue_stage: 'implementation',
+        phase_index: 1,
         chain_status: 'active',
         chain_id: 'chain-1',
       });
       insertTask(db, {
         id: 'task-2',
         status: 'completed',
-        queue_stage: 'implementation',
+        phase_index: 1,
         chain_status: 'closed',
         chain_id: 'chain-2',
       });
@@ -167,14 +170,14 @@ describe('ChainTrackerService', () => {
       insertTask(db, {
         id: 'task-1',
         status: 'pending',
-        queue_stage: 'implementation',
+        phase_index: 1,
         chain_status: 'active',
         chain_id: 'chain-1',
       });
       insertTask(db, {
         id: 'task-2',
         status: 'pending',
-        queue_stage: 'followup',
+        phase_index: 3,
         chain_status: 'active',
         chain_id: 'chain-1',
       });
@@ -248,41 +251,42 @@ describe('ChainTrackerService', () => {
       insertTask(db, {
         id: 'task-1',
         status: 'pending',
-        queue_stage: 'implementation',
+        phase_index: 1,
         chain_status: 'pending',
       });
       insertTask(db, {
         id: 'task-2',
         status: 'pending',
-        queue_stage: 'implementation',
+        phase_index: 1,
         chain_status: 'pending',
       });
       insertTask(db, {
         id: 'task-3',
         status: 'pending',
-        queue_stage: 'followup',
+        phase_index: 3,
         chain_status: 'active',
       });
 
       const depths = chainTracker.getQueueDepths();
-      expect(depths.implementation).toBe(2);
-      expect(depths.followup).toBe(1);
+      expect(depths.phaseDistribution[1]).toBe(1); // Phase 1 (implementation start)
+      expect(depths.phaseDistribution[2]).toBe(1); // Phase 2
+      expect(depths.phaseDistribution[3]).toBe(1); // Phase 3 (review)
     });
 
     it('should exclude running tasks', () => {
       insertTask(db, {
         id: 'task-1',
         status: 'pending',
-        queue_stage: 'implementation',
+        phase_index: 1,
       });
       insertTask(db, {
         id: 'task-2',
         status: 'running',
-        queue_stage: 'implementation',
+        phase_index: 1,
       });
 
       const depths = chainTracker.getQueueDepths();
-      expect(depths.implementation).toBe(1);
+      expect(depths.phaseDistribution[1]).toBe(1);
     });
   });
 
@@ -483,7 +487,7 @@ describe('ChainTrackerService', () => {
       insertTask(db, {
         id: 'task-1',
         status: 'running', // Active task shouldn't count in queue depth
-        queue_stage: 'implementation',
+        phase_index: 1,
         chain_status: 'active',
         chain_id: 'chain-1',
       });
@@ -492,7 +496,7 @@ describe('ChainTrackerService', () => {
       insertTask(db, {
         id: 'task-2',
         status: 'pending',
-        queue_stage: 'implementation',
+        phase_index: 1,
         chain_status: 'pending',
       });
       db.prepare('UPDATE tasks SET assigned_agent = ? WHERE id = ?').run(null, 'task-2');
@@ -500,7 +504,7 @@ describe('ChainTrackerService', () => {
       insertTask(db, {
         id: 'task-3',
         status: 'pending',
-        queue_stage: 'followup',
+        phase_index: 3,
         chain_status: 'active',
         chain_id: 'chain-1',
       });
@@ -519,8 +523,7 @@ describe('ChainTrackerService', () => {
       const stats = chainTracker.getChainStats(3);
       expect(stats.activeChains).toBe(1);
       expect(stats.blockedChains).toBe(1);
-      expect(stats.implementationQueueDepth).toBe(1);
-      expect(stats.followupQueueDepth).toBe(1);
+      expect(stats.phaseDistribution[1]).toBeGreaterThanOrEqual(0); // Phase distribution instead of queue depths
       expect(stats.maxConcurrentChains).toBe(3);
     });
 

@@ -14,7 +14,6 @@ import { DockerManager, DockerValidationResult } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
 import { MetricsEmitter } from './metricsEmitter.js';
 
-import { SimpleFailureRecovery } from './failureRecovery.js';
 import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
 import type { ScopeControlService } from './scopeControl.service.js';
 import type { EphemeralWorkerService, EphemeralWorker as EphemeralWorkerType } from './ephemeralWorker.service.js';
@@ -46,16 +45,13 @@ export interface RetryAttempt {
 }
 
 // TaskStatus and Task interface now imported from taskQueue.sqlite.ts (canonical source per Stabilization Plan)
-// Re-export for compatibility with existing imports
 export type TaskStatus = SQLiteTaskStatus;
 export type { Task } from './taskQueue.sqlite.js';
 
 // EphemeralWorker now managed by EphemeralWorkerService
-// Re-export for backward compatibility
 export type EphemeralWorker = EphemeralWorkerType;
 
 // WorkerStatus and DevBotsStatus moved to statusAggregation.service.ts
-// Re-export for backward compatibility
 export type { WorkerStatus, DevBotsStatus } from './statusAggregation.service.js';
 
 // Scope control classes moved to scopeControl.service.ts
@@ -76,7 +72,6 @@ export class DevBotsManager extends EventEmitter {
   private guidelinesManager!: TaskCreationGuidelinesManager;
   private workspaceSyncManager!: WorkspaceSyncManager;
   private retryManager!: RetryManager;
-  private recovery!: SimpleFailureRecovery;
   private scopeControl!: ScopeControlService;
   private ephemeralWorkerService!: EphemeralWorkerService;
   private taskExecutionService!: TaskExecutionService;
@@ -129,27 +124,11 @@ export class DevBotsManager extends EventEmitter {
     // Initialize maxWorkers from config
     this.maxWorkers = config.devBots.maxWorkers;
 
-    // Initialize SimpleFailureRecovery
-    this.recovery = new SimpleFailureRecovery(this);
-
-    // Type helper for dependency injection
+    // Update WorkerHealthMonitor with emit function
     interface WorkerHealthMonitorDeps {
-      recovery: SimpleFailureRecovery;
       emit: (event: string, data: unknown) => void;
     }
-
-    // Update WorkerHealthMonitor with recovery and emit function
-    // Note: WorkerHealthMonitor is injected but needs recovery instance from DevBotsManager
-    (this.workerHealthMonitor as unknown as WorkerHealthMonitorDeps).recovery = this.recovery;
     (this.workerHealthMonitor as unknown as WorkerHealthMonitorDeps).emit = this.emit.bind(this);
-
-    // Type helper for dependency injection
-    interface SystemInitDeps {
-      components: { recovery: SimpleFailureRecovery };
-    }
-
-    // Update SystemInitializationService with recovery instance
-    (this.systemInitializationService as unknown as SystemInitDeps).components.recovery = this.recovery;
 
     // Type helper for dependency injection
     interface RetryCoordinationDeps {
@@ -426,19 +405,6 @@ export class DevBotsManager extends EventEmitter {
    */
   async assignNextTask(): Promise<void> {
     await this.taskExecutionService.assignNextTask(() => this.assignNextTask());
-  }
-
-  /**
-   * Complete worker onboarding (no-op for ephemeral workers)
-   * Ephemeral workers are created fresh for each task and don't require onboarding
-   * @deprecated Kept for API compatibility but not used with ephemeral workers
-   */
-  public completeWorkerOnboarding(workerId: string): void {
-    logger.info({
-      category: 'process',
-      action: 'worker_onboarding_noop',
-      message: `Worker onboarding called for ${workerId} (no-op for ephemeral workers)`
-    });
   }
 
   /**

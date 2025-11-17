@@ -1,7 +1,6 @@
 import { logger } from '../utils/logger.js';
 import type { DockerManager, DockerValidationResult } from './dockerManager.js';
 import type { TaskQueueService, Task } from './taskQueue.sqlite.js';
-import type { SimpleFailureRecovery } from './failureRecovery.js';
 import type { TaskExecutionService } from './taskExecution.service.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { InteractiveSessionService } from './interactiveSession.service.js';
@@ -12,7 +11,6 @@ import { MetricsEmitter } from './metricsEmitter.js';
 export interface InitializationComponents {
   dockerManager: DockerManager;
   taskQueue: TaskQueueService;
-  recovery: SimpleFailureRecovery;
   taskExecutionService: TaskExecutionService;
   ephemeralWorkerService: EphemeralWorkerService;
   interactiveSessionService: InteractiveSessionService;

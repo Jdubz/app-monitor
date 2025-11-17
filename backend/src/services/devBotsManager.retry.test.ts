@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { DevBotsManager } from './devBotsManager.js';
 import { ProcessManager } from './processManager.js';
-import { Task } from './devBotsManager.js';
+import { Task } from './taskQueue.sqlite.js';
 
 // Mock the ProcessManager
 vi.mock('./processManager.js', () => ({

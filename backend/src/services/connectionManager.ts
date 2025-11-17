@@ -282,3 +282,14 @@ export class ConnectionManager {
     };
   }
 }
+
+// Singleton instance for broadcasting events from services
+let connectionManagerInstance: ConnectionManager | null = null;
+
+export function setConnectionManagerInstance(instance: ConnectionManager): void {
+  connectionManagerInstance = instance;
+}
+
+export function getConnectionManager(): ConnectionManager | null {
+  return connectionManagerInstance;
+}

@@ -73,9 +73,6 @@ export const TaskSchema = z.object({
   timeout_ms: z.number().positive().nullable().optional(),
   fingerprint: z.string().optional(),
   agent_type: z.string().optional(),
-  is_repair_bot: z.boolean().optional(),
-  original_task_id: z.string().optional(),
-  repair_stage: z.enum(['cleanup', 'followup']).optional(),
 });
 
 // Partial task for updates
@@ -103,9 +100,6 @@ export const TaskCreateSchema = z.object({
   retry_count: z.number().min(0).optional(),
   max_retries: z.number().min(0).optional(),
   timeout_ms: z.number().positive().optional(),
-  is_repair_bot: z.boolean().optional(),
-  original_task_id: z.string().optional(),
-  repair_stage: z.enum(['cleanup', 'followup']).optional(),
 });
 
 export type TaskCreate = z.infer<typeof TaskCreateSchema>;

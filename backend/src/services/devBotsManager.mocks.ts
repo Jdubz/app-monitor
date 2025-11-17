@@ -21,7 +21,6 @@ import type { ScopeControlService } from './scopeControl.service.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskExecutionService } from './taskExecution.service.js';
 import type { TaskCompletionService } from './taskCompletion.service.js';
-import type { SimpleFailureRecovery } from './failureRecovery.js';
 import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 import type { InteractiveSessionService } from './interactiveSession.service.js';
 import type { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
@@ -34,8 +33,6 @@ import type { SystemInitializationService } from './systemInitialization.service
 import type { InteractiveSessionCoordinator } from './interactiveSessionCoordinator.service.js';
 import type { InfoQueryService } from './infoQuery.service.js';
 import { EventEmitter } from 'events';
-
-// ProcessManager removed - no longer needed
 
 /**
  * Create mock Docker
@@ -614,13 +611,10 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     guidelinesManager,
     workspaceSyncManager,
     retryManager,
-    // workspaceOrchestrator removed
-    // taskPersistence removed
     scopeControl,
     ephemeralWorkerService,
     taskExecutionService,
     taskCompletionService,
-    recovery: null as unknown as SimpleFailureRecovery, // Will be created by DevBotsManager
     prWorkflowOrchestrator: {
       handleTaskCompletion: vi.fn().mockResolvedValue(undefined),
       getMonitoredPRs: vi.fn().mockReturnValue([]),
