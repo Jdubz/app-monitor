@@ -465,9 +465,7 @@ export function createMockTaskPersistence(): TaskPersistence {
 export function createMockWorkspaceOrchestrator(): Record<string, unknown> {
   const mockWorkspace: Record<string, unknown> = {
     id: 'workspace-test',
-    hostPath: '/tmp/workspace',
     branchName: 'bots/task-core',
-    mirrorPath: '/tmp/mirror',
     createdAt: new Date().toISOString(),
   };
 
@@ -535,9 +533,7 @@ export function createMockEphemeralWorkerService(): EphemeralWorkerService {
     createdAt: new Date().toISOString(),
     workspace: {
       id: 'workspace-1',
-      hostPath: '/tmp/workspace',
       branchName: 'staging',
-      mirrorPath: '',
       createdAt: new Date().toISOString(),
     }
   };

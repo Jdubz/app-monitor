@@ -38,9 +38,7 @@ import { CONTAINER_MEMORY_LIMIT_BYTES, CONTAINER_CPU_QUOTA, WORKER_UID_GID } fro
 
 export interface WorkspaceContext {
   id: string;
-  hostPath: string;  // DEPRECATED: Always empty with Docker cp approach
   branchName: string;
-  mirrorPath: string;  // DEPRECATED: Always empty with Docker cp approach
   createdAt: string;
 }
 
@@ -474,11 +472,9 @@ export class EphemeralWorkerService {
 
       await this.initializeWorkerLogFile(workerId);
 
-      const workspace = {
+      const workspace: WorkspaceContext = {
         id: workspaceId,
-        hostPath: '', // No host path - workspace is inside container only
         branchName: 'staging', // Always work on staging
-        mirrorPath: '', // No mirror
         createdAt: new Date().toISOString()
       };
 

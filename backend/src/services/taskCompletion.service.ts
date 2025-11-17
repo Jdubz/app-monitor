@@ -91,31 +91,15 @@ export class TaskCompletionService {
     this.extractAndRecordTokenUsage(task, output);
     this.extractAndRecordPRInfo(task, output);
 
-    const workspacePath = worker.workspace.hostPath;
     let qualityValidation: QualityValidationResult | undefined;
     let taskVerification: TaskVerificationResult | undefined;
     let shouldPush = exitCode === 0;
 
-    // Run comprehensive task verification first (if enabled and workspace is on host)
-    if (shouldPush && this.config.enableTaskVerification && workspacePath) {
-      taskVerification = await this.runTaskVerification(task, workspacePath, output);
-      shouldPush = taskVerification.passed;
+    // NOTE: Task verification and quality gates are disabled with Docker cp mode
+    // because workspace exists only inside containers, not on host filesystem.
+    // These features would need to be re-implemented to run inside containers.
 
-      // Log verification details
-      if (!taskVerification.passed) {
-        logger.warn({
-          category: 'verification',
-          action: 'task_verification_failed',
-          message: `Task verification failed for ${task.id}`,
-          details: {
-            acceptanceCriteriaMet: taskVerification.acceptanceCriteria.percentMet,
-            testCoverage: taskVerification.testCoverage?.totalCoverage,
-            scopeViolations: taskVerification.scopeBoundaries?.violationCount,
-            recommendations: taskVerification.recommendations
-          }
-        });
-      }
-    } else if (this.config.enableTaskVerification && !workspacePath) {
+    if (this.config.enableTaskVerification) {
       logger.info({
         category: 'verification',
         action: 'task_verification_skipped',
@@ -127,11 +111,7 @@ export class TaskCompletionService {
       });
     }
 
-    // Run quality gates (if verification passed, quality gates enabled, and workspace on host)
-    if (shouldPush && this.config.enableQualityGates && workspacePath) {
-      qualityValidation = await this.runQualityGateValidation(task, workspacePath);
-      shouldPush = qualityValidation.passed;
-    } else if (this.config.enableQualityGates && !workspacePath) {
+    if (this.config.enableQualityGates) {
       logger.info({
         category: 'verification',
         action: 'quality_gates_skipped',

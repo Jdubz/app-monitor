@@ -21,9 +21,7 @@ vi.mock('./workspaceOrchestrator.js', () => {
   const mockInitialize = vi.fn();
   const mockCreateWorkspace = vi.fn(() => ({
     id: 'workspace-test',
-    hostPath: '/tmp/workspace',
     branchName: 'bots/task-core',
-    mirrorPath: '/tmp/mirror',
     createdAt: new Date().toISOString()
   }));
   const mockSealWorkspace = vi.fn(async () => ({
