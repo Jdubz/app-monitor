@@ -182,25 +182,45 @@ export class ChainTrackerService {
   }
 
   /**
-   * Unblock a chain
+   * Unblock a chain and retry last failed phase
+   * 
+   * When a chain is unblocked:
+   * 1. Set chain_status back to 'active'
+   * 2. Set phase_status to 'ready' (so task can be retried)
+   * 3. Set task status to 'pending' (ready for assignment)
+   * 4. Clear blocked metadata
+   * 
+   * This allows the task to be picked up by the next available worker
+   * and retry the phase that was blocked.
    */
   unblockChain(chainId: string, unblockedBy: string): void {
     const stmt = this.db.prepare(`
       UPDATE tasks
       SET chain_status = 'active',
+          phase_status = 'ready',
+          status = 'pending',
           blocked_reason = NULL,
-          blocked_at = NULL
+          blocked_at = NULL,
+          assigned_worker = NULL,
+          assigned_at = NULL
       WHERE chain_id = ?
       AND chain_status = 'blocked'
     `);
 
-    stmt.run(chainId);
+    const result = stmt.run(chainId);
+    const tasksUnblocked = result.changes;
 
     logger.info({
       category: 'process',
       action: 'chain_unblocked',
       message: `Chain ${chainId} unblocked by ${unblockedBy}`,
-      details: { chainId, unblockedBy }
+      details: { 
+        chainId, 
+        unblockedBy,
+        tasksUnblocked,
+        phaseResetTo: 'ready',
+        statusResetTo: 'pending'
+      }
     });
 
     // Trigger plan status update for all tasks in this chain
