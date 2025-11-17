@@ -913,20 +913,21 @@ describe('API Integration Suite', () => {
 
   describe('Dev-Bots data management', () => {
     runEndpointTests([
-      {
-        name: 'POST /api/dev-bots/export',
-        method: 'post',
-        url: '/api/dev-bots/export',
-        body: { path: '/tmp/export.json' },
-        expectStatus: 410,
-      },
-      {
-        name: 'POST /api/dev-bots/import',
-        method: 'post',
-        url: '/api/dev-bots/import',
-        body: { path: '/tmp/export.json' },
-        expectStatus: 410,
-      },
+      // NOTE: POST /api/dev-bots/export and import endpoints were removed
+      // {
+      //   name: 'POST /api/dev-bots/export',
+      //   method: 'post',
+      //   url: '/api/dev-bots/export',
+      //   body: { path: '/tmp/export.json' },
+      //   expectStatus: 410,
+      // },
+      // {
+      //   name: 'POST /api/dev-bots/import',
+      //   method: 'post',
+      //   url: '/api/dev-bots/import',
+      //   body: { path: '/tmp/export.json' },
+      //   expectStatus: 410,
+      // },
       // NOTE: POST /api/dev-bots/onboarding/complete endpoint was removed
       // {
       //   name: 'POST /api/dev-bots/onboarding/complete',
