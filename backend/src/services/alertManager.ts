@@ -25,7 +25,7 @@ export class AlertManager {
    * Create a new alert
    * @param chainId - Chain ID associated with the alert
    * @param reason - Reason or description of the alert
-   * @returns The created alert
+   * @returns A copy of the created alert (immutable)
    */
   createAlert(chainId: string, reason: string): Alert {
     const alert: Alert = {
@@ -49,12 +49,13 @@ export class AlertManager {
       },
     });
 
-    return alert;
+    // Return a copy to preserve immutability
+    return { ...alert };
   }
 
   /**
    * Get all active (non-dismissed) alerts
-   * @returns Array of active alerts
+   * @returns Array of alert copies (immutable)
    */
   getActiveAlerts(): Alert[] {
     const activeAlerts = Array.from(this.alerts.values()).filter(
@@ -70,13 +71,14 @@ export class AlertManager {
       },
     });
 
-    return activeAlerts;
+    // Return copies to preserve immutability
+    return activeAlerts.map(alert => ({ ...alert }));
   }
 
   /**
    * Dismiss an alert by ID
    * @param alertId - ID of the alert to dismiss
-   * @returns The dismissed alert, or null if not found
+   * @returns A copy of the dismissed alert, or null if not found (immutable)
    */
   dismissAlert(alertId: string): Alert | null {
     const alert = this.alerts.get(alertId);
@@ -102,10 +104,13 @@ export class AlertManager {
           alertId,
         },
       });
-      return alert;
+      // Return copy even for already dismissed alert
+      return { ...alert };
     }
 
-    alert.dismissed = true;
+    // Create new object instead of mutating existing one
+    const dismissedAlert = { ...alert, dismissed: true };
+    this.alerts.set(alertId, dismissedAlert);
 
     logger.info({
       category: 'alerts',
@@ -113,28 +118,32 @@ export class AlertManager {
       message: `Alert dismissed: ${alertId}`,
       details: {
         alertId,
-        chainId: alert.chainId,
+        chainId: dismissedAlert.chainId,
       },
     });
 
-    return alert;
+    // Return copy to preserve immutability
+    return { ...dismissedAlert };
   }
 
   /**
    * Get alert by ID
    * @param alertId - ID of the alert to retrieve
-   * @returns The alert, or null if not found
+   * @returns A copy of the alert, or null if not found (immutable)
    */
   getAlertById(alertId: string): Alert | null {
-    return this.alerts.get(alertId) || null;
+    const alert = this.alerts.get(alertId);
+    // Return copy to preserve immutability
+    return alert ? { ...alert } : null;
   }
 
   /**
    * Get all alerts (active and dismissed)
-   * @returns Array of all alerts
+   * @returns Array of alert copies (immutable)
    */
   getAllAlerts(): Alert[] {
-    return Array.from(this.alerts.values());
+    // Return copies to preserve immutability
+    return Array.from(this.alerts.values()).map(alert => ({ ...alert }));
   }
 
   /**
@@ -157,11 +166,12 @@ export class AlertManager {
   /**
    * Get alerts by chain ID
    * @param chainId - Chain ID to filter by
-   * @returns Array of alerts for the specified chain
+   * @returns Array of alert copies for the specified chain (immutable)
    */
   getAlertsByChainId(chainId: string): Alert[] {
-    return Array.from(this.alerts.values()).filter(
-      (alert) => alert.chainId === chainId
-    );
+    // Return copies to preserve immutability
+    return Array.from(this.alerts.values())
+      .filter((alert) => alert.chainId === chainId)
+      .map(alert => ({ ...alert }));
   }
 }
