@@ -16,7 +16,6 @@ import type { Task } from './taskQueue.sqlite.js';
 import { PhaseOrchestratorService } from './phaseOrchestrator.service.js';
 import { getValidatorRegistry } from './phaseValidation/index.js';
 import { getArtifactExtractor } from './artifactExtractor.service.js';
-import { getArtifactStorage } from './artifactStorage.service.js';
 import Database from 'better-sqlite3';
 
 export interface PhaseExecutionResult {
@@ -69,25 +68,14 @@ export class PhaseExecutionService {
         attempt,
       });
 
-      // Step 2: Store file artifacts if any
-      const storage = getArtifactStorage();
-      const artifactFiles = artifacts.files;
-      if (artifactFiles && artifactFiles.size > 0) {
-        await storage.storeFiles({ 
-          taskId: task.id, 
-          phaseIndex, 
-          attempt 
-        }, artifactFiles);
-      }
-
-      // Step 3: Get validator for this phase
+      // Step 2: Get validator for this phase
       const registry = getValidatorRegistry();
       const validator = registry.getValidator(phaseIndex);
 
-      // Step 4: Validate artifacts
+      // Step 3: Validate artifacts
       const validationResult = await validator.validate(task, artifacts);
 
-      // Step 5: Record stage run in database
+      // Step 4: Record stage run in database
       const stageRunId = this.orchestrator.recordStageRun({
         task_id: task.id,
         phase_index: phaseIndex,
@@ -113,7 +101,7 @@ export class PhaseExecutionService {
         },
       });
 
-      // Step 6: If validation failed, return early
+      // Step 5: If validation failed, return early
       if (!validationResult.passed) {
         return {
           success: false,
@@ -124,10 +112,10 @@ export class PhaseExecutionService {
         };
       }
 
-      // Step 7: Determine next phase via orchestrator
+      // Step 6: Determine next phase via orchestrator
       const transition = this.orchestrator.determineNextPhase(phaseIndex, validationResult);
 
-      // Step 8: Check attempt limits before advancing
+      // Step 7: Check attempt limits before advancing
       if (transition.toPhase !== null && transition.toPhase === phaseIndex) {
         // Staying in same phase (retry) - check attempt limits
         const limitReached = this.orchestrator.checkAttemptLimits(task);
@@ -141,7 +129,7 @@ export class PhaseExecutionService {
         }
       }
 
-      // Step 9: Advance to next phase
+      // Step 8: Advance to next phase
       this.orchestrator.advancePhase(task, validationResult);
 
       logger.info({
@@ -192,10 +180,10 @@ export class PhaseExecutionService {
   }
 
   /**
-   * Get current phase statistics for a task.
+   * Get current phase for a task.
    */
-  getPhaseStats(taskId: string) {
-    return this.orchestrator.getPhaseStats(taskId);
+  getCurrentPhase(taskId: string) {
+    return this.orchestrator.getCurrentPhase(taskId);
   }
 }
 
