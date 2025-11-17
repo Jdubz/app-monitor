@@ -31,13 +31,14 @@ describe('TaskQueueService - Phase Integration', () => {
   describe('Task Creation with Phases', () => {
     it('should create task with initial phase 1 (Planning)', async () => {
       // Given: Creating a new task
-      const taskId = await taskQueue.addTask({
+      const createdTask = taskQueue.createTask({
         type: 'feature',
         title: 'Test Feature',
         description: 'Test description',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
       });
+      const taskId = createdTask.id;
 
       // When: Retrieving the task
       const task = taskQueue.getTask(taskId);
@@ -53,14 +54,15 @@ describe('TaskQueueService - Phase Integration', () => {
 
     it('should allow creating task with specific phase for testing', async () => {
       // Given: Creating a task at specific phase
-      const taskId = await taskQueue.addTask({
+      const createdTask = taskQueue.createTask({
         type: 'feature',
         title: 'Test Feature',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
         phase_index: 5,
         phase_name: 'Test & Validate',
       });
+      const taskId = createdTask.id;
 
       // When: Retrieving the task
       const task = taskQueue.getTask(taskId);
@@ -74,15 +76,15 @@ describe('TaskQueueService - Phase Integration', () => {
   describe('Phase Updates', () => {
     it('should update phase fields correctly', async () => {
       // Given: A task in initial phase
-      const taskId = await taskQueue.addTask({
+      const taskId = taskQueue.createTask({
         type: 'feature',
         title: 'Test Feature',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
-      });
+        assigned_agent: 'claude-sonnet',
+      }).id;
 
       // When: Updating to next phase
-      await taskQueue.updateTask(taskId, {
+      taskQueue.updateTask(taskId, {
         phase_index: 2,
         phase_name: 'Implementation',
         phase_status: 'running',
@@ -99,16 +101,16 @@ describe('TaskQueueService - Phase Integration', () => {
 
     it('should increment phase_attempts on retry', async () => {
       // Given: A task that needs retry
-      const taskId = await taskQueue.addTask({
+      const taskId = taskQueue.createTask({
         type: 'feature',
         title: 'Test Feature',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
-      });
+        assigned_agent: 'claude-sonnet',
+      }).id;
 
       // When: Incrementing attempts
-      await taskQueue.updateTask(taskId, { phase_attempts: 2 });
-      await taskQueue.updateTask(taskId, { phase_attempts: 3 });
+      taskQueue.updateTask(taskId, { phase_attempts: 2 });
+      taskQueue.updateTask(taskId, { phase_attempts: 3 });
 
       // Then: Attempts should increment
       const task = taskQueue.getTask(taskId);
@@ -117,12 +119,12 @@ describe('TaskQueueService - Phase Integration', () => {
 
     it('should store and retrieve phase_payload', async () => {
       // Given: A task with phase state
-      const taskId = await taskQueue.addTask({
+      const taskId = taskQueue.createTask({
         type: 'feature',
         title: 'Test Feature',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
-      });
+        assigned_agent: 'claude-sonnet',
+      }).id;
 
       const payload = {
         reviewComments: ['Fix lint error', 'Add tests'],
@@ -130,7 +132,7 @@ describe('TaskQueueService - Phase Integration', () => {
       };
 
       // When: Storing payload
-      await taskQueue.updateTask(taskId, {
+      taskQueue.updateTask(taskId, {
         phase_payload: JSON.stringify(payload),
       });
 
@@ -143,19 +145,19 @@ describe('TaskQueueService - Phase Integration', () => {
 
     it('should clear phase_payload when set to null', async () => {
       // Given: A task with payload
-      const taskId = await taskQueue.addTask({
+      const taskId = taskQueue.createTask({
         type: 'feature',
         title: 'Test Feature',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
-      });
+        assigned_agent: 'claude-sonnet',
+      }).id;
 
-      await taskQueue.updateTask(taskId, {
+      taskQueue.updateTask(taskId, {
         phase_payload: JSON.stringify({ data: 'test' }),
       });
 
       // When: Clearing payload
-      await taskQueue.updateTask(taskId, { phase_payload: null });
+      taskQueue.updateTask(taskId, { phase_payload: null });
 
       // Then: Payload should be null
       const task = taskQueue.getTask(taskId);
@@ -164,31 +166,31 @@ describe('TaskQueueService - Phase Integration', () => {
 
     it('should update phase_status independently', async () => {
       // Given: A task in running phase
-      const taskId = await taskQueue.addTask({
+      const taskId = taskQueue.createTask({
         type: 'feature',
         title: 'Test Feature',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
-      });
+        assigned_agent: 'claude-sonnet',
+      }).id;
 
       // When: Updating status through different states
-      await taskQueue.updateTask(taskId, { phase_status: 'running' });
+      taskQueue.updateTask(taskId, { phase_status: 'running' });
       let task = taskQueue.getTask(taskId);
       expect(task?.phase_status).toBe('running');
 
-      await taskQueue.updateTask(taskId, { phase_status: 'validating' });
+      taskQueue.updateTask(taskId, { phase_status: 'validating' });
       task = taskQueue.getTask(taskId);
       expect(task?.phase_status).toBe('validating');
 
-      await taskQueue.updateTask(taskId, { phase_status: 'recovering' });
+      taskQueue.updateTask(taskId, { phase_status: 'recovering' });
       task = taskQueue.getTask(taskId);
       expect(task?.phase_status).toBe('recovering');
 
-      await taskQueue.updateTask(taskId, { phase_status: 'complete' });
+      taskQueue.updateTask(taskId, { phase_status: 'complete' });
       task = taskQueue.getTask(taskId);
       expect(task?.phase_status).toBe('complete');
 
-      await taskQueue.updateTask(taskId, { phase_status: 'blocked' });
+      taskQueue.updateTask(taskId, { phase_status: 'blocked' });
       task = taskQueue.getTask(taskId);
       expect(task?.phase_status).toBe('blocked');
     });
@@ -197,12 +199,12 @@ describe('TaskQueueService - Phase Integration', () => {
   describe('Phase Progression Tracking', () => {
     it('should track full phase progression history', async () => {
       // Given: A task progressing through phases
-      const taskId = await taskQueue.addTask({
+      const taskId = taskQueue.createTask({
         type: 'feature',
         title: 'Test Feature',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
-      });
+        assigned_agent: 'claude-sonnet',
+      }).id;
 
       // When: Progressing through phases
       const progressions = [
@@ -228,39 +230,39 @@ describe('TaskQueueService - Phase Integration', () => {
 
     it('should handle Review/Fix loop correctly', async () => {
       // Given: A task in Review phase
-      const taskId = await taskQueue.addTask({
+      const taskId = taskQueue.createTask({
         type: 'feature',
         title: 'Test Feature',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
-      });
+        assigned_agent: 'claude-sonnet',
+      }).id;
 
-      await taskQueue.updateTask(taskId, {
+      taskQueue.updateTask(taskId, {
         phase_index: 3,
         phase_name: 'Review',
         phase_attempts: 1,
       });
 
       // When: Looping between Review and Fixes
-      await taskQueue.updateTask(taskId, {
+      taskQueue.updateTask(taskId, {
         phase_index: 4,
         phase_name: 'Fixes',
         phase_attempts: 1,
       });
 
-      await taskQueue.updateTask(taskId, {
+      taskQueue.updateTask(taskId, {
         phase_index: 3,
         phase_name: 'Review',
         phase_attempts: 2,
       });
 
-      await taskQueue.updateTask(taskId, {
+      taskQueue.updateTask(taskId, {
         phase_index: 4,
         phase_name: 'Fixes',
         phase_attempts: 2,
       });
 
-      await taskQueue.updateTask(taskId, {
+      taskQueue.updateTask(taskId, {
         phase_index: 3,
         phase_name: 'Review',
         phase_attempts: 3,
@@ -276,71 +278,71 @@ describe('TaskQueueService - Phase Integration', () => {
   describe('Metrics and Queries', () => {
     it('should count tasks by phase', async () => {
       // Given: Multiple tasks in different phases
-      await taskQueue.addTask({
+      taskQueue.createTask({
         type: 'feature',
         title: 'Task 1',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
         phase_index: 1,
       });
 
-      await taskQueue.addTask({
+      taskQueue.createTask({
         type: 'feature',
         title: 'Task 2',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
         phase_index: 2,
       });
 
-      await taskQueue.addTask({
+      taskQueue.createTask({
         type: 'feature',
         title: 'Task 3',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
         phase_index: 2,
       });
 
-      await taskQueue.addTask({
+      taskQueue.createTask({
         type: 'feature',
         title: 'Task 4',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
         phase_index: 5,
       });
 
       // When: Querying metrics
-      const metrics = taskQueue.getMetrics();
+      const metrics = taskQueue.getQueueMetrics();
 
       // Then: Should have accurate counts
       expect(metrics.total).toBe(4);
-      // Phase distribution can be checked if getMetrics supports it
+      // Phase distribution can be checked if getQueueMetrics supports it
     });
 
     it('should filter tasks by phase', async () => {
       // Given: Tasks in different phases
-      const task1Id = await taskQueue.addTask({
+      const task1Id = taskQueue.createTask({
         type: 'feature',
         title: 'Task 1',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
         phase_index: 3,
         status: 'pending',
-      });
+      }).id;
 
-      const task2Id = await taskQueue.addTask({
+      const task2Id = taskQueue.createTask({
         type: 'feature',
         title: 'Task 2',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
         phase_index: 3,
         status: 'pending',
-      });
+      }).id;
 
-      await taskQueue.addTask({
+      taskQueue.createTask({
         type: 'feature',
         title: 'Task 3',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
         phase_index: 5,
         status: 'pending',
       });
@@ -357,27 +359,27 @@ describe('TaskQueueService - Phase Integration', () => {
 
     it('should track tasks in blocked phase_status', async () => {
       // Given: Tasks with different phase statuses
-      await taskQueue.addTask({
+      taskQueue.createTask({
         type: 'feature',
         title: 'Task 1',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
         phase_status: 'blocked',
       });
 
-      await taskQueue.addTask({
+      taskQueue.createTask({
         type: 'feature',
         title: 'Task 2',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
         phase_status: 'running',
       });
 
-      await taskQueue.addTask({
+      taskQueue.createTask({
         type: 'feature',
         title: 'Task 3',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
         phase_status: 'blocked',
       });
 
@@ -395,27 +397,27 @@ describe('TaskQueueService - Phase Integration', () => {
       // Given: A chain of related tasks
       const chainId = 'chain-123';
 
-      const task1Id = await taskQueue.addTask({
+      const task1Id = taskQueue.createTask({
         type: 'feature',
         title: 'Task 1',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
         chain_id: chainId,
         chain_depth: 0,
         phase_index: 7, // Completed all phases
         status: 'completed',
-      });
+      }).id;
 
-      const task2Id = await taskQueue.addTask({
+      const task2Id = taskQueue.createTask({
         type: 'feature',
         title: 'Task 2 (fix)',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
         chain_id: chainId,
         chain_depth: 1,
         phase_index: 3, // Currently in Review
         status: 'running',
-      });
+      }).id;
 
       // When: Checking chain status
       const task1 = taskQueue.getTask(task1Id);
@@ -432,17 +434,18 @@ describe('TaskQueueService - Phase Integration', () => {
   describe('Phase Completion', () => {
     it('should mark task complete after phase 7', async () => {
       // Given: A task in final phase
-      const taskId = await taskQueue.addTask({
+      const taskId = taskQueue.createTask({
         type: 'feature',
         title: 'Test Feature',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
         phase_index: 7,
         phase_name: 'PR Shepherding',
-      });
+        status: 'running', // Must be running to complete
+      }).id;
 
       // When: Completing the task
-      await taskQueue.completeTask(taskId);
+      taskQueue.completeTask(taskId, 'Task completed', 'claude');
 
       // Then: Task should be completed
       const task = taskQueue.getTask(taskId);
@@ -452,16 +455,17 @@ describe('TaskQueueService - Phase Integration', () => {
 
     it('should preserve phase information after completion', async () => {
       // Given: A task completing at phase 7
-      const taskId = await taskQueue.addTask({
+      const taskId = taskQueue.createTask({
         type: 'feature',
         title: 'Test Feature',
         priority: 1,
-        assignedAgent: 'claude-sonnet',
+        assigned_agent: 'claude-sonnet',
         phase_index: 7,
         phase_name: 'PR Shepherding',
-      });
+        status: 'running', // Must be running to complete
+      }).id;
 
-      await taskQueue.completeTask(taskId);
+      taskQueue.completeTask(taskId, 'Task completed', 'claude');
 
       // When: Retrieving completed task
       const task = taskQueue.getTask(taskId);

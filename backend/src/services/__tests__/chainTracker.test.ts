@@ -21,6 +21,8 @@ function setupTestSchema(db: Database.Database) {
       pr_number INTEGER,
       pr_status TEXT,
       assigned_agent TEXT,
+      assigned_worker TEXT,
+      assigned_at INTEGER,
       created_at INTEGER NOT NULL
     );
   `);
@@ -257,7 +259,7 @@ describe('ChainTrackerService', () => {
       insertTask(db, {
         id: 'task-2',
         status: 'pending',
-        phase_index: 1,
+        phase_index: 2,
         chain_status: 'pending',
       });
       insertTask(db, {
@@ -268,9 +270,9 @@ describe('ChainTrackerService', () => {
       });
 
       const depths = chainTracker.getQueueDepths();
-      expect(depths.phaseDistribution[1]).toBe(1); // Phase 1 (implementation start)
-      expect(depths.phaseDistribution[2]).toBe(1); // Phase 2
-      expect(depths.phaseDistribution[3]).toBe(1); // Phase 3 (review)
+      expect(depths.phaseDistribution[1]).toBe(1); // 1 task in phase 1
+      expect(depths.phaseDistribution[2]).toBe(1); // 1 task in phase 2
+      expect(depths.phaseDistribution[3]).toBe(1); // 1 task in phase 3
     });
 
     it('should exclude running tasks', () => {

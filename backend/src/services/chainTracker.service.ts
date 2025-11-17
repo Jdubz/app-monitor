@@ -74,12 +74,11 @@ export class ChainTrackerService {
    * Returns distribution of tasks across phases for monitoring
    */
   getQueueDepths(): { phaseDistribution: Record<number, number> } {
-    // Phase distribution - tasks ready for execution
+    // Phase distribution - all pending tasks (ready or not yet ready)
     const phaseDistResult = this.db.prepare(`
       SELECT phase_index, COUNT(*) as count
       FROM tasks
       WHERE status = 'pending'
-      AND phase_status = 'ready'
       AND phase_index IS NOT NULL
       GROUP BY phase_index
     `).all() as Array<{ phase_index: number; count: number }>;

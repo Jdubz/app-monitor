@@ -109,6 +109,17 @@ export class ValidatorRegistry {
   getValidatorCount(): number {
     return this.validators.size;
   }
+
+  /**
+   * Get all validators as a map indexed by phase number.
+   */
+  getAllValidators(): Record<number, PhaseValidator> {
+    const validators: Record<number, PhaseValidator> = {};
+    for (const [phaseIndex, validator] of this.validators.entries()) {
+      validators[phaseIndex] = validator;
+    }
+    return validators;
+  }
 }
 
 // Singleton instance
