@@ -164,6 +164,12 @@ export function TaskQueuePanel() {
                   <div className="flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
                     <span className="font-mono">{task.assignedWorker || 'Unassigned worker'}</span>
                     <span className="font-mono">{task.assignedAgent}</span>
+                    {task.phaseIndex && task.phaseName && (
+                      <span className="font-medium text-primary">
+                        Phase {task.phaseIndex}/7: {task.phaseName}
+                        {task.phaseAttempts && task.phaseAttempts > 1 && ` (attempt ${task.phaseAttempts})`}
+                      </span>
+                    )}
                     <span>Created {formatRelativeTime(task.createdAt)}</span>
                     {task.completedAt && <span>Completed {formatRelativeTime(task.completedAt)}</span>}
                   </div>

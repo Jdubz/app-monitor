@@ -197,6 +197,8 @@ export interface DevBotsTaskScope {
   };
 }
 
+export type PhaseStatus = 'ready' | 'running' | 'validating' | 'recovering' | 'complete' | 'blocked';
+
 export interface DevBotsTask {
   id: string;
   type: string;
@@ -229,6 +231,11 @@ export interface DevBotsTask {
   chainId?: string;
   scopeViolations?: Array<{ type: string; severity: string }>;
   isPeriodicCleanup?: boolean;
+  // Phase system fields
+  phaseIndex?: number;
+  phaseName?: string;
+  phaseStatus?: PhaseStatus;
+  phaseAttempts?: number;
 }
 
 export interface DevBotsTaskCollections {
