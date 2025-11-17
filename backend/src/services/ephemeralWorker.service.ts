@@ -1015,11 +1015,14 @@ export class EphemeralWorkerService {
 
     let agentCommand: string;
     if (cliType === 'gemini') {
-      agentCommand = `gemini --print --dangerously-skip-permissions --output-format json --workingDirectory /workspace '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
+      // Gemini does not support working directory flag
+      agentCommand = `gemini --print --dangerously-skip-permissions --output-format json '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
     } else if (cliType === 'codex') {
-      agentCommand = `codex --print --dangerously-skip-permissions --output-format json --workingDirectory /workspace '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
+      // Codex uses --cd for working directory, not --workingDirectory
+      agentCommand = `codex exec --cd /workspace --dangerously-bypass-approvals-and-sandbox '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
     } else {
-      agentCommand = `claude --print --dangerously-skip-permissions --output-format json --workingDirectory /workspace '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
+      // Claude does not support working directory flag
+      agentCommand = `claude --print --dangerously-skip-permissions --output-format json '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
     }
 
     // Create a wrapper command that logs to the worker-specific file
