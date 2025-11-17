@@ -312,56 +312,94 @@ export class TaskQueueService {
       });
     }
 
-    // Migration 2: Add PR workflow columns
-    // DEPRECATED: Most of these columns (pr_url, pr_branch, pr_status, etc.) violate
-    // the design principle "Any information available from GitHub should NOT be stored in our DB"
-    // and will be removed in migration 013. Only pr_number (foreign key reference) will remain.
-    const prColumns = ['pr_number', 'pr_url', 'pr_branch', 'pr_status', 'pr_checks_status', 'pr_review_status', 'pr_created_at', 'pr_merged_at'];
-    const missingPrColumns = prColumns.filter(col => !columnNames.has(col));
+    // Migration 2: Add PR workflow columns (REFACTORED)
+    // Following the design principle: "Any information available from GitHub should NOT be stored in our DB"
+    // We only store pr_number as a foreign key reference.
+    // All other PR data (status, checks, reviews, etc.) is fetched from GitHub API on-demand.
 
-    if (missingPrColumns.length > 0) {
+    // Only add pr_number if it doesn't exist
+    if (!columnNames.has('pr_number')) {
       logger.info({
         category: 'process',
-        action: 'adding_pr_workflow_columns',
-        message: `Adding ${missingPrColumns.length} PR workflow columns to tasks table (DEPRECATED - will be removed in migration 013)`,
-        details: { columns: missingPrColumns }
+        action: 'adding_pr_number_column',
+        message: 'Adding pr_number column to tasks table (foreign key to GitHub PR)'
       });
 
-      // Add each missing column
-      if (!columnNames.has('pr_number')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_number INTEGER;`);
-      }
-      if (!columnNames.has('pr_url')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_url TEXT;`);
-      }
-      if (!columnNames.has('pr_branch')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_branch TEXT;`);
-      }
-      if (!columnNames.has('pr_status')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_status TEXT CHECK(pr_status IN ('creating', 'pending_checks', 'pending_review', 'ready_to_merge', 'merged', 'closed'));`);
-      }
-      if (!columnNames.has('pr_checks_status')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_checks_status TEXT CHECK(pr_checks_status IN ('pending', 'success', 'failure'));`);
-      }
-      if (!columnNames.has('pr_review_status')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_review_status TEXT CHECK(pr_review_status IN ('no_reviews', 'approved', 'changes_requested', 'commented'));`);
-      }
-      if (!columnNames.has('pr_created_at')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_created_at INTEGER;`);
-      }
-      if (!columnNames.has('pr_merged_at')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_merged_at INTEGER;`);
-      }
-
-      // Create indexes
+      this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_number INTEGER;`);
       this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_pr_number ON tasks(pr_number);`);
-      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_pr_status ON tasks(pr_status) WHERE pr_status IS NOT NULL;`);
 
       logger.info({
         category: 'process',
         action: 'migration_complete',
-        message: 'PR workflow columns added successfully'
+        message: 'PR number column added successfully'
       });
+    }
+
+    // Migration 013: Remove deprecated PR columns that violate architecture principles
+    // These columns duplicated GitHub data and created consistency issues
+    const deprecatedPrColumns = ['pr_url', 'pr_branch', 'pr_status', 'pr_checks_status', 'pr_review_status', 'pr_created_at', 'pr_merged_at'];
+    const existingDeprecatedColumns = deprecatedPrColumns.filter(col => columnNames.has(col));
+
+    if (existingDeprecatedColumns.length > 0) {
+      logger.info({
+        category: 'process',
+        action: 'removing_deprecated_pr_columns',
+        message: `Removing ${existingDeprecatedColumns.length} deprecated PR columns (data available from GitHub API)`,
+        details: { columns: existingDeprecatedColumns }
+      });
+
+      // SQLite doesn't support DROP COLUMN directly, so we need to recreate the table
+      // This is safe because these columns should never have been used (deprecated from day 1)
+
+      // Get all column definitions excluding deprecated PR columns
+      const columns = this.db.prepare(`PRAGMA table_info(tasks)`).all() as Array<{name: string; type: string; notnull: number; dflt_value: string | null; pk: number}>;
+      const filteredColumns = columns.filter(col => !deprecatedPrColumns.includes(col.name));
+
+      // Build new table schema
+      const columnDefs = filteredColumns.map(col => {
+        let def = `${col.name} ${col.type}`;
+        if (col.notnull) def += ' NOT NULL';
+        if (col.dflt_value) def += ` DEFAULT ${col.dflt_value}`;
+        if (col.pk) def += ' PRIMARY KEY';
+        return def;
+      }).join(', ');
+
+      // Recreate table without deprecated columns
+      this.db.exec('BEGIN TRANSACTION;');
+      try {
+        this.db.exec(`CREATE TABLE tasks_new (${columnDefs});`);
+
+        // Copy data from old table (only non-deprecated columns)
+        const columnNames = filteredColumns.map(col => col.name).join(', ');
+        this.db.exec(`INSERT INTO tasks_new (${columnNames}) SELECT ${columnNames} FROM tasks;`);
+
+        // Drop old table and rename new one
+        this.db.exec('DROP TABLE tasks;');
+        this.db.exec('ALTER TABLE tasks_new RENAME TO tasks;');
+
+        // Recreate indexes
+        this.db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_pr_number ON tasks(pr_number);');
+        this.db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status);');
+        this.db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_chain_id ON tasks(chain_id) WHERE chain_id IS NOT NULL;');
+
+        this.db.exec('COMMIT;');
+
+        logger.info({
+          category: 'process',
+          action: 'deprecated_columns_removed',
+          message: `Successfully removed ${existingDeprecatedColumns.length} deprecated PR columns`,
+          details: { removedColumns: existingDeprecatedColumns }
+        });
+      } catch (error) {
+        this.db.exec('ROLLBACK;');
+        logger.error({
+          category: 'process',
+          action: 'migration_failed',
+          message: 'Failed to remove deprecated PR columns',
+          error
+        });
+        throw error;
+      }
     }
 
     // Migration 4: Add intelligent agent selection columns
