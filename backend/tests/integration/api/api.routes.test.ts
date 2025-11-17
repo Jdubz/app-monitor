@@ -763,30 +763,32 @@ describe('API Integration Suite', () => {
         url: `/api/dev-bots/tasks/${MOCK_TASK_ID}/logs/stdout`,
         expectStatus: 404,
       },
-      {
-        name: 'POST /api/dev-bots/tasks',
-        method: 'post',
-        url: '/api/dev-bots/tasks',
-        body: {
-          type: 'implementation',
-          title: 'Add integration tests',
-          documentation: 'Detailed plan for integration testing to stabilize server startup.',
-          acceptanceCriteria: ['All endpoints tested'],
-          files: ['src/server.ts'],
-        },
-        assert: (res) => {
-          // In non-production environments, task creation is blocked and returns stubbed response
-          // In production, it would return 'Task added successfully'
-          expect(res.body?.data?.message).toMatch(/Task (added|creation stubbed)/);
-          expect(res.body?.data?.task).toBeDefined();
+      // NOTE: POST /api/dev-bots/tasks endpoint was removed - task creation now
+      // happens through specialized endpoints like /tasks/minimal
+      // {
+      //   name: 'POST /api/dev-bots/tasks',
+      //   method: 'post',
+      //   url: '/api/dev-bots/tasks',
+      //   body: {
+      //     type: 'implementation',
+      //     title: 'Add integration tests',
+      //     documentation: 'Detailed plan for integration testing to stabilize server startup.',
+      //     acceptanceCriteria: ['All endpoints tested'],
+      //     files: ['src/server.ts'],
+      //   },
+      //   assert: (res) => {
+      //     // In non-production environments, task creation is blocked and returns stubbed response
+      //     // In production, it would return 'Task added successfully'
+      //     expect(res.body?.data?.message).toMatch(/Task (added|creation stubbed)/);
+      //     expect(res.body?.data?.task).toBeDefined();
 
-          // If stubbed (non-production), verify stub structure
-          if (res.body?.data?.task?.stubbed) {
-            expect(res.body?.data?.task?.id).toMatch(/^stub-/);
-            expect(res.body?.data?.task?.reason).toContain('non-production');
-          }
-        },
-      },
+      //     // If stubbed (non-production), verify stub structure
+      //     if (res.body?.data?.task?.stubbed) {
+      //       expect(res.body?.data?.task?.id).toMatch(/^stub-/);
+      //       expect(res.body?.data?.task?.reason).toContain('non-production');
+      //     }
+      //   },
+      // },
       {
         name: 'GET /api/dev-bots/tasks/completed',
         method: 'get',
@@ -925,12 +927,13 @@ describe('API Integration Suite', () => {
         body: { path: '/tmp/export.json' },
         expectStatus: 410,
       },
-      {
-        name: 'POST /api/dev-bots/onboarding/complete',
-        method: 'post',
-        url: '/api/dev-bots/onboarding/complete',
-        body: { workerId: 'worker-1' },
-      },
+      // NOTE: POST /api/dev-bots/onboarding/complete endpoint was removed
+      // {
+      //   name: 'POST /api/dev-bots/onboarding/complete',
+      //   method: 'post',
+      //   url: '/api/dev-bots/onboarding/complete',
+      //   body: { workerId: 'worker-1' },
+      // },
       {
         name: 'GET /api/dev-bots/workspace-sync/status',
         method: 'get',

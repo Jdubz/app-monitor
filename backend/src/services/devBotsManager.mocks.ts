@@ -155,6 +155,7 @@ export function createMockTaskQueue(): TaskQueueService {
         run: vi.fn().mockReturnValue({ changes: 0 })
       })
     }),
+    assignNextTask: vi.fn().mockReturnValue(null),
   } as unknown as TaskQueueService;
 }
 
@@ -228,20 +229,24 @@ export function createMockGuidelinesManager(): TaskCreationGuidelinesManager {
  */
 export function createMockTaskCreationService(): TaskCreationService {
   return {
-    createTask: vi.fn().mockResolvedValue({
-      task: {
-        id: 'task-1',
-        type: 'feature',
-        title: 'Test Task',
-        status: 'pending',
-        created_at: Date.now()
-      },
-      validation: {
-        isValid: true,
-        warnings: [],
-        suggestions: [],
-        errors: []
-      }
+    createTask: vi.fn().mockImplementation(async (taskData: Record<string, unknown>) => {
+      return {
+        task: {
+          id: taskData.id || `task-${Date.now()}`,
+          type: taskData.type || 'feature',
+          title: taskData.title || 'Test Task',
+          description: taskData.description || 'Test Description',
+          status: 'pending',
+          created_at: Date.now(),
+          assignedAgent: taskData.assignedAgent || taskData.assigned_agent || 'general'
+        },
+        validation: {
+          isValid: true,
+          warnings: [],
+          suggestions: [],
+          errors: []
+        }
+      };
     }),
     calculateTaskFingerprint: vi.fn().mockReturnValue('abc123def456')
   } as unknown as TaskCreationService;
@@ -561,7 +566,7 @@ export function createMockEphemeralWorkerService(): EphemeralWorkerService {
  */
 export function createMockTaskExecutionService(): TaskExecutionService {
   return {
-    assignNextTask: vi.fn().mockResolvedValue(undefined),
+    assignNextTask: vi.fn().mockReturnValue(null),
     setRecovery: vi.fn(),
   } as unknown as TaskExecutionService;
 }
