@@ -57,7 +57,7 @@ This directory contains the approved MCP server design for App Monitor.
 ## 📚 Related Documents
 
 - **Plan System Design:** [multi-phase-plan-system.md](./multi-phase-plan-system.md)
-- **Original MCP Proposal:** [app-monitor-mcp-server-ORIGINAL.md](./app-monitor-mcp-server-ORIGINAL.md) (backup)
+- **Current MCP Server Design:** [app-monitor-mcp-server.md](./app-monitor-mcp-server.md)
 - **Master Design Intent:** [../architecture/master-design-intent.md](../architecture/master-design-intent.md)
 
 ---
