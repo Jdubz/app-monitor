@@ -88,10 +88,10 @@ export class PRCacheService<T = unknown> extends EventEmitter {
    * Get cached data or fetch if not cached/expired
    */
   async getOrFetch(
-    prNumber: number,
+    key: string | number,
     fetchFn: () => Promise<T>
   ): Promise<T> {
-    const cached = this.get(prNumber);
+    const cached = this.get(key);
     
     if (cached) {
       // Stats already tracked by get()
@@ -101,7 +101,7 @@ export class PRCacheService<T = unknown> extends EventEmitter {
     // Stats already tracked by get() as a miss
     // Fetch and cache
     const data = await fetchFn();
-    this.set(prNumber, data);
+    this.set(key, data);
     
     return data;
   }

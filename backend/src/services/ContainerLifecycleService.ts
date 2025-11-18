@@ -49,6 +49,8 @@ export interface ContainerInspection {
  * Service for managing Docker container lifecycle
  */
 export class ContainerLifecycleService {
+  private static readonly MAX_BACKOFF_MS = 3000; // 3 seconds max backoff
+  
   constructor(private docker: Docker) {}
 
   /**
