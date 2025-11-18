@@ -350,15 +350,15 @@ main() {
     # Install dependencies locally (force devDependencies so build tools exist)
     NPM_CONFIG_PRODUCTION=false npm ci --include=dev
 
-    # Load environment variables from shared config if available
-    if [ -f "${SHARED_DIR}/config/.env.production" ]; then
-        log_info "Loading production environment variables..."
+    # Load environment variables from shared .env file
+    if [ -f "${SHARED_DIR}/.env" ]; then
+        log_info "Loading production environment variables from ${SHARED_DIR}/.env..."
         set -a
-        source "${SHARED_DIR}/config/.env.production"
+        source "${SHARED_DIR}/.env"
         set +a
     else
-        log_warn "No production environment file found at ${SHARED_DIR}/config/.env.production"
-        log_warn "Frontend may use default values. Create this file with VITE_PASSWORD=your-password"
+        log_warn "No production environment file found at ${SHARED_DIR}/.env"
+        log_warn "Frontend may use default values. Create this file with required VITE_* variables"
     fi
 
     NODE_ENV=production npm run build
