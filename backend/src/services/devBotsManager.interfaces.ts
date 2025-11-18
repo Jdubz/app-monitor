@@ -21,16 +21,14 @@ import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskExecutionService } from './taskExecution.service.js';
 import type { TaskCompletionService } from './taskCompletion.service.js';
 import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
-import type { InteractiveSessionService } from './interactiveSession.service.js';
-import type { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
-import type { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
+import type { InteractiveSessionManager } from './InteractiveSessionManager.js';
+import type { InteractiveSessionStreaming } from './InteractiveSessionStreaming.js';
 import type { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
 import type { TaskCreationService } from './taskCreation.service.js';
 import type { StatusAggregationService } from './statusAggregation.service.js';
 import type { RetryCoordinationService } from './retryCoordination.service.js';
 import type { SystemLifecycleService } from './systemLifecycle.service.js';
 import type { SystemInitializationService } from './systemInitialization.service.js';
-import type { InteractiveSessionCoordinator } from './interactiveSessionCoordinator.service.js';
 import type { CleanupCoordinator } from './cleanupCoordinator.service.js';
 import type { InfoQueryService } from './infoQuery.service.js';
 
@@ -68,10 +66,9 @@ export interface DevBotsManagerDependencies {
   // PR workflow orchestration
   prWorkflowOrchestrator: PRWorkflowOrchestrator;
 
-  // Interactive sessions
-  interactiveSessionService: InteractiveSessionService;
-  interactiveSessionOrchestrator: InteractiveSessionOrchestrator;
-  interactiveSessionStreamManager: InteractiveSessionStreamManager;
+  // Interactive sessions (consolidated from 6 services → 2)
+  interactiveSessionManager: InteractiveSessionManager;
+  interactiveSessionStreaming: InteractiveSessionStreaming;
 
   // Worker health monitoring
   workerHealthMonitor: WorkerHealthMonitor;
@@ -81,9 +78,6 @@ export interface DevBotsManagerDependencies {
 
   // System initialization
   systemInitializationService: SystemInitializationService;
-
-  // Interactive session coordination
-  interactiveSessionCoordinator: InteractiveSessionCoordinator;
 
   // Cleanup and scope control coordination
   cleanupCoordinator: CleanupCoordinator;
@@ -96,6 +90,9 @@ export interface DevBotsManagerDependencies {
  * Configuration for creating DevBotsManager dependencies
  */
 export interface DevBotsManagerConfig {
+  // HTTP server (required for InteractiveSessionStreaming WebSocket)
+  httpServer?: import('http').Server;
+
   // Docker configuration
   dockerSocket?: string;
 

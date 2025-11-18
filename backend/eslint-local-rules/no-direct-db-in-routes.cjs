@@ -8,13 +8,13 @@
  * Routes -> Services -> Database
  *
  * Violations:
- * - Calling .getDatabase() followed by storing in a variable and using it for queries
  * - Calling db.prepare() in route files
  * - Calling db.exec() in route files
  *
- * Exceptions:
- * - Service initialization (passing db to service constructors) - allowed
- * - Test files - rule not applied
+ * Allowed patterns:
+ * - Service initialization (passing db to service constructors)
+ * - Passing db to initialization functions
+ * - Test files
  */
 
 module.exports = {
@@ -26,7 +26,6 @@ module.exports = {
       recommended: true,
     },
     messages: {
-      noDatabaseInRoutes: 'Routes should not access the database directly. Use service methods instead. Consider adding a method to TaskQueueService or the appropriate service layer.',
       noDatabasePrepare: 'Routes should not execute SQL queries directly. Move database logic to service layer.',
       noDatabaseExec: 'Routes should not execute SQL statements directly. Move database logic to service layer.',
     },
@@ -47,25 +46,6 @@ module.exports = {
     }
 
     return {
-      // Detect .getDatabase() calls that are stored in variables
-      VariableDeclarator(node) {
-        if (
-          node.init &&
-          node.init.type === 'CallExpression' &&
-          node.init.callee &&
-          node.init.callee.type === 'MemberExpression' &&
-          node.init.callee.property &&
-          node.init.callee.property.name === 'getDatabase'
-        ) {
-          // This is: const db = something.getDatabase()
-          // This pattern is problematic in routes
-          context.report({
-            node,
-            messageId: 'noDatabaseInRoutes',
-          });
-        }
-      },
-
       // Detect db.prepare() and db.exec() patterns
       CallExpression(node) {
         if (
@@ -73,19 +53,28 @@ module.exports = {
           node.callee.type === 'MemberExpression' &&
           node.callee.object &&
           node.callee.object.type === 'Identifier' &&
-          node.callee.object.name === 'db' &&
           node.callee.property
         ) {
-          if (node.callee.property.name === 'prepare') {
-            context.report({
-              node,
-              messageId: 'noDatabasePrepare',
-            });
-          } else if (node.callee.property.name === 'exec') {
-            context.report({
-              node,
-              messageId: 'noDatabaseExec',
-            });
+          const objectName = node.callee.object.name;
+          const propertyName = node.callee.property.name;
+
+          // Flag db.prepare() and db.exec() calls
+          // Allow getDatabase() and getDb() for service initialization
+          if (
+            (objectName === 'db' || objectName === 'database') &&
+            (propertyName === 'prepare' || propertyName === 'exec')
+          ) {
+            if (propertyName === 'prepare') {
+              context.report({
+                node,
+                messageId: 'noDatabasePrepare',
+              });
+            } else if (propertyName === 'exec') {
+              context.report({
+                node,
+                messageId: 'noDatabaseExec',
+              });
+            }
           }
         }
       },

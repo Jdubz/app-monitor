@@ -56,4 +56,10 @@ export const config = {
     // Number of task completions before triggering sync
     taskThreshold: parseInt(process.env.PR_SYNC_TASK_THRESHOLD || '10', 10), // Default 10
   },
+
+  // Phase System Configuration
+  phaseSystem: {
+    // Maximum attempts per phase before blocking task
+    maxPhaseAttempts: parseInt(process.env.MAX_PHASE_ATTEMPTS || '4', 10),
+  },
 };

@@ -11,6 +11,7 @@ export const BYTES_PER_MB = 1024 * BYTES_PER_KB;
 export const BYTES_PER_GB = 1024 * BYTES_PER_MB;
 
 export const CONTAINER_MEMORY_LIMIT_BYTES = 512 * BYTES_PER_MB; // 512 MB
+export const CONTAINER_MEMORY_LIMIT_MB = 512; // Default memory limit in MB
 export const CONTAINER_MEMORY_SWAP_LIMIT_BYTES = 1024 * BYTES_PER_MB; // 1 GB
 
 // CPU limits

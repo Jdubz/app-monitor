@@ -17,6 +17,7 @@ import type { TaskQueueService } from './taskQueue.sqlite.js';
 import type { DockerManager } from './dockerManager.js';
 import type { ScopeControlService } from './scopeControl.service.js';
 import { TIME_BASED_GUARDS } from './taskFailureGuards.js';
+import { HEARTBEAT_TIMEOUT_MS } from '../constants/timeouts.js';
 
 export interface WorkerHealthMonitorConfig {
   heartbeatCheckInterval: number;  // Currently disabled
@@ -138,10 +139,10 @@ export class WorkerHealthMonitor {
     logger.info({
       category: 'process',
       action: 'heartbeat_monitor_started',
-      message: `Worker heartbeat monitor started (check interval: ${this.config.heartbeatCheckInterval / 1000}s, timeout: 30s)`,
+      message: `Worker heartbeat monitor started (check interval: ${this.config.heartbeatCheckInterval / 1000}s, timeout: ${HEARTBEAT_TIMEOUT_MS / 1000}s)`,
       details: {
         checkInterval_ms: this.config.heartbeatCheckInterval,
-        timeout_ms: 30000
+        timeout_ms: HEARTBEAT_TIMEOUT_MS
       }
     });
   }
