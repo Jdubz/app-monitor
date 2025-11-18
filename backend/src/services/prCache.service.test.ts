@@ -26,7 +26,7 @@ describe('PRCacheService', () => {
   });
   
   describe('Basic Operations', () => {
-    it('should cache and retrieve data', () => {
+    it('should cache and retrieve data with numeric key', () => {
       const prData: TestPRData = { number: 123, title: 'Test PR', status: 'open' };
       
       cache.set(123, prData);
@@ -34,23 +34,48 @@ describe('PRCacheService', () => {
       
       expect(retrieved).toEqual(prData);
     });
+
+    it('should cache and retrieve data with string key', () => {
+      const prData: TestPRData = { number: 123, title: 'Test PR', status: 'open' };
+      const key = 'owner/repo/123';
+      
+      cache.set(key, prData);
+      const retrieved = cache.get(key);
+      
+      expect(retrieved).toEqual(prData);
+      expect(cache.has(key)).toBe(true);
+    });
     
     it('should return null for non-existent entry', () => {
       const result = cache.get(999);
       expect(result).toBeNull();
     });
+
+    it('should return null for non-existent string key', () => {
+      const result = cache.get('owner/repo/999');
+      expect(result).toBeNull();
+    });
     
-    it('should invalidate specific entry', () => {
+    it('should invalidate specific numeric entry', () => {
       cache.set(123, { number: 123, title: 'Test', status: 'open' });
       expect(cache.has(123)).toBe(true);
       
       cache.invalidate(123);
       expect(cache.has(123)).toBe(false);
     });
+
+    it('should invalidate specific string entry', () => {
+      const key = 'owner/repo/123';
+      cache.set(key, { number: 123, title: 'Test', status: 'open' });
+      expect(cache.has(key)).toBe(true);
+      
+      cache.invalidate(key);
+      expect(cache.has(key)).toBe(false);
+    });
     
     it('should clear all entries', () => {
       cache.set(123, { number: 123, title: 'Test 1', status: 'open' });
-      cache.set(456, { number: 456, title: 'Test 2', status: 'closed' });
+      cache.set('owner/repo/456', { number: 456, title: 'Test 2', status: 'closed' });
       
       expect(cache.size()).toBe(2);
       

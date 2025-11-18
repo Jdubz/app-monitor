@@ -7,7 +7,7 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ContextDeliveryService } from '../ContextDeliveryService.js';
-import type { Task } from '../../types/database.js';
+import type { Task } from '../taskQueue.sqlite.js';
 import { Readable } from 'stream';
 
 // Mock tar-fs module
