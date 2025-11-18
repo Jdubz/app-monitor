@@ -81,38 +81,38 @@ All three services extracted with comprehensive test coverage:
 
 EphemeralWorkerService reduced from 1621 lines to 1257 lines (364 lines extracted).
 
-### 7. Move Database Access to Service Layer (8h)
-**Status:** NOT STARTED
+### 7. ✅ Move Database Access to Service Layer (8h)
+**Status:** COMPLETE ✅
 
-**Issue:** Some route handlers still access database directly.
+**Audit Results:**
+- ✅ All route handlers use services (no direct DB access found)
+- ✅ ESLint rule `no-direct-db-in-routes` exists and configured
+- ✅ Layered architecture enforced: Routes → Services → Database
 
-**Action:**
-- Audit all route handlers in `src/routes/`
-- Move DB queries to service methods
-- Add ESLint rule to prevent direct DB access
-- Update routes to use services
+**Files Checked:**
+- logs.routes.ts
+- metrics.routes.ts  
+- dev-bots/tasks.routes.ts
+- dev-bots/plans.routes.ts
+- issues.routes.ts
+- observability.routes.ts
 
-**Priority:** P1  
-**Effort:** 8 hours
+All routes delegate to services properly.
 
-### 8. Complete Log Parser Consolidation (8h)
-**Status:** NOT STARTED
+### 8. ✅ Complete Log Parser Consolidation (8h)
+**Status:** COMPLETE ✅
 
-**Issue:** Three parsers exist - `claudeLogParser`, `codexLogParser`, `unifiedLogParser`
+**Completed:** Git commits 7004fce → ebe13e6
 
-**Action:**
-- Mark old parsers as @deprecated
-- Migrate all usages to unifiedLogParser
-- Create adapter layer if agent-specific logic needed
-- Remove old parsers in next major version
+**Actions Taken:**
+- ✅ Marked claudeLogParser as @deprecated (commit 7004fce)
+- ✅ Marked codexLogParser as @deprecated (commit 3cc61c1)
+- ✅ Removed old parsers completely (commit ebe13e6)
+- ✅ Only unifiedLogParser remains
 
-**Files:**
-- `src/services/claudeLogParser.ts` (422 lines)
-- `src/services/codexLogParser.ts` (319 lines)
-- `src/services/unifiedLogParser.ts` (consolidated)
-
-**Priority:** P1  
-**Effort:** 8 hours
+**Files Removed:**
+- src/services/claudeLogParser.ts (422 lines)
+- src/services/codexLogParser.ts (319 lines)
 
 ### 9. Add Unit Tests for Critical Services (24h)
 **Status:** PARTIALLY COMPLETE
@@ -207,9 +207,9 @@ Constants already in:
 | Priority | Tasks | Estimated Hours |
 |----------|-------|-----------------|
 | P0 | 0 tasks | 0h |
-| P1 | 3 tasks | 40h |
+| P1 | 1 task | 24h |
 | P2 | 4 tasks | 48h |
-| **Total** | **7 tasks** | **88h** |
+| **Total** | **5 tasks** | **72h** |
 
 ---
 
@@ -225,8 +225,8 @@ Constants already in:
 
 - [x] Execute migration 027 (P0, 2h) ✅
 - [x] Refactor EphemeralWorkerService (P1, 22h) ✅
-- [ ] Move DB access to service layer (P1, 8h)
-- [ ] Consolidate log parsers (P1, 8h)
+- [x] Move DB access to service layer (P1, 8h) ✅
+- [x] Consolidate log parsers (P1, 8h) ✅
 - [ ] Add EphemeralWorker tests (P1, 12h)
 - [ ] Add TaskQueue integration tests (P1, 8h)
 - [ ] Consolidate interactive session services (P2, 16h)
