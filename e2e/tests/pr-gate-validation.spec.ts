@@ -29,10 +29,13 @@ import {
 } from '../mocks/github-api-mock';
 
 const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3002';
+const API_KEY = 'test-e2e-api-key-not-for-production';
 
 // Helper to get PR gates
 async function getPRGates(prNumber: number): Promise<any[]> {
-  const response = await fetch(`${API_BASE_URL}/api/prs/${prNumber}/gates`);
+  const response = await fetch(`${API_BASE_URL}/api/prs/${prNumber}/gates`, {
+    headers: { 'X-API-Key': API_KEY }
+  });
   if (!response.ok) {
     throw new Error(`Failed to get PR gates: ${response.statusText}`);
   }
@@ -44,7 +47,10 @@ async function getPRGates(prNumber: number): Promise<any[]> {
 async function triggerGateEvaluation(prNumber: number, options?: { force?: boolean }): Promise<void> {
   const response = await fetch(`${API_BASE_URL}/api/prs/${prNumber}/evaluate-gates`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'X-API-Key': API_KEY
+    },
     body: JSON.stringify(options || {})
   });
   

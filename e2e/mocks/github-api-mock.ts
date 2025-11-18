@@ -57,14 +57,19 @@ export interface WebhookPayload {
  */
 export class GitHubAPIMock extends EventEmitter {
   private prs: Map<number, MockPRResponse> = new Map();
-  private checkRuns: Map<number, MockCheckRun> = new Map();
+  private checkRunsById: Map<number, MockCheckRun> = new Map(); // checkRuns by ID
+  private checkRunsByPR: Map<number, MockCheckRun[]> = new Map(); // checkRuns by PR number
   private webhookEndpoint: string;
   private nextPRNumber = 1;
   private nextCheckRunId = 1;
+  private prCounter = 1; // Counter for createPullRequest helper
 
   constructor(webhookEndpoint: string = 'http://localhost:3002/api/webhooks/github') {
     super();
     this.webhookEndpoint = webhookEndpoint;
+    // Expose internal maps for helper functions
+    this['pullRequests'] = this.prs;
+    this['checkRuns'] = this.checkRunsByPR;
   }
 
   /**
@@ -145,8 +150,9 @@ export class GitHubAPIMock extends EventEmitter {
     return {
       reply: (status: number, checks: MockCheckRun[]) => {
         checks.forEach(check => {
-          this.checkRuns.set(check.id, check);
+          this.checkRunsById.set(check.id, check);
         });
+        this.checkRunsByPR.set(prNumber, checks);
         
         return {
           total_count: checks.length,
@@ -171,7 +177,7 @@ export class GitHubAPIMock extends EventEmitter {
           completed_at: data.completed_at || null,
         };
         
-        this.checkRuns.set(checkRun.id, checkRun);
+        this.checkRunsById.set(checkRun.id, checkRun);
         this.emit('check_run_created', checkRun);
         
         return checkRun;
@@ -185,7 +191,7 @@ export class GitHubAPIMock extends EventEmitter {
   onUpdateCheckRun(checkRunId: number) {
     return {
       reply: (status: number, data: Partial<MockCheckRun>) => {
-        const existing = this.checkRuns.get(checkRunId);
+        const existing = this.checkRunsById.get(checkRunId);
         if (!existing) {
           throw new Error(`Check run ${checkRunId} not found`);
         }
@@ -200,7 +206,7 @@ export class GitHubAPIMock extends EventEmitter {
           updated.completed_at = new Date().toISOString();
         }
         
-        this.checkRuns.set(checkRunId, updated);
+        this.checkRunsById.set(checkRunId, updated);
         this.emit('check_run_updated', updated);
         
         return updated;
