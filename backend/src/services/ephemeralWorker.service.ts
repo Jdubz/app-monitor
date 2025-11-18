@@ -18,6 +18,7 @@ import os from 'os';
 import path from 'path';
 import tar from 'tar-fs';
 import type Docker from 'dockerode';
+import Database from 'better-sqlite3';
 import { logger } from '../utils/logger.js';
 import type { Task } from './taskQueue.sqlite.js';
 import type { AgentPersonality } from './agentPersonalities.js';
@@ -27,12 +28,18 @@ import * as DockerConfig from './dockerConfig.js';
 import { getLogPaths } from './workTargetDocumentation.js';
 import { getGitHubPRService, type GitHubPRService } from './githubPR.service.js';
 import { ContextBundleGenerator } from './context/index.js';
+import { ValidatorRegistry } from './phaseValidation/ValidatorRegistry.js';
+import { ArtifactExtractorService } from './artifactExtractor.service.js';
+import { PhaseOrchestratorService } from './phaseOrchestrator.service.js';
+import { RecoveryAgentService } from './recoveryAgent.service.js';
+import type { ValidationResult } from './phaseValidation/types.js';
+import { getConnectionManager } from './connectionManager.js';
+import { CONTAINER_MEMORY_LIMIT_BYTES, CONTAINER_CPU_QUOTA, WORKER_UID_GID } from '../constants/containers.js';
+import { DEFAULT_EPHEMERAL_WORKER_CONFIG } from '../config/defaults.js';
 
 export interface WorkspaceContext {
   id: string;
-  hostPath: string;  // DEPRECATED: Always empty with Docker cp approach
   branchName: string;
-  mirrorPath: string;  // DEPRECATED: Always empty with Docker cp approach
   createdAt: string;
 }
 
@@ -79,6 +86,10 @@ export class EphemeralWorkerService {
   private readonly dockerManager: DockerManager;
   private readonly githubPR: GitHubPRService;
   private readonly contextGenerator: ContextBundleGenerator;
+  private readonly validatorRegistry: ValidatorRegistry;
+  private readonly artifactExtractor: ArtifactExtractorService;
+  private readonly phaseOrchestrator: PhaseOrchestratorService;
+  private readonly recoveryAgent: RecoveryAgentService;
   private logStreams = new Map<string, fs.WriteStream>();
   private readonly devBotsLogPath: string;
 
@@ -86,28 +97,20 @@ export class EphemeralWorkerService {
     docker: Docker,
     dockerManager: DockerManager,
     config: Partial<EphemeralWorkerServiceConfig> = {},
+    db: Database.Database,  // Required - ensures consistent database connection
     contextGenerator?: ContextBundleGenerator  // Optional for DI/testing
   ) {
     this.docker = docker;
     this.githubPR = getGitHubPRService();
     this.dockerManager = dockerManager;
     this.contextGenerator = contextGenerator || new ContextBundleGenerator();
+    this.validatorRegistry = new ValidatorRegistry();
+    this.artifactExtractor = new ArtifactExtractorService();
+    this.phaseOrchestrator = new PhaseOrchestratorService(db);  // Use injected database instance
+    this.recoveryAgent = new RecoveryAgentService();
 
-    this.config = {
-      maxConcurrentWorkers: config.maxConcurrentWorkers ?? 2,
-      dockerImage: config.dockerImage ?? 'dev-bot:latest',
-      logsDirectory: config.logsDirectory ?? './data/logs',
-      envPassthroughKeys: config.envPassthroughKeys ?? [
-        'ANTHROPIC_API_KEY',
-        'CLAUDE_API_KEY',
-        'OPENAI_API_KEY',
-        'GITHUB_TOKEN',
-        'GIT_AUTHOR_NAME',
-        'GIT_AUTHOR_EMAIL',
-        'GIT_COMMITTER_NAME',
-        'GIT_COMMITTER_EMAIL'
-      ]
-    };
+    // Merge provided config with defaults
+    this.config = { ...DEFAULT_EPHEMERAL_WORKER_CONFIG, ...config };
 
     // Dev-bots consolidated log file for real-time monitoring
     const devBotsLogDir = path.join(process.cwd(), 'dev-bots', 'logs');
@@ -228,37 +231,18 @@ export class EphemeralWorkerService {
     });
 
     try {
-      // Determine branch to work on
-      let baseBranch = 'staging';  // Default to staging
+      // Determine branch to work on - default to staging
+      const baseBranch = 'staging';
 
-      // For improvement tasks (repair bots) with PR context, fetch branch from GitHub
-      if (task.is_repair_bot && (task.pr_number || task.followup_for_pr)) {
-        const prNum = task.followup_for_pr || task.pr_number;
-        if (prNum) {
-          try {
-            const prStatus = await this.githubPR.getPRStatus(prNum);
-            baseBranch = prStatus.head_ref;
-            logger.info({
-              category: 'process',
-              action: 'improvement_task_branch',
-              message: `Improvement task will work on branch: ${baseBranch}`,
-              details: {
-                taskId: task.id,
-                parentTaskId: task.original_task_id,
-                prNumber: prNum,
-                branch: baseBranch
-              }
-            });
-          } catch (error) {
-            logger.warn({
-              category: 'process',
-              action: 'branch_fetch_failed',
-              message: `Failed to fetch PR branch, using default: ${baseBranch}`,
-              details: { prNumber: prNum, error }
-            });
-          }
+      logger.info({
+        category: 'process',
+        action: 'base_branch_selected',
+        message: `Task will work on branch: ${baseBranch}`,
+        details: {
+          taskId: task.id,
+          branch: baseBranch
         }
-      }
+      });
 
       // Container will clone fresh repository internally
       logger.info({
@@ -409,7 +393,6 @@ export class EphemeralWorkerService {
         `WORKSPACE_BRANCH=${baseBranch}`,
         `WORKSPACE_ID=${workspaceId}`,
         `HOME=/home/node`,  // Explicitly set HOME for gh CLI to find config
-        ...(task.is_repair_bot ? [`IS_IMPROVEMENT_TASK=true`, `PARENT_TASK_ID=${task.original_task_id}`] : []),
         // Context management environment variables
         ...(task.context_bundle_id ? [`CONTEXT_BUNDLE_ID=${task.context_bundle_id}`] : []),
         ...(task.context_cache_key ? [`CONTEXT_CACHE_KEY=${task.context_cache_key}`] : []),
@@ -442,14 +425,14 @@ export class EphemeralWorkerService {
         Env: envVars,
         WorkingDir: `/workspace`,
         HostConfig: {
-          Memory: 512 * 1024 * 1024,
-          CpuQuota: 50000,
+          Memory: CONTAINER_MEMORY_LIMIT_BYTES,
+          CpuQuota: CONTAINER_CPU_QUOTA,
           AutoRemove: true,
           Binds: binds,
           Tmpfs: {
-            '/home/worker/.claude': 'uid=1000,gid=1000',  // Writable temp for Claude CLI (matches node user)
-            '/home/worker/.gemini': 'uid=1000,gid=1000',  // Writable temp for Gemini CLI (matches node user)
-            '/home/worker/.codex': 'uid=1000,gid=1000'    // Writable temp for Codex CLI (matches node user)
+            '/home/worker/.claude': WORKER_UID_GID,  // Writable temp for Claude CLI (matches node user)
+            '/home/worker/.gemini': WORKER_UID_GID,  // Writable temp for Gemini CLI (matches node user)
+            '/home/worker/.codex': WORKER_UID_GID    // Writable temp for Codex CLI (matches node user)
           }
         },
         Labels: {
@@ -463,8 +446,11 @@ export class EphemeralWorkerService {
       // Start the container FIRST so we can exec commands
       await container.start();
 
-      // Wait for container to be fully running before exec commands
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Wait for container to be fully running and healthy before exec commands
+      await this.waitForContainerReady(container.id, {
+        maxAttempts: 30,
+        intervalMs: 100
+      });
 
       // Clone fresh repository inside container for complete isolation
       await this.cloneFreshRepoInContainer(container.id, baseBranch);
@@ -474,11 +460,9 @@ export class EphemeralWorkerService {
 
       await this.initializeWorkerLogFile(workerId);
 
-      const workspace = {
+      const workspace: WorkspaceContext = {
         id: workspaceId,
-        hostPath: '', // No host path - workspace is inside container only
         branchName: 'staging', // Always work on staging
-        mirrorPath: '', // No mirror
         createdAt: new Date().toISOString()
       };
 
@@ -617,6 +601,80 @@ export class EphemeralWorkerService {
         reject(error);
       });
     });
+  }
+
+  /**
+   * Wait for container to be fully running and healthy before executing commands
+   * Implements exponential backoff to avoid overwhelming the Docker daemon
+   *
+   * @param containerId Container ID to check
+   * @param options Configuration for health check polling
+   * @throws Error if container fails to become ready within max attempts
+   */
+  private async waitForContainerReady(
+    containerId: string,
+    options: { maxAttempts: number; intervalMs: number }
+  ): Promise<void> {
+    const { maxAttempts, intervalMs } = options;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const container = this.docker.getContainer(containerId);
+        const inspection = await container.inspect();
+
+        // Check if container is running
+        if (inspection.State.Running) {
+          // If container has no health check, consider it ready once running
+          if (!inspection.State.Health) {
+            logger.info({
+              category: 'docker',
+              action: 'container_ready',
+              message: 'Container is running (no health check defined)',
+              details: { containerId, attempt }
+            });
+            return;
+          }
+
+          // If health check exists, wait for healthy status
+          if (inspection.State.Health.Status === 'healthy') {
+            logger.info({
+              category: 'docker',
+              action: 'container_ready',
+              message: 'Container is running and healthy',
+              details: { containerId, attempt }
+            });
+            return;
+          }
+        }
+
+        // Check for fatal states
+        if (inspection.State.Dead || inspection.State.OOMKilled) {
+          const error = inspection.State.Error || 'Unknown error';
+          throw new Error(`Container failed to start: ${error}`);
+        }
+
+        // Not ready yet, wait with exponential backoff
+        const delay = Math.min(intervalMs * attempt, 3000); // Cap at 3 seconds
+        await new Promise(resolve => setTimeout(resolve, delay));
+
+      } catch (error) {
+        if (attempt === maxAttempts) {
+          logger.error({
+            category: 'docker',
+            action: 'container_health_check_failed',
+            message: `Container failed to become ready after ${maxAttempts} attempts`,
+            error: { message: (error as Error).message },
+            details: { containerId, maxAttempts }
+          });
+          throw new Error(`Container failed to become ready after ${maxAttempts} attempts: ${(error as Error).message}`);
+        }
+
+        // For non-fatal errors, continue retrying
+        if ((error as Error).message.includes('no such container')) {
+          throw error; // Container doesn't exist, fail immediately
+        }
+      }
+    }
   }
 
   /**
@@ -939,6 +997,250 @@ export class EphemeralWorkerService {
   }
 
   /**
+   * Complete phase execution with validation and recovery
+   * This is the NEW phase-aware completion flow that:
+   * 1. Extracts artifacts from container
+   * 2. Runs phase validation
+   * 3. Handles recovery if validation fails
+   * 4. Only destroys container after validation/recovery complete
+   * 
+   * @param worker - Ephemeral worker
+   * @param output - Task execution output
+   * @param errorOutput - Task execution error output
+   * @param exitCode - Task execution exit code
+   * @returns Phase validation result
+   */
+  async completePhaseExecution(
+    worker: EphemeralWorker,
+    output: string,
+    errorOutput: string,
+    exitCode: number
+  ): Promise<ValidationResult> {
+    const task = worker.task;
+    const containerId = worker.containerId;
+
+    logger.info({
+      category: 'phase',
+      action: 'phase_completion_start',
+      message: `Starting phase completion for task ${task.id}, phase ${task.phase_index}`,
+      details: {
+        taskId: task.id,
+        phaseIndex: task.phase_index,
+        phaseName: task.phase_name,
+        exitCode,
+      },
+    });
+
+    // Emit phase:started event
+    const connManager = getConnectionManager();
+    if (connManager) {
+      connManager.broadcastToAll('phase:started', {
+        taskId: task.id,
+        phaseIndex: task.phase_index,
+        phaseName: task.phase_name,
+        attempt: task.phase_attempts,
+      });
+    }
+
+    try {
+      // Step 1: Extract artifacts from container BEFORE validation
+      logger.info({
+        category: 'phase',
+        action: 'extracting_artifacts',
+        message: `Extracting artifacts from container ${containerId}`,
+      });
+
+      const artifacts = await this.artifactExtractor.extractArtifacts({
+        containerId,
+        phaseIndex: task.phase_index,
+        attempt: task.phase_attempts,
+      });
+
+      logger.info({
+        category: 'phase',
+        action: 'artifacts_extracted',
+        message: `Artifacts extracted for task ${task.id}`,
+        details: {
+          artifactTypes: Object.keys(artifacts).filter(
+            (k) => artifacts[k as keyof typeof artifacts] && !['stdout', 'stderr', 'exitCode'].includes(k)
+          ),
+        },
+      });
+
+      // Step 2: Run phase validation
+      logger.info({
+        category: 'phase',
+        action: 'validating_phase',
+        message: `Validating phase ${task.phase_index} for task ${task.id}`,
+      });
+
+      // Emit phase:validating event
+      if (connManager) {
+        connManager.broadcastToAll('phase:validating', {
+          taskId: task.id,
+          phaseIndex: task.phase_index,
+        });
+      }
+
+      const validator = this.validatorRegistry.getValidator(task.phase_index);
+      let validation = await validator.validate(task, artifacts);
+
+      logger.info({
+        category: 'phase',
+        action: 'validation_complete',
+        message: `Phase validation ${validation.passed ? 'PASSED' : 'FAILED'} for task ${task.id}`,
+        details: {
+          passed: validation.passed,
+          errors: validation.errors,
+          warnings: validation.warnings,
+        },
+      });
+
+      // Emit phase:validation_failed or phase:validation_passed event
+      if (connManager) {
+        if (!validation.passed) {
+          connManager.broadcastToAll('phase:validation_failed', {
+            taskId: task.id,
+            phaseIndex: task.phase_index,
+            errors: validation.errors,
+          });
+        }
+      }
+
+      // Step 3: Record stage run in database
+      const stageRunId = this.phaseOrchestrator.recordStageRun({
+        task_id: task.id,
+        phase_index: task.phase_index,
+        phase_name: task.phase_name,
+        attempt: task.phase_attempts,
+        status: validation.passed ? 'success' : 'failed',
+        artifacts_blob: validation.artifacts ? JSON.stringify(validation.artifacts) : undefined,
+        created_at: Date.now(),
+        completed_at: Date.now(),
+        exit_code: exitCode,
+      });
+
+      logger.info({
+        category: 'phase',
+        action: 'stage_run_recorded',
+        message: `Recorded stage run ${stageRunId} for task ${task.id}`,
+        details: {
+          stageRunId,
+          taskId: task.id,
+          phaseIndex: task.phase_index,
+          status: validation.passed ? 'success' : 'failed',
+        },
+      });
+
+      // Step 4: Handle validation failure with recovery
+      if (!validation.passed) {
+        logger.warn({
+          category: 'phase',
+          action: 'validation_failed',
+          message: `Phase ${task.phase_index} validation failed, initiating recovery`,
+          details: {
+            taskId: task.id,
+            phaseIndex: task.phase_index,
+            errors: validation.errors,
+          },
+        });
+
+        // Emit phase:recovering event
+        if (connManager) {
+          connManager.broadcastToAll('phase:recovering', {
+            taskId: task.id,
+            phaseIndex: task.phase_index,
+          });
+        }
+
+        // Run recovery agent in same container
+        const recoveryResult = await this.recoveryAgent.executeRecovery(
+          task,
+          containerId,
+          validation,
+          task.phase_attempts
+        );
+
+        logger.info({
+          category: 'phase',
+          action: 'recovery_complete',
+          message: `Recovery ${recoveryResult.success ? 'succeeded' : 'failed'} for task ${task.id}`,
+          details: {
+            category: recoveryResult.category,
+            shouldRetry: recoveryResult.shouldRetry,
+            contextUpdated: recoveryResult.contextUpdated,
+            isSystemBlocked: recoveryResult.isSystemBlocked,
+          },
+        });
+
+        // Enrich validation result with recovery information
+        // Add recovery info to validation result (immutably)
+        validation = {
+          ...validation,
+          recovery: {
+            attempted: true,
+            success: recoveryResult.success,
+            category: recoveryResult.category,
+            diagnosis: recoveryResult.diagnosis,
+          },
+        };
+
+        // Update stage run with recovery diagnosis
+        this.phaseOrchestrator.updateStageRunWithRecovery(
+          stageRunId,
+          JSON.stringify(recoveryResult),
+          recoveryResult.success ? 'recovered' : 'failed'
+        );
+      }
+
+      // Step 5: Advance phase if validation passed
+      if (validation.passed) {
+        const transition = this.phaseOrchestrator.advancePhase(task, validation);
+        
+        logger.info({
+          category: 'phase',
+          action: 'phase_advanced',
+          message: `Task ${task.id} advanced from phase ${transition.fromPhase} to ${transition.toPhase}`,
+          details: {
+            taskId: task.id,
+            fromPhase: transition.fromPhase,
+            toPhase: transition.toPhase,
+            reason: transition.reason,
+          },
+        });
+
+        // Emit phase:completed event
+        if (connManager) {
+          connManager.broadcastToAll('phase:completed', {
+            taskId: task.id,
+            phaseIndex: transition.fromPhase,
+            nextPhase: transition.toPhase,
+            reason: transition.reason,
+          });
+        }
+      }
+
+      return validation;
+
+    } catch (error) {
+      logger.error({
+        category: 'phase',
+        action: 'phase_completion_error',
+        message: `Error during phase completion for task ${task.id}`,
+        error,
+      });
+
+      // Return failed validation on error
+      return {
+        passed: false,
+        errors: [
+          `Phase completion error: ${error instanceof Error ? error.message : String(error)}`
+        ],
+      };
+    }
+  }
+
+  /**
    * Create a log stream for real-time monitoring
    * Writes to consolidated dev-bots.log file that LogWatcher monitors
    */
@@ -1128,6 +1430,9 @@ export class EphemeralWorkerService {
       worker.status = 'destroyed';
       worker.destroyedAt = new Date().toISOString();
 
+      // Close log stream if it exists
+      await this.closeLogStream(workerId);
+
       // Remove from ephemeral workers map
       this.ephemeralWorkers.delete(workerId);
 
@@ -1228,4 +1533,89 @@ export class EphemeralWorkerService {
   }
 
   // populateWorkspaceFromRepo removed - using cloneFreshRepoInContainer directly
+
+  /**
+   * Close log stream for a worker
+   * Ensures file handle is properly released
+   *
+   * @param workerId Worker ID whose log stream should be closed
+   */
+  private async closeLogStream(workerId: string): Promise<void> {
+    const stream = this.logStreams.get(workerId);
+    if (!stream) return;
+
+    return new Promise((resolve, reject) => {
+      stream.end((error: Error | null) => {
+        if (error) {
+          logger.warn({
+            category: 'process',
+            action: 'log_stream_close_error',
+            message: `Error closing log stream for worker ${workerId}`,
+            error: { message: error.message }
+          });
+          reject(error);
+        } else {
+          this.logStreams.delete(workerId);
+          logger.debug({
+            category: 'process',
+            action: 'log_stream_closed',
+            message: `Closed log stream for worker ${workerId}`
+          });
+          resolve();
+        }
+      });
+    });
+  }
+
+  /**
+   * Shutdown service and cleanup all resources
+   * Called on process termination to ensure no resource leaks
+   */
+  async shutdown(): Promise<void> {
+    logger.info({
+      category: 'process',
+      action: 'ephemeral_worker_service_shutdown',
+      message: `Shutting down EphemeralWorkerService (${this.logStreams.size} log streams, ${this.ephemeralWorkers.size} workers)`
+    });
+
+    // Close all log streams
+    const streamClosePromises: Promise<void>[] = [];
+    for (const [workerId] of this.logStreams.entries()) {
+      streamClosePromises.push(
+        this.closeLogStream(workerId).catch(error => {
+          logger.error({
+            category: 'process',
+            action: 'log_stream_cleanup_failed',
+            message: `Failed to close log stream for worker ${workerId}`,
+            error: { message: error.message }
+          });
+        })
+      );
+    }
+
+    await Promise.all(streamClosePromises);
+
+    // Destroy all remaining workers
+    const workerDestroyPromises: Promise<void>[] = [];
+    for (const [workerId] of this.ephemeralWorkers.entries()) {
+      workerDestroyPromises.push(
+        this.destroyWorker(workerId).catch(error => {
+          logger.error({
+            category: 'process',
+            action: 'worker_cleanup_failed',
+            message: `Failed to destroy worker ${workerId} during shutdown`,
+            error: { message: error.message }
+          });
+        })
+      );
+    }
+
+    await Promise.all(workerDestroyPromises);
+
+    logger.info({
+      category: 'process',
+      action: 'ephemeral_worker_service_shutdown_complete',
+      message: 'EphemeralWorkerService shutdown complete'
+    });
+  }
 }

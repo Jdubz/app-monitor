@@ -2,7 +2,8 @@ import fs from 'fs';
 import path from 'path';
 
 import { logger } from '../utils/logger.js';
-import type { Task } from './devBotsManager.js';
+import type { Task } from './taskQueue.sqlite.js';
+import { daysAgo } from '../constants/timeouts.js';
 
 const STORAGE_VERSION = '1.0';
 
@@ -141,7 +142,7 @@ export class TaskPersistence {
     if (!retentionDays || retentionDays <= 0) {
       return tasks;
     }
-    const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+    const cutoff = daysAgo(retentionDays).getTime();
     const filtered = tasks.filter((task) => {
       const completedAt = this.getCompletedTimestamp(task);
       return !completedAt || completedAt >= cutoff;

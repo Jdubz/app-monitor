@@ -49,6 +49,9 @@ RUN npm install -g \
     prettier \
     vitest \
     jest \
+    nyc \
+    c8 \
+    lcov-parse \
     && npm cache clean --force
 
 # ==============================================================================
@@ -86,6 +89,9 @@ RUN apk add --no-cache \
     openssl \
     shellcheck \
     ripgrep \
+    bc \
+    chromium \
+    chromium-chromedriver \
     && rm -rf /var/cache/apk/*
 
 # Create non-root user for security
@@ -95,11 +101,13 @@ RUN addgroup -g 1000 -S node && \
 # Create necessary directories with proper permissions
 RUN mkdir -p \
     /workspace \
+    /workspace/.artifacts \
     /logs \
+    /scripts \
     /home/node/.claude \
     /home/node/.codex \
     /home/node/.gemini \
-    && chown -R node:node /workspace /logs /home/node \
+    && chown -R node:node /workspace /logs /scripts /home/node \
     && chmod -R 755 /home/node
 
 # ==============================================================================
@@ -109,6 +117,11 @@ RUN mkdir -p \
 # Copy Node.js global packages (CLIs and dev tools)
 COPY --from=builder --chown=node:node /usr/local/lib/node_modules /usr/local/lib/node_modules
 COPY --from=builder --chown=node:node /usr/local/bin /usr/local/bin
+
+# Copy test infrastructure scripts
+COPY --chown=node:node dev-bots/docker/scripts/run-tests.sh /workspace/run-tests.sh
+COPY --chown=node:node dev-bots/docker/scripts/coverage-delta.sh /scripts/coverage-delta.sh
+RUN chmod +x /workspace/run-tests.sh /scripts/coverage-delta.sh
 
 # ==============================================================================
 # SETUP WORKING ENVIRONMENT

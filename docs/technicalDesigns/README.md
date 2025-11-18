@@ -4,8 +4,8 @@ Feature designs that are ready or being planned for implementation.
 
 ## Ready for Implementation
 
-### [Integrated Planning System](integrated-planning-system-implementation-plan.md)
-Plans management system with multi-bot orchestration.
+### [Multi-Phase Plan System](multi-phase-plan-system.md)
+7-phase task processing system with validation gates and recovery.
 
 ## Future Features
 

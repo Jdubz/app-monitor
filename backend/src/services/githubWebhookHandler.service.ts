@@ -38,7 +38,6 @@ import {
   PullRequestReviewHandler
 } from './webhookHandlers/index.js';
 
-// Re-export for backward compatibility
 export type {
   GitHubPullRequestPayload,
   GitHubPushPayload,

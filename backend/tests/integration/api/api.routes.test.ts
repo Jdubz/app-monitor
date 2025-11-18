@@ -3,21 +3,8 @@ import request, { type Response as SupertestResponse } from 'supertest';
 import type { Server } from 'http';
 import type {
   HealthCheckApiResponse,
-  ServicesStatusResponse,
-  ServiceStatusResponse,
-  ServiceActionResponse,
   DockerInfoResponse,
   DockerActionResponse,
-  EnvironmentsApiResponse,
-  EnvironmentServicesApiResponse,
-  LogSourcesResponse,
-  LogConfigResponse,
-  LogReloadResponse,
-  ServiceLogsApiResponse,
-  CloudLogsApiResponse,
-  CloudLoggingStatusApiResponse,
-  PortStatusesResponse,
-  PortKillApiResponse,
   TokenSummariesResponse,
   TokenSummaryResponse,
   TokenBudgetResponse,
@@ -160,8 +147,8 @@ vi.mock('../../src/utils/portManager.js', () => ({
   killPortProcess: async () => true,
 }));
 
-vi.mock('child_process', () => {
-  const { EventEmitter } = require('events');
+vi.mock('child_process', async () => {
+  const { EventEmitter } = await import('events');
   return {
     spawn: () => {
       const proc = new EventEmitter();
@@ -178,15 +165,24 @@ vi.mock('child_process', () => {
       }
       return {} as unknown;
     },
+    execFile: (_file: string, _args: unknown, _options: unknown, callback?: (error: Error | null, stdout: string, stderr: string) => void) => {
+      if (typeof _args === 'function') {
+        (_args as (error: Error | null, stdout: string, stderr: string) => void)(null, '', '');
+      } else if (typeof _options === 'function') {
+        (_options as (error: Error | null, stdout: string, stderr: string) => void)(null, '', '');
+      } else if (callback) {
+        callback(null, '', '');
+      }
+      return {} as unknown;
+    },
   };
 });
 
 const verificationMocks = vi.hoisted(() => {
   const MOCK_TASK_ID = 'task-123';
-  const MOCK_PR_NUMBER = 42;
   const MOCK_SOCKET_ID = 'socket-test-1';
 
-  type VerificationResultPayload = {
+  interface _VerificationResultPayload {
     taskId: string;
     passed: boolean;
     acceptanceCriteria: {
@@ -214,9 +210,9 @@ const verificationMocks = vi.hoisted(() => {
     overallScore: number;
     timestamp: string;
     recommendations: string[];
-  };
+  }
 
-  const baseVerificationResult: VerificationResultPayload = {
+  const baseVerificationResult: _VerificationResultPayload = {
     taskId: MOCK_TASK_ID,
     passed: true,
     acceptanceCriteria: {
@@ -311,11 +307,60 @@ const verificationMocks = vi.hoisted(() => {
         recommendations: ['All verification checks passed'],
       };
     }),
+    getVerificationResult: vi.fn((taskId: string) => {
+      return verificationResults.get(taskId) || null;
+    }),
+    getRecommendations: vi.fn((taskId: string) => {
+      const result = verificationResults.get(taskId);
+      if (!result) {
+        return null;
+      }
+
+      // Enhance recommendations like the real service does
+      const enhancedRecommendations = [...(result.recommendations || [])];
+
+      // Add recommendations for scope violations
+      if (result.scopeBoundaries?.violationCount > 0) {
+        const files = result.scopeBoundaries.violations.slice(0, 3).map((v) => v.file).join(', ');
+        enhancedRecommendations.push(`Review and revert changes to restricted files: ${files}`);
+      }
+
+      // Add recommendations for test coverage
+      if (result.testCoverage && !result.testCoverage.meetsThreshold) {
+        enhancedRecommendations.push(`Run 'npm run test:coverage' and add tests for uncovered code`);
+      }
+
+      return {
+        taskId,
+        passed: result.passed,
+        overallScore: result.overallScore,
+        recommendations: enhancedRecommendations,
+      };
+    }),
+    getVerificationStats: vi.fn(() => {
+      const allResults = Array.from(verificationResults.values());
+      const totalVerified = allResults.length;
+      const passedCount = allResults.filter((r) => r.passed).length;
+      return {
+        totalTasks: 10, // Mock total tasks count
+        totalVerified,
+        verificationRate: totalVerified > 0 ? (totalVerified / 10) * 100 : 0,
+        passRate: totalVerified > 0 ? (passedCount / totalVerified) * 100 : 0,
+        averageScore: totalVerified > 0
+          ? allResults.reduce((sum, r) => sum + r.overallScore, 0) / totalVerified
+          : 0,
+        acceptanceCriteria: { averageMetRate: 85 },
+        testCoverage: { checksPerformed: totalVerified, passRate: 90 },
+        scopeBoundaries: { checksPerformed: totalVerified, passRate: 95 },
+      };
+    }),
+    storeVerificationResult: vi.fn((result: typeof baseVerificationResult) => {
+      verificationResults.set(result.taskId, result);
+    }),
   };
 
   return {
     MOCK_TASK_ID,
-    MOCK_PR_NUMBER,
     MOCK_SOCKET_ID,
     baseVerificationResult,
     verificationResults,
@@ -329,12 +374,10 @@ type VerificationResultPayload = ReturnType<typeof verificationMocks>['baseVerif
 
 const {
   MOCK_TASK_ID,
-  MOCK_PR_NUMBER,
   MOCK_SOCKET_ID,
   baseVerificationResult,
   verificationResults,
   mockDatabase,
-  mockTaskQueue,
   mockVerificationService,
 } = verificationMocks;
 
@@ -770,30 +813,32 @@ describe('API Integration Suite', () => {
         url: `/api/dev-bots/tasks/${MOCK_TASK_ID}/logs/stdout`,
         expectStatus: 404,
       },
-      {
-        name: 'POST /api/dev-bots/tasks',
-        method: 'post',
-        url: '/api/dev-bots/tasks',
-        body: {
-          type: 'implementation',
-          title: 'Add integration tests',
-          documentation: 'Detailed plan for integration testing to stabilize server startup.',
-          acceptanceCriteria: ['All endpoints tested'],
-          files: ['src/server.ts'],
-        },
-        assert: (res) => {
-          // In non-production environments, task creation is blocked and returns stubbed response
-          // In production, it would return 'Task added successfully'
-          expect(res.body?.data?.message).toMatch(/Task (added|creation stubbed)/);
-          expect(res.body?.data?.task).toBeDefined();
+      // NOTE: POST /api/dev-bots/tasks endpoint was removed - task creation now
+      // happens through specialized endpoints like /tasks/minimal
+      // {
+      //   name: 'POST /api/dev-bots/tasks',
+      //   method: 'post',
+      //   url: '/api/dev-bots/tasks',
+      //   body: {
+      //     type: 'implementation',
+      //     title: 'Add integration tests',
+      //     documentation: 'Detailed plan for integration testing to stabilize server startup.',
+      //     acceptanceCriteria: ['All endpoints tested'],
+      //     files: ['src/server.ts'],
+      //   },
+      //   assert: (res) => {
+      //     // In non-production environments, task creation is blocked and returns stubbed response
+      //     // In production, it would return 'Task added successfully'
+      //     expect(res.body?.data?.message).toMatch(/Task (added|creation stubbed)/);
+      //     expect(res.body?.data?.task).toBeDefined();
 
-          // If stubbed (non-production), verify stub structure
-          if (res.body?.data?.task?.stubbed) {
-            expect(res.body?.data?.task?.id).toMatch(/^stub-/);
-            expect(res.body?.data?.task?.reason).toContain('non-production');
-          }
-        },
-      },
+      //     // If stubbed (non-production), verify stub structure
+      //     if (res.body?.data?.task?.stubbed) {
+      //       expect(res.body?.data?.task?.id).toMatch(/^stub-/);
+      //       expect(res.body?.data?.task?.reason).toContain('non-production');
+      //     }
+      //   },
+      // },
       {
         name: 'GET /api/dev-bots/tasks/completed',
         method: 'get',
@@ -918,26 +963,28 @@ describe('API Integration Suite', () => {
 
   describe('Dev-Bots data management', () => {
     runEndpointTests([
-      {
-        name: 'POST /api/dev-bots/export',
-        method: 'post',
-        url: '/api/dev-bots/export',
-        body: { path: '/tmp/export.json' },
-        expectStatus: 410,
-      },
-      {
-        name: 'POST /api/dev-bots/import',
-        method: 'post',
-        url: '/api/dev-bots/import',
-        body: { path: '/tmp/export.json' },
-        expectStatus: 410,
-      },
-      {
-        name: 'POST /api/dev-bots/onboarding/complete',
-        method: 'post',
-        url: '/api/dev-bots/onboarding/complete',
-        body: { workerId: 'worker-1' },
-      },
+      // NOTE: POST /api/dev-bots/export and import endpoints were removed
+      // {
+      //   name: 'POST /api/dev-bots/export',
+      //   method: 'post',
+      //   url: '/api/dev-bots/export',
+      //   body: { path: '/tmp/export.json' },
+      //   expectStatus: 410,
+      // },
+      // {
+      //   name: 'POST /api/dev-bots/import',
+      //   method: 'post',
+      //   url: '/api/dev-bots/import',
+      //   body: { path: '/tmp/export.json' },
+      //   expectStatus: 410,
+      // },
+      // NOTE: POST /api/dev-bots/onboarding/complete endpoint was removed
+      // {
+      //   name: 'POST /api/dev-bots/onboarding/complete',
+      //   method: 'post',
+      //   url: '/api/dev-bots/onboarding/complete',
+      //   body: { workerId: 'worker-1' },
+      // },
       {
         name: 'GET /api/dev-bots/workspace-sync/status',
         method: 'get',

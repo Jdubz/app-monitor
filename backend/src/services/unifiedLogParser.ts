@@ -4,6 +4,28 @@
  * Consolidates ClaudeLogParser and CodexLogParser into a single service
  * with agent-specific parsing strategies. Eliminates code duplication
  * and provides a consistent interface for both agent types.
+ *
+ * This parser replaces:
+ * - claudeLogParser.ts (deprecated)
+ * - codexLogParser.ts (deprecated)
+ *
+ * Benefits of unification:
+ * - Single interface for all agent types
+ * - Shared pricing and cost calculation logic
+ * - Consistent log entry format
+ * - Easier to add new agent types
+ * - Reduced code duplication
+ *
+ * Usage:
+ * ```typescript
+ * import { parseLog, parseLogFile } from './unifiedLogParser.js';
+ *
+ * // Parse entire log file
+ * const summary = await parseLog('/path/to/log.jsonl', 'claude');
+ *
+ * // Parse single log file
+ * const entry = await parseLogFile('/path/to/log.json', 'codex');
+ * ```
  */
 
 import * as fs from 'fs';

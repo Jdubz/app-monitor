@@ -59,6 +59,7 @@
     "@typescript-eslint/parser": "^6.16.0",
     "@vitest/coverage-v8": "^1.6.1",
     "eslint": "^8.56.0",
+    "eslint-plugin-local-rules": "^3.0.2",
     "nodemon": "^3.0.2",
     "supertest": "^7.1.4",
     "tsx": "^4.20.6",

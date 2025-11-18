@@ -7,8 +7,7 @@ import { createApiRouter } from './routes/index.js';
 import { DevBotsManager } from './services/devBotsManager.js';
 import { createDevBotsManagerDependencies } from './services/devBotsManager.factory.js';
 import type { DevBotsManagerDependencies } from './services/devBotsManager.interfaces.js';
-import { ConnectionManager } from './services/connectionManager.js';
-import { InteractiveSessionGateway } from './services/interactiveSessionGateway.js';
+import { ConnectionManager, setConnectionManagerInstance } from './services/connectionManager.js';
 import { GitHubWebhookHandler } from './services/githubWebhookHandler.service.js';
 import { setWebhookHandler } from './routes/github-webhooks.routes.js';
 import { logger } from './utils/logger.js';
@@ -64,27 +63,23 @@ export async function createApp(options: CreateAppOptions = {}) {
 
   // Set Socket.IO instance for broadcasting
   connectionManager.setIO(io);
+  
+  // Set global instance for service access
+  setConnectionManagerInstance(connectionManager);
 
   if (overrides.devBotsManager === null) {
     devBotsManager = undefined;
   } else if (overrides.devBotsManager) {
     devBotsManager = overrides.devBotsManager;
-    const depsForGateway = overrides.devBotsDependencies;
-    if (depsForGateway?.interactiveSessionStreamManager) {
-      new InteractiveSessionGateway({
-        server: httpServer,
-        devBotsManager,
-        streamManager: depsForGateway.interactiveSessionStreamManager,
-      });
-    }
+    // Note: InteractiveSessionStreaming is now created inside the factory
+    // and automatically handles WebSocket connections via the HTTP server
   } else {
-    const devBotsDeps = overrides.devBotsDependencies ?? await createDevBotsManagerDependencies();
-    devBotsManager = new DevBotsManager(devBotsDeps);
-    new InteractiveSessionGateway({
-      server: httpServer,
-      devBotsManager,
-      streamManager: devBotsDeps.interactiveSessionStreamManager,
+    // Create dependencies with HTTP server for InteractiveSessionStreaming
+    const devBotsDeps = overrides.devBotsDependencies ?? await createDevBotsManagerDependencies({
+      httpServer
     });
+    devBotsManager = new DevBotsManager(devBotsDeps);
+    // Note: InteractiveSessionStreaming WebSocket gateway is already initialized
   }
 
   if (devBotsManager) {

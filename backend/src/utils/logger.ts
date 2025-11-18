@@ -60,6 +60,7 @@ export type LogCategory =
   | 'merge_conflict'
   | 'metrics'
   | 'mirror_debug'
+  | 'phase' // Phase system orchestration
   | 'plan' // AI agent-managed planning system
   | 'port-manager' // Port management operations
   | 'pr-sync' // PR sync service (event-driven)

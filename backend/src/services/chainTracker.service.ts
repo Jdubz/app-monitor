@@ -18,8 +18,7 @@ import { getPlanStatusUpdater } from './planStatusUpdater.singleton.js';
 export interface ChainStats {
   activeChains: number;
   blockedChains: number;
-  implementationQueueDepth: number;
-  followupQueueDepth: number;
+  phaseDistribution: Record<number, number>;
   maxConcurrentChains: number;
 }
 
@@ -71,27 +70,26 @@ export class ChainTrackerService {
   }
 
   /**
-   * Get queue depths
+   * Get queue depths by phase
+   * Returns distribution of tasks across phases for monitoring
    */
-  getQueueDepths(): { implementation: number; followup: number } {
-    const implResult = this.db.prepare(`
-      SELECT COUNT(*) as count
+  getQueueDepths(): { phaseDistribution: Record<number, number> } {
+    // Phase distribution - all pending tasks (ready or not yet ready)
+    const phaseDistResult = this.db.prepare(`
+      SELECT phase_index, COUNT(*) as count
       FROM tasks
-      WHERE queue_stage = 'implementation'
-      AND status = 'pending'
-    `).get() as { count: number };
+      WHERE status = 'pending'
+      AND phase_index IS NOT NULL
+      GROUP BY phase_index
+    `).all() as Array<{ phase_index: number; count: number }>;
 
-    const followupResult = this.db.prepare(`
-      SELECT COUNT(*) as count
-      FROM tasks
-      WHERE queue_stage = 'followup'
-      AND status = 'pending'
-      AND chain_status != 'blocked'
-    `).get() as { count: number };
+    const phaseDistribution: Record<number, number> = {};
+    for (const row of phaseDistResult) {
+      phaseDistribution[row.phase_index] = row.count;
+    }
 
     return {
-      implementation: implResult.count,
-      followup: followupResult.count
+      phaseDistribution
     };
   }
 
@@ -99,8 +97,9 @@ export class ChainTrackerService {
    * Check if chains are complete and mark them closed
    * 
    * Complete means:
-   * 1. PR is merged (pr_status = 'merged')
-   * 2. No pending/active tasks in the chain
+   * 1. Task reached Phase 7 (PR Shepherding) with phase_status = 'complete'
+   * 2. PR is merged (pr_status = 'merged')
+   * 3. No pending/active tasks in the chain
    * 
    * Returns number of chains closed
    */
@@ -112,7 +111,13 @@ export class ChainTrackerService {
         SELECT DISTINCT t1.chain_id
         FROM tasks t1
         WHERE t1.chain_id IS NOT NULL
-        AND t1.pr_status = 'merged'
+        AND (
+          -- New phase system: Phase 7 complete
+          (t1.phase_index = 7 AND t1.phase_status = 'complete')
+          OR 
+          -- Legacy: PR merged
+          (t1.pr_status = 'merged')
+        )
         AND NOT EXISTS (
           SELECT 1 FROM tasks t2
           WHERE t2.chain_id = t1.chain_id
@@ -176,25 +181,46 @@ export class ChainTrackerService {
   }
 
   /**
-   * Unblock a chain
+   * Unblock a chain and retry last failed phase
+   * 
+   * When a chain is unblocked:
+   * 1. Set chain_status back to 'active'
+   * 2. Set phase_status to 'ready' (so task can be retried)
+   * 3. Set task status to 'pending' (ready for assignment)
+   * 4. Clear blocked metadata
+   * 
+   * This allows the task to be picked up by the next available worker
+   * and retry the phase that was blocked.
    */
   unblockChain(chainId: string, unblockedBy: string): void {
     const stmt = this.db.prepare(`
       UPDATE tasks
       SET chain_status = 'active',
+          phase_status = 'ready',
+          status = 'pending',
           blocked_reason = NULL,
-          blocked_at = NULL
+          blocked_at = NULL,
+          blocked_by = NULL,
+          assigned_worker = NULL,
+          assigned_at = NULL
       WHERE chain_id = ?
       AND chain_status = 'blocked'
     `);
 
-    stmt.run(chainId);
+    const result = stmt.run(chainId);
+    const tasksUnblocked = result.changes;
 
     logger.info({
       category: 'process',
       action: 'chain_unblocked',
       message: `Chain ${chainId} unblocked by ${unblockedBy}`,
-      details: { chainId, unblockedBy }
+      details: { 
+        chainId, 
+        unblockedBy,
+        tasksUnblocked,
+        phaseResetTo: 'ready',
+        statusResetTo: 'pending'
+      }
     });
 
     // Trigger plan status update for all tasks in this chain
@@ -244,8 +270,7 @@ export class ChainTrackerService {
     return {
       activeChains,
       blockedChains,
-      implementationQueueDepth: depths.implementation,
-      followupQueueDepth: depths.followup,
+      phaseDistribution: depths.phaseDistribution,
       maxConcurrentChains
     };
   }

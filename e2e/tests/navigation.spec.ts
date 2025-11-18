@@ -38,11 +38,11 @@ test.describe('Dev Monitor - Basic Navigation', () => {
   test('should switch between tabs', async ({ page }) => {
     // Click on Task Queue tab
     await page.getByRole('tab', { name: /task queue/i }).click();
-    await expect(page.getByText(/task queue|queue/i)).toBeVisible();
+    await expect(page.getByRole('tab', { name: /task queue/i })).toHaveAttribute('aria-selected', 'true');
 
     // Click on Plans tab
     await page.getByRole('tab', { name: /plans/i }).click();
-    await expect(page.getByText(/plans|plan/i)).toBeVisible();
+    await expect(page.getByRole('tab', { name: /plans/i })).toHaveAttribute('aria-selected', 'true');
   });
 
   test('should show loading state initially', async ({ page }) => {

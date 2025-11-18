@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/utils/dateFormatters';
+import { PhaseProgressBar, PhaseBadge } from './PhaseProgress';
 
 type QueueBucket = 'pending' | 'active' | 'completed' | 'failed';
 
@@ -158,6 +159,20 @@ export function TaskQueuePanel() {
                       </Badge>
                     )}
                   </div>
+
+                  {/* Phase Progress - Enhanced */}
+                  {task.phaseIndex && task.phaseName && (
+                    <div className="flex flex-col gap-1.5">
+                      <PhaseBadge
+                        phaseIndex={task.phaseIndex}
+                        phaseName={task.phaseName}
+                        phaseStatus={task.phaseStatus}
+                        phaseAttempts={task.phaseAttempts}
+                      />
+                      <PhaseProgressBar currentPhase={task.phaseIndex} />
+                    </div>
+                  )}
+
                   <p className="line-clamp-2 text-xs text-muted-foreground">
                     {bucketCopy[bucket].helper}
                   </p>

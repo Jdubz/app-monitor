@@ -74,6 +74,14 @@ export class DevBotsDatabase {
     this.initialize();
   }
 
+  /**
+   * Get the underlying better-sqlite3 database instance.
+   * Used by services that need direct database access.
+   */
+  getDb(): Database.Database {
+    return this.db;
+  }
+
   private initialize(): void {
     // Run migrations
     this.runMigrations();
@@ -389,6 +397,14 @@ export class DevBotsDatabase {
           created_at TEXT NOT NULL DEFAULT (datetime('now'))
         );
         CREATE INDEX IF NOT EXISTS idx_session_metadata_start_time ON session_metadata(start_time);
+      `);
+    });
+
+    this.applyMigration('025_issues_screenshot_columns', () => {
+      this.db.exec(`
+        -- Add screenshot and screenshotError columns to issues table if they don't exist
+        ALTER TABLE issues ADD COLUMN screenshot TEXT;
+        ALTER TABLE issues ADD COLUMN screenshotError TEXT;
       `);
     });
   }
