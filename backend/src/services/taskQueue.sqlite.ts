@@ -477,6 +477,7 @@ export class TaskQueueService {
         artifacts_blob TEXT,
         created_at INTEGER NOT NULL,
         completed_at INTEGER,
+        recovery_diagnosis TEXT,
         exit_code INTEGER,
 
         FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE

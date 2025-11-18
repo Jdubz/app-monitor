@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { usePhaseUpdates } from '@/hooks/usePhaseUpdates';
+import { getDevBotsTaskStageRuns } from '@/services/api';
 
 interface StageRun {
   id: number;
@@ -18,6 +19,30 @@ interface StageRun {
   completed_at?: number;
   recovery_diagnosis?: string;
   exit_code?: number;
+}
+
+function isStageRun(obj: unknown): obj is StageRun {
+  if (!obj || typeof obj !== 'object') return false;
+  const run = obj as Record<string, unknown>;
+
+  return (
+    typeof run.id === 'number' &&
+    typeof run.task_id === 'string' &&
+    typeof run.phase_index === 'number' &&
+    typeof run.phase_name === 'string' &&
+    typeof run.attempt === 'number' &&
+    typeof run.status === 'string' &&
+    ['success', 'failed', 'recovered', 'blocked'].includes(run.status as string) &&
+    typeof run.created_at === 'number' &&
+    (run.completed_at === undefined || typeof run.completed_at === 'number') &&
+    (run.artifacts_blob === undefined || typeof run.artifacts_blob === 'string') &&
+    (run.recovery_diagnosis === undefined || typeof run.recovery_diagnosis === 'string') &&
+    (run.exit_code === undefined || typeof run.exit_code === 'number')
+  );
+}
+
+function isStageRunArray(data: unknown): data is StageRun[] {
+  return Array.isArray(data) && data.every(isStageRun);
 }
 
 interface TaskPhaseHistoryProps {
@@ -81,14 +106,14 @@ export function TaskPhaseHistory({ taskId }: TaskPhaseHistoryProps) {
   const fetchStageRuns = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/dev-bots/tasks/${taskId}/stage-runs`);
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch stage runs: ${response.statusText}`);
+      const data = await getDevBotsTaskStageRuns(taskId);
+
+      // Validate the response data with runtime type checking
+      if (!isStageRunArray(data.stageRuns)) {
+        throw new Error('Invalid stage runs data received from API');
       }
 
-      const data = await response.json();
-      setStageRuns(data.data?.stageRuns || []);
+      setStageRuns(data.stageRuns);
       setError(null);
     } catch (err) {
       console.error('Error fetching stage runs:', err);

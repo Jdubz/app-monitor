@@ -1,4 +1,5 @@
 import type http from 'http';
+import * as crypto from 'crypto';
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 
 import type { DevBotsManager } from './devBotsManager.js';
@@ -7,6 +8,7 @@ import type {
   InteractiveStreamMessage,
 } from './interactiveSessionStreamManager.js';
 import { logger } from '../utils/logger.js';
+import { config } from '../config.js';
 
 interface InteractiveGatewayOptions {
   server: http.Server;
@@ -17,6 +19,7 @@ interface InteractiveGatewayOptions {
 
 interface ParsedRequest {
   sessionId: string;
+  apiKey?: string;
 }
 
 type ClientMessage =
@@ -42,6 +45,36 @@ export class InteractiveSessionGateway {
       const parsed = this.parseRequest(request);
       if (!parsed) {
         return;
+      }
+
+      // Check authentication if required
+      if (config.requireAuth) {
+        // Extract API key - headers can be string or string[]
+        const headerKey = request.headers['x-api-key'];
+        const apiKey = (Array.isArray(headerKey) ? headerKey[0] : headerKey) || parsed.apiKey;
+        const expectedKeyBuffer = Buffer.from(config.apiKey);
+        const providedKeyBuffer = Buffer.from(apiKey || '');
+
+        // Use timing-safe comparison to prevent timing attacks
+        const keysMatch =
+          expectedKeyBuffer.length === providedKeyBuffer.length &&
+          crypto.timingSafeEqual(expectedKeyBuffer, providedKeyBuffer);
+
+        if (!apiKey || !keysMatch) {
+          logger.warn({
+            category: 'socket',
+            action: 'auth_failed',
+            message: 'WebSocket upgrade denied - invalid or missing API key',
+            details: {
+              sessionId: parsed.sessionId,
+              hasKey: !!apiKey,
+              ip: request.socket.remoteAddress
+            }
+          });
+          socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+          socket.destroy();
+          return;
+        }
       }
 
       const session = this.devBotsManager.getInteractiveSession(parsed.sessionId);
@@ -240,7 +273,11 @@ export class InteractiveSessionGateway {
       if (!sessionId) {
         return null;
       }
-      return { sessionId };
+
+      // Extract API key from query parameter
+      const apiKey = url.searchParams.get('apiKey') || url.searchParams.get('api_key') || undefined;
+
+      return { sessionId, apiKey };
     } catch {
       return null;
     }

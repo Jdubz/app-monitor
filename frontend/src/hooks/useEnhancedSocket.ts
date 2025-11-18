@@ -29,6 +29,16 @@ export function useEnhancedSocket() {
 
   // Initialize socket service
   useEffect(() => {
+    const apiKey = import.meta.env.VITE_API_KEY;
+
+    // Warn if API key is missing in production
+    if (!apiKey) {
+      log.warn('VITE_API_KEY is not set - Socket.IO authentication will fail if required', {
+        env: import.meta.env.MODE,
+        hasKey: !!apiKey,
+      });
+    }
+
     const service = createSocketService({
       url: SOCKET_URL,
       reconnection: true,
@@ -38,6 +48,9 @@ export function useEnhancedSocket() {
       timeout: 20000,
       autoConnect: true,
       transports: ['websocket', 'polling'],
+      auth: {
+        apiKey,
+      },
     });
 
     // Listen to connection state changes
