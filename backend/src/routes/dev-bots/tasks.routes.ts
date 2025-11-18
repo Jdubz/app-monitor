@@ -19,6 +19,7 @@ import { sendSuccess, sendError } from '../../utils/apiResponse.js';
 import { WorkerLogLocator } from '../../services/taskLogLocator.js';
 import { getTaskContextService } from '../../services/taskContext.service.js';
 import { taskAutoDetectionService } from '../../services/taskAutoDetection.service.js';
+import { PHASE_NAMES } from '../../services/phaseConstants.js';
 import type {
   MinimalTaskPayload,
   DevBotsReportCompletionPayload,
@@ -1126,16 +1127,8 @@ async function simulatePhaseProgression(
   const phaseDelay = delays[speed];
   const db = taskQueue.getDatabase();
 
-  // Phase names (1-7)
-  const phaseNames = [
-    'Planning',
-    'Implementation',
-    'Review',
-    'Fixes',
-    'Test Coverage & Validation',
-    'Cleanup & Docs',
-    'PR Shepherding'
-  ];
+  // Use centralized phase names constant
+  const phaseNames = Object.values(PHASE_NAMES);
 
   for (let phaseIndex = 1; phaseIndex <= 7; phaseIndex++) {
     const phaseName = phaseNames[phaseIndex - 1];

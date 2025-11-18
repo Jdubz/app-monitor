@@ -8,6 +8,20 @@
  * - File lock conflict resolution
  * - Execution history and observability
  *
+ * ## Architecture (Refactored - Nov 2024)
+ *
+ * This service follows the Single Responsibility Principle by delegating
+ * specialized concerns to focused services:
+ *
+ * - **TaskRepository**: All database CRUD operations for tasks
+ * - **WorkerLifecycleService**: Worker registration, heartbeats, stalled detection
+ * - **ChainTrackerService**: Task chain lifecycle management
+ * - **TaskQueueMetricsService**: Metrics collection and analytics
+ * - **TaskClassifier**: Automatic task categorization
+ *
+ * TaskQueueService orchestrates these services to provide queue operations:
+ * priority-based task selection, file conflict detection, and task assignment.
+ *
  * ## Timeout Philosophy
  *
  * We DO NOT automatically timeout tasks. Complex tasks may legitimately take hours.
@@ -25,6 +39,10 @@
  *
  * 4. **Worker Heartbeats**: detectStalledWorkers() handles actual infrastructure
  *    failures (container crashes, system issues) via heartbeat mechanism.
+ *
+ * @see TaskRepository for database operations
+ * @see WorkerLifecycleService for worker management
+ * @see ChainTrackerService for chain tracking
  */
 
 import Database from 'better-sqlite3';
@@ -44,6 +62,8 @@ import {
 } from './taskQueueMetrics.service.js';
 import { getPlanStatusUpdater } from './planStatusUpdater.singleton.js';
 import { getPhaseMetricsService, type PhaseMetricsSnapshot, type PhaseStats } from './phaseMetrics.service.js';
+import { TaskRepository } from '../repositories/TaskRepository.js';
+import { WorkerLifecycleService } from './WorkerLifecycleService.js';
 // import { MigrationManager } from './migrationManager.js'; // TODO: Uncomment when migration files are updated
 
 export type { ChainStats, BlockedChain };
@@ -188,6 +208,35 @@ export interface QueueMetrics {
   oldest_pending_age_ms?: number;
 }
 
+/**
+ * Task Queue Service
+ * 
+ * Orchestrates task queue operations by coordinating multiple specialized services.
+ * This service focuses on queue-specific logic: priority-based selection, file conflict
+ * detection, and task assignment, while delegating data access and worker management
+ * to dedicated services.
+ * 
+ * @example
+ * ```typescript
+ * const queue = new TaskQueueService('./data/tasks.db');
+ * 
+ * // Create a task (delegates to TaskRepository)
+ * const task = queue.createTask({
+ *   title: 'Implement feature',
+ *   type: 'implementation',
+ *   priority: 8
+ * });
+ * 
+ * // Assign task to next available worker
+ * const next = queue.getNextTask();
+ * if (next) {
+ *   queue.updateWorkerHeartbeat(next.assigned_worker!);
+ * }
+ * 
+ * // Complete task (delegates to WorkerLifecycleService)
+ * queue.completeTask(task.id, 'Success!', 'claude');
+ * ```
+ */
 export class TaskQueueService {
   private db: Database.Database;
   private dbPath: string;
@@ -195,16 +244,27 @@ export class TaskQueueService {
   private readonly chainTracker: ChainTrackerService; // Chain lifecycle management (Phase 2)
   private readonly maxConcurrentChains: number; // Chain concurrency limit
   private readonly metricsService: TaskQueueMetricsService; // Metrics and analytics
+  private readonly taskRepository: TaskRepository; // Database operations (extracted)
+  private readonly workerLifecycle: WorkerLifecycleService; // Worker management (extracted)
   private taskCompletionCount = 0; // PR sync counter (event-driven trigger)
   private readonly PR_SYNC_THRESHOLD: number; // Every N task completions
   private prSyncService: { syncAllTrackedPRs: () => Promise<void> } | null = null; // PRSyncService (set after construction)
 
+  /**
+   * Create a new TaskQueueService
+   * 
+   * @param dbPath Path to SQLite database file
+   */
   constructor(dbPath: string) {
     this.dbPath = dbPath;
     this.taskClassifier = new TaskClassifier();
     this.ensureDirectory();
     this.db = new Database(dbPath);
     this.initialize();
+    
+    // Initialize extracted services
+    this.taskRepository = new TaskRepository(this.db);
+    this.workerLifecycle = new WorkerLifecycleService(this.db);
     
     // Initialize chain tracking with configurable concurrency limit
     this.chainTracker = new ChainTrackerService(this.db);
@@ -842,13 +902,8 @@ export class TaskQueueService {
 
     updateStmt.run(now, now, workerId, task.id);
 
-    // Create worker record
-    const workerStmt = this.db.prepare(`
-      INSERT INTO workers (id, agent_id, status, current_task_id, created_at, last_heartbeat)
-      VALUES (?, ?, 'running', ?, ?, ?)
-    `);
-
-    workerStmt.run(workerId, task.assigned_agent, task.id, now, now);
+    // Register worker via WorkerLifecycleService
+    this.workerLifecycle.registerWorker(workerId, task.assigned_agent, task.id);
 
     // Record execution attempt
     const executionStmt = this.db.prepare(`
@@ -933,15 +988,15 @@ export class TaskQueueService {
         updateExecutionStmt.run(now, now - execution.started_at, execution.id);
       }
 
-      // Clean up worker
-      const workerStmt = this.db.prepare(`
-        UPDATE workers
-        SET status = 'stopped',
-            current_task_id = NULL
-        WHERE current_task_id = ?
-      `);
-
-      workerStmt.run(taskId);
+      // Stop worker via WorkerLifecycleService
+      const worker = this.db.prepare('SELECT id FROM workers WHERE current_task_id = ?')
+        .get(taskId) as { id: string } | undefined;
+      
+      if (worker) {
+        this.workerLifecycle.stopWorker(worker.id);
+        // Clear task assignment
+        this.db.prepare('UPDATE workers SET current_task_id = NULL WHERE id = ?').run(worker.id);
+      }
 
       logger.info({
         category: 'process',
@@ -1067,15 +1122,15 @@ export class TaskQueueService {
         updateExecutionStmt.run(now, now - execution.started_at, error, execution.id);
       }
 
-      // Clean up worker
-      const workerStmt = this.db.prepare(`
-        UPDATE workers
-        SET status = 'stopped',
-            current_task_id = NULL
-        WHERE current_task_id = ?
-      `);
-
-      workerStmt.run(taskId);
+      // Stop worker via WorkerLifecycleService
+      const worker = this.db.prepare('SELECT id FROM workers WHERE current_task_id = ?')
+        .get(taskId) as { id: string } | undefined;
+      
+      if (worker) {
+        this.workerLifecycle.stopWorker(worker.id);
+        // Clear task assignment
+        this.db.prepare('UPDATE workers SET current_task_id = NULL WHERE id = ?').run(worker.id);
+      }
 
       logger.info({
         category: 'process',
@@ -1196,8 +1251,7 @@ export class TaskQueueService {
    * Update worker heartbeat
    */
   updateWorkerHeartbeat(workerId: string): void {
-    const stmt = this.db.prepare('UPDATE workers SET last_heartbeat = ? WHERE id = ?');
-    stmt.run(Date.now(), workerId);
+    this.workerLifecycle.updateHeartbeat(workerId);
   }
 
   /**
@@ -1209,23 +1263,12 @@ export class TaskQueueService {
    */
   detectStalledWorkers(): string[] {
     return this.transaction(() => {
-      const HEARTBEAT_TIMEOUT_MS = 90000; // 90 seconds (increased from 30s to reduce false positives)
-      const timeout = Date.now() - HEARTBEAT_TIMEOUT_MS;
+      const stalledWorkers = this.workerLifecycle.handleStalledWorkers();
       const now = Date.now();
 
-      const stmt = this.db.prepare(`
-        SELECT id, current_task_id, last_heartbeat
-        FROM workers
-        WHERE status = 'running'
-        AND last_heartbeat < ?
-      `);
-
-      const stalledWorkers = stmt.all(timeout) as { id: string; current_task_id: string; last_heartbeat: number }[];
-
+      // Fail tasks for stalled workers
       for (const worker of stalledWorkers) {
-        const timeSinceLastHeartbeat = now - worker.last_heartbeat;
-        
-        if (worker.current_task_id) {
+        if (worker.task_id) {
           const updateTaskStmt = this.db.prepare(`
             UPDATE tasks
             SET status = 'failed',
@@ -1234,24 +1277,8 @@ export class TaskQueueService {
             WHERE id = ?
           `);
 
-          updateTaskStmt.run(now, worker.current_task_id);
+          updateTaskStmt.run(now, worker.task_id);
         }
-
-        const updateWorkerStmt = this.db.prepare('UPDATE workers SET status = \'stopped\' WHERE id = ?');
-        updateWorkerStmt.run(worker.id);
-
-        logger.warn({
-          category: 'process',
-          action: 'stalled_worker_detected',
-          message: `Worker ${worker.id} stalled (no heartbeat for ${Math.round(timeSinceLastHeartbeat / 1000)}s), marked task ${worker.current_task_id} as failed`,
-          details: {
-            workerId: worker.id,
-            taskId: worker.current_task_id,
-            lastHeartbeat: worker.last_heartbeat,
-            timeSinceLastHeartbeat_ms: timeSinceLastHeartbeat,
-            timeout_ms: HEARTBEAT_TIMEOUT_MS
-          }
-        });
       }
 
       return stalledWorkers.map(w => w.id);
@@ -1722,16 +1749,12 @@ export class TaskQueueService {
           updateExecutionStmt.run(now, now - execution.started_at, execution.id);
         }
 
-        // Clean up worker reference
+        // Stop worker via WorkerLifecycleService
         if (task.assigned_worker) {
-          const workerStmt = this.db.prepare(`
-            UPDATE workers
-            SET status = 'stopped',
-                current_task_id = NULL
-            WHERE id = ?
-          `);
-
-          workerStmt.run(task.assigned_worker);
+          this.workerLifecycle.stopWorker(task.assigned_worker);
+          // Clear task assignment
+          this.db.prepare('UPDATE workers SET current_task_id = NULL WHERE id = ?')
+            .run(task.assigned_worker);
         }
 
         orphanedTaskIds.push(task.id);
