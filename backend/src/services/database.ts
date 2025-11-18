@@ -399,6 +399,14 @@ export class DevBotsDatabase {
         CREATE INDEX IF NOT EXISTS idx_session_metadata_start_time ON session_metadata(start_time);
       `);
     });
+
+    this.applyMigration('025_issues_screenshot_columns', () => {
+      this.db.exec(`
+        -- Add screenshot and screenshotError columns to issues table if they don't exist
+        ALTER TABLE issues ADD COLUMN screenshot TEXT;
+        ALTER TABLE issues ADD COLUMN screenshotError TEXT;
+      `);
+    });
   }
 
   /**

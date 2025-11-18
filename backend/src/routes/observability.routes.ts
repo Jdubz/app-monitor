@@ -22,14 +22,14 @@ import {
   DiagnosticQueriesResponse,
   DiagnosticQueryResultResponse,
 } from '@app-monitor/api-contracts';
-import { PhaseObservabilityService } from '../services/phaseObservability.service.js';
+import { getPhaseObservabilityService, QueryNotFoundError } from '../services/phaseObservability.service.js';
 import { getDatabase } from '../services/database.js';
 import { logger } from '../utils/logger.js';
 
 const router = express.Router();
 
-// Initialize service
-const observabilityService = new PhaseObservabilityService(getDatabase().getDb());
+// Initialize service using singleton pattern
+const observabilityService = getPhaseObservabilityService(getDatabase().getDb());
 
 /**
  * Helper to respond with success
@@ -186,7 +186,7 @@ router.get('/diagnostics/:queryId', async (req: Request, res: Response) => {
     
     respondSuccess<DiagnosticQueryResultResponse['data']>(res, result);
   } catch (error) {
-    if (error instanceof Error && error.message.includes('Unknown diagnostic query')) {
+    if (error instanceof QueryNotFoundError) {
       return respondError(res, 404, 'QUERY_NOT_FOUND', error.message);
     }
     

@@ -28,6 +28,30 @@ import {
 } from '@app-monitor/api-contracts';
 import { PHASE_NAMES } from './phaseConstants.js';
 
+/**
+ * Custom error for when a diagnostic query is not found
+ */
+export class QueryNotFoundError extends Error {
+  constructor(queryId: string) {
+    super(`Unknown diagnostic query: ${queryId}`);
+    this.name = 'QueryNotFoundError';
+  }
+}
+
+/**
+ * Type guard for phase execution status
+ */
+function isPhaseExecutionStatus(status: string): status is PhaseExecutionTrace['status'] {
+  return ['success', 'failed', 'blocked', 'recovered'].includes(status);
+}
+
+/**
+ * Type guard for log level
+ */
+function isLogLevel(level: string): level is PhaseLogEntry['level'] {
+  return ['info', 'warn', 'error', 'debug'].includes(level);
+}
+
 export class PhaseObservabilityService {
   private db: Database.Database;
 
@@ -112,12 +136,14 @@ export class PhaseObservabilityService {
         ? new Date(run.completed_at).getTime() - new Date(run.created_at).getTime()
         : null;
 
+      const validatedStatus = isPhaseExecutionStatus(run.status) ? run.status : 'failed';
+
       return {
         taskId: run.task_id,
         phaseIndex: run.phase_index,
         phaseName: PHASE_NAMES[run.phase_index] || `Phase ${run.phase_index}`,
         attempt: run.attempt,
-        status: run.status as 'success' | 'failed' | 'blocked' | 'recovered',
+        status: validatedStatus,
         createdAt: run.created_at,
         completedAt: run.completed_at,
         durationMs: duration,
@@ -196,7 +222,7 @@ export class PhaseObservabilityService {
         l.message,
         l.details
       FROM logs l
-      INNER JOIN task_stage_runs tsr ON l.details LIKE '%' || tsr.task_id || '%'
+      INNER JOIN task_stage_runs tsr ON json_extract(l.details, '$.taskId') = tsr.task_id
       WHERE 1=1
     `;
     
@@ -256,18 +282,22 @@ export class PhaseObservabilityService {
       details: string;
     }>;
 
-    const logs: PhaseLogEntry[] = rows.map(row => ({
-      taskId: row.task_id,
-      phaseIndex: row.phase_index,
-      phaseName: PHASE_NAMES[row.phase_index] || `Phase ${row.phase_index}`,
-      attempt: row.attempt,
-      timestamp: row.timestamp,
-      level: row.level as 'info' | 'warn' | 'error' | 'debug',
-      category: row.category,
-      action: row.action,
-      message: row.message,
-      details: this.safeParse(row.details),
-    }));
+    const logs: PhaseLogEntry[] = rows.map(row => {
+      const validatedLevel = isLogLevel(row.level) ? row.level : 'info';
+      
+      return {
+        taskId: row.task_id,
+        phaseIndex: row.phase_index,
+        phaseName: PHASE_NAMES[row.phase_index] || `Phase ${row.phase_index}`,
+        attempt: row.attempt,
+        timestamp: row.timestamp,
+        level: validatedLevel,
+        category: row.category,
+        action: row.action,
+        message: row.message,
+        details: this.safeParse(row.details),
+      };
+    });
 
     return {
       logs,
@@ -426,7 +456,7 @@ export class PhaseObservabilityService {
   executeDiagnosticQuery(queryId: string): DiagnosticQueryResult {
     const query = this.getDiagnosticQueries().find(q => q.id === queryId);
     if (!query) {
-      throw new Error(`Unknown diagnostic query: ${queryId}`);
+      throw new QueryNotFoundError(queryId);
     }
 
     let results: unknown[] = [];
