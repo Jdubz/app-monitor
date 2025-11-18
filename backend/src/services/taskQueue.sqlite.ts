@@ -926,15 +926,15 @@ export class TaskQueueService {
         updateExecutionStmt.run(now, now - execution.started_at, execution.id);
       }
 
-      // Clean up worker
-      const workerStmt = this.db.prepare(`
-        UPDATE workers
-        SET status = 'stopped',
-            current_task_id = NULL
-        WHERE current_task_id = ?
-      `);
-
-      workerStmt.run(taskId);
+      // Stop worker via WorkerLifecycleService
+      const worker = this.db.prepare('SELECT id FROM workers WHERE current_task_id = ?')
+        .get(taskId) as { id: string } | undefined;
+      
+      if (worker) {
+        this.workerLifecycle.stopWorker(worker.id);
+        // Clear task assignment
+        this.db.prepare('UPDATE workers SET current_task_id = NULL WHERE id = ?').run(worker.id);
+      }
 
       logger.info({
         category: 'process',
@@ -1060,15 +1060,15 @@ export class TaskQueueService {
         updateExecutionStmt.run(now, now - execution.started_at, error, execution.id);
       }
 
-      // Clean up worker
-      const workerStmt = this.db.prepare(`
-        UPDATE workers
-        SET status = 'stopped',
-            current_task_id = NULL
-        WHERE current_task_id = ?
-      `);
-
-      workerStmt.run(taskId);
+      // Stop worker via WorkerLifecycleService
+      const worker = this.db.prepare('SELECT id FROM workers WHERE current_task_id = ?')
+        .get(taskId) as { id: string } | undefined;
+      
+      if (worker) {
+        this.workerLifecycle.stopWorker(worker.id);
+        // Clear task assignment
+        this.db.prepare('UPDATE workers SET current_task_id = NULL WHERE id = ?').run(worker.id);
+      }
 
       logger.info({
         category: 'process',
@@ -1687,16 +1687,12 @@ export class TaskQueueService {
           updateExecutionStmt.run(now, now - execution.started_at, execution.id);
         }
 
-        // Clean up worker reference
+        // Stop worker via WorkerLifecycleService
         if (task.assigned_worker) {
-          const workerStmt = this.db.prepare(`
-            UPDATE workers
-            SET status = 'stopped',
-                current_task_id = NULL
-            WHERE id = ?
-          `);
-
-          workerStmt.run(task.assigned_worker);
+          this.workerLifecycle.stopWorker(task.assigned_worker);
+          // Clear task assignment
+          this.db.prepare('UPDATE workers SET current_task_id = NULL WHERE id = ?')
+            .run(task.assigned_worker);
         }
 
         orphanedTaskIds.push(task.id);
