@@ -360,10 +360,10 @@ These are **expected failures** that validate comprehensive test coverage for fu
 
 ---
 
-**Note:** Unnecessary features have been removed to keep the app simple:
-- **Workspace-sync feature** (~1,500 lines) - Dev-bots have native git/gh CLI access. See WORKSPACE_SYNC_REMOVAL.md
-- **Observability routes tests** (~400 lines) - Agents can read logs directly. See OBSERVABILITY_REMOVAL.md
-- **Chain management tests** (~746 lines) - Core blocking/unblocking already exists. See CHAIN_MANAGEMENT_REMOVAL.md
+**Note:** Unnecessary features have been removed to keep the app simple (see docs/architecture/simplicity-principle.md):
+- **Workspace-sync feature** (~1,500 lines) - Dev-bots have native git/gh CLI access
+- **Observability routes tests** (~400 lines) - Agents can read logs directly
+- **Chain management tests** (~746 lines) - Core blocking/unblocking already exists
 
 ---
 

@@ -4,10 +4,10 @@
 **Passed:** 623 (90.8%)
 **Failed:** 63 (9.2%)
 
-**Note:** Unnecessary test files have been removed to keep the app simple:
-- Workspace sync tests (see WORKSPACE_SYNC_REMOVAL.md) - Dev-bots have native git/gh CLI access
-- Observability routes tests (see OBSERVABILITY_REMOVAL.md) - Agents can read logs directly, no need for extra monitoring APIs
-- Chain management tests (see CHAIN_MANAGEMENT_REMOVAL.md) - Core blocking/unblocking already exists, no need for complex pattern API
+**Note:** Unnecessary test files have been removed to keep the app simple (see docs/architecture/simplicity-principle.md):
+- Workspace sync tests - Dev-bots have native git/gh CLI access
+- Observability routes tests - Agents can read logs directly, no need for extra monitoring APIs
+- Chain management tests - Core blocking/unblocking already exists, no need for complex pattern API
 
 ## Executive Summary
 
