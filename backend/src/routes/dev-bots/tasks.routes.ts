@@ -13,6 +13,7 @@
 
 import { Router, Request, Response } from 'express';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
+import type { TaskQueueService } from '../../services/taskQueue.sqlite.js';
 import { logger } from '../../utils/logger.js';
 import { sendSuccess, sendError } from '../../utils/apiResponse.js';
 import { WorkerLogLocator } from '../../services/taskLogLocator.js';
