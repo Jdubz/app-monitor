@@ -667,7 +667,7 @@ export class DockerManager {
         category: 'docker',
         action: 'inspect_container_error',
         message: `Failed to inspect container ${containerId}`,
-        error
+        _error
       });
       return null;
     }
