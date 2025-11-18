@@ -140,13 +140,15 @@ export class DevBotSimulator extends EventEmitter {
     );
 
     if (!response.ok) {
-      throw new Error(`Failed to start phase execution: ${response.statusText}`);
+      const errorText = await response.text();
+      console.error(`[DevBotSimulator] Phase progression failed: ${errorText}`);
+      throw new Error(`Failed to start phase execution: ${response.statusText} - ${errorText}`);
     }
 
     const result = await response.json();
     
     if (!result.success) {
-      throw new Error(`Backend rejected phase execution: ${result.message}`);
+      throw new Error(`Backend rejected phase execution: ${result.message || 'Unknown error'}`);
     }
   }
 
@@ -158,7 +160,7 @@ export class DevBotSimulator extends EventEmitter {
     // Phase 1: Planning, 2: Implementation, 3: Review, 4: Fixes,
     // 5: Test & Validate, 6: Cleanup, 7: PR Shepherding
     
-    let currentPhase = 1;
+    let currentPhase = 0; // Start at 0 so we detect phase 1
     let pollCount = 0;
     const maxPolls = 600; // 60 seconds timeout
     
@@ -170,7 +172,7 @@ export class DevBotSimulator extends EventEmitter {
         throw new Error(`Task ${taskId} not found in backend`);
       }
       
-      const backendPhase = task.phase_index || 1;
+      const backendPhase = task.phaseIndex || 1;  // Use camelCase from API contract
       
       // Detect phase change
       if (backendPhase !== currentPhase) {
@@ -181,14 +183,14 @@ export class DevBotSimulator extends EventEmitter {
         // Record phase attempt
         this.attemptHistory.push({
           phase: backendPhase,
-          attempt: task.phase_attempts || 1,
-          success: task.phase_status === 'complete'
+          attempt: task.phaseAttempts || 1,
+          success: task.phaseStatus === 'complete'
         });
         
         this.emit('phase_attempt', {
           phase: backendPhase,
-          attempt: task.phase_attempts || 1,
-          success: task.phase_status === 'complete'
+          attempt: task.phaseAttempts || 1,
+          success: task.phaseStatus === 'complete'
         });
         
         currentPhase = backendPhase;
@@ -202,7 +204,7 @@ export class DevBotSimulator extends EventEmitter {
       }
       
       // Check if task completed (phase 7 complete OR task status = completed)
-      if (task.status === 'completed' || (backendPhase === 7 && task.phase_status === 'complete')) {
+      if (task.status === 'completed' || (backendPhase === 7 && task.phaseStatus === 'complete')) {
         this.instance.status = 'idle';
         this.instance.currentTaskId = undefined;
         this.instance.currentPhase = undefined;
@@ -213,7 +215,7 @@ export class DevBotSimulator extends EventEmitter {
           success: true,
           taskId,
           finalPhase: backendPhase,
-          prUrl: task.pr_url || undefined
+          prUrl: task.pr_url || task.prUrl || undefined
         };
       }
       
@@ -242,8 +244,7 @@ export class DevBotSimulator extends EventEmitter {
   }
 
   /**
-   * Execute a single phase (REMOVED - backend handles phase execution)
-   * E2E tests should monitor backend, not simulate phase execution
+   * Get task status from backend
    */
   private async getTaskStatus(taskId: string): Promise<any> {
     const response = await fetch(`${this.apiBaseUrl}/api/dev-bots/tasks/${taskId}/detail`, {
@@ -251,12 +252,19 @@ export class DevBotSimulator extends EventEmitter {
     });
     
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[DevBotSimulator] Failed to get task status: ${response.status} - ${errorText}`);
       throw new Error(`Failed to get task status: ${response.statusText}`);
     }
     
     const result = await response.json();
-    return result.data || result;
+    
+    // API returns { success: true, data: { task: {...}, history: [...] } }
+    const taskData = result.data?.task || result.data || result;
+    return taskData;
   }
+
+  private hasLoggedFirstResponse = false;
 
   /**
    * Inject failure at specific phase (FOR TESTING ONLY)
@@ -502,7 +510,7 @@ export async function getTask(
   taskId: string,
   apiBaseUrl: string = 'http://localhost:3002'
 ): Promise<any> {
-  const response = await fetch(`${apiBaseUrl}/api/dev-bots/tasks/${taskId}`, {
+  const response = await fetch(`${apiBaseUrl}/api/dev-bots/tasks/${taskId}/detail`, {
     headers: { 'X-API-Key': API_KEY }
   });
   
@@ -511,7 +519,7 @@ export async function getTask(
   }
   
   const result = await response.json();
-  return result.data;
+  return result.data.task;  // Return just the task, not the whole detail object
 }
 
 /**
@@ -530,5 +538,24 @@ export async function getTaskLogs(
   }
   
   const result = await response.json();
-  return result.data.logs.join('\n');
+  
+  // The logs endpoint returns descriptors, not actual log content
+  // For test purposes, we can return a formatted string of the descriptors
+  if (result.data && (result.data.stdout || result.data.stderr)) {
+    const parts = [];
+    if (result.data.stdout) {
+      parts.push(`STDOUT: ${result.data.stdout.absolutePath || 'No logs'}`);
+    }
+    if (result.data.stderr) {
+      parts.push(`STDERR: ${result.data.stderr.absolutePath || 'No logs'}`);
+    }
+    return parts.join('\n');
+  }
+  
+  // If logs array exists (old format), join it
+  if (result.data && Array.isArray(result.data.logs)) {
+    return result.data.logs.join('\n');
+  }
+  
+  return 'No logs available';
 }

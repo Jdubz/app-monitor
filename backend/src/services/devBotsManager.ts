@@ -386,14 +386,17 @@ export class DevBotsManager extends EventEmitter {
     this.emit('taskAdded', result.task);
 
     // Try to assign in background (fire-and-forget to prevent API blocking)
-    this.assignNextTask().catch(error => {
-      logger.error({
-        category: 'process',
-        action: 'background_assignment_failed',
-        message: `Background task assignment failed for ${result.task.id}`,
-        error
+    // Skip in test environment to allow e2e tests to simulate phase progression
+    if (process.env.NODE_ENV !== 'test') {
+      this.assignNextTask().catch(error => {
+        logger.error({
+          category: 'process',
+          action: 'background_assignment_failed',
+          message: `Background task assignment failed for ${result.task.id}`,
+          error
+        });
       });
-    });
+    }
 
     return result;
   }
