@@ -273,7 +273,8 @@ export async function createApp(options: CreateAppOptions = {}) {
     credentials: true,
     allowedHeaders: ALLOWED_CORS_HEADERS,
   }));
-  app.use(express.json());
+  // Increase limit to 10MB to support bug report screenshots
+  app.use(express.json({ limit: '10mb' }));
 
   const apiRouter = createApiRouter({
     devBotsManager: devBotsManager ?? undefined,
