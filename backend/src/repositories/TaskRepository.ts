@@ -71,6 +71,11 @@ export class TaskRepository {
 
   /**
    * Find all tasks matching filters
+   * 
+   * TODO: Performance optimization needed - N+1 query problem
+   * Current implementation calls hydrateTask for each task, resulting in 5*N queries.
+   * Should batch-fetch related data with WHERE task_id IN (...) to reduce to constant queries.
+   * See PR #225 comment for details.
    */
   findAll(filters?: TaskFilters): Task[] {
     let query = 'SELECT * FROM tasks WHERE 1=1';

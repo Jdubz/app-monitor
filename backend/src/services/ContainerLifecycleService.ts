@@ -224,7 +224,7 @@ export class ContainerLifecycleService {
         }
 
         // Not ready yet, wait with exponential backoff
-        const delay = Math.min(intervalMs * attempt, 3000); // Cap at 3 seconds
+        const delay = Math.min(intervalMs * (2 ** (attempt - 1)), 3000); // Cap at 3 seconds
         await new Promise(resolve => setTimeout(resolve, delay));
 
       } catch (error) {
