@@ -67,8 +67,9 @@ export function initializeIssuesRoutes(
  * Receive issue report, persist it, and immediately trigger triage
  *
  * SECURITY: Rate limited to 10 reports/hour per session
+ * SECURITY: 10MB body limit scoped to this endpoint only (for screenshot support)
  */
-router.post('/', issueReportLimiter, async (req: Request, res: Response) => {
+router.post('/', express.json({ limit: '10mb' }), issueReportLimiter, async (req: Request, res: Response) => {
   try {
     const report = req.body as IssueReport;
 
@@ -153,6 +154,15 @@ router.post('/', issueReportLimiter, async (req: Request, res: Response) => {
       res.status(400).json({
         success: false,
         error: 'User agent too long (max 1000 characters)',
+      });
+      return;
+    }
+
+    // 10. Validate screenshot size (if provided)
+    if (report.screenshot && report.screenshot.length > 8 * 1024 * 1024) { // 8MB limit
+      res.status(400).json({
+        success: false,
+        error: 'Screenshot too large (max 8MB)',
       });
       return;
     }

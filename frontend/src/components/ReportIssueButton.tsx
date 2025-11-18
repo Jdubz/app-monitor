@@ -359,6 +359,7 @@ function ReportIssueModal({ isOpen, onClose, onSubmit }: ReportIssueModalProps) 
     >
       <div
         ref={modalRef}
+        data-html2canvas-ignore="true"
         className="bg-white dark:bg-gray-900 rounded-lg shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
         role="dialog"

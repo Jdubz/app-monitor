@@ -14,12 +14,29 @@ export const useServices = () => {
   const [socket, setSocket] = useState<Socket | null>(null);
 
   useEffect(() => {
+    const apiKey = import.meta.env.VITE_API_KEY;
+
+    // Warn if API key is missing in production
+    if (!apiKey) {
+      log.warn('VITE_API_KEY is not set - Socket.IO authentication will fail if required', {
+        env: import.meta.env.MODE,
+        hasKey: !!apiKey,
+      });
+    }
+
     const newSocket = io(SOCKET_URL, {
       transports: ['websocket', 'polling'],
+      auth: {
+        apiKey,
+      },
     });
 
     newSocket.on('connect', () => {
       log.info('Socket connected');
+    });
+
+    newSocket.on('connect_error', (error) => {
+      log.error('Socket connection error', 'useServices', error);
     });
 
     newSocket.on('disconnect', () => {
