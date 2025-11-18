@@ -8,6 +8,20 @@
  * - File lock conflict resolution
  * - Execution history and observability
  *
+ * ## Architecture (Refactored - Nov 2024)
+ *
+ * This service follows the Single Responsibility Principle by delegating
+ * specialized concerns to focused services:
+ *
+ * - **TaskRepository**: All database CRUD operations for tasks
+ * - **WorkerLifecycleService**: Worker registration, heartbeats, stalled detection
+ * - **ChainTrackerService**: Task chain lifecycle management
+ * - **TaskQueueMetricsService**: Metrics collection and analytics
+ * - **TaskClassifier**: Automatic task categorization
+ *
+ * TaskQueueService orchestrates these services to provide queue operations:
+ * priority-based task selection, file conflict detection, and task assignment.
+ *
  * ## Timeout Philosophy
  *
  * We DO NOT automatically timeout tasks. Complex tasks may legitimately take hours.
@@ -25,6 +39,10 @@
  *
  * 4. **Worker Heartbeats**: detectStalledWorkers() handles actual infrastructure
  *    failures (container crashes, system issues) via heartbeat mechanism.
+ *
+ * @see TaskRepository for database operations
+ * @see WorkerLifecycleService for worker management
+ * @see ChainTrackerService for chain tracking
  */
 
 import Database from 'better-sqlite3';
@@ -190,6 +208,35 @@ export interface QueueMetrics {
   oldest_pending_age_ms?: number;
 }
 
+/**
+ * Task Queue Service
+ * 
+ * Orchestrates task queue operations by coordinating multiple specialized services.
+ * This service focuses on queue-specific logic: priority-based selection, file conflict
+ * detection, and task assignment, while delegating data access and worker management
+ * to dedicated services.
+ * 
+ * @example
+ * ```typescript
+ * const queue = new TaskQueueService('./data/tasks.db');
+ * 
+ * // Create a task (delegates to TaskRepository)
+ * const task = queue.createTask({
+ *   title: 'Implement feature',
+ *   type: 'implementation',
+ *   priority: 8
+ * });
+ * 
+ * // Assign task to next available worker
+ * const next = queue.getNextTask();
+ * if (next) {
+ *   queue.updateWorkerHeartbeat(next.assigned_worker!);
+ * }
+ * 
+ * // Complete task (delegates to WorkerLifecycleService)
+ * queue.completeTask(task.id, 'Success!', 'claude');
+ * ```
+ */
 export class TaskQueueService {
   private db: Database.Database;
   private dbPath: string;
@@ -203,6 +250,11 @@ export class TaskQueueService {
   private readonly PR_SYNC_THRESHOLD: number; // Every N task completions
   private prSyncService: { syncAllTrackedPRs: () => Promise<void> } | null = null; // PRSyncService (set after construction)
 
+  /**
+   * Create a new TaskQueueService
+   * 
+   * @param dbPath Path to SQLite database file
+   */
   constructor(dbPath: string) {
     this.dbPath = dbPath;
     this.taskClassifier = new TaskClassifier();
