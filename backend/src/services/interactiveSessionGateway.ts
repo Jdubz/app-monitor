@@ -1,4 +1,5 @@
 import type http from 'http';
+import * as crypto from 'crypto';
 import { WebSocketServer, WebSocket, type RawData } from 'ws';
 
 import type { DevBotsManager } from './devBotsManager.js';
@@ -48,8 +49,18 @@ export class InteractiveSessionGateway {
 
       // Check authentication if required
       if (config.requireAuth) {
-        const apiKey = request.headers['x-api-key'] || parsed.apiKey;
-        if (!apiKey || apiKey !== config.apiKey) {
+        // Extract API key - headers can be string or string[]
+        const headerKey = request.headers['x-api-key'];
+        const apiKey = (Array.isArray(headerKey) ? headerKey[0] : headerKey) || parsed.apiKey;
+        const expectedKeyBuffer = Buffer.from(config.apiKey);
+        const providedKeyBuffer = Buffer.from(apiKey || '');
+
+        // Use timing-safe comparison to prevent timing attacks
+        const keysMatch =
+          expectedKeyBuffer.length === providedKeyBuffer.length &&
+          crypto.timingSafeEqual(expectedKeyBuffer, providedKeyBuffer);
+
+        if (!apiKey || !keysMatch) {
           logger.warn({
             category: 'socket',
             action: 'auth_failed',

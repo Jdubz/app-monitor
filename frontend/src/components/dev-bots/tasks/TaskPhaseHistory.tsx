@@ -21,6 +21,30 @@ interface StageRun {
   exit_code?: number;
 }
 
+function isStageRun(obj: unknown): obj is StageRun {
+  if (!obj || typeof obj !== 'object') return false;
+  const run = obj as Record<string, unknown>;
+
+  return (
+    typeof run.id === 'number' &&
+    typeof run.task_id === 'string' &&
+    typeof run.phase_index === 'number' &&
+    typeof run.phase_name === 'string' &&
+    typeof run.attempt === 'number' &&
+    typeof run.status === 'string' &&
+    ['success', 'failed', 'recovered', 'blocked'].includes(run.status as string) &&
+    typeof run.created_at === 'number' &&
+    (run.completed_at === undefined || typeof run.completed_at === 'number') &&
+    (run.artifacts_blob === undefined || typeof run.artifacts_blob === 'string') &&
+    (run.recovery_diagnosis === undefined || typeof run.recovery_diagnosis === 'string') &&
+    (run.exit_code === undefined || typeof run.exit_code === 'number')
+  );
+}
+
+function isStageRunArray(data: unknown): data is StageRun[] {
+  return Array.isArray(data) && data.every(isStageRun);
+}
+
 interface TaskPhaseHistoryProps {
   taskId: string;
 }
@@ -83,7 +107,13 @@ export function TaskPhaseHistory({ taskId }: TaskPhaseHistoryProps) {
     try {
       setIsLoading(true);
       const data = await getDevBotsTaskStageRuns(taskId);
-      setStageRuns(data.stageRuns as StageRun[]);
+
+      // Validate the response data with runtime type checking
+      if (!isStageRunArray(data.stageRuns)) {
+        throw new Error('Invalid stage runs data received from API');
+      }
+
+      setStageRuns(data.stageRuns);
       setError(null);
     } catch (err) {
       console.error('Error fetching stage runs:', err);

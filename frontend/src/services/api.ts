@@ -325,6 +325,7 @@ export const getDevBotsInteractiveStreamUrl = (sessionId: string): string => {
   const baseUrl = getApiBaseUrl();
   const apiKey = import.meta.env.VITE_API_KEY;
 
+  let baseWsUrl: string;
   try {
     const parsed = new URL(baseUrl);
     const wsProtocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -332,31 +333,24 @@ export const getDevBotsInteractiveStreamUrl = (sessionId: string): string => {
     const streamPath = '/api/dev-bots/interactive/session/' + sessionId + '/stream';
     const normalizedPath = (basePath || '') + streamPath;
     const ensuredPath = normalizedPath.startsWith('/') ? normalizedPath : '/' + normalizedPath;
-    const baseWsUrl = wsProtocol + '//' + parsed.host + ensuredPath;
-
-    // Add API key as query parameter if available
-    if (apiKey) {
-      return baseWsUrl + '?apiKey=' + encodeURIComponent(apiKey);
-    }
-    return baseWsUrl;
+    baseWsUrl = wsProtocol + '//' + parsed.host + ensuredPath;
   } catch (error) {
     log.warn('Unable to parse API base URL for interactive stream', { error });
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const baseWsUrl = (
+    baseWsUrl =
       wsProtocol +
       '//' +
       window.location.host +
       '/api/dev-bots/interactive/session/' +
       sessionId +
-      '/stream'
-    );
-
-    // Add API key as query parameter if available
-    if (apiKey) {
-      return baseWsUrl + '?apiKey=' + encodeURIComponent(apiKey);
-    }
-    return baseWsUrl;
+      '/stream';
   }
+
+  // Add API key as query parameter if available
+  if (apiKey) {
+    return baseWsUrl + '?apiKey=' + encodeURIComponent(apiKey);
+  }
+  return baseWsUrl;
 };
 
 // Export everything as a namespace for components that use `api.method()`
