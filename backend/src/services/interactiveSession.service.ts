@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
-import { WORKER_IDLE_TIMEOUT_MS } from '../constants/timeouts.js';
+import { WORKER_IDLE_TIMEOUT_MS, IDLE_CHECK_INTERVAL_MS } from '../constants/timeouts.js';
 
 import {
   getDatabase,
@@ -191,7 +191,7 @@ export class InteractiveSessionService extends EventEmitter {
         // Emit event for monitoring
         this.emit('idleTimeout', { sessionId: session.id, idleDuration });
       }
-    }, 30000); // Check every 30 seconds
+    }, IDLE_CHECK_INTERVAL_MS);
   }
 
   /**

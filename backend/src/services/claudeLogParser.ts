@@ -25,6 +25,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
+import { daysAgo } from '../constants/timeouts.js';
 
 export interface ClaudeUsageData {
   inputTokens: number;
@@ -274,7 +275,7 @@ export class ClaudeLogParser {
    */
   async getRecentUsage(projectPath: string, days: number): Promise<ClaudeUsageSummary> {
     const now = new Date();
-    const startDate = new Date(now.getTime() - (days * 24 * 60 * 60 * 1000));
+    const startDate = daysAgo(days);
 
     return this.parseProjectUsage(projectPath, {
       startDate,

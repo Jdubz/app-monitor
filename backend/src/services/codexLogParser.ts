@@ -26,6 +26,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
 import { logger } from '../utils/logger.js';
+import { daysAgo } from '../constants/timeouts.js';
 
 export interface CodexSessionMeta {
   sessionId: string;
@@ -192,7 +193,7 @@ export class CodexLogParser {
    */
   async getRecentActivity(days: number): Promise<CodexUsageEstimate> {
     const now = new Date();
-    const startDate = new Date(now.getTime() - (days * 24 * 60 * 60 * 1000));
+    const startDate = daysAgo(days);
 
     return this.getUsageEstimate({ startDate, endDate: now });
   }

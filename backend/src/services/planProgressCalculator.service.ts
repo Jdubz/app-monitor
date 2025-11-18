@@ -36,6 +36,7 @@ import type {
   PlanDetails,
 } from '../types/plan.js';
 import type { Task } from './taskQueue.sqlite.js';
+import { MS_PER_DAY } from '../constants/timeouts.js';
 
 export class PlanProgressCalculator {
   private db: Database.Database;
@@ -176,7 +177,7 @@ export class PlanProgressCalculator {
 
     // Escalation logic: if any chain has been blocked for >24 hours
     const now = Date.now();
-    const escalationThreshold = 24 * 60 * 60 * 1000; // 24 hours
+    const escalationThreshold = MS_PER_DAY;
     const needsEscalation = blockedChains.some(chain =>
       chain.blockedAt && (now - chain.blockedAt) > escalationThreshold
     );
