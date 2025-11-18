@@ -7,7 +7,18 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ContextDeliveryService } from '../ContextDeliveryService.js';
-import type { Task } from '../taskQueue.sqlite.js';
+import type { Task } from '../../types/database.js';
+import { Readable } from 'stream';
+
+// Mock tar-fs module
+vi.mock('tar-fs', () => ({
+  default: {
+    pack: vi.fn(() => {
+      // Return a mock stream
+      return Readable.from(['mock tar data']);
+    })
+  }
+}));
 
 // Mock fs module with factory
 vi.mock('fs', async () => {
@@ -21,20 +32,6 @@ vi.mock('fs', async () => {
     existsSync: vi.fn(() => true)
   };
 });
-
-// Mock tar-fs module
-const mockTarStream = {
-  on: vi.fn(),
-  pipe: vi.fn(),
-  destroy: vi.fn()
-};
-
-vi.mock('tar-fs', () => ({
-  default: {
-    pack: vi.fn(() => mockTarStream)
-  },
-  pack: vi.fn(() => mockTarStream)
-}));
 
 // Import mocked fs
 import * as fs from 'fs';
