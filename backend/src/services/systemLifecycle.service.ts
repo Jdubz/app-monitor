@@ -1,12 +1,12 @@
 import { logger } from '../utils/logger.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
-import type { InteractiveSessionService } from './interactiveSession.service.js';
+import type { InteractiveSessionManager } from './InteractiveSessionManager.js';
 
 export interface SystemLifecycleComponents {
   ephemeralWorkerService: EphemeralWorkerService;
   workerHealthMonitor: WorkerHealthMonitor;
-  interactiveSessionService: InteractiveSessionService;
+  interactiveSessionService: InteractiveSessionManager;
   taskQueueWorker?: { stop: () => Promise<void> };
   metricsEmitter?: { stop: () => void };
 }

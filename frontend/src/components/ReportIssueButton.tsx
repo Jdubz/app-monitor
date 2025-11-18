@@ -688,14 +688,16 @@ export function ReportIssueButton() {
         <button
           onClick={() => setIsOpen(true)}
           disabled={reporting || !canReport}
-          className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="inline-flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           title={
             !canReport
               ? 'Please wait 60 seconds between reports'
               : 'Report an issue with this page'
           }
+          aria-label="Report Issue"
+          data-testid="report-issue-button"
         >
-          <AlertCircle className="w-4 h-4" />
+          <AlertCircle className="w-4 h-4" aria-hidden="true" />
           Report Issue
         </button>
 

@@ -3,8 +3,8 @@ import type { DockerManager, DockerValidationResult } from './dockerManager.js';
 import type { TaskQueueService } from './taskQueue.sqlite.js';
 import type { TaskExecutionService } from './taskExecution.service.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
-import type { InteractiveSessionService } from './interactiveSession.service.js';
-import type { InteractiveSessionStreamManager, InteractiveStreamMessage } from './interactiveSessionStreamManager.js';
+import type { InteractiveSessionManager } from './InteractiveSessionManager.js';
+import type { InteractiveSessionStreaming, InteractiveStreamMessage } from './InteractiveSessionStreaming.js';
 import type { SystemLifecycleService } from './systemLifecycle.service.js';
 import { MetricsEmitter } from './metricsEmitter.js';
 
@@ -13,8 +13,8 @@ export interface InitializationComponents {
   taskQueue: TaskQueueService;
   taskExecutionService: TaskExecutionService;
   ephemeralWorkerService: EphemeralWorkerService;
-  interactiveSessionService: InteractiveSessionService;
-  interactiveSessionStreamManager: InteractiveSessionStreamManager;
+  interactiveSessionService: InteractiveSessionManager;
+  interactiveSessionStreamManager: InteractiveSessionStreaming;
   systemLifecycleService: SystemLifecycleService;
 }
 

@@ -30,7 +30,7 @@ import {
 
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { AgentPersonality } from './agentPersonalities.js';
-import type { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
+import type { InteractiveSessionStreaming } from './InteractiveSessionStreaming.js';
 
 // ============================================================================
 // Types & Interfaces
@@ -56,7 +56,7 @@ export interface InteractiveSessionManagerOptions {
   idleTimeoutMs?: number;
   allowedModels?: AllowedInteractiveModel[];
   workerService: EphemeralWorkerService;
-  streamManager: InteractiveSessionStreamManager;
+  streamManager: InteractiveSessionStreaming;
 }
 
 export type ActivityKind = 'user' | 'agent';
@@ -83,7 +83,7 @@ export class InteractiveSessionManager extends EventEmitter {
   private readonly idleTimeoutMs: number;
   private readonly allowedModels: AllowedInteractiveModel[];
   private readonly workerService: EphemeralWorkerService;
-  private readonly streamManager: InteractiveSessionStreamManager;
+  private readonly streamManager: InteractiveSessionStreaming;
   private readonly sessionWorkers = new Map<string, string>(); // sessionId -> workerId
   private idleWatchdogInterval?: NodeJS.Timeout;
   private onIdleTimeoutCallback?: (sessionId: string, idleDuration: number) => void;

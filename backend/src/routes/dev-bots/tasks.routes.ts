@@ -13,6 +13,7 @@
 
 import { Router, Request, Response } from 'express';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
+import type { TaskQueueService } from '../../services/taskQueue.sqlite.js';
 import { logger } from '../../utils/logger.js';
 import { sendSuccess, sendError } from '../../utils/apiResponse.js';
 import { WorkerLogLocator } from '../../services/taskLogLocator.js';
@@ -1113,7 +1114,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
  */
 async function simulatePhaseProgression(
   taskId: string,
-  taskQueue: any,
+  taskQueue: TaskQueueService,
   speed: 'fast' | 'normal' | 'slow'
 ): Promise<void> {
   const delays = {
@@ -1140,6 +1141,7 @@ async function simulatePhaseProgression(
     const phaseName = phaseNames[phaseIndex - 1];
 
     // Update task to new phase
+    // eslint-disable-next-line local-rules/no-direct-db-in-routes -- Test simulation endpoint
     db.prepare(`
       UPDATE tasks
       SET phase_index = ?,
@@ -1160,6 +1162,7 @@ async function simulatePhaseProgression(
     await new Promise(resolve => setTimeout(resolve, phaseDelay));
 
     // Mark phase as complete
+    // eslint-disable-next-line local-rules/no-direct-db-in-routes -- Test simulation endpoint
     db.prepare(`
       UPDATE tasks
       SET phase_status = 'complete'
@@ -1168,6 +1171,7 @@ async function simulatePhaseProgression(
   }
 
   // Mark task as completed
+  // eslint-disable-next-line local-rules/no-direct-db-in-routes -- Test simulation endpoint
   db.prepare(`
     UPDATE tasks
     SET status = 'completed',

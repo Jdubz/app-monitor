@@ -200,6 +200,7 @@ export class ChainTrackerService {
           status = 'pending',
           blocked_reason = NULL,
           blocked_at = NULL,
+          blocked_by = NULL,
           assigned_worker = NULL,
           assigned_at = NULL
       WHERE chain_id = ?

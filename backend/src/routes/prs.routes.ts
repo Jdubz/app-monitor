@@ -75,6 +75,7 @@ export function createPRsRouter(devBotsManager: DevBotsManager) {
 
       // Query PR condition state directly from database
       const db = taskQueue.getDatabase();
+      // eslint-disable-next-line local-rules/no-direct-db-in-routes -- TODO: Move to PRConditionStateService
       const row = db.prepare(
         'SELECT state_json FROM pr_condition_states WHERE pr_number = ?'
       ).get(prNumber) as { state_json: string } | undefined;
@@ -96,13 +97,22 @@ export function createPRsRouter(devBotsManager: DevBotsManager) {
         'not_ready': 'pending'
       };
 
-      const gates = state.conditions ? Object.entries(state.conditions).map(([name, condition]: [string, any]) => ({
-        name,
-        status: statusMap[condition.status] || condition.status,
-        blocking: true, // All 8 conditions are blocking
-        blocking_issues: condition.blocking_issues || [],
-        last_checked: condition.last_checked
-      })) : [];
+      interface ConditionData {
+        status: string;
+        blocking_issues?: string[];
+        last_checked?: string;
+      }
+
+      const gates = state.conditions ? Object.entries(state.conditions).map(([name, condition]: [string, unknown]) => {
+        const cond = condition as ConditionData;
+        return {
+          name,
+          status: statusMap[cond.status] || cond.status,
+          blocking: true, // All 8 conditions are blocking
+          blocking_issues: cond.blocking_issues || [],
+          last_checked: cond.last_checked
+        };
+      }) : [];
 
       res.json({
         success: true,

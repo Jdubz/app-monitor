@@ -402,15 +402,25 @@ export class TaskQueueService {
         chain_depth INTEGER,
         -- Migration 012 columns (queue_stage and original_task_id removed - phase system only)
         chain_status TEXT,
+        blocked_reason TEXT,
+        blocked_at INTEGER,
+        blocked_by TEXT,
         -- Migration 013 columns (phase system)
         phase_index INTEGER DEFAULT 1,
         phase_name TEXT,
+        phase_status TEXT CHECK(phase_status IN ('ready', 'running', 'validating', 'recovering', 'complete', 'blocked')) DEFAULT 'ready',
         phase_attempts INTEGER DEFAULT 1,
+        phase_payload TEXT,
         -- Migration 020 columns (context management)
         context_bundle_id TEXT,
         context_cache_key TEXT,
         context_profiles TEXT,
-        risk_level TEXT CHECK(risk_level IN ('minimal', 'low', 'medium', 'high'))
+        risk_level TEXT CHECK(risk_level IN ('minimal', 'low', 'medium', 'high')),
+        -- Migration 4 columns (intelligent agent selection / task classification)
+        task_category TEXT CHECK(task_category IN ('implementation', 'analysis', 'documentation', 'review', 'planning')),
+        file_patterns TEXT,
+        estimated_complexity TEXT CHECK(estimated_complexity IN ('simple', 'medium', 'complex')),
+        preferred_agent TEXT CHECK(preferred_agent IN ('claude', 'codex', 'copilot'))
       );
 
       -- Indexes for performance

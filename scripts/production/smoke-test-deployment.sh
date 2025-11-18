@@ -34,7 +34,7 @@ cd "${PROJECT_ROOT}"
 echo -e "${BLUE}📦 Test 1: Package artifact simulation${NC}"
 # Simulate what deploy.sh does - copy files excluding what's in .gitignore
 rsync -a --exclude=node_modules --exclude=.git --exclude=dist --exclude=.pids \
-  --exclude=current --exclude=releases --exclude='*.log' \
+  --exclude=current --exclude=releases --exclude='*.log' --exclude='*.tsbuildinfo' \
   . "${SMOKE_TEST_DIR}/"
 
 if [ ! -f "${SMOKE_TEST_DIR}/package.json" ]; then
@@ -44,38 +44,42 @@ fi
 echo -e "${GREEN}✅ Artifact created successfully${NC}"
 echo ""
 
-echo -e "${BLUE}📦 Test 2: Backend npm ci (deployment simulation)${NC}"
-cd "${SMOKE_TEST_DIR}/backend"
+echo -e "${BLUE}📦 Test 2: Install dependencies (npm workspace)${NC}"
+# Since this is an npm workspace project, install from root
+cd "${SMOKE_TEST_DIR}"
 
-# Simulate deploy.sh behavior: temporarily remove root package.json
-if [ -f "${SMOKE_TEST_DIR}/package.json" ]; then
-  mv "${SMOKE_TEST_DIR}/package.json" "${SMOKE_TEST_DIR}/package.json.bak"
-fi
-
-# Test npm ci just like deploy.sh does
-if ! npm ci --prefer-offline --no-audit 2>&1 | tail -10; then
-  echo -e "${RED}❌ Backend npm ci failed (exactly as it would in production)${NC}"
+# Install all workspace dependencies
+if ! npm ci --prefer-offline --no-audit --include=dev 2>&1 | tail -15; then
+  echo -e "${RED}❌ npm ci failed${NC}"
   echo ""
   echo "This is the EXACT error that would occur during deployment!"
   echo "Fix before deploying:"
-  echo "  cd backend && npm install"
+  echo "  npm install"
   echo "  git add package-lock.json"
   exit 1
 fi
 
-# Restore package.json
-if [ -f "${SMOKE_TEST_DIR}/package.json.bak" ]; then
-  mv "${SMOKE_TEST_DIR}/package.json.bak" "${SMOKE_TEST_DIR}/package.json"
-fi
-
-echo -e "${GREEN}✅ Backend dependencies install successfully${NC}"
+echo -e "${GREEN}✅ Dependencies installed successfully${NC}"
 echo ""
 
-echo -e "${BLUE}🔨 Test 3: Backend build${NC}"
+echo -e "${BLUE}🔨 Test 3a: Build shared/api-contracts (project reference)${NC}"
+cd "${SMOKE_TEST_DIR}/shared/api-contracts"
+if ! npm run build 2>&1 | tail -5; then
+  echo -e "${RED}❌ API contracts build failed${NC}"
+  exit 1
+fi
+echo -e "${GREEN}✅ API contracts built successfully${NC}"
+echo ""
+
+echo -e "${BLUE}🔨 Test 3b: Backend build${NC}"
+cd "${SMOKE_TEST_DIR}/backend"
+
+# Build backend
 if ! npm run build 2>&1 | tail -5; then
   echo -e "${RED}❌ Backend build failed${NC}"
   exit 1
 fi
+
 echo -e "${GREEN}✅ Backend builds successfully${NC}"
 echo ""
 
@@ -84,7 +88,7 @@ echo -e "${BLUE}🗄️  Test 4: Database schema validation${NC}"
 # This catches bugs where indexes are created before migrations add the columns
 if ! node -e "
 const fs = require('fs');
-const code = fs.readFileSync('${SMOKE_TEST_DIR}/backend/dist/services/taskQueue.sqlite.js', 'utf8');
+const code = fs.readFileSync('dist/services/taskQueue.sqlite.js', 'utf8');
 
 // Look for the problematic pattern: CREATE INDEX on context_bundle_id within createSchema's SQL
 // The bug was: createSchema() had SQL like 'CREATE INDEX idx_tasks_context_bundle_id...'
@@ -99,8 +103,8 @@ if (!createSchemaMatch) {
 const createSchemaSQL = createSchemaMatch[1];
 
 // Check for the specific bug: CREATE INDEX on context_bundle_id in the initial schema
-if (createSchemaSQL.includes('idx_tasks_context_bundle_id') ||
-    (createSchemaSQL.match(/CREATE INDEX.*context_bundle_id/))) {
+// Use regex to match actual CREATE INDEX statements, not comments
+if (createSchemaSQL.match(/CREATE\s+INDEX[^;]*context_bundle_id/i)) {
   console.error('ERROR: createSchema() tries to create indexes on context_bundle_id');
   console.error('This will fail because context_bundle_id column is added by migrations!');
   console.error('Indexes should only be created AFTER migrations add the columns');
