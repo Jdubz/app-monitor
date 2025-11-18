@@ -118,7 +118,7 @@ test.describe('Dev Bots Command Center', () => {
     await expect(page.getByRole('tabpanel', { name: /Dev-Bots/i })).toBeVisible();
   });
 
-  test.skip('captures layout screenshot', async ({ page }) => {
+  test('captures layout screenshot', async ({ page }) => {
     await disableAnimations(page);
     const screenshot = await page.screenshot({
       animations: 'disabled',

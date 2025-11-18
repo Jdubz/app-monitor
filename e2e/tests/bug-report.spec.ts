@@ -19,39 +19,42 @@ test.describe('Bug Report Feature', () => {
   test.beforeEach(async ({ page: testPage }) => {
     page = testPage;
     // Navigate to app
-    await page.goto('/');
+    await page.goto('/', { waitUntil: 'networkidle' });
 
     // Wait for authentication if needed
-    const isAuthPage = await page.locator('input[type="email"]').isVisible().catch(() => false);
+    const passwordInput = page.locator('input[type="password"]').first();
+    const isAuthPage = await passwordInput.isVisible().catch(() => false);
     if (isAuthPage) {
-      await page.fill('input[type="email"]', 'test@example.com');
-      await page.fill('input[type="password"]', 'test-password');
-      await page.click('button[type="submit"]');
-      await page.waitForURL('/');
+      await passwordInput.fill('e2e-test-password');
+      await page.keyboard.press('Enter');
+      await page.waitForTimeout(1000); // Wait for auth to complete
     }
+
+    // Wait for the report issue button to be available
+    await page.waitForSelector('[data-testid="report-issue-button"], button:has-text("Report Issue")', { timeout: 10000 });
   });
 
   test.describe('Report Issue Button', () => {
     test('should be visible on page', async () => {
-      const reportButton = page.locator('button:has-text("Report Issue")');
+      const reportButton = page.getByTestId('report-issue-button');
       await expect(reportButton).toBeVisible();
     });
 
     test('should have alert icon', async () => {
-      const reportButton = page.locator('button:has-text("Report Issue")');
+      const reportButton = page.getByTestId('report-issue-button');
       await expect(reportButton.locator('svg')).toBeVisible();
     });
 
     test('should open modal when clicked', async () => {
-      await page.click('button:has-text("Report Issue")');
-      await expect(page.locator('h2:has-text("Report an Issue")')).toBeVisible();
+      await page.getByTestId('report-issue-button').click();
+      await expect(page.locator('h2:has-text("Report an Issue")')).toBeVisible({ timeout: 5000 });
     });
   });
 
   test.describe('Bug Report Modal', () => {
     test.beforeEach(async () => {
-      await page.click('button:has-text("Report Issue")');
-      await page.waitForSelector('h2:has-text("Report an Issue")');
+      await page.getByTestId('report-issue-button').click();
+      await page.waitForSelector('h2:has-text("Report an Issue")', { timeout: 5000 });
     });
 
     test('should display modal with all required elements', async () => {
