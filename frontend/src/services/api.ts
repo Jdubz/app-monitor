@@ -325,6 +325,14 @@ export const getDevBotsInteractiveStreamUrl = (sessionId: string): string => {
   const baseUrl = getApiBaseUrl();
   const apiKey = import.meta.env.VITE_API_KEY;
 
+  // Warn if API key is missing in production
+  if (!apiKey) {
+    log.warn('VITE_API_KEY is not set - WebSocket authentication will fail if required', {
+      env: import.meta.env.MODE,
+      hasKey: !!apiKey,
+    });
+  }
+
   let baseWsUrl: string;
   try {
     const parsed = new URL(baseUrl);
@@ -350,6 +358,8 @@ export const getDevBotsInteractiveStreamUrl = (sessionId: string): string => {
   if (apiKey) {
     return baseWsUrl + '?apiKey=' + encodeURIComponent(apiKey);
   }
+
+  log.warn('WebSocket URL generated without API key', { baseWsUrl });
   return baseWsUrl;
 };
 

@@ -65,11 +65,27 @@ router.post('/frontend', (req: Request, res: Response) => {
 
     const batch = req.body as LogBatch;
 
-    // Validate batch
+    // Validate batch with detailed error logging
     if (!batch.type || !batch.sessionId) {
+      logger.warn({
+        category: 'api',
+        action: 'invalid_log_batch',
+        message: 'Received invalid log batch format',
+        details: {
+          hasType: !!batch.type,
+          hasSessionId: !!batch.sessionId,
+          type: batch.type,
+          sessionId: batch.sessionId,
+          bodyKeys: Object.keys(req.body || {}),
+        }
+      });
       res.status(400).json({
         success: false,
-        error: 'Invalid batch format',
+        error: 'Invalid batch format: missing type or sessionId',
+        details: {
+          hasType: !!batch.type,
+          hasSessionId: !!batch.sessionId,
+        }
       });
       return;
     }
