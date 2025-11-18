@@ -94,16 +94,11 @@ export class PRCacheService<T = unknown> extends EventEmitter {
     const cached = this.get(prNumber);
     
     if (cached) {
-      this.hits++;
-      this.log('debug', 'Cache hit', { prNumber });
-      this.emit('hit', prNumber);
+      // Stats already tracked by get()
       return cached;
     }
     
-    this.misses++;
-    this.log('debug', 'Cache miss', { prNumber });
-    this.emit('miss', prNumber);
-    
+    // Stats already tracked by get() as a miss
     // Fetch and cache
     const data = await fetchFn();
     this.set(prNumber, data);
@@ -118,6 +113,9 @@ export class PRCacheService<T = unknown> extends EventEmitter {
     const entry = this.cache.get(prNumber);
     
     if (!entry) {
+      this.misses++;
+      this.log('debug', 'Cache miss', { prNumber });
+      this.emit('miss', prNumber);
       return null;
     }
     
@@ -125,11 +123,15 @@ export class PRCacheService<T = unknown> extends EventEmitter {
     const age = Date.now() - entry.fetchedAt;
     if (age > this.ttlMs) {
       this.cache.delete(prNumber);
+      this.misses++;
       this.log('debug', 'Cache entry expired', { prNumber, age });
       this.emit('expired', prNumber);
       return null;
     }
     
+    this.hits++;
+    this.log('debug', 'Cache hit', { prNumber });
+    this.emit('hit', prNumber);
     return entry.data;
   }
   

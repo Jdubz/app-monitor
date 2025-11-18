@@ -226,36 +226,42 @@ describe('PRCacheService', () => {
       cache.get(999);
     });
     
-    it('should emit "set" event when entry is cached', (done) => {
-      cache.on('set', (prNumber) => {
-        expect(prNumber).toBe(123);
-        done();
+    it('should emit "set" event when entry is cached', () => {
+      return new Promise<void>((resolve) => {
+        cache.on('set', (prNumber) => {
+          expect(prNumber).toBe(123);
+          resolve();
+        });
+        
+        cache.set(123, { number: 123, title: 'Test', status: 'open' });
       });
-      
-      cache.set(123, { number: 123, title: 'Test', status: 'open' });
     });
     
-    it('should emit "invalidated" event on invalidation', (done) => {
+    it('should emit "invalidated" event on invalidation', () => {
       cache.set(123, { number: 123, title: 'Test', status: 'open' });
       
-      cache.on('invalidated', (prNumber) => {
-        expect(prNumber).toBe(123);
-        done();
+      return new Promise<void>((resolve) => {
+        cache.on('invalidated', (prNumber) => {
+          expect(prNumber).toBe(123);
+          resolve();
+        });
+        
+        cache.invalidate(123);
       });
-      
-      cache.invalidate(123);
     });
     
-    it('should emit "cleared" event on clear', (done) => {
+    it('should emit "cleared" event on clear', () => {
       cache.set(123, { number: 123, title: 'Test 1', status: 'open' });
       cache.set(456, { number: 456, title: 'Test 2', status: 'open' });
       
-      cache.on('cleared', (count) => {
-        expect(count).toBe(2);
-        done();
+      return new Promise<void>((resolve) => {
+        cache.on('cleared', (count) => {
+          expect(count).toBe(2);
+          resolve();
+        });
+        
+        cache.clear();
       });
-      
-      cache.clear();
     });
   });
   
