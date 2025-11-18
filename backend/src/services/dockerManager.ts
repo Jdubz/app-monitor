@@ -96,7 +96,7 @@ export class DockerManager {
         result.isValid = false;
       }
 
-    } catch (_error) {
+    } catch (error) {
       result.errors.push(`Docker validation failed: ${error instanceof Error ? error.message : String(error)}`);
       result.isValid = false;
       logger.error({
@@ -133,7 +133,7 @@ export class DockerManager {
       }
 
       return { name, tag, exists: false };
-    } catch (_error) {
+    } catch (error) {
       logger.error({
       category: 'process',
       action: 'failed_to_check_image_imagename',
@@ -185,7 +185,7 @@ export class DockerManager {
           }
         );
       });
-    } catch (_error) {
+    } catch (error) {
       logger.error({
       category: 'process',
       action: 'error_pulling_image_imagename',
@@ -291,7 +291,7 @@ export class DockerManager {
       });
 
       return container;
-    } catch (_error) {
+    } catch (error) {
       logger.error({
         category: 'docker',
         action: 'create_container_error',
@@ -323,7 +323,7 @@ export class DockerManager {
     try {
       await this.docker.ping();
       return true;
-    } catch (_error) {
+    } catch (error) {
       logger.error({
       category: 'process',
       action: 'docker_health_check_failed',
@@ -355,7 +355,7 @@ export class DockerManager {
       action: 'removed_orphaned_volume_volume_name',
       message: `Removed orphaned volume: ${volume.Name}`
     });
-          } catch (_error) {
+          } catch (error) {
             logger.warn({
       category: 'process',
       action: 'failed_to_remove_volume_volume_name',
@@ -367,7 +367,7 @@ export class DockerManager {
       }
 
       return cleaned;
-    } catch (_error) {
+    } catch (error) {
       logger.error({
       category: 'process',
       action: 'failed_to_cleanup_orphaned_volumes',
@@ -401,7 +401,7 @@ export class DockerManager {
       action: 'removed_orphaned_network_network_name',
       message: `Removed orphaned network: ${network.Name}`
     });
-        } catch (_error) {
+        } catch (error) {
           logger.warn({
       category: 'process',
       action: 'failed_to_remove_network_network_name',
@@ -412,7 +412,7 @@ export class DockerManager {
       }
 
       return cleaned;
-    } catch (_error) {
+    } catch (error) {
       logger.error({
       category: 'process',
       action: 'failed_to_cleanup_orphaned_networks',
@@ -437,7 +437,7 @@ export class DockerManager {
       });
 
       return stream.toString();
-    } catch (_error) {
+    } catch (error) {
       logger.error({
       category: 'process',
       action: 'failed_to_get_logs_for_container_containerid',
@@ -516,7 +516,7 @@ export class DockerManager {
       });
 
       return containers;
-    } catch (_error) {
+    } catch (error) {
       logger.error({
         category: 'docker',
         action: 'list_containers_error',
@@ -543,7 +543,7 @@ export class DockerManager {
       });
 
       return true;
-    } catch (_error) {
+    } catch (error) {
       logger.error({
         category: 'docker',
         action: 'start_container_error',
@@ -570,7 +570,7 @@ export class DockerManager {
       });
 
       return true;
-    } catch (_error) {
+    } catch (error) {
       logger.error({
         category: 'docker',
         action: 'stop_container_error',
@@ -597,7 +597,7 @@ export class DockerManager {
       });
 
       return true;
-    } catch (_error) {
+    } catch (error) {
       logger.error({
         category: 'docker',
         action: 'restart_container_error',
@@ -631,7 +631,7 @@ export class DockerManager {
       });
 
       return true;
-    } catch (_error) {
+    } catch (error) {
       logger.error({
         category: 'docker',
         action: 'remove_container_error',
@@ -662,7 +662,7 @@ export class DockerManager {
       });
 
       return info;
-    } catch (_error) {
+    } catch (error) {
       logger.error({
         category: 'docker',
         action: 'inspect_container_error',
@@ -712,7 +712,7 @@ export class DockerManager {
       });
 
       return stream;
-    } catch (_error) {
+    } catch (error) {
       logger.error({
         category: 'docker',
         action: 'stream_logs_error',
@@ -739,7 +739,7 @@ export class DockerManager {
       });
 
       return stats as Docker.ContainerStats;
-    } catch (_error) {
+    } catch (error) {
       logger.error({
         category: 'docker',
         action: 'get_stats_error',
