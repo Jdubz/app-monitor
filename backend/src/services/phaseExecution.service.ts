@@ -157,7 +157,7 @@ export class PhaseExecutionService {
           this.orchestrator.updateStageRunWithRecovery(
             stageRunId,
             JSON.stringify(recoveryResult),
-            recoveryResult.success ? 'recovered' : 'failed'
+            recoveryResult.success ? 'success' : 'failed'
           );
 
           if (recoveryResult.success) {

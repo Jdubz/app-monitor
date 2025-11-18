@@ -440,6 +440,7 @@ router.post('/pr_review', async (req: Request, res: Response) => {
  */
 router.get('/health', (_req: Request, res: Response) => {
   return respondSuccess(res, {
+    status: 'ok',
     message: 'GitHub webhooks endpoint is healthy',
     timestamp: new Date().toISOString()
   });
