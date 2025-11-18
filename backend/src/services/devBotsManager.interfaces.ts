@@ -90,6 +90,9 @@ export interface DevBotsManagerDependencies {
  * Configuration for creating DevBotsManager dependencies
  */
 export interface DevBotsManagerConfig {
+  // HTTP server (required for InteractiveSessionStreaming WebSocket)
+  httpServer?: import('http').Server;
+
   // Docker configuration
   dockerSocket?: string;
 

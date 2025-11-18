@@ -22,16 +22,14 @@ import { resolveArtifactsDir } from '../utils/repoPaths.js';
 import { TaskExecutionService } from './taskExecution.service.js';
 import { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 import { TaskCompletionService } from './taskCompletion.service.js';
-import { InteractiveSessionService } from './interactiveSession.service.js';
-import { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
-import { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
+import { InteractiveSessionManager } from './InteractiveSessionManager.js';
+import { InteractiveSessionStreaming } from './InteractiveSessionStreaming.js';
 import { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
 import { TaskCreationService } from './taskCreation.service.js';
 import { StatusAggregationService } from './statusAggregation.service.js';
 import { RetryCoordinationService } from './retryCoordination.service.js';
 import { SystemLifecycleService } from './systemLifecycle.service.js';
 import { SystemInitializationService } from './systemInitialization.service.js';
-import { InteractiveSessionCoordinator } from './interactiveSessionCoordinator.service.js';
 import { CleanupCoordinator } from './cleanupCoordinator.service.js';
 import { InfoQueryService } from './infoQuery.service.js';
 import { AgentSelector } from './agentSelector.js';
@@ -175,21 +173,27 @@ export async function createDevBotsManagerDependencies(
   // Initialize PR monitoring for existing unmerged PRs
   await prWorkflowOrchestrator.initialize();
 
-  const interactiveSessionService = new InteractiveSessionService({
+  // Create InteractiveSessionStreaming (requires HTTP server)
+  if (!config.httpServer) {
+    throw new Error('HTTP server required for InteractiveSessionStreaming (pass via config.httpServer)');
+  }
+
+  const interactiveSessionStreaming = new InteractiveSessionStreaming({
+    docker,
+    httpServer: config.httpServer,
+    backlogLimit: 500,
+    shellCommand: ['/bin/bash'],
+  });
+
+  // Create InteractiveSessionManager (consolidated from 4 services)
+  const interactiveSessionManager = new InteractiveSessionManager({
     idleTimeoutMs: WORKER_IDLE_TIMEOUT_MS,
     allowedModels: [
       { provider: 'claude', name: '*' },
       { provider: 'codex', name: '*' },
     ],
-  });
-
-  const interactiveSessionOrchestrator = new InteractiveSessionOrchestrator(
-    ephemeralWorkerService,
-  );
-
-  const interactiveSessionStreamManager = new InteractiveSessionStreamManager(docker, {
-    backlogLimit: 500,
-    shellCommand: ['/bin/bash'],
+    workerService: ephemeralWorkerService,
+    streamManager: interactiveSessionStreaming,
   });
 
   // Note: TaskCompletionService and WorkerHealthMonitor require DevBotsManager instance
@@ -213,7 +217,7 @@ export async function createDevBotsManagerDependencies(
     {
       ephemeralWorkerService,
       workerHealthMonitor,
-      interactiveSessionService,
+      interactiveSessionService: interactiveSessionManager,
       // taskQueueWorker and metricsEmitter will be set dynamically by DevBotsManager
     },
     () => {}, // emit function placeholder
@@ -227,19 +231,12 @@ export async function createDevBotsManagerDependencies(
       taskQueue,
       taskExecutionService,
       ephemeralWorkerService,
-      interactiveSessionService,
-      interactiveSessionStreamManager,
+      interactiveSessionService: interactiveSessionManager,
+      interactiveSessionStreamManager: interactiveSessionStreaming,
       systemLifecycleService
     },
     () => {}, // emit function placeholder
     async () => {} // endInteractiveSession placeholder
-  );
-
-  // Create InteractiveSessionCoordinator
-  const interactiveSessionCoordinator = new InteractiveSessionCoordinator(
-    interactiveSessionService,
-    interactiveSessionOrchestrator,
-    interactiveSessionStreamManager
   );
 
   // Create CleanupCoordinator
@@ -278,13 +275,11 @@ export async function createDevBotsManagerDependencies(
     taskExecutionService,
     taskCompletionService,
     prWorkflowOrchestrator,
-    interactiveSessionService,
-    interactiveSessionOrchestrator,
-    interactiveSessionStreamManager,
+    interactiveSessionManager,
+    interactiveSessionStreaming,
     workerHealthMonitor,
     systemLifecycleService,
     systemInitializationService,
-    interactiveSessionCoordinator,
     cleanupCoordinator,
     infoQueryService,
   };
