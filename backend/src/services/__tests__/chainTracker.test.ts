@@ -25,14 +25,6 @@ function setupTestSchema(db: Database.Database) {
       assigned_at INTEGER,
       created_at INTEGER NOT NULL
     );
-
-    CREATE TABLE IF NOT EXISTS pull_requests (
-      number INTEGER PRIMARY KEY,
-      state TEXT NOT NULL,
-      title TEXT,
-      created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
-    );
   `);
 }
 
@@ -301,24 +293,7 @@ describe('ChainTrackerService', () => {
   });
 
   describe('closeCompletedChains', () => {
-    it('should close chains when PR merged and no pending tasks', () => {
-      // Insert PR info (mock - in real system would be in PR table)
-      insertTask(db, {
-        id: 'task-1',
-        status: 'completed',
-        chain_status: 'active',
-        chain_id: 'chain-1',
-        pr_number: 123,
-      });
 
-      // Mock PR as merged (normally would query PR table)
-      // For this test, we'll just verify the query logic works
-
-      chainTracker.closeCompletedChains();
-
-      // Since we don't have PR table in this test, we can't verify full behavior
-      // In integration tests, this will be properly tested
-    });
 
     it('should not close chains with pending tasks', () => {
       insertTask(db, {

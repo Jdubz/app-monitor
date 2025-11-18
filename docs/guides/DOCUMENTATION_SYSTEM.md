@@ -254,7 +254,6 @@ Every document MUST start with:
 - ❌ No versioned docs (`-v2.md`, `-new.md`, `-old.md`)
 - ❌ No completion markers (`COMPLETED.md`, `DONE.md`)
 - ❌ No databases in docs/ (`.db` files)
-- ❌ `master-design-intent.md` > 200 lines
 - ❌ `/analysis/` > 5 files
 - ❌ Total docs > 60 files
 
