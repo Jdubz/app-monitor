@@ -44,6 +44,8 @@ import {
 } from './taskQueueMetrics.service.js';
 import { getPlanStatusUpdater } from './planStatusUpdater.singleton.js';
 import { getPhaseMetricsService, type PhaseMetricsSnapshot, type PhaseStats } from './phaseMetrics.service.js';
+import { TaskRepository } from '../repositories/TaskRepository.js';
+import { WorkerLifecycleService } from './WorkerLifecycleService.js';
 // import { MigrationManager } from './migrationManager.js'; // TODO: Uncomment when migration files are updated
 
 export type { ChainStats, BlockedChain };
@@ -195,6 +197,8 @@ export class TaskQueueService {
   private readonly chainTracker: ChainTrackerService; // Chain lifecycle management (Phase 2)
   private readonly maxConcurrentChains: number; // Chain concurrency limit
   private readonly metricsService: TaskQueueMetricsService; // Metrics and analytics
+  private readonly taskRepository: TaskRepository; // Database operations (extracted)
+  private readonly workerLifecycle: WorkerLifecycleService; // Worker management (extracted)
   private taskCompletionCount = 0; // PR sync counter (event-driven trigger)
   private readonly PR_SYNC_THRESHOLD: number; // Every N task completions
   private prSyncService: { syncAllTrackedPRs: () => Promise<void> } | null = null; // PRSyncService (set after construction)
@@ -205,6 +209,10 @@ export class TaskQueueService {
     this.ensureDirectory();
     this.db = new Database(dbPath);
     this.initialize();
+    
+    // Initialize extracted services
+    this.taskRepository = new TaskRepository(this.db);
+    this.workerLifecycle = new WorkerLifecycleService(this.db);
     
     // Initialize chain tracking with configurable concurrency limit
     this.chainTracker = new ChainTrackerService(this.db);
@@ -832,13 +840,8 @@ export class TaskQueueService {
 
     updateStmt.run(now, now, workerId, task.id);
 
-    // Create worker record
-    const workerStmt = this.db.prepare(`
-      INSERT INTO workers (id, agent_id, status, current_task_id, created_at, last_heartbeat)
-      VALUES (?, ?, 'running', ?, ?, ?)
-    `);
-
-    workerStmt.run(workerId, task.assigned_agent, task.id, now, now);
+    // Register worker via WorkerLifecycleService
+    this.workerLifecycle.registerWorker(workerId, task.assigned_agent, task.id);
 
     // Record execution attempt
     const executionStmt = this.db.prepare(`
@@ -1186,8 +1189,7 @@ export class TaskQueueService {
    * Update worker heartbeat
    */
   updateWorkerHeartbeat(workerId: string): void {
-    const stmt = this.db.prepare('UPDATE workers SET last_heartbeat = ? WHERE id = ?');
-    stmt.run(Date.now(), workerId);
+    this.workerLifecycle.updateHeartbeat(workerId);
   }
 
   /**
@@ -1199,23 +1201,12 @@ export class TaskQueueService {
    */
   detectStalledWorkers(): string[] {
     return this.transaction(() => {
-      const HEARTBEAT_TIMEOUT_MS = 90000; // 90 seconds (increased from 30s to reduce false positives)
-      const timeout = Date.now() - HEARTBEAT_TIMEOUT_MS;
+      const stalledWorkers = this.workerLifecycle.handleStalledWorkers();
       const now = Date.now();
 
-      const stmt = this.db.prepare(`
-        SELECT id, current_task_id, last_heartbeat
-        FROM workers
-        WHERE status = 'running'
-        AND last_heartbeat < ?
-      `);
-
-      const stalledWorkers = stmt.all(timeout) as { id: string; current_task_id: string; last_heartbeat: number }[];
-
+      // Fail tasks for stalled workers
       for (const worker of stalledWorkers) {
-        const timeSinceLastHeartbeat = now - worker.last_heartbeat;
-        
-        if (worker.current_task_id) {
+        if (worker.task_id) {
           const updateTaskStmt = this.db.prepare(`
             UPDATE tasks
             SET status = 'failed',
@@ -1224,24 +1215,8 @@ export class TaskQueueService {
             WHERE id = ?
           `);
 
-          updateTaskStmt.run(now, worker.current_task_id);
+          updateTaskStmt.run(now, worker.task_id);
         }
-
-        const updateWorkerStmt = this.db.prepare('UPDATE workers SET status = \'stopped\' WHERE id = ?');
-        updateWorkerStmt.run(worker.id);
-
-        logger.warn({
-          category: 'process',
-          action: 'stalled_worker_detected',
-          message: `Worker ${worker.id} stalled (no heartbeat for ${Math.round(timeSinceLastHeartbeat / 1000)}s), marked task ${worker.current_task_id} as failed`,
-          details: {
-            workerId: worker.id,
-            taskId: worker.current_task_id,
-            lastHeartbeat: worker.last_heartbeat,
-            timeSinceLastHeartbeat_ms: timeSinceLastHeartbeat,
-            timeout_ms: HEARTBEAT_TIMEOUT_MS
-          }
-        });
       }
 
       return stalledWorkers.map(w => w.id);
