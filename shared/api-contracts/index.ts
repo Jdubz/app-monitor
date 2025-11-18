@@ -355,23 +355,6 @@ export interface DevBotsTaskTemplate {
   validationRules: string[];
 }
 
-export interface DevBotsWorkspaceSyncStatus {
-  isRunning: boolean;
-  syncInProgress: boolean;
-  lastSyncTime?: string;
-  baseDir: string;
-  repositories: string[];
-  workers: string[];
-  conflictStrategy: string;
-}
-
-export interface DevBotsWorkspaceSyncResult {
-  successful: Array<{ worker?: string; repo: string; action: string }>;
-  conflicts: Array<{ worker: string; repo: string; path: string; timestamp: string; strategy: string; status?: string }>;
-  errors: Array<{ worker?: string; repo: string; error: string }>;
-  skipped: Array<{ worker?: string; repo: string; reason: string }>;
-}
-
 export interface DevBotsInteractiveSessionModelOption {
   provider: string;
   model: string;
@@ -638,8 +621,6 @@ export type DevBotsAgentsResponse = ApiSuccess<{ agents: DevBotsAgentPersonality
 export type DevBotsAgentComparisonResponse = ApiSuccess<{ comparison: DevBotsAgentComparison }>;
 export type DevBotsTemplatesResponse = ApiSuccess<{ templates: DevBotsTaskTemplate[] }>;
 export type DevBotsMessageResponse = ApiSuccess<{ message: string }>;
-export type DevBotsWorkspaceSyncStatusResponse = ApiSuccess<DevBotsWorkspaceSyncStatus>;
-export type DevBotsWorkspaceSyncResultResponse = ApiSuccess<DevBotsWorkspaceSyncResult>;
 export type DevBotsInteractiveSessionStateResponse = ApiSuccess<DevBotsInteractiveSessionState>;
 export type DevBotsInteractiveSessionInputResponse = ApiSuccess<{ accepted: boolean }>;
 

@@ -9,7 +9,6 @@ import type { DevBotsStatus } from './statusAggregation.service.js';
 import { TaskPromptTemplateManager } from './taskPromptTemplates.js';
 import { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js';
 import { EnhancedTaskData } from './taskMetadataFields.js';
-import { WorkspaceSyncManager, SyncOptions, SyncResult } from './workspaceSyncManager.js';
 import { DockerManager, DockerValidationResult } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
 import { MetricsEmitter } from './metricsEmitter.js';
@@ -69,7 +68,6 @@ export class DevBotsManager extends EventEmitter {
   private agentManager!: AgentPersonalityManager;
   private templateManager!: TaskPromptTemplateManager;
   private guidelinesManager!: TaskCreationGuidelinesManager;
-  private workspaceSyncManager!: WorkspaceSyncManager;
   private retryManager!: RetryManager;
   private scopeControl!: ScopeControlService;
   private ephemeralWorkerService!: EphemeralWorkerService;
@@ -102,7 +100,6 @@ export class DevBotsManager extends EventEmitter {
     this.agentManager = dependencies.agentManager;
     this.templateManager = dependencies.templateManager;
     this.guidelinesManager = dependencies.guidelinesManager;
-    this.workspaceSyncManager = dependencies.workspaceSyncManager;
     this.retryManager = dependencies.retryManager;
     this.scopeControl = dependencies.scopeControl;
     this.ephemeralWorkerService = dependencies.ephemeralWorkerService;
@@ -522,32 +519,6 @@ export class DevBotsManager extends EventEmitter {
 
   async triggerCleanup(type: string): Promise<Task> {
     return await this.cleanupCoordinator.triggerCleanup(type);
-  }
-
-  /**
-   * Get workspace sync status
-   */
-  async getWorkspaceSyncStatus(): Promise<unknown> {
-    return this.workspaceSyncManager.getSyncStatus();
-  }
-
-  /**
-   * Trigger manual workspace sync
-   */
-  async triggerWorkspaceSync(options: SyncOptions = {}): Promise<SyncResult> {
-    logger.info({
-      category: 'process',
-      action: 'manual_workspace_sync_triggered',
-      message: 'Manual workspace sync triggered'
-    });
-    return await this.workspaceSyncManager.syncAllWorkspaces(options);
-  }
-
-  /**
-   * Update workspace sync configuration
-   */
-  updateWorkspaceSyncConfig(options: Partial<SyncOptions>): void {
-    this.workspaceSyncManager.updateConfig(options);
   }
 
   /**

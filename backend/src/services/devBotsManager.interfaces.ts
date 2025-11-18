@@ -11,7 +11,6 @@ import type { TaskQueueService } from './taskQueue.sqlite.js';
 import type { AgentPersonalityManager } from './agentPersonalities.js';
 import type { TaskPromptTemplateManager } from './taskPromptTemplates.js';
 import type { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js';
-import type { WorkspaceSyncManager } from './workspaceSyncManager.js';
 import type { DockerManager } from './dockerManager.js';
 import type { RetryManager } from './retryManager.js';
 // TaskPersistence removed - using SQLite directly
@@ -48,7 +47,6 @@ export interface DevBotsManagerDependencies {
   agentManager: AgentPersonalityManager;
   templateManager: TaskPromptTemplateManager;
   guidelinesManager: TaskCreationGuidelinesManager;
-  workspaceSyncManager: WorkspaceSyncManager;
   retryManager: RetryManager;
 
   // Scope control
@@ -105,11 +103,6 @@ export interface DevBotsManagerConfig {
   maxBackups?: number;
   autoSave?: boolean;
   saveInterval?: number;
-
-  // Workspace sync configuration
-  workspaceBaseDir?: string;
-  repositories?: string[];
-  conflictStrategy?: 'auto-merge' | 'manual';
 
   // Retry configuration
   maxRetries?: number;

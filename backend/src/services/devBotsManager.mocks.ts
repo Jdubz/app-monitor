@@ -11,7 +11,6 @@ import type { TaskQueueService, Task } from './taskQueue.sqlite.js';
 import type { AgentPersonalityManager, AgentPersonality } from './agentPersonalities.js';
 import type { TaskPromptTemplateManager } from './taskPromptTemplates.js';
 import type { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js';
-import type { WorkspaceSyncManager } from './workspaceSyncManager.js';
 import type { DockerManager } from './dockerManager.js';
 import type { RetryManager } from './retryManager.js';
 import type { TaskPersistence } from './taskPersistence.js';
@@ -391,16 +390,6 @@ export function createMockInfoQueryService(): InfoQueryService {
 }
 
 /**
- * Create mock WorkspaceSyncManager
- */
-export function createMockWorkspaceSyncManager(): WorkspaceSyncManager {
-  return {
-    syncWorkspace: vi.fn().mockResolvedValue({ success: true }),
-    getSyncStatus: vi.fn().mockReturnValue({ status: 'synced' }),
-  } as unknown as WorkspaceSyncManager;
-}
-
-/**
  * Create mock RetryManager
  */
 export function createMockRetryManager(): RetryManager {
@@ -568,7 +557,6 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
   const agentManager = createMockAgentManager();
   const templateManager = createMockTemplateManager();
   const guidelinesManager = createMockGuidelinesManager();
-  const workspaceSyncManager = createMockWorkspaceSyncManager();
   const retryManager = createMockRetryManager();
   // workspaceOrchestrator removed
   // taskPersistence removed - using SQLite directly
@@ -599,7 +587,6 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     agentManager,
     templateManager,
     guidelinesManager,
-    workspaceSyncManager,
     retryManager,
     scopeControl,
     ephemeralWorkerService,

@@ -4,7 +4,7 @@
  * Endpoints for system health, metrics, and infrastructure management:
  * - System status and health checks
  * - Performance metrics and agent comparison
- * - Projects and workspace synchronization
+ * - Projects management
  * - Docker integration and management
  * - Cleanup and maintenance
  * - Emergency recovery
@@ -179,49 +179,6 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
         error
       });
       sendError(res, 'Failed to get projects', 500, { message: error instanceof Error ? error.message : String(error) });
-    }
-  });
-
-  // ============================================================================
-  // Workspace Synchronization
-  // ============================================================================
-
-  /**
-   * GET /workspace-sync/status
-   * Get workspace synchronization status
-   */
-  router.get('/workspace-sync/status', async (_req: Request, res: Response) => {
-    try {
-      const status = await devBotsManager.getWorkspaceSyncStatus();
-      sendSuccess(res, status);
-    } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'error_getting_workspace_sync_status_error',
-        message: `Error getting workspace sync status: ${error}`,
-        error
-      });
-      sendError(res, 'Failed to get workspace sync status', 500, { message: error instanceof Error ? error.message : String(error) });
-    }
-  });
-
-  /**
-   * POST /workspace-sync/trigger
-   * Trigger workspace synchronization
-   */
-  router.post('/workspace-sync/trigger', async (req: Request, res: Response) => {
-    try {
-      const { force } = req.body;
-      const result = await devBotsManager.triggerWorkspaceSync(force);
-      sendSuccess(res, result);
-    } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'error_triggering_workspace_sync_error',
-        message: `Error triggering workspace sync: ${error}`,
-        error
-      });
-      sendError(res, 'Failed to trigger workspace sync', 500, { message: error instanceof Error ? error.message : String(error) });
     }
   });
 

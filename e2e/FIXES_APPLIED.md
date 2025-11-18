@@ -360,7 +360,12 @@ These are **expected failures** that validate comprehensive test coverage for fu
 
 ---
 
+**Note:** The workspace-sync feature has been removed as it was determined to be redundant. Dev-bots have native git and gh CLI access within their Docker containers, making an API wrapper unnecessary. See WORKSPACE_SYNC_REMOVAL.md for details.
+
+---
+
 **Total Lines Changed:** ~120 lines
 **Build Status:** ✅ Successful (clean rebuild)
 **Tests Fixed:** 8 issues (6 real bugs + 2 test improvements)
 **Production Bugs Fixed:** 3 critical (Docker race condition, phase status constraint, webhook health endpoint)
+**Code Removed:** ~1,500 lines (workspace-sync feature)
