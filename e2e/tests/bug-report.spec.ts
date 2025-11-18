@@ -77,7 +77,7 @@ test.describe('Bug Report Feature', () => {
     });
 
     test('should close modal when Cancel button clicked', async () => {
-      await page.click('button:has-text("Cancel")').last();
+      await page.locator('button:has-text("Cancel")').last().click();
       await expect(page.locator('h2:has-text("Report an Issue")')).not.toBeVisible();
     });
 
@@ -318,7 +318,7 @@ test.describe('Bug Report Feature', () => {
       await page.click('button:has-text("Report Issue")');
       await page.waitForSelector('h2:has-text("Report an Issue")');
       await page.fill('textarea#description', 'First report text');
-      await page.click('button:has-text("Cancel")').last();
+      await page.locator('button:has-text("Cancel")').last().click();
 
       // Wait a bit
       await page.waitForTimeout(1000);
@@ -337,7 +337,7 @@ test.describe('Bug Report Feature', () => {
       await page.click('button:has-text("Report Issue")');
       await page.waitForSelector('h2:has-text("Report an Issue")');
       await page.waitForTimeout(500);
-      await page.click('button:has-text("Cancel")').last();
+      await page.locator('button:has-text("Cancel")').last().click();
 
       // Second open
       await page.click('button:has-text("Report Issue")');
