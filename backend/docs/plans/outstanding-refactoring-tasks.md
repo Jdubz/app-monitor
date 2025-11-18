@@ -15,8 +15,8 @@ Original analysis: 27 issues identified, health score 6.5/10.
 
 ## P0 Critical Tasks (Complete Week 1)
 
-### 1. ✅ Execute Migration 013 - Remove Deprecated PR Columns (2h)
-**Status:** NOT STARTED (originally P0)
+### 1. ✅ Execute Migration 027 - Remove Deprecated PR Columns (2h)
+**Status:** COMPLETE ✅
 
 **Issue:** Deprecated PR workflow columns still in production schema.
 
@@ -71,16 +71,15 @@ TaskRepository and WorkerLifecycleService extracted, 48 tests passing.
 
 All major extractions done. Minor cleanup may remain.
 
-### 6. Refactor EphemeralWorkerService (32h)
-**Status:** PLANNED - See next-refactoring-session.md
+### 6. ✅ Refactor EphemeralWorkerService (32h)
+**Status:** COMPLETE ✅
 
-Split into:
-- ContainerLifecycleService (8h)
-- WorkerLogService (6h)
-- ContextDeliveryService (8h)
+All three services extracted with comprehensive test coverage:
+- ContainerLifecycleService (289 lines, 25 tests)
+- WorkerLogService (319 lines, no dedicated tests but used in integration)
+- ContextDeliveryService (218 lines, 19 tests)
 
-**Priority:** P1  
-**Total Effort:** 22 hours
+EphemeralWorkerService reduced from 1621 lines to 1257 lines (364 lines extracted).
 
 ### 7. Move Database Access to Service Layer (8h)
 **Status:** NOT STARTED
@@ -207,10 +206,10 @@ Constants already in:
 
 | Priority | Tasks | Estimated Hours |
 |----------|-------|-----------------|
-| P0 | 1 task | 2h |
-| P1 | 4 tasks | 62h |
+| P0 | 0 tasks | 0h |
+| P1 | 3 tasks | 40h |
 | P2 | 4 tasks | 48h |
-| **Total** | **9 tasks** | **112h** |
+| **Total** | **7 tasks** | **88h** |
 
 ---
 
@@ -224,8 +223,8 @@ Constants already in:
 
 ## Action Items Checklist
 
-- [ ] Execute migration 013 (P0, 2h)
-- [ ] Refactor EphemeralWorkerService (P1, 22h)
+- [x] Execute migration 027 (P0, 2h) ✅
+- [x] Refactor EphemeralWorkerService (P1, 22h) ✅
 - [ ] Move DB access to service layer (P1, 8h)
 - [ ] Consolidate log parsers (P1, 8h)
 - [ ] Add EphemeralWorker tests (P1, 12h)
