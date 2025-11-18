@@ -17,8 +17,6 @@ import type {
   DevBotsTask as ContractDevBotsTask,
   DevBotsTaskTemplate as ContractDevBotsTaskTemplate,
   DevBotsWorkerStatus as ContractDevBotsWorkerStatus,
-  DevBotsWorkspaceSyncResult as ContractDevBotsWorkspaceSyncResult,
-  DevBotsWorkspaceSyncStatus as ContractDevBotsWorkspaceSyncStatus,
   DevBotsTrackedTaskType as ContractDevBotsTrackedTaskType,
   DevBotsQueueSummary as ContractDevBotsQueueSummary,
   DevBotsQueueItem as ContractDevBotsQueueItem,
@@ -32,8 +30,6 @@ export type DevBotsCleanupStatus = ContractDevBotsCleanupStatus;
 export type DevBotsAgentPersonality = ContractDevBotsAgentPersonality;
 export type DevBotsTaskTemplate = ContractDevBotsTaskTemplate;
 export type DevBotsWorkerStatus = ContractDevBotsWorkerStatus;
-export type DevBotsWorkspaceSyncResult = ContractDevBotsWorkspaceSyncResult;
-export type DevBotsWorkspaceSyncStatus = ContractDevBotsWorkspaceSyncStatus;
 export type DevBotsInteractiveSession = ContractDevBotsInteractiveSession;
 export type DevBotsInteractiveSessionStatus = ContractDevBotsInteractiveSessionStatus;
 export type DevBotsInteractiveSessionModelOption = ContractDevBotsInteractiveSessionModelOption;
