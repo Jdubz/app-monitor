@@ -81,7 +81,7 @@ test.describe('PR Gate 1: Base Branch Updated', () => {
     await triggerGateEvaluation(pr.number);
     
     const gates = await getPRGates(pr.number);
-    const baseGate = gates.find((g: any) => g.name === 'base_branch_updated');
+    const baseGate = gates.find((g: any) => g.name === 'branch_updated');
     
     expect(baseGate).toBeDefined();
     expect(baseGate.status).toBe('pass');
@@ -103,7 +103,7 @@ test.describe('PR Gate 1: Base Branch Updated', () => {
     await triggerGateEvaluation(pr.number);
     
     const gates = await getPRGates(pr.number);
-    const baseGate = gates.find((g: any) => g.name === 'base_branch_updated');
+    const baseGate = gates.find((g: any) => g.name === 'branch_updated');
     
     expect(baseGate.status).toBe('fail');
     expect(baseGate.message).toContain('behind');
@@ -134,7 +134,7 @@ test.describe('PR Gate 1: Base Branch Updated', () => {
     await triggerGateEvaluation(pr.number);
     
     const gates = await getPRGates(pr.number);
-    const baseGate = gates.find((g: any) => g.name === 'base_branch_updated');
+    const baseGate = gates.find((g: any) => g.name === 'branch_updated');
     
     // Should pass after auto-update
     if (baseGate.status === 'pass') {
@@ -618,7 +618,7 @@ test.describe('PR Gate 7: Final Validation', () => {
     await triggerGateEvaluation(pr.number);
     
     const gates = await getPRGates(pr.number);
-    const finalGate = gates.find((g: any) => g.name === 'final_validation');
+    const finalGate = gates.find((g: any) => g.name === 'final_validation_passed');
     
     expect(finalGate.status).toBe('pass');
     expect(finalGate.blocking).toBe(true);
@@ -645,7 +645,7 @@ test.describe('PR Gate 7: Final Validation', () => {
     await triggerGateEvaluation(pr.number);
     
     const gates = await getPRGates(pr.number);
-    const finalGate = gates.find((g: any) => g.name === 'final_validation');
+    const finalGate = gates.find((g: any) => g.name === 'final_validation_passed');
     
     expect(finalGate.status).toBe('fail');
     
