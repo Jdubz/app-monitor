@@ -5,12 +5,10 @@
  * Separates dependency creation from business logic to enable testing.
  */
 
-import path from 'path';
 import { TaskQueueService } from './taskQueue.sqlite.js';
 import { AgentPersonalityManager } from './agentPersonalities.js';
 import { TaskPromptTemplateManager } from './taskPromptTemplates.js';
 import { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js';
-import { WorkspaceSyncManager } from './workspaceSyncManager.js';
 import { DockerManager } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
 import { MS_PER_HOUR, WORKER_IDLE_TIMEOUT_MS } from '../constants/timeouts.js';
@@ -80,21 +78,6 @@ export async function createDevBotsManagerDependencies(
 
   // Note: StatusAggregationService created after ephemeralWorkerService
   // Each bot gets its own fresh repository clone inside the container
-
-  // Initialize workspace sync manager
-  const workspaceBaseDir = config.workspaceBaseDir ?? path.resolve(path.join(process.cwd(), '../../'));
-  const repositories = config.repositories ?? [
-    'job-finder-BE',
-    'job-finder-FE',
-    'job-finder-shared-types',
-    'job-finder-worker'
-  ];
-  const workspaceSyncManager = new WorkspaceSyncManager({
-    baseDir: workspaceBaseDir,
-    repositories,
-    workers: [],
-    conflictStrategy: (config.conflictStrategy === 'manual' ? 'stash' : config.conflictStrategy) ?? 'auto-merge',
-  });
 
   // Initialize retry manager
   const retryConfig: Partial<RetryConfig> = {
@@ -265,7 +248,6 @@ export async function createDevBotsManagerDependencies(
     agentManager,
     templateManager,
     guidelinesManager,
-    workspaceSyncManager,
     retryManager,
     // WorkspaceOrchestrator removed - using container isolation
     // Recovery removed - handled by task execution service

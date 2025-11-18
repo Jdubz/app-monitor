@@ -50,7 +50,8 @@ export interface ContainerInspection {
  */
 export class ContainerLifecycleService {
   private static readonly MAX_BACKOFF_MS = 3000; // 3 seconds max backoff
-  
+  private removalInProgress: Map<string, Promise<void>> = new Map();
+
   constructor(private docker: Docker) {}
 
   /**
@@ -148,29 +149,64 @@ export class ContainerLifecycleService {
    * @param force Force removal even if running
    */
   async removeContainer(containerId: string, force: boolean = true): Promise<void> {
-    try {
-      const container = this.docker.getContainer(containerId);
-      await container.remove({ v: true, force });
-
-      logger.info({
+    // Check if removal is already in progress for this container
+    const existingRemoval = this.removalInProgress.get(containerId);
+    if (existingRemoval) {
+      logger.debug({
         category: 'docker',
-        action: 'container_removed',
-        message: `Removed container ${containerId}`,
-        details: { containerId, force }
+        action: 'container_removal_already_in_progress',
+        message: `Container ${containerId} removal already in progress, waiting...`,
+        details: { containerId }
       });
-    } catch (error) {
-      // Container may already be removed
-      if ((error as Error).message.includes('no such container')) {
-        logger.debug({
-          category: 'docker',
-          action: 'container_already_removed',
-          message: `Container ${containerId} already removed`,
-          details: { containerId }
-        });
-        return;
-      }
-      throw error;
+      // Wait for the existing removal to complete
+      return existingRemoval;
     }
+
+    // Create a new removal promise
+    const removalPromise = (async () => {
+      try {
+        const container = this.docker.getContainer(containerId);
+        await container.remove({ v: true, force });
+
+        logger.info({
+          category: 'docker',
+          action: 'container_removed',
+          message: `Removed container ${containerId}`,
+          details: { containerId, force }
+        });
+      } catch (error) {
+        // Container may already be removed
+        if ((error as Error).message.includes('no such container')) {
+          logger.debug({
+            category: 'docker',
+            action: 'container_already_removed',
+            message: `Container ${containerId} already removed`,
+            details: { containerId }
+          });
+          return;
+        }
+        // If removal is already in progress (409), treat as success
+        if ((error as Error).message.includes('removal of container') &&
+            (error as Error).message.includes('is already in progress')) {
+          logger.debug({
+            category: 'docker',
+            action: 'container_removal_race_handled',
+            message: `Container ${containerId} removal already in progress (race condition handled)`,
+            details: { containerId }
+          });
+          return;
+        }
+        throw error;
+      } finally {
+        // Always remove from tracking map when done
+        this.removalInProgress.delete(containerId);
+      }
+    })();
+
+    // Track this removal
+    this.removalInProgress.set(containerId, removalPromise);
+
+    return removalPromise;
   }
 
   /**

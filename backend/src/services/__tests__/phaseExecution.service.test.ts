@@ -226,10 +226,10 @@ describe('PhaseExecutionService', () => {
       expect(result.recoverySucceeded).toBe(true);
       expect(mockRecoveryService.executeRecovery).toHaveBeenCalled();
 
-      // Verify stage run recorded as recovered
+      // Verify stage run recorded as success (recovered status maps to success per DB constraints)
       const stageRuns = db.prepare('SELECT * FROM task_stage_runs WHERE task_id = ?').all(task.id) as Array<Record<string, unknown>>;
       expect(stageRuns).toHaveLength(1);
-      expect(stageRuns[0].status).toBe('recovered');
+      expect(stageRuns[0].status).toBe('success');
     });
 
     it('should handle validation failure without recovery (retry same phase)', async () => {

@@ -13,7 +13,7 @@ import { config } from '../config.js';
  * Tasks will be blocked if they reach this limit without successful validation.
  * Configurable via MAX_PHASE_ATTEMPTS environment variable (default: 4).
  */
-export const MAX_PHASE_ATTEMPTS = config.phaseSystem.maxPhaseAttempts;
+export const MAX_PHASE_ATTEMPTS = config.phaseSystem?.maxPhaseAttempts ?? 4;
 
 /**
  * Phase names mapped by phase index.
