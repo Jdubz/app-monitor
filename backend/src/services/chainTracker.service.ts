@@ -98,8 +98,10 @@ export class ChainTrackerService {
    * 
    * Complete means:
    * 1. Task reached Phase 7 (PR Shepherding) with phase_status = 'complete'
-   * 2. PR is merged (from pull_requests.state = 'merged')
-   * 3. No pending/active tasks in the chain
+   * 2. No pending/active tasks in the chain
+   * 
+   * Note: We rely on Phase 7 completion which already validates PR merge status
+   * via GitHub API. No need to duplicate PR state in local database.
    * 
    * Returns number of chains closed
    */
@@ -110,15 +112,9 @@ export class ChainTrackerService {
       WHERE chain_id IN (
         SELECT DISTINCT t1.chain_id
         FROM tasks t1
-        LEFT JOIN pull_requests pr ON t1.pr_number = pr.number
         WHERE t1.chain_id IS NOT NULL
-        AND (
-          -- New phase system: Phase 7 complete
-          (t1.phase_index = 7 AND t1.phase_status = 'complete')
-          OR 
-          -- PR merged
-          (pr.state = 'merged')
-        )
+        AND t1.phase_index = 7 
+        AND t1.phase_status = 'complete'
         AND NOT EXISTS (
           SELECT 1 FROM tasks t2
           WHERE t2.chain_id = t1.chain_id
