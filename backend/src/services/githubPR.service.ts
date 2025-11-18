@@ -138,7 +138,7 @@ export class GitHubPRService {
   async getPRStatus(prNumber: number, repoOwner?: string, repoName?: string): Promise<PRStatus> {
     const owner = repoOwner || this.repoOwner;
     const repo = repoName || this.repoName;
-    
+
     const executeGetPRStatus = async (): Promise<PRStatus> => {
       logger.info({
         category: 'pr-workflow',

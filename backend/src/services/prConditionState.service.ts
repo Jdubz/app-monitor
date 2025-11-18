@@ -124,10 +124,15 @@ export class PRConditionStateService {
    * This is the main entry point called from webhook handlers
    *
    * Uses locking to prevent concurrent evaluations from corrupting state
+   *
+   * @param prNumber - PR number to evaluate
+   * @param eventType - Type of event triggering evaluation
+   * @param prContext - Optional PR status context to avoid redundant GitHub API calls
    */
   async evaluateConditions(
     prNumber: number,
-    eventType: 'check_suite' | 'pull_request_review' | 'pull_request_synchronize' | 'push' | 'task_completion' | 'manual_restart' | 'pull_request_reopened' | 'pull_request_ready_for_review' | 'pull_request_opened'
+    eventType: 'check_suite' | 'pull_request_review' | 'pull_request_synchronize' | 'push' | 'task_completion' | 'manual_restart' | 'pull_request_reopened' | 'pull_request_ready_for_review' | 'pull_request_opened',
+    prContext?: PRStatus
   ): Promise<void> {
     // Check for existing evaluation in progress
     const existingLock = this.evaluationLocks.get(prNumber);
@@ -159,7 +164,7 @@ export class PRConditionStateService {
     this.evaluationLocks.set(prNumber, lockPromise);
 
     try {
-      await this._evaluateConditionsInternal(prNumber, eventType);
+      await this._evaluateConditionsInternal(prNumber, eventType, prContext);
     } finally {
       // Always release lock
       this.evaluationLocks.delete(prNumber);
@@ -173,7 +178,8 @@ export class PRConditionStateService {
    */
   private async _evaluateConditionsInternal(
     prNumber: number,
-    eventType: 'check_suite' | 'pull_request_review' | 'pull_request_synchronize' | 'push' | 'task_completion' | 'manual_restart' | 'pull_request_reopened' | 'pull_request_ready_for_review' | 'pull_request_opened'
+    eventType: 'check_suite' | 'pull_request_review' | 'pull_request_synchronize' | 'push' | 'task_completion' | 'manual_restart' | 'pull_request_reopened' | 'pull_request_ready_for_review' | 'pull_request_opened',
+    prContext?: PRStatus
   ): Promise<void> {
     logger.info({
       category: 'pr-workflow',
@@ -195,27 +201,27 @@ export class PRConditionStateService {
     switch (eventType) {
       case 'check_suite':
         // ONLY evaluate CI checks
-        await this.evaluateAndHandleCIChecks(prNumber, state);
+        await this.evaluateAndHandleCIChecks(prNumber, state, prContext);
         break;
 
       case 'pull_request_review':
         // ONLY evaluate comments and change requests
-        await this.evaluateAndHandleReview(prNumber, state);
+        await this.evaluateAndHandleReview(prNumber, state, prContext);
         break;
 
       case 'pull_request_synchronize':
         // Evaluate code-change-related conditions
-        await this.evaluateAndHandleSynchronize(prNumber, state);
+        await this.evaluateAndHandleSynchronize(prNumber, state, prContext);
         break;
 
       case 'push':
         // ONLY evaluate branch update
-        await this.evaluateAndHandleBranchUpdate(prNumber, state);
+        await this.evaluateAndHandleBranchUpdate(prNumber, state, prContext);
         break;
 
       case 'task_completion':
         // Re-evaluate the condition that task was fixing
-        await this.evaluateAndHandleTaskCompletion(prNumber, state);
+        await this.evaluateAndHandleTaskCompletion(prNumber, state, prContext);
         break;
 
       case 'manual_restart':
@@ -225,10 +231,10 @@ export class PRConditionStateService {
           action: 'manual_restart_all_conditions',
           message: `Full condition restart for PR #${prNumber} - evaluating all 8 conditions`
         });
-        await this.evaluateAndHandleCIChecks(prNumber, state);
-        await this.evaluateAndHandleReview(prNumber, state);
-        await this.evaluateAndHandleSynchronize(prNumber, state);
-        await this.evaluateAndHandleBranchUpdate(prNumber, state);
+        await this.evaluateAndHandleCIChecks(prNumber, state, prContext);
+        await this.evaluateAndHandleReview(prNumber, state, prContext);
+        await this.evaluateAndHandleSynchronize(prNumber, state, prContext);
+        await this.evaluateAndHandleBranchUpdate(prNumber, state, prContext);
         // Task verification and Copilot review will be checked in checkMergeReadiness
         break;
 
@@ -240,7 +246,7 @@ export class PRConditionStateService {
           action: 'pr_opened_initial_evaluation',
           message: `Initial condition evaluation for new PR #${prNumber}`
         });
-        await this.evaluateCommonConditions(prNumber, state, false);
+        await this.evaluateCommonConditions(prNumber, state, false, prContext);
         break;
 
       case 'pull_request_reopened':
@@ -250,7 +256,7 @@ export class PRConditionStateService {
           action: 'pr_reopened_evaluation',
           message: `Re-evaluating conditions for reopened PR #${prNumber}`
         });
-        await this.evaluateCommonConditions(prNumber, state, true);
+        await this.evaluateCommonConditions(prNumber, state, true, prContext);
         break;
 
       case 'pull_request_ready_for_review':
@@ -260,7 +266,7 @@ export class PRConditionStateService {
           action: 'pr_ready_for_review_evaluation',
           message: `Evaluating conditions for PR #${prNumber} now ready for review`
         });
-        await this.evaluateCommonConditions(prNumber, state, false);
+        await this.evaluateCommonConditions(prNumber, state, false, prContext);
         break;
     }
 
@@ -308,18 +314,20 @@ export class PRConditionStateService {
    * Evaluate common PR conditions (CI checks, reviews, conflicts)
    * Used by multiple event types: opened, reopened, ready_for_review
    * @param includeBranchUpdate - Whether to also evaluate branch update condition
+   * @param prContext - Optional PR status context to avoid redundant GitHub API calls
    */
   private async evaluateCommonConditions(
     prNumber: number,
     state: PRConditionState,
-    includeBranchUpdate: boolean
+    includeBranchUpdate: boolean,
+    prContext?: PRStatus
   ): Promise<void> {
-    await this.evaluateAndHandleCIChecks(prNumber, state);
-    await this.evaluateAndHandleReview(prNumber, state);
-    await this.evaluateAndHandleSynchronize(prNumber, state);
+    await this.evaluateAndHandleCIChecks(prNumber, state, prContext);
+    await this.evaluateAndHandleReview(prNumber, state, prContext);
+    await this.evaluateAndHandleSynchronize(prNumber, state, prContext);
 
     if (includeBranchUpdate) {
-      await this.evaluateAndHandleBranchUpdate(prNumber, state);
+      await this.evaluateAndHandleBranchUpdate(prNumber, state, prContext);
     }
   }
 
@@ -379,9 +387,9 @@ export class PRConditionStateService {
   /**
    * Handle check_suite event - ONLY evaluate CI checks
    */
-  private async evaluateAndHandleCIChecks(prNumber: number, state: PRConditionState): Promise<void> {
-    // Fetch PR status once and reuse
-    const prStatus = await this.github.getPRStatus(prNumber);
+  private async evaluateAndHandleCIChecks(prNumber: number, state: PRConditionState, prContext?: PRStatus): Promise<void> {
+    // Use provided context or fetch PR status
+    const prStatus = prContext || await this.github.getPRStatus(prNumber);
     const evaluation = await this.evaluateCIChecksCondition(prNumber, prStatus);
 
     await this.handleConditionChange(prNumber, state, 'ci_checks_passing', evaluation);
@@ -390,10 +398,10 @@ export class PRConditionStateService {
   /**
    * Handle pull_request_review event - ONLY evaluate comments and change requests
    */
-  private async evaluateAndHandleReview(prNumber: number, state: PRConditionState): Promise<void> {
-    // Fetch PR status once and reuse
-    const prStatus = await this.github.getPRStatus(prNumber);
-    
+  private async evaluateAndHandleReview(prNumber: number, state: PRConditionState, prContext?: PRStatus): Promise<void> {
+    // Use provided context or fetch PR status
+    const prStatus = prContext || await this.github.getPRStatus(prNumber);
+
     // Evaluate comments
     const commentsEval = await this.evaluateCommentsCondition(prNumber);
     await this.handleConditionChange(prNumber, state, 'comments_resolved', commentsEval);
@@ -406,11 +414,11 @@ export class PRConditionStateService {
   /**
    * Handle pull_request.synchronize event - Evaluate code-change-related conditions
    */
-  private async evaluateAndHandleSynchronize(prNumber: number, state: PRConditionState): Promise<void> {
+  private async evaluateAndHandleSynchronize(prNumber: number, state: PRConditionState, prContext?: PRStatus): Promise<void> {
     state.last_updated = Date.now();
 
-    // Fetch PR status once and reuse for all evaluations
-    const prStatus = await this.github.getPRStatus(prNumber);
+    // Use provided context or fetch PR status once for all evaluations
+    const prStatus = prContext || await this.github.getPRStatus(prNumber);
 
     // Evaluate conditions that code changes might affect
     const commentsEval = await this.evaluateCommentsCondition(prNumber);
@@ -428,9 +436,9 @@ export class PRConditionStateService {
   /**
    * Handle push to base branch - ONLY evaluate branch update
    */
-  private async evaluateAndHandleBranchUpdate(prNumber: number, state: PRConditionState): Promise<void> {
-    // Fetch PR status once and reuse
-    const prStatus = await this.github.getPRStatus(prNumber);
+  private async evaluateAndHandleBranchUpdate(prNumber: number, state: PRConditionState, prContext?: PRStatus): Promise<void> {
+    // Use provided context or fetch PR status
+    const prStatus = prContext || await this.github.getPRStatus(prNumber);
     const evaluation = await this.evaluateBranchUpdateCondition(prNumber, prStatus);
     await this.handleConditionChange(prNumber, state, 'branch_updated', evaluation);
   }
@@ -438,10 +446,10 @@ export class PRConditionStateService {
   /**
    * Handle task completion - Re-evaluate all conditions to detect partial fixes
    */
-  private async evaluateAndHandleTaskCompletion(prNumber: number, state: PRConditionState): Promise<void> {
-    // Fetch PR status once and reuse for all evaluations
-    const prStatus = await this.github.getPRStatus(prNumber);
-    
+  private async evaluateAndHandleTaskCompletion(prNumber: number, state: PRConditionState, prContext?: PRStatus): Promise<void> {
+    // Use provided context or fetch PR status once for all evaluations
+    const prStatus = prContext || await this.github.getPRStatus(prNumber);
+
     // Re-evaluate ALL conditions to see what changed
     const evaluations = await Promise.all([
       this.evaluateCIChecksCondition(prNumber, prStatus),
