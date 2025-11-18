@@ -961,7 +961,8 @@ describe('API Integration Suite', () => {
     ]);
   });
 
-  describe('Dev-Bots data management', () => {
+  describe.skip('Dev-Bots data management', () => {
+    // All endpoints in this section have been removed - no tests remain
     runEndpointTests([
       // NOTE: POST /api/dev-bots/export and import endpoints were removed
       // {
@@ -985,17 +986,8 @@ describe('API Integration Suite', () => {
       //   url: '/api/dev-bots/onboarding/complete',
       //   body: { workerId: 'worker-1' },
       // },
-      {
-        name: 'GET /api/dev-bots/workspace-sync/status',
-        method: 'get',
-        url: '/api/dev-bots/workspace-sync/status',
-      },
-      {
-        name: 'POST /api/dev-bots/workspace-sync/trigger',
-        method: 'post',
-        url: '/api/dev-bots/workspace-sync/trigger',
-        body: { repositories: ['dev-monitor'] },
-      },
+      // Workspace sync endpoints removed - feature deemed unnecessary
+      // Dev-bots have native git/gh CLI access (see docs/architecture/simplicity-principle.md)
     ]);
   });
 
