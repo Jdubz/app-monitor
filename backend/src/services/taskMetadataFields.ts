@@ -239,7 +239,7 @@ const TASK_METADATA_FIELD_DEFINITIONS = [
     key: 'parentInitiative',
     label: 'Parent Initiative',
     description: 'Program, epic, or initiative that the task rolls into.',
-    queueField: 'parent_initiative',
+    queueField: 'plan_id',
     guidelineField: 'parentInitiative',
     templateVariables: ['task.parentInitiative']
   },

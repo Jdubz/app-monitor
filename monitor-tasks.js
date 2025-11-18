@@ -97,9 +97,13 @@ async function monitor() {
         activeTasks.forEach((item, idx) => {
           const t = item.task;
           const duration = formatDuration(t.assignedAt || t.createdAt);
+          const phaseInfo = t.phaseIndex && t.phaseName 
+            ? `Phase ${t.phaseIndex}/7: ${t.phaseName}${t.phaseAttempts > 1 ? ` (attempt ${t.phaseAttempts})` : ''}`
+            : 'N/A';
           console.log(`  ${idx + 1}. ${t.id.substring(0, 8)} - ${colors.blue}RUNNING${colors.reset} (${duration})`);
           console.log(`     ${t.description?.substring(0, 70) || 'No description'}`);
           console.log(`     Worker: ${t.assignedWorker || 'N/A'} | Agent: ${t.assignedAgent || 'N/A'}`);
+          console.log(`     ${colors.cyan}${phaseInfo}${colors.reset}`);
         });
       }
       
@@ -108,8 +112,12 @@ async function monitor() {
         pendingTasks.slice(0, 5).forEach((item, idx) => {
           const t = item.task;
           const waitTime = formatDuration(t.createdAt);
+          const phaseInfo = t.phaseIndex && t.phaseName 
+            ? `Phase ${t.phaseIndex}/7: ${t.phaseName}`
+            : 'N/A';
           console.log(`  ${idx + 1}. ${t.id.substring(0, 8)} - ${colors.gray}WAITING${colors.reset} (${waitTime})`);
           console.log(`     ${t.description?.substring(0, 70) || 'No description'}`);
+          console.log(`     ${colors.gray}${phaseInfo}${colors.reset}`);
         });
         if (pendingTasks.length > 5) {
           console.log(`     ... and ${pendingTasks.length - 5} more`);

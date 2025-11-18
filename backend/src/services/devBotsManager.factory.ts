@@ -13,6 +13,7 @@ import { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js';
 import { WorkspaceSyncManager } from './workspaceSyncManager.js';
 import { DockerManager } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
+import { MS_PER_HOUR, WORKER_IDLE_TIMEOUT_MS } from '../constants/timeouts.js';
 // TaskPersistence removed - using SQLite directly
 // WorkspaceOrchestrator removed - using container isolation
 import { ScopeControlService } from './scopeControl.service.js';
@@ -20,18 +21,15 @@ import { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import { resolveArtifactsDir } from '../utils/repoPaths.js';
 import { TaskExecutionService } from './taskExecution.service.js';
 import { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
-import { SimpleFailureRecovery } from './failureRecovery.js';
 import { TaskCompletionService } from './taskCompletion.service.js';
-import { InteractiveSessionService } from './interactiveSession.service.js';
-import { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
-import { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
+import { InteractiveSessionManager } from './InteractiveSessionManager.js';
+import { InteractiveSessionStreaming } from './InteractiveSessionStreaming.js';
 import { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
 import { TaskCreationService } from './taskCreation.service.js';
 import { StatusAggregationService } from './statusAggregation.service.js';
 import { RetryCoordinationService } from './retryCoordination.service.js';
 import { SystemLifecycleService } from './systemLifecycle.service.js';
 import { SystemInitializationService } from './systemInitialization.service.js';
-import { InteractiveSessionCoordinator } from './interactiveSessionCoordinator.service.js';
 import { CleanupCoordinator } from './cleanupCoordinator.service.js';
 import { InfoQueryService } from './infoQuery.service.js';
 import { AgentSelector } from './agentSelector.js';
@@ -125,7 +123,8 @@ export async function createDevBotsManagerDependencies(
         'GIT_COMMITTER_NAME',
         'GIT_COMMITTER_EMAIL'
       ]
-    }
+    },
+    taskQueue.getDb() // Pass database instance from TaskQueueService
   );
 
   // Initialize status aggregation service
@@ -155,7 +154,7 @@ export async function createDevBotsManagerDependencies(
     {
       maxConcurrentWorkers: 2,
       stuckCheckInterval: 60000,
-      absoluteMaxDuration: 60 * 60 * 1000,
+      absoluteMaxDuration: MS_PER_HOUR,
       artifactsDir: resolveArtifactsDir(),
       recovery: {
         enabled: config.recovery?.enabled ?? true,
@@ -174,37 +173,42 @@ export async function createDevBotsManagerDependencies(
   // Initialize PR monitoring for existing unmerged PRs
   await prWorkflowOrchestrator.initialize();
 
-  const interactiveSessionService = new InteractiveSessionService({
-    idleTimeoutMs: 5 * 60 * 1000,
-    allowedModels: [
-      { provider: 'claude', name: '*' },
-      { provider: 'codex', name: '*' },
-    ],
-  });
+  // Create InteractiveSessionStreaming (requires HTTP server)
+  if (!config.httpServer) {
+    throw new Error('HTTP server required for InteractiveSessionStreaming (pass via config.httpServer)');
+  }
 
-  const interactiveSessionOrchestrator = new InteractiveSessionOrchestrator(
-    ephemeralWorkerService,
-  );
-
-  const interactiveSessionStreamManager = new InteractiveSessionStreamManager(docker, {
+  const interactiveSessionStreaming = new InteractiveSessionStreaming({
+    docker,
+    httpServer: config.httpServer,
     backlogLimit: 500,
     shellCommand: ['/bin/bash'],
   });
 
-  // Note: SimpleFailureRecovery, TaskCompletionService, and WorkerHealthMonitor require DevBotsManager instance
+  // Create InteractiveSessionManager (consolidated from 4 services)
+  const interactiveSessionManager = new InteractiveSessionManager({
+    idleTimeoutMs: WORKER_IDLE_TIMEOUT_MS,
+    allowedModels: [
+      { provider: 'claude', name: '*' },
+      { provider: 'codex', name: '*' },
+    ],
+    workerService: ephemeralWorkerService,
+    streamManager: interactiveSessionStreaming,
+  });
+
+  // Note: TaskCompletionService and WorkerHealthMonitor require DevBotsManager instance
   // They will be created/initialized after DevBotsManager is instantiated
   // For now, create placeholders that will be replaced
-  const recovery = null as unknown as SimpleFailureRecovery; // Will be set by DevBotsManager
   const taskCompletionService = null as unknown as TaskCompletionService; // Will be set by DevBotsManager
 
-  // Create WorkerHealthMonitor (will be given recovery instance by DevBotsManager)
+  // Create WorkerHealthMonitor
   const workerHealthMonitor = new WorkerHealthMonitor(
     ephemeralWorkerService,
     taskQueue,
     dockerManager,
     scopeControl,
     null, // processManager removed
-    null, // recovery will be set by DevBotsManager
+    null, // recovery - will be handled by task execution service
     () => {} // emit function placeholder, will be bound by DevBotsManager
   );
 
@@ -213,7 +217,7 @@ export async function createDevBotsManagerDependencies(
     {
       ephemeralWorkerService,
       workerHealthMonitor,
-      interactiveSessionService,
+      interactiveSessionService: interactiveSessionManager,
       // taskQueueWorker and metricsEmitter will be set dynamically by DevBotsManager
     },
     () => {}, // emit function placeholder
@@ -221,27 +225,18 @@ export async function createDevBotsManagerDependencies(
   );
 
   // Create SystemInitializationService (callbacks will be bound by DevBotsManager)
-  // Note: recovery will be set by DevBotsManager after instantiation
   const systemInitializationService = new SystemInitializationService(
     {
       dockerManager,
       taskQueue,
-      recovery: null as unknown as SimpleFailureRecovery, // Will be set by DevBotsManager
       taskExecutionService,
       ephemeralWorkerService,
-      interactiveSessionService,
-      interactiveSessionStreamManager,
+      interactiveSessionService: interactiveSessionManager,
+      interactiveSessionStreamManager: interactiveSessionStreaming,
       systemLifecycleService
     },
     () => {}, // emit function placeholder
     async () => {} // endInteractiveSession placeholder
-  );
-
-  // Create InteractiveSessionCoordinator
-  const interactiveSessionCoordinator = new InteractiveSessionCoordinator(
-    interactiveSessionService,
-    interactiveSessionOrchestrator,
-    interactiveSessionStreamManager
   );
 
   // Create CleanupCoordinator
@@ -273,20 +268,18 @@ export async function createDevBotsManagerDependencies(
     workspaceSyncManager,
     retryManager,
     // WorkspaceOrchestrator removed - using container isolation
-    recovery,
+    // Recovery removed - handled by task execution service
     // TaskPersistence removed - using SQLite directly
     scopeControl,
     ephemeralWorkerService,
     taskExecutionService,
     taskCompletionService,
     prWorkflowOrchestrator,
-    interactiveSessionService,
-    interactiveSessionOrchestrator,
-    interactiveSessionStreamManager,
+    interactiveSessionManager,
+    interactiveSessionStreaming,
     workerHealthMonitor,
     systemLifecycleService,
     systemInitializationService,
-    interactiveSessionCoordinator,
     cleanupCoordinator,
     infoQueryService,
   };

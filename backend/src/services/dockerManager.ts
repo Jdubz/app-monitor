@@ -317,11 +317,6 @@ export class DockerManager {
   }
 
   /**
-   * Get the Gemini Dev-Bot image name
-   * @deprecated Use getDevBotImage() instead. All agents use the same unified image.
-   */
-
-  /**
    * Health check for Docker
    */
   async healthCheck(): Promise<boolean> {

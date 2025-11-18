@@ -66,11 +66,8 @@ export class InteractiveSessionOrchestrator {
       owner_email: session.ownerEmail,
       model_provider: session.modelProvider,
       model_name: session.modelName,
-      // Additional fields required by EphemeralWorkerService.createWorker
-      is_repair_bot: false,
       pr_number: null,
       followup_for_pr: null,
-      original_task_id: null,
       prompt: '',
       priority: 'p2' as const,
       updated_at: session.startedAt,

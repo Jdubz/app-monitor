@@ -10,7 +10,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { ContextBundleGenerator } from '../context/contextBundleGenerator';
 import { ContextRecipeLoader } from '../context/contextRecipeLoader';
 import { TaskPromptTemplateManager, type TaskContext } from '../taskPromptTemplates';
-import type { Task } from '../devBotsManager';
+import type { Task } from '../taskQueue.sqlite';
 
 describe('Context Integration Flow', () => {
   let bundleGenerator: ContextBundleGenerator;

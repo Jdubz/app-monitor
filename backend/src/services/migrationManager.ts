@@ -261,7 +261,7 @@ export class MigrationManager {
   /**
    * Run all pending migrations
    */
-  async runMigrations(): Promise<MigrationResult> {
+  runMigrations(): MigrationResult {
     const startTime = Date.now();
     
     logger.info({

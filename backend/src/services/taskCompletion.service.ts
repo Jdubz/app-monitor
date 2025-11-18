@@ -1,7 +1,19 @@
 /**
  * TaskCompletionService
- *
- * Handles the final lifecycle stage of ephemeral worker tasks:
+ * 
+ * ⚠️ DEPRECATED - PENDING REMOVAL
+ * 
+ * This service is superseded by the 7-phase system:
+ * - Phase validation handled by PhaseValidatorRegistry
+ * - Quality gates handled by Phase 3 (Review) and Phase 5 (Test & Validate)
+ * - Task completion handled by PhaseOrchestratorService.advancePhase()
+ * - Recovery handled by RecoveryAgentService
+ * 
+ * Status: Instantiated in DevBotsManager but completeEphemeralTask() is NEVER CALLED.
+ * 
+ * Action Required: Remove this service entirely once confirmed no hidden dependencies.
+ * 
+ * Original functionality (now distributed across phase system):
  * - Token usage tracking
  * - Quality gate validation
  * - Workspace sealing and commit pushing
@@ -23,8 +35,7 @@ import { getTokenTrackingService } from './tokenTracking.js';
 import { getQualityGateValidator, type QualityValidationResult } from './qualityGates.js';
 import { extractPRInfo, isValidPRInfo } from '../utils/prExtractor.js';
 import { getTaskVerificationService, type TaskVerificationResult } from './taskVerification.service.js';
-import { getQualityObservationService, type QualityObservation } from './qualityObservation.service.js';
-import { getQualityImprovementTaskGenerator } from './qualityImprovementTaskGenerator.js';
+import { getQualityObservationService } from './qualityObservation.service.js';
 import { getDatabase } from './database.js';
 
 export interface TaskCompletionServiceConfig {
@@ -80,36 +91,36 @@ export class TaskCompletionService {
     this.extractAndRecordTokenUsage(task, output);
     this.extractAndRecordPRInfo(task, output);
 
-    const workspacePath = worker.workspace.hostPath;
     let qualityValidation: QualityValidationResult | undefined;
     let taskVerification: TaskVerificationResult | undefined;
     let shouldPush = exitCode === 0;
 
-    // Run comprehensive task verification first (if enabled)
-    if (shouldPush && this.config.enableTaskVerification) {
-      taskVerification = await this.runTaskVerification(task, workspacePath, output);
-      shouldPush = taskVerification.passed;
+    // NOTE: Task verification and quality gates are disabled with Docker cp mode
+    // because workspace exists only inside containers, not on host filesystem.
+    // These features would need to be re-implemented to run inside containers.
 
-      // Log verification details
-      if (!taskVerification.passed) {
-        logger.warn({
-          category: 'verification',
-          action: 'task_verification_failed',
-          message: `Task verification failed for ${task.id}`,
-          details: {
-            acceptanceCriteriaMet: taskVerification.acceptanceCriteria.percentMet,
-            testCoverage: taskVerification.testCoverage?.totalCoverage,
-            scopeViolations: taskVerification.scopeBoundaries?.violationCount,
-            recommendations: taskVerification.recommendations
-          }
-        });
-      }
+    if (this.config.enableTaskVerification) {
+      logger.info({
+        category: 'verification',
+        action: 'task_verification_skipped',
+        message: `Task verification skipped for ${task.id} - workspace not on host filesystem (Docker cp mode)`,
+        details: {
+          taskId: task.id,
+          reason: 'Workspace is inside container only, cannot run host-side verification'
+        }
+      });
     }
 
-    // Run quality gates (if verification passed and quality gates enabled)
-    if (shouldPush && this.config.enableQualityGates) {
-      qualityValidation = await this.runQualityGateValidation(task, workspacePath);
-      shouldPush = qualityValidation.passed;
+    if (this.config.enableQualityGates) {
+      logger.info({
+        category: 'verification',
+        action: 'quality_gates_skipped',
+        message: `Quality gate validation skipped for ${task.id} - workspace not on host filesystem`,
+        details: {
+          taskId: task.id,
+          reason: 'Workspace is inside container only, cannot run host-side quality gates'
+        }
+      });
     }
 
     // Check if bot self-reported completion status
@@ -577,11 +588,6 @@ export class TaskCompletionService {
         }
       });
 
-      // Generate improvement tasks if needed
-      if (observation.improvementOpportunities.length > 0 && !task.is_repair_bot) {
-        await this.generateImprovementTasks(task, observation);
-      }
-
       // Emit observation event for UI updates
       this.emit('quality_observation_created', {
         taskId: task.id,
@@ -596,76 +602,6 @@ export class TaskCompletionService {
         error
       });
       // Don't throw - observation failure shouldn't block task completion
-    }
-  }
-
-  /**
-   * Generate improvement tasks from quality observation
-   */
-  private async generateImprovementTasks(
-    parentTask: Task,
-    observation: QualityObservation
-  ): Promise<void> {
-    try {
-      // Get task queue from TaskCompletionService dependencies
-      // Note: We need access to taskQueue, but it's not directly available here.
-      // For now, we'll get it through the database initialization path.
-      // TODO: Consider refactoring to inject taskQueue as dependency
-
-      const { getTaskQueueService } = await import('./taskQueue.factory.js');
-      const taskQueue = getTaskQueueService();
-
-      const generator = getQualityImprovementTaskGenerator(taskQueue);
-
-      // Check if we should generate improvements
-      if (!generator.shouldGenerateImprovements(parentTask, observation)) {
-        logger.debug({
-          category: 'quality-improvement',
-          action: 'skip_improvement_generation',
-          message: `Skipping improvement task generation for ${parentTask.id}`,
-          details: { taskId: parentTask.id }
-        });
-        return;
-      }
-
-      // Limit opportunities to top 5
-      const limitedOpportunities = {
-        ...observation,
-        improvementOpportunities: generator.getLimitedOpportunities(observation.improvementOpportunities)
-      };
-
-      // Generate improvement tasks
-      const generatedTasks = await generator.generateImprovementTasks(
-        parentTask,
-        limitedOpportunities
-      );
-
-      logger.info({
-        category: 'quality-improvement',
-        action: 'improvement_tasks_generated',
-        message: `Generated ${generatedTasks.length} improvement tasks for ${parentTask.id}`,
-        details: {
-          parentTaskId: parentTask.id,
-          tasksGenerated: generatedTasks.length,
-          taskIds: generatedTasks.map(t => t.task.id)
-        }
-      });
-
-      // Emit event for UI updates
-      this.emit('improvement_tasks_generated', {
-        parentTaskId: parentTask.id,
-        tasks: generatedTasks.map(t => t.task),
-        observation
-      });
-
-    } catch (error) {
-      logger.error({
-        category: 'quality-improvement',
-        action: 'improvement_task_generation_failed',
-        message: `Failed to generate improvement tasks for ${parentTask.id}`,
-        error
-      });
-      // Don't throw - improvement task generation failure shouldn't block completion
     }
   }
 

@@ -582,7 +582,7 @@ describe('TaskPromptTemplateManager', () => {
       it('should display parent initiative when provided', () => {
         const taskWithParent: Task = {
           ...mockTask,
-          parent_initiative: 'Q4 2024 Performance Optimization Initiative'
+          plan_id: 'Q4 2024 Performance Optimization Initiative'
         };
 
         const context: TaskContext = {
@@ -1315,7 +1315,7 @@ describe('TaskPromptTemplateManager', () => {
     it('should generate complete prompt with all enhanced fields', () => {
       const fullyEnhancedTask: Task = {
         ...mockTask,
-        parent_initiative: 'Q4 2024 Performance Optimization',
+        plan_id: 'Q4 2024 Performance Optimization',
         long_term_goals: [
           'Improve system performance by 50%',
           'Reduce database query times',
@@ -1420,7 +1420,7 @@ describe('TaskPromptTemplateManager', () => {
         estimated_effort: { hours: 4, complexity: 'medium', confidence: 'high' },
         success_metrics: ['Metric 1'],
         required_skills: ['Skill 1'],
-        parent_initiative: 'Initiative 1',
+        plan_id: 'Initiative 1',
         related_tasks: ['Task 1'],
         assumptions: ['Assumption 1'],
         alternatives: ['Alternative 1'],

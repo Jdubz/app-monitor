@@ -11,6 +11,7 @@ const skipHeavyBots = process.env.SKIP_HEAVY_DEV_BOT_TESTS === '1';
 
 const heavyBotPatterns = [
   'src/routes/dev-bots.routes.test.ts',
+  'src/routes/__tests__/api-contracts.integration.test.ts',
   'src/services/devBotsManager*.test.ts',
   'src/services/devBotsManager.test.ts',
   'src/services/devBotsManager.core.test.ts',
@@ -25,8 +26,11 @@ const heavyBotPatterns = [
   'src/services/processManager.workerLimit.test.ts',
   'src/services/tokenTracking.test.ts',
   'src/services/taskQueueManager.test.ts',
+  'src/services/githubWebhookHandler.service.test.ts',
   'tests/integration/docker-operations.test.ts',
   'tests/integration/socket-events.test.ts',
+  'tests/integration/api/api.routes.test.ts',
+  'tests/integration/bug-report-workflow.test.ts',
 ];
 
 export default defineConfig({

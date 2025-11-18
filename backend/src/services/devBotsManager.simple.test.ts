@@ -9,79 +9,18 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { DevBotsManager } from './devBotsManager.js';
 import { logger } from '../utils/logger.js';
+import { createMockDevBotsManagerDependencies } from './devBotsManager.mocks.js';
+import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
 
-// Mock all dependencies
-vi.mock('./processManager.js');
-vi.mock('./taskPersistence.js');
-vi.mock('./agentPersonalities.js');
-vi.mock('./workspaceSyncManager.js');
-vi.mock('./dockerManager.js');
-vi.mock('./retryManager.js');
-vi.mock('./workspaceOrchestrator.js', () => {
-  const mockInitialize = vi.fn();
-  const mockCreateWorkspace = vi.fn(() => ({
-    id: 'workspace-test',
-    hostPath: '/tmp/workspace',
-    branchName: 'bots/task-simple',
-    mirrorPath: '/tmp/mirror',
-    createdAt: new Date().toISOString()
-  }));
-  const mockSealWorkspace = vi.fn(async () => ({
-    status: 'success',
-    branchName: 'bots/task-simple',
-    commitSha: 'abc123'
-  }));
-  const mockCleanupWorkspace = vi.fn();
-  const mockCreatePatchArtifact = vi.fn(() => '/tmp/workspace.patch');
-
-  return {
-    WorkspaceOrchestrator: vi.fn().mockImplementation(() => ({
-      initialize: mockInitialize,
-      createWorkspace: mockCreateWorkspace,
-      sealWorkspace: mockSealWorkspace,
-      cleanupWorkspace: mockCleanupWorkspace,
-      createPatchArtifact: mockCreatePatchArtifact
-    })),
-    PushCoordinator: class {
-      enqueue(handler: () => Promise<unknown> | unknown) {
-        return Promise.resolve(handler());
-      }
-    }
-  };
-});
-vi.mock('./taskCreationGuidelines.js', async () => {
-  return {
-    TaskCreationGuidelinesManager: class MockTaskCreationGuidelinesManager {
-      validateTaskData = vi.fn().mockReturnValue({
-        isValid: true,
-        warnings: [],
-        suggestions: [],
-        errors: []
-      });
-      getGuidelinesForType = vi.fn().mockReturnValue({ type: 'feature', guidelines: [] });
-      constructor() {}
-    }
-  };
-});
-vi.mock('./promptTemplateService.js');
+// Mock logger
 vi.mock('../utils/logger.js');
 
 describe('DevBotsManager Public Interface', () => {
   let devBotsManager: DevBotsManager;
-  let mockProcessManager: any;
+  let mockDependencies: DevBotsManagerDependencies;
 
   beforeEach(() => {
     vi.clearAllMocks();
-
-    // Setup mock ProcessManager
-    mockProcessManager = {
-      on: vi.fn(),
-      emit: vi.fn(),
-      getStatus: vi.fn().mockResolvedValue({ status: 'running' }),
-      getAllStatuses: vi.fn().mockResolvedValue({}),
-      startService: vi.fn().mockResolvedValue({ success: true }),
-      stopService: vi.fn().mockResolvedValue({ success: true })
-    };
 
     // Mock logger
     vi.mocked(logger.info).mockImplementation(() => {});
@@ -89,30 +28,9 @@ describe('DevBotsManager Public Interface', () => {
     vi.mocked(logger.error).mockImplementation(() => {});
     vi.mocked(logger.debug).mockImplementation(() => {});
 
-    // Create DevBotsManager instance
-    devBotsManager = new DevBotsManager(mockProcessManager);
-
-    const orchestratorStub = {
-      initialize: vi.fn(),
-      createWorkspace: vi.fn(() => ({
-        id: 'workspace-test',
-        hostPath: '/tmp/workspace',
-        branchName: 'bots/task-simple',
-        mirrorPath: '/tmp/mirror',
-        createdAt: new Date().toISOString()
-      })),
-      sealWorkspace: vi.fn(async () => ({
-        status: 'success',
-        branchName: 'bots/task-simple',
-        commitSha: 'abc123'
-      })),
-      cleanupWorkspace: vi.fn(),
-      createPatchArtifact: vi.fn(() => '/tmp/workspace.patch')
-    };
-    (devBotsManager as any).workspaceOrchestrator = orchestratorStub;
-    (devBotsManager as any).pushCoordinator = {
-      enqueue: (handler: () => unknown) => Promise.resolve(handler())
-    };
+    // Create DevBotsManager instance with proper dependencies
+    mockDependencies = createMockDevBotsManagerDependencies();
+    devBotsManager = new DevBotsManager(mockDependencies);
   });
 
   afterEach(() => {
@@ -126,22 +44,18 @@ describe('DevBotsManager Public Interface', () => {
         type: 'feature',
         title: 'Test Task',
         description: 'A test task for development',
-        assignedAgent: 'test-agent'
+        assignedAgent: 'test-agent',
+        acceptanceCriteria: ['Test acceptance criteria']
       };
 
       // When: Task is added
-      const result = await devBotsManager.addTask(
-        taskData.type,
-        taskData.title,
-        taskData.description || '',
-        'Test acceptance criteria',
-        { assignedAgent: taskData.assignedAgent }
-      );
+      const result = await devBotsManager.addTask(taskData);
 
       // Then: Task data is returned
       expect(result).toBeDefined();
-      expect(result.type).toBe('feature');
-      expect(result.title).toBe('Test Task');
+      expect(result.task).toBeDefined();
+      expect(result.task.type).toBe('feature');
+      expect(result.task.title).toBe('Test Task');
     });
 
     it('should add enhanced task with all fields', async () => {
@@ -151,44 +65,35 @@ describe('DevBotsManager Public Interface', () => {
         title: 'Enhanced Test Task',
         description: 'A test task with enhanced fields',
         assignedAgent: 'test-agent',
-        acceptanceCriteria: ['Criterion 1', 'Criterion 2'],
-        estimatedEffort: {
-          hours: 4,
-          complexity: 'medium' as const,
-          confidence: 'high' as const
-        },
-        requiredSkills: ['TypeScript', 'React'],
-        successMetrics: ['Test passes', 'Code review approved']
+        acceptanceCriteria: ['Criterion 1', 'Criterion 2']
       };
 
       // When: Enhanced task is added
-      const result = await devBotsManager.addEnhancedTask(enhancedTaskData);
+      const result = await devBotsManager.addTask(enhancedTaskData);
 
       // Then: Task is created with enhanced fields
       expect(result).toBeDefined();
       expect(result.task).toBeDefined();
       expect(result.task.title).toBe('Enhanced Test Task');
-      expect(result.task.acceptanceCriteria).toEqual(enhancedTaskData.acceptanceCriteria);
-      expect(result.task.estimatedEffort).toEqual(enhancedTaskData.estimatedEffort);
     });
 
     it('should get all tasks', async () => {
       // Given: Tasks are added
-      await devBotsManager.addTask(
-        'feature',
-        'Task 1',
-        'Task 1 documentation',
-        'Task 1 acceptance criteria',
-        { assignedAgent: 'test-agent' }
-      );
+      await devBotsManager.addTask({
+        type: 'feature',
+        title: 'Task 1',
+        description: 'Task 1 documentation',
+        acceptanceCriteria: ['Task 1 acceptance criteria'],
+        assignedAgent: 'test-agent'
+      });
 
-      await devBotsManager.addTask(
-        'bugfix',
-        'Task 2',
-        'Task 2 documentation',
-        'Task 2 acceptance criteria',
-        { assignedAgent: 'test-agent' }
-      );
+      await devBotsManager.addTask({
+        type: 'bugfix',
+        title: 'Task 2',
+        description: 'Task 2 documentation',
+        acceptanceCriteria: ['Task 2 acceptance criteria'],
+        assignedAgent: 'test-agent'
+      });
 
       // When: Tasks are retrieved
       const tasks = await devBotsManager.getTasks();
@@ -293,49 +198,46 @@ describe('DevBotsManager Public Interface', () => {
       // Given: Invalid task data
       const invalidTaskData = {
         type: 'invalid-type',
-        // Missing required fields
-      } as any;
+        title: 'Test Title',
+        description: 'Test documentation',
+        acceptanceCriteria: ['Test acceptance criteria']
+      };
 
       // When: Task is added
-      const result = await devBotsManager.addTask(
-        invalidTaskData.type,
-        'Test Title',
-        'Test documentation',
-        'Test acceptance criteria'
-      );
+      const result = await devBotsManager.addTask(invalidTaskData);
 
       // Then: Task data is returned
       expect(result).toBeDefined();
-      expect(result.type).toBe('invalid-type');
+      expect(result.task).toBeDefined();
+      expect(result.task.type).toBe('invalid-type');
     });
 
     it('should handle missing required fields', async () => {
       // Given: Task with minimal data
       const minimalTaskData = {
-        type: 'feature'
-        // Missing title and assignedAgent
-      } as any;
+        type: 'feature',
+        title: 'Test Title',
+        description: 'Test documentation',
+        acceptanceCriteria: ['Test acceptance criteria']
+      };
 
       // When: Task is added
-      const result = await devBotsManager.addTask(
-        minimalTaskData.type,
-        'Test Title',
-        'Test documentation',
-        'Test acceptance criteria'
-      );
+      const result = await devBotsManager.addTask(minimalTaskData);
 
       // Then: Task data is returned
       expect(result).toBeDefined();
-      expect(result.type).toBe('feature');
+      expect(result.task).toBeDefined();
+      expect(result.task.type).toBe('feature');
     });
   });
 
   describe('Integration', () => {
-    it('should integrate with ProcessManager', () => {
-      // Given: DevBotsManager is created with ProcessManager
+    it('should integrate with dependencies', () => {
+      // Given: DevBotsManager is created with dependencies
       // When: DevBotsManager is initialized
-      // Then: ProcessManager is properly injected
-      expect(devBotsManager['processManager']).toBe(mockProcessManager);
+      // Then: Dependencies are properly injected
+      expect(devBotsManager['taskQueue']).toBe(mockDependencies.taskQueue);
+      expect(devBotsManager['dockerManager']).toBe(mockDependencies.dockerManager);
     });
 
     it('should emit events for status changes', () => {

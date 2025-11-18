@@ -5,100 +5,24 @@
 
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { DevBotsManager } from './devBotsManager.js';
-import { ProcessManager } from './processManager.js';
-import { Task } from './devBotsManager.js';
-
-// Mock the ProcessManager
-vi.mock('./processManager.js', () => ({
-  ProcessManager: vi.fn().mockImplementation(() => ({
-    on: vi.fn(),
-    emit: vi.fn(),
-    getStatus: vi.fn().mockResolvedValue({ status: 'running' }),
-    getAllStatuses: vi.fn().mockResolvedValue({})
-  }))
-}));
-
-// Mock other dependencies
-vi.mock('./taskPersistence.js', () => ({
-  TaskPersistence: vi.fn().mockImplementation(() => ({
-    loadTasks: vi.fn().mockReturnValue([]),
-    saveCompletedTasks: vi.fn()
-  }))
-}));
-
-vi.mock('./agentPersonalities.js', () => ({
-  AgentPersonalityManager: vi.fn().mockImplementation(() => ({
-    getPersonality: vi.fn().mockReturnValue({ id: 'test-agent', name: 'Test Agent' })
-  }))
-}));
-
-vi.mock('./taskPromptTemplates.js', () => ({
-  TaskPromptTemplateManager: vi.fn().mockImplementation(() => ({}))
-}));
-
-vi.mock('./taskCreationGuidelines.js', () => ({
-  TaskCreationGuidelinesManager: vi.fn().mockImplementation(() => ({}))
-}));
-
-vi.mock('./workspaceSyncManager.js', () => ({
-  WorkspaceSyncManager: vi.fn().mockImplementation(() => ({}))
-}));
-vi.mock('./workspaceOrchestrator.js', () => {
-  const mockInitialize = vi.fn();
-  const mockCreateWorkspace = vi.fn(() => ({
-    id: 'workspace-test',
-    hostPath: '/tmp/workspace',
-    branchName: 'bots/test-task-1',
-    mirrorPath: '/tmp/mirror',
-    createdAt: new Date().toISOString()
-  }));
-  const mockSealWorkspace = vi.fn(async () => ({
-    status: 'success',
-    branchName: 'bots/test-task-1',
-    commitSha: 'abc123'
-  }));
-  const mockCleanupWorkspace = vi.fn();
-  const mockCreatePatchArtifact = vi.fn(() => '/tmp/workspace.patch');
-
-  return {
-    WorkspaceOrchestrator: vi.fn().mockImplementation(() => ({
-      initialize: mockInitialize,
-      createWorkspace: mockCreateWorkspace,
-      sealWorkspace: mockSealWorkspace,
-      cleanupWorkspace: mockCleanupWorkspace,
-      createPatchArtifact: mockCreatePatchArtifact
-    })),
-    PushCoordinator: class {
-      enqueue(handler: () => Promise<unknown> | unknown) {
-        return Promise.resolve(handler());
-      }
-    }
-  };
-});
-
-vi.mock('./dockerManager.js', () => ({
-  DockerManager: vi.fn().mockImplementation(() => ({
-    validateDockerEnvironment: vi.fn().mockResolvedValue({ isValid: true, errors: [] }),
-    getDocker: vi.fn().mockReturnValue({})
-  }))
-}));
+import { Task } from './taskQueue.sqlite.js';
+import { createMockDevBotsManagerDependencies } from './devBotsManager.mocks.js';
+import type { DevBotsManagerDependencies } from './devBotsManager.interfaces.js';
 
 describe('DevBotsManager Retry Functionality', () => {
   let manager: DevBotsManager;
-  let mockProcessManager: ProcessManager;
+  let mockDependencies: DevBotsManagerDependencies;
   let mockTask: Task;
 
   beforeEach(() => {
-    mockProcessManager = new ProcessManager() as any;
-    manager = new DevBotsManager(mockProcessManager);
+    mockDependencies = createMockDevBotsManagerDependencies();
+    manager = new DevBotsManager(mockDependencies);
 
     manager['workspaceOrchestrator'] = {
       initialize: vi.fn(),
       createWorkspace: vi.fn(() => ({
         id: 'workspace-test',
-        hostPath: '/tmp/workspace',
         branchName: 'bots/task-1',
-        mirrorPath: '/tmp/mirror',
         createdAt: new Date().toISOString()
       })),
       sealWorkspace: vi.fn(async () => ({

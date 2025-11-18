@@ -140,7 +140,8 @@ describe('TaskCompletionService - Bot Self-Reporting', () => {
       status: 'running',
       workspace: {
         id: 'workspace-123',
-        hostPath: '/tmp/workspace'
+        branchName: 'staging',
+        createdAt: new Date().toISOString()
       }
     } as EphemeralWorker;
   });

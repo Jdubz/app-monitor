@@ -28,6 +28,11 @@ server.listen(config.port, '0.0.0.0', () => {
   console.log(`📡 CORS enabled for: ${config.corsOrigin}`);
   console.log(`🌍 Environment: ${config.nodeEnv}`);
   console.log(`🔌 Socket.IO ready for connections`);
+
+  // Signal PM2 that the app is ready (for zero-downtime reloads)
+  if (process.send) {
+    process.send('ready');
+  }
 });
 
 // Graceful shutdown handling
@@ -197,6 +202,30 @@ async function gracefulShutdown(signal: string) {
     action: 'resources_cleanup',
     message: 'Resources cleanup initiated'
   });
+
+  // Shutdown ephemeral worker service to close log streams
+  if (devBotsManager) {
+    try {
+      const ephemeralWorkerService = devBotsManager.getEphemeralWorkerService?.();
+      if (ephemeralWorkerService?.shutdown) {
+        await ephemeralWorkerService.shutdown();
+        logger.info({
+          category: 'system',
+          action: 'ephemeral_worker_shutdown',
+          message: 'Ephemeral worker service shutdown completed'
+        });
+        console.log('✅ Ephemeral worker service shutdown completed');
+      }
+    } catch (error) {
+      logger.error({
+        category: 'system',
+        action: 'ephemeral_worker_shutdown_failed',
+        message: 'Failed to shutdown ephemeral worker service',
+        error
+      });
+      console.log('⚠️  Failed to shutdown ephemeral worker service:', error);
+    }
+  }
 
   console.log('✅ Graceful shutdown completed');
   logger.info({

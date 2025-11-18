@@ -15,6 +15,7 @@ import type { IssueReport } from '../services/issueStorageService.js';
 import type { TaskQueueService } from '../services/taskQueue.sqlite.js';
 import type Database from 'better-sqlite3';
 import { logger } from '../utils/logger.js';
+import { MS_PER_HOUR, MS_PER_MINUTE } from '../constants/timeouts.js';
 
 const router = express.Router();
 
@@ -24,7 +25,7 @@ let triageService: IssueTriageService;
 
 // Rate limiter: Prevent abuse of unauthenticated endpoint
 const issueReportLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour window
+  windowMs: MS_PER_HOUR, // 1 hour window
   max: 10, // Max 10 requests per hour
   message: { success: false, error: 'Too many issue reports. Please try again in an hour.' },
   standardHeaders: true,
@@ -93,7 +94,7 @@ router.post('/', issueReportLimiter, async (req: Request, res: Response) => {
 
     // 3. Validate timestamp is not in future (allow 5 minute clock skew)
     const now = Date.now();
-    const maxFuture = now + 5 * 60 * 1000;
+    const maxFuture = now + 5 * MS_PER_MINUTE;
     if (timestamp.getTime() > maxFuture) {
       res.status(400).json({
         success: false,

@@ -24,6 +24,9 @@ import verificationRoutes from './verification.routes.js';
 import githubWebhooksRoutes from './github-webhooks.routes.js';
 import logsRoutes, { initializeLogsRoutes } from './logs.routes.js';
 import issuesRoutes, { initializeIssuesRoutes } from './issues.routes.js';
+import metricsRoutes from './metrics.routes.js';
+import observabilityRoutes from './observability.routes.js';
+import { createPRsRouter } from './prs.routes.js';
 
 /**
  * Create the main API router with all sub-routes
@@ -44,6 +47,7 @@ export function createApiRouter(deps: {
   // Initialize logs and issues routes with database and task queue from devBotsManager
   if (deps.devBotsManager) {
     const taskQueue = deps.devBotsManager.getTaskQueue();
+    // eslint-disable-next-line local-rules/no-direct-db-in-routes -- Safe: Only used for service initialization
     const db = taskQueue.getDatabase();
     initializeLogsRoutes(db);
     initializeIssuesRoutes(db, taskQueue);
@@ -109,6 +113,12 @@ export function createApiRouter(deps: {
   router.use('/token-tracking', requireApiKey, tokenTrackingRoutes);
   router.use('/quality-gates', requireApiKey, qualityGatesRoutes);
   router.use('/verification', requireApiKey, verificationRoutes);
+  router.use('/metrics', requireApiKey, metricsRoutes);
+  router.use('/observability', requireApiKey, observabilityRoutes);
+  
+  if (deps.devBotsManager) {
+    router.use('/prs', requireApiKey, createPRsRouter(deps.devBotsManager));
+  }
 
   // Logs and issues endpoints - no auth required (frontend logs and issue reports)
   router.use('/logs', logsRoutes);

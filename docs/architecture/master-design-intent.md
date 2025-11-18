@@ -2,22 +2,18 @@
 
 **Purpose:** Quick onboarding for new developers - the design philosophy and high-level restrictions that guide all decision-making.
 
-**Authority:** Only human-directed bots may edit this document. All autonomous agents must adhere to it.
 
 **Last Updated:** 2025-11-14
 
 ---
-
 ## Core Philosophy
 
 **Autonomy First**: After initial human planning/dispatch, the system (task queue → dev-bots → verification → PR tracking) operates autonomously. Manual input comes *only* when automation raises alerts or humans intentionally intervene.
 
-**Trust But Verify**: Never trust reported success. Every task flows through REVIEW → FIX → COMPLETE pipeline that verifies real-world outcomes.
 
 **Isolation Everywhere**: AI agents run in isolated Docker containers with ephemeral filesystems. No host writes, no shared state between bots.
 
 **Chain-Aware Processing**: Tasks belong to chains (implementation → review → fix → complete). Concurrency limits apply to chains, not individual tasks.
-
 ---
 
 ## High-Level Restrictions
@@ -105,12 +101,29 @@
 
 ## Critical Workflows
 
-### Task Chain Lifecycle
-1. **Implementation Task** → creates branch, opens PR
-2. **REVIEW Task** → verifies outcome (branch exists, PR exists, tracked)
-3. **FIX Task** → corrects issues found in review (max 4 attempts)
-4. **COMPLETE Task** → finishes original goal after verification passes
-5. **Escalation** → 5th review blocks chain, alerts humans
+### Task Processing: 7-Phase Lifecycle (v0.3.0)
+
+**Single Task, Multiple Phases** - No child tasks, all phases within one task entity.
+
+1. **Phase 1: Planning** → Validate task relevance, determine if obsolete or needs realignment
+2. **Phase 2: Implementation** → Write code, create branch, open PR
+3. **Phase 3: Review** → Identify code issues with fingerprints (loops to Phase 4 if issues)
+4. **Phase 4: Fixes** → Address all issues from review (returns to Phase 3 for re-review)
+5. **Phase 5: Test Coverage & Validation** → Write tests, ensure ≥80% coverage, all passing (internal loop)
+6. **Phase 6: Cleanup & Docs** → Update documentation, prune phase artifacts
+7. **Phase 7: PR Shepherding** → Monitor 8 merge gates, auto-merge when ready
+
+**Phase Loops:**
+- **3↔4 Loop**: Review finds issues → Fixes applied → Re-review (max 4 cycles)
+- **Phase 5 Internal**: Tests fail → Agent fixes → Re-run tests (max 4 attempts)
+
+**Attempt Limits**: 4 attempts per loop before escalation to human
+
+**Recovery Agent**: On validation failure, recovery agent diagnoses in same container:
+- `retry` - Simple retry (transient error)
+- `context_update` - Update task prompt and retry
+- `chain_blocked` - Block this task, alert human
+- `system_blocked` - Pause ALL tasks, alert human
 
 ### PR Merge Gates (8 Conditions)
 1. Base branch updated
@@ -123,10 +136,10 @@
 8. Final validation clean
 
 ### Agent Selection
-- **Claude**: Code implementation, refactoring (primary bottleneck)
-- **Codex**: Analysis, documentation, planning, review
-- **Gemini**: Eligible tasks (frontend, logs, analysis) with quota/risk checks
-- **Copilot**: GitHub delegation (within throttle limits)
+- **AgentSelector Service** is authoritative - NO hardcoded preferences
+- Selection criteria: task type, context, agent availability, quota limits
+- Available agents: Claude, Codex, Gemini, Copilot
+- Recovery agent selected dynamically based on failure context
 
 ---
 

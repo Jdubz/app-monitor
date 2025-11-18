@@ -10,6 +10,7 @@
 
 import Docker from 'dockerode';
 import { logger } from '../../utils/logger.js';
+import { MS_PER_HOUR } from '../../constants/timeouts.js';
 
 export interface ContainerHealth {
   isRunning: boolean;
@@ -396,7 +397,7 @@ export class DevBotContainerLifecycle {
 
     const containers = await this.listDevBotContainers();
     const now = Date.now();
-    const cutoffTime = now - olderThanHours * 60 * 60 * 1000;
+    const cutoffTime = now - olderThanHours * MS_PER_HOUR;
 
     let cleanedCount = 0;
 

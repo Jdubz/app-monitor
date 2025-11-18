@@ -8,6 +8,7 @@
 import * as crypto from 'crypto';
 import { DevBotsDatabase } from '../database.js';
 import { getContextLogger } from './contextLogger.js';
+import { MS_PER_HOUR } from '../../constants/timeouts.js';
 import type {
   ContextBundle,
   BundleCacheEntry,
@@ -81,7 +82,7 @@ export class ContextCache {
           } finally {
             this.cleanupInProgress = false;
           }
-        }, 60 * 60 * 1000); // 1 hour
+        }, MS_PER_HOUR);
       }
     } catch (error) {
       this.logger.error('Failed to initialize database connection', { component: 'ContextCache', operation: 'constructor' }, error instanceof Error ? error : new Error(String(error)));

@@ -6,7 +6,8 @@
 
 import { EventEmitter } from 'events';
 import { logger } from '../utils/logger.js';
-import { Task, RetryAttempt } from './devBotsManager.js';
+import { Task } from './taskQueue.sqlite.js';
+import { RetryAttempt } from './devBotsManager.js';
 import { ShutdownStateManager } from './shutdownStateManager.js';
 import { getDatabase } from './database.js';
 

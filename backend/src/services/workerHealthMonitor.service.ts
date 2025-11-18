@@ -13,11 +13,11 @@
 
 import { logger } from '../utils/logger.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
-import type { TaskQueueService, Task } from './taskQueue.sqlite.js';
+import type { TaskQueueService } from './taskQueue.sqlite.js';
 import type { DockerManager } from './dockerManager.js';
 import type { ScopeControlService } from './scopeControl.service.js';
 import { TIME_BASED_GUARDS } from './taskFailureGuards.js';
-import type { SimpleFailureRecovery } from './failureRecovery.js';
+import { HEARTBEAT_TIMEOUT_MS } from '../constants/timeouts.js';
 
 export interface WorkerHealthMonitorConfig {
   heartbeatCheckInterval: number;  // Currently disabled
@@ -41,7 +41,7 @@ export class WorkerHealthMonitor {
     private dockerManager: DockerManager,
     private scopeControl: ScopeControlService,
     private processManager: null,  // Removed - no longer needed
-    private recovery: SimpleFailureRecovery | null,
+    private recovery: unknown | null,
     private emit: (event: string, ...args: unknown[]) => void,
     private config: WorkerHealthMonitorConfig = {
       heartbeatCheckInterval: 60000,  // 1 minute (disabled)
@@ -139,10 +139,10 @@ export class WorkerHealthMonitor {
     logger.info({
       category: 'process',
       action: 'heartbeat_monitor_started',
-      message: `Worker heartbeat monitor started (check interval: ${this.config.heartbeatCheckInterval / 1000}s, timeout: 30s)`,
+      message: `Worker heartbeat monitor started (check interval: ${this.config.heartbeatCheckInterval / 1000}s, timeout: ${HEARTBEAT_TIMEOUT_MS / 1000}s)`,
       details: {
         checkInterval_ms: this.config.heartbeatCheckInterval,
-        timeout_ms: 30000
+        timeout_ms: HEARTBEAT_TIMEOUT_MS
       }
     });
   }
@@ -238,43 +238,7 @@ export class WorkerHealthMonitor {
           }
         });
 
-        // Attempt recovery if enabled
-        const { config } = await import('../config.js');
-        if (config.recovery.enabled) {
-          // Actually attempt recovery
-          try {
-            const recoveryResult = await this.recovery.attemptRecovery({
-              task: fullTask as Task & { metadata?: Record<string, unknown> },
-              failurePattern,
-              stderr: taskError,
-              stdout: '',
-              exitCode: 0
-            });
-
-            if (recoveryResult.recovered) {
-              logger.info({
-                category: 'process',
-                action: 'recovery_initiated_for_stuck_task',
-                message: `Initiated automatic recovery for stuck task ${task.id}`,
-                details: {
-                  taskId: task.id,
-                  cleanupTaskId: recoveryResult.cleanupTaskId,
-                  failurePattern: failurePattern.name
-                }
-              });
-            }
-          } catch (recoveryError) {
-            logger.error({
-              category: 'process',
-              action: 'recovery_attempt_failed_for_stuck_task',
-              message: `Failed to attempt recovery for stuck task ${task.id}: ${recoveryError instanceof Error ? recoveryError.message : String(recoveryError)}`,
-              details: {
-                taskId: task.id,
-                error: recoveryError instanceof Error ? recoveryError.message : String(recoveryError)
-              }
-            });
-          }
-        }
+        // Recovery is now handled by phase execution service
       }
 
       // Mark task as failed in database

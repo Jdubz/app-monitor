@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
 
+// Backend needs extended timeout due to database initialization and Docker startup
+const BACKEND_STARTUP_TIMEOUT = 120000;
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: true,
@@ -12,6 +15,7 @@ export default defineConfig({
     baseURL: 'http://localhost:5174',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
+    headless: true,
   },
 
   projects: [
@@ -29,11 +33,22 @@ export default defineConfig({
     },
   ],
 
-  webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:5174',
-    reuseExistingServer: !process.env.CI,
-    stdout: 'ignore',
-    stderr: 'pipe',
-  },
+  webServer: [
+    {
+      command: 'npm run dev:backend',
+      cwd: '..',
+      url: 'http://localhost:5000/api/health',
+      reuseExistingServer: !process.env.CI,
+      stdout: 'ignore',
+      stderr: 'pipe',
+      timeout: BACKEND_STARTUP_TIMEOUT,
+    },
+    {
+      command: 'npm run dev',
+      url: 'http://localhost:5174',
+      reuseExistingServer: !process.env.CI,
+      stdout: 'ignore',
+      stderr: 'pipe',
+    },
+  ],
 });

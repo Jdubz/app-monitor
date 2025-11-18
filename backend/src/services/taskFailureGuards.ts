@@ -6,6 +6,7 @@
  */
 
 import { logger } from '../utils/logger.js';
+import { MS_PER_HOUR } from '../constants/timeouts.js';
 
 export interface FailurePattern {
   name: string;
@@ -308,7 +309,7 @@ export function getCleanupStrategy(pattern: FailurePattern): {
  */
 export const TIME_BASED_GUARDS = {
   // Hard timeout - force kill after this
-  ABSOLUTE_MAX_DURATION_MS: 60 * 60 * 1000, // 1 hour
+  ABSOLUTE_MAX_DURATION_MS: MS_PER_HOUR, // 1 hour
 
   // Soft timeout - warning after this
   SOFT_TIMEOUT_MS: 30 * 60 * 1000, // 30 minutes

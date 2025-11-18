@@ -168,8 +168,8 @@ describe('ContextRecipeValidator', () => {
       expect(result.valid).toBe(true);
     });
 
-    it.skip('should validate dependencies array', () => {
-      const recipe = mockRecipe();
+    it('should validate dependencies array', () => {
+      const recipe = mockRecipe({ dependencies: ['profile-a', 'profile-b'] } as any);
       const result = validator.validate(recipe);
       expect(result.valid).toBe(true);
     });
@@ -181,19 +181,19 @@ describe('ContextRecipeValidator', () => {
       expect(result.errors).toContain('dependencies must be an array');
     });
 
-    it.skip('should reject non-string dependency', () => {
-      const recipe = mockRecipe();
+    it('should reject non-string dependency', () => {
+      const recipe = mockRecipe({ dependencies: ['profile-a', 123, 'profile-b'] } as any);
       const result = validator.validate(recipe);
       expect(result.valid).toBe(false);
       expect(result.errors).toContain('Each dependency must be a string');
     });
 
-    it.skip('should reject invalid dependency profile name', () => {
-      const recipe = mockRecipe();
+    it('should reject invalid dependency profile name', () => {
+      const recipe = mockRecipe({ dependencies: ['profile-a', 'invalid profile!', 'profile-b'] } as any);
       const result = validator.validate(recipe);
       expect(result.valid).toBe(false);
       expect(result.errors).toBeDefined();
-      expect(result.errors![0]).toContain('Invalid dependency profile name');
+      expect(result.errors!.some(e => e.includes('Invalid dependency profile name'))).toBe(true);
     });
 
     it('should validate ttl number', () => {

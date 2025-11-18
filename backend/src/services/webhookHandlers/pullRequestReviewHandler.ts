@@ -102,8 +102,8 @@ export class PullRequestReviewHandler extends BaseWebhookHandler {
     
     // Get current PR status and analysis
     const prStatus = await githubPR.getPRStatus(
-      prNumber, 
-      repository.owner.login, 
+      prNumber,
+      repository.owner.login,
       repository.name
     );
     const copilotAnalysis = await githubPR.getCopilotReviewAnalysis(
@@ -115,8 +115,8 @@ export class PullRequestReviewHandler extends BaseWebhookHandler {
     // Auto-update branch if behind
     await this.autoUpdateBranchIfNeeded(prNumber, prStatus, repository, githubPR);
 
-    // Evaluate PR conditions
-    await this.evaluateConditions(prNumber);
+    // Evaluate PR conditions (pass context to avoid redundant GitHub API calls)
+    await this.evaluateConditions(prNumber, prStatus);
 
     // Store Copilot comments
     if (isCopilot) {
@@ -179,11 +179,11 @@ export class PullRequestReviewHandler extends BaseWebhookHandler {
   /**
    * Evaluate PR conditions
    */
-  private async evaluateConditions(prNumber: number): Promise<void> {
+  private async evaluateConditions(prNumber: number, prContext?: import('../githubPR.service.js').PRStatus): Promise<void> {
     if (!this.prConditionState) return;
 
     try {
-      await this.prConditionState.evaluateConditions(prNumber, 'pull_request_review');
+      await this.prConditionState.evaluateConditions(prNumber, 'pull_request_review', prContext);
     } catch (error) {
       logger.warn({
         category: 'pr-workflow',

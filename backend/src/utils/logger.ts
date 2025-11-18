@@ -23,7 +23,11 @@ import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const LOGS_DIR = path.resolve(__dirname, '../../../logs');
+
+// Centralized log directory - same location for dev and production
+// Development: <repo-root>/backend/data/logs
+// Production: /opt/app-monitor/shared/backend/data/logs
+const LOGS_DIR = process.env.LOGS_DIR || path.resolve(__dirname, '../../data/logs');
 
 // Ensure logs directory exists
 if (!fs.existsSync(LOGS_DIR)) {
@@ -56,11 +60,14 @@ export type LogCategory =
   | 'merge_conflict'
   | 'metrics'
   | 'mirror_debug'
+  | 'phase' // Phase system orchestration
   | 'plan' // AI agent-managed planning system
   | 'port-manager' // Port management operations
+  | 'pr-cache' // PR cache service
   | 'pr-sync' // PR sync service (event-driven)
   | 'pr-workflow'
   | 'process'
+  | 'repository' // Repository pattern database operations
   | 'quality'
   | 'quality-gates'
   | 'quality-improvement'
@@ -76,6 +83,7 @@ export type LogCategory =
   | 'token-tracking'
   | 'utility'
   | 'verification'
+  | 'worker' // Worker lifecycle management
   | 'workspace';
 
 export interface LogEntry {

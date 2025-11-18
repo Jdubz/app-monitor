@@ -21,21 +21,16 @@ import type { ScopeControlService } from './scopeControl.service.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskExecutionService } from './taskExecution.service.js';
 import type { TaskCompletionService } from './taskCompletion.service.js';
-import type { SimpleFailureRecovery } from './failureRecovery.js';
 import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
-import type { InteractiveSessionService } from './interactiveSession.service.js';
-import type { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
-import type { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
+import type { InteractiveSessionManager } from './InteractiveSessionManager.js';
+import type { InteractiveSessionStreaming } from './InteractiveSessionStreaming.js';
 import type { TaskCreationService } from './taskCreation.service.js';
 import type { StatusAggregationService } from './statusAggregation.service.js';
 import type { RetryCoordinationService } from './retryCoordination.service.js';
 import type { SystemLifecycleService } from './systemLifecycle.service.js';
 import type { SystemInitializationService } from './systemInitialization.service.js';
-import type { InteractiveSessionCoordinator } from './interactiveSessionCoordinator.service.js';
 import type { InfoQueryService } from './infoQuery.service.js';
 import { EventEmitter } from 'events';
-
-// ProcessManager removed - no longer needed
 
 /**
  * Create mock Docker
@@ -142,6 +137,23 @@ export function createMockTaskQueue(): TaskQueueService {
     runRecoveryMigration: vi.fn().mockResolvedValue(undefined),
     recoverOrphanedTasks: vi.fn(() => []),
     checkDuplicateTask: vi.fn().mockResolvedValue(null),
+    getQueueMetrics: vi.fn().mockReturnValue({
+      pending: 0,
+      active: 0,
+      completed: 0,
+      failed: 0,
+      totalTasks: 0,
+      avgWaitTime: 0,
+      avgExecutionTime: 0
+    }),
+    getDatabase: vi.fn().mockReturnValue({
+      prepare: vi.fn().mockReturnValue({
+        all: vi.fn().mockReturnValue([]),
+        get: vi.fn().mockReturnValue(null),
+        run: vi.fn().mockReturnValue({ changes: 0 })
+      })
+    }),
+    assignNextTask: vi.fn().mockReturnValue(null),
   } as unknown as TaskQueueService;
 }
 
@@ -215,20 +227,24 @@ export function createMockGuidelinesManager(): TaskCreationGuidelinesManager {
  */
 export function createMockTaskCreationService(): TaskCreationService {
   return {
-    createTask: vi.fn().mockResolvedValue({
-      task: {
-        id: 'task-1',
-        type: 'feature',
-        title: 'Test Task',
-        status: 'pending',
-        created_at: Date.now()
-      },
-      validation: {
-        isValid: true,
-        warnings: [],
-        suggestions: [],
-        errors: []
-      }
+    createTask: vi.fn().mockImplementation(async (taskData: Record<string, unknown>) => {
+      return {
+        task: {
+          id: taskData.id || `task-${Date.now()}`,
+          type: taskData.type || 'feature',
+          title: taskData.title || 'Test Task',
+          description: taskData.description || 'Test Description',
+          status: 'pending',
+          created_at: Date.now(),
+          assignedAgent: taskData.assignedAgent || taskData.assigned_agent || 'general'
+        },
+        validation: {
+          isValid: true,
+          warnings: [],
+          suggestions: [],
+          errors: []
+        }
+      };
     }),
     calculateTaskFingerprint: vi.fn().mockReturnValue('abc123def456')
   } as unknown as TaskCreationService;
@@ -323,29 +339,6 @@ export function createMockSystemInitializationService(): SystemInitializationSer
     getTaskQueueWorker: vi.fn().mockReturnValue(undefined),
     getMetricsEmitter: vi.fn().mockReturnValue(undefined)
   } as unknown as SystemInitializationService;
-}
-
-/**
- * Create mock InteractiveSessionCoordinator
- */
-export function createMockInteractiveSessionCoordinator(): InteractiveSessionCoordinator {
-  return {
-    getActiveSession: vi.fn().mockReturnValue(null),
-    getSession: vi.fn().mockReturnValue(null),
-    listSessions: vi.fn().mockReturnValue([]),
-    launchSession: vi.fn().mockResolvedValue({
-      id: 'session-1',
-      status: 'active',
-      startedAt: new Date().toISOString()
-    }),
-    endSession: vi.fn().mockResolvedValue(undefined),
-    sendInput: vi.fn(),
-    sendSignal: vi.fn(),
-    recordActivity: vi.fn(),
-    updateContext: vi.fn(),
-    getIdleTimeoutMs: vi.fn().mockReturnValue(300000),
-    getAllowedModels: vi.fn().mockReturnValue([])
-  } as unknown as InteractiveSessionCoordinator;
 }
 
 /**
@@ -447,9 +440,7 @@ export function createMockTaskPersistence(): TaskPersistence {
 export function createMockWorkspaceOrchestrator(): Record<string, unknown> {
   const mockWorkspace: Record<string, unknown> = {
     id: 'workspace-test',
-    hostPath: '/tmp/workspace',
     branchName: 'bots/task-core',
-    mirrorPath: '/tmp/mirror',
     createdAt: new Date().toISOString(),
   };
 
@@ -517,9 +508,7 @@ export function createMockEphemeralWorkerService(): EphemeralWorkerService {
     createdAt: new Date().toISOString(),
     workspace: {
       id: 'workspace-1',
-      hostPath: '/tmp/workspace',
       branchName: 'staging',
-      mirrorPath: '',
       createdAt: new Date().toISOString(),
     }
   };
@@ -548,7 +537,7 @@ export function createMockEphemeralWorkerService(): EphemeralWorkerService {
  */
 export function createMockTaskExecutionService(): TaskExecutionService {
   return {
-    assignNextTask: vi.fn().mockResolvedValue(undefined),
+    assignNextTask: vi.fn().mockReturnValue(null),
     setRecovery: vi.fn(),
   } as unknown as TaskExecutionService;
 }
@@ -575,7 +564,6 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
   const retryCoordinationService = createMockRetryCoordinationService();
   const systemLifecycleService = createMockSystemLifecycleService();
   const systemInitializationService = createMockSystemInitializationService();
-  const interactiveSessionCoordinator = createMockInteractiveSessionCoordinator();
   const cleanupCoordinator = createMockCleanupCoordinator();
   const agentManager = createMockAgentManager();
   const templateManager = createMockTemplateManager();
@@ -606,7 +594,6 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     retryCoordinationService,
     systemLifecycleService,
     systemInitializationService,
-    interactiveSessionCoordinator,
     cleanupCoordinator,
     infoQueryService,
     agentManager,
@@ -614,13 +601,10 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
     guidelinesManager,
     workspaceSyncManager,
     retryManager,
-    // workspaceOrchestrator removed
-    // taskPersistence removed
     scopeControl,
     ephemeralWorkerService,
     taskExecutionService,
     taskCompletionService,
-    recovery: null as unknown as SimpleFailureRecovery, // Will be created by DevBotsManager
     prWorkflowOrchestrator: {
       handleTaskCompletion: vi.fn().mockResolvedValue(undefined),
       getMonitoredPRs: vi.fn().mockReturnValue([]),
@@ -630,7 +614,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
       }),
       stop: vi.fn()
     } as unknown as PRWorkflowOrchestrator,
-    interactiveSessionService: {
+    interactiveSessionManager: {
       createSession: vi.fn().mockReturnValue({
         id: 'session-1',
         status: 'active',
@@ -641,13 +625,11 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
       recordActivity: vi.fn(),
       getIdleTimeoutMs: vi.fn().mockReturnValue(300000),
       listActiveSessions: vi.fn().mockReturnValue([]),
-      startIdleWatchdog: vi.fn()
-    } as unknown as InteractiveSessionService,
-    interactiveSessionOrchestrator: {
-      start: vi.fn().mockResolvedValue('container-id'),
-      stop: vi.fn().mockResolvedValue(undefined)
-    } as unknown as InteractiveSessionOrchestrator,
-    interactiveSessionStreamManager: {
+      startIdleWatchdog: vi.fn(),
+      stopIdleWatchdog: vi.fn(),
+      setStatus: vi.fn()
+    } as unknown as InteractiveSessionManager,
+    interactiveSessionStreaming: {
       attach: vi.fn().mockResolvedValue(undefined),
       detach: vi.fn().mockResolvedValue(undefined),
       sendInput: vi.fn(),
@@ -656,7 +638,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
       getBacklog: vi.fn().mockReturnValue([]),
       on: vi.fn(),
       removeAllListeners: vi.fn()
-    } as unknown as InteractiveSessionStreamManager,
+    } as unknown as InteractiveSessionStreaming,
     workerHealthMonitor: {
       start: vi.fn(),
       stop: vi.fn(),

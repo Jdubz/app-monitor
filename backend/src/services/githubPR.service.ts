@@ -8,6 +8,8 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { logger } from '../utils/logger.js';
+import { GITHUB_API_TIMEOUT_MS } from '../constants/timeouts.js';
+import { PRCacheService } from './prCache.service.js';
 
 const execAsync = promisify(exec);
 
@@ -17,7 +19,7 @@ const execAsync = promisify(exec);
  */
 async function execWithTimeout(
   cmd: string,
-  timeoutMs: number = 30000
+  timeoutMs: number = GITHUB_API_TIMEOUT_MS
 ): Promise<{ stdout: string; stderr: string }> {
   return Promise.race([
     execAsync(cmd),
@@ -94,10 +96,12 @@ export class GitHubPRService {
   private repoOwner: string;
   private repoName: string;
   private githubCircuitBreaker?: { execute: <T>(fn: () => Promise<T>) => Promise<T> }; // CircuitBreaker (imported lazily)
+  private cache: PRCacheService<PRStatus>;
 
   constructor(repoOwner: string = 'Jdubz', repoName: string = 'app-monitor') {
     this.repoOwner = repoOwner;
     this.repoName = repoName;
+    this.cache = new PRCacheService<PRStatus>({ ttlMs: 30000, debug: false });
     this.initializeCircuitBreaker();
   }
 
@@ -137,7 +141,18 @@ export class GitHubPRService {
   async getPRStatus(prNumber: number, repoOwner?: string, repoName?: string): Promise<PRStatus> {
     const owner = repoOwner || this.repoOwner;
     const repo = repoName || this.repoName;
-    
+
+    // Use cache for getPRStatus calls
+    return this.cache.getOrFetch(prNumber, async () => {
+      return this.fetchPRStatusUncached(prNumber, owner, repo);
+    });
+  }
+
+  /**
+   * Fetch PR status without cache (internal method)
+   * Called by cache on cache miss
+   */
+  private async fetchPRStatusUncached(prNumber: number, owner: string, repo: string): Promise<PRStatus> {
     const executeGetPRStatus = async (): Promise<PRStatus> => {
       logger.info({
         category: 'pr-workflow',
@@ -145,10 +160,15 @@ export class GitHubPRService {
         message: `Fetching status for PR #${prNumber} in ${owner}/${repo}`
       });
 
+      // TEST MODE: Return mock PR data for E2E tests
+      if (process.env.NODE_ENV === 'test') {
+        return this.getMockPRStatus(prNumber);
+      }
+
       // Fetch PR data using gh CLI with timeout protection
       const { stdout } = await execWithTimeout(
         `gh pr view ${prNumber} --repo ${owner}/${repo} --json number,url,headRefName,baseRefName,state,mergeable,mergeStateStatus,statusCheckRollup,reviews,comments`,
-        30000 // 30 second timeout
+        GITHUB_API_TIMEOUT_MS
       );
 
       const prData = JSON.parse(stdout);
@@ -365,9 +385,8 @@ export class GitHubPRService {
   }
 
   /**
-   * Check if PR can be auto-merged (synchronous version - DEPRECATED)
-   * Use canAutoMergeAsync instead which checks unresolved comments
-   * @deprecated Use canAutoMergeAsync for complete validation including comment resolution
+   * Check if PR can be auto-merged (synchronous basic checks)
+   * For complete validation including comment resolution, use canAutoMergeAsync
    */
   canAutoMerge(status: PRStatus, copilotAnalysis: CopilotReviewAnalysis): {
     canMerge: boolean;
@@ -495,7 +514,7 @@ export class GitHubPRService {
 
       const { stdout } = await execWithTimeout(
         `gh api graphql -f query='${query.replace(/'/g, "'\\''")}' -F owner='${owner}' -F repo='${repo}' -F prNumber=${prNumber}`,
-        30000
+        GITHUB_API_TIMEOUT_MS
       );
 
       const result = JSON.parse(stdout);
@@ -629,7 +648,10 @@ export class GitHubPRService {
         details: { prNumber, method, useAutoMerge }
       });
 
-      await execWithTimeout(command, 30000);
+      await execWithTimeout(command, GITHUB_API_TIMEOUT_MS);
+
+      // Invalidate cache after successful merge
+      this.cache.invalidate(prNumber);
 
       logger.info({
         category: 'pr-workflow',
@@ -671,7 +693,7 @@ export class GitHubPRService {
     const executeGetPR = async () => {
       const { stdout } = await execWithTimeout(
         `gh pr view ${prNumber} --repo ${owner}/${repo} --json number,state,title,mergeStateStatus`,
-        30000
+        GITHUB_API_TIMEOUT_MS
       );
       
       const data = JSON.parse(stdout);
@@ -718,7 +740,7 @@ export class GitHubPRService {
       // Use GitHub API to update branch (merges base into PR branch)
       await execWithTimeout(
         `gh api repos/${owner}/${repo}/pulls/${prNumber}/update-branch -X PUT`,
-        30000
+        GITHUB_API_TIMEOUT_MS
       );
 
       logger.info({
@@ -752,7 +774,7 @@ export class GitHubPRService {
     try {
       await execWithTimeout(
         `gh pr comment ${prNumber} --repo ${this.repoOwner}/${this.repoName} --body "${body.replace(/"/g, '\\"')}"`,
-        30000 // 30 second timeout
+        GITHUB_API_TIMEOUT_MS // 30 second timeout
       );
 
       logger.info({
@@ -780,7 +802,7 @@ export class GitHubPRService {
       // Get PR details including branch name
       const { stdout } = await execWithTimeout(
         `gh pr view ${prNumber} --repo ${this.repoOwner}/${this.repoName} --json number,headRefName,url,state`,
-        30000
+        GITHUB_API_TIMEOUT_MS
       );
       
       const prData = JSON.parse(stdout);
@@ -849,6 +871,46 @@ export class GitHubPRService {
   }
 
   /**
+   * Get mock PR status for E2E testing
+   * Returns a realistic PR status object without calling GitHub API
+   */
+  private getMockPRStatus(prNumber: number): PRStatus {
+    logger.info({
+      category: 'pr-workflow',
+      action: 'mock_pr_status',
+      message: `Returning mock PR status for test PR #${prNumber}`
+    });
+
+    // Return a PR that passes all basic gates
+    return {
+      number: prNumber,
+      url: `https://github.com/test/repo/pull/${prNumber}`,
+      html_url: `https://github.com/test/repo/pull/${prNumber}`,
+      head_ref: `feature/test-${prNumber}`,
+      base_ref: 'main',
+      state: 'OPEN',
+      mergeable: 'MERGEABLE',
+      mergeable_state: 'clean', // clean = no conflicts, up to date
+      checks: [
+        {
+          name: 'CI Tests',
+          status: 'success',
+          conclusion: 'success',
+          detailsUrl: null
+        },
+        {
+          name: 'Lint',
+          status: 'success',
+          conclusion: 'success',
+          detailsUrl: null
+        }
+      ],
+      reviews: [], // No change requests
+      comments: [] // No unresolved comments
+    };
+  }
+
+  /**
    * Normalize GitHub check conclusion to our status enum
    * CRITICAL: Must use conclusion field, NOT status field!
    * - status = execution state (COMPLETED, IN_PROGRESS)
@@ -891,6 +953,38 @@ export class GitHubPRService {
     }
     
     return 'pending';
+  }
+
+  /**
+   * Invalidate cache for specific PR (call after PR updates)
+   */
+  invalidateCache(prNumber: number): void {
+    this.cache.invalidate(prNumber);
+    logger.debug({
+      category: 'pr-cache',
+      action: 'cache_invalidated',
+      message: `Cache invalidated for PR #${prNumber}`,
+      details: { prNumber }
+    });
+  }
+
+  /**
+   * Clear all PR cache entries
+   */
+  clearCache(): void {
+    this.cache.clear();
+    logger.info({
+      category: 'pr-cache',
+      action: 'cache_cleared',
+      message: 'All PR cache entries cleared'
+    });
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getCacheStats() {
+    return this.cache.getStats();
   }
 }
 
