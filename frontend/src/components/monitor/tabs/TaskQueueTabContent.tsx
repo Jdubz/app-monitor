@@ -37,6 +37,9 @@ export function TaskQueueTabContent() {
     { autoSelectFirst: true }
   );
 
+  // Subscribe to live phase updates for selected task
+  const livePhase = usePhaseUpdates(selectedTask?.id);
+
   // Filter tasks
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => task.status === activeFilter);
@@ -106,8 +109,6 @@ export function TaskQueueTabContent() {
 
   // Render detail pane
   const renderDetail = (task: DevBotsTask | null) => {
-    const livePhase = usePhaseUpdates(task?.id);
-    
     if (!task) {
       return (
         <Card>

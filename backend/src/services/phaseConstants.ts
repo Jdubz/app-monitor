@@ -6,11 +6,14 @@
  * execution, and observability layers.
  */
 
+import { config } from '../config.js';
+
 /**
  * Maximum number of attempts allowed per phase before blocking.
  * Tasks will be blocked if they reach this limit without successful validation.
+ * Configurable via MAX_PHASE_ATTEMPTS environment variable (default: 4).
  */
-export const MAX_PHASE_ATTEMPTS = 4;
+export const MAX_PHASE_ATTEMPTS = config.phaseSystem.maxPhaseAttempts;
 
 /**
  * Phase names mapped by phase index.

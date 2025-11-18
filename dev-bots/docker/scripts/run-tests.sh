@@ -17,6 +17,7 @@ set -e
 WORKSPACE_DIR="${WORKSPACE_DIR:-/workspace}"
 ARTIFACTS_DIR="${WORKSPACE_DIR}/.artifacts"
 RESULTS_FILE="${ARTIFACTS_DIR}/test-results.json"
+COVERAGE_DELTA_THRESHOLD="-0.1"  # Minimum acceptable coverage delta (%)
 
 # Create artifacts directory
 mkdir -p "$ARTIFACTS_DIR"
@@ -177,9 +178,9 @@ if [ -f "/scripts/coverage-delta.sh" ]; then
         echo "  Coverage delta: ${COVERAGE_DELTA}%"
         echo "  Threshold: ${COVERAGE_THRESHOLD}%"
         
-        # Check both absolute threshold (≥80%) and delta (≥-0.1%)
+        # Check both absolute threshold (≥80%) and delta (≥COVERAGE_DELTA_THRESHOLD%)
         if (( $(echo "$CURRENT_COVERAGE >= $COVERAGE_THRESHOLD" | bc -l) )) && \
-           (( $(echo "$COVERAGE_DELTA >= -0.1" | bc -l) )); then
+           (( $(echo "$COVERAGE_DELTA >= $COVERAGE_DELTA_THRESHOLD" | bc -l) )); then
             echo "  ✅ Coverage maintained"
             COVERAGE_DELTA_ACCEPTABLE=true
         else
