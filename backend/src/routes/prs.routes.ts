@@ -1,5 +1,6 @@
 import express, { Request, Response } from 'express';
 import { getPRConditionStateService } from '../services/prConditionState.service.js';
+import { getMockPRRegistry } from '../services/mockPRRegistry.service.js';
 import { logger } from '../utils/logger.js';
 import type { DevBotsManager } from '../services/devBotsManager.js';
 
@@ -127,6 +128,62 @@ export function createPRsRouter(devBotsManager: DevBotsManager) {
       res.status(500).json({
         success: false,
         error: 'Failed to fetch PR gates'
+      });
+    }
+  });
+
+  /**
+   * POST /prs/mock/register (TEST ONLY)
+   * Register a mock PR for E2E testing
+   * Used by E2E tests to provide mock GitHub PR data to the backend
+   */
+  router.post('/mock/register', async (req: Request, res: Response) => {
+    // Only allow in test mode
+    if (process.env.NODE_ENV !== 'test') {
+      return res.status(403).json({
+        success: false,
+        error: 'This endpoint is only available in test mode'
+      });
+    }
+
+    try {
+      const mockPRData = req.body;
+
+      if (!mockPRData.number) {
+        return res.status(400).json({
+          success: false,
+          error: 'PR number is required'
+        });
+      }
+
+      logger.info({
+        category: 'api',
+        action: 'mock_pr_registration',
+        message: `Registering mock PR #${mockPRData.number} for E2E testing`,
+        details: { prNumber: mockPRData.number }
+      });
+
+      const mockRegistry = getMockPRRegistry();
+      mockRegistry.registerMockPR(mockPRData);
+
+      res.json({
+        success: true,
+        data: {
+          message: `Mock PR #${mockPRData.number} registered`,
+          prNumber: mockPRData.number
+        }
+      });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'mock_pr_registration_failed',
+        message: 'Failed to register mock PR',
+        error
+      });
+
+      res.status(500).json({
+        success: false,
+        error: 'Failed to register mock PR'
       });
     }
   });

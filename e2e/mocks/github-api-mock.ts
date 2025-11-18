@@ -640,10 +640,11 @@ export async function createPullRequest(
   };
   
   mock['pullRequests'].set(prNumber, pr);
-  
+
   // Add check runs if ciChecks specified
+  let checkRuns: MockCheckRun[] = [];
   if (options.ciChecks && options.ciChecks.length > 0) {
-    const checkRuns: MockCheckRun[] = options.ciChecks.map((check, idx) => ({
+    checkRuns = options.ciChecks.map((check, idx) => ({
       id: Date.now() + idx,
       status: check.status === 'pending' ? 'in_progress' : 'completed',
       conclusion: check.status === 'pending' ? null : check.status,
@@ -662,10 +663,80 @@ export async function createPullRequest(
       started_at: new Date().toISOString(),
       completed_at: overallCIStatus === 'pending' ? null : new Date().toISOString(),
     };
-    mock['checkRuns'].set(prNumber, [checkRun]);
+    checkRuns = [checkRun];
+    mock['checkRuns'].set(prNumber, checkRuns);
   }
-  
+
+  // Get reviews for this PR
+  const reviews = mock['reviews'].get(prNumber) || [];
+
+  // Register PR with backend mock registry (TEST MODE only)
+  await registerPRWithBackend({
+    number: prNumber,
+    url: `https://github.com/test/repo/pull/${prNumber}`,
+    html_url: `https://github.com/test/repo/pull/${prNumber}`,
+    head_ref: pr.head.ref,
+    base_ref: pr.base.ref,
+    state: pr.state === 'open' ? 'OPEN' : pr.state === 'closed' ? 'CLOSED' : 'MERGED',
+    mergeable: pr.mergeable ? 'MERGEABLE' : 'CONFLICTING',
+    mergeable_state: mergeableState.toUpperCase(), // Convert to uppercase for backend
+    checks: checkRuns.map(check => ({
+      name: check.name,
+      status: check.conclusion === 'success' ? 'success' :
+              check.conclusion === 'failure' ? 'failure' :
+              check.conclusion === null ? 'pending' : 'error',
+      conclusion: check.conclusion,
+      detailsUrl: null
+    })),
+    reviews: reviews.map(review => ({
+      author: review.user.login,
+      state: review.state,
+      submittedAt: review.submitted_at,
+      body: review.body || ''
+    })),
+    comments: [],
+    commits: options.commits?.map((commit, idx) => ({
+      sha: `sha-${idx}`,
+      message: commit.message
+    }))
+  });
+
   return pr;
+}
+
+/**
+ * Register a mock PR with the backend mock registry
+ * This allows the backend to retrieve mock PR data during E2E tests
+ */
+async function registerPRWithBackend(prData: any): Promise<void> {
+  try {
+    const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3002';
+    const API_KEY = 'test-e2e-api-key-not-for-production';
+
+    const response = await fetch(`${API_BASE_URL}/api/prs/mock/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': API_KEY
+      },
+      body: JSON.stringify(prData)
+    });
+
+    if (!response.ok) {
+      // Log but don't throw - backend might not be ready yet
+      console.warn(`Failed to register mock PR #${prData.number} with backend: ${response.statusText}`);
+      return;
+    }
+
+    const result = await response.json();
+    if (!result.success) {
+      console.warn(`Backend rejected mock PR registration for #${prData.number}: ${result.error}`);
+    }
+  } catch (error) {
+    // Silently fail if backend is not available
+    // This allows tests to run even if backend is starting up
+    console.warn(`Could not register mock PR with backend:`, error instanceof Error ? error.message : error);
+  }
 }
 
 /**

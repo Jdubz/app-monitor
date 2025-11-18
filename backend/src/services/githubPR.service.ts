@@ -864,7 +864,30 @@ export class GitHubPRService {
       message: `Returning mock PR status for test PR #${prNumber}`
     });
 
-    // Return a PR that passes all basic gates
+    // Try to get registered mock PR from E2E tests
+    // This allows E2E tests to provide specific PR states for testing
+    const { getMockPRRegistry } = require('./mockPRRegistry.service.js');
+    const mockRegistry = getMockPRRegistry();
+    const mockPR = mockRegistry.getMockPR(prNumber);
+
+    if (mockPR) {
+      logger.info({
+        category: 'pr-workflow',
+        action: 'mock_pr_from_registry',
+        message: `Using registered mock PR #${prNumber} from E2E test registry`,
+        details: { mergeable_state: mockPR.mergeable_state }
+      });
+
+      return mockRegistry.convertToPRStatus(mockPR);
+    }
+
+    // Fallback: Return a PR that passes all basic gates (default behavior)
+    logger.info({
+      category: 'pr-workflow',
+      action: 'mock_pr_default',
+      message: `No registered mock PR found, using default passing PR status for #${prNumber}`
+    });
+
     return {
       number: prNumber,
       url: `https://github.com/test/repo/pull/${prNumber}`,
