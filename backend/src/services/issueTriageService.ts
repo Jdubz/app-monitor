@@ -10,6 +10,7 @@ import * as crypto from 'crypto';
 import { IssueStorageService } from './issueStorageService.js';
 import type { StoredIssue } from './issueStorageService.js';
 import type { TaskQueueService, Task } from './taskQueue.sqlite.js';
+import { MS_PER_MINUTE } from '../constants/timeouts.js';
 
 interface LogEntry {
   id?: string;
@@ -138,8 +139,8 @@ export class IssueTriageService {
     // 1. Search logs around timestamp (±5 minutes)
     const logs = await this.searchLogsByTimeRange(
       issue.timestamp,
-      -5 * 60 * 1000, // -5 minutes
-      +5 * 60 * 1000  // +5 minutes
+      -5 * MS_PER_MINUTE,
+      +5 * MS_PER_MINUTE
     );
 
     // 2. Filter by session ID or trace ID

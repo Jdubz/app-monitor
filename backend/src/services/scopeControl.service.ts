@@ -10,6 +10,7 @@
 
 import { logger } from '../utils/logger.js';
 import type { Task } from './taskQueue.sqlite.js';
+import { MS_PER_HOUR, MS_PER_DAY } from '../constants/timeouts.js';
 
 // ============================================================================
 // Types & Interfaces
@@ -145,11 +146,11 @@ export class SnowballPrevention {
 
 export class PeriodicCleanupScheduler {
   private schedules = {
-    linting: { interval: 6 * 60 * 60 * 1000, lastRun: Date.now() },
-    deduplication: { interval: 12 * 60 * 60 * 1000, lastRun: Date.now() },
-    documentation: { interval: 24 * 60 * 60 * 1000, lastRun: Date.now() },
-    testing: { interval: 48 * 60 * 60 * 1000, lastRun: Date.now() },
-    deepCleanup: { interval: 7 * 24 * 60 * 60 * 1000, lastRun: Date.now() }
+    linting: { interval: 6 * MS_PER_HOUR, lastRun: Date.now() },
+    deduplication: { interval: 12 * MS_PER_HOUR, lastRun: Date.now() },
+    documentation: { interval: 24 * MS_PER_HOUR, lastRun: Date.now() },
+    testing: { interval: 48 * MS_PER_HOUR, lastRun: Date.now() },
+    deepCleanup: { interval: 7 * MS_PER_DAY, lastRun: Date.now() }
   };
 
   checkSchedules(): string[] {

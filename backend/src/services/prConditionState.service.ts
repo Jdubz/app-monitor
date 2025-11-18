@@ -26,6 +26,7 @@ import { getDatabase, type DevBotsDatabase } from './database.js';
 import { GitHubPRService, getGitHubPRService, type PRStatus } from './githubPR.service.js';
 import { TaskQueueService } from './taskQueue.sqlite.js';
 import type { Task } from './taskQueue.sqlite.js';
+import { MS_PER_MINUTE } from '../constants/timeouts.js';
 
 // Import modular evaluators
 import {
@@ -105,7 +106,7 @@ export class PRConditionStateService {
           message: `${lockCount} evaluation locks still active - may indicate stuck evaluations`
         });
       }
-    }, 5 * 60 * 1000);
+    }, 5 * MS_PER_MINUTE);
 
     logger.info({
       category: 'pr-workflow',

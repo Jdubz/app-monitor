@@ -16,6 +16,7 @@
 
 import Database from 'better-sqlite3';
 import { logger } from '../utils/logger.js';
+import { MS_PER_MINUTE } from '../constants/timeouts.js';
 
 export interface PhaseStats {
   phaseIndex: number;
@@ -73,7 +74,7 @@ export interface PhaseMetricsSnapshot {
   activeTaskDistribution: PhaseDistribution;
 }
 
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL_MS = 5 * MS_PER_MINUTE;
 
 export class PhaseMetricsService {
   private db: Database.Database;
