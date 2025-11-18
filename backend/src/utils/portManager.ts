@@ -14,7 +14,7 @@ export async function isPortInUse(port: number): Promise<boolean> {
   try {
     const { stdout } = await execAsync(`lsof -ti:${port}`);
     return stdout.trim().length > 0;
-  } catch (error) {
+  } catch (_error) {
     // lsof returns non-zero exit code if port is not in use
     return false;
   }
@@ -28,7 +28,7 @@ export async function getPortPid(port: number): Promise<number | null> {
     const { stdout } = await execAsync(`lsof -ti:${port}`);
     const pid = parseInt(stdout.trim().split('\n')[0]);
     return isNaN(pid) ? null : pid;
-  } catch (error) {
+  } catch (_error) {
     return null;
   }
 }
@@ -108,7 +108,7 @@ export async function killPortProcess(port: number): Promise<boolean> {
         });
         return true;
       }
-    } catch (error) {
+    } catch (_error) {
       // Process might already be dead
     }
 
@@ -126,7 +126,7 @@ export async function killPortProcess(port: number): Promise<boolean> {
       await new Promise(resolve => setTimeout(resolve, 500));
 
       return true;
-    } catch (error) {
+    } catch (_error) {
       logger.error({
         category: 'port-manager',
         action: 'kill_process_failed',
@@ -135,7 +135,7 @@ export async function killPortProcess(port: number): Promise<boolean> {
       });
       return false;
     }
-  } catch (error) {
+  } catch (_error) {
     logger.error({
       category: 'port-manager',
       action: 'kill_port_error',
@@ -188,7 +188,7 @@ export async function isDockerContainerRunning(containerName: string): Promise<b
       `docker ps --filter "name=${containerName}" --filter "status=running" --format "{{.Names}}"`
     );
     return stdout.trim().includes(containerName);
-  } catch (error) {
+  } catch (_error) {
     return false;
   }
 }
@@ -219,7 +219,7 @@ export async function stopDockerContainer(containerName: string): Promise<boolea
       details: { containerName }
     });
     return true;
-  } catch (error) {
+  } catch (_error) {
     logger.error({
       category: 'docker',
       action: 'stop_container_failed',
@@ -240,7 +240,7 @@ export async function getDockerContainerPid(containerName: string): Promise<numb
     );
     const pid = parseInt(stdout.trim());
     return isNaN(pid) || pid === 0 ? null : pid;
-  } catch (error) {
+  } catch (_error) {
     return null;
   }
 }
@@ -286,7 +286,7 @@ export async function getDockerContainerInfo(containerName: string): Promise<{
       startedAt,
       containerId,
     };
-  } catch (error) {
+  } catch (_error) {
     logger.error({
       category: 'docker',
       action: 'get_container_info_failed',

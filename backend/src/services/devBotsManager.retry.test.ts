@@ -189,7 +189,7 @@ describe('DevBotsManager Retry Functionality', () => {
       // Simulate task failure
       try {
         await (manager as any).executeTask(failingTask);
-      } catch (error) {
+      } catch (_error) {
         // Task should be scheduled for retry
         expect(mockRetryManager.canRetryTask).toHaveBeenCalledWith(failingTask);
         expect(mockRetryManager.scheduleRetry).toHaveBeenCalled();

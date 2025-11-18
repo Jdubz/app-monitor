@@ -445,7 +445,7 @@ export class DevBotsDatabase {
         applied = this.db.prepare(
           'SELECT 1 FROM migrations WHERE name = ?'
         ).get(name);
-      } catch (err: unknown) {
+      } catch (_err: unknown) {
         // If the migrations table does not exist, create it
         const errorMsg = err instanceof Error ? err.message : String(err);
         if (errorMsg.includes('no such table: migrations')) {

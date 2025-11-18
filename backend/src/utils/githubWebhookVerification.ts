@@ -46,7 +46,7 @@ export function verifyGitHubWebhookSignature(
       Buffer.from(providedSignature, 'hex'),
       Buffer.from(expectedSignature, 'hex')
     );
-  } catch (error) {
+  } catch (_error) {
     // timingSafeEqual throws if buffers have different lengths
     return false;
   }

@@ -5,7 +5,7 @@
  * Task-type-specific guidelines are loaded from taskTypeGuidelines.ts
  */
 
-/* eslint-disable no-useless-escape */
+ 
 
 import { logger } from '../utils/logger.js';
 import { Task } from './taskQueue.sqlite.js';

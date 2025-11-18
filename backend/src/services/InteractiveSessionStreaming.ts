@@ -178,7 +178,7 @@ export class InteractiveSessionStreaming extends EventEmitter {
       context.stream.removeAllListeners();
       try {
         context.stream.end();
-      } catch (error) {
+      } catch (_error) {
         logger.warn({
           category: 'system',
           action: 'stream_end_failed',
@@ -230,7 +230,7 @@ export class InteractiveSessionStreaming extends EventEmitter {
         h: size.rows,
         w: size.cols,
       });
-    } catch (error) {
+    } catch (_error) {
       logger.warn({
         category: 'system',
         action: 'pty_resize_failed',
@@ -298,7 +298,7 @@ export class InteractiveSessionStreaming extends EventEmitter {
     try {
       const text = typeof raw === 'string' ? raw : raw.toString('utf8');
       payload = JSON.parse(text) as ClientMessage;
-    } catch (error) {
+    } catch (_error) {
       socket.send(JSON.stringify({ type: 'error', message: 'Invalid message payload' }));
       return;
     }
@@ -340,7 +340,7 @@ export class InteractiveSessionStreaming extends EventEmitter {
         default:
           socket.send(JSON.stringify({ type: 'error', message: 'Unknown message type' }));
       }
-    } catch (error) {
+    } catch (_error) {
       socket.send(
         JSON.stringify({
           type: 'error',
@@ -435,7 +435,7 @@ export class InteractiveSessionStreaming extends EventEmitter {
 
       this.emit('ready', { sessionId: this.active.sessionId });
       this.pushSystemMessage(this.active, 'Interactive stream ready', 'info');
-    } catch (error) {
+    } catch (_error) {
       if (!this.active) {
         return;
       }

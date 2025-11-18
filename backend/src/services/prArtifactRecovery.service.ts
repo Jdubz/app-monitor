@@ -240,7 +240,7 @@ export class PRArtifactRecoveryService {
       try {
         const stderrContent = await fs.readFile(stderrDescriptor.path, 'utf-8');
         stderrSample = stderrContent.substring(0, 500);
-      } catch (error) {
+      } catch (_error) {
         // Ignore read errors for stderr
       }
     }

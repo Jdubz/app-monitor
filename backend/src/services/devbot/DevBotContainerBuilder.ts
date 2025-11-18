@@ -224,7 +224,7 @@ export class DevBotContainerBuilder {
         if (fs.existsSync(mapping.hostPath)) {
           this.volume(mapping.hostPath, mapping.containerPath, mapping.mode || 'ro');
         }
-      } catch (err) {
+      } catch (_err) {
         // Silently skip if we can't check existence (e.g., in test environments)
       }
     }

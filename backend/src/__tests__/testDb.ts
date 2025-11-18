@@ -39,7 +39,7 @@ export function closeTestDatabase(db: Database.Database | TaskQueueService): voi
     if ('close' in db) {
       db.close();
     }
-  } catch (err) {
+  } catch (_err) {
     // Ignore close errors in tests - database may already be closed
   }
 }

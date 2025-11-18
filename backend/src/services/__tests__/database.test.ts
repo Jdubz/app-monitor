@@ -22,7 +22,7 @@ describe('DevBotsDatabase', () => {
   afterEach(() => {
     try {
       db?.close?.();
-    } catch (err) {
+    } catch (_err) {
       // Ignore close errors in tests
     }
   });

@@ -425,7 +425,7 @@ export class WorkspaceSyncManager extends EventEmitter {
           file: line.substring(3)
         }))
       };
-    } catch (error) {
+    } catch (_error) {
       return { hasUncommittedChanges: false, changes: [] };
     }
   }
@@ -603,7 +603,7 @@ export class WorkspaceSyncManager extends EventEmitter {
       }
 
       return false;
-    } catch (error) {
+    } catch (_error) {
       return false;
     }
   }
