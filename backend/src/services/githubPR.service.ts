@@ -142,8 +142,9 @@ export class GitHubPRService {
     const owner = repoOwner || this.repoOwner;
     const repo = repoName || this.repoName;
 
-    // Use cache for getPRStatus calls
-    return this.cache.getOrFetch(prNumber, async () => {
+    // Use cache for getPRStatus calls - include repo info in cache key to avoid collisions
+    const cacheKey = `${owner}/${repo}/${prNumber}`;
+    return this.cache.getOrFetch(cacheKey, async () => {
       return this.fetchPRStatusUncached(prNumber, owner, repo);
     });
   }
