@@ -317,11 +317,9 @@ test.describe('Consecutive Failures', () => {
     
     // Check logs for recovery activation
     const logs = await getTaskLogs(task.id, API_BASE_URL);
-    const hasRecoveryLog = logs.some(log => 
-      log.includes('Recovery') || 
-      log.includes('recovery') ||
-      log.includes('escalat')
-    );
+    const hasRecoveryLog = logs.includes('Recovery') || 
+      logs.includes('recovery') ||
+      logs.includes('escalat');
     
     if (hasRecoveryLog || recoveryTriggered) {
       console.log('✅ Recovery bot escalation verified');
@@ -400,10 +398,8 @@ test.describe('Timeout and Resource Failures', () => {
     const taskStatus = await getTask(task.id, API_BASE_URL);
     const logs = await getTaskLogs(task.id, API_BASE_URL);
     
-    const hasOOMLog = logs.some(log => 
-      log.toLowerCase().includes('memory') ||
-      log.toLowerCase().includes('oom')
-    );
+    const hasOOMLog = logs.toLowerCase().includes('memory') ||
+      logs.toLowerCase().includes('oom');
     
     if (oomDetected || hasOOMLog) {
       console.log('✅ OOM error detected and logged');
@@ -485,7 +481,7 @@ test.describe('Validation Failures', () => {
     expect(validationFailed).toBe(true);
     
     const logs = await getTaskLogs(task.id, API_BASE_URL);
-    const hasCriteriaLog = logs.some(log => log.includes('criteria') || log.includes('Coverage'));
+    const hasCriteriaLog = logs.includes('criteria') || logs.includes('Coverage');
     
     if (hasCriteriaLog) {
       console.log('✅ Success criteria validation enforced');
@@ -583,7 +579,7 @@ test.describe('State Recovery', () => {
     
     // Should resume from phase 3
     const taskStatus = await getTask(task.id, API_BASE_URL);
-    expect(taskStatus.phase_index).toBeGreaterThanOrEqual(3);
+    expect(taskStatus.phaseIndex).toBeGreaterThanOrEqual(3);
     
     // Continue to completion
     await bot2.executeTask(task.id);
@@ -614,8 +610,8 @@ test.describe('State Recovery', () => {
     const logs = await getTaskLogs(task.id, API_BASE_URL);
     
     // Should see phase 3 attempted multiple times
-    const phase3Logs = logs.filter(log => log.includes('Phase 3') || log.includes('phase 3'));
-    expect(phase3Logs.length).toBeGreaterThan(1);
+    const phase3Occurrences = (logs.match(/Phase 3|phase 3/g) || []).length;
+    expect(phase3Occurrences).toBeGreaterThan(1);
     
     console.log('✅ Phase state preserved across retries');
   });
