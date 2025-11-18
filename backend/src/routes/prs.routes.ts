@@ -73,21 +73,15 @@ export function createPRsRouter(devBotsManager: DevBotsManager) {
         });
       }
 
-      // Query PR condition state directly from database
-      const db = taskQueue.getDatabase();
-      // eslint-disable-next-line local-rules/no-direct-db-in-routes -- TODO: Move to PRConditionStateService
-      const row = db.prepare(
-        'SELECT state_json FROM pr_condition_states WHERE pr_number = ?'
-      ).get(prNumber) as { state_json: string } | undefined;
+      // Get PR condition state from service
+      const state = await prConditionState.getState(prNumber);
 
-      if (!row) {
+      if (!state) {
         return res.status(404).json({
           success: false,
           error: 'PR not found'
         });
       }
-
-      const state = JSON.parse(row.state_json);
 
       // Convert conditions object to array format expected by tests
       // Map internal status to test-friendly values
