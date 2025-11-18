@@ -1,16 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
-
-async function bypassPasswordGate(page: Page) {
-  await page.goto('/');
-  const passwordInput = page.getByPlaceholder('Password');
-  const isPasswordGateVisible = await passwordInput.isVisible().catch(() => false);
-
-  if (isPasswordGateVisible) {
-    await passwordInput.fill('e2e-test-password');
-    await page.getByRole('button', { name: 'Enter' }).click();
-    await page.waitForLoadState('networkidle');
-  }
-}
+import { bypassPasswordGate } from '../helpers/auth';
 
 test.describe('Keyboard Shortcuts', () => {
   test.beforeEach(async ({ page }) => {

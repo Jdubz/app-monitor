@@ -1,23 +1,10 @@
 import { test, expect, Page } from '@playwright/test';
+import { bypassPasswordGate } from '../helpers/auth';
 
 /**
  * Interactive Terminal Tab E2E Tests
  * Tests the interactive terminal functionality including sessions, commands, and real-time I/O
  */
-
-// Helper to bypass password gate if present
-async function bypassPasswordGate(page: Page) {
-  await page.goto('/');
-
-  const passwordInput = page.getByPlaceholder('Password');
-  const isPasswordGateVisible = await passwordInput.isVisible().catch(() => false);
-
-  if (isPasswordGateVisible) {
-    await passwordInput.fill('e2e-test-password');
-    await page.getByRole('button', { name: 'Enter' }).click();
-    await page.waitForLoadState('networkidle');
-  }
-}
 
 // Helper to mock interactive session API (Docker disabled in test env)
 async function mockInteractiveSessionApi(page: Page) {

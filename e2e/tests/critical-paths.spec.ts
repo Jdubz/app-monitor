@@ -1,4 +1,5 @@
-import { test, expect, Page } from '@playwright/test';
+import { test, expect } from '@playwright/test';
+import { bypassPasswordGate } from '../helpers/auth';
 
 /**
  * Critical Path E2E Tests
@@ -8,22 +9,6 @@ import { test, expect, Page } from '@playwright/test';
  *
  * ⚠️ NEVER run against production!
  */
-
-// Helper to bypass password gate if present
-async function bypassPasswordGate(page: Page) {
-  await page.goto('/');
-
-  // Check if password gate is present
-  const passwordInput = page.getByPlaceholder('Password');
-  const isPasswordGateVisible = await passwordInput.isVisible().catch(() => false);
-
-  if (isPasswordGateVisible) {
-    // Enter the E2E test password
-    await passwordInput.fill('e2e-test-password');
-    await page.getByRole('button', { name: 'Enter' }).click();
-    await page.waitForLoadState('networkidle');
-  }
-}
 
 test.describe('Task Queue - Critical Functionality', () => {
   test.beforeEach(async ({ page }) => {
@@ -62,8 +47,11 @@ test.describe('Task Queue - Critical Functionality', () => {
     // beforeEach already navigated to / which redirects to /monitor/dev-bots
     // Dev-Bots tab shows Queue Size, Workers, and Active Tasks summary cards
 
-    // Wait for page to load
-    await page.waitForTimeout(3000);
+    // Wait for API response instead of fixed timeout
+    await page.waitForResponse(
+      response => response.url().includes('/api/dev-bots/') && response.status() === 200,
+      { timeout: 10000 }
+    ).catch(() => null);
 
     // Look for any dev-bots content (loading state, summary cards, or empty state)
     const hasLoading = await page.getByText(/Loading dev-bots status/i).isVisible().catch(() => false);
@@ -79,8 +67,11 @@ test.describe('Task Queue - Critical Functionality', () => {
   test('task counts are displayed', async ({ page }) => {
     // beforeEach already navigated to / which redirects to /monitor/dev-bots
 
-    // Wait for page to load
-    await page.waitForTimeout(3000);
+    // Wait for API response instead of fixed timeout
+    await page.waitForResponse(
+      response => response.url().includes('/api/dev-bots/') && response.status() === 200,
+      { timeout: 10000 }
+    ).catch(() => null);
 
     // Verify summary card labels or loading state is visible
     const hasLoading = await page.getByText(/Loading dev-bots status/i).isVisible().catch(() => false);

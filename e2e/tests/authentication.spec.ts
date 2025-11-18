@@ -31,13 +31,14 @@ test.describe('Password Gate', () => {
       await page.getByRole('button', { name: 'Enter' }).click();
       await page.waitForTimeout(1000);
 
-      // Should show error or stay on password gate
+      // Should show error AND stay on password gate
       const errorMessage = page.getByText(/incorrect|invalid|wrong/i);
       const hasError = await errorMessage.isVisible().catch(() => false);
-
-      // Either error is shown or we're still on password gate
       const stillOnGate = await passwordInput.isVisible();
-      expect(hasError || stillOnGate).toBe(true);
+
+      // BOTH must be true - error shown AND still on gate
+      expect(hasError).toBe(true);
+      expect(stillOnGate).toBe(true);
     }
   });
 

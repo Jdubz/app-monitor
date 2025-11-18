@@ -1,4 +1,5 @@
 import { test, expect, Page } from '@playwright/test';
+import { bypassPasswordGate } from '../helpers/auth';
 
 /**
  * Interactive Session WebSocket Authentication E2E Tests
@@ -13,20 +14,6 @@ import { test, expect, Page } from '@playwright/test';
 const API_KEY = 'test-e2e-api-key-not-for-production';
 const TEST_PASSWORD = 'e2e-test-password';
 const BASE_URL = 'http://localhost:3002';
-
-// Helper to bypass password gate if present
-async function bypassPasswordGate(page: Page) {
-  await page.goto('/');
-
-  const passwordInput = page.getByPlaceholder('Password');
-  const isPasswordGateVisible = await passwordInput.isVisible().catch(() => false);
-
-  if (isPasswordGateVisible) {
-    await passwordInput.fill(TEST_PASSWORD);
-    await page.getByRole('button', { name: 'Enter' }).click();
-    await page.waitForLoadState('networkidle');
-  }
-}
 
 // Helper to setup WebSocket monitoring
 function setupWebSocketMonitoring(page: Page) {

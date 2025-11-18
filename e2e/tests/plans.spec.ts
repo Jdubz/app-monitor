@@ -1,23 +1,10 @@
 import { test, expect, Page } from '@playwright/test';
+import { bypassPasswordGate } from '../helpers/auth';
 
 /**
  * Plans Tab E2E Tests
  * Tests the plans system including plan creation, management, and execution
  */
-
-// Helper to bypass password gate if present
-async function bypassPasswordGate(page: Page) {
-  await page.goto('/');
-
-  const passwordInput = page.getByPlaceholder('Password');
-  const isPasswordGateVisible = await passwordInput.isVisible().catch(() => false);
-
-  if (isPasswordGateVisible) {
-    await passwordInput.fill('e2e-test-password');
-    await page.getByRole('button', { name: 'Enter' }).click();
-    await page.waitForLoadState('networkidle');
-  }
-}
 
 // Helper to navigate to Plans tab
 async function navigateToPlans(page: Page) {
