@@ -178,9 +178,9 @@ export class PRCacheService<T = unknown> extends EventEmitter {
    */
   clear(): void {
     const size = this.cache.size;
+    this.emit('cleared', size);
     this.cache.clear();
     this.log('info', 'Cache cleared', { entriesRemoved: size });
-    this.emit('cleared', size);
   }
   
   /**

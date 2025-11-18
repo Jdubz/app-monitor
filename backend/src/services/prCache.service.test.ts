@@ -206,24 +206,28 @@ describe('PRCacheService', () => {
   });
   
   describe('Events', () => {
-    it('should emit "hit" event on cache hit', (done) => {
+    it('should emit "hit" event on cache hit', () => {
       cache.set(123, { number: 123, title: 'Test', status: 'open' });
       
-      cache.on('hit', (prNumber) => {
-        expect(prNumber).toBe(123);
-        done();
+      return new Promise<void>((resolve) => {
+        cache.on('hit', (prNumber) => {
+          expect(prNumber).toBe(123);
+          resolve();
+        });
+        
+        cache.get(123);
       });
-      
-      cache.get(123);
     });
     
-    it('should emit "miss" event on cache miss', (done) => {
-      cache.on('miss', (prNumber) => {
-        expect(prNumber).toBe(999);
-        done();
+    it('should emit "miss" event on cache miss', () => {
+      return new Promise<void>((resolve) => {
+        cache.on('miss', (prNumber) => {
+          expect(prNumber).toBe(999);
+          resolve();
+        });
+        
+        cache.get(999);
       });
-      
-      cache.get(999);
     });
     
     it('should emit "set" event when entry is cached', () => {
@@ -255,10 +259,12 @@ describe('PRCacheService', () => {
       cache.set(456, { number: 456, title: 'Test 2', status: 'open' });
       
       return new Promise<void>((resolve) => {
-        cache.on('cleared', (count) => {
+        const listener = (count: number) => {
           expect(count).toBe(2);
+          cache.off('cleared', listener);
           resolve();
-        });
+        };
+        cache.on('cleared', listener);
         
         cache.clear();
       });

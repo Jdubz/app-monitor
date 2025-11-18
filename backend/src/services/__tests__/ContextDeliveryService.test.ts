@@ -8,6 +8,17 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ContextDeliveryService } from '../ContextDeliveryService.js';
 import type { Task } from '../../types/database.js';
+import { Readable } from 'stream';
+
+// Mock tar-fs module
+vi.mock('tar-fs', () => ({
+  default: {
+    pack: vi.fn(() => {
+      // Return a mock stream
+      return Readable.from(['mock tar data']);
+    })
+  }
+}));
 
 // Mock fs module with factory
 vi.mock('fs', async () => {
