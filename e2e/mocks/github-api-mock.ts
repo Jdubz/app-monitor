@@ -26,10 +26,34 @@ export interface MockPRResponse {
 export interface MockCheckRun {
   id: number;
   status: 'queued' | 'in_progress' | 'completed';
-  conclusion: 'success' | 'failure' | 'neutral' | 'cancelled' | 'skipped' | null;
+  conclusion: 'success' | 'failure' | 'neutral' | 'cancelled' | 'skipped' | 'timed_out' | 'action_required' | null;
   name: string;
   started_at: string;
   completed_at: string | null;
+  output?: {
+    title?: string;
+    summary?: string;
+    text?: string;
+  };
+}
+
+export interface MockReview {
+  id: number;
+  user: { login: string };
+  state: 'approved' | 'changes_requested' | 'commented' | 'dismissed';
+  submitted_at: string;
+  body?: string;
+}
+
+export interface PRGateStatus {
+  base_branch_updated: boolean;
+  no_conflicts: boolean;
+  ci_checks_passing: boolean;
+  required_approvals: boolean;
+  task_verification: boolean;
+  copilot_review: boolean;
+  final_validation: boolean;
+  no_wip_commits: boolean;
 }
 
 export interface WebhookPayload {
@@ -59,9 +83,11 @@ export class GitHubAPIMock extends EventEmitter {
   private prs: Map<number, MockPRResponse> = new Map();
   private checkRunsById: Map<number, MockCheckRun> = new Map(); // checkRuns by ID
   private checkRunsByPR: Map<number, MockCheckRun[]> = new Map(); // checkRuns by PR number
+  private reviewsByPR: Map<number, MockReview[]> = new Map(); // reviews by PR number
   private webhookEndpoint: string;
   private nextPRNumber = 1;
   private nextCheckRunId = 1;
+  private nextReviewId = 1;
   private prCounter = 1; // Counter for createPullRequest helper
 
   constructor(webhookEndpoint: string = 'http://localhost:3002/api/webhooks/github') {
@@ -70,6 +96,7 @@ export class GitHubAPIMock extends EventEmitter {
     // Expose internal maps for helper functions
     this['pullRequests'] = this.prs;
     this['checkRuns'] = this.checkRunsByPR;
+    this['reviews'] = this.reviewsByPR;
   }
 
   /**
@@ -374,6 +401,115 @@ export class GitHubAPIMock extends EventEmitter {
         name,
       });
     });
+    
+    // Add approving review
+    this.addReview(prNumber, {
+      user: { login: 'reviewer' },
+      state: 'approved'
+    });
+  }
+
+  /**
+   * Add a review to a PR
+   */
+  addReview(prNumber: number, review: Partial<MockReview>): MockReview {
+    const newReview: MockReview = {
+      id: this.nextReviewId++,
+      user: review.user || { login: 'test-reviewer' },
+      state: review.state || 'commented',
+      submitted_at: new Date().toISOString(),
+      body: review.body
+    };
+    
+    const existing = this.reviewsByPR.get(prNumber) || [];
+    existing.push(newReview);
+    this.reviewsByPR.set(prNumber, existing);
+    
+    this.emit('review_added', { prNumber, review: newReview });
+    return newReview;
+  }
+
+  /**
+   * Get reviews for PR
+   */
+  getReviews(prNumber: number): MockReview[] {
+    return this.reviewsByPR.get(prNumber) || [];
+  }
+
+  /**
+   * Check if PR has required approvals
+   */
+  hasRequiredApprovals(prNumber: number, required: number = 1): boolean {
+    const reviews = this.getReviews(prNumber);
+    const approvals = reviews.filter(r => r.state === 'approved').length;
+    const changeRequests = reviews.filter(r => r.state === 'changes_requested').length;
+    
+    // Must have approvals and no active change requests
+    return approvals >= required && changeRequests === 0;
+  }
+
+  /**
+   * Get PR gate status (8 gates)
+   */
+  getPRGateStatus(prNumber: number): PRGateStatus {
+    const pr = this.prs.get(prNumber);
+    if (!pr) {
+      throw new Error(`PR ${prNumber} not found`);
+    }
+    
+    const checkRuns = this.checkRunsByPR.get(prNumber) || [];
+    const allChecksPassing = checkRuns.length > 0 && 
+      checkRuns.every(c => c.status === 'completed' && c.conclusion === 'success');
+    
+    return {
+      base_branch_updated: pr.mergeable !== false, // Simplified check
+      no_conflicts: pr.mergeable !== false,
+      ci_checks_passing: allChecksPassing,
+      required_approvals: this.hasRequiredApprovals(prNumber),
+      task_verification: true, // Assume task is verified
+      copilot_review: true, // Non-blocking, assume passed
+      final_validation: allChecksPassing, // Tied to CI for simplicity
+      no_wip_commits: !pr.draft && !pr.title.toLowerCase().includes('wip')
+    };
+  }
+
+  /**
+   * Create PR with specific gate failures
+   */
+  createPRWithGateFailures(
+    gates: Partial<PRGateStatus>,
+    prNumber?: number
+  ): MockPRResponse {
+    const pr = this.onCreatePR().reply(201, {
+      number: prNumber,
+      mergeable: gates.no_conflicts !== false,
+      mergeable_state: gates.no_conflicts === false ? 'dirty' : 'unstable',
+      draft: gates.no_wip_commits === false
+    });
+    
+    // Add failing checks if ci_checks_passing is false
+    if (gates.ci_checks_passing === false) {
+      this.onCreateCheckRun().reply(201, {
+        status: 'completed',
+        conclusion: 'failure',
+        name: 'ci-tests',
+        output: {
+          title: 'Tests Failed',
+          summary: '3 of 10 tests failed',
+          text: 'See details for more information'
+        }
+      });
+    }
+    
+    // Add change request if required_approvals is false
+    if (gates.required_approvals === false) {
+      this.addReview(pr.number, {
+        state: 'changes_requested',
+        body: 'Please fix the issues before merging'
+      });
+    }
+    
+    return pr;
   }
 
   /**
@@ -402,9 +538,12 @@ export class GitHubAPIMock extends EventEmitter {
    */
   resetMocks(): void {
     this.prs.clear();
-    this.checkRuns.clear();
+    this.checkRunsByPR.clear();
+    this.checkRunsById.clear();
+    this.reviewsByPR.clear();
     this.nextPRNumber = 1;
     this.nextCheckRunId = 1;
+    this.nextReviewId = 1;
     this.removeAllListeners();
   }
 

@@ -10,6 +10,22 @@ import { EventEmitter } from 'events';
 // API key for E2E tests (must match playwright.config.ts)
 const API_KEY = 'test-e2e-api-key-not-for-production';
 
+export type FailureType = 
+  | 'compilation_error'
+  | 'test_failure'
+  | 'timeout'
+  | 'validation_error'
+  | 'linting_error'
+  | 'insufficient_coverage'
+  | 'invalid_plan_structure'
+  | 'out_of_memory'
+  | 'disk_full'
+  | 'flaky_test'
+  | 'no_files_changed'
+  | 'success_criteria_not_met'
+  | 'persistent_error'
+  | 'various';
+
 export interface SimulatorConfig {
   /** Docker image to use for bot */
   image?: string;
@@ -17,14 +33,36 @@ export interface SimulatorConfig {
   mountWorkspace?: boolean;
   /** Inject failure at specific phase */
   failAtPhase?: number;
+  /** Inject failures at multiple phases */
+  failAtPhases?: number[];
   /** Type of failure to inject */
-  failureType?: 'compilation_error' | 'test_failure' | 'timeout' | 'validation_error';
+  failureType?: FailureType;
   /** Hang (infinite loop) at specific phase */
   hangAtPhase?: number;
   /** Timeout for hung phases (ms) */
   timeout?: number;
   /** Crash bot at specific phase */
   crashAtPhase?: number;
+  
+  // Advanced failure simulation
+  /** Number of times to fail before succeeding (for retry tests) */
+  failCount?: number;
+  /** Maximum total failures before giving up */
+  maxFailures?: number;
+  /** Flaky failure rate (0.0-1.0) for intermittent failures */
+  flakyFailureRate?: number;
+  
+  // Validation failures
+  /** Success criteria that should not be met */
+  unmetCriteria?: string[];
+  /** Test coverage percentage to report (0-100) */
+  coverage?: number;
+  
+  // State recovery
+  /** Resume from this task ID */
+  resumeTask?: string;
+  /** Phase timeout in milliseconds */
+  phaseTimeout?: number;
 }
 
 export interface BotInstance {
@@ -49,6 +87,8 @@ export interface PhaseAttempt {
   attempt: number;
   success: boolean;
   error?: string;
+  reason?: string;
+  timestamp?: number;
 }
 
 /**
@@ -67,6 +107,9 @@ export class DevBotSimulator extends EventEmitter {
   private apiBaseUrl: string;
   private phaseHistory: number[] = [];
   private attemptHistory: PhaseAttempt[] = [];
+  private phaseAttemptCounts: Map<number, number> = new Map();
+  private totalFailureCount: number = 0;
+  private phaseFailureCount: Map<number, number> = new Map();
 
   constructor(config: SimulatorConfig = {}, apiBaseUrl: string = 'http://localhost:3002') {
     super();
@@ -408,6 +451,91 @@ export class DevBotSimulator extends EventEmitter {
     
     if (this.instance.containerId) {
       await this.removeContainer();
+    }
+  }
+
+  /**
+   * Determine if failure should be injected for this phase attempt
+   */
+  private shouldInjectFailure(phase: number): boolean {
+    // Check single phase failure
+    if (this.config.failAtPhase === phase) {
+      const failureCount = this.phaseFailureCount.get(phase) || 0;
+      
+      // If failCount specified, only fail that many times
+      if (this.config.failCount !== undefined) {
+        if (failureCount < this.config.failCount) {
+          this.phaseFailureCount.set(phase, failureCount + 1);
+          return true;
+        }
+        return false;
+      }
+      
+      // If maxFailures specified, check total failure limit
+      if (this.config.maxFailures !== undefined) {
+        if (this.totalFailureCount < this.config.maxFailures) {
+          this.totalFailureCount++;
+          this.phaseFailureCount.set(phase, failureCount + 1);
+          return true;
+        }
+        return false;
+      }
+      
+      // Default: always fail
+      this.totalFailureCount++;
+      this.phaseFailureCount.set(phase, failureCount + 1);
+      return true;
+    }
+    
+    // Check multiple phase failures
+    if (this.config.failAtPhases && this.config.failAtPhases.includes(phase)) {
+      this.totalFailureCount++;
+      return true;
+    }
+    
+    // Check flaky failures
+    if (this.config.flakyFailureRate && this.config.flakyFailureRate > 0) {
+      return Math.random() < this.config.flakyFailureRate;
+    }
+    
+    return false;
+  }
+
+  /**
+   * Get failure reason based on failure type
+   */
+  private getFailureReason(phase: number, failureType?: FailureType): string {
+    const type = failureType || this.config.failureType;
+    
+    switch (type) {
+      case 'compilation_error':
+        return 'Compilation failed: Syntax error in generated code';
+      case 'test_failure':
+        return 'Tests failed: 3 of 10 tests failing';
+      case 'linting_error':
+        return 'Linting failed: 15 ESLint errors found';
+      case 'insufficient_coverage':
+        return `Test coverage ${this.config.coverage || 65}% below required 80%`;
+      case 'invalid_plan_structure':
+        return 'Plan validation failed: Missing required fields';
+      case 'out_of_memory':
+        return 'Container killed: Out of memory (OOM)';
+      case 'disk_full':
+        return 'Disk space exhausted: No space left on device';
+      case 'flaky_test':
+        return 'Intermittent test failure detected';
+      case 'no_files_changed':
+        return 'No files modified: Implementation phase requires changes';
+      case 'success_criteria_not_met':
+        return `Success criteria not met: ${this.config.unmetCriteria?.join(', ') || 'Unknown criteria'}`;
+      case 'persistent_error':
+        return 'Persistent error: Unable to resolve after multiple attempts';
+      case 'timeout':
+        return 'Phase execution timeout exceeded';
+      case 'validation_error':
+        return 'Validation failed: Output does not meet requirements';
+      default:
+        return `Phase ${phase} failed`;
     }
   }
 
