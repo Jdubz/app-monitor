@@ -4,7 +4,8 @@ import { jsonLogger } from './vite-plugin-json-logger';
 import path from 'path';
 
 // Get backend URL from environment, defaulting to dev server
-const backendUrl = process.env.VITE_BACKEND_URL || 'http://localhost:5000';
+// Support both VITE_API_BASE_URL (E2E tests) and VITE_BACKEND_URL (legacy)
+const backendUrl = process.env.VITE_API_BASE_URL || process.env.VITE_BACKEND_URL || 'http://localhost:5000';
 
 // https://vitejs.dev/config/
 export default defineConfig({
