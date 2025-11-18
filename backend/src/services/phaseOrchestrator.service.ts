@@ -284,7 +284,9 @@ export class PhaseOrchestratorService {
    * Update a stage run with recovery diagnosis and status.
    * Called when recovery agent completes its diagnosis.
    */
-  updateStageRunWithRecovery(stageRunId: number, recoveryDiagnosis: string, status: 'recovered' | 'failed' = 'recovered'): void {
+  updateStageRunWithRecovery(stageRunId: number, recoveryDiagnosis: string, status: 'success' | 'failed' = 'success'): void {
+    // DB constraint only allows: 'pending', 'running', 'success', 'failed', 'skipped'
+    // Recovery successful = 'success', recovery failed = 'failed'
     this.db.prepare(`
       UPDATE task_stage_runs
       SET recovery_diagnosis = ?,

@@ -948,7 +948,7 @@ export class EphemeralWorkerService {
         this.phaseOrchestrator.updateStageRunWithRecovery(
           stageRunId,
           JSON.stringify(recoveryResult),
-          recoveryResult.success ? 'recovered' : 'failed'
+          recoveryResult.success ? 'success' : 'failed'
         );
       }
 

@@ -1,23 +1,10 @@
 import { test, expect, Page } from '@playwright/test';
+import { bypassPasswordGate } from '../helpers/auth';
 
 /**
  * PR Tracking Tab E2E Tests
  * Tests the PR tracking functionality including listing, filtering, and PR details
  */
-
-// Helper to bypass password gate if present
-async function bypassPasswordGate(page: Page) {
-  await page.goto('/');
-
-  const passwordInput = page.getByPlaceholder('Password');
-  const isPasswordGateVisible = await passwordInput.isVisible().catch(() => false);
-
-  if (isPasswordGateVisible) {
-    await passwordInput.fill('e2e-test-password');
-    await page.getByRole('button', { name: 'Enter' }).click();
-    await page.waitForLoadState('networkidle');
-  }
-}
 
 // Helper to navigate to PR Tracking tab
 async function navigateToPrTracking(page: Page) {

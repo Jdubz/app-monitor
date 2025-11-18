@@ -1,24 +1,11 @@
 import { test, expect, Page } from '@playwright/test';
+import { bypassPasswordGate } from '../helpers/auth';
 
 /**
  * Enhanced Task Queue Tab E2E Tests
  * Comprehensive tests for task queue functionality including task management,
  * filtering, details view, and real-time updates
  */
-
-// Helper to bypass password gate if present
-async function bypassPasswordGate(page: Page) {
-  await page.goto('/');
-
-  const passwordInput = page.getByPlaceholder('Password');
-  const isPasswordGateVisible = await passwordInput.isVisible().catch(() => false);
-
-  if (isPasswordGateVisible) {
-    await passwordInput.fill('e2e-test-password');
-    await page.getByRole('button', { name: 'Enter' }).click();
-    await page.waitForLoadState('networkidle');
-  }
-}
 
 // Helper to navigate to Task Queue tab
 async function navigateToTaskQueue(page: Page) {
