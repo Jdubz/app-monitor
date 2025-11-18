@@ -51,7 +51,7 @@ export class InteractiveSessionGateway {
         const apiKey = request.headers['x-api-key'] || parsed.apiKey;
         if (!apiKey || apiKey !== config.apiKey) {
           logger.warn({
-            category: 'websocket',
+            category: 'socket',
             action: 'auth_failed',
             message: 'WebSocket upgrade denied - invalid or missing API key',
             details: {
