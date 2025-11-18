@@ -37,6 +37,7 @@ import { getConnectionManager } from './connectionManager.js';
 import { CONTAINER_MEMORY_LIMIT_BYTES, CONTAINER_CPU_QUOTA, WORKER_UID_GID } from '../constants/containers.js';
 import { DEFAULT_EPHEMERAL_WORKER_CONFIG } from '../config/defaults.js';
 import { ContainerLifecycleService } from './ContainerLifecycleService.js';
+import { WorkerLogService } from './WorkerLogService.js';
 
 export interface WorkspaceContext {
   id: string;
@@ -92,7 +93,8 @@ export class EphemeralWorkerService {
   private readonly phaseOrchestrator: PhaseOrchestratorService;
   private readonly recoveryAgent: RecoveryAgentService;
   private readonly containerLifecycle: ContainerLifecycleService; // Container management (extracted)
-  private logStreams = new Map<string, fs.WriteStream>();
+  private readonly workerLog: WorkerLogService; // Log management (extracted)
+  private logStreams = new Map<string, fs.WriteStream>(); // TODO: Remove after full migration to WorkerLogService
   private readonly devBotsLogPath: string;
 
   constructor(
@@ -112,30 +114,23 @@ export class EphemeralWorkerService {
     this.recoveryAgent = new RecoveryAgentService();
     this.containerLifecycle = new ContainerLifecycleService(docker); // Initialize container lifecycle service
 
-    // Merge provided config with defaults
-    this.config = { ...DEFAULT_EPHEMERAL_WORKER_CONFIG, ...config };
-
     // Dev-bots consolidated log file for real-time monitoring
     const devBotsLogDir = path.join(process.cwd(), 'dev-bots', 'logs');
     this.devBotsLogPath = path.join(devBotsLogDir, 'dev-bots.log');
-    this.ensureLogDirectory();
+    
+    // Initialize log service with consolidated log
+    this.workerLog = new WorkerLogService({
+      logsDirectory: devBotsLogDir,
+      consolidatedLogPath: this.devBotsLogPath
+    });
+
+    // Merge provided config with defaults
+    this.config = { ...DEFAULT_EPHEMERAL_WORKER_CONFIG, ...config };
   }
 
   /**
    * Ensure dev-bots log directory exists
    */
-  private ensureLogDirectory(): void {
-    const logDir = path.dirname(this.devBotsLogPath);
-    if (!fs.existsSync(logDir)) {
-      fs.mkdirSync(logDir, { recursive: true });
-      logger.info({
-        category: 'process',
-        action: 'dev_bots_log_directory_created',
-        message: `Created dev-bots log directory: ${logDir}`
-      });
-    }
-  }
-
   // ==========================================================================
   // Worker Tracking & Limits
   // ==========================================================================
@@ -459,7 +454,8 @@ export class EphemeralWorkerService {
       // Copy context bundle into container (if available)
       await this.copyContextBundleToContainer(container.id, task);
 
-      await this.initializeWorkerLogFile(workerId);
+      // Initialize worker log file using WorkerLogService
+      await this.workerLog.initializeWorkerLogFile(workerId);
 
       const workspace: WorkspaceContext = {
         id: workspaceId,
@@ -500,76 +496,6 @@ export class EphemeralWorkerService {
   }
 
   // copyWorkspaceToContainer method removed - using cloneFreshRepoInContainer instead
-
-  /**
-   * Initialize worker-specific log file
-   */
-  private async initializeWorkerLogFile(workerId: string): Promise<void> {
-    try {
-      const sanitizedId = workerId.replace(/[^a-zA-Z0-9-_]/g, '_');
-      const logDir = this.getHostLogsDir();
-      const logFilePath = path.join(logDir, `${sanitizedId}.log`);
-
-      if (!fs.existsSync(logDir)) {
-        fs.mkdirSync(logDir, { recursive: true });
-        logger.info({
-          category: 'process',
-          action: 'created_log_directory',
-          message: `Created log directory: ${logDir}`
-        });
-      }
-
-      // Verify directory is writable
-      try {
-        fs.accessSync(logDir, fs.constants.W_OK);
-      } catch (err) {
-        logger.error({
-          category: 'process',
-          action: 'log_directory_not_writable',
-          message: `Log directory not writable: ${logDir}`,
-          error: err,
-          details: {
-            logDir,
-            cwd: process.cwd(),
-            user: process.env.USER,
-            uid: typeof process.getuid === 'function' ? process.getuid() : 'unknown',
-            gid: typeof process.getgid === 'function' ? process.getgid() : 'unknown'
-          }
-        });
-        throw err;
-      }
-
-      const timestamp = new Date().toISOString();
-      const header = `=== Dev-Bot Worker Log ===\nWorker ID: ${workerId}\nInitialized: ${timestamp}\n===========================\n\n`;
-
-      fs.writeFileSync(logFilePath, header, 'utf8');
-
-      logger.info({
-        category: 'process',
-        action: 'initialized_worker_log_file',
-        message: `Initialized log file for worker ${workerId}`,
-        details: {
-          path: logFilePath,
-          size: header.length,
-          logDir
-        }
-      });
-    } catch (error) {
-      logger.error({
-        category: 'process',
-        action: 'failed_to_initialize_worker_log_file',
-        message: `Failed to initialize log file for worker ${workerId}`,
-        error: error,
-        details: {
-          logDir: this.getHostLogsDir(),
-          workerId,
-          cwd: process.cwd()
-        }
-      });
-      // Throw error with additional context
-      throw new Error(`Failed to initialize log file for worker ${workerId}: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
-    }
-  }
 
   /**
    * Execute Git command
@@ -808,8 +734,13 @@ export class EphemeralWorkerService {
 
       const container = this.docker.getContainer(worker.containerId);
 
-      // Create log stream for real-time monitoring
-      logStream = await this.createLogStream(worker);
+      // Create log stream for real-time monitoring using WorkerLogService
+      logStream = this.workerLog.createLogStream({
+        id: worker.id,
+        agentId: worker.agent.id,
+        taskId: worker.task.id,
+        taskTitle: worker.task.title
+      });
 
       // Determine log file path per worker
       const sanitizedId = worker.id.replace(/[^a-zA-Z0-9-_]/g, '_');
@@ -1176,61 +1107,6 @@ export class EphemeralWorkerService {
   }
 
   /**
-   * Create a log stream for real-time monitoring
-   * Writes to consolidated dev-bots.log file that LogWatcher monitors
-   */
-  private async createLogStream(worker: EphemeralWorker): Promise<fs.WriteStream> {
-    const timestamp = new Date().toISOString();
-    const separator = '='.repeat(80);
-    
-    const header = [
-      `\n${separator}`,
-      `[${timestamp}] NEW TASK STARTED`,
-      `Worker: ${worker.id}`,
-      `Agent: ${worker.agent.name} (${worker.agent.id})`,
-      `Task ID: ${worker.task.id}`,
-      `Task Title: ${worker.task.title}`,
-      `Task Type: ${worker.task.type}`,
-      `Container: ${worker.containerId}`,
-      separator + '\n'
-    ].join('\n');
-
-    // Create append stream to consolidated log file
-    const stream = fs.createWriteStream(this.devBotsLogPath, { flags: 'a' });
-    
-    // Add error handler for write failures
-    stream.on('error', (error) => {
-      logger.error({
-        category: 'process',
-        action: 'log_stream_error',
-        message: `Failed to write to log stream for worker ${worker.id}`,
-        error,
-        details: { logPath: this.devBotsLogPath, workerId: worker.id }
-      });
-    });
-    
-    // Write header
-    stream.write(header);
-
-    // Store stream for cleanup
-    this.logStreams.set(worker.id, stream);
-    
-    // Remove stream from map when closed to prevent memory leak
-    stream.on('close', () => {
-      this.logStreams.delete(worker.id);
-    });
-
-    logger.info({
-      category: 'process',
-      action: 'log_stream_created',
-      message: `Created log stream for worker ${worker.id}`,
-      details: { logPath: this.devBotsLogPath, workerId: worker.id }
-    });
-
-    return stream;
-  }
-
-  /**
    * Generate task execution command with worker-specific logging
    * 
    * Note: Model versions are determined by CLI defaults, not explicitly specified:
@@ -1353,8 +1229,8 @@ export class EphemeralWorkerService {
       worker.status = 'destroyed';
       worker.destroyedAt = new Date().toISOString();
 
-      // Close log stream if it exists
-      await this.closeLogStream(workerId);
+      // Close log stream if it exists using WorkerLogService
+      await this.workerLog.closeLogStream(workerId);
 
       // Remove from ephemeral workers map
       this.ephemeralWorkers.delete(workerId);
@@ -1453,33 +1329,6 @@ export class EphemeralWorkerService {
    *
    * @param workerId Worker ID whose log stream should be closed
    */
-  private async closeLogStream(workerId: string): Promise<void> {
-    const stream = this.logStreams.get(workerId);
-    if (!stream) return;
-
-    return new Promise((resolve, reject) => {
-      stream.end((error: Error | undefined) => {
-        if (error) {
-          logger.warn({
-            category: 'process',
-            action: 'log_stream_close_error',
-            message: `Error closing log stream for worker ${workerId}`,
-            error: { message: error.message }
-          });
-          reject(error);
-        } else {
-          this.logStreams.delete(workerId);
-          logger.debug({
-            category: 'process',
-            action: 'log_stream_closed',
-            message: `Closed log stream for worker ${workerId}`
-          });
-          resolve();
-        }
-      });
-    });
-  }
-
   /**
    * Shutdown service and cleanup all resources
    * Called on process termination to ensure no resource leaks
@@ -1488,25 +1337,11 @@ export class EphemeralWorkerService {
     logger.info({
       category: 'process',
       action: 'ephemeral_worker_service_shutdown',
-      message: `Shutting down EphemeralWorkerService (${this.logStreams.size} log streams, ${this.ephemeralWorkers.size} workers)`
+      message: `Shutting down EphemeralWorkerService (${this.workerLog.getActiveStreamCount()} log streams, ${this.ephemeralWorkers.size} workers)`
     });
 
-    // Close all log streams
-    const streamClosePromises: Promise<void>[] = [];
-    for (const [workerId] of this.logStreams.entries()) {
-      streamClosePromises.push(
-        this.closeLogStream(workerId).catch(error => {
-          logger.error({
-            category: 'process',
-            action: 'log_stream_cleanup_failed',
-            message: `Failed to close log stream for worker ${workerId}`,
-            error: { message: error.message }
-          });
-        })
-      );
-    }
-
-    await Promise.all(streamClosePromises);
+    // Shutdown WorkerLogService (closes all streams)
+    await this.workerLog.shutdown();
 
     // Destroy all remaining workers
     const workerDestroyPromises: Promise<void>[] = [];
