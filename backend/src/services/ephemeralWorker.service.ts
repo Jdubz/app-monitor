@@ -36,6 +36,7 @@ import type { ValidationResult } from './phaseValidation/types.js';
 import { getConnectionManager } from './connectionManager.js';
 import { CONTAINER_MEMORY_LIMIT_BYTES, CONTAINER_CPU_QUOTA, WORKER_UID_GID } from '../constants/containers.js';
 import { DEFAULT_EPHEMERAL_WORKER_CONFIG } from '../config/defaults.js';
+import { ContainerLifecycleService } from './ContainerLifecycleService.js';
 
 export interface WorkspaceContext {
   id: string;
@@ -90,6 +91,7 @@ export class EphemeralWorkerService {
   private readonly artifactExtractor: ArtifactExtractorService;
   private readonly phaseOrchestrator: PhaseOrchestratorService;
   private readonly recoveryAgent: RecoveryAgentService;
+  private readonly containerLifecycle: ContainerLifecycleService; // Container management (extracted)
   private logStreams = new Map<string, fs.WriteStream>();
   private readonly devBotsLogPath: string;
 
@@ -108,6 +110,7 @@ export class EphemeralWorkerService {
     this.artifactExtractor = new ArtifactExtractorService();
     this.phaseOrchestrator = new PhaseOrchestratorService(db);  // Use injected database instance
     this.recoveryAgent = new RecoveryAgentService();
+    this.containerLifecycle = new ContainerLifecycleService(docker); // Initialize container lifecycle service
 
     // Merge provided config with defaults
     this.config = { ...DEFAULT_EPHEMERAL_WORKER_CONFIG, ...config };
@@ -417,25 +420,23 @@ export class EphemeralWorkerService {
         }
       }
 
-      // Create container (not started yet)
-      const container = await this.docker.createContainer({
-        Image: this.config.dockerImage,
+      // Create and start container using ContainerLifecycleService
+      const container = await this.containerLifecycle.createContainer({
+        image: this.config.dockerImage,
         name: containerName,
-        Cmd: ['/bin/bash', '-c', 'tail -f /dev/null'],
-        Env: envVars,
-        WorkingDir: `/workspace`,
-        HostConfig: {
-          Memory: CONTAINER_MEMORY_LIMIT_BYTES,
-          CpuQuota: CONTAINER_CPU_QUOTA,
-          AutoRemove: true,
-          Binds: binds,
-          Tmpfs: {
-            '/home/worker/.claude': WORKER_UID_GID,  // Writable temp for Claude CLI (matches node user)
-            '/home/worker/.gemini': WORKER_UID_GID,  // Writable temp for Gemini CLI (matches node user)
-            '/home/worker/.codex': WORKER_UID_GID    // Writable temp for Codex CLI (matches node user)
-          }
+        cmd: ['/bin/bash', '-c', 'tail -f /dev/null'],
+        env: envVars,
+        workingDir: `/workspace`,
+        memory: CONTAINER_MEMORY_LIMIT_BYTES,
+        cpuQuota: CONTAINER_CPU_QUOTA,
+        autoRemove: true,
+        binds: binds,
+        tmpfs: {
+          '/home/worker/.claude': WORKER_UID_GID,  // Writable temp for Claude CLI (matches node user)
+          '/home/worker/.gemini': WORKER_UID_GID,  // Writable temp for Gemini CLI (matches node user)
+          '/home/worker/.codex': WORKER_UID_GID    // Writable temp for Codex CLI (matches node user)
         },
-        Labels: {
+        labels: {
           'claude.worker.id': workerId,
           'claude.agent.id': agent.id,
           'claude.task.id': task.id,
@@ -443,11 +444,11 @@ export class EphemeralWorkerService {
         }
       });
 
-      // Start the container FIRST so we can exec commands
-      await container.start();
+      // Start the container
+      await this.containerLifecycle.startContainer(container.id);
 
-      // Wait for container to be fully running and healthy before exec commands
-      await this.waitForContainerReady(container.id, {
+      // Wait for container to be fully running and healthy
+      await this.containerLifecycle.waitForHealthy(container.id, {
         maxAttempts: 30,
         intervalMs: 100
       });
@@ -611,72 +612,6 @@ export class EphemeralWorkerService {
    * @param options Configuration for health check polling
    * @throws Error if container fails to become ready within max attempts
    */
-  private async waitForContainerReady(
-    containerId: string,
-    options: { maxAttempts: number; intervalMs: number }
-  ): Promise<void> {
-    const { maxAttempts, intervalMs } = options;
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        const container = this.docker.getContainer(containerId);
-        const inspection = await container.inspect();
-
-        // Check if container is running
-        if (inspection.State.Running) {
-          // If container has no health check, consider it ready once running
-          if (!inspection.State.Health) {
-            logger.info({
-              category: 'docker',
-              action: 'container_ready',
-              message: 'Container is running (no health check defined)',
-              details: { containerId, attempt }
-            });
-            return;
-          }
-
-          // If health check exists, wait for healthy status
-          if (inspection.State.Health.Status === 'healthy') {
-            logger.info({
-              category: 'docker',
-              action: 'container_ready',
-              message: 'Container is running and healthy',
-              details: { containerId, attempt }
-            });
-            return;
-          }
-        }
-
-        // Check for fatal states
-        if (inspection.State.Dead || inspection.State.OOMKilled) {
-          const error = inspection.State.Error || 'Unknown error';
-          throw new Error(`Container failed to start: ${error}`);
-        }
-
-        // Not ready yet, wait with exponential backoff
-        const delay = Math.min(intervalMs * attempt, 3000); // Cap at 3 seconds
-        await new Promise(resolve => setTimeout(resolve, delay));
-
-      } catch (error) {
-        if (attempt === maxAttempts) {
-          logger.error({
-            category: 'docker',
-            action: 'container_health_check_failed',
-            message: `Container failed to become ready after ${maxAttempts} attempts`,
-            error: { message: (error as Error).message },
-            details: { containerId, maxAttempts }
-          });
-          throw new Error(`Container failed to become ready after ${maxAttempts} attempts: ${(error as Error).message}`);
-        }
-
-        // For non-fatal errors, continue retrying
-        if ((error as Error).message.includes('no such container')) {
-          throw error; // Container doesn't exist, fail immediately
-        }
-      }
-    }
-  }
-
   /**
    * Clone fresh repository inside container for complete isolation
    * Each bot gets its own independent copy of the repository
@@ -1411,21 +1346,9 @@ export class EphemeralWorkerService {
         });
       }
 
-      // Stop container if running
-      try {
-        await container.stop({ t: 10 }); // 10 second grace period
-      } catch (error) {
-        // Container might already be stopped
-        logger.warn({
-          category: 'process',
-          action: 'container_already_stopped',
-          message: `Container ${worker.containerId} already stopped or error stopping:`,
-          details: { error }
-        });
-      }
-
-      // Remove container (includes volumes with AutoRemove: true)
-      await container.remove({ v: true, force: true });
+      // Stop and remove container using ContainerLifecycleService
+      await this.containerLifecycle.stopContainer(worker.containerId, 10);
+      await this.containerLifecycle.removeContainer(worker.containerId, true);
 
       worker.status = 'destroyed';
       worker.destroyedAt = new Date().toISOString();
@@ -1495,18 +1418,8 @@ export class EphemeralWorkerService {
         try {
           const container = docker.getContainer(containerInfo.Id);
 
-          // Force kill if running
-          if (containerInfo.State === 'running') {
-            logger.info({
-              category: 'process',
-              action: 'force_killing_stuck_container',
-              message: `Force killing container ${containerInfo.Id.substring(0, 12)} for stuck task ${taskId}`
-            });
-            await container.kill();
-          }
-
-          // Remove container
-          await container.remove({ force: true });
+          // Remove container using ContainerLifecycleService
+          await this.containerLifecycle.removeContainer(containerInfo.Id, true);
 
           logger.info({
             category: 'process',
