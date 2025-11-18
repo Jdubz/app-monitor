@@ -10,6 +10,7 @@ import { promisify } from 'util';
 import { logger } from '../utils/logger.js';
 import { GITHUB_API_TIMEOUT_MS } from '../constants/timeouts.js';
 import { getMockPRRegistry } from './mockPRRegistry.service.js';
+import { PRCacheService } from './prCache.service.js';
 
 const execAsync = promisify(exec);
 
@@ -97,10 +98,12 @@ export class GitHubPRService {
   private repoOwner: string;
   private repoName: string;
   private githubCircuitBreaker?: { execute: <T>(fn: () => Promise<T>) => Promise<T> }; // CircuitBreaker (imported lazily)
+  private cache: PRCacheService<PRStatus>;
 
   constructor(repoOwner: string = 'Jdubz', repoName: string = 'app-monitor') {
     this.repoOwner = repoOwner;
     this.repoName = repoName;
+    this.cache = new PRCacheService<PRStatus>({ ttlMs: 30000, debug: false });
     this.initializeCircuitBreaker();
   }
 
@@ -141,6 +144,18 @@ export class GitHubPRService {
     const owner = repoOwner || this.repoOwner;
     const repo = repoName || this.repoName;
 
+    // Use composite cache key: owner/repo/prNumber
+    const cacheKey = `${owner}/${repo}/${prNumber}`;
+    return this.cache.getOrFetch(cacheKey, async () => {
+      return this.fetchPRStatusUncached(prNumber, owner, repo);
+    });
+  }
+
+  /**
+   * Fetch PR status without cache (internal method)
+   * Called by cache on cache miss
+   */
+  private async fetchPRStatusUncached(prNumber: number, owner: string, repo: string): Promise<PRStatus> {
     const executeGetPRStatus = async (): Promise<PRStatus> => {
       logger.info({
         category: 'pr-workflow',
@@ -638,6 +653,10 @@ export class GitHubPRService {
 
       await execWithTimeout(command, GITHUB_API_TIMEOUT_MS);
 
+      // Invalidate cache after successful merge
+      const cacheKey = `${owner}/${repo}/${prNumber}`;
+      this.cache.invalidate(cacheKey);
+
       logger.info({
         category: 'pr-workflow',
         action: 'merge_pr_success',
@@ -960,6 +979,41 @@ export class GitHubPRService {
     }
     
     return 'pending';
+  }
+
+  /**
+   * Invalidate cache for specific PR (call after PR updates)
+   */
+  invalidateCache(prNumber: number, repoOwner?: string, repoName?: string): void {
+    const owner = repoOwner || this.repoOwner;
+    const repo = repoName || this.repoName;
+    const cacheKey = `${owner}/${repo}/${prNumber}`;
+    this.cache.invalidate(cacheKey);
+    logger.debug({
+      category: 'pr-cache',
+      action: 'cache_invalidated',
+      message: `Cache invalidated for PR #${prNumber} in ${owner}/${repo}`,
+      details: { prNumber, owner, repo, cacheKey }
+    });
+  }
+
+  /**
+   * Clear all PR cache entries
+   */
+  clearCache(): void {
+    this.cache.clear();
+    logger.info({
+      category: 'pr-cache',
+      action: 'cache_cleared',
+      message: 'All PR cache entries cleared'
+    });
+  }
+
+  /**
+   * Get cache statistics
+   */
+  getCacheStats() {
+    return this.cache.getStats();
   }
 }
 

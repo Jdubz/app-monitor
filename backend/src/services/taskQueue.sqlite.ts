@@ -353,7 +353,7 @@ export class TaskQueueService {
     
     this.db.exec(`
       -- Main tasks table (compatible with migrations schema)
-      -- Includes columns from migrations: project, pr_number, pr_url, chain_id, chain_depth, etc.
+      -- Includes columns from migrations: project, pr_number, chain_id, chain_depth, etc.
       CREATE TABLE IF NOT EXISTS tasks (
         id TEXT PRIMARY KEY,
         type TEXT NOT NULL,
@@ -388,15 +388,8 @@ export class TaskQueueService {
         timeout INTEGER,
         metadata TEXT,
         context_json TEXT,
-        -- Migration 005 columns
+        -- Migration 005 columns (pr_number ONLY - other PR columns removed in migration 027)
         pr_number INTEGER,
-        pr_url TEXT,
-        pr_branch TEXT,
-        pr_status TEXT,
-        pr_checks_status TEXT,
-        pr_review_status TEXT,
-        pr_created_at TEXT,
-        pr_merged_at TEXT,
         -- Migration 011 columns
         chain_id TEXT,
         chain_depth INTEGER,

@@ -209,7 +209,7 @@ describe('WorkerLogService', () => {
       };
 
       service.createLogStream(worker);
-
+      
       // Close stream immediately, then try to close again
       await service.closeLogStream('worker-123');
 

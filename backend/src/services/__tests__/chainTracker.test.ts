@@ -25,6 +25,14 @@ function setupTestSchema(db: Database.Database) {
       assigned_at INTEGER,
       created_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS pull_requests (
+      number INTEGER PRIMARY KEY,
+      state TEXT NOT NULL,
+      title TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
   `);
 }
 

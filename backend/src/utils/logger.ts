@@ -63,15 +63,16 @@ export type LogCategory =
   | 'phase' // Phase system orchestration
   | 'plan' // AI agent-managed planning system
   | 'port-manager' // Port management operations
+  | 'pr-cache' // PR cache service
   | 'pr-sync' // PR sync service (event-driven)
   | 'pr-workflow'
   | 'process'
+  | 'repository' // Repository pattern database operations
   | 'quality'
   | 'quality-gates'
   | 'quality-improvement'
   | 'quality-observation'
   | 'recovery'
-  | 'repository' // Repository layer operations
   | 'safety' // Safety mechanisms for git operations
   | 'scripts'
   | 'socket'
@@ -82,7 +83,7 @@ export type LogCategory =
   | 'token-tracking'
   | 'utility'
   | 'verification'
-  | 'worker' // Worker lifecycle and management
+  | 'worker' // Worker lifecycle management
   | 'workspace';
 
 export interface LogEntry {

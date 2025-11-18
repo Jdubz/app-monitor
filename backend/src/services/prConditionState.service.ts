@@ -375,7 +375,18 @@ export class PRConditionStateService {
         return null;
       }
 
-      return JSON.parse(row.state_json) as PRConditionState;
+      try {
+        return JSON.parse(row.state_json) as PRConditionState;
+      } catch (parseError) {
+        logger.error({
+          category: 'pr-workflow',
+          action: 'json_parse_failed',
+          message: `Failed to parse condition state JSON for PR #${prNumber}`,
+          error: parseError,
+          details: { prNumber, stateJson: row.state_json }
+        });
+        return null;
+      }
     } catch (error) {
       logger.error({
         category: 'pr-workflow',
