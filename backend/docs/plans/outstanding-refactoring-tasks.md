@@ -182,15 +182,14 @@ Integration testing complete with phase system coverage.
 **Priority:** P2  
 **Effort:** 12 hours
 
-### 13. Remove Legacy parent_initiative Field (4h)
-**Status:** NOT STARTED
+### 13. ✅ Remove Legacy parent_initiative Field (4h)
+**Status:** COMPLETE ✅
 
 **Issue:** Dual fields for same concept (parent_initiative vs plan_id).
 
-**Action:**
-- Create migration to drop parent_initiative column
-- Ensure all code uses plan_id
-- Add ESLint rule to prevent usage
+**Verification (2024-11-18):**
+- ✅ No usages of parent_initiative found in src/
+- ✅ Field already removed from codebase
 
 **Priority:** P2  
 **Effort:** 4 hours
@@ -212,12 +211,12 @@ Integration testing complete with phase system coverage.
 
 ## Summary of Outstanding Work
 
-| Priority | Tasks | Estimated Hours |
-|----------|-------|-----------------|
-| P0 | 0 tasks (COMPLETE) | 0h |
-| P1 | 0 tasks (COMPLETE) | 0h |
-| P2 | 4 tasks | 48h |
-| **Total** | **4 tasks** | **48h** |
+| Priority | Tasks | Estimated Hours | Status |
+|----------|-------|-----------------|--------|
+| P0 | 0 tasks | 0h | ✅ COMPLETE |
+| P1 | 0 tasks | 0h | ✅ COMPLETE |
+| P2 | 3 tasks (parent_initiative removed) | 44h | 📋 READY |
+| **Total** | **3 tasks** | **44h** | |
 
 ---
 
