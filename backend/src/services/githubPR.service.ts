@@ -9,6 +9,7 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import { logger } from '../utils/logger.js';
 import { GITHUB_API_TIMEOUT_MS } from '../constants/timeouts.js';
+import { getMockPRRegistry } from './mockPRRegistry.service.js';
 
 const execAsync = promisify(exec);
 
@@ -866,7 +867,6 @@ export class GitHubPRService {
 
     // Try to get registered mock PR from E2E tests
     // This allows E2E tests to provide specific PR states for testing
-    const { getMockPRRegistry } = require('./mockPRRegistry.service.js');
     const mockRegistry = getMockPRRegistry();
     const mockPR = mockRegistry.getMockPR(prNumber);
 
