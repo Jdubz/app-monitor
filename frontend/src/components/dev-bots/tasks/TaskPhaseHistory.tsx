@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { usePhaseUpdates } from '@/hooks/usePhaseUpdates';
+import { getDevBotsTaskStageRuns } from '@/services/api';
 
 interface StageRun {
   id: number;
@@ -81,14 +82,8 @@ export function TaskPhaseHistory({ taskId }: TaskPhaseHistoryProps) {
   const fetchStageRuns = async () => {
     try {
       setIsLoading(true);
-      const response = await fetch(`/api/dev-bots/tasks/${taskId}/stage-runs`);
-      
-      if (!response.ok) {
-        throw new Error(`Failed to fetch stage runs: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      setStageRuns(data.data?.stageRuns || []);
+      const data = await getDevBotsTaskStageRuns(taskId);
+      setStageRuns(data.stageRuns as StageRun[]);
       setError(null);
     } catch (err) {
       console.error('Error fetching stage runs:', err);

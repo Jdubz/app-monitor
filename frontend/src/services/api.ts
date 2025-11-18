@@ -175,6 +175,14 @@ export const getDevBotsTaskLogs = async (
   return ensureApiSuccess(response, `fetching Dev-Bots task logs for ${taskId}`);
 };
 
+export const getDevBotsTaskStageRuns = async (taskId: string): Promise<{ stageRuns: unknown[] }> => {
+  const client = await getApiClient();
+  const response = await client.get<ApiSuccess<{ stageRuns: unknown[] }>>(
+    `/dev-bots/tasks/${taskId}/stage-runs`,
+  );
+  return ensureApiSuccess(response, `fetching stage runs for task ${taskId}`);
+};
+
 export const getDevBotsSettings = async (): Promise<DevBotsSettings> => {
   const client = await getApiClient();
   const response = await client.get<ApiSuccess<DevBotsSettings>>('/dev-bots/settings');
@@ -315,6 +323,8 @@ export const getApiClientInstance = getApiClient;
 
 export const getDevBotsInteractiveStreamUrl = (sessionId: string): string => {
   const baseUrl = getApiBaseUrl();
+  const apiKey = import.meta.env.VITE_API_KEY;
+
   try {
     const parsed = new URL(baseUrl);
     const wsProtocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -322,11 +332,17 @@ export const getDevBotsInteractiveStreamUrl = (sessionId: string): string => {
     const streamPath = '/api/dev-bots/interactive/session/' + sessionId + '/stream';
     const normalizedPath = (basePath || '') + streamPath;
     const ensuredPath = normalizedPath.startsWith('/') ? normalizedPath : '/' + normalizedPath;
-    return wsProtocol + '//' + parsed.host + ensuredPath;
+    const baseWsUrl = wsProtocol + '//' + parsed.host + ensuredPath;
+
+    // Add API key as query parameter if available
+    if (apiKey) {
+      return baseWsUrl + '?apiKey=' + encodeURIComponent(apiKey);
+    }
+    return baseWsUrl;
   } catch (error) {
     log.warn('Unable to parse API base URL for interactive stream', { error });
     const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    return (
+    const baseWsUrl = (
       wsProtocol +
       '//' +
       window.location.host +
@@ -334,6 +350,12 @@ export const getDevBotsInteractiveStreamUrl = (sessionId: string): string => {
       sessionId +
       '/stream'
     );
+
+    // Add API key as query parameter if available
+    if (apiKey) {
+      return baseWsUrl + '?apiKey=' + encodeURIComponent(apiKey);
+    }
+    return baseWsUrl;
   }
 };
 

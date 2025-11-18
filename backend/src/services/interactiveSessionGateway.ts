@@ -7,6 +7,7 @@ import type {
   InteractiveStreamMessage,
 } from './interactiveSessionStreamManager.js';
 import { logger } from '../utils/logger.js';
+import { config } from '../config.js';
 
 interface InteractiveGatewayOptions {
   server: http.Server;
@@ -17,6 +18,7 @@ interface InteractiveGatewayOptions {
 
 interface ParsedRequest {
   sessionId: string;
+  apiKey?: string;
 }
 
 type ClientMessage =
@@ -42,6 +44,26 @@ export class InteractiveSessionGateway {
       const parsed = this.parseRequest(request);
       if (!parsed) {
         return;
+      }
+
+      // Check authentication if required
+      if (config.requireAuth) {
+        const apiKey = request.headers['x-api-key'] || parsed.apiKey;
+        if (!apiKey || apiKey !== config.apiKey) {
+          logger.warn({
+            category: 'websocket',
+            action: 'auth_failed',
+            message: 'WebSocket upgrade denied - invalid or missing API key',
+            details: {
+              sessionId: parsed.sessionId,
+              hasKey: !!apiKey,
+              ip: request.socket.remoteAddress
+            }
+          });
+          socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+          socket.destroy();
+          return;
+        }
       }
 
       const session = this.devBotsManager.getInteractiveSession(parsed.sessionId);
@@ -240,7 +262,11 @@ export class InteractiveSessionGateway {
       if (!sessionId) {
         return null;
       }
-      return { sessionId };
+
+      // Extract API key from query parameter
+      const apiKey = url.searchParams.get('apiKey') || url.searchParams.get('api_key') || undefined;
+
+      return { sessionId, apiKey };
     } catch {
       return null;
     }
