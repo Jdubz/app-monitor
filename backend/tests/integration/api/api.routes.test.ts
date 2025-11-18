@@ -307,6 +307,56 @@ const verificationMocks = vi.hoisted(() => {
         recommendations: ['All verification checks passed'],
       };
     }),
+    getVerificationResult: vi.fn((taskId: string) => {
+      return verificationResults.get(taskId) || null;
+    }),
+    getRecommendations: vi.fn((taskId: string) => {
+      const result = verificationResults.get(taskId);
+      if (!result) {
+        return null;
+      }
+
+      // Enhance recommendations like the real service does
+      const enhancedRecommendations = [...(result.recommendations || [])];
+
+      // Add recommendations for scope violations
+      if (result.scopeBoundaries?.violationCount > 0) {
+        const files = result.scopeBoundaries.violations.slice(0, 3).map((v) => v.file).join(', ');
+        enhancedRecommendations.push(`Review and revert changes to restricted files: ${files}`);
+      }
+
+      // Add recommendations for test coverage
+      if (result.testCoverage && !result.testCoverage.meetsThreshold) {
+        enhancedRecommendations.push(`Run 'npm run test:coverage' and add tests for uncovered code`);
+      }
+
+      return {
+        taskId,
+        passed: result.passed,
+        overallScore: result.overallScore,
+        recommendations: enhancedRecommendations,
+      };
+    }),
+    getVerificationStats: vi.fn(() => {
+      const allResults = Array.from(verificationResults.values());
+      const totalVerified = allResults.length;
+      const passedCount = allResults.filter((r) => r.passed).length;
+      return {
+        totalTasks: 10, // Mock total tasks count
+        totalVerified,
+        verificationRate: totalVerified > 0 ? (totalVerified / 10) * 100 : 0,
+        passRate: totalVerified > 0 ? (passedCount / totalVerified) * 100 : 0,
+        averageScore: totalVerified > 0
+          ? allResults.reduce((sum, r) => sum + r.overallScore, 0) / totalVerified
+          : 0,
+        acceptanceCriteria: { averageMetRate: 85 },
+        testCoverage: { checksPerformed: totalVerified, passRate: 90 },
+        scopeBoundaries: { checksPerformed: totalVerified, passRate: 95 },
+      };
+    }),
+    storeVerificationResult: vi.fn((result: typeof baseVerificationResult) => {
+      verificationResults.set(result.taskId, result);
+    }),
   };
 
   return {
