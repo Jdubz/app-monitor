@@ -6,7 +6,8 @@
 
 **Note:** Unnecessary test files have been removed to keep the app simple:
 - Workspace sync tests (see WORKSPACE_SYNC_REMOVAL.md) - Dev-bots have native git/gh CLI access
-- Observability routes tests - Agents can read logs directly, no need for extra monitoring APIs
+- Observability routes tests (see OBSERVABILITY_REMOVAL.md) - Agents can read logs directly, no need for extra monitoring APIs
+- Chain management tests (see CHAIN_MANAGEMENT_REMOVAL.md) - Core blocking/unblocking already exists, no need for complex pattern API
 
 ## Executive Summary
 
@@ -28,12 +29,6 @@ These tests were created during the e2e audit to provide comprehensive coverage.
 - File: `interactive-terminal-new-api.spec.ts`
 - Reason: New REST API endpoints not implemented (`/api/dev-bots/interactive/active`, `/api/dev-bots/interactive/sessions`, etc.)
 - **Action Required:** Implement the new interactive terminal REST API endpoints
-
-#### Chain Management (9 failures)
-- Tests: #121, #123
-- File: `chain-management.spec.ts`
-- Reason: Most endpoints not implemented, 2 tests failing due to wrong error status codes
-- **Action Required:** Implement chain management API, fix status codes for non-existent resources
 
 #### Log Viewer UI (4 failures)
 - Tests: #354-357
@@ -161,17 +156,13 @@ These tests were created during the e2e audit to provide comprehensive coverage.
 
 ### Medium Priority (Implement Missing Features)
 
-4. **Implement Chain Management API**
-   - Create endpoints for blocked chain CRUD operations
-   - Impact: Fixes 9 test failures, adds new feature
-
-5. **Implement Interactive Terminal New REST API**
+4. **Implement Interactive Terminal New REST API**
    - Add session management endpoints
    - Impact: Fixes 11 test failures, modernizes API
 
 ### Low Priority (Future Enhancements)
 
-6. **Fix Authentication Test Environment Issues**
+5. **Fix Authentication Test Environment Issues**
    - Update tests to use localStorage or mock session persistence
    - Impact: Fixes 2 test failures (not production bugs)
 
@@ -200,7 +191,7 @@ The e2e test suite is comprehensive and healthy. The 91% pass rate accurately re
 
 **Next Steps:**
 1. Fix the 6 real bugs (Docker race condition, phase status constraint, etc.)
-2. Decide which missing features to implement (chain management, observability, etc.)
+2. Decide which missing features to implement (interactive terminal REST API, etc.)
 3. Update test configuration to be less brittle
 4. Re-run test suite to verify fixes
 

@@ -360,7 +360,10 @@ These are **expected failures** that validate comprehensive test coverage for fu
 
 ---
 
-**Note:** The workspace-sync feature has been removed as it was determined to be redundant. Dev-bots have native git and gh CLI access within their Docker containers, making an API wrapper unnecessary. See WORKSPACE_SYNC_REMOVAL.md for details.
+**Note:** Unnecessary features have been removed to keep the app simple:
+- **Workspace-sync feature** (~1,500 lines) - Dev-bots have native git/gh CLI access. See WORKSPACE_SYNC_REMOVAL.md
+- **Observability routes tests** (~400 lines) - Agents can read logs directly. See OBSERVABILITY_REMOVAL.md
+- **Chain management tests** (~746 lines) - Core blocking/unblocking already exists. See CHAIN_MANAGEMENT_REMOVAL.md
 
 ---
 
@@ -368,4 +371,4 @@ These are **expected failures** that validate comprehensive test coverage for fu
 **Build Status:** ✅ Successful (clean rebuild)
 **Tests Fixed:** 8 issues (6 real bugs + 2 test improvements)
 **Production Bugs Fixed:** 3 critical (Docker race condition, phase status constraint, webhook health endpoint)
-**Code Removed:** ~1,500 lines (workspace-sync feature)
+**Code Removed:** ~2,646 lines (over-engineered features removed)
