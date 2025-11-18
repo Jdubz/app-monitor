@@ -61,7 +61,7 @@ export interface PRCacheStats {
  * Generic cache service for PR-related data with TTL and LRU eviction
  */
 export class PRCacheService<T = unknown> extends EventEmitter {
-  private cache: Map<string | number, PRCacheEntry<T>>;
+  private cache: Map<number, PRCacheEntry<T>>;
   private readonly ttlMs: number;
   private readonly maxEntries: number;
   private readonly debug: boolean;
@@ -88,10 +88,10 @@ export class PRCacheService<T = unknown> extends EventEmitter {
    * Get cached data or fetch if not cached/expired
    */
   async getOrFetch(
-    key: string | number,
+    prNumber: number,
     fetchFn: () => Promise<T>
   ): Promise<T> {
-    const cached = this.get(key);
+    const cached = this.get(prNumber);
     
     if (cached) {
       // Stats already tracked by get()
@@ -101,7 +101,7 @@ export class PRCacheService<T = unknown> extends EventEmitter {
     // Stats already tracked by get() as a miss
     // Fetch and cache
     const data = await fetchFn();
-    this.set(key, data);
+    this.set(prNumber, data);
     
     return data;
   }
@@ -109,36 +109,36 @@ export class PRCacheService<T = unknown> extends EventEmitter {
   /**
    * Get cached entry if valid (not expired)
    */
-  get(key: string | number): T | null {
-    const entry = this.cache.get(key);
+  get(prNumber: number): T | null {
+    const entry = this.cache.get(prNumber);
     
     if (!entry) {
       this.misses++;
-      this.log('debug', 'Cache miss', { key });
-      this.emit('miss', key);
+      this.log('debug', 'Cache miss', { prNumber });
+      this.emit('miss', prNumber);
       return null;
     }
     
     // Check if expired
     const age = Date.now() - entry.fetchedAt;
     if (age > this.ttlMs) {
-      this.cache.delete(key);
+      this.cache.delete(prNumber);
       this.misses++;
-      this.log('debug', 'Cache entry expired', { key, age });
-      this.emit('expired', key);
+      this.log('debug', 'Cache entry expired', { prNumber, age });
+      this.emit('expired', prNumber);
       return null;
     }
     
     this.hits++;
-    this.log('debug', 'Cache hit', { key });
-    this.emit('hit', key);
+    this.log('debug', 'Cache hit', { prNumber });
+    this.emit('hit', prNumber);
     return entry.data;
   }
   
   /**
    * Set cache entry
    */
-  set(key: string | number, data: T): void {
+  set(prNumber: number, data: T): void {
     // Enforce max entries (LRU eviction)
     if (this.cache.size >= this.maxEntries) {
       this.evictOldest();
@@ -147,30 +147,30 @@ export class PRCacheService<T = unknown> extends EventEmitter {
     const entry: PRCacheEntry<T> = {
       data,
       fetchedAt: Date.now(),
-      prNumber: typeof key === 'number' ? key : 0 // Keep for backward compatibility
+      prNumber
     };
     
-    this.cache.set(key, entry);
-    this.log('debug', 'Cache entry set', { key });
-    this.emit('set', key);
+    this.cache.set(prNumber, entry);
+    this.log('debug', 'Cache entry set', { prNumber });
+    this.emit('set', prNumber);
   }
   
   /**
-   * Invalidate (remove) cache entry for specific PR or key
+   * Invalidate (remove) cache entry for specific PR
    */
-  invalidate(key: string | number): void {
-    const deleted = this.cache.delete(key);
+  invalidate(prNumber: number): void {
+    const deleted = this.cache.delete(prNumber);
     if (deleted) {
-      this.log('debug', 'Cache entry invalidated', { key });
-      this.emit('invalidated', key);
+      this.log('debug', 'Cache entry invalidated', { prNumber });
+      this.emit('invalidated', prNumber);
     }
   }
   
   /**
    * Invalidate multiple PRs at once
    */
-  invalidateMany(keys: (string | number)[]): void {
-    keys.forEach(key => this.invalidate(key));
+  invalidateMany(prNumbers: number[]): void {
+    prNumbers.forEach(prNumber => this.invalidate(prNumber));
   }
   
   /**
@@ -211,19 +211,19 @@ export class PRCacheService<T = unknown> extends EventEmitter {
    * Evict oldest entry (LRU)
    */
   private evictOldest(): void {
-    let oldest: { key: string | number; fetchedAt: number } | null = null;
+    let oldest: { prNumber: number; fetchedAt: number } | null = null;
     
-    for (const [key, entry] of this.cache.entries()) {
+    for (const [prNumber, entry] of this.cache.entries()) {
       if (!oldest || entry.fetchedAt < oldest.fetchedAt) {
-        oldest = { key, fetchedAt: entry.fetchedAt };
+        oldest = { prNumber, fetchedAt: entry.fetchedAt };
       }
     }
     
     if (oldest) {
-      this.cache.delete(oldest.key);
+      this.cache.delete(oldest.prNumber);
       this.evictions++;
-      this.log('debug', 'Cache entry evicted (LRU)', { key: oldest.key });
-      this.emit('evicted', oldest.key);
+      this.log('debug', 'Cache entry evicted (LRU)', { prNumber: oldest.prNumber });
+      this.emit('evicted', oldest.prNumber);
     }
   }
   

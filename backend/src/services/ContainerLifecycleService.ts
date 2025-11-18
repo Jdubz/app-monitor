@@ -49,8 +49,6 @@ export interface ContainerInspection {
  * Service for managing Docker container lifecycle
  */
 export class ContainerLifecycleService {
-  private static readonly MAX_BACKOFF_MS = 3000;
-
   constructor(private docker: Docker) {}
 
   /**
@@ -226,7 +224,7 @@ export class ContainerLifecycleService {
         }
 
         // Not ready yet, wait with exponential backoff
-        const delay = Math.min(intervalMs * (2 ** (attempt - 1)), ContainerLifecycleService.MAX_BACKOFF_MS);
+        const delay = Math.min(intervalMs * (2 ** (attempt - 1)), 3000); // Cap at 3 seconds
         await new Promise(resolve => setTimeout(resolve, delay));
 
       } catch (error) {
