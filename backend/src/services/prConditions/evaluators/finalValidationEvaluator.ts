@@ -37,7 +37,7 @@ export class FinalValidationEvaluator extends BaseEvaluator {
     ] as const;
 
     const allOtherMet = otherConditions.every(
-      conditionId => state.conditions[conditionId].status === 'met'
+      conditionId => state.conditions[conditionId]?.status === 'met'
     );
 
     if (!allOtherMet) {

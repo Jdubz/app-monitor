@@ -1,6 +1,6 @@
 /**
  * Evaluators Index
- * 
+ *
  * Exports all condition evaluators for easy importing.
  */
 
@@ -13,3 +13,4 @@ export { ChangeRequestsEvaluator } from './changeRequestsEvaluator.js';
 export { TaskVerificationEvaluator } from './taskVerificationEvaluator.js';
 export { CopilotReviewEvaluator } from './copilotReviewEvaluator.js';
 export { FinalValidationEvaluator } from './finalValidationEvaluator.js';
+export { WIPCommitsEvaluator } from './wipCommitsEvaluator.js';

@@ -79,7 +79,8 @@ export class MockPRRegistryService {
       mergeable_state: mockData.mergeable_state,
       checks: mockData.checks,
       reviews: mockData.reviews,
-      comments: mockData.comments
+      comments: mockData.comments,
+      commits: mockData.commits
     };
   }
 

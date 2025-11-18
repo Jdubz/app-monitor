@@ -79,6 +79,7 @@ export interface PRStatus {
   checks: PRCheckStatus[];
   reviews: PRReview[];
   comments: PRComment[];
+  commits?: Array<{ sha: string; message: string }>;
 }
 
 export interface CopilotReviewAnalysis {
