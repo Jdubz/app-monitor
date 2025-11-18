@@ -45,6 +45,10 @@ export interface CodexUsageEstimate {
   note: string;
 }
 
+/**
+ * @deprecated Use UnifiedLogParser instead. This class will be removed in a future version.
+ * @see unifiedLogParser.ts for the current implementation
+ */
 export class CodexLogParser {
   private readonly codexDir = path.join(process.env.HOME || '', '.codex');
 

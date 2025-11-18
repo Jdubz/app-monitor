@@ -90,6 +90,10 @@ const getPricingForModel = (model: string): ClaudePricingTier => {
   return CLAUDE_PRICING.get(model) ?? DEFAULT_PRICING;
 };
 
+/**
+ * @deprecated Use UnifiedLogParser instead. This class will be removed in a future version.
+ * @see unifiedLogParser.ts for the current implementation
+ */
 export class ClaudeLogParser {
   /**
    * Parse a single JSONL log file and extract usage entries
