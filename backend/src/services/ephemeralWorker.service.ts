@@ -1218,12 +1218,6 @@ export class EphemeralWorkerService {
   // populateWorkspaceFromRepo removed - using cloneFreshRepoInContainer directly
 
   /**
-   * Close log stream for a worker
-   * Ensures file handle is properly released
-   *
-   * @param workerId Worker ID whose log stream should be closed
-   */
-  /**
    * Shutdown service and cleanup all resources
    * Called on process termination to ensure no resource leaks
    */
