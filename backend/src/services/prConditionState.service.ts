@@ -354,6 +354,34 @@ export class PRConditionStateService {
   }
 
   /**
+   * Get PR condition state from database
+   * @param prNumber PR number to fetch state for
+   * @returns Parsed condition state or null if not found
+   */
+  async getState(prNumber: number): Promise<PRConditionState | null> {
+    try {
+      const row = this.db.getConnection().prepare(
+        'SELECT state_json FROM pr_condition_states WHERE pr_number = ?'
+      ).get(prNumber) as { state_json: string } | undefined;
+
+      if (!row) {
+        return null;
+      }
+
+      return JSON.parse(row.state_json) as PRConditionState;
+    } catch (error) {
+      logger.error({
+        category: 'pr-workflow',
+        action: 'get_state_failed',
+        message: `Failed to get condition state for PR #${prNumber}`,
+        error,
+        details: { prNumber }
+      });
+      return null;
+    }
+  }
+
+  /**
    * Delete PR condition state from database
    * Called when PR is closed or merged
    */

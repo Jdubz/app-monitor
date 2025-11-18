@@ -401,11 +401,17 @@ export class DevBotsDatabase {
     });
 
     this.applyMigration('025_issues_screenshot_columns', () => {
-      this.db.exec(`
-        -- Add screenshot and screenshotError columns to issues table if they don't exist
-        ALTER TABLE issues ADD COLUMN screenshot TEXT;
-        ALTER TABLE issues ADD COLUMN screenshotError TEXT;
-      `);
+      // Check if columns exist before adding them (idempotent migration)
+      const tableInfo = this.db.prepare('PRAGMA table_info(issues)').all() as Array<{ name: string }>;
+      const columnNames = tableInfo.map(col => col.name);
+      
+      if (!columnNames.includes('screenshot')) {
+        this.db.exec('ALTER TABLE issues ADD COLUMN screenshot TEXT;');
+      }
+      
+      if (!columnNames.includes('screenshotError')) {
+        this.db.exec('ALTER TABLE issues ADD COLUMN screenshotError TEXT;');
+      }
     });
   }
 
