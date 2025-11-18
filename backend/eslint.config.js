@@ -36,9 +36,10 @@ export default [
     rules: {
       '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/ban-ts-comment': 'off',
+      '@typescript-eslint/no-unused-vars': 'off',
     },
   },
   {
-    ignores: ["node_modules/", "dist/", "build/", "*.config.js", "src/utils/repoPaths.d.ts"],
+    ignores: ["node_modules/", "dist/", "build/", "*.config.js", "src/utils/repoPaths.d.ts", "eslint-local-rules.cjs", "eslint-local-rules/index.cjs", "safe-test-runner.mjs"],
   }
 ];

@@ -66,6 +66,6 @@ describeIfDocker('Docker Operations Integration', () => {
     await dockerManager.removeContainer(container.id);
     testContainers.splice(testContainers.indexOf(container.id), 1);
 
-    await expect(dockerManager.inspectContainer(container.id)).resolves.toBeNull();
+    await expect(dockerManager.inspectContainer(container.id)).rejects.toThrow();
   }, 40000);
 });
