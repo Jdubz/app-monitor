@@ -142,8 +142,9 @@ export class GitHubPRService {
     const owner = repoOwner || this.repoOwner;
     const repo = repoName || this.repoName;
 
-    // Use cache for getPRStatus calls
-    return this.cache.getOrFetch(prNumber, async () => {
+    // Use composite cache key: owner/repo/prNumber
+    const cacheKey = `${owner}/${repo}/${prNumber}`;
+    return this.cache.getOrFetch(cacheKey, async () => {
       return this.fetchPRStatusUncached(prNumber, owner, repo);
     });
   }
@@ -651,7 +652,8 @@ export class GitHubPRService {
       await execWithTimeout(command, GITHUB_API_TIMEOUT_MS);
 
       // Invalidate cache after successful merge
-      this.cache.invalidate(prNumber);
+      const cacheKey = `${owner}/${repo}/${prNumber}`;
+      this.cache.invalidate(cacheKey);
 
       logger.info({
         category: 'pr-workflow',
@@ -958,13 +960,16 @@ export class GitHubPRService {
   /**
    * Invalidate cache for specific PR (call after PR updates)
    */
-  invalidateCache(prNumber: number): void {
-    this.cache.invalidate(prNumber);
+  invalidateCache(prNumber: number, repoOwner?: string, repoName?: string): void {
+    const owner = repoOwner || this.repoOwner;
+    const repo = repoName || this.repoName;
+    const cacheKey = `${owner}/${repo}/${prNumber}`;
+    this.cache.invalidate(cacheKey);
     logger.debug({
       category: 'pr-cache',
       action: 'cache_invalidated',
-      message: `Cache invalidated for PR #${prNumber}`,
-      details: { prNumber }
+      message: `Cache invalidated for PR #${prNumber} in ${owner}/${repo}`,
+      details: { prNumber, owner, repo, cacheKey }
     });
   }
 
