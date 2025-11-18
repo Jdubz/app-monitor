@@ -11,7 +11,12 @@
 import Docker from 'dockerode';
 import fs from 'fs';
 import { logger } from '../../utils/logger.js';
-import { CONTAINER_CPU_QUOTA, WORKER_UID_GID } from '../../constants/containers.js';
+import {
+  CONTAINER_CPU_QUOTA,
+  WORKER_UID_GID,
+  BYTES_PER_MB,
+  CONTAINER_MEMORY_LIMIT_MB
+} from '../../constants/containers.js';
 
 export interface ContainerLabels {
   [key: string]: string;
@@ -71,13 +76,12 @@ export class DevBotContainerBuilder {
       volumes: [],
       tmpfs: [
         // Writable temp for agent CLI session data
-        // uid=1000 (node user) gid=1000 (node group) mode=0700
         { containerPath: '/home/node/.claude', options: `size=100m,${WORKER_UID_GID},mode=0700` },
         { containerPath: '/home/node/.codex', options: `size=100m,${WORKER_UID_GID},mode=0700` },
         { containerPath: '/home/node/.gemini', options: `size=100m,${WORKER_UID_GID},mode=0700` }
       ],
       resources: {
-        memoryMB: 512,
+        memoryMB: CONTAINER_MEMORY_LIMIT_MB,
         cpuQuota: CONTAINER_CPU_QUOTA,
       },
       autoRemove: true,
@@ -255,7 +259,7 @@ export class DevBotContainerBuilder {
       HostConfig: {
         AutoRemove: config.autoRemove,
         Binds: config.volumes.map(v => `${v.hostPath}:${v.containerPath}:${v.mode}`),
-        Memory: config.resources.memoryMB * 1024 * 1024,
+        Memory: config.resources.memoryMB * BYTES_PER_MB,
         CpuQuota: config.resources.cpuQuota,
         Tmpfs: config.tmpfs.reduce((acc, mount) => {
           acc[mount.containerPath] = mount.options;
