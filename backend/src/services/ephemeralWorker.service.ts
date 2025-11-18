@@ -1545,7 +1545,7 @@ export class EphemeralWorkerService {
     if (!stream) return;
 
     return new Promise((resolve, reject) => {
-      stream.end((error: Error | undefined) => {
+      stream.end((error: Error | null) => {
         if (error) {
           logger.warn({
             category: 'process',
