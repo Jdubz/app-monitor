@@ -578,7 +578,7 @@ test.describe('Console Error Monitoring', () => {
     );
 
     // Should have minimal critical errors during normal operation
-    expect(criticalErrors.length).toBeLessThanOrEqual(10); // Allow up to 10 errors (raised from 5)
+    expect(criticalErrors.length).toBeLessThanOrEqual(10); // Reduced from 15 to make test stricter
   });
 
   test('should not have unhandled promise rejections', async ({ page }) => {
