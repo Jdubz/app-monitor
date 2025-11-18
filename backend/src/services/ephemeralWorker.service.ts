@@ -38,6 +38,7 @@ import { CONTAINER_MEMORY_LIMIT_BYTES, CONTAINER_CPU_QUOTA, WORKER_UID_GID } fro
 import { DEFAULT_EPHEMERAL_WORKER_CONFIG } from '../config/defaults.js';
 import { ContainerLifecycleService } from './ContainerLifecycleService.js';
 import { WorkerLogService } from './WorkerLogService.js';
+import { ContextDeliveryService } from './ContextDeliveryService.js';
 
 export interface WorkspaceContext {
   id: string;
@@ -94,6 +95,7 @@ export class EphemeralWorkerService {
   private readonly recoveryAgent: RecoveryAgentService;
   private readonly containerLifecycle: ContainerLifecycleService; // Container management (extracted)
   private readonly workerLog: WorkerLogService; // Log management (extracted)
+  private readonly contextDelivery: ContextDeliveryService; // Context delivery (extracted)
   private logStreams = new Map<string, fs.WriteStream>(); // TODO: Remove after full migration to WorkerLogService
   private readonly devBotsLogPath: string;
 
@@ -123,6 +125,9 @@ export class EphemeralWorkerService {
       logsDirectory: devBotsLogDir,
       consolidatedLogPath: this.devBotsLogPath
     });
+
+    // Initialize context delivery service
+    this.contextDelivery = new ContextDeliveryService(docker, contextGenerator);
 
     // Merge provided config with defaults
     this.config = { ...DEFAULT_EPHEMERAL_WORKER_CONFIG, ...config };
@@ -451,8 +456,8 @@ export class EphemeralWorkerService {
       // Clone fresh repository inside container for complete isolation
       await this.cloneFreshRepoInContainer(container.id, baseBranch);
 
-      // Copy context bundle into container (if available)
-      await this.copyContextBundleToContainer(container.id, task);
+      // Copy context bundle into container using ContextDeliveryService
+      await this.contextDelivery.copyContextBundleToContainer(container.id, task);
 
       // Initialize worker log file using WorkerLogService
       await this.workerLog.initializeWorkerLogFile(workerId);
@@ -601,117 +606,6 @@ export class EphemeralWorkerService {
    * Copy context bundle into container using docker cp
    * Uses tar-fs to create tar stream from bundle directory
    */
-  private async copyContextBundleToContainer(containerId: string, task: Task): Promise<void> {
-    // Skip if no context bundle metadata
-    if (!task.context_cache_key || !task.files || task.files.length === 0) {
-      logger.debug({
-        category: 'context',
-        action: 'context_copy_skipped',
-        message: 'No context bundle to copy (no cache key or files)',
-        details: {
-          taskId: task.id,
-          hasCacheKey: !!task.context_cache_key,
-          hasFiles: !!(task.files && task.files.length > 0)
-        }
-      });
-      return;
-    }
-
-    try {
-      // Regenerate bundle (will use cache if available)
-      const contextResult = await this.contextGenerator.generateBundle({
-        taskType: (task.type || 'implementation') as 'implementation' | 'fix' | 'review' | 'deployment' | 'pr-follow-up' | 'analysis',
-        targetFiles: task.files,
-        force: false  // Use cached bundle if available
-      });
-
-      if (!contextResult.success || !contextResult.bundle?.mountPath) {
-        logger.warn({
-          category: 'context',
-          action: 'context_bundle_generation_failed',
-          message: 'Failed to generate context bundle for copying',
-          details: {
-            taskId: task.id,
-            cacheKey: task.context_cache_key,
-            errors: contextResult.errors,
-            note: 'Task will proceed without context'
-          }
-        });
-        return;
-      }
-
-      const bundlePath = contextResult.bundle.mountPath;
-
-      // Verify bundle path exists
-      if (!fs.existsSync(bundlePath)) {
-        logger.warn({
-          category: 'context',
-          action: 'context_bundle_path_not_found',
-          message: `Context bundle path does not exist: ${bundlePath}`,
-          details: {
-            taskId: task.id,
-            bundleId: task.context_bundle_id,
-            bundlePath,
-            note: 'Task will proceed without context'
-          }
-        });
-        return;
-      }
-
-      logger.info({
-        category: 'context',
-        action: 'copying_context_bundle',
-        message: `Copying context bundle to container`,
-        details: {
-          taskId: task.id,
-          bundleId: task.context_bundle_id,
-          cacheKey: task.context_cache_key,
-          profiles: task.context_profiles,
-          bundlePath,
-          containerPath: '/workspace/context',
-          cached: contextResult.cached || false
-        }
-      });
-
-      const container = this.docker.getContainer(containerId);
-
-      // Create tar stream from bundle directory
-      const tarStream = tar.pack(bundlePath);
-
-      // Copy tar stream into container at /workspace/context
-      await container.putArchive(tarStream, {
-        path: '/workspace'  // Will create /workspace/context directory
-      });
-
-      logger.info({
-        category: 'context',
-        action: 'context_bundle_copied',
-        message: `Context bundle successfully copied to container`,
-        details: {
-          taskId: task.id,
-          bundleId: task.context_bundle_id,
-          profiles: task.context_profiles,
-          containerPath: '/workspace/context',
-          sizeBytes: contextResult.bundle.metadata.totalBytes
-        }
-      });
-
-    } catch (error) {
-      // Context bundle copy failure should NOT block task execution
-      logger.warn({
-        category: 'context',
-        action: 'context_copy_failed',
-        message: `Failed to copy context bundle to container`,
-        error,
-        details: {
-          taskId: task.id,
-          cacheKey: task.context_cache_key,
-          note: 'Task will proceed without context'
-        }
-      });
-    }
-  }
-
   /**
    * Get host logs directory
    */
