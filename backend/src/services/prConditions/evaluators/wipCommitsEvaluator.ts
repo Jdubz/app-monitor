@@ -31,7 +31,7 @@ export class WIPCommitsEvaluator extends BaseEvaluator {
     /\bdebugging\b/i,
     /remove later/i,
     /delete me/i,
-    /\btodo\s*:/i  // TODO: commits that are placeholders
+    /^\s*todo\s*:/i  // TODO: commits that are placeholders (only at start of message)
   ];
 
   getConditionId(): string {

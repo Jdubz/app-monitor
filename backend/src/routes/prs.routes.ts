@@ -125,7 +125,7 @@ export function createPRsRouter(devBotsManager: DevBotsManager) {
           return {
             name,
             status: statusMap[cond.status] || cond.status,
-            blocking: true, // All 8 conditions are blocking (except copilot_review)
+            blocking: name !== 'copilot_review', // All 8 conditions are blocking (except copilot_review)
             blocking_issues: cond.blocking_issues || [],
             message: message || undefined,
             last_checked: cond.last_checked

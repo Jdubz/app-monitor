@@ -711,7 +711,7 @@ export async function createPullRequest(
 async function registerPRWithBackend(prData: any): Promise<void> {
   try {
     const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3002';
-    const API_KEY = 'test-e2e-api-key-not-for-production';
+    const API_KEY = process.env.E2E_TEST_API_KEY || 'test-e2e-api-key-not-for-production';
 
     const response = await fetch(`${API_BASE_URL}/api/prs/mock/register`, {
       method: 'POST',

@@ -685,10 +685,10 @@ export class PRConditionStateService {
       'copilot_review_completed': 'copilot_review'
     };
 
-    const newToOld: Record<string, string> = {
-      'required_approvals': 'no_change_requests', // Note: maps to one old name
-      'no_conflicts': 'no_merge_conflicts',
-      'copilot_review': 'copilot_review_completed'
+    const newToOld: Record<string, string[]> = {
+      'required_approvals': ['comments_resolved', 'no_change_requests'], // Multiple old names
+      'no_conflicts': ['no_merge_conflicts'],
+      'copilot_review': ['copilot_review_completed']
     };
 
     // If updating an old name, also update the new name
@@ -697,11 +697,14 @@ export class PRConditionStateService {
       state.conditions[newName] = conditionState;
     }
 
-    // If updating a new name, also update the old name(s)
+    // If updating a new name, also update ALL corresponding old names
     if (newToOld[conditionId]) {
-      const oldName = newToOld[conditionId] as keyof PRConditionState['conditions'];
-      if (state.conditions[oldName] !== undefined) {
-        state.conditions[oldName] = conditionState;
+      const oldNames = newToOld[conditionId];
+      for (const oldName of oldNames) {
+        const oldKey = oldName as keyof PRConditionState['conditions'];
+        if (state.conditions[oldKey] !== undefined) {
+          state.conditions[oldKey] = conditionState;
+        }
       }
     }
 
