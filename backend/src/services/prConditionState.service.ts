@@ -465,6 +465,9 @@ export class PRConditionStateService {
     const branchEval = await this.evaluateBranchUpdateCondition(prNumber, prStatus);
     await this.handleConditionChange(prNumber, state, 'branch_updated', branchEval);
 
+    const wipEval = await this.evaluateWIPCommitsCondition(prNumber, prStatus);
+    await this.handleConditionChange(prNumber, state, 'no_wip_commits', wipEval);
+
     // NOTE: Do NOT evaluate CI checks here - wait for check_suite.completed event
   }
 
@@ -493,7 +496,8 @@ export class PRConditionStateService {
       this.evaluateBranchUpdateCondition(prNumber, prStatus),
       this.evaluateChangeRequestsCondition(prNumber, prStatus),
       this.evaluateTaskVerificationCondition(prNumber, prStatus),
-      this.evaluateCopilotReviewCondition(prNumber, prStatus)
+      this.evaluateCopilotReviewCondition(prNumber, prStatus),
+      this.evaluateWIPCommitsCondition(prNumber, prStatus)
     ]);
 
     const conditionIds = [
@@ -503,7 +507,8 @@ export class PRConditionStateService {
       'branch_updated',
       'no_change_requests',
       'task_verification',
-      'copilot_review_completed'
+      'copilot_review_completed',
+      'no_wip_commits'
     ];
 
     for (let i = 0; i < evaluations.length; i++) {
@@ -577,6 +582,15 @@ export class PRConditionStateService {
   private async evaluateCopilotReviewCondition(prNumber: number, prStatus?: PRStatus): Promise<ConditionEvaluation> {
     // Delegate to modular evaluator
     const evaluator = this.evaluators.get('copilot_review_completed')!;
+    return evaluator.evaluate(prNumber, prStatus);
+  }
+
+  /**
+   * Evaluate Condition 8: No WIP Commits
+   */
+  private async evaluateWIPCommitsCondition(prNumber: number, prStatus?: PRStatus): Promise<ConditionEvaluation> {
+    // Delegate to modular evaluator
+    const evaluator = this.evaluators.get('no_wip_commits')!;
     return evaluator.evaluate(prNumber, prStatus);
   }
 

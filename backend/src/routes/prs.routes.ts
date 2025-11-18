@@ -94,20 +94,43 @@ export function createPRsRouter(devBotsManager: DevBotsManager) {
 
       interface ConditionData {
         status: string;
-        blocking_issues?: string[];
+        blocking_issues?: Array<{type: string; severity?: string}>;
         last_checked?: string;
       }
 
-      const gates = state.conditions ? Object.entries(state.conditions).map(([name, condition]: [string, unknown]) => {
-        const cond = condition as ConditionData;
-        return {
-          name,
-          status: statusMap[cond.status] || cond.status,
-          blocking: true, // All 8 conditions are blocking
-          blocking_issues: cond.blocking_issues || [],
-          last_checked: cond.last_checked
-        };
-      }) : [];
+      // Only return NEW gate names (E2E test expectations), filter out old backward-compat names
+      const newGateNames = [
+        'branch_updated',
+        'no_conflicts',
+        'ci_checks_passing',
+        'required_approvals',
+        'task_verification',
+        'copilot_review',
+        'final_validation_passed',
+        'no_wip_commits'
+      ];
+
+      const gates = state.conditions ? Object.entries(state.conditions)
+        .filter(([name]) => newGateNames.includes(name))
+        .map(([name, condition]: [string, unknown]) => {
+          const cond = condition as ConditionData;
+
+          // Generate human-readable message from blocking issues
+          let message = '';
+          if (cond.blocking_issues && cond.blocking_issues.length > 0) {
+            const issueTypes = cond.blocking_issues.map(issue => issue.type).join(', ');
+            message = `Blocked by: ${issueTypes}`;
+          }
+
+          return {
+            name,
+            status: statusMap[cond.status] || cond.status,
+            blocking: true, // All 8 conditions are blocking (except copilot_review)
+            blocking_issues: cond.blocking_issues || [],
+            message: message || undefined,
+            last_checked: cond.last_checked
+          };
+        }) : [];
 
       res.json({
         success: true,
