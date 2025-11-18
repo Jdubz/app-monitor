@@ -424,7 +424,7 @@ export function setupGitHubMock(webhookEndpoint?: string): GitHubAPIMock {
 }
 
 /**
- * Helper to create a pull request
+ * Helper to create a pull request with all E2E test options
  */
 export async function createPullRequest(
   options: {
@@ -433,29 +433,56 @@ export async function createPullRequest(
     headBranch?: string;
     baseBehind?: number;
     hasConflicts?: boolean;
+    conflicts?: string[]; // Alias for hasConflicts
     ciStatus?: 'success' | 'failure' | 'pending';
-    approvals?: number;
+    ciChecks?: Array<{ name: string; status: 'success' | 'failure' | 'pending' }>;
+    approvals?: number | Array<{ user: string; status: 'approved' | 'changes_requested' }>;
     isDraft?: boolean;
+    taskId?: string;
+    commits?: Array<{ message: string }>;
   },
   mock: GitHubAPIMock
 ): Promise<MockPRResponse> {
   const prNumber = mock['prCounter']++;
   
+  // Determine if there are conflicts
+  const hasConflicts = options.hasConflicts || (options.conflicts && options.conflicts.length > 0) || false;
+  
+  // Determine CI status from ciChecks or ciStatus
+  let overallCIStatus: 'success' | 'failure' | 'pending' = options.ciStatus || 'success';
+  if (options.ciChecks) {
+    const hasFailure = options.ciChecks.some(c => c.status === 'failure');
+    const hasPending = options.ciChecks.some(c => c.status === 'pending');
+    if (hasFailure) {
+      overallCIStatus = 'failure';
+    } else if (hasPending) {
+      overallCIStatus = 'pending';
+    }
+  }
+  
   // Determine mergeable state based on options
   let mergeableState: MockPRResponse['mergeable_state'] = 'clean';
-  if (options.hasConflicts) {
+  if (hasConflicts) {
     mergeableState = 'dirty';
-  } else if (options.ciStatus === 'pending') {
+  } else if (options.baseBehind && options.baseBehind > 0) {
+    mergeableState = 'behind';
+  } else if (overallCIStatus === 'pending') {
     mergeableState = 'unstable';
-  } else if (options.ciStatus === 'failure') {
+  } else if (overallCIStatus === 'failure') {
     mergeableState = 'blocked';
+  }
+  
+  // Build PR body with task reference if provided
+  let body = 'Test PR body';
+  if (options.taskId) {
+    body += `\n\nRelated to task: ${options.taskId}`;
   }
   
   const pr: MockPRResponse = {
     number: prNumber,
     state: 'open',
     title: options.title || `Test PR #${prNumber}`,
-    body: 'Test PR body',
+    body,
     user: { login: 'test-user' },
     head: { 
       ref: options.headBranch || 'feature/test',
@@ -465,7 +492,7 @@ export async function createPullRequest(
       ref: options.baseBranch || 'main',
       sha: `sha-base-${prNumber}`
     },
-    mergeable: !options.hasConflicts,
+    mergeable: !hasConflicts,
     mergeable_state: mergeableState,
     merged: false,
     draft: options.isDraft || false,
@@ -475,15 +502,26 @@ export async function createPullRequest(
   
   mock['pullRequests'].set(prNumber, pr);
   
-  // Add check run if CI status specified
-  if (options.ciStatus) {
+  // Add check runs if ciChecks specified
+  if (options.ciChecks && options.ciChecks.length > 0) {
+    const checkRuns: MockCheckRun[] = options.ciChecks.map((check, idx) => ({
+      id: Date.now() + idx,
+      status: check.status === 'pending' ? 'in_progress' : 'completed',
+      conclusion: check.status === 'pending' ? null : check.status,
+      name: check.name,
+      started_at: new Date().toISOString(),
+      completed_at: check.status === 'pending' ? null : new Date().toISOString(),
+    }));
+    mock['checkRuns'].set(prNumber, checkRuns);
+  } else if (overallCIStatus) {
+    // Add default check run if CI status specified
     const checkRun: MockCheckRun = {
       id: Date.now(),
-      status: options.ciStatus === 'pending' ? 'in_progress' : 'completed',
-      conclusion: options.ciStatus === 'pending' ? null : options.ciStatus,
+      status: overallCIStatus === 'pending' ? 'in_progress' : 'completed',
+      conclusion: overallCIStatus === 'pending' ? null : overallCIStatus,
       name: 'CI',
       started_at: new Date().toISOString(),
-      completed_at: options.ciStatus === 'pending' ? null : new Date().toISOString(),
+      completed_at: overallCIStatus === 'pending' ? null : new Date().toISOString(),
     };
     mock['checkRuns'].set(prNumber, [checkRun]);
   }
