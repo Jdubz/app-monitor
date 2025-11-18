@@ -8,7 +8,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
 import { TaskRepository } from '../TaskRepository.js';
-import type { Task } from '../../services/taskQueue.sqlite.js';
 
 describe('TaskRepository', () => {
   let db: Database.Database;

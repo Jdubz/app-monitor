@@ -17,7 +17,7 @@
 -- SQLite doesn't support DROP COLUMN directly, so we need to recreate the table
 
 -- Step 1: Create new tasks table without deprecated columns
-CREATE TABLE tasks_new (
+CREATE TABLE IF NOT EXISTS tasks_new (
   id TEXT PRIMARY KEY,
   type TEXT NOT NULL,
   title TEXT NOT NULL,

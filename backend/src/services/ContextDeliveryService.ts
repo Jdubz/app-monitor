@@ -12,7 +12,7 @@ import tar from 'tar-fs';
 import type Docker from 'dockerode';
 import { logger } from '../utils/logger.js';
 import { ContextBundleGenerator } from './context/index.js';
-import type { Task } from '../types/database.js';
+import type { Task } from './taskQueue.sqlite.js';
 
 export interface ContextDeliveryConfig {
   containerTargetPath?: string;
