@@ -33,11 +33,12 @@ export class FinalValidationEvaluator extends BaseEvaluator {
       'branch_updated',
       'no_change_requests',
       'task_verification',
-      'copilot_review_completed'
+      'copilot_review_completed',
+      'no_wip_commits'
     ] as const;
 
     const allOtherMet = otherConditions.every(
-      conditionId => state.conditions[conditionId].status === 'met'
+      conditionId => state.conditions[conditionId]?.status === 'met'
     );
 
     if (!allOtherMet) {

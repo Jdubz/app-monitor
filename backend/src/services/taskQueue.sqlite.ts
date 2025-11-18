@@ -981,15 +981,8 @@ export class TaskQueueService {
         updateExecutionStmt.run(now, now - execution.started_at, execution.id);
       }
 
-      // Stop worker via WorkerLifecycleService
-      const worker = this.db.prepare('SELECT id FROM workers WHERE current_task_id = ?')
-        .get(taskId) as { id: string } | undefined;
-      
-      if (worker) {
-        this.workerLifecycle.stopWorker(worker.id);
-        // Clear task assignment
-        this.db.prepare('UPDATE workers SET current_task_id = NULL WHERE id = ?').run(worker.id);
-      }
+      // Release worker from task via WorkerLifecycleService
+      this.workerLifecycle.releaseWorkerFromTask(taskId);
 
       logger.info({
         category: 'process',
@@ -1115,15 +1108,8 @@ export class TaskQueueService {
         updateExecutionStmt.run(now, now - execution.started_at, error, execution.id);
       }
 
-      // Stop worker via WorkerLifecycleService
-      const worker = this.db.prepare('SELECT id FROM workers WHERE current_task_id = ?')
-        .get(taskId) as { id: string } | undefined;
-      
-      if (worker) {
-        this.workerLifecycle.stopWorker(worker.id);
-        // Clear task assignment
-        this.db.prepare('UPDATE workers SET current_task_id = NULL WHERE id = ?').run(worker.id);
-      }
+      // Release worker from task via WorkerLifecycleService
+      this.workerLifecycle.releaseWorkerFromTask(taskId);
 
       logger.info({
         category: 'process',
