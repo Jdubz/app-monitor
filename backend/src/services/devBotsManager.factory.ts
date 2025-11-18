@@ -13,6 +13,7 @@ import { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js';
 import { WorkspaceSyncManager } from './workspaceSyncManager.js';
 import { DockerManager } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
+import { MS_PER_HOUR, WORKER_IDLE_TIMEOUT_MS } from '../constants/timeouts.js';
 // TaskPersistence removed - using SQLite directly
 // WorkspaceOrchestrator removed - using container isolation
 import { ScopeControlService } from './scopeControl.service.js';
@@ -155,7 +156,7 @@ export async function createDevBotsManagerDependencies(
     {
       maxConcurrentWorkers: 2,
       stuckCheckInterval: 60000,
-      absoluteMaxDuration: 60 * 60 * 1000,
+      absoluteMaxDuration: MS_PER_HOUR,
       artifactsDir: resolveArtifactsDir(),
       recovery: {
         enabled: config.recovery?.enabled ?? true,
@@ -175,7 +176,7 @@ export async function createDevBotsManagerDependencies(
   await prWorkflowOrchestrator.initialize();
 
   const interactiveSessionService = new InteractiveSessionService({
-    idleTimeoutMs: 5 * 60 * 1000,
+    idleTimeoutMs: WORKER_IDLE_TIMEOUT_MS,
     allowedModels: [
       { provider: 'claude', name: '*' },
       { provider: 'codex', name: '*' },

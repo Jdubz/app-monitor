@@ -91,36 +91,36 @@ export class TaskCompletionService {
     this.extractAndRecordTokenUsage(task, output);
     this.extractAndRecordPRInfo(task, output);
 
-    const workspacePath = worker.workspace.hostPath;
     let qualityValidation: QualityValidationResult | undefined;
     let taskVerification: TaskVerificationResult | undefined;
     let shouldPush = exitCode === 0;
 
-    // Run comprehensive task verification first (if enabled)
-    if (shouldPush && this.config.enableTaskVerification) {
-      taskVerification = await this.runTaskVerification(task, workspacePath, output);
-      shouldPush = taskVerification.passed;
+    // NOTE: Task verification and quality gates are disabled with Docker cp mode
+    // because workspace exists only inside containers, not on host filesystem.
+    // These features would need to be re-implemented to run inside containers.
 
-      // Log verification details
-      if (!taskVerification.passed) {
-        logger.warn({
-          category: 'verification',
-          action: 'task_verification_failed',
-          message: `Task verification failed for ${task.id}`,
-          details: {
-            acceptanceCriteriaMet: taskVerification.acceptanceCriteria.percentMet,
-            testCoverage: taskVerification.testCoverage?.totalCoverage,
-            scopeViolations: taskVerification.scopeBoundaries?.violationCount,
-            recommendations: taskVerification.recommendations
-          }
-        });
-      }
+    if (this.config.enableTaskVerification) {
+      logger.info({
+        category: 'verification',
+        action: 'task_verification_skipped',
+        message: `Task verification skipped for ${task.id} - workspace not on host filesystem (Docker cp mode)`,
+        details: {
+          taskId: task.id,
+          reason: 'Workspace is inside container only, cannot run host-side verification'
+        }
+      });
     }
 
-    // Run quality gates (if verification passed and quality gates enabled)
-    if (shouldPush && this.config.enableQualityGates) {
-      qualityValidation = await this.runQualityGateValidation(task, workspacePath);
-      shouldPush = qualityValidation.passed;
+    if (this.config.enableQualityGates) {
+      logger.info({
+        category: 'verification',
+        action: 'quality_gates_skipped',
+        message: `Quality gate validation skipped for ${task.id} - workspace not on host filesystem`,
+        details: {
+          taskId: task.id,
+          reason: 'Workspace is inside container only, cannot run host-side quality gates'
+        }
+      });
     }
 
     // Check if bot self-reported completion status

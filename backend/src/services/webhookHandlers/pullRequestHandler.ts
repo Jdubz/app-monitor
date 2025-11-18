@@ -11,6 +11,7 @@ import type { GitHubPullRequestPayload } from './types.js';
 import type { Task } from '../taskQueue.sqlite.js';
 import type Database from 'better-sqlite3';
 import { getPlanStatusUpdater } from '../planStatusUpdater.singleton.js';
+import { MS_PER_MINUTE } from '../../constants/timeouts.js';
 
 /**
  * Handler for GitHub pull_request webhook events
@@ -623,7 +624,7 @@ export class PullRequestHandler extends BaseWebhookHandler {
     const BASE_INTERVAL_MS = 10000; // Base interval: 10 seconds
     const MAX_INTERVAL_MS = 60000; // Max interval: 60 seconds
     const MAX_POLLS = 8; // Total attempts
-    const MAX_TOTAL_TIME_MS = 5 * 60 * 1000; // 5 minutes max
+    const MAX_TOTAL_TIME_MS = 5 * MS_PER_MINUTE;
 
     if (!this.prOrchestrator) {
       logger.debug({

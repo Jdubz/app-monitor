@@ -1,17 +1,31 @@
 /**
  * Claude Code Log Parser
  *
- * Parses Claude Code JSONL logs to extract usage data including:
- * - Input/output tokens
- * - Cache usage (read and creation)
- * - Model information
- * - Timestamps and session IDs
- * - Cost estimates
+ * @deprecated This parser has been consolidated into unifiedLogParser.ts
+ * Use unifiedLogParser.parseLog() instead with agentType: 'claude'
+ *
+ * This file is kept for reference only and will be removed in a future version.
+ * All functionality has been migrated to the unified parser which supports
+ * both Claude and Codex agents with a consistent interface.
+ *
+ * Migration guide:
+ * ```typescript
+ * // OLD:
+ * import { parseClaudeLog } from './claudeLogParser.js';
+ * const summary = await parseClaudeLog(logPath);
+ *
+ * // NEW:
+ * import { parseLog } from './unifiedLogParser.js';
+ * const summary = await parseLog(logPath, 'claude');
+ * ```
+ *
+ * @see unifiedLogParser.ts for the current implementation
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
+import { daysAgo } from '../constants/timeouts.js';
 
 export interface ClaudeUsageData {
   inputTokens: number;
@@ -76,6 +90,10 @@ const getPricingForModel = (model: string): ClaudePricingTier => {
   return CLAUDE_PRICING.get(model) ?? DEFAULT_PRICING;
 };
 
+/**
+ * @deprecated Use UnifiedLogParser instead. This class will be removed in a future version.
+ * @see unifiedLogParser.ts for the current implementation
+ */
 export class ClaudeLogParser {
   /**
    * Parse a single JSONL log file and extract usage entries
@@ -261,7 +279,7 @@ export class ClaudeLogParser {
    */
   async getRecentUsage(projectPath: string, days: number): Promise<ClaudeUsageSummary> {
     const now = new Date();
-    const startDate = new Date(now.getTime() - (days * 24 * 60 * 60 * 1000));
+    const startDate = daysAgo(days);
 
     return this.parseProjectUsage(projectPath, {
       startDate,

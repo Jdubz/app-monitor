@@ -282,7 +282,6 @@ export const WorkTargetConfigSchema = z.object({
 
   // Workspace paths
   workspacePath: z.string(),
-  mirrorPath: z.string().optional(),
 
   // Access control
   allowedFilePatterns: z.array(z.string()).optional(),

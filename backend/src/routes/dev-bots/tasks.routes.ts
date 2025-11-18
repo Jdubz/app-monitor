@@ -18,7 +18,6 @@ import { sendSuccess, sendError } from '../../utils/apiResponse.js';
 import { WorkerLogLocator } from '../../services/taskLogLocator.js';
 import { getTaskContextService } from '../../services/taskContext.service.js';
 import { taskAutoDetectionService } from '../../services/taskAutoDetection.service.js';
-import { getPhaseMetricsService } from '../../services/phaseMetrics.service.js';
 import type {
   MinimalTaskPayload,
   DevBotsReportCompletionPayload,
@@ -558,13 +557,9 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const { id: taskId } = req.params;
       const taskQueue = devBotsManager.getTaskQueue();
-      const db = taskQueue.getDatabase();
 
-      const stageRuns = db.prepare(`
-        SELECT * FROM task_stage_runs
-        WHERE task_id = ?
-        ORDER BY created_at DESC
-      `).all(taskId);
+      // Use service method instead of direct DB access
+      const stageRuns = taskQueue.getStageRuns(taskId);
 
       sendSuccess(res, { stageRuns });
     } catch (error) {
@@ -908,7 +903,6 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       const { taskId } = req.params;
 
       const taskQueue = devBotsManager.getTaskQueue();
-      const db = taskQueue.getDatabase();
 
       // Get task info
       const task = taskQueue.getTask(taskId);
@@ -917,20 +911,15 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         return;
       }
 
-      // Get phase history from task_stage_runs
-      const phaseHistory = db.prepare(`
-        SELECT * FROM task_stage_runs
-        WHERE task_id = ?
-        ORDER BY phase_index ASC, attempt ASC
-      `).all(taskId);
+      // Use service method instead of direct DB access
+      const phaseHistory = taskQueue.getPhaseHistory(taskId);
 
       // Parse artifacts_blob and recovery_diagnosis JSON fields
-      const parsedHistory = phaseHistory.map((run: unknown) => {
-        const record = run as Record<string, unknown>;
+      const parsedHistory = phaseHistory.map((run) => {
         return {
-          ...record,
-          artifacts: record.artifacts_blob ? JSON.parse(record.artifacts_blob as string) : null,
-          recovery: record.recovery_diagnosis ? JSON.parse(record.recovery_diagnosis as string) : null,
+          ...run,
+          artifacts: run.artifacts_blob ? JSON.parse(run.artifacts_blob) : null,
+          validation: run.validation_result ? JSON.parse(run.validation_result) : null,
         };
       });
 
@@ -964,10 +953,9 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   router.get('/phases/metrics', async (_req: Request, res: Response) => {
     try {
       const taskQueue = devBotsManager.getTaskQueue();
-      const db = taskQueue.getDatabase();
-      const metricsService = getPhaseMetricsService(db);
 
-      const metrics = metricsService.getMetrics();
+      // Use service method instead of direct DB access
+      const metrics = taskQueue.getPhaseMetrics();
 
       sendSuccess(res, metrics);
     } catch (error) {
@@ -997,10 +985,9 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       }
 
       const taskQueue = devBotsManager.getTaskQueue();
-      const db = taskQueue.getDatabase();
-      const metricsService = getPhaseMetricsService(db);
 
-      const phaseMetrics = metricsService.getPhaseMetrics(phaseIndex);
+      // Use service method instead of direct DB access
+      const phaseMetrics = taskQueue.getPhaseSpecificMetrics(phaseIndex);
 
       if (!phaseMetrics) {
         sendError(res, 'No metrics available for this phase', 404);
@@ -1028,10 +1015,9 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   router.post('/phases/metrics/refresh', async (_req: Request, res: Response) => {
     try {
       const taskQueue = devBotsManager.getTaskQueue();
-      const db = taskQueue.getDatabase();
-      const metricsService = getPhaseMetricsService(db);
 
-      metricsService.clearCache();
+      // Use service method instead of direct DB access
+      taskQueue.clearPhaseMetricsCache();
 
       sendSuccess(res, { 
         message: 'Phase metrics cache cleared',

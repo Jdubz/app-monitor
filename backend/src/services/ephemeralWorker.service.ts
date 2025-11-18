@@ -34,12 +34,12 @@ import { PhaseOrchestratorService } from './phaseOrchestrator.service.js';
 import { RecoveryAgentService } from './recoveryAgent.service.js';
 import type { ValidationResult } from './phaseValidation/types.js';
 import { getConnectionManager } from './connectionManager.js';
+import { CONTAINER_MEMORY_LIMIT_BYTES, CONTAINER_CPU_QUOTA, WORKER_UID_GID } from '../constants/containers.js';
+import { DEFAULT_EPHEMERAL_WORKER_CONFIG } from '../config/defaults.js';
 
 export interface WorkspaceContext {
   id: string;
-  hostPath: string;  // DEPRECATED: Always empty with Docker cp approach
   branchName: string;
-  mirrorPath: string;  // DEPRECATED: Always empty with Docker cp approach
   createdAt: string;
 }
 
@@ -109,21 +109,8 @@ export class EphemeralWorkerService {
     this.phaseOrchestrator = new PhaseOrchestratorService(db);  // Use injected database instance
     this.recoveryAgent = new RecoveryAgentService();
 
-    this.config = {
-      maxConcurrentWorkers: config.maxConcurrentWorkers ?? 2,
-      dockerImage: config.dockerImage ?? 'dev-bot:latest',
-      logsDirectory: config.logsDirectory ?? './data/logs',
-      envPassthroughKeys: config.envPassthroughKeys ?? [
-        'ANTHROPIC_API_KEY',
-        'CLAUDE_API_KEY',
-        'OPENAI_API_KEY',
-        'GITHUB_TOKEN',
-        'GIT_AUTHOR_NAME',
-        'GIT_AUTHOR_EMAIL',
-        'GIT_COMMITTER_NAME',
-        'GIT_COMMITTER_EMAIL'
-      ]
-    };
+    // Merge provided config with defaults
+    this.config = { ...DEFAULT_EPHEMERAL_WORKER_CONFIG, ...config };
 
     // Dev-bots consolidated log file for real-time monitoring
     const devBotsLogDir = path.join(process.cwd(), 'dev-bots', 'logs');
@@ -438,14 +425,14 @@ export class EphemeralWorkerService {
         Env: envVars,
         WorkingDir: `/workspace`,
         HostConfig: {
-          Memory: 512 * 1024 * 1024,
-          CpuQuota: 50000,
+          Memory: CONTAINER_MEMORY_LIMIT_BYTES,
+          CpuQuota: CONTAINER_CPU_QUOTA,
           AutoRemove: true,
           Binds: binds,
           Tmpfs: {
-            '/home/worker/.claude': 'uid=1000,gid=1000',  // Writable temp for Claude CLI (matches node user)
-            '/home/worker/.gemini': 'uid=1000,gid=1000',  // Writable temp for Gemini CLI (matches node user)
-            '/home/worker/.codex': 'uid=1000,gid=1000'    // Writable temp for Codex CLI (matches node user)
+            '/home/worker/.claude': WORKER_UID_GID,  // Writable temp for Claude CLI (matches node user)
+            '/home/worker/.gemini': WORKER_UID_GID,  // Writable temp for Gemini CLI (matches node user)
+            '/home/worker/.codex': WORKER_UID_GID    // Writable temp for Codex CLI (matches node user)
           }
         },
         Labels: {
@@ -459,8 +446,11 @@ export class EphemeralWorkerService {
       // Start the container FIRST so we can exec commands
       await container.start();
 
-      // Wait for container to be fully running before exec commands
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Wait for container to be fully running and healthy before exec commands
+      await this.waitForContainerReady(container.id, {
+        maxAttempts: 30,
+        intervalMs: 100
+      });
 
       // Clone fresh repository inside container for complete isolation
       await this.cloneFreshRepoInContainer(container.id, baseBranch);
@@ -470,11 +460,9 @@ export class EphemeralWorkerService {
 
       await this.initializeWorkerLogFile(workerId);
 
-      const workspace = {
+      const workspace: WorkspaceContext = {
         id: workspaceId,
-        hostPath: '', // No host path - workspace is inside container only
         branchName: 'staging', // Always work on staging
-        mirrorPath: '', // No mirror
         createdAt: new Date().toISOString()
       };
 
@@ -613,6 +601,80 @@ export class EphemeralWorkerService {
         reject(error);
       });
     });
+  }
+
+  /**
+   * Wait for container to be fully running and healthy before executing commands
+   * Implements exponential backoff to avoid overwhelming the Docker daemon
+   *
+   * @param containerId Container ID to check
+   * @param options Configuration for health check polling
+   * @throws Error if container fails to become ready within max attempts
+   */
+  private async waitForContainerReady(
+    containerId: string,
+    options: { maxAttempts: number; intervalMs: number }
+  ): Promise<void> {
+    const { maxAttempts, intervalMs } = options;
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const container = this.docker.getContainer(containerId);
+        const inspection = await container.inspect();
+
+        // Check if container is running
+        if (inspection.State.Running) {
+          // If container has no health check, consider it ready once running
+          if (!inspection.State.Health) {
+            logger.info({
+              category: 'docker',
+              action: 'container_ready',
+              message: 'Container is running (no health check defined)',
+              details: { containerId, attempt }
+            });
+            return;
+          }
+
+          // If health check exists, wait for healthy status
+          if (inspection.State.Health.Status === 'healthy') {
+            logger.info({
+              category: 'docker',
+              action: 'container_ready',
+              message: 'Container is running and healthy',
+              details: { containerId, attempt }
+            });
+            return;
+          }
+        }
+
+        // Check for fatal states
+        if (inspection.State.Dead || inspection.State.OOMKilled) {
+          const error = inspection.State.Error || 'Unknown error';
+          throw new Error(`Container failed to start: ${error}`);
+        }
+
+        // Not ready yet, wait with exponential backoff
+        const delay = Math.min(intervalMs * attempt, 3000); // Cap at 3 seconds
+        await new Promise(resolve => setTimeout(resolve, delay));
+
+      } catch (error) {
+        if (attempt === maxAttempts) {
+          logger.error({
+            category: 'docker',
+            action: 'container_health_check_failed',
+            message: `Container failed to become ready after ${maxAttempts} attempts`,
+            error: { message: (error as Error).message },
+            details: { containerId, maxAttempts }
+          });
+          throw new Error(`Container failed to become ready after ${maxAttempts} attempts: ${(error as Error).message}`);
+        }
+
+        // For non-fatal errors, continue retrying
+        if ((error as Error).message.includes('no such container')) {
+          throw error; // Container doesn't exist, fail immediately
+        }
+      }
+    }
   }
 
   /**
@@ -1368,6 +1430,9 @@ export class EphemeralWorkerService {
       worker.status = 'destroyed';
       worker.destroyedAt = new Date().toISOString();
 
+      // Close log stream if it exists
+      await this.closeLogStream(workerId);
+
       // Remove from ephemeral workers map
       this.ephemeralWorkers.delete(workerId);
 
@@ -1468,4 +1533,89 @@ export class EphemeralWorkerService {
   }
 
   // populateWorkspaceFromRepo removed - using cloneFreshRepoInContainer directly
+
+  /**
+   * Close log stream for a worker
+   * Ensures file handle is properly released
+   *
+   * @param workerId Worker ID whose log stream should be closed
+   */
+  private async closeLogStream(workerId: string): Promise<void> {
+    const stream = this.logStreams.get(workerId);
+    if (!stream) return;
+
+    return new Promise((resolve, reject) => {
+      stream.end((error: Error | undefined) => {
+        if (error) {
+          logger.warn({
+            category: 'process',
+            action: 'log_stream_close_error',
+            message: `Error closing log stream for worker ${workerId}`,
+            error: { message: error.message }
+          });
+          reject(error);
+        } else {
+          this.logStreams.delete(workerId);
+          logger.debug({
+            category: 'process',
+            action: 'log_stream_closed',
+            message: `Closed log stream for worker ${workerId}`
+          });
+          resolve();
+        }
+      });
+    });
+  }
+
+  /**
+   * Shutdown service and cleanup all resources
+   * Called on process termination to ensure no resource leaks
+   */
+  async shutdown(): Promise<void> {
+    logger.info({
+      category: 'process',
+      action: 'ephemeral_worker_service_shutdown',
+      message: `Shutting down EphemeralWorkerService (${this.logStreams.size} log streams, ${this.ephemeralWorkers.size} workers)`
+    });
+
+    // Close all log streams
+    const streamClosePromises: Promise<void>[] = [];
+    for (const [workerId] of this.logStreams.entries()) {
+      streamClosePromises.push(
+        this.closeLogStream(workerId).catch(error => {
+          logger.error({
+            category: 'process',
+            action: 'log_stream_cleanup_failed',
+            message: `Failed to close log stream for worker ${workerId}`,
+            error: { message: error.message }
+          });
+        })
+      );
+    }
+
+    await Promise.all(streamClosePromises);
+
+    // Destroy all remaining workers
+    const workerDestroyPromises: Promise<void>[] = [];
+    for (const [workerId] of this.ephemeralWorkers.entries()) {
+      workerDestroyPromises.push(
+        this.destroyWorker(workerId).catch(error => {
+          logger.error({
+            category: 'process',
+            action: 'worker_cleanup_failed',
+            message: `Failed to destroy worker ${workerId} during shutdown`,
+            error: { message: error.message }
+          });
+        })
+      );
+    }
+
+    await Promise.all(workerDestroyPromises);
+
+    logger.info({
+      category: 'process',
+      action: 'ephemeral_worker_service_shutdown_complete',
+      message: 'EphemeralWorkerService shutdown complete'
+    });
+  }
 }

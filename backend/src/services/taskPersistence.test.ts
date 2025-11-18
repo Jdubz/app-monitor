@@ -10,6 +10,7 @@ import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import { TaskPersistence, TaskStorageConfig } from './taskPersistence.js';
 import { Task } from './taskQueue.sqlite.js';
 import { logger } from '../utils/logger.js';
+import { daysAgo } from '../constants/timeouts.js';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -432,8 +433,8 @@ describe('TaskPersistence', () => {
   describe('Cleanup Operations', () => {
     it('should cleanup old completed tasks', () => {
       // Given: Old completed tasks
-      const oldDate = Date.now() - (8 * 24 * 60 * 60 * 1000); // 8 days ago
-      const recentDate = Date.now() - (3 * 24 * 60 * 60 * 1000); // 3 days ago
+      const oldDate = daysAgo(8).getTime();
+      const recentDate = daysAgo(3).getTime();
 
       const tasks: Task[] = [
         {

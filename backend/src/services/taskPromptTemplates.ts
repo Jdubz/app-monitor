@@ -1103,9 +1103,9 @@ Use your specialized knowledge to ensure this implementation follows best practi
         ? context.task.required_skills.map((s: string) => `- ${s}`).join('\n')
         : '- General development skills\n- Ability to read documentation\n- Problem-solving skills');
 
-    // 5. Parent initiative - strategic alignment
+    // 5. Parent initiative - strategic alignment (using plan_id)
     this.variableProcessors.set('task.parentInitiative', (context) =>
-      context.task.parent_initiative || 'No parent initiative specified - this is an independent task');
+      context.task.plan_id || 'No parent initiative specified - this is an independent task');
 
     // 6. Related tasks - coordination context
     this.variableProcessors.set('task.relatedTasks', (context) => {

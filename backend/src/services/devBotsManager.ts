@@ -669,6 +669,13 @@ export class DevBotsManager extends EventEmitter {
   }
 
   /**
+   * Get ephemeral worker service for shutdown and resource cleanup
+   */
+  public getEphemeralWorkerService(): EphemeralWorkerService {
+    return this.ephemeralWorkerService;
+  }
+
+  /**
    * Update retry configuration
    * Delegated to RetryCoordinationService
    */

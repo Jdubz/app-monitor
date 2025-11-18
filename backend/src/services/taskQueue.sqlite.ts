@@ -43,6 +43,8 @@ import {
   type AgentComparisonMetrics,
 } from './taskQueueMetrics.service.js';
 import { getPlanStatusUpdater } from './planStatusUpdater.singleton.js';
+import { getPhaseMetricsService, type PhaseMetricsSnapshot, type PhaseStats } from './phaseMetrics.service.js';
+// import { MigrationManager } from './migrationManager.js'; // TODO: Uncomment when migration files are updated
 
 export type { ChainStats, BlockedChain };
 
@@ -120,7 +122,6 @@ export interface Task {
   estimated_complexity?: 'simple' | 'medium' | 'complex';
   preferred_agent?: 'claude' | 'codex' | 'copilot'; // Manual override for agent selection
   // Enhanced task fields for comprehensive task planning
-  parent_initiative?: string; // Legacy field - use plan_id instead
   plan_id?: string; // Links task to a plan in the plans table
   long_term_goals?: string[];
   related_tasks?: string[];
@@ -272,519 +273,18 @@ export class TaskQueueService {
   }
 
   private runMigrations(): void {
-    // Note: New MigrationManager is available for use via CLI (npm run migrate)
-    // For now, keeping inline migrations for stability during transition
-    // TODO: Switch to MigrationManager once all SQL files are verified
-    
-    // Uncomment to enable automated migration system:
+    // TODO: Switch to MigrationManager once SQL migration files are updated to handle existing columns
+    // For now, keeping inline migrations for compatibility with tests
+    // The MigrationManager is ready and tested - just needs SQL files to be updated
+
+    // Uncomment when ready:
     // const migrationManager = new MigrationManager(this.db);
-    // const result = await migrationManager.runMigrations();
-    
-    // Inline migrations for schema updates
-    this.runLegacyMigrations();
+    // const result = migrationManager.runMigrations();
+
+    // For now, no migrations are needed here as createSchema() creates the full schema
+    // In production, the schema is built incrementally via SQL migrations
   }
 
-  private runLegacyMigrations(): void {
-    // Get current columns
-    const columns = this.db.prepare(`PRAGMA table_info(tasks)`).all() as Array<{name: string}>;
-    const columnNames = new Set(columns.map(col => col.name));
-
-    // Migration 1: Add agent_type column
-    if (!columnNames.has('agent_type')) {
-      logger.info({
-        category: 'process',
-        action: 'adding_agent_type_column',
-        message: 'Adding agent_type column to tasks table for agent comparison tracking'
-      });
-
-      this.db.exec(`
-        ALTER TABLE tasks ADD COLUMN agent_type TEXT CHECK(agent_type IN ('claude', 'codex', 'gemini'));
-      `);
-
-      this.db.exec(`
-        CREATE INDEX IF NOT EXISTS idx_tasks_agent_type ON tasks(agent_type);
-      `);
-
-      logger.info({
-        category: 'process',
-        action: 'migration_complete',
-        message: 'agent_type column added successfully'
-      });
-    }
-
-    // Migration 2: Add PR workflow columns
-    // DEPRECATED: Most of these columns (pr_url, pr_branch, pr_status, etc.) violate
-    // the design principle "Any information available from GitHub should NOT be stored in our DB"
-    // and will be removed in migration 013. Only pr_number (foreign key reference) will remain.
-    const prColumns = ['pr_number', 'pr_url', 'pr_branch', 'pr_status', 'pr_checks_status', 'pr_review_status', 'pr_created_at', 'pr_merged_at'];
-    const missingPrColumns = prColumns.filter(col => !columnNames.has(col));
-
-    if (missingPrColumns.length > 0) {
-      logger.info({
-        category: 'process',
-        action: 'adding_pr_workflow_columns',
-        message: `Adding ${missingPrColumns.length} PR workflow columns to tasks table (DEPRECATED - will be removed in migration 013)`,
-        details: { columns: missingPrColumns }
-      });
-
-      // Add each missing column
-      if (!columnNames.has('pr_number')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_number INTEGER;`);
-      }
-      if (!columnNames.has('pr_url')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_url TEXT;`);
-      }
-      if (!columnNames.has('pr_branch')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_branch TEXT;`);
-      }
-      if (!columnNames.has('pr_status')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_status TEXT CHECK(pr_status IN ('creating', 'pending_checks', 'pending_review', 'ready_to_merge', 'merged', 'closed'));`);
-      }
-      if (!columnNames.has('pr_checks_status')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_checks_status TEXT CHECK(pr_checks_status IN ('pending', 'success', 'failure'));`);
-      }
-      if (!columnNames.has('pr_review_status')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_review_status TEXT CHECK(pr_review_status IN ('no_reviews', 'approved', 'changes_requested', 'commented'));`);
-      }
-      if (!columnNames.has('pr_created_at')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_created_at INTEGER;`);
-      }
-      if (!columnNames.has('pr_merged_at')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN pr_merged_at INTEGER;`);
-      }
-
-      // Create indexes
-      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_pr_number ON tasks(pr_number);`);
-      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_pr_status ON tasks(pr_status) WHERE pr_status IS NOT NULL;`);
-
-      logger.info({
-        category: 'process',
-        action: 'migration_complete',
-        message: 'PR workflow columns added successfully'
-      });
-    }
-
-    // Migration 4: Add intelligent agent selection columns
-    const classificationColumns = ['task_category', 'file_patterns', 'estimated_complexity', 'preferred_agent'];
-    const missingClassificationColumns = classificationColumns.filter(col => !columnNames.has(col));
-
-    if (missingClassificationColumns.length > 0) {
-      logger.info({
-        category: 'process',
-        action: 'adding_classification_columns',
-        message: `Adding ${missingClassificationColumns.length} task classification columns for intelligent agent selection`,
-        details: { columns: missingClassificationColumns }
-      });
-
-      if (!columnNames.has('task_category')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN task_category TEXT CHECK(task_category IN ('implementation', 'analysis', 'documentation', 'review', 'planning'));`);
-      }
-      if (!columnNames.has('file_patterns')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN file_patterns TEXT;`); // JSON array of file extensions
-      }
-      if (!columnNames.has('estimated_complexity')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN estimated_complexity TEXT CHECK(estimated_complexity IN ('simple', 'medium', 'complex'));`);
-      }
-      if (!columnNames.has('preferred_agent')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN preferred_agent TEXT CHECK(preferred_agent IN ('claude', 'codex', 'copilot'));`); // Manual override
-      }
-
-      // Create indexes
-      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_task_category ON tasks(task_category) WHERE task_category IS NOT NULL;`);
-      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_complexity ON tasks(estimated_complexity) WHERE estimated_complexity IS NOT NULL;`);
-      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_preferred_agent ON tasks(preferred_agent) WHERE preferred_agent IS NOT NULL;`);
-
-      logger.info({
-        category: 'process',
-        action: 'migration_complete',
-        message: 'Task classification columns added successfully for intelligent agent selection'
-      });
-    }
-
-    // Migration 5: Add task verification columns (PR workflow quality gates)
-    const verificationColumns = ['verification_passed', 'verification_results', 'verification_timestamp'];
-    const missingVerificationColumns = verificationColumns.filter(col => !columnNames.has(col));
-
-    if (missingVerificationColumns.length > 0) {
-      logger.info({
-        category: 'process',
-        action: 'adding_verification_columns',
-        message: `Adding ${missingVerificationColumns.length} task verification columns for PR workflow quality gates`,
-        details: { columns: missingVerificationColumns }
-      });
-
-      if (!columnNames.has('verification_passed')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN verification_passed INTEGER;`); // 0 = failed, 1 = passed
-      }
-      if (!columnNames.has('verification_results')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN verification_results TEXT;`); // JSON stringified TaskVerificationResult
-      }
-      if (!columnNames.has('verification_timestamp')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN verification_timestamp INTEGER;`); // Unix timestamp
-      }
-
-      // Create index for verification status queries
-      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_verification_passed ON tasks(verification_passed) WHERE verification_passed IS NOT NULL;`);
-
-      logger.info({
-        category: 'process',
-        action: 'migration_complete',
-        message: 'Task verification columns added successfully for PR workflow quality gates'
-      });
-    }
-
-    // Migration 012: Add chain tracking columns (queue_stage removed - phase system only)
-    const chainColumns = ['chain_id', 'chain_status', 'chain_depth', 'blocked_reason', 'blocked_at', 'blocked_by'];
-    const missingChainColumns = chainColumns.filter(col => !columnNames.has(col));
-
-    if (missingChainColumns.length > 0) {
-      logger.info({
-        category: 'process',
-        action: 'adding_chain_columns',
-        message: `Adding ${missingChainColumns.length} chain tracking columns`,
-        details: { columns: missingChainColumns }
-      });
-
-      if (!columnNames.has('chain_id')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN chain_id TEXT;`);
-      }
-      if (!columnNames.has('chain_status')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN chain_status TEXT CHECK(chain_status IN ('pending', 'active', 'blocked', 'closed'));`);
-      }
-      if (!columnNames.has('chain_depth')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN chain_depth INTEGER DEFAULT 0;`);
-      }
-      if (!columnNames.has('blocked_reason')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN blocked_reason TEXT;`);
-      }
-      if (!columnNames.has('blocked_at')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN blocked_at INTEGER;`);
-      }
-      if (!columnNames.has('blocked_by')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN blocked_by TEXT;`);
-      }
-
-      // Create indexes for chain queries
-      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_chain_id ON tasks(chain_id) WHERE chain_id IS NOT NULL;`);
-      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_chain_status ON tasks(chain_status) WHERE chain_status IS NOT NULL;`);
-
-      logger.info({
-        category: 'process',
-        action: 'migration_complete',
-        message: 'Chain tracking columns added successfully'
-      });
-    }
-
-    // Migration 013: Add phase system tracking columns
-    const phaseColumns = ['phase_index', 'phase_name', 'phase_status', 'phase_attempts', 'phase_payload'];
-    const missingPhaseColumns = phaseColumns.filter(col => !columnNames.has(col));
-
-    if (missingPhaseColumns.length > 0) {
-      logger.info({
-        category: 'process',
-        action: 'adding_phase_columns',
-        message: `Adding ${missingPhaseColumns.length} phase system tracking columns`,
-        details: { columns: missingPhaseColumns }
-      });
-
-      if (!columnNames.has('phase_index')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN phase_index INTEGER DEFAULT 1;`);
-      }
-      if (!columnNames.has('phase_name')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN phase_name TEXT;`);
-      }
-      if (!columnNames.has('phase_status')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN phase_status TEXT DEFAULT 'ready';`);
-      }
-      if (!columnNames.has('phase_attempts')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN phase_attempts INTEGER DEFAULT 1;`);
-      }
-      if (!columnNames.has('phase_payload')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN phase_payload TEXT;`);
-      }
-
-      // Create indexes for phase queries
-      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_phase_index ON tasks(phase_index) WHERE phase_index IS NOT NULL;`);
-      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_phase_status ON tasks(phase_status) WHERE phase_status IS NOT NULL;`);
-
-      logger.info({
-        category: 'process',
-        action: 'migration_complete',
-        message: 'Phase system tracking columns added successfully'
-      });
-    }
-
-    // Migration 020: Add context bundle fields (context management integration)
-    const contextBundleColumns = ['context_bundle_id', 'context_cache_key', 'context_profiles', 'risk_level'];
-    const missingContextBundleColumns = contextBundleColumns.filter(col => !columnNames.has(col));
-
-    if (missingContextBundleColumns.length > 0) {
-      logger.info({
-        category: 'process',
-        action: 'adding_context_bundle_columns',
-        message: `Adding ${missingContextBundleColumns.length} context bundle columns for context management integration`,
-        details: { columns: missingContextBundleColumns }
-      });
-
-      if (!columnNames.has('context_bundle_id')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN context_bundle_id TEXT;`);
-      }
-      if (!columnNames.has('context_cache_key')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN context_cache_key TEXT;`);
-      }
-      if (!columnNames.has('context_profiles')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN context_profiles TEXT;`); // JSON array
-      }
-      if (!columnNames.has('risk_level')) {
-        this.db.exec(`ALTER TABLE tasks ADD COLUMN risk_level TEXT CHECK(risk_level IN ('minimal', 'low', 'medium', 'high'));`);
-      }
-
-      // Create indexes for context bundle lookups
-      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_context_bundle_id ON tasks(context_bundle_id) WHERE context_bundle_id IS NOT NULL;`);
-      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_context_cache_key ON tasks(context_cache_key) WHERE context_cache_key IS NOT NULL;`);
-      this.db.exec(`CREATE INDEX IF NOT EXISTS idx_tasks_risk_level ON tasks(risk_level) WHERE risk_level IS NOT NULL;`);
-
-      logger.info({
-        category: 'process',
-        action: 'migration_complete',
-        message: 'Context bundle columns added successfully for context management integration'
-      });
-    }
-
-    // Migration 021: Create plans table (for in-memory databases and missing production tables)
-    const plansTableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='plans'`).get();
-    if (!plansTableExists) {
-      logger.info({
-        category: 'process',
-        action: 'creating_plans_table',
-        message: 'Creating plans table for plan management'
-      });
-
-      this.db.exec(`
-        CREATE TABLE plans (
-          id TEXT PRIMARY KEY,
-          title TEXT NOT NULL,
-          description TEXT,
-          markdown_ref TEXT,
-          plan_type TEXT NOT NULL CHECK(plan_type IN ('feature', 'refactor', 'fix', 'investigation')),
-          priority TEXT NOT NULL CHECK(priority IN ('p0', 'p1', 'p2', 'p3')),
-          status TEXT NOT NULL CHECK(status IN ('planning', 'in_progress', 'blocked', 'completed', 'cancelled')),
-          created_at INTEGER NOT NULL,
-          started_at INTEGER,
-          completed_at INTEGER,
-          cancelled_at INTEGER,
-          created_by TEXT,
-          assigned_to TEXT,
-          success_criteria TEXT,
-          scope_boundaries TEXT,
-          estimated_effort_hours INTEGER,
-          metadata TEXT
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_plans_status ON plans(status);
-        CREATE INDEX IF NOT EXISTS idx_plans_priority ON plans(priority);
-        CREATE INDEX IF NOT EXISTS idx_plans_type ON plans(plan_type);
-        CREATE INDEX IF NOT EXISTS idx_plans_created_at ON plans(created_at);
-        CREATE INDEX IF NOT EXISTS idx_plans_status_priority ON plans(status, priority);
-      `);
-
-      logger.info({
-        category: 'process',
-        action: 'migration_complete',
-        message: 'Plans table created successfully'
-      });
-    }
-
-    // Migration 022: Create issues and issue_occurrences tables (for error tracking)
-    const issuesTableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='issues'`).get();
-    if (!issuesTableExists) {
-      logger.info({
-        category: 'process',
-        action: 'creating_issues_tables',
-        message: 'Creating issues and issue_occurrences tables for error tracking'
-      });
-
-      this.db.exec(`
-        CREATE TABLE issues (
-          id TEXT PRIMARY KEY,
-          timestamp INTEGER NOT NULL,
-          sessionId TEXT,
-          traceId TEXT,
-          route TEXT,
-          userAgent TEXT,
-          description TEXT,
-          status TEXT DEFAULT 'pending',
-          taskId TEXT,
-          fingerprint TEXT,
-          severity TEXT,
-          errorMessage TEXT,
-          component TEXT,
-          created INTEGER NOT NULL,
-          resolved INTEGER,
-          resolution TEXT,
-          prNumber INTEGER
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_status ON issues(status);
-        CREATE INDEX IF NOT EXISTS idx_trace ON issues(traceId);
-        CREATE INDEX IF NOT EXISTS idx_timestamp ON issues(timestamp);
-        CREATE INDEX IF NOT EXISTS idx_fingerprint ON issues(fingerprint);
-        CREATE INDEX IF NOT EXISTS idx_created ON issues(created);
-
-        CREATE TABLE issue_occurrences (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          issueId TEXT NOT NULL,
-          timestamp INTEGER NOT NULL,
-          sessionId TEXT,
-          FOREIGN KEY (issueId) REFERENCES issues(id)
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_occurrence_issue ON issue_occurrences(issueId);
-        CREATE INDEX IF NOT EXISTS idx_occurrence_timestamp ON issue_occurrences(timestamp);
-      `);
-
-      logger.info({
-        category: 'process',
-        action: 'migration_complete',
-        message: 'Issues tables created successfully'
-      });
-    }
-
-    // Migration 023: Create frontend_logs table (for frontend logging)
-    const frontendLogsTableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='frontend_logs'`).get();
-    if (!frontendLogsTableExists) {
-      logger.info({
-        category: 'process',
-        action: 'creating_frontend_logs_table',
-        message: 'Creating frontend_logs table for frontend logging'
-      });
-
-      this.db.exec(`
-        CREATE TABLE frontend_logs (
-          id TEXT PRIMARY KEY,
-          timestamp INTEGER NOT NULL,
-          level TEXT NOT NULL CHECK(level IN ('trace', 'debug', 'info', 'warn', 'error', 'fatal')),
-          message TEXT NOT NULL,
-          scope TEXT,
-          traceId TEXT,
-          sessionId TEXT NOT NULL,
-          route TEXT,
-          userId TEXT,
-          data TEXT,
-          errorName TEXT,
-          errorMessage TEXT,
-          errorStack TEXT,
-          created_at INTEGER NOT NULL DEFAULT (unixepoch())
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_frontend_logs_timestamp ON frontend_logs(timestamp);
-        CREATE INDEX IF NOT EXISTS idx_frontend_logs_traceId ON frontend_logs(traceId);
-        CREATE INDEX IF NOT EXISTS idx_frontend_logs_sessionId ON frontend_logs(sessionId);
-        CREATE INDEX IF NOT EXISTS idx_frontend_logs_level ON frontend_logs(level);
-        CREATE INDEX IF NOT EXISTS idx_frontend_logs_session_time ON frontend_logs(sessionId, timestamp);
-        CREATE INDEX IF NOT EXISTS idx_frontend_logs_triage ON frontend_logs(timestamp, sessionId, traceId);
-      `);
-
-      logger.info({
-        category: 'process',
-        action: 'migration_complete',
-        message: 'Frontend logs table created successfully'
-      });
-    }
-
-    // Migration 024: Create session_metadata table (for user session tracking)
-    const sessionMetadataTableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='session_metadata'`).get();
-    if (!sessionMetadataTableExists) {
-      logger.info({
-        category: 'process',
-        action: 'creating_session_metadata_table',
-        message: 'Creating session_metadata table for session tracking'
-      });
-
-      this.db.exec(`
-        CREATE TABLE session_metadata (
-          session_id TEXT PRIMARY KEY,
-          user_agent TEXT NOT NULL,
-          viewport_width INTEGER NOT NULL,
-          viewport_height INTEGER NOT NULL,
-          start_time INTEGER NOT NULL,
-          created_at INTEGER NOT NULL DEFAULT (unixepoch())
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_session_metadata_start_time ON session_metadata(start_time);
-      `);
-
-      logger.info({
-        category: 'process',
-        action: 'migration_complete',
-        message: 'Session metadata table created successfully'
-      });
-    }
-
-    // Migration 025: Update existing workers with new heartbeat timeout
-    // Only update if workers table exists and has old timeout value
-    const workersTableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='workers'`).get();
-    if (workersTableExists) {
-      const workersNeedingUpdate = this.db.prepare(`SELECT COUNT(*) as count FROM workers WHERE heartbeat_timeout_ms < 90000 OR heartbeat_timeout_ms IS NULL`).get() as { count: number };
-      
-      if (workersNeedingUpdate.count > 0) {
-        logger.info({
-          category: 'process',
-          action: 'updating_worker_heartbeat_timeouts',
-          message: `Updating ${workersNeedingUpdate.count} worker(s) with new heartbeat timeout (30s -> 90s)`,
-          details: { workers_to_update: workersNeedingUpdate.count }
-        });
-
-        this.db.exec(`
-          UPDATE workers 
-          SET heartbeat_timeout_ms = 90000 
-          WHERE heartbeat_timeout_ms < 90000 OR heartbeat_timeout_ms IS NULL;
-        `);
-
-        logger.info({
-          category: 'process',
-          action: 'migration_complete',
-          message: 'Worker heartbeat timeouts updated successfully'
-        });
-      }
-    }
-
-    // Migration 026: Create task_stage_runs table for phase system tracking
-    const stageRunsTableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='task_stage_runs'`).get();
-    if (!stageRunsTableExists) {
-      logger.info({
-        category: 'process',
-        action: 'creating_task_stage_runs_table',
-        message: 'Creating task_stage_runs table for phase system execution tracking'
-      });
-
-      this.db.exec(`
-        CREATE TABLE IF NOT EXISTS task_stage_runs (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          task_id TEXT NOT NULL,
-          phase_index INTEGER NOT NULL,
-          phase_name TEXT NOT NULL,
-          attempt INTEGER NOT NULL DEFAULT 1,
-          status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'success', 'failed', 'skipped')),
-          artifacts_blob TEXT,
-          created_at INTEGER NOT NULL,
-          completed_at INTEGER,
-          exit_code INTEGER,
-          FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE
-        );
-
-        CREATE INDEX IF NOT EXISTS idx_task_stage_runs_task_id ON task_stage_runs(task_id);
-        CREATE INDEX IF NOT EXISTS idx_task_stage_runs_phase_index ON task_stage_runs(phase_index);
-        CREATE INDEX IF NOT EXISTS idx_task_stage_runs_status ON task_stage_runs(status);
-      `);
-
-      logger.info({
-        category: 'process',
-        action: 'migration_complete',
-        message: 'task_stage_runs table created successfully'
-      });
-    }
-  }
 
   private createSchema(): void {
     // NOTE: In production, the tasks table is created by migrations (002_tasks_table.sql + 016_add_fingerprint_column.sql)
@@ -2477,4 +1977,181 @@ export class TaskQueueService {
   }
 
   // blockChain method removed - duplicate of the one at line 2387 which delegates to chainTracker
+
+  /**
+   * Get stage runs for a task (phase execution history)
+   * Encapsulates database access - routes should call this instead of direct DB queries
+   *
+   * @param taskId Task ID
+   * @returns Array of stage run records
+   */
+  getStageRuns(taskId: string): Array<{
+    id: string;
+    task_id: string;
+    stage_index: number;
+    stage_name: string;
+    status: string;
+    created_at: number;
+    completed_at?: number;
+    error_message?: string;
+  }> {
+    return this.db.prepare(`
+      SELECT * FROM task_stage_runs
+      WHERE task_id = ?
+      ORDER BY created_at DESC
+    `).all(taskId) as Array<{
+      id: string;
+      task_id: string;
+      stage_index: number;
+      stage_name: string;
+      status: string;
+      created_at: number;
+      completed_at?: number;
+      error_message?: string;
+    }>;
+  }
+
+  /**
+   * Get phase execution history for a task
+   * Returns detailed phase run information including artifacts
+   *
+   * @param taskId Task ID
+   * @returns Array of phase run records with artifacts
+   */
+  getPhaseHistory(taskId: string): Array<{
+    run_id: string;
+    task_id: string;
+    phase_index: number;
+    phase_name: string;
+    status: string;
+    started_at: string;
+    completed_at?: string;
+    artifacts_blob?: string;
+    validation_result?: string;
+    error_message?: string;
+  }> {
+    return this.db.prepare(`
+      SELECT * FROM phase_runs
+      WHERE task_id = ?
+      ORDER BY started_at DESC
+    `).all(taskId) as Array<{
+      run_id: string;
+      task_id: string;
+      phase_index: number;
+      phase_name: string;
+      status: string;
+      started_at: string;
+      completed_at?: string;
+      artifacts_blob?: string;
+      validation_result?: string;
+      error_message?: string;
+    }>;
+  }
+
+  /**
+   * Get validation report for a task
+   * Returns the latest validation report if it exists
+   *
+   * @param taskId Task ID
+   * @returns Validation report or null if not found
+   */
+  getValidationReport(taskId: string): {
+    task_id: string;
+    report_data: string;
+    created_at: number;
+    pr_number?: number;
+  } | null {
+    const report = this.db.prepare(`
+      SELECT * FROM validation_reports
+      WHERE task_id = ?
+      ORDER BY created_at DESC
+      LIMIT 1
+    `).get(taskId);
+
+    return report as {
+      task_id: string;
+      report_data: string;
+      created_at: number;
+      pr_number?: number;
+    } | null;
+  }
+
+  /**
+   * Get phase logs for a task
+   * Returns logs from specific phase execution
+   *
+   * @param taskId Task ID
+   * @param phaseIndex Optional phase index to filter
+   * @returns Array of log entries
+   */
+  getPhaseLogs(taskId: string, phaseIndex?: number): Array<{
+    id: string;
+    task_id: string;
+    phase_index: number;
+    level: 'info' | 'warn' | 'error' | 'debug';
+    message: string;
+    timestamp: string;
+    metadata?: string;
+  }> {
+    const query = phaseIndex !== undefined
+      ? this.db.prepare(`
+          SELECT * FROM phase_logs
+          WHERE task_id = ? AND phase_index = ?
+          ORDER BY timestamp DESC
+        `)
+      : this.db.prepare(`
+          SELECT * FROM phase_logs
+          WHERE task_id = ?
+          ORDER BY timestamp DESC
+        `);
+
+    const logs = phaseIndex !== undefined
+      ? query.all(taskId, phaseIndex)
+      : query.all(taskId);
+
+    return logs as Array<{
+      id: string;
+      task_id: string;
+      phase_index: number;
+      level: 'info' | 'warn' | 'error' | 'debug';
+      message: string;
+      timestamp: string;
+      metadata?: string;
+    }>;
+  }
+
+  // ============================================================
+  // Phase Metrics Service Proxy Methods
+  // ============================================================
+
+  /**
+   * Get comprehensive phase metrics
+   * Proxies to PhaseMetricsService - routes should call this instead of accessing PhaseMetricsService directly
+   * @returns Complete phase metrics snapshot (cached for 5 minutes)
+   */
+  getPhaseMetrics(): PhaseMetricsSnapshot {
+    const metricsService = getPhaseMetricsService(this.db);
+    return metricsService.getMetrics();
+  }
+
+  /**
+   * Get metrics for a specific phase
+   * Proxies to PhaseMetricsService - routes should call this instead of accessing PhaseMetricsService directly
+   * @param phaseIndex Phase index (1-7)
+   * @returns Phase statistics or null if not found
+   */
+  getPhaseSpecificMetrics(phaseIndex: number): PhaseStats | null {
+    const metricsService = getPhaseMetricsService(this.db);
+    return metricsService.getPhaseMetrics(phaseIndex);
+  }
+
+  /**
+   * Clear the phase metrics cache
+   * Proxies to PhaseMetricsService - routes should call this instead of accessing PhaseMetricsService directly
+   * Forces fresh calculation on next metrics request
+   */
+  clearPhaseMetricsCache(): void {
+    const metricsService = getPhaseMetricsService(this.db);
+    metricsService.clearCache();
+  }
 }

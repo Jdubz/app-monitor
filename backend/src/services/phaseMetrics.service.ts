@@ -16,6 +16,7 @@
 
 import Database from 'better-sqlite3';
 import { logger } from '../utils/logger.js';
+import { MS_PER_MINUTE } from '../constants/timeouts.js';
 
 export interface PhaseStats {
   phaseIndex: number;
@@ -73,7 +74,7 @@ export interface PhaseMetricsSnapshot {
   activeTaskDistribution: PhaseDistribution;
 }
 
-const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL_MS = 5 * MS_PER_MINUTE;
 
 export class PhaseMetricsService {
   private db: Database.Database;
@@ -85,7 +86,23 @@ export class PhaseMetricsService {
   }
 
   /**
-   * Get comprehensive phase metrics (cached).
+   * Get comprehensive phase metrics with 5-minute caching.
+   *
+   * Returns aggregated statistics for all 7 phases including:
+   * - Success/failure rates per phase
+   * - Average/min/max execution durations
+   * - Loop iteration statistics (Phase 3↔4, Phase 5 internal)
+   * - Recovery agent effectiveness metrics
+   * - Current active task distribution across phases
+   *
+   * @returns Complete metrics snapshot with timestamp
+   *
+   * @example
+   * ```typescript
+   * const metrics = metricsService.getMetrics();
+   * console.log(`Phase 2 success rate: ${metrics.phaseStats[1].successRate}%`);
+   * console.log(`Total recovery attempts: ${metrics.recoveryStats.totalRecoveryAttempts}`);
+   * ```
    */
   getMetrics(): PhaseMetricsSnapshot {
     const now = Date.now();
@@ -124,7 +141,26 @@ export class PhaseMetricsService {
   }
 
   /**
-   * Get metrics for a specific phase.
+   * Get metrics for a specific phase by index.
+   *
+   * @param phaseIndex - Phase number (1-7):
+   *   1: Planning
+   *   2: Implementation
+   *   3: Review
+   *   4: Fixes
+   *   5: Test & Validate
+   *   6: Cleanup
+   *   7: PR Shepherding
+   * @returns Phase statistics or null if phase not found
+   *
+   * @example
+   * ```typescript
+   * const phase2Stats = metricsService.getPhaseMetrics(2);
+   * if (phase2Stats) {
+   *   console.log(`Implementation phase: ${phase2Stats.successRate}% success rate`);
+   *   console.log(`Average duration: ${phase2Stats.averageDurationMs}ms`);
+   * }
+   * ```
    */
   getPhaseMetrics(phaseIndex: number): PhaseStats | null {
     const metrics = this.getMetrics();
@@ -132,7 +168,17 @@ export class PhaseMetricsService {
   }
 
   /**
-   * Clear the metrics cache (useful after significant system changes).
+   * Clear the metrics cache to force fresh data on next request.
+   *
+   * Call this after significant system changes that would invalidate cached metrics,
+   * such as bulk task updates, phase configuration changes, or database migrations.
+   *
+   * @example
+   * ```typescript
+   * // After bulk task deletion
+   * await taskQueue.bulkDeleteTasks(taskIds);
+   * metricsService.clearCache(); // Force metrics refresh
+   * ```
    */
   clearCache(): void {
     this.cache = null;

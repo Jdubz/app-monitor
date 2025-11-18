@@ -14,6 +14,7 @@
  */
 
 import Database from 'better-sqlite3';
+import { MS_PER_DAY } from '../constants/timeouts.js';
 import {
   PhaseExecutionTrace,
   TaskExecutionTimeline,
@@ -35,8 +36,28 @@ export class PhaseObservabilityService {
   }
 
   /**
-   * Get complete execution timeline for a specific task.
-   * Shows all phase executions, retries, recoveries, and current state.
+   * Get complete execution timeline for a specific task across all phases.
+   *
+   * Returns a comprehensive trace showing:
+   * - All phase executions (including retries and recovery attempts)
+   * - Validation results per phase attempt
+   * - Recovery diagnostics when recovery agent was invoked
+   * - Loop detection (Phase 3↔4 back-and-forth, Phase 5 internal retries)
+   * - Stuck task detection
+   * - Overall task duration and current status
+   *
+   * @param taskId - Unique task identifier
+   * @returns Complete execution timeline or null if task not found
+   *
+   * @example
+   * ```typescript
+   * const timeline = observabilityService.getTaskTrace('task-123');
+   * if (timeline) {
+   *   console.log(`Task spent ${timeline.loopCount} iterations in review/fix loop`);
+   *   console.log(`Recovery invoked ${timeline.recoveryCount} times`);
+   *   console.log(`Current phase: ${timeline.currentPhase?.name}`);
+   * }
+   * ```
    */
   getTaskTrace(taskId: string): TaskExecutionTimeline | null {
     // Get task metadata
@@ -138,7 +159,29 @@ export class PhaseObservabilityService {
   }
 
   /**
-   * Query phase-specific logs with flexible filtering.
+   * Query phase-specific logs with flexible filtering and pagination.
+   *
+   * Supports filtering by:
+   * - Task ID (all logs for specific task)
+   * - Phase index (all logs from specific phase across tasks)
+   * - Log level (info, warn, error, debug)
+   * - Log category (phase_execution, validation, recovery, etc.)
+   * - Time range (startTime/endTime ISO timestamps)
+   *
+   * @param query - Filter criteria and pagination options
+   * @returns Paginated log entries with total count
+   *
+   * @example
+   * ```typescript
+   * // Get all error logs from Phase 5 in last hour
+   * const logs = observabilityService.getPhaseLogs({
+   *   phaseIndex: 5,
+   *   level: 'error',
+   *   startTime: new Date(Date.now() - 3600000).toISOString(),
+   *   limit: 50
+   * });
+   * console.log(`Found ${logs.total} validation errors in Phase 5`);
+   * ```
    */
   getPhaseLogs(query: PhaseLogsQuery): PhaseLogsResponse {
     let sql = `
@@ -506,16 +549,17 @@ export class PhaseObservabilityService {
   }
 
   private querySlowPhases(): unknown[] {
+    // Convert Julian day difference to milliseconds (MS_PER_DAY = 86400000)
     return this.db.prepare(`
-      SELECT 
+      SELECT
         task_id,
         phase_index,
         attempt,
-        (julianday(completed_at) - julianday(created_at)) * 24 * 60 * 60 * 1000 as duration_ms,
+        (julianday(completed_at) - julianday(created_at)) * ${MS_PER_DAY} as duration_ms,
         status
       FROM task_stage_runs
       WHERE completed_at IS NOT NULL
-        AND (julianday(completed_at) - julianday(created_at)) * 24 * 60 * 60 * 1000 > 300000
+        AND (julianday(completed_at) - julianday(created_at)) * ${MS_PER_DAY} > 300000
       ORDER BY duration_ms DESC
       LIMIT 50
     `).all();

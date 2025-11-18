@@ -453,7 +453,6 @@ export class PRSyncService {
     const repoFullName = repoUrl
       .replace('https://github.com/', '')
       .replace('.git', '');
-    const [owner, name] = repoFullName.split('/');
 
     return {
       action: 'closed',
@@ -462,24 +461,25 @@ export class PRSyncService {
         number: prNumber,
         state: 'closed',
         merged,
+        merged_at: merged ? new Date().toISOString() : null,
         title: `PR #${prNumber}`,
-        head: { 
-          ref: `pr-${prNumber}`, 
-          sha: '' 
+        html_url: `https://github.com/${repoFullName}/pull/${prNumber}`,
+        head: {
+          ref: `pr-${prNumber}`,
+          sha: ''
         },
-        user: { 
-          login: 'pr-sync-service' 
+        base: {
+          ref: 'main'
         },
-        draft: false,
-        body: 'PR sync service detected stale PR data'
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any, // Minimal fields - handler will query GitHub if needed
+        user: {
+          login: 'pr-sync-service',
+          type: 'Service'
+        },
+        draft: false
+      },
       repository: {
-        full_name: repoFullName,
-        owner: { login: owner },
-        name: name
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } as any
+        full_name: repoFullName
+      }
     };
   }
 }

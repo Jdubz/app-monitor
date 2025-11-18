@@ -22,9 +22,7 @@ describe('DevBotsManager Retry Functionality', () => {
       initialize: vi.fn(),
       createWorkspace: vi.fn(() => ({
         id: 'workspace-test',
-        hostPath: '/tmp/workspace',
         branchName: 'bots/task-1',
-        mirrorPath: '/tmp/mirror',
         createdAt: new Date().toISOString()
       })),
       sealWorkspace: vi.fn(async () => ({

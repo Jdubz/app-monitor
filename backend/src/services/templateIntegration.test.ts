@@ -485,7 +485,7 @@ describe('Template Integration Tests', () => {
         max_retries: 3,
         timeout_ms: null,
         // Provide default values for enhanced fields to avoid template placeholders
-        parent_initiative: undefined,
+        plan_id: undefined,
         related_tasks: undefined,
         estimated_effort: undefined,
         success_metrics: undefined,

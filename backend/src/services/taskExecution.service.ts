@@ -18,6 +18,7 @@ import { exec } from 'child_process';
 import { logger } from '../utils/logger.js';
 import type { Task } from './taskQueue.sqlite.js';
 import type { TaskQueueService } from './taskQueue.sqlite.js';
+import { MS_PER_HOUR } from '../constants/timeouts.js';
 import type { AgentPersonalityManager } from './agentPersonalities.js';
 import type { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplates.js';
 // WorkspaceOrchestrator removed - we use Docker cp for file systems, not git mirrors
@@ -91,7 +92,7 @@ export class TaskExecutionService {
     this.config = {
       maxConcurrentWorkers: config.maxConcurrentWorkers ?? 2,
       stuckCheckInterval: config.stuckCheckInterval ?? 60000,
-      absoluteMaxDuration: config.absoluteMaxDuration ?? 60 * 60 * 1000,
+      absoluteMaxDuration: config.absoluteMaxDuration ?? MS_PER_HOUR,
       artifactsDir: config.artifactsDir ?? resolveArtifactsDir(),
       recovery: {
         enabled: config.recovery?.enabled ?? true,
