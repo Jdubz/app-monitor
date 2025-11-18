@@ -71,6 +71,7 @@ export type LogCategory =
   | 'quality-improvement'
   | 'quality-observation'
   | 'recovery'
+  | 'repository' // Repository layer operations
   | 'safety' // Safety mechanisms for git operations
   | 'scripts'
   | 'socket'
@@ -81,6 +82,7 @@ export type LogCategory =
   | 'token-tracking'
   | 'utility'
   | 'verification'
+  | 'worker' // Worker lifecycle and management
   | 'workspace';
 
 export interface LogEntry {
