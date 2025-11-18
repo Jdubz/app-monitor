@@ -7,10 +7,10 @@
  * This is the ONLY way to run tests in this repository.
  */
 
-const { spawn } = await import('node:child_process')
-const fs = await import('node:fs')
-const path = await import('node:path')
-const { getMaxThreads } = await import('./vitest.shared.config.js')
+const { spawn } = require('node:child_process')
+const fs = require('node:fs')
+const path = require('node:path')
+const { getMaxThreads } = require('./vitest.shared.config.js')
 
 // Configuration
 const LOCK_FILE = path.join(__dirname, '.test-lock')

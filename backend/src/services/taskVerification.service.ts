@@ -401,7 +401,7 @@ export class TaskVerificationService {
       // Parse coverage output (Vitest format)
       return this.parseCoverageOutput(coverageOutput);
 
-    } catch (_error) {
+    } catch (error) {
       logger.error({
         category: 'verification',
         action: 'coverage_check_failed',

@@ -91,7 +91,7 @@ export class DockerManager {
       // Check Docker socket permissions
       try {
         await this.docker.listContainers();
-      } catch (_error) {
+      } catch (error) {
         result.errors.push('Insufficient permissions to access Docker socket');
         result.isValid = false;
       }
@@ -490,7 +490,7 @@ export class DockerManager {
         status: inspect.State.Status,
         logs: await this.getContainerLogs(containerId, 20)
       };
-    } catch (_error) {
+    } catch (error) {
       return {
         healthy: false,
         status: 'not_found'
@@ -667,7 +667,7 @@ export class DockerManager {
         category: 'docker',
         action: 'inspect_container_error',
         message: `Failed to inspect container ${containerId}`,
-        _error
+        error
       });
       return null;
     }
