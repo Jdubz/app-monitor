@@ -38,6 +38,7 @@ import {
   TaskVerificationEvaluator,
   CopilotReviewEvaluator,
   FinalValidationEvaluator,
+  WIPCommitsEvaluator,
   type BaseEvaluator
 } from './prConditions/evaluators/index.js';
 
@@ -85,15 +86,21 @@ export class PRConditionStateService {
     this.taskQueue = taskQueue;
 
     // Initialize modular evaluators
+    // Gate names MUST match E2E test expectations
     this.evaluators = new Map([
+      ['branch_updated', new BranchUpdateEvaluator(this.github, this.taskQueue)],
+      ['no_conflicts', new ConflictsEvaluator(this.github, this.taskQueue)],
       ['ci_checks_passing', new CIChecksEvaluator(this.github, this.taskQueue)],
+      ['required_approvals', new ChangeRequestsEvaluator(this.github, this.taskQueue)],
+      ['task_verification', new TaskVerificationEvaluator(this.github, this.taskQueue)],
+      ['copilot_review', new CopilotReviewEvaluator(this.github, this.taskQueue)],
+      ['final_validation_passed', new FinalValidationEvaluator(this.github, this.taskQueue)],
+      ['no_wip_commits', new WIPCommitsEvaluator(this.github, this.taskQueue)],
+      // Keep old names for backward compatibility with internal code
       ['comments_resolved', new CommentsEvaluator(this.github, this.taskQueue)],
       ['no_merge_conflicts', new ConflictsEvaluator(this.github, this.taskQueue)],
-      ['branch_updated', new BranchUpdateEvaluator(this.github, this.taskQueue)],
       ['no_change_requests', new ChangeRequestsEvaluator(this.github, this.taskQueue)],
-      ['task_verification', new TaskVerificationEvaluator(this.github, this.taskQueue)],
-      ['copilot_review_completed', new CopilotReviewEvaluator(this.github, this.taskQueue)],
-      ['final_validation_passed', new FinalValidationEvaluator(this.github, this.taskQueue)]
+      ['copilot_review_completed', new CopilotReviewEvaluator(this.github, this.taskQueue)]
     ]);
 
     // Cleanup stale evaluation locks every 5 minutes
@@ -469,6 +476,9 @@ export class PRConditionStateService {
     const branchEval = await this.evaluateBranchUpdateCondition(prNumber, prStatus);
     await this.handleConditionChange(prNumber, state, 'branch_updated', branchEval);
 
+    const wipEval = await this.evaluateWIPCommitsCondition(prNumber, prStatus);
+    await this.handleConditionChange(prNumber, state, 'no_wip_commits', wipEval);
+
     // NOTE: Do NOT evaluate CI checks here - wait for check_suite.completed event
   }
 
@@ -497,7 +507,8 @@ export class PRConditionStateService {
       this.evaluateBranchUpdateCondition(prNumber, prStatus),
       this.evaluateChangeRequestsCondition(prNumber, prStatus),
       this.evaluateTaskVerificationCondition(prNumber, prStatus),
-      this.evaluateCopilotReviewCondition(prNumber, prStatus)
+      this.evaluateCopilotReviewCondition(prNumber, prStatus),
+      this.evaluateWIPCommitsCondition(prNumber, prStatus)
     ]);
 
     const conditionIds = [
@@ -507,7 +518,8 @@ export class PRConditionStateService {
       'branch_updated',
       'no_change_requests',
       'task_verification',
-      'copilot_review_completed'
+      'copilot_review_completed',
+      'no_wip_commits'
     ];
 
     for (let i = 0; i < evaluations.length; i++) {
@@ -585,6 +597,15 @@ export class PRConditionStateService {
   }
 
   /**
+   * Evaluate Condition 8: No WIP Commits
+   */
+  private async evaluateWIPCommitsCondition(prNumber: number, prStatus?: PRStatus): Promise<ConditionEvaluation> {
+    // Delegate to modular evaluator
+    const evaluator = this.evaluators.get('no_wip_commits')!;
+    return evaluator.evaluate(prNumber, prStatus);
+  }
+
+  /**
    * Evaluate Condition 8: Final Validation Passed
    * Only evaluated when ALL other conditions are met
    */
@@ -646,12 +667,46 @@ export class PRConditionStateService {
     }
 
     // Update condition state
-    state.conditions[conditionId] = {
+    const conditionState = {
       status: evaluation.status,
       issue_fingerprint: currentFingerprint,
       blocking_issues: evaluation.blocking_issues,
       last_checked: Date.now()
     };
+
+    state.conditions[conditionId] = conditionState;
+
+    // DUAL-NAME SYNC: Also update corresponding old/new name for backward compatibility
+    // This ensures both old and new gate names stay in sync
+    const oldToNew: Record<string, string> = {
+      'comments_resolved': 'required_approvals',
+      'no_merge_conflicts': 'no_conflicts',
+      'no_change_requests': 'required_approvals',
+      'copilot_review_completed': 'copilot_review'
+    };
+
+    const newToOld: Record<string, string[]> = {
+      'required_approvals': ['comments_resolved', 'no_change_requests'], // Multiple old names
+      'no_conflicts': ['no_merge_conflicts'],
+      'copilot_review': ['copilot_review_completed']
+    };
+
+    // If updating an old name, also update the new name
+    if (oldToNew[conditionId]) {
+      const newName = oldToNew[conditionId] as keyof PRConditionState['conditions'];
+      state.conditions[newName] = conditionState;
+    }
+
+    // If updating a new name, also update ALL corresponding old names
+    if (newToOld[conditionId]) {
+      const oldNames = newToOld[conditionId];
+      for (const oldName of oldNames) {
+        const oldKey = oldName as keyof PRConditionState['conditions'];
+        if (state.conditions[oldKey] !== undefined) {
+          state.conditions[oldKey] = conditionState;
+        }
+      }
+    }
 
     // Handle task spawning/completion based on new status
     if (evaluation.status === 'met') {
@@ -1390,14 +1445,20 @@ Store validation results in task verification data with score and issues.
       last_updated: now,
       merge_eligible: false,
       conditions: {
+        // New names (E2E test expectations)
+        branch_updated: { status: 'not_ready', issue_fingerprint: '', blocking_issues: [], last_checked: now },
+        no_conflicts: { status: 'not_ready', issue_fingerprint: '', blocking_issues: [], last_checked: now },
         ci_checks_passing: { status: 'not_ready', issue_fingerprint: '', blocking_issues: [], last_checked: now },
+        required_approvals: { status: 'not_ready', issue_fingerprint: '', blocking_issues: [], last_checked: now },
+        task_verification: { status: 'not_ready', issue_fingerprint: '', blocking_issues: [], last_checked: now },
+        copilot_review: { status: 'not_ready', issue_fingerprint: '', blocking_issues: [], last_checked: now },
+        final_validation_passed: { status: 'not_ready', issue_fingerprint: '', blocking_issues: [], last_checked: now },
+        no_wip_commits: { status: 'not_ready', issue_fingerprint: '', blocking_issues: [], last_checked: now },
+        // Old names (backward compatibility)
         comments_resolved: { status: 'not_ready', issue_fingerprint: '', blocking_issues: [], last_checked: now },
         no_merge_conflicts: { status: 'not_ready', issue_fingerprint: '', blocking_issues: [], last_checked: now },
-        branch_updated: { status: 'not_ready', issue_fingerprint: '', blocking_issues: [], last_checked: now },
         no_change_requests: { status: 'not_ready', issue_fingerprint: '', blocking_issues: [], last_checked: now },
-        task_verification: { status: 'not_ready', issue_fingerprint: '', blocking_issues: [], last_checked: now },
-        copilot_review_completed: { status: 'not_ready', issue_fingerprint: '', blocking_issues: [], last_checked: now },
-        final_validation_passed: { status: 'not_ready', issue_fingerprint: '', blocking_issues: [], last_checked: now }
+        copilot_review_completed: { status: 'not_ready', issue_fingerprint: '', blocking_issues: [], last_checked: now }
       },
       active_fix_tasks: {},
       final_validation_state: {
@@ -1471,12 +1532,12 @@ Store validation results in task verification data with score and issues.
           now,
           state.merge_eligible ? 1 : 0,
           state.conditions.ci_checks_passing.status === 'met' ? 1 : 0,
-          state.conditions.comments_resolved.status === 'met' ? 1 : 0,
-          state.conditions.no_merge_conflicts.status === 'met' ? 1 : 0,
+          state.conditions.comments_resolved?.status === 'met' ? 1 : 0,
+          state.conditions.no_merge_conflicts?.status === 'met' ? 1 : 0,
           state.conditions.branch_updated.status === 'met' ? 1 : 0,
-          state.conditions.no_change_requests.status === 'met' ? 1 : 0,
+          state.conditions.no_change_requests?.status === 'met' ? 1 : 0,
           state.conditions.task_verification.status === 'met' ? 1 : 0,
-          state.conditions.copilot_review_completed.status === 'met' ? 1 : 0,
+          state.conditions.copilot_review_completed?.status === 'met' ? 1 : 0,
           state.conditions.final_validation_passed.status === 'met' ? 1 : 0,
           activeTaskCount > 0 ? 1 : 0,
           activeTaskCount,

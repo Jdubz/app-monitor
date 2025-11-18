@@ -203,6 +203,36 @@ export class WorkerLifecycleService {
   }
 
   /**
+   * Release worker from a task
+   * Finds the worker assigned to the given task, stops it, and clears the task assignment.
+   * This encapsulates the worker table logic and removes direct database access from callers.
+   *
+   * @param taskId - The task ID to release the worker from
+   * @returns true if a worker was released, false if no worker was found
+   */
+  releaseWorkerFromTask(taskId: string): boolean {
+    const worker = this.db.prepare('SELECT id FROM workers WHERE current_task_id = ?')
+      .get(taskId) as { id: string } | undefined;
+
+    if (!worker) {
+      return false;
+    }
+
+    // Stop the worker and clear task assignment
+    this.stopWorker(worker.id);
+    this.db.prepare('UPDATE workers SET current_task_id = NULL WHERE id = ?').run(worker.id);
+
+    logger.info({
+      category: 'worker',
+      action: 'worker_released_from_task',
+      message: `Released worker ${worker.id} from task ${taskId}`,
+      details: { workerId: worker.id, taskId }
+    });
+
+    return true;
+  }
+
+  /**
    * Handle stalled workers - mark them as stopped
    * Returns array of stalled worker IDs
    * Note: Does NOT fail tasks - that should be done by TaskQueueService

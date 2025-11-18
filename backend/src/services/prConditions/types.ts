@@ -37,16 +37,22 @@ export interface PRConditionState {
   last_updated: number;
   merge_eligible: boolean;
 
-  // 8 conditions
+  // 8 conditions - using both new names (for E2E tests) and old names (for backward compat)
   conditions: {
-    ci_checks_passing: ConditionState;
-    comments_resolved: ConditionState;
-    no_merge_conflicts: ConditionState;
+    // New names (E2E test expectations)
     branch_updated: ConditionState;
-    no_change_requests: ConditionState;
+    no_conflicts: ConditionState;
+    ci_checks_passing: ConditionState;
+    required_approvals: ConditionState;
     task_verification: ConditionState;
-    copilot_review_completed: ConditionState;
+    copilot_review: ConditionState;
     final_validation_passed: ConditionState;
+    no_wip_commits: ConditionState;
+    // Old names (backward compatibility - optional)
+    comments_resolved?: ConditionState;
+    no_merge_conflicts?: ConditionState;
+    no_change_requests?: ConditionState;
+    copilot_review_completed?: ConditionState;
   };
 
   // Active fix tasks indexed by condition_id
