@@ -211,19 +211,19 @@ export class PRCacheService<T = unknown> extends EventEmitter {
    * Evict oldest entry (LRU)
    */
   private evictOldest(): void {
-    let oldest: { prNumber: number; fetchedAt: number } | null = null;
+    let oldest: { key: string | number; fetchedAt: number } | null = null;
     
-    for (const [prNumber, entry] of this.cache.entries()) {
+    for (const [key, entry] of this.cache.entries()) {
       if (!oldest || entry.fetchedAt < oldest.fetchedAt) {
-        oldest = { prNumber, fetchedAt: entry.fetchedAt };
+        oldest = { key, fetchedAt: entry.fetchedAt };
       }
     }
     
     if (oldest) {
-      this.cache.delete(oldest.prNumber);
+      this.cache.delete(oldest.key);
       this.evictions++;
-      this.log('debug', 'Cache entry evicted (LRU)', { prNumber: oldest.prNumber });
-      this.emit('evicted', oldest.prNumber);
+      this.log('debug', 'Cache entry evicted (LRU)', { key: oldest.key });
+      this.emit('evicted', oldest.key);
     }
   }
   
