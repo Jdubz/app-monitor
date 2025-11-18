@@ -195,7 +195,7 @@ export class InteractiveSessionGateway {
       socket.send(
         JSON.stringify({
           type: 'error',
-          message: error instanceof Error ? error.message : 'Request failed',
+          message: _error instanceof Error ? _error.message : 'Request failed',
         }),
       );
     }

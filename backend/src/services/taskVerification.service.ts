@@ -603,7 +603,7 @@ export class TaskVerificationService {
         category: 'verification',
         action: 'git_diff_analysis_failed',
         message: 'Failed to analyze git diff',
-        error
+        error: _error
       });
 
       // Return empty analysis on error

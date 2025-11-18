@@ -131,7 +131,7 @@ export async function killPortProcess(port: number): Promise<boolean> {
         category: 'port-manager',
         action: 'kill_process_failed',
         message: `Failed to kill process ${pid}`,
-        details: { pid, port, error }
+        details: { pid, port, error: _error }
       });
       return false;
     }
@@ -140,7 +140,7 @@ export async function killPortProcess(port: number): Promise<boolean> {
       category: 'port-manager',
       action: 'kill_port_error',
       message: `Error killing port ${port}`,
-      details: { port, error }
+      details: { port, error: _error }
     });
     return false;
   }
@@ -224,7 +224,7 @@ export async function stopDockerContainer(containerName: string): Promise<boolea
       category: 'docker',
       action: 'stop_container_failed',
       message: `Failed to stop container ${containerName}`,
-      details: { containerName, error }
+      details: { containerName, error: _error }
     });
     return false;
   }
@@ -291,7 +291,7 @@ export async function getDockerContainerInfo(containerName: string): Promise<{
       category: 'docker',
       action: 'get_container_info_failed',
       message: `Failed to get container info for ${containerName}`,
-      details: { containerName, error }
+      details: { containerName, error: _error }
     });
     return {
       running: false,

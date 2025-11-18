@@ -417,7 +417,7 @@ export class DevBotContainerLifecycle {
               logger.warn({
                 category: 'system',
                 action: 'failed_to_cleanup_container',            message: `Failed to remove container ${containerInfo.Id}`,
-            error,
+            error: _error,
           });
         }
       }

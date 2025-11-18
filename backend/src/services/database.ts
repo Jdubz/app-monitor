@@ -447,7 +447,7 @@ export class DevBotsDatabase {
         ).get(name);
       } catch (_err: unknown) {
         // If the migrations table does not exist, create it
-        const errorMsg = err instanceof Error ? err.message : String(err);
+        const errorMsg = _err instanceof Error ? _err.message : String(_err);
         if (errorMsg.includes('no such table: migrations')) {
           this.db.exec(`
             CREATE TABLE IF NOT EXISTS migrations (
@@ -457,7 +457,7 @@ export class DevBotsDatabase {
           `);
           applied = undefined;
         } else {
-          throw err;
+          throw _err;
         }
       }
 

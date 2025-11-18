@@ -183,7 +183,7 @@ export class InteractiveSessionStreaming extends EventEmitter {
           category: 'system',
           action: 'stream_end_failed',
           message: `Failed to end interactive stream for ${context.sessionId}`,
-          error,
+          error: _error,
         });
       }
     }
@@ -235,7 +235,7 @@ export class InteractiveSessionStreaming extends EventEmitter {
         category: 'system',
         action: 'pty_resize_failed',
         message: `Failed to resize PTY for session ${sessionId}`,
-        error,
+        error: _error,
       });
     }
   }
@@ -344,7 +344,7 @@ export class InteractiveSessionStreaming extends EventEmitter {
       socket.send(
         JSON.stringify({
           type: 'error',
-          message: error instanceof Error ? error.message : 'Request failed',
+          message: _error instanceof Error ? _error.message : 'Request failed',
         }),
       );
     }
@@ -443,13 +443,13 @@ export class InteractiveSessionStreaming extends EventEmitter {
         category: 'system',
         action: 'stream_init_failed',
         message: `Failed to attach interactive stream for session ${this.active.sessionId}`,
-        error,
+        error: _error,
       });
       this.emit('error', {
         sessionId: this.active.sessionId,
-        error: error instanceof Error ? error : new Error(String(error)),
+        error: _error instanceof Error ? _error : new Error(String(_error)),
       });
-      throw error;
+      throw _error;
     }
   }
 
