@@ -656,12 +656,43 @@ export class PRConditionStateService {
     }
 
     // Update condition state
-    state.conditions[conditionId] = {
+    const conditionState = {
       status: evaluation.status,
       issue_fingerprint: currentFingerprint,
       blocking_issues: evaluation.blocking_issues,
       last_checked: Date.now()
     };
+
+    state.conditions[conditionId] = conditionState;
+
+    // DUAL-NAME SYNC: Also update corresponding old/new name for backward compatibility
+    // This ensures both old and new gate names stay in sync
+    const oldToNew: Record<string, string> = {
+      'comments_resolved': 'required_approvals',
+      'no_merge_conflicts': 'no_conflicts',
+      'no_change_requests': 'required_approvals',
+      'copilot_review_completed': 'copilot_review'
+    };
+
+    const newToOld: Record<string, string> = {
+      'required_approvals': 'no_change_requests', // Note: maps to one old name
+      'no_conflicts': 'no_merge_conflicts',
+      'copilot_review': 'copilot_review_completed'
+    };
+
+    // If updating an old name, also update the new name
+    if (oldToNew[conditionId]) {
+      const newName = oldToNew[conditionId] as keyof PRConditionState['conditions'];
+      state.conditions[newName] = conditionState;
+    }
+
+    // If updating a new name, also update the old name(s)
+    if (newToOld[conditionId]) {
+      const oldName = newToOld[conditionId] as keyof PRConditionState['conditions'];
+      if (state.conditions[oldName] !== undefined) {
+        state.conditions[oldName] = conditionState;
+      }
+    }
 
     // Handle task spawning/completion based on new status
     if (evaluation.status === 'met') {
