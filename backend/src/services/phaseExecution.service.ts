@@ -17,6 +17,7 @@ import { PhaseOrchestratorService } from './phaseOrchestrator.service.js';
 import { getValidatorRegistry } from './phaseValidation/index.js';
 import { getArtifactExtractor } from './artifactExtractor.service.js';
 import { getRecoveryService } from './recoveryAgent.service.js';
+import { MAX_PHASE_ATTEMPTS } from './phaseConstants.js';
 import Database from 'better-sqlite3';
 
 export interface PhaseExecutionResult {
@@ -109,7 +110,7 @@ export class PhaseExecutionService {
       if (!validationResult.passed) {
         // Check if we've reached max attempts in Phase 3 (Review)
         // If so, transition to Phase 4 (Fixes) instead of attempting recovery
-        if (phaseIndex === 3 && attempt >= 4) {
+        if (phaseIndex === 3 && attempt >= MAX_PHASE_ATTEMPTS) {
           logger.warn({
             category: 'phase',
             action: 'max_attempts_transition',

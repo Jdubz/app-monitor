@@ -1544,7 +1544,7 @@ export class EphemeralWorkerService {
     const stream = this.logStreams.get(workerId);
     if (!stream) return;
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolve) => {
       stream.end((error: Error | null) => {
         if (error) {
           logger.warn({
@@ -1553,7 +1553,9 @@ export class EphemeralWorkerService {
             message: `Error closing log stream for worker ${workerId}`,
             error: { message: error.message }
           });
-          reject(error);
+          // Resolve anyway - stream closure errors are non-fatal during shutdown
+          this.logStreams.delete(workerId);
+          resolve();
         } else {
           this.logStreams.delete(workerId);
           logger.debug({

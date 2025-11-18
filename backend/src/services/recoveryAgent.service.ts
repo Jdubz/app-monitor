@@ -240,10 +240,12 @@ export class RecoveryAgentService {
       // Using claude CLI as recovery agent (can be configured per task/agent)
       // Use base64 encoding to avoid heredoc injection vulnerabilities
       const promptBase64 = Buffer.from(recoveryPrompt).toString('base64');
+      // Escape single quotes for safe shell interpolation
+      const promptBase64Escaped = promptBase64.replace(/'/g, "'\\''");
       const recoveryScript = `
         # Write recovery prompt to secure in-memory temp file
         # Use base64 to prevent command injection via heredoc
-        echo '${promptBase64}' | base64 -d > /dev/shm/recovery-prompt.txt
+        echo '${promptBase64Escaped}' | base64 -d > /dev/shm/recovery-prompt.txt
 
         # Execute recovery agent (claude CLI) with prompt
         # Output structured JSON response to artifacts

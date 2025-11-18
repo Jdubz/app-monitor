@@ -585,14 +585,14 @@ export class PhaseObservabilityService {
         task_id,
         phase_index,
         attempt,
-        (julianday(completed_at) - julianday(created_at)) * ${MS_PER_DAY} as duration_ms,
+        (julianday(completed_at) - julianday(created_at)) * @msPerDay as duration_ms,
         status
       FROM task_stage_runs
       WHERE completed_at IS NOT NULL
-        AND (julianday(completed_at) - julianday(created_at)) * ${MS_PER_DAY} > 300000
+        AND (julianday(completed_at) - julianday(created_at)) * @msPerDay > 300000
       ORDER BY duration_ms DESC
       LIMIT 50
-    `).all();
+    `).all({ msPerDay: MS_PER_DAY });
   }
 
   private queryHighFailurePhases(): unknown[] {
