@@ -23,13 +23,12 @@ import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js
 import { AgentEligibilityServiceImpl } from './agentEligibility.service.js';
 import { AgentSelector } from './agentSelector.js';
 import {
-  InteractiveSessionService,
-  StartInteractiveSessionOptions,
-  ActivityKind,
+  InteractiveSessionManager,
+  type StartInteractiveSessionOptions,
+  type ActivityKind,
   type AllowedInteractiveModel,
-} from './interactiveSession.service.js';
-import { InteractiveSessionOrchestrator } from './interactiveSessionOrchestrator.js';
-import { InteractiveSessionStreamManager } from './interactiveSessionStreamManager.js';
+} from './InteractiveSessionManager.js';
+import type { InteractiveSessionStreaming } from './InteractiveSessionStreaming.js';
 import type { InteractiveSessionRecord } from './database.js';
 import type { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
 
@@ -77,12 +76,10 @@ export class DevBotsManager extends EventEmitter {
   private taskExecutionService!: TaskExecutionService;
   private taskCompletionService!: TaskCompletionService;
   private prWorkflowOrchestrator!: PRWorkflowOrchestrator;
-  private interactiveSessionService!: InteractiveSessionService;
-  private interactiveSessionOrchestrator!: InteractiveSessionOrchestrator;
-  private interactiveSessionStreamManager!: InteractiveSessionStreamManager;
+  private interactiveSessionManager!: InteractiveSessionManager;
+  private interactiveSessionStreaming!: InteractiveSessionStreaming;
   private systemLifecycleService!: import('./systemLifecycle.service.js').SystemLifecycleService;
   private systemInitializationService!: import('./systemInitialization.service.js').SystemInitializationService;
-  private interactiveSessionCoordinator!: import('./interactiveSessionCoordinator.service.js').InteractiveSessionCoordinator;
   private cleanupCoordinator!: import('./cleanupCoordinator.service.js').CleanupCoordinator;
   private infoQueryService!: import('./infoQuery.service.js').InfoQueryService;
   private taskQueueWorker?: { start: () => Promise<void>; stop: () => Promise<void> };
@@ -111,13 +108,11 @@ export class DevBotsManager extends EventEmitter {
     this.ephemeralWorkerService = dependencies.ephemeralWorkerService;
     // taskExecutionService is initialized later with agent selector (line 242-248)
     this.prWorkflowOrchestrator = dependencies.prWorkflowOrchestrator;
-    this.interactiveSessionService = dependencies.interactiveSessionService;
-    this.interactiveSessionOrchestrator = dependencies.interactiveSessionOrchestrator;
-    this.interactiveSessionStreamManager = dependencies.interactiveSessionStreamManager;
+    this.interactiveSessionManager = dependencies.interactiveSessionManager;
+    this.interactiveSessionStreaming = dependencies.interactiveSessionStreaming;
     this.workerHealthMonitor = dependencies.workerHealthMonitor;
     this.systemLifecycleService = dependencies.systemLifecycleService;
     this.systemInitializationService = dependencies.systemInitializationService;
-    this.interactiveSessionCoordinator = dependencies.interactiveSessionCoordinator;
     this.cleanupCoordinator = dependencies.cleanupCoordinator;
     this.infoQueryService = dependencies.infoQueryService;
 
@@ -275,43 +270,43 @@ export class DevBotsManager extends EventEmitter {
   // ============================================================================
 
   /**
-   * Interactive session methods - all delegated to InteractiveSessionCoordinator
+   * Interactive session methods - delegated to InteractiveSessionManager
    */
   public getActiveInteractiveSession(): InteractiveSessionRecord | null {
-    return this.interactiveSessionCoordinator.getActiveSession();
+    return this.interactiveSessionManager.getActiveSession();
   }
 
   public getInteractiveSession(sessionId: string): InteractiveSessionRecord | null {
-    return this.interactiveSessionCoordinator.getSession(sessionId);
+    return this.interactiveSessionManager.getSessionById(sessionId);
   }
 
   public listInteractiveSessions(limit = 20): InteractiveSessionRecord[] {
-    return this.interactiveSessionCoordinator.listSessions(limit);
+    return this.interactiveSessionManager.listRecentSessions(limit);
   }
 
   public async launchInteractiveSession(
     options: StartInteractiveSessionOptions,
   ): Promise<InteractiveSessionRecord> {
-    return await this.interactiveSessionCoordinator.launchSession(options);
+    return await this.interactiveSessionManager.launchSession(options);
   }
 
   public async endInteractiveSession(sessionId: string, reason?: string): Promise<void> {
-    await this.interactiveSessionCoordinator.endSession(sessionId, reason);
+    await this.interactiveSessionManager.endSession(sessionId, reason);
   }
 
   public sendInteractiveInput(sessionId: string, payload: string): void {
-    this.interactiveSessionCoordinator.sendInput(sessionId, payload);
+    this.interactiveSessionManager.sendInput(sessionId, payload);
   }
 
   public sendInteractiveSignal(
     sessionId: string,
     signal: 'interrupt' | 'terminate' = 'interrupt',
   ): void {
-    this.interactiveSessionCoordinator.sendSignal(sessionId, signal);
+    this.interactiveSessionManager.sendSignal(sessionId, signal);
   }
 
   public recordInteractiveActivity(sessionId: string, kind: ActivityKind): void {
-    this.interactiveSessionCoordinator.recordActivity(sessionId, kind);
+    this.interactiveSessionManager.recordActivity(sessionId, kind);
   }
 
   public updateInteractiveContext(
@@ -319,15 +314,15 @@ export class DevBotsManager extends EventEmitter {
     contextSnapshot?: unknown,
     metadata?: Record<string, unknown>,
   ): void {
-    this.interactiveSessionCoordinator.updateContext(sessionId, contextSnapshot, metadata);
+    this.interactiveSessionManager.updateContext(sessionId, contextSnapshot, metadata);
   }
 
   public getInteractiveIdleTimeoutMs(): number {
-    return this.interactiveSessionCoordinator.getIdleTimeoutMs();
+    return this.interactiveSessionManager.getIdleTimeoutMs();
   }
 
   public getAllowedInteractiveModels(): AllowedInteractiveModel[] {
-    return this.interactiveSessionCoordinator.getAllowedModels();
+    return this.interactiveSessionManager.getAllowedModels();
   }
 
   /**
