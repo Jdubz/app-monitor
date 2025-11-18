@@ -404,13 +404,17 @@ export class DevBotsDatabase {
       // Check if columns exist before adding them (idempotent migration)
       const tableInfo = this.db.prepare('PRAGMA table_info(issues)').all() as Array<{ name: string }>;
       const columnNames = tableInfo.map(col => col.name);
-      
+
       if (!columnNames.includes('screenshot')) {
         this.db.exec('ALTER TABLE issues ADD COLUMN screenshot TEXT;');
       }
-      
-      if (!columnNames.includes('screenshotError')) {
-        this.db.exec('ALTER TABLE issues ADD COLUMN screenshotError TEXT;');
+
+      if (!columnNames.includes('screenshot_error')) {
+        this.db.exec('ALTER TABLE issues ADD COLUMN screenshot_error TEXT;');
+      }
+
+      if (!columnNames.includes('meta')) {
+        this.db.exec('ALTER TABLE issues ADD COLUMN meta TEXT;');
       }
     });
   }

@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import { createServer } from 'http';
 import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
+import * as crypto from 'crypto';
 import { config } from './config.js';
 import { createApiRouter } from './routes/index.js';
 import { DevBotsManager } from './services/devBotsManager.js';
@@ -57,6 +58,55 @@ export async function createApp(options: CreateAppOptions = {}) {
     transports: ['websocket', 'polling'],
     allowEIO3: true,
   });
+
+  // Add Socket.IO authentication middleware
+  if (config.requireAuth) {
+    io.use((socket, next) => {
+      const apiKey = socket.handshake.auth?.apiKey as string | undefined;
+
+      if (!apiKey) {
+        logger.warn({
+          category: 'socket',
+          action: 'auth_failed',
+          message: 'Socket.IO connection denied - missing API key',
+          details: {
+            socketId: socket.id,
+            ip: socket.handshake.address,
+          },
+        });
+        return next(new Error('Authentication required'));
+      }
+
+      const expectedKeyBuffer = Buffer.from(config.apiKey);
+      const providedKeyBuffer = Buffer.from(apiKey);
+
+      // Use timing-safe comparison to prevent timing attacks
+      const keysMatch =
+        expectedKeyBuffer.length === providedKeyBuffer.length &&
+        crypto.timingSafeEqual(expectedKeyBuffer, providedKeyBuffer);
+
+      if (!keysMatch) {
+        logger.warn({
+          category: 'socket',
+          action: 'auth_failed',
+          message: 'Socket.IO connection denied - invalid API key',
+          details: {
+            socketId: socket.id,
+            ip: socket.handshake.address,
+          },
+        });
+        return next(new Error('Invalid API key'));
+      }
+
+      logger.info({
+        category: 'socket',
+        action: 'auth_success',
+        message: 'Socket.IO connection authenticated',
+        details: { socketId: socket.id },
+      });
+      next();
+    });
+  }
 
   // Initialize ConnectionManager
   connectionManager = overrides.connectionManager ?? new ConnectionManager();

@@ -107,17 +107,22 @@ function ReportIssueModal({ isOpen, onClose, onSubmit }: ReportIssueModalProps) 
     setScreenshotError(null);
 
     try {
-      // Wait briefly for modal to hide
+      // Wait briefly for any animations to settle
       await new Promise(resolve => setTimeout(resolve, 100));
 
       const canvas = await html2canvas(document.body, {
         allowTaint: true,
         useCORS: true,
         logging: false,
-        scale: 0.5, // Reduce file size
+        scale: 0.4, // Reduce file size further to prevent 413 errors
+        ignoreElements: (element) => {
+          // Also ignore elements with data-html2canvas-ignore attribute
+          return element.getAttribute('data-html2canvas-ignore') === 'true';
+        },
       });
 
-      const dataUrl = canvas.toDataURL('image/png', 0.8);
+      // Convert to JPEG with reduced quality to minimize payload size
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
       setScreenshot(dataUrl);
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
@@ -343,6 +348,7 @@ function ReportIssueModal({ isOpen, onClose, onSubmit }: ReportIssueModalProps) 
 
   const modalContent = (
     <div
+      data-html2canvas-ignore="true"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
       onClick={(e) => {
         // Close modal when clicking backdrop
@@ -353,6 +359,7 @@ function ReportIssueModal({ isOpen, onClose, onSubmit }: ReportIssueModalProps) 
     >
       <div
         ref={modalRef}
+        data-html2canvas-ignore="true"
         className="bg-white dark:bg-gray-900 rounded-lg shadow-2xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
         role="dialog"

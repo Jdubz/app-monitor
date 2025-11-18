@@ -23,6 +23,9 @@ export interface SocketConfig {
   timeout?: number;
   autoConnect?: boolean;
   transports?: string[];
+  auth?: {
+    apiKey?: string;
+  };
 }
 
 export interface ConnectionState {
@@ -42,9 +45,11 @@ export interface HealthMetrics {
   isHealthy: boolean;
 }
 
+type ResolvedSocketConfig = Required<Omit<SocketConfig, 'auth'>> & Pick<SocketConfig, 'auth'>;
+
 export class SocketService {
   private socket: Socket | null = null;
-  private config: Required<SocketConfig>;
+  private config: ResolvedSocketConfig;
   private connectionState: ConnectionState;
   private healthMetrics: HealthMetrics;
   private pingInterval?: NodeJS.Timeout;
@@ -60,6 +65,7 @@ export class SocketService {
       timeout: config.timeout ?? 20000,
       autoConnect: config.autoConnect ?? true,
       transports: config.transports ?? ['websocket', 'polling'],
+      auth: config.auth,
     };
 
     this.connectionState = {
@@ -98,6 +104,7 @@ export class SocketService {
       reconnectionAttempts: this.config.reconnectionAttempts,
       timeout: this.config.timeout,
       transports: this.config.transports,
+      auth: this.config.auth,
     });
 
     this.setupEventHandlers();
