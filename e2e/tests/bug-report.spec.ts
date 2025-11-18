@@ -72,12 +72,12 @@ test.describe('Bug Report Feature', () => {
     });
 
     test('should close modal when X button clicked', async () => {
-      await page.click('button[aria-label="Close"], button:has(svg):has-text("")');
+      await page.click('button[aria-label="Close modal"]');
       await expect(page.locator('h2:has-text("Report an Issue")')).not.toBeVisible();
     });
 
     test('should close modal when Cancel button clicked', async () => {
-      await page.click('button:has-text("Cancel")').last();
+      await page.locator('button:has-text("Cancel")').last().click();
       await expect(page.locator('h2:has-text("Report an Issue")')).not.toBeVisible();
     });
 
@@ -139,7 +139,7 @@ test.describe('Bug Report Feature', () => {
 
       // Should show annotation buttons
       await expect(page.locator('button:has-text("Done Annotating")')).toBeVisible();
-      await expect(page.locator('button:has-text("Cancel Annotations")')).toBeVisible();
+      await expect(page.locator('button:has-text("Clear & Cancel")')).toBeVisible();
     });
 
     test('should save annotations', async () => {
@@ -168,7 +168,7 @@ test.describe('Bug Report Feature', () => {
       await page.click('button:has-text("Add Annotations")');
 
       // Cancel annotations
-      await page.click('button:has-text("Cancel Annotations")');
+      await page.click('button:has-text("Clear & Cancel")');
 
       // Should return to original screenshot
       await expect(page.locator('canvas')).not.toBeVisible();
@@ -233,12 +233,12 @@ test.describe('Bug Report Feature', () => {
       // Submit
       await page.click('button[type="submit"]:has-text("Submit Report")');
 
-      // Should show success message
-      await expect(page.locator('text=Issue reported')).toBeVisible({ timeout: 5000 });
-      await expect(page.locator('text=Triage started')).toBeVisible();
-
       // Modal should close
-      await expect(page.locator('h2:has-text("Report an Issue")')).not.toBeVisible();
+      await expect(page.locator('h2:has-text("Report an Issue")')).not.toBeVisible({ timeout: 5000 });
+
+      // Should show success message (toast appears after modal closes)
+      await expect(page.locator('text=Issue reported')).toBeVisible({ timeout: 2000 });
+      await expect(page.locator('text=Triage started')).toBeVisible();
     });
 
     test('should submit without screenshot if disabled', async () => {
@@ -255,8 +255,11 @@ test.describe('Bug Report Feature', () => {
       // Submit
       await page.click('button[type="submit"]:has-text("Submit Report")');
 
-      // Should still succeed
-      await expect(page.locator('text=Issue reported')).toBeVisible({ timeout: 5000 });
+      // Modal should close first
+      await expect(page.locator('h2:has-text("Report an Issue")')).not.toBeVisible({ timeout: 5000 });
+
+      // Should show success message
+      await expect(page.locator('text=Issue reported')).toBeVisible({ timeout: 2000 });
     });
 
     test('should submit with annotated screenshot', async () => {
@@ -284,8 +287,11 @@ test.describe('Bug Report Feature', () => {
       // Submit
       await page.click('button[type="submit"]:has-text("Submit Report")');
 
-      // Should succeed
-      await expect(page.locator('text=Issue reported')).toBeVisible({ timeout: 5000 });
+      // Modal should close first
+      await expect(page.locator('h2:has-text("Report an Issue")')).not.toBeVisible({ timeout: 5000 });
+
+      // Should show success message
+      await expect(page.locator('text=Issue reported')).toBeVisible({ timeout: 2000 });
     });
   });
 
@@ -318,7 +324,7 @@ test.describe('Bug Report Feature', () => {
       await page.click('button:has-text("Report Issue")');
       await page.waitForSelector('h2:has-text("Report an Issue")');
       await page.fill('textarea#description', 'First report text');
-      await page.click('button:has-text("Cancel")').last();
+      await page.locator('button:has-text("Cancel")').last().click();
 
       // Wait a bit
       await page.waitForTimeout(1000);
@@ -337,7 +343,7 @@ test.describe('Bug Report Feature', () => {
       await page.click('button:has-text("Report Issue")');
       await page.waitForSelector('h2:has-text("Report an Issue")');
       await page.waitForTimeout(500);
-      await page.click('button:has-text("Cancel")').last();
+      await page.locator('button:has-text("Cancel")').last().click();
 
       // Second open
       await page.click('button:has-text("Report Issue")');
