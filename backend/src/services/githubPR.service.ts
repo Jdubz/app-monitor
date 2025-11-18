@@ -146,6 +146,11 @@ export class GitHubPRService {
         message: `Fetching status for PR #${prNumber} in ${owner}/${repo}`
       });
 
+      // TEST MODE: Return mock PR data for E2E tests
+      if (process.env.NODE_ENV === 'test') {
+        return this.getMockPRStatus(prNumber);
+      }
+
       // Fetch PR data using gh CLI with timeout protection
       const { stdout } = await execWithTimeout(
         `gh pr view ${prNumber} --repo ${owner}/${repo} --json number,url,headRefName,baseRefName,state,mergeable,mergeStateStatus,statusCheckRollup,reviews,comments`,
@@ -846,6 +851,46 @@ export class GitHubPRService {
       });
       throw error;
     }
+  }
+
+  /**
+   * Get mock PR status for E2E testing
+   * Returns a realistic PR status object without calling GitHub API
+   */
+  private getMockPRStatus(prNumber: number): PRStatus {
+    logger.info({
+      category: 'pr-workflow',
+      action: 'mock_pr_status',
+      message: `Returning mock PR status for test PR #${prNumber}`
+    });
+
+    // Return a PR that passes all basic gates
+    return {
+      number: prNumber,
+      url: `https://github.com/test/repo/pull/${prNumber}`,
+      html_url: `https://github.com/test/repo/pull/${prNumber}`,
+      head_ref: `feature/test-${prNumber}`,
+      base_ref: 'main',
+      state: 'OPEN',
+      mergeable: 'MERGEABLE',
+      mergeable_state: 'clean', // clean = no conflicts, up to date
+      checks: [
+        {
+          name: 'CI Tests',
+          status: 'success',
+          conclusion: 'success',
+          detailsUrl: null
+        },
+        {
+          name: 'Lint',
+          status: 'success',
+          conclusion: 'success',
+          detailsUrl: null
+        }
+      ],
+      reviews: [], // No change requests
+      comments: [] // No unresolved comments
+    };
   }
 
   /**

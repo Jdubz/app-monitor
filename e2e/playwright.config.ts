@@ -20,7 +20,7 @@ export default defineConfig({
     timeout: 15000, // 15 seconds for expect assertions (increased for UI visibility checks)
   },
   reporter: [
-    ['html'],
+    ['html', { open: 'never' }], // Generate HTML report but never auto-open
     ['list'],
     ['junit', { outputFile: 'results/junit.xml' }]
   ],
@@ -37,7 +37,7 @@ export default defineConfig({
   // Test environment setup
   webServer: [
     {
-      command: 'PORT=3002 DATABASE_PATH=:memory: API_KEY=test-e2e-api-key-not-for-production REQUIRE_AUTH=true NODE_ENV=test node backend/dist/index.js',
+      command: 'PORT=3002 DATABASE_PATH=./e2e/test-data/e2e-test.db API_KEY=test-e2e-api-key-not-for-production REQUIRE_AUTH=true NODE_ENV=test node backend/dist/index.js',
       cwd: '../',
       port: 3002,
       timeout: 120000,
@@ -59,7 +59,15 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: { 
+        ...devices['Desktop Chrome'],
+        headless: true, // Explicitly enforce headless mode - ALWAYS run headless
+        channel: 'chrome', // Use Chrome specifically
+        launchOptions: {
+          // Force headless mode at launch level - cannot be overridden by CLI
+          headless: true,
+        },
+      },
     },
   ],
 });
