@@ -16,7 +16,6 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
-import tar from 'tar-fs';
 import type Docker from 'dockerode';
 import Database from 'better-sqlite3';
 import { logger } from '../utils/logger.js';
@@ -1095,8 +1094,6 @@ export class EphemeralWorkerService {
     if (!worker) return;
 
     try {
-      const container = this.docker.getContainer(worker.containerId);
-
       // Get container logs before destruction for debugging
       try {
         const logs = await this.dockerManager.getContainerLogs(worker.containerId, 50);
@@ -1186,8 +1183,6 @@ export class EphemeralWorkerService {
 
       for (const containerInfo of taskContainers) {
         try {
-          const container = docker.getContainer(containerInfo.Id);
-
           // Remove container using ContainerLifecycleService
           await this.containerLifecycle.removeContainer(containerInfo.Id, true);
 

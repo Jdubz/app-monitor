@@ -5,7 +5,7 @@
  * Part of P1 refactoring plan - Week 2: Extract Log Management
  */
 
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import fs from 'fs';
 import path from 'path';
 import { WorkerLogService } from '../WorkerLogService.js';
@@ -208,8 +208,8 @@ describe('WorkerLogService', () => {
         taskId: 'task-456'
       };
 
-      const stream = service.createLogStream(worker);
-      
+      service.createLogStream(worker);
+
       // Close stream immediately, then try to close again
       await service.closeLogStream('worker-123');
 
