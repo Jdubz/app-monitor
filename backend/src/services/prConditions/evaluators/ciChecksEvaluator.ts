@@ -29,6 +29,25 @@ export class CIChecksEvaluator extends BaseEvaluator {
         check.status === 'failure' || check.status === 'error'
       );
 
+      // Find pending checks
+      const pendingChecks = checks.filter(check =>
+        check.status === 'pending'
+      );
+
+      // If there are pending checks, return not_ready
+      if (pendingChecks.length > 0) {
+        this.logEvaluation(prNumber, 'not_ready', {
+          pending_count: pendingChecks.length,
+          total_checks: checks.length
+        });
+        return {
+          condition_id: this.getConditionId(),
+          status: 'not_ready',
+          fingerprint: 'checks-pending',
+          blocking_issues: []
+        };
+      }
+
       if (failingChecks.length === 0) {
         // All checks passing
         this.logEvaluation(prNumber, 'met', { total_checks: checks.length });
