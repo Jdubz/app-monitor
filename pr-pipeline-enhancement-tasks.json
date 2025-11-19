@@ -1,0 +1,13 @@
+[
+  {
+    "title": "Test Task from Gemini CLI - Verify PR Integration",
+    "type": "feature_enhancement",
+    "priority": "high",
+    "assignedAgent": "gemini-bot",
+    "metadata": {
+      "promptEngineeringVersion": "3.0"
+    },
+    "investigation": "Verify that this task successfully triggers a PR creation and the PR tracker updates its status.",
+    "constraints": "Ensure no destructive actions are performed. This is a read-only or metadata-only task."
+  }
+]

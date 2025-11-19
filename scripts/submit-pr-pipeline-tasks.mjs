@@ -12,12 +12,23 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+import dotenv from 'dotenv';
+dotenv.config({ path: path.resolve(__dirname, '../../frontend/.env.production') });
+
 const API_BASE_URL = process.env.API_URL || 'https://app-monitor.joshwentworth.com/api';
 const TASKS_FILE = path.join(__dirname, '..', 'pr-pipeline-enhancement-tasks.json');
 
 async function submitTask(task) {
   const url = `${API_BASE_URL}/dev-bots/tasks`;
   
+  const API_KEY = process.env.VITE_API_KEY; // Get API key from env
+
+  if (!API_KEY) {
+    console.error('❌ Error: VITE_API_KEY environment variable is not set.');
+    console.error('Please ensure your .env file is configured correctly and loaded.');
+    throw new Error('API key missing.'); // Throw an error to stop submission
+  }
+
   console.log(`\n📤 Submitting task: ${task.title}`);
   console.log(`   Type: ${task.type}`);
   console.log(`   Priority: ${task.priority}`);
@@ -28,6 +39,7 @@ async function submitTask(task) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-API-Key': API_KEY, // Use the retrieved API key
       },
       body: JSON.stringify(task)
     });

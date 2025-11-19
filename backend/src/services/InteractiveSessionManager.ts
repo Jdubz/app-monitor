@@ -136,8 +136,22 @@ export class InteractiveSessionManager extends EventEmitter {
       // Start container via worker service
       const containerId = await this.startContainer(session);
 
+      logger.info({
+        category: 'interactive_terminal',
+        action: 'container_started',
+        message: 'Interactive session container started, updating status to running',
+        details: { sessionId: session.id, containerId },
+      });
+
       // Update session with container ID
       this.setStatus(session.id, 'running', { containerId });
+
+      logger.info({
+        category: 'interactive_terminal',
+        action: 'status_updated_to_running',
+        message: 'Session status updated to running - should emit sessionUpdated event',
+        details: { sessionId: session.id, containerId },
+      });
 
       // Note: Terminal streaming is now handled by SocketIOTerminalHandler
       // via event listeners wired in server.ts (sessionStarted → startSession)
@@ -374,7 +388,24 @@ export class InteractiveSessionManager extends EventEmitter {
     });
     const record = this.getSessionById(sessionId);
     if (record) {
+      logger.info({
+        category: 'interactive_terminal',
+        action: 'emit_session_updated',
+        message: 'Emitting sessionUpdated event',
+        details: {
+          sessionId: record.id,
+          status: record.status,
+          containerId: record.containerId,
+        },
+      });
       this.emit('sessionUpdated', record);
+    } else {
+      logger.warn({
+        category: 'interactive_terminal',
+        action: 'session_not_found_after_update',
+        message: 'Session not found after database update - cannot emit event',
+        details: { sessionId, status, updates },
+      });
     }
   }
 

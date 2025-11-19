@@ -240,6 +240,16 @@ export function useInteractiveSession(
     try {
       const state = await getDevBotsInteractiveSession();
       if (!isMountedRef.current) return;
+
+      // DEBUG: Log session state for investigation
+      log.info('Received session state from backend', {
+        hasSession: !!state.session,
+        sessionId: state.session?.id,
+        sessionStatus: state.session?.status,
+        containerId: state.session?.containerId,
+        availableModels: state.availableModels?.length,
+      });
+
       setSessionState(state);
       const activeSession = state.session;
       sessionIdRef.current = activeSession?.id ?? null;

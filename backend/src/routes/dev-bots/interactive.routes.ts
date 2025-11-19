@@ -36,6 +36,21 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
   router.get('/interactive/session', (_req: Request, res: Response) => {
     try {
       const payload: DevBotsInteractiveSessionStateResponse['data'] = buildInteractiveSessionState(devBotsManager);
+
+      // DEBUG: Log what we're returning
+      logger.info({
+        category: 'api',
+        action: 'get_interactive_session',
+        message: 'Returning interactive session state',
+        details: {
+          hasSession: !!payload.session,
+          sessionId: (payload.session as Record<string, unknown>)?.id,
+          sessionStatus: (payload.session as Record<string, unknown>)?.status,
+          containerId: (payload.session as Record<string, unknown>)?.containerId,
+          availableModelsCount: (payload.availableModels as unknown[])?.length,
+        }
+      });
+
       sendSuccess(res, payload);
     } catch (error) {
       logger.error({
