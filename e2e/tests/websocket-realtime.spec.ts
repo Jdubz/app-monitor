@@ -252,7 +252,7 @@ test.describe('Real-time Task Queue Updates', () => {
     const initialCount = queueData.data.counts.pending || 0;
 
     // Create a new task via API (this should trigger WebSocket update)
-    const createResponse = await request.post('http://localhost:3002/api/dev-bots/tasks/minimal', {
+    const createResponse = await request.post('http://localhost:3002/api/dev-bots/tasks', {
       headers: {
         'X-API-Key': 'test-e2e-api-key-not-for-production',
         'Content-Type': 'application/json',

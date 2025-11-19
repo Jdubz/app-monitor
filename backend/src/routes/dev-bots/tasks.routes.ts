@@ -19,10 +19,9 @@ import { sendSuccess, sendError } from '../../utils/apiResponse.js';
 import { WorkerLogLocator } from '../../services/taskLogLocator.js';
 import { getTaskContextService } from '../../services/taskContext.service.js';
 import { taskAutoDetectionService } from '../../services/taskAutoDetection.service.js';
-import { TaskCreationGuidelinesManager } from '../../services/taskCreationGuidelines.js';
 import { PHASE_NAMES } from '../../services/phaseConstants.js';
 import type {
-  MinimalTaskPayload,
+  TaskSubmissionPayload,
   DevBotsReportCompletionPayload,
   DevBotsReportCompletionResponse
 } from '@app-monitor/api-contracts';
@@ -38,6 +37,7 @@ import {
   type TaskLogsResponsePayload,
   type LogStreamType,
 } from './shared.js';
+import { validateTaskSubmissionPayload } from '../../services/taskSubmissionValidator.js';
 
 /**
  * Create task management routes
@@ -45,7 +45,6 @@ import {
 export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   const router = Router();
   const workerLogLocator = new WorkerLogLocator();
-  const taskCreationGuidelinesManager = new TaskCreationGuidelinesManager();
 
   // ============================================================================
   // Task CRUD Operations
@@ -162,34 +161,35 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   });
 
   // ============================================================================
-  // Context-Aware Minimal Task Creation (NEW)
+  // Context-Aware Task Creation (NEW)
   // ============================================================================
 
   /**
-   * POST /tasks/minimal
-   * Create task with minimal payload (3 required fields)
+   * POST /tasks
+   * Create task with the standard payload (3 required fields)
    * Auto-detects: files, risk level, context profiles, outputs
    */
-  router.post('/tasks/minimal', async (req: Request, res: Response) => {
+  router.post('/tasks', async (req: Request, res: Response) => {
     try {
-      const payload: MinimalTaskPayload = req.body;
-      
-      // Validate required fields
-      if (!payload.title || !payload.taskType || !payload.intent) {
+      const submissionPayload: TaskSubmissionPayload = req.body;
+      const submissionValidation = validateTaskSubmissionPayload(submissionPayload);
+
+      if (!submissionValidation.isValid) {
         return sendError(
           res,
-          'Missing required fields',
+          'Task submission failed validation',
           400,
           {
-            message: 'title, taskType, and intent are required',
             details: {
-              provided: Object.keys(payload),
-              required: ['title', 'taskType', 'intent']
+              errors: submissionValidation.errors,
+              warnings: submissionValidation.warnings
             }
           }
         );
       }
-      
+
+      const payload = submissionValidation.normalized;
+
       // Auto-detect missing fields
       const detected = await taskAutoDetectionService.detectFields(payload);
       
@@ -211,51 +211,19 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
           desiredOutputs: detected.recommendedOutputs,
           autoDetectionConfidence: detected.confidence,
           autoDetectionWarnings: detected.warnings,
-          submissionMode: 'minimal',
+          submissionMode: 'standard',
           followUpOf: payload.followUpOf,
           chainId: payload.chainId
         }
       };
 
-      // --- NEW VALIDATION STEP ---
-      const validationResult = taskCreationGuidelinesManager.validateTaskData(taskData, taskData.type);
-
-      if (!validationResult.isValid) {
-        // Log the validation errors before sending to client
-        logger.warn({
-          category: 'api',
-          action: 'task_validation_failed',
-          message: 'Task submitted via minimal API failed validation',
-          details: {
-            taskType: taskData.type,
-            errors: validationResult.errors,
-            warnings: validationResult.warnings
-          }
-        });
-
-        // Send 400 Bad Request with detailed errors
-        return sendError(
-          res,
-          'Task validation failed',
-          400, // Explicitly 400 Bad Request
-          {
-            details: {
-              errors: validationResult.errors,
-              warnings: validationResult.warnings,
-              suggestions: validationResult.suggestions
-            }
-          }
-        );
-      }
-      // --- END NEW VALIDATION STEP ---
-      
       // Create task using existing service
-      const result = await devBotsManager.addTask(taskData);
+      const result = await devBotsManager.addTask(taskData, { submission: true });
       
       logger.info({
         category: 'api',
-        action: 'task_created_minimal',
-        message: `Created task ${result.task.id} via minimal API`,
+        action: 'task_created_submission',
+        message: `Created task ${result.task.id} via task submission API`,
         details: {
           taskId: result.task.id,
           taskType: payload.taskType,
@@ -276,10 +244,19 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         201
       );
     } catch (error) {
+      if (error instanceof Error && error.message.startsWith('Duplicate task detected')) {
+        return sendError(
+          res,
+          'Duplicate task detected',
+          409,
+          { message: error.message }
+        );
+      }
+
       logger.error({
         category: 'api',
-        action: 'task_creation_minimal_failed',
-        message: `Failed to create task via minimal API: ${error}`,
+        action: 'task_creation_submission_failed',
+        message: `Failed to create task via task submission API: ${error}`,
         error
       });
       sendError(
@@ -298,7 +275,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
    */
   router.post('/tasks/preview-detection', async (req: Request, res: Response) => {
     try {
-      const payload: MinimalTaskPayload = req.body;
+      const payload: TaskSubmissionPayload = req.body;
       
       // Validate at least task type is provided
       if (!payload.taskType) {

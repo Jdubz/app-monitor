@@ -13,9 +13,9 @@ export interface E2ETaskData {
 }
 
 /**
- * Creates a valid minimal task payload for E2E testing
+ * Creates a valid task submission payload for E2E testing
  * 
- * Note: The minimal API auto-detects fields, but the underlying
+ * Note: The task submission API auto-detects fields, but the underlying
  * task creation still has validation requirements. This helper
  * provides sensible defaults that pass validation.
  */

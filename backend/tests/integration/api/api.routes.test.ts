@@ -814,7 +814,7 @@ describe('API Integration Suite', () => {
         expectStatus: 404,
       },
       // NOTE: POST /api/dev-bots/tasks endpoint was removed - task creation now
-      // happens through specialized endpoints like /tasks/minimal
+      // happens through the unified /tasks submission endpoint
       // {
       //   name: 'POST /api/dev-bots/tasks',
       //   method: 'post',

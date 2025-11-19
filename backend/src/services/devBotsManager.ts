@@ -310,7 +310,7 @@ export class DevBotsManager extends EventEmitter {
       countsTowardsConcurrencyLimit?: boolean;
       [key: string]: unknown;
     };
-  }): Promise<{
+  }, options?: { submission?: boolean }): Promise<{
     task: Task;
     validation: {
       isValid: boolean;
@@ -320,7 +320,7 @@ export class DevBotsManager extends EventEmitter {
     };
   }> {
     // Delegate to TaskCreationService
-    const result = await this.taskCreationService.createTask(taskData);
+    const result = await this.taskCreationService.createTask(taskData, options);
 
     // Emit event for task added
     this.emit('taskAdded', result.task);

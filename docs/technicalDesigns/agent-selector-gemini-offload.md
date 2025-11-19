@@ -43,7 +43,7 @@ Introduce a small static capability table consumed by the selector:
 ### 4.3 Eligibility Checks
 Add `AgentEligibilityService` invoked before final selection. Inputs:
 1. **Task Risk Score** (derived from task metadata + classifier).
-2. **Context Readiness** (ensures `MinimalTaskPayload` + context bundles exist). If the task lacks the new context BOM or references missing bundles, Gemini is disallowed.
+2. **Context Readiness** (ensures `TaskSubmissionPayload` + context bundles exist). If the task lacks the new context BOM or references missing bundles, Gemini is disallowed.
 3. **Quota Health** (per-agent rpm/day counters stored in Redis/sqlite). Gemini allowed only if ≥10% quota remains.
 4. **Policy Overrides** (ops can block Gemini per project/branch).
 

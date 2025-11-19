@@ -99,10 +99,10 @@ export interface TokenCanUsePayload {
 }
 
 // ============================================================================
-// Context-Aware Task Submission (Minimal API)
+// Context-Aware Task Submission (Standard API)
 // ============================================================================
 
-export interface MinimalTaskPayload {
+export interface TaskSubmissionPayload {
   // Required fields (3 only)
   title: string;
   taskType: 'implementation' | 'review' | 'fix' | 'pr-follow-up' | 'analysis';

@@ -3,7 +3,7 @@
 Practical guides for development, deployment, and operations.
 
 ## Getting Started
-- [Task Submission Guide](MINIMAL_TASK_SUBMISSION_GUIDE.md) - Submit tasks to dev-bots
+- [Task Submission Guide](TASK_SUBMISSION_GUIDE.md) - Submit tasks to dev-bots
 - [Frontend Development](FRONTEND_DEVELOPMENT.md) - Frontend development workflow
 - [Environment Setup](../setup/ENVIRONMENT_SETUP.md) - Set up development environment
 
