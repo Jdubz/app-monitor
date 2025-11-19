@@ -79,6 +79,7 @@ export function getTaskStatusLabel(status: TaskStatus): string {
     active: 'Active',
     assigned: 'Assigned',
     pending: 'Pending',
+    blocked: 'Blocked',
   };
 
   return labelMap[status] || 'Unknown';
