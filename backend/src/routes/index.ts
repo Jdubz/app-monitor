@@ -47,14 +47,13 @@ export function createApiRouter(deps: {
   // Initialize logs and issues routes with database and task queue from devBotsManager
   if (deps.devBotsManager) {
     const taskQueue = deps.devBotsManager.getTaskQueue();
-    // eslint-disable-next-line local-rules/no-direct-db-in-routes -- Safe: Only used for service initialization
     const db = taskQueue.getDatabase();
     initializeLogsRoutes(db);
     initializeIssuesRoutes(db, taskQueue);
   }
 
   // Health check - no auth required
-  router.get('/health', (_req, res) => {
+  router.get('/health', async (_req, res) => {
     logger.debug({
       category: 'api',
       action: 'health_check',
@@ -69,8 +68,7 @@ export function createApiRouter(deps: {
     // Note: This will be false in test environment where index module isn't loaded
     let shuttingDown = false;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-var-requires
-      const indexModule = require('../index.js');
+      const indexModule = await import('../index.js');
       shuttingDown = indexModule.isShuttingDown || false;
     } catch {
       // In test environment, index.js may not be available

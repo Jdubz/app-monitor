@@ -249,7 +249,7 @@ export class TaskVerificationService {
             met = true;
             evidence = `New files detected in git status`;
           }
-        } catch (error) {
+        } catch (_error) {
           // Git command failed, continue with other checks
         }
       }
@@ -284,7 +284,7 @@ export class TaskVerificationService {
             met = true;
             evidence = `${target} found in modified files`;
           }
-        } catch (error) {
+        } catch (_error) {
           // Git command failed, check output
           if (lowerOutput.includes(target.toLowerCase()) &&
               (lowerOutput.includes('updated') || lowerOutput.includes('modified') || lowerOutput.includes('fixed'))) {
@@ -598,12 +598,12 @@ export class TaskVerificationService {
         totalChanges: filesChanged.length,
         violations: [] // Populated by boundary checks
       };
-    } catch (error) {
+    } catch (_error) {
       logger.error({
         category: 'verification',
         action: 'git_diff_analysis_failed',
         message: 'Failed to analyze git diff',
-        error
+        error: _error
       });
 
       // Return empty analysis on error

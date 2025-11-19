@@ -153,7 +153,7 @@ export class InteractiveSessionGateway {
     try {
       const text = typeof raw === 'string' ? raw : raw.toString('utf8');
       payload = JSON.parse(text) as ClientMessage;
-    } catch (error) {
+    } catch (_error) {
       socket.send(JSON.stringify({ type: 'error', message: 'Invalid message payload' }));
       return;
     }
@@ -191,11 +191,11 @@ export class InteractiveSessionGateway {
         default:
           socket.send(JSON.stringify({ type: 'error', message: 'Unknown message type' }));
       }
-    } catch (error) {
+    } catch (_error) {
       socket.send(
         JSON.stringify({
           type: 'error',
-          message: error instanceof Error ? error.message : 'Request failed',
+          message: _error instanceof Error ? _error.message : 'Request failed',
         }),
       );
     }
