@@ -30,7 +30,6 @@ import {
 
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { AgentPersonality } from './agentPersonalities.js';
-import type { InteractiveSessionStreaming } from './InteractiveSessionStreaming.js';
 
 // ============================================================================
 // Types & Interfaces
@@ -56,7 +55,6 @@ export interface InteractiveSessionManagerOptions {
   idleTimeoutMs?: number;
   allowedModels?: AllowedInteractiveModel[];
   workerService: EphemeralWorkerService;
-  streamManager: InteractiveSessionStreaming;
 }
 
 export type ActivityKind = 'user' | 'agent';
@@ -83,7 +81,6 @@ export class InteractiveSessionManager extends EventEmitter {
   private readonly idleTimeoutMs: number;
   private readonly allowedModels: AllowedInteractiveModel[];
   private readonly workerService: EphemeralWorkerService;
-  private readonly streamManager: InteractiveSessionStreaming;
   private readonly sessionWorkers = new Map<string, string>(); // sessionId -> workerId
   private idleWatchdogInterval?: NodeJS.Timeout;
   private onIdleTimeoutCallback?: (sessionId: string, idleDuration: number) => void;
@@ -96,7 +93,6 @@ export class InteractiveSessionManager extends EventEmitter {
         ? options.allowedModels
         : DEFAULT_ALLOWED_MODELS;
     this.workerService = options.workerService;
-    this.streamManager = options.streamManager;
   }
 
   // ==========================================================================
@@ -143,8 +139,8 @@ export class InteractiveSessionManager extends EventEmitter {
       // Update session with container ID
       this.setStatus(session.id, 'running', { containerId });
 
-      // Attach stream manager
-      await this.streamManager.attach(session.id, containerId);
+      // Note: Terminal streaming is now handled by SocketIOTerminalHandler
+      // via event listeners wired in server.ts (sessionStarted → startSession)
 
       // Return updated session record
       const updated = this.getSessionById(session.id);
@@ -156,9 +152,8 @@ export class InteractiveSessionManager extends EventEmitter {
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Interactive session launch failed';
       this.endSession(session.id, message, 'error');
-      await this.streamManager.detach(session.id).catch(() => {
-        /* noop */
-      });
+      // Note: Terminal streaming cleanup is handled by SocketIOTerminalHandler
+      // via event listeners wired in server.ts (sessionEnded → stopSession)
       throw error;
     }
   }
@@ -315,8 +310,8 @@ export class InteractiveSessionManager extends EventEmitter {
       await this.stopContainer(session.containerId);
     }
 
-    // Detach stream
-    await this.streamManager.detach(sessionId);
+    // Note: Terminal streaming cleanup is handled by SocketIOTerminalHandler
+    // via event listeners wired in server.ts (sessionEnded → stopSession)
 
     // Update database
     getDatabase().updateInteractiveSession(sessionId, {
@@ -406,26 +401,10 @@ export class InteractiveSessionManager extends EventEmitter {
   }
 
   // ==========================================================================
-  // Input/Output Methods (delegate to StreamManager)
+  // Note: Input/output is now handled directly by SocketIOTerminalHandler
+  // via Socket.IO events (terminal:input, terminal:signal)
+  // No REST API endpoints needed for these operations
   // ==========================================================================
-
-  /**
-   * Send input to interactive session
-   * Records user activity
-   */
-  sendInput(sessionId: string, payload: string): void {
-    this.streamManager.sendInput(sessionId, payload);
-    this.recordActivity(sessionId, 'user');
-  }
-
-  /**
-   * Send signal to interactive session
-   * Records user activity
-   */
-  sendSignal(sessionId: string, signal: 'interrupt' | 'terminate' = 'interrupt'): void {
-    this.streamManager.sendSignal(sessionId, signal);
-    this.recordActivity(sessionId, 'user');
-  }
 
   // ==========================================================================
   // Configuration & Utilities

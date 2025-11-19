@@ -21,10 +21,12 @@ import type {
   InterServerEvents,
   SocketData,
 } from './types/socketEvents.js';
+import { SocketIOTerminalHandler } from './services/socketIOTerminalHandler.js';
 
 // Export services for API access
 export let devBotsManager: DevBotsManager | undefined;
 export let connectionManager: ConnectionManager;
+export let terminalHandler: SocketIOTerminalHandler | undefined;
 
 export interface CreateAppOverrides {
   devBotsManager?: DevBotsManager | null;
@@ -113,23 +115,24 @@ export async function createApp(options: CreateAppOptions = {}) {
 
   // Set Socket.IO instance for broadcasting
   connectionManager.setIO(io);
-  
+
   // Set global instance for service access
   setConnectionManagerInstance(connectionManager);
+
+  // Initialize Socket.IO Terminal Handler (unified architecture)
+  // This will be used instead of the native WebSocket implementation (InteractiveSessionStreaming)
+  // Note: Docker instance will be available after DevBotsManager initialization
+  // Terminal handler initialization happens after DevBotsManager is created
+  // (moved to after DevBotsManager initialization below)
 
   if (overrides.devBotsManager === null) {
     devBotsManager = undefined;
   } else if (overrides.devBotsManager) {
     devBotsManager = overrides.devBotsManager;
-    // Note: InteractiveSessionStreaming is now created inside the factory
-    // and automatically handles WebSocket connections via the HTTP server
   } else {
-    // Create dependencies with HTTP server for InteractiveSessionStreaming
-    const devBotsDeps = overrides.devBotsDependencies ?? await createDevBotsManagerDependencies({
-      httpServer
-    });
+    // Create dependencies
+    const devBotsDeps = overrides.devBotsDependencies ?? await createDevBotsManagerDependencies();
     devBotsManager = new DevBotsManager(devBotsDeps);
-    // Note: InteractiveSessionStreaming WebSocket gateway is already initialized
   }
 
   if (devBotsManager) {
@@ -181,6 +184,81 @@ export async function createApp(options: CreateAppOptions = {}) {
         message: 'Docker warning emitted to clients',
         details: { warning },
       });
+    });
+
+    // Initialize Socket.IO Terminal Handler with Docker instance
+    const dockerManager = devBotsManager.getDockerManager();
+    const docker = dockerManager.getDocker();
+
+    terminalHandler = new SocketIOTerminalHandler({
+      io,
+      docker,
+      backlogLimit: config.interactiveTerminal.backlogLimit,
+      shellCommand: [config.interactiveTerminal.shellCommand],
+    });
+
+    logger.info({
+      category: 'interactive_terminal',
+      action: 'handler_initialized',
+      message: 'Socket.IO terminal handler initialized (unified architecture)',
+      details: {
+        backlogLimit: config.interactiveTerminal.backlogLimit,
+        shellCommand: config.interactiveTerminal.shellCommand,
+      },
+    });
+
+    // Wire up InteractiveSessionManager events to Socket.IO terminal handler
+    const sessionManager = devBotsManager.getInteractiveSessionManager();
+
+    sessionManager.on('sessionUpdated', async (session) => {
+      // Start terminal streaming when session transitions to 'running' with containerId
+      if (session.status === 'running' && session.containerId && terminalHandler) {
+        try {
+          await terminalHandler.startSession(session.id, session.containerId);
+          logger.info({
+            category: 'interactive_terminal',
+            action: 'socketio_streaming_started',
+            message: 'Socket.IO terminal streaming started for session',
+            details: { sessionId: session.id, containerId: session.containerId },
+          });
+        } catch (error) {
+          logger.error({
+            category: 'interactive_terminal',
+            action: 'socketio_streaming_start_failed',
+            message: 'Failed to start Socket.IO terminal streaming',
+            error,
+            details: { sessionId: session.id, containerId: session.containerId },
+          });
+        }
+      }
+    });
+
+    sessionManager.on('sessionEnded', async (session) => {
+      if (terminalHandler) {
+        try {
+          await terminalHandler.stopSession(session.id);
+          logger.info({
+            category: 'interactive_terminal',
+            action: 'socketio_streaming_stopped',
+            message: 'Socket.IO terminal streaming stopped for session',
+            details: { sessionId: session.id },
+          });
+        } catch (error) {
+          logger.error({
+            category: 'interactive_terminal',
+            action: 'socketio_streaming_stop_failed',
+            message: 'Failed to stop Socket.IO terminal streaming',
+            error,
+            details: { sessionId: session.id },
+          });
+        }
+      }
+    });
+
+    logger.info({
+      category: 'interactive_terminal',
+      action: 'event_listeners_wired',
+      message: 'Interactive session events wired to Socket.IO terminal handler',
     });
   }
 

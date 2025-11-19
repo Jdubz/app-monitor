@@ -4,7 +4,6 @@ import type { TaskQueueService } from './taskQueue.sqlite.js';
 import type { TaskExecutionService } from './taskExecution.service.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { InteractiveSessionManager } from './InteractiveSessionManager.js';
-import type { InteractiveSessionStreaming, InteractiveStreamMessage } from './InteractiveSessionStreaming.js';
 import type { SystemLifecycleService } from './systemLifecycle.service.js';
 import { MetricsEmitter } from './metricsEmitter.js';
 
@@ -14,7 +13,6 @@ export interface InitializationComponents {
   taskExecutionService: TaskExecutionService;
   ephemeralWorkerService: EphemeralWorkerService;
   interactiveSessionService: InteractiveSessionManager;
-  interactiveSessionStreamManager: InteractiveSessionStreaming;
   systemLifecycleService: SystemLifecycleService;
 }
 
@@ -224,44 +222,13 @@ export class SystemInitializationService {
 
   /**
    * Wire interactive session stream events
+   * Note: Stream events are now handled by SocketIOTerminalHandler
+   * Event listeners are wired in server.ts (sessionStarted → startSession, sessionEnded → stopSession)
    */
   wireInteractiveStreamEvents(): void {
-    this.components.interactiveSessionStreamManager.on('message', (message: InteractiveStreamMessage) => {
-      if (message.kind === 'stdout' || message.kind === 'stderr') {
-        try {
-          this.components.interactiveSessionService.recordActivity(message.sessionId, 'agent');
-        } catch (error) {
-          logger.warn({
-            category: 'system',
-            action: 'activity_record_failed',
-            message: `Failed to record agent activity for session ${message.sessionId}`,
-            error,
-          });
-        }
-      }
-    });
-
-    this.components.interactiveSessionStreamManager.on('error', ({ sessionId, error }) => {
-      logger.error({
-        category: 'system',
-        action: 'stream_error',
-        message: `Interactive stream error for session ${sessionId}`,
-        error,
-      });
-      const session = this.components.interactiveSessionService.getSessionById(sessionId);
-      if (session && session.status !== 'ended') {
-        this.components.interactiveSessionService.endSession(sessionId, error.message, 'error');
-      }
-    });
-
-    this.components.interactiveSessionStreamManager.on('closed', ({ sessionId, reason }) => {
-      const session = this.components.interactiveSessionService.getSessionById(sessionId);
-      if (session && session.status !== 'ended') {
-        this.components.interactiveSessionService.setStatus(sessionId, 'disconnecting', {
-          terminationReason: reason,
-        });
-      }
-    });
+    // Legacy method - no longer needed with Socket.IO architecture
+    // Interactive session streaming is now handled by SocketIOTerminalHandler
+    // Event listeners are wired in server.ts
   }
 
   /**

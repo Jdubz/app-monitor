@@ -27,7 +27,6 @@ import {
   type ActivityKind,
   type AllowedInteractiveModel,
 } from './InteractiveSessionManager.js';
-import type { InteractiveSessionStreaming } from './InteractiveSessionStreaming.js';
 import type { InteractiveSessionRecord } from './database.js';
 import type { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
 
@@ -75,7 +74,6 @@ export class DevBotsManager extends EventEmitter {
   private taskCompletionService!: TaskCompletionService;
   private prWorkflowOrchestrator!: PRWorkflowOrchestrator;
   private interactiveSessionManager!: InteractiveSessionManager;
-  private interactiveSessionStreaming!: InteractiveSessionStreaming;
   private systemLifecycleService!: import('./systemLifecycle.service.js').SystemLifecycleService;
   private systemInitializationService!: import('./systemInitialization.service.js').SystemInitializationService;
   private cleanupCoordinator!: import('./cleanupCoordinator.service.js').CleanupCoordinator;
@@ -106,7 +104,6 @@ export class DevBotsManager extends EventEmitter {
     // taskExecutionService is initialized later with agent selector (line 242-248)
     this.prWorkflowOrchestrator = dependencies.prWorkflowOrchestrator;
     this.interactiveSessionManager = dependencies.interactiveSessionManager;
-    this.interactiveSessionStreaming = dependencies.interactiveSessionStreaming;
     this.workerHealthMonitor = dependencies.workerHealthMonitor;
     this.systemLifecycleService = dependencies.systemLifecycleService;
     this.systemInitializationService = dependencies.systemInitializationService;
@@ -291,16 +288,8 @@ export class DevBotsManager extends EventEmitter {
     await this.interactiveSessionManager.endSession(sessionId, reason);
   }
 
-  public sendInteractiveInput(sessionId: string, payload: string): void {
-    this.interactiveSessionManager.sendInput(sessionId, payload);
-  }
-
-  public sendInteractiveSignal(
-    sessionId: string,
-    signal: 'interrupt' | 'terminate' = 'interrupt',
-  ): void {
-    this.interactiveSessionManager.sendSignal(sessionId, signal);
-  }
+  // Note: sendInput and sendSignal are now handled directly via Socket.IO
+  // Clients emit 'terminal:input' and 'terminal:signal' events to the SocketIOTerminalHandler
 
   public recordInteractiveActivity(sessionId: string, kind: ActivityKind): void {
     this.interactiveSessionManager.recordActivity(sessionId, kind);
@@ -320,6 +309,14 @@ export class DevBotsManager extends EventEmitter {
 
   public getAllowedInteractiveModels(): AllowedInteractiveModel[] {
     return this.interactiveSessionManager.getAllowedModels();
+  }
+
+  /**
+   * Get the interactive session manager
+   * Useful for wiring up event listeners (e.g., for Socket.IO terminal handler)
+   */
+  public getInteractiveSessionManager(): InteractiveSessionManager {
+    return this.interactiveSessionManager;
   }
 
   /**

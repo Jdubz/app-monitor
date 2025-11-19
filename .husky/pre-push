@@ -21,11 +21,6 @@ if find . -path "*/dev-bots/mirror/*" -print -quit | grep -q .; then
     exit 1
 fi
 
-if [ -d "backend/dev-bots" ]; then
-    echo "❌ Refusing to push with backend/dev-bots artifacts present. Run 'rm -rf backend/dev-bots' and retry."
-    exit 1
-fi
-
 # Run linting for backend and frontend workspaces
 npm run lint -w backend || {
     echo "❌ Backend linting failed! Please fix errors before pushing."

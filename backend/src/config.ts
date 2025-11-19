@@ -62,4 +62,12 @@ export const config = {
     // Maximum attempts per phase before blocking task
     maxPhaseAttempts: parseInt(process.env.MAX_PHASE_ATTEMPTS || '4', 10),
   },
+
+  // Interactive Terminal Configuration
+  interactiveTerminal: {
+    // Maximum number of terminal output messages to keep in backlog
+    backlogLimit: parseInt(process.env.TERMINAL_BACKLOG_LIMIT || '100', 10),
+    // Shell command to execute in container
+    shellCommand: process.env.TERMINAL_SHELL_COMMAND || '/bin/sh',
+  },
 };

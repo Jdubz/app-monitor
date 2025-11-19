@@ -155,12 +155,11 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
       return sendError(res, 'invalid_payload', 400, { message: 'input data is required' });
     }
 
-    try {
-      devBotsManager.sendInteractiveInput(sessionId, data);
-      sendSuccess(res, { accepted: true });
-    } catch (_error) {
-      sendError(res, 'not_found', 404, { message: 'Session not found or already ended' });
-    }
+    // Note: Input is now sent directly via Socket.IO (terminal:input event)
+    // This REST endpoint is deprecated - clients should use Socket.IO
+    sendError(res, 'deprecated', 410, {
+      message: 'This endpoint is deprecated. Use Socket.IO terminal:input event instead.'
+    });
   });
 
   /**
@@ -199,17 +198,11 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
       return sendError(res, 'invalid_payload', 400, { message: 'sessionId is required' });
     }
 
-    try {
-      devBotsManager.sendInteractiveSignal(sessionId, 'interrupt');
-      sendSuccess(res, { message: 'Interrupt signal sent' });
-    } catch (_error) {
-      sendError(
-        res,
-        'not_found',
-        404,
-        { message: `Interactive session ${sessionId} not found or not running` }
-      );
-    }
+    // Note: Signals are now sent directly via Socket.IO (terminal:signal event)
+    // This REST endpoint is deprecated - clients should use Socket.IO
+    sendError(res, 'deprecated', 410, {
+      message: 'This endpoint is deprecated. Use Socket.IO terminal:signal event instead.'
+    });
   });
 
   return router;

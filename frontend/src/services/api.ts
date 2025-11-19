@@ -1,12 +1,11 @@
 /**
  * Centralized API Service
- * 
+ *
  * Refactored to use the centralized ApiClient.
  * Replaces scattered axios calls with consistent patterns.
  */
 
 import type { ApiClient } from './ApiClient';
-import { getApiBaseUrl } from '@/utils/apiBaseUrl';
 import { createLogger } from '@/utils/logger';
 
 const log = createLogger('api');
@@ -321,48 +320,6 @@ export const handleApiError = (error: unknown): string => {
 // Re-export the apiClient for direct use if needed
 export const getApiClientInstance = getApiClient;
 
-export const getDevBotsInteractiveStreamUrl = (sessionId: string): string => {
-  const baseUrl = getApiBaseUrl();
-  const apiKey = import.meta.env.VITE_API_KEY;
-
-  // Warn if API key is missing in production
-  if (!apiKey) {
-    log.warn('VITE_API_KEY is not set - WebSocket authentication will fail if required', {
-      env: import.meta.env.MODE,
-      hasKey: !!apiKey,
-    });
-  }
-
-  let baseWsUrl: string;
-  try {
-    const parsed = new URL(baseUrl);
-    const wsProtocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
-    const basePath = parsed.pathname.replace(/\/$/, '');
-    const streamPath = '/api/dev-bots/interactive/session/' + sessionId + '/stream';
-    const normalizedPath = (basePath || '') + streamPath;
-    const ensuredPath = normalizedPath.startsWith('/') ? normalizedPath : '/' + normalizedPath;
-    baseWsUrl = wsProtocol + '//' + parsed.host + ensuredPath;
-  } catch (error) {
-    log.warn('Unable to parse API base URL for interactive stream', { error });
-    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    baseWsUrl =
-      wsProtocol +
-      '//' +
-      window.location.host +
-      '/api/dev-bots/interactive/session/' +
-      sessionId +
-      '/stream';
-  }
-
-  // Add API key as query parameter if available
-  if (apiKey) {
-    return baseWsUrl + '?apiKey=' + encodeURIComponent(apiKey);
-  }
-
-  log.warn('WebSocket URL generated without API key', { baseWsUrl });
-  return baseWsUrl;
-};
-
 // Export everything as a namespace for components that use `api.method()`
 export const api = {
   healthCheck,
@@ -379,7 +336,6 @@ export const api = {
   sendDevBotsInteractiveInput,
   sendDevBotsInteractiveInterrupt,
   sendDevBotsInteractiveHeartbeat,
-  getDevBotsInteractiveStreamUrl,
   // Intervention endpoints
   retryDevBotsTask,
   skipDevBotsTask,

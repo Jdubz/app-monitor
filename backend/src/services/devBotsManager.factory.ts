@@ -21,7 +21,6 @@ import { TaskExecutionService } from './taskExecution.service.js';
 import { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 import { TaskCompletionService } from './taskCompletion.service.js';
 import { InteractiveSessionManager } from './InteractiveSessionManager.js';
-import { InteractiveSessionStreaming } from './InteractiveSessionStreaming.js';
 import { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
 import { TaskCreationService } from './taskCreation.service.js';
 import { StatusAggregationService } from './statusAggregation.service.js';
@@ -156,17 +155,8 @@ export async function createDevBotsManagerDependencies(
   // Initialize PR monitoring for existing unmerged PRs
   await prWorkflowOrchestrator.initialize();
 
-  // Create InteractiveSessionStreaming (requires HTTP server)
-  if (!config.httpServer) {
-    throw new Error('HTTP server required for InteractiveSessionStreaming (pass via config.httpServer)');
-  }
-
-  const interactiveSessionStreaming = new InteractiveSessionStreaming({
-    docker,
-    httpServer: config.httpServer,
-    backlogLimit: 500,
-    shellCommand: ['/bin/bash'],
-  });
+  // Note: Terminal streaming is now handled by SocketIOTerminalHandler
+  // which is initialized in server.ts and wired to InteractiveSessionManager events
 
   // Create InteractiveSessionManager (consolidated from 4 services)
   const interactiveSessionManager = new InteractiveSessionManager({
@@ -176,7 +166,6 @@ export async function createDevBotsManagerDependencies(
       { provider: 'codex', name: '*' },
     ],
     workerService: ephemeralWorkerService,
-    streamManager: interactiveSessionStreaming,
   });
 
   // Note: TaskCompletionService and WorkerHealthMonitor require DevBotsManager instance
@@ -215,7 +204,6 @@ export async function createDevBotsManagerDependencies(
       taskExecutionService,
       ephemeralWorkerService,
       interactiveSessionService: interactiveSessionManager,
-      interactiveSessionStreamManager: interactiveSessionStreaming,
       systemLifecycleService
     },
     () => {}, // emit function placeholder
@@ -258,7 +246,6 @@ export async function createDevBotsManagerDependencies(
     taskCompletionService,
     prWorkflowOrchestrator,
     interactiveSessionManager,
-    interactiveSessionStreaming,
     workerHealthMonitor,
     systemLifecycleService,
     systemInitializationService,

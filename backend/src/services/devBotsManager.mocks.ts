@@ -22,7 +22,6 @@ import type { TaskExecutionService } from './taskExecution.service.js';
 import type { TaskCompletionService } from './taskCompletion.service.js';
 import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 import type { InteractiveSessionManager } from './InteractiveSessionManager.js';
-import type { InteractiveSessionStreaming } from './InteractiveSessionStreaming.js';
 import type { TaskCreationService } from './taskCreation.service.js';
 import type { StatusAggregationService } from './statusAggregation.service.js';
 import type { RetryCoordinationService } from './retryCoordination.service.js';
@@ -616,16 +615,6 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
       stopIdleWatchdog: vi.fn(),
       setStatus: vi.fn()
     } as unknown as InteractiveSessionManager,
-    interactiveSessionStreaming: {
-      attach: vi.fn().mockResolvedValue(undefined),
-      detach: vi.fn().mockResolvedValue(undefined),
-      sendInput: vi.fn(),
-      sendSignal: vi.fn(),
-      resizePty: vi.fn().mockResolvedValue(undefined),
-      getBacklog: vi.fn().mockReturnValue([]),
-      on: vi.fn(),
-      removeAllListeners: vi.fn()
-    } as unknown as InteractiveSessionStreaming,
     workerHealthMonitor: {
       start: vi.fn(),
       stop: vi.fn(),
