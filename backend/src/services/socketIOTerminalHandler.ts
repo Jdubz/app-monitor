@@ -113,7 +113,7 @@ export class SocketIOTerminalHandler {
       socket.data.terminalSessions.add(sessionId);
 
       logger.info({
-        category: 'terminal',
+        category: 'interactive_terminal',
         action: 'session_joined',
         message: 'Client joined terminal session',
         details: { sessionId, socketId: socket.id },
@@ -136,7 +136,7 @@ export class SocketIOTerminalHandler {
       socket.emit('terminal:joined', { sessionId });
     } catch (error) {
       logger.error({
-        category: 'terminal',
+        category: 'interactive_terminal',
         action: 'join_error',
         message: 'Failed to join terminal session',
         error,
@@ -158,7 +158,7 @@ export class SocketIOTerminalHandler {
     socket.data.terminalSessions?.delete(sessionId);
 
     logger.info({
-      category: 'terminal',
+      category: 'interactive_terminal',
       action: 'session_left',
       message: 'Client left terminal session',
       details: { sessionId, socketId: socket.id },
@@ -172,7 +172,7 @@ export class SocketIOTerminalHandler {
     const session = this.sessions.get(sessionId);
     if (!session?.stream) {
       logger.warn({
-        category: 'terminal',
+        category: 'interactive_terminal',
         action: 'input_no_stream',
         message: 'Attempted to send input to session without stream',
         details: { sessionId },
@@ -184,7 +184,7 @@ export class SocketIOTerminalHandler {
       session.stream.write(data);
     } catch (error) {
       logger.error({
-        category: 'terminal',
+        category: 'interactive_terminal',
         action: 'input_error',
         message: 'Failed to write to terminal stream',
         error,
@@ -212,7 +212,7 @@ export class SocketIOTerminalHandler {
       }
     } catch (error) {
       logger.error({
-        category: 'terminal',
+        category: 'interactive_terminal',
         action: 'signal_error',
         message: 'Failed to send signal to terminal',
         error,
@@ -233,14 +233,14 @@ export class SocketIOTerminalHandler {
     try {
       await session.exec.resize({ h: rows, w: cols });
       logger.debug({
-        category: 'terminal',
+        category: 'interactive_terminal',
         action: 'resized',
         message: 'Terminal resized',
         details: { sessionId, rows, cols },
       });
     } catch (error) {
       logger.error({
-        category: 'terminal',
+        category: 'interactive_terminal',
         action: 'resize_error',
         message: 'Failed to resize terminal',
         error,
@@ -321,7 +321,7 @@ export class SocketIOTerminalHandler {
       // Handle stream errors
       stream.on('error', (error: Error) => {
         logger.error({
-          category: 'terminal',
+          category: 'interactive_terminal',
           action: 'stream_error',
           message: 'Terminal stream error',
           error,
@@ -341,14 +341,14 @@ export class SocketIOTerminalHandler {
       });
 
       logger.info({
-        category: 'terminal',
+        category: 'interactive_terminal',
         action: 'session_started',
         message: 'Terminal session started',
         details: { sessionId, containerId },
       });
     } catch (error) {
       logger.error({
-        category: 'terminal',
+        category: 'interactive_terminal',
         action: 'start_error',
         message: 'Failed to start terminal session',
         error,
@@ -374,7 +374,9 @@ export class SocketIOTerminalHandler {
     }
 
     try {
-      session.stream?.destroy();
+      if (session.stream && 'destroy' in session.stream && typeof session.stream.destroy === 'function') {
+        session.stream.destroy();
+      }
       this.sessions.delete(sessionId);
 
       this.io.to(`terminal:${sessionId}`).emit('terminal:status', {
@@ -384,14 +386,14 @@ export class SocketIOTerminalHandler {
       });
 
       logger.info({
-        category: 'terminal',
+        category: 'interactive_terminal',
         action: 'session_stopped',
         message: 'Terminal session stopped',
         details: { sessionId },
       });
     } catch (error) {
       logger.error({
-        category: 'terminal',
+        category: 'interactive_terminal',
         action: 'stop_error',
         message: 'Failed to stop terminal session',
         error,
