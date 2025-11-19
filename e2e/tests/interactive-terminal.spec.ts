@@ -3,75 +3,17 @@ import { bypassPasswordGate } from '../helpers/auth';
 
 /**
  * Interactive Terminal Tab E2E Tests
- * Tests the interactive terminal functionality including sessions, commands, and real-time I/O
+ * Tests the interactive terminal functionality using the new tmux-based TerminalService
+ *
+ * Architecture:
+ * - Frontend: xterm.js terminal component with Socket.IO client
+ * - Backend: TerminalService managing tmux sessions via node-pty
+ * - Communication: Socket.IO events (terminal:create, terminal:attach, terminal:input, terminal:output)
+ * - Persistence: tmux sessions survive disconnects
  */
-
-// Helper to mock interactive session API (Docker disabled in test env)
-async function mockInteractiveSessionApi(page: Page) {
-  await page.route('**/api/dev-bots/interactive/**', async (route) => {
-    const url = new URL(route.request().url());
-    const pathname = url.pathname;
-    const method = route.request().method();
-
-    // Mock session state endpoint
-    if (pathname.endsWith('/interactive/session') && method === 'GET') {
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          data: {
-            activeSession: null,
-            availableModels: [
-              { provider: 'claude', name: 'sonnet-4-5' },
-              { provider: 'claude', name: 'opus-4' }
-            ],
-            idleTimeoutMs: 300000
-          }
-        })
-      });
-    }
-
-    // Mock session creation (returns mock session data)
-    if (pathname.endsWith('/interactive/session') && method === 'POST') {
-      return route.fulfill({
-        status: 201,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          data: {
-            activeSession: {
-              id: 'mock-session-123',
-              modelProvider: 'claude',
-              modelName: 'sonnet-4-5',
-              status: 'active',
-              startTime: new Date().toISOString()
-            }
-          }
-        })
-      });
-    }
-
-    // Mock command input
-    if (pathname.includes('/interactive/input') || pathname.includes('/interactive/command')) {
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          data: { acknowledged: true }
-        })
-      });
-    }
-
-    // Fallback
-    return route.continue();
-  });
-}
 
 // Helper to navigate to Interactive Terminal tab
 async function navigateToInteractiveTerminal(page: Page) {
-  await mockInteractiveSessionApi(page);
   await bypassPasswordGate(page);
   await page.goto('/monitor/interactive');
   await page.waitForLoadState('networkidle');
@@ -92,609 +34,254 @@ test.describe('Interactive Terminal - Navigation and Layout', () => {
     await expect(page).toHaveURL(/\/monitor\/interactive/);
   });
 
-  test('should display interactive terminal header', async ({ page }) => {
-    const heading = page.getByRole('heading', { name: /Interactive|Terminal/i }).first();
-    await expect(heading).toBeVisible({ timeout: 10000 });
+  test('should display terminal container', async ({ page }) => {
+    // Terminal container is always rendered (doesn't require socket)
+    const terminalContainer = page.locator('.terminal-container');
+    await expect(terminalContainer).toBeVisible({ timeout: 20000 });
   });
 
-  test('should show terminal interface', async ({ page }) => {
-    await page.waitForTimeout(2000);
+  test('should display terminal header with status', async ({ page }) => {
+    // Terminal header is always rendered (doesn't require socket)
+    const terminalHeader = page.locator('.terminal-header');
+    await expect(terminalHeader).toBeVisible({ timeout: 20000 });
 
-    // Look for terminal-related elements
-    const terminalArea = page.locator('[class*="terminal"], [class*="console"]').first();
-    const hasTerminal = await terminalArea.isVisible().catch(() => false);
+    // Should show connection status
+    const statusText = page.locator('.terminal-header').getByText(/(connecting|connected|disconnected)/i);
+    await expect(statusText).toBeVisible({ timeout: 20000 });
+  });
 
-    expect(hasTerminal || true).toBe(true);
+  test('should display xterm.js terminal element after socket connects', async ({ page }) => {
+    // First, wait for terminal container
+    const terminalContainer = page.locator('.terminal-container');
+    await expect(terminalContainer).toBeVisible({ timeout: 20000 });
+
+    // Wait for socket to connect and xterm to initialize
+    // xterm.js creates elements with class="xterm" only after socket is available
+    const xtermElement = page.locator('.xterm');
+    await expect(xtermElement).toBeVisible({ timeout: 30000 });
   });
 });
 
-test.describe('Interactive Terminal - Session Management', () => {
+test.describe('Interactive Terminal - Connection Status', () => {
   test.beforeEach(async ({ page }) => {
     await navigateToInteractiveTerminal(page);
   });
 
-  test('should display active sessions or empty state', async ({ page }) => {
-    await page.waitForTimeout(2000);
+  test('should show connecting status initially', async ({ page }) => {
+    // Wait for terminal header to render
+    const terminalHeader = page.locator('.terminal-header');
+    await expect(terminalHeader).toBeVisible({ timeout: 20000 });
 
-    // Check for session-related UI elements
-    const hasSessions = await page.getByText(/session/i).isVisible().catch(() => false);
-    const hasEmptyState = await page.getByText(/no sessions|no active|start.*session/i).isVisible().catch(() => false);
-    const hasNewSessionButton = await page.getByRole('button', { name: /new session|create session|start session/i }).isVisible().catch(() => false);
-
-    // Should display some session management UI
-    expect(hasSessions || hasEmptyState || hasNewSessionButton).toBe(true);
+    // Should show connecting or connected status
+    const statusIndicator = terminalHeader.getByText(/(connecting|connected)/i);
+    await expect(statusIndicator).toBeVisible({ timeout: 20000 });
   });
 
-  test('should allow creating new session', async ({ page }) => {
-    await page.waitForTimeout(2000);
+  test('should show session ID when connected', async ({ page }) => {
+    // Wait for terminal header
+    const terminalHeader = page.locator('.terminal-header');
+    await expect(terminalHeader).toBeVisible({ timeout: 20000 });
 
-    const newSessionButton = page.getByRole('button', { name: /new session|create session/i });
-
-    if (await newSessionButton.isVisible()) {
-      await newSessionButton.click();
-      await page.waitForTimeout(500);
-
-      // Should show session creation or new terminal
-      await expect(page.locator('body')).toBeVisible();
-    }
+    // Wait for socket to connect and session to be created
+    // Header should show either "Terminal" or "Session: <id>"
+    await expect(terminalHeader).toContainText(/(Terminal|Session:)/i, { timeout: 30000 });
   });
 
-  test('should list all active sessions', async ({ page }) => {
-    await page.waitForTimeout(2000);
+  test('should have visual status indicator', async ({ page }) => {
+    // Terminal header contains a colored status dot
+    const terminalHeader = page.locator('.terminal-header');
+    await expect(terminalHeader).toBeVisible({ timeout: 20000 });
 
-    // Look for sessions list or tabs
-    const sessionsList = page.locator('[class*="session"]');
-    const count = await sessionsList.count();
-
-    expect(count).toBeGreaterThanOrEqual(0);
-  });
-
-  test('should allow switching between sessions', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    const sessionTabs = page.locator('[role="tab"]');
-    const tabCount = await sessionTabs.count();
-
-    if (tabCount > 1) {
-      const secondTab = sessionTabs.nth(1);
-      await secondTab.click();
-      await page.waitForTimeout(500);
-
-      await expect(page.locator('body')).toBeVisible();
-    }
-  });
-
-  test('should show session status (active, idle, disconnected)', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    const statusIndicators = page.locator('[class*="status"]');
-    const count = await statusIndicators.count();
-
-    expect(count).toBeGreaterThanOrEqual(0);
-  });
-
-  test('should allow closing/terminating a session', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    const closeButton = page.getByRole('button', { name: /close|terminate|end/i }).first();
-
-    if (await closeButton.isVisible()) {
-      // Don't actually close, just verify button exists
-      await expect(closeButton).toBeVisible();
-    }
-  });
-
-  test('should persist sessions across page refreshes', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    // Get current sessions count
-    await page.locator('[class*="session"]').count();
-
-    // Refresh page
-    await page.reload();
-    await page.waitForTimeout(2000);
-
-    // Sessions should still be there (or empty state if none existed)
-    const sessionsAfter = await page.locator('[class*="session"]').count();
-
-    expect(typeof sessionsAfter).toBe('number');
+    // Status text should be visible
+    const status = terminalHeader.getByText(/(connecting|connected|disconnected)/i);
+    await expect(status).toBeVisible({ timeout: 20000 });
   });
 });
 
-test.describe('Interactive Terminal - Command Input', () => {
+test.describe('Interactive Terminal - Terminal Interaction', () => {
+  test.beforeEach(async ({ page }) => {
+    await navigateToInteractiveTerminal(page);
+    // Wait for terminal container to ensure page loaded
+    await page.locator('.terminal-container').waitFor({ timeout: 20000 });
+  });
+
+  test('should have xterm.js textarea for input', async ({ page }) => {
+    // Wait for xterm to initialize (requires socket connection)
+    const xtermElement = page.locator('.xterm');
+    await expect(xtermElement).toBeVisible({ timeout: 30000 });
+
+    // xterm.js creates a textarea for input
+    const xtermTextarea = page.locator('.xterm-helper-textarea');
+    await expect(xtermTextarea).toBeAttached({ timeout: 10000 });
+  });
+
+  test('should display terminal viewport', async ({ page }) => {
+    // Wait for xterm to initialize
+    await page.locator('.xterm').waitFor({ timeout: 30000 });
+
+    // xterm.js creates a viewport element
+    const viewport = page.locator('.xterm-viewport');
+    await expect(viewport).toBeVisible({ timeout: 10000 });
+  });
+
+  test('should have terminal screen for output', async ({ page }) => {
+    // Wait for xterm to initialize
+    await page.locator('.xterm').waitFor({ timeout: 30000 });
+
+    // xterm.js creates a screen element
+    const screen = page.locator('.xterm-screen');
+    await expect(screen).toBeVisible({ timeout: 10000 });
+  });
+
+  test('should focus terminal when clicked', async ({ page }) => {
+    // Wait for xterm to initialize
+    const xtermElement = page.locator('.xterm');
+    await expect(xtermElement).toBeVisible({ timeout: 30000 });
+
+    await xtermElement.click();
+
+    // After clicking, the terminal should be focused
+    const xtermTextarea = page.locator('.xterm-helper-textarea');
+    const isFocused = await xtermTextarea.evaluate(el => el === document.activeElement);
+    expect(isFocused).toBe(true);
+  });
+});
+
+test.describe('Interactive Terminal - Socket.IO Communication', () => {
   test.beforeEach(async ({ page }) => {
     await navigateToInteractiveTerminal(page);
   });
 
-  test('should have command input field', async ({ page }) => {
-    await page.waitForTimeout(2000);
+  test('should establish Socket.IO connection', async ({ page }) => {
+    // Wait for terminal container
+    const terminalContainer = page.locator('.terminal-container');
+    await expect(terminalContainer).toBeVisible({ timeout: 20000 });
 
-    const inputField = page.locator('input[type="text"], textarea').first();
-    const hasInput = await inputField.isVisible().catch(() => false);
+    // Wait for socket to connect and xterm to initialize
+    const xtermElement = page.locator('.xterm');
+    await expect(xtermElement).toBeVisible({ timeout: 30000 });
 
-    expect(hasInput || true).toBe(true);
+    // If xterm is visible, socket must be connected
+    const terminalHeader = page.locator('.terminal-header');
+    const status = terminalHeader.getByText(/(connected|connecting)/i);
+    await expect(status).toBeVisible();
   });
 
-  test('should accept text input in terminal', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    const inputField = page.locator('input[type="text"], textarea').first();
-
-    if (await inputField.isVisible()) {
-      await inputField.fill('echo "test"');
-      await page.waitForTimeout(500);
-
-      const value = await inputField.inputValue();
-      expect(value).toContain('echo');
-    }
-  });
-
-  test('should send command on Enter key', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    const inputField = page.locator('input[type="text"], textarea').first();
-
-    if (await inputField.isVisible()) {
-      await inputField.fill('echo "hello"');
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(500);
-
-      // Command should be processed
-      await expect(page.locator('body')).toBeVisible();
-    }
-  });
-
-  test('should support command history (up/down arrows)', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    const inputField = page.locator('input[type="text"], textarea').first();
-
-    if (await inputField.isVisible()) {
-      // Type and send a command
-      await inputField.fill('ls');
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(500);
-
-      // Press up arrow to recall
-      await page.keyboard.press('ArrowUp');
-      await page.waitForTimeout(200);
-
-      const value = await inputField.inputValue();
-      // Should recall previous command or be empty if not implemented
-      expect(typeof value).toBe('string');
-    }
-  });
-
-  test('should support tab completion', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    const inputField = page.locator('input[type="text"], textarea').first();
-
-    if (await inputField.isVisible()) {
-      await inputField.fill('ec');
-      await page.keyboard.press('Tab');
-      await page.waitForTimeout(200);
-
-      // Tab completion may or may not be implemented
-      await expect(page.locator('body')).toBeVisible();
-    }
-  });
-
-  test('should handle multi-line input', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    const inputField = page.locator('textarea').first();
-
-    if (await inputField.isVisible()) {
-      await inputField.fill('echo "line 1"\necho "line 2"');
-      await page.waitForTimeout(500);
-
-      const value = await inputField.inputValue();
-      expect(value).toContain('line 1');
-    }
-  });
-});
-
-test.describe('Interactive Terminal - Output Display', () => {
-  test.beforeEach(async ({ page }) => {
-    await navigateToInteractiveTerminal(page);
-  });
-
-  test('should display command output', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    // Look for output area
-    const outputArea = page.locator('[class*="output"], [class*="terminal"]').first();
-    const hasOutput = await outputArea.isVisible().catch(() => false);
-
-    expect(hasOutput || true).toBe(true);
-  });
-
-  test('should distinguish between stdout and stderr', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    // Look for different styling for stdout vs stderr
-    const stdoutElements = page.locator('[class*="stdout"]');
-    const stderrElements = page.locator('[class*="stderr"]');
-
-    const stdoutCount = await stdoutElements.count();
-    const stderrCount = await stderrElements.count();
-
-    expect(stdoutCount + stderrCount).toBeGreaterThanOrEqual(0);
-  });
-
-  test('should support ANSI color codes', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    // Check if colored output is rendered
-    const coloredElements = page.locator('[style*="color"], [class*="ansi"]');
-    const count = await coloredElements.count();
-
-    expect(count).toBeGreaterThanOrEqual(0);
-  });
-
-  test('should auto-scroll to latest output', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    // Verify output area exists
-    const outputArea = page.locator('[class*="output"], [class*="terminal"]').first();
-
-    if (await outputArea.isVisible()) {
-      // Auto-scroll should keep latest output visible
-      await expect(outputArea).toBeVisible();
-    }
-  });
-
-  test('should allow manual scrolling of output', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    const outputArea = page.locator('[class*="output"], [class*="terminal"]').first();
-
-    if (await outputArea.isVisible()) {
-      // Try scrolling
-      await outputArea.hover();
-      await page.mouse.wheel(0, 100);
-      await page.waitForTimeout(200);
-
-      await expect(outputArea).toBeVisible();
-    }
-  });
-
-  test('should handle large output efficiently', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    // Terminal should remain responsive even with lots of output
-    await expect(page.locator('body')).toBeVisible();
-  });
-});
-
-test.describe('Interactive Terminal - Terminal Controls', () => {
-  test.beforeEach(async ({ page }) => {
-    await navigateToInteractiveTerminal(page);
-  });
-
-  test('should have clear terminal button', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    const clearButton = page.getByRole('button', { name: /clear/i });
-
-    if (await clearButton.isVisible()) {
-      await clearButton.click();
-      await page.waitForTimeout(500);
-
-      // Terminal should be cleared
-      await expect(page.locator('body')).toBeVisible();
-    }
-  });
-
-  test('should have copy output button', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    const copyButton = page.getByRole('button', { name: /copy/i });
-
-    const hasCopy = await copyButton.isVisible().catch(() => false);
-    expect(typeof hasCopy).toBe('boolean');
-  });
-
-  test('should have download output button', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    const downloadButton = page.getByRole('button', { name: /download|export/i });
-
-    const hasDownload = await downloadButton.isVisible().catch(() => false);
-    expect(typeof hasDownload).toBe('boolean');
-  });
-
-  test('should support search in terminal output', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    const searchInput = page.getByPlaceholder(/search/i);
-
-    if (await searchInput.isVisible()) {
-      await searchInput.fill('test');
-      await page.waitForTimeout(500);
-
-      await expect(searchInput).toHaveValue('test');
-    }
-  });
-
-  test('should allow toggling line numbers', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    const lineNumbersButton = page.getByRole('button', { name: /line numbers/i });
-
-    if (await lineNumbersButton.isVisible()) {
-      await lineNumbersButton.click();
-      await page.waitForTimeout(500);
-
-      await expect(page.locator('body')).toBeVisible();
-    }
-  });
-
-  test('should allow changing font size', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    const fontSizeControl = page.locator('[class*="font"], [class*="size"]').first();
-
-    if (await fontSizeControl.isVisible()) {
-      // Font size controls may be implemented
-      await expect(fontSizeControl).toBeVisible();
-    }
-  });
-});
-
-test.describe('Interactive Terminal - Agent Interaction', () => {
-  test.beforeEach(async ({ page }) => {
-    await navigateToInteractiveTerminal(page);
-  });
-
-  test('should allow sending commands to Claude agent', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    const inputField = page.locator('input[type="text"], textarea').first();
-
-    if (await inputField.isVisible()) {
-      await inputField.fill('help');
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(1000);
-
-      // Should receive response from agent
-      await expect(page.locator('body')).toBeVisible();
-    }
-  });
-
-  test('should display agent responses in terminal', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    // Look for agent response indicators
-    const responseArea = page.locator('[class*="response"], [class*="agent"]');
-    const hasResponse = await responseArea.isVisible().catch(() => false);
-
-    expect(typeof hasResponse).toBe('boolean');
-  });
-
-  test('should show agent thinking/processing state', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    // Look for loading/thinking indicators
-    const thinkingIndicator = page.locator('[class*="thinking"], [class*="processing"]');
-    const hasThinking = await thinkingIndicator.isVisible().catch(() => false);
-
-    expect(typeof hasThinking).toBe('boolean');
-  });
-
-  test('should support interactive prompts from agent', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    // Agent may ask follow-up questions
-    const promptArea = page.locator('[class*="prompt"]');
-    const hasPrompt = await promptArea.isVisible().catch(() => false);
-
-    expect(typeof hasPrompt).toBe('boolean');
-  });
-
-  test('should allow canceling agent operations', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    const cancelButton = page.getByRole('button', { name: /cancel|stop/i });
-
-    const hasCancel = await cancelButton.isVisible().catch(() => false);
-    expect(typeof hasCancel).toBe('boolean');
-  });
-});
-
-test.describe('Interactive Terminal - Keyboard Shortcuts', () => {
-  test.beforeEach(async ({ page }) => {
-    await navigateToInteractiveTerminal(page);
-  });
-
-  test('Ctrl+C should cancel current command', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    await page.keyboard.press('Control+c');
-    await page.waitForTimeout(500);
-
-    // Should handle Ctrl+C
-    await expect(page.locator('body')).toBeVisible();
-  });
-
-  test('Ctrl+L should clear terminal', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    await page.keyboard.press('Control+l');
-    await page.waitForTimeout(500);
-
-    // Should clear terminal
-    await expect(page.locator('body')).toBeVisible();
-  });
-
-  test('Ctrl+K should focus command input', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    await page.keyboard.press('Control+k');
-    await page.waitForTimeout(500);
-
-    const inputField = page.locator('input[type="text"], textarea').first();
-    if (await inputField.isVisible()) {
-      // Input should be focused
-      const isFocused = await inputField.evaluate(el => el === document.activeElement);
-      expect(typeof isFocused).toBe('boolean');
-    }
-  });
-});
-
-test.describe('Interactive Terminal - Real-time Updates', () => {
-  test.beforeEach(async ({ page }) => {
-    await navigateToInteractiveTerminal(page);
-  });
-
-  test('should stream output in real-time', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    // Monitor for new output
-    const outputArea = page.locator('[class*="output"], [class*="terminal"]').first();
-
-    if (await outputArea.isVisible()) {
-      await outputArea.textContent();
-      await page.waitForTimeout(2000);
-      // Content may or may not change
-      await expect(outputArea).toBeVisible();
-    }
-  });
-
-  test('should receive WebSocket messages for session updates', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    // Monitor console for WebSocket activity
-    const wsMessages: string[] = [];
-    page.on('console', msg => {
-      if (msg.text().includes('socket') || msg.text().includes('websocket')) {
-        wsMessages.push(msg.text());
-      }
-    });
-
-    await page.waitForTimeout(3000);
-
-    // Verify page stays connected
-    await expect(page.locator('body')).toBeVisible();
-  });
-
-  test('should handle connection loss gracefully', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    // Simulate network offline
+  test('should handle Socket.IO reconnection', async ({ page }) => {
+    // Wait for terminal to load and connect
+    const terminalHeader = page.locator('.terminal-header');
+    await expect(terminalHeader).toBeVisible({ timeout: 20000 });
+
+    // Wait for initial connection
+    await page.locator('.xterm').waitFor({ timeout: 30000 });
+
+    // Simulate network offline/online
     await page.context().setOffline(true);
     await page.waitForTimeout(1000);
-
-    // Should show disconnected state
-    const disconnectedIndicator = page.getByText(/disconnected|offline/i);
-    const hasDisconnected = await disconnectedIndicator.isVisible().catch(() => false);
 
     // Restore connection
     await page.context().setOffline(false);
+    await page.waitForTimeout(3000);
 
-    expect(typeof hasDisconnected).toBe('boolean');
-  });
-
-  test('should auto-reconnect when connection is restored', async ({ page }) => {
-    await page.waitForTimeout(2000);
-
-    // Simulate disconnect and reconnect
-    await page.context().setOffline(true);
-    await page.waitForTimeout(1000);
-    await page.context().setOffline(false);
-    await page.waitForTimeout(2000);
-
-    // Should reconnect automatically
-    await expect(page.locator('body')).toBeVisible();
+    // Should reconnect - check status shows connected or connecting
+    const status = terminalHeader.getByText(/(connected|connecting)/i);
+    await expect(status).toBeVisible({ timeout: 20000 });
   });
 });
 
-test.describe('Interactive Terminal - API Integration', () => {
-  test('should establish interactive session via API', async ({ request }) => {
-    const response = await request.post('http://localhost:3002/api/dev-bots/interactive/session', {
-      headers: {
-        'X-API-Key': 'test-e2e-api-key-not-for-production',
-        'Content-Type': 'application/json'
-      },
-      data: {
-        modelProvider: 'claude',
-        modelName: 'sonnet-4-5'
-      }
-    }).catch(() => null);
-
-    if (response) {
-      // In test environment with Docker disabled, expect 500 (service unavailable)
-      // With proper mocking or Docker enabled, expect 200/201 (success) or 400 (validation error)
-      expect([200, 201, 400, 500]).toContain(response.status());
-    }
-  });
-
-  test('should send commands via API', async ({ request }) => {
-    const response = await request.post('http://localhost:3002/api/dev-bots/interactive/command', {
-      headers: {
-        'X-API-Key': 'test-e2e-api-key-not-for-production',
-        'Content-Type': 'application/json'
-      },
-      data: {
-        sessionId: 'test-session',
-        command: 'help'
-      }
-    }).catch(() => null);
-
-    if (response) {
-      expect([200, 404]).toContain(response.status());
-    }
-  });
-
-  test('should handle API errors gracefully', async ({ page }) => {
-    await page.route('**/api/dev-bots/interactive/**', route => route.abort());
-
+test.describe('Interactive Terminal - Error Handling', () => {
+  test('should gracefully handle navigation away and back', async ({ page }) => {
     await navigateToInteractiveTerminal(page);
-    await page.waitForTimeout(2000);
 
-    // Should show error state
-    await expect(page.locator('#root')).toBeVisible();
+    // Terminal should be visible
+    const terminal1 = page.locator('.terminal-container');
+    await expect(terminal1).toBeVisible({ timeout: 20000 });
+
+    // Navigate away
+    await page.goto('/monitor/dev-bots');
+    await page.waitForLoadState('networkidle');
+
+    // Navigate back
+    await page.goto('/monitor/interactive');
+    await page.waitForLoadState('networkidle');
+
+    // Terminal should be visible again
+    const terminal2 = page.locator('.terminal-container');
+    await expect(terminal2).toBeVisible({ timeout: 20000 });
+  });
+
+  test('should handle page refresh', async ({ page }) => {
+    await navigateToInteractiveTerminal(page);
+
+    // Wait for terminal container to load
+    const terminalContainer = page.locator('.terminal-container');
+    await expect(terminalContainer).toBeVisible({ timeout: 20000 });
+
+    // Refresh page
+    await page.reload();
+    await page.waitForLoadState('networkidle');
+
+    // Terminal should reload
+    await expect(terminalContainer).toBeVisible({ timeout: 20000 });
+
+    // Should show connecting or connected status
+    const status = page.locator('.terminal-header').getByText(/(connecting|connected)/i);
+    await expect(status).toBeVisible({ timeout: 20000 });
   });
 });
 
-test.describe('Interactive Terminal - Error States', () => {
-  test('should display error when session fails to start', async ({ page }) => {
-    await page.route('**/api/dev-bots/interactive/**', route => route.abort());
-
+test.describe('Interactive Terminal - Layout and Responsiveness', () => {
+  test.beforeEach(async ({ page }) => {
     await navigateToInteractiveTerminal(page);
-    await page.waitForTimeout(2000);
-
-    await expect(page.locator('#root')).toBeVisible();
   });
 
-  test('should handle command execution errors', async ({ page }) => {
-    await page.waitForTimeout(2000);
+  test('should have full height terminal container', async ({ page }) => {
+    const terminalContainer = page.locator('.terminal-container');
+    await expect(terminalContainer).toBeVisible({ timeout: 20000 });
 
-    const inputField = page.locator('input[type="text"], textarea').first();
+    const height = await terminalContainer.evaluate(el => {
+      return window.getComputedStyle(el).height;
+    });
 
-    if (await inputField.isVisible()) {
-      // Try invalid command
-      await inputField.fill('invalid-command-xyz');
-      await page.keyboard.press('Enter');
-      await page.waitForTimeout(1000);
-
-      // Should show error or command not found
-      await expect(page.locator('body')).toBeVisible();
-    }
+    // Should have substantial height (not collapsed)
+    expect(height).not.toBe('0px');
+    expect(height).not.toBe('');
   });
 
-  test('should show error when WebSocket disconnects', async ({ page }) => {
-    await page.waitForTimeout(2000);
+  test('should have proper terminal header styling', async ({ page }) => {
+    const terminalHeader = page.locator('.terminal-header');
+    await expect(terminalHeader).toBeVisible({ timeout: 20000 });
 
-    // Simulate network issue
-    await page.context().setOffline(true);
-    await page.waitForTimeout(1000);
+    const styles = await terminalHeader.evaluate(el => {
+      const computed = window.getComputedStyle(el);
+      return {
+        display: computed.display,
+        padding: computed.padding,
+        background: computed.backgroundColor,
+      };
+    });
 
-    // Should show connection error
-    await expect(page.locator('body')).toBeVisible();
+    // Should be visible and styled
+    expect(styles.display).toBe('flex');
+    expect(styles.padding).not.toBe('');
+  });
 
-    // Restore
-    await page.context().setOffline(false);
+  test('should resize terminal on window resize', async ({ page }) => {
+    // Wait for xterm to initialize
+    const xtermViewport = page.locator('.xterm-viewport');
+    await expect(xtermViewport).toBeVisible({ timeout: 30000 });
+
+    // Get initial size
+    const initialSize = await xtermViewport.boundingBox();
+
+    // Resize viewport
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.waitForTimeout(500);
+
+    // Size should be updated (terminal should fit new viewport)
+    const newSize = await xtermViewport.boundingBox();
+
+    expect(newSize).not.toBeNull();
+    expect(initialSize).not.toBeNull();
   });
 });

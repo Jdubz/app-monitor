@@ -82,7 +82,7 @@ export function Terminal({ socket, sessionId: initialSessionId, onSessionCreated
 
     // Send input to backend
     term.onData((data) => {
-      if (socket.connected) {
+      if (socket && socket.connected) {
         socket.emit('terminal:input', data);
       }
     });
@@ -90,7 +90,7 @@ export function Terminal({ socket, sessionId: initialSessionId, onSessionCreated
     // Handle terminal resize
     const handleResize = () => {
       fitAddon.fit();
-      if (socket.connected) {
+      if (socket && socket.connected) {
         socket.emit('terminal:resize', term.cols, term.rows);
       }
     };
@@ -107,11 +107,14 @@ export function Terminal({ socket, sessionId: initialSessionId, onSessionCreated
     // Cleanup
     return () => {
       window.removeEventListener('resize', handleResize);
-      socket.off('terminal:created');
-      socket.off('terminal:attached');
-      socket.off('terminal:output');
-      socket.off('terminal:closed');
-      socket.off('terminal:error');
+      // Only clean up socket listeners if socket still exists
+      if (socket) {
+        socket.off('terminal:created');
+        socket.off('terminal:attached');
+        socket.off('terminal:output');
+        socket.off('terminal:closed');
+        socket.off('terminal:error');
+      }
       term.dispose();
     };
   }, [socket, initialSessionId, onSessionCreated]);

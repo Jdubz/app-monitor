@@ -1,10 +1,15 @@
 /**
+ * @deprecated This class has been replaced by TerminalService (tmux-based terminal)
+ *
  * STUB: Socket.IO Terminal Handler
  *
- * This is a temporary stub to prevent compilation errors while we rebuild
- * the terminal feature with tmux.
+ * This stub exists for backwards compatibility during the migration period.
+ * All methods are no-ops.
  *
- * TODO: Remove this stub once new TerminalService is complete
+ * Migration completed: 2025-11-18
+ * New implementation: TerminalService (backend/src/services/TerminalService.ts)
+ *
+ * TODO: Remove this stub once all references are cleaned up (Phase 3 cleanup)
  */
 
 import type { Server as SocketIOServer } from 'socket.io';
@@ -33,11 +38,11 @@ export class SocketIOTerminalHandler {
     // Stub - does nothing
   }
 
-  getSession(_sessionId: string): unknown | undefined {
+  getSession(_sessionId: string): undefined {
     return undefined;
   }
 
-  getAllSessions(): unknown[] {
+  getAllSessions(): never[] {
     return [];
   }
 }

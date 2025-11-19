@@ -27,6 +27,9 @@ export interface TerminalSession {
   createdAt: Date;
   lastActivity: Date;
   connectedClients: Set<string>;
+  // Store disposables for cleanup
+  dataHandler?: pty.IDisposable;
+  exitHandler?: pty.IDisposable;
 }
 
 export interface TerminalServiceConfig {
@@ -38,6 +41,10 @@ export interface TerminalServiceConfig {
 /**
  * TerminalService manages persistent terminal sessions using tmux
  */
+// Default terminal dimensions - clients will send resize event after connect
+const DEFAULT_TERMINAL_COLS = 80;
+const DEFAULT_TERMINAL_ROWS = 24;
+
 export class TerminalService extends EventEmitter {
   private io: SocketIOServer;
   private sessions: Map<string, TerminalSession> = new Map();
@@ -76,8 +83,8 @@ export class TerminalService extends EventEmitter {
     try {
       const checkProcess = pty.spawn('which', ['tmux'], {
         name: 'xterm-256color',
-        cols: 80,
-        rows: 24,
+        cols: DEFAULT_TERMINAL_COLS,
+        rows: DEFAULT_TERMINAL_ROWS,
       });
 
       checkProcess.onExit(({ exitCode }) => {
@@ -157,13 +164,17 @@ export class TerminalService extends EventEmitter {
       });
 
       // Create new tmux session with error handling
+      // Note: Using default dimensions - client will send resize event after connect
       const ptyProcess = pty.spawn('tmux', ['new-session', '-s', tmuxSessionName, this.shellCommand], {
         name: 'xterm-256color',
-        cols: 80,
-        rows: 24,
+        cols: DEFAULT_TERMINAL_COLS,
+        rows: DEFAULT_TERMINAL_ROWS,
         cwd: process.cwd(),
         env: process.env as { [key: string]: string },
       });
+
+      // Join socket to room for broadcasting
+      await socket.join(`terminal:${sanitizedId}`);
 
       // Store session
       const session: TerminalSession = {
@@ -176,23 +187,45 @@ export class TerminalService extends EventEmitter {
       };
       this.sessions.set(sanitizedId, session);
 
-      // Forward output to socket
-      ptyProcess.onData((data: string) => {
-        socket.emit('terminal:output', data);
+      // Forward output to all connected clients (broadcast using Socket.IO rooms)
+      const dataHandler = ptyProcess.onData((data: string) => {
         session.lastActivity = new Date();
+        // Broadcast to all clients in the terminal's room
+        this.io.to(`terminal:${sanitizedId}`).emit('terminal:output', data);
       });
 
-      // Handle process exit
-      ptyProcess.onExit(({ exitCode }) => {
+      // Handle process exit (including startup failures)
+      const exitHandler = ptyProcess.onExit(({ exitCode, signal }) => {
         logger.info({
           category: 'interactive_terminal',
           action: 'process_exited',
           message: 'Terminal process exited',
-          details: { sessionId: sanitizedId, exitCode }
+          details: { sessionId: sanitizedId, exitCode, signal }
         });
-        socket.emit('terminal:closed', { exitCode });
+
+        // Check if this was a startup failure (quick exit with error code)
+        const sessionAge = Date.now() - session.createdAt.getTime();
+        if (exitCode !== 0 && sessionAge < 1000) {
+          // Process failed within 1 second - likely a startup error
+          logger.error({
+            category: 'interactive_terminal',
+            action: 'startup_failed',
+            message: 'Terminal process failed to start',
+            details: { sessionId: sanitizedId, exitCode, signal }
+          });
+          this.io.to(`terminal:${sanitizedId}`).emit('terminal:error', {
+            message: `Failed to start terminal: exit code ${exitCode}`
+          });
+        }
+
+        // Notify all connected clients in the room
+        this.io.to(`terminal:${sanitizedId}`).emit('terminal:closed', { exitCode });
         this.cleanupSession(sanitizedId);
       });
+
+      // Store disposables for cleanup
+      session.dataHandler = dataHandler;
+      session.exitHandler = exitHandler;
 
       // Notify client of successful creation
       socket.emit('terminal:created', { sessionId: sanitizedId });
@@ -249,13 +282,17 @@ export class TerminalService extends EventEmitter {
         }
 
         // Attach to existing tmux session
+        // Note: Using default dimensions - client will send resize event after connect
         const ptyProcess = pty.spawn('tmux', ['attach-session', '-t', tmuxSessionName], {
           name: 'xterm-256color',
-          cols: 80,
-          rows: 24,
+          cols: DEFAULT_TERMINAL_COLS,
+          rows: DEFAULT_TERMINAL_ROWS,
           cwd: process.cwd(),
           env: process.env as { [key: string]: string },
         });
+
+        // Join socket to room for broadcasting
+        await socket.join(`terminal:${sanitizedId}`);
 
         // Recreate session object
         const newSession: TerminalSession = {
@@ -268,23 +305,45 @@ export class TerminalService extends EventEmitter {
         };
         this.sessions.set(sanitizedId, newSession);
 
-        // Forward output to socket
-        ptyProcess.onData((data: string) => {
-          socket.emit('terminal:output', data);
+        // Forward output to all connected clients (broadcast using Socket.IO rooms)
+        const dataHandler = ptyProcess.onData((data: string) => {
           newSession.lastActivity = new Date();
+          // Broadcast to all clients in the terminal's room
+          this.io.to(`terminal:${sanitizedId}`).emit('terminal:output', data);
         });
 
-        // Handle process exit
-        ptyProcess.onExit(({ exitCode }) => {
+        // Handle process exit (including attach failures)
+        const exitHandler = ptyProcess.onExit(({ exitCode, signal }) => {
           logger.info({
             category: 'interactive_terminal',
             action: 'process_exited',
             message: 'Terminal process exited',
-            details: { sessionId: sanitizedId, exitCode }
+            details: { sessionId: sanitizedId, exitCode, signal }
           });
-          socket.emit('terminal:closed', { exitCode });
+
+          // Check if this was an attach failure (quick exit with error code)
+          const sessionAge = Date.now() - newSession.createdAt.getTime();
+          if (exitCode !== 0 && sessionAge < 1000) {
+            // Process failed within 1 second - likely an attach error
+            logger.error({
+              category: 'interactive_terminal',
+              action: 'attach_failed',
+              message: 'Terminal process failed to attach',
+              details: { sessionId: sanitizedId, exitCode, signal }
+            });
+            this.io.to(`terminal:${sanitizedId}`).emit('terminal:error', {
+              message: `Failed to attach to terminal: exit code ${exitCode}`
+            });
+          }
+
+          // Notify all connected clients in the room
+          this.io.to(`terminal:${sanitizedId}`).emit('terminal:closed', { exitCode });
           this.cleanupSession(sanitizedId);
         });
+
+        // Store disposables for cleanup
+        newSession.dataHandler = dataHandler;
+        newSession.exitHandler = exitHandler;
 
         socket.emit('terminal:attached', { sessionId: sanitizedId });
         socket.data.sessionId = sanitizedId;
@@ -292,6 +351,7 @@ export class TerminalService extends EventEmitter {
         this.emit('sessionReattached', newSession);
       } else {
         // Session exists in memory, just add this client
+        await socket.join(`terminal:${sanitizedId}`);
         session.connectedClients.add(socket.id);
         session.lastActivity = new Date();
         socket.data.sessionId = sanitizedId;
@@ -367,6 +427,9 @@ export class TerminalService extends EventEmitter {
       return;
     }
 
+    // Leave the Socket.IO room
+    socket.leave(`terminal:${sessionId}`);
+
     const session = this.sessions.get(sessionId);
     if (session) {
       session.connectedClients.delete(socket.id);
@@ -394,8 +457,8 @@ export class TerminalService extends EventEmitter {
       try {
         const checkProcess = pty.spawn('tmux', ['has-session', '-t', sessionName], {
           name: 'xterm-256color',
-          cols: 80,
-          rows: 24,
+          cols: DEFAULT_TERMINAL_COLS,
+          rows: DEFAULT_TERMINAL_ROWS,
         });
 
         checkProcess.onExit(({ exitCode }) => {
@@ -420,6 +483,14 @@ export class TerminalService extends EventEmitter {
     const session = this.sessions.get(sessionId);
     if (!session) {
       return;
+    }
+
+    // Dispose of event handlers to prevent memory leaks
+    if (session.dataHandler) {
+      session.dataHandler.dispose();
+    }
+    if (session.exitHandler) {
+      session.exitHandler.dispose();
     }
 
     if (session.ptyProcess) {
@@ -469,8 +540,8 @@ export class TerminalService extends EventEmitter {
       try {
         const killProcess = pty.spawn('tmux', ['kill-session', '-t', tmuxSessionName], {
           name: 'xterm-256color',
-          cols: 80,
-          rows: 24,
+          cols: DEFAULT_TERMINAL_COLS,
+          rows: DEFAULT_TERMINAL_ROWS,
         });
 
         killProcess.onExit(({ exitCode }) => {
@@ -553,8 +624,16 @@ export class TerminalService extends EventEmitter {
       clearInterval(this.idleCheckInterval);
     }
 
-    // Kill all PTY processes (but leave tmux sessions running)
+    // Clean up all sessions (dispose handlers and kill PTY processes)
     for (const session of this.sessions.values()) {
+      // Dispose of event handlers
+      if (session.dataHandler) {
+        session.dataHandler.dispose();
+      }
+      if (session.exitHandler) {
+        session.exitHandler.dispose();
+      }
+      // Kill PTY process (but leave tmux session running)
       if (session.ptyProcess) {
         session.ptyProcess.kill();
       }
