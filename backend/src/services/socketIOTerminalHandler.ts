@@ -30,7 +30,7 @@ export interface TerminalSession {
 
 export interface TerminalMessage {
   sessionId: string;
-  stream: 'stdout' | 'stderr' | 'system';
+  stream: 'stdout' | 'system';
   text: string;
   timestamp: string;
 }

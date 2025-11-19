@@ -449,6 +449,22 @@ class MockDockerManager {
       },
     };
   }
+
+  getDocker() {
+    // Return a minimal mock Docker instance for terminal handler
+    return {
+      getContainer: (_containerId: string) => ({
+        exec: async () => ({
+          start: async () => ({
+            on: () => {},
+            write: () => {},
+            destroy: () => {},
+          }),
+          resize: async () => {},
+        }),
+      }),
+    } as any;
+  }
 }
 
 export class MockDevBotsManager extends EventEmitter {
@@ -729,6 +745,11 @@ export class MockDevBotsManager extends EventEmitter {
 
   sendInteractiveSignal() {
     return;
+  }
+
+  getInteractiveSessionManager() {
+    // Return a minimal mock session manager for terminal handler event wiring
+    return new EventEmitter();
   }
 }
 
