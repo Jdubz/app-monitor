@@ -113,9 +113,8 @@ describe('Agent Assignment System', () => {
     it('should map task types to valid agents', () => {
       const taskTypes = [
         'implementation',
-        'review', 
+        'review',
         'testing',
-        'deployment',
         'documentation',
         'api-development',
         'ui-development'

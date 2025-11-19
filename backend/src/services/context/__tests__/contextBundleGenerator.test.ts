@@ -1894,7 +1894,7 @@ describe('ContextBundleGenerator', () => {
 
     it('should handle all valid task types', async () => {
       await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
-      const taskTypes = ['implementation', 'fix', 'review', 'deployment', 'pr-follow-up', 'analysis'];
+      const taskTypes = ['implementation', 'fix', 'review', 'pr-follow-up', 'analysis'];
 
       for (const taskType of taskTypes) {
         const recipe = mockRecipe({
