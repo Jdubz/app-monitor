@@ -187,13 +187,8 @@ export class DevBotsDatabase {
       ));
     });
 
-    // Migration 007: Interactive Sessions Support
-    this.applyMigration('007_interactive_sessions', () => {
-      this.db.exec(fs.readFileSync(
-        path.join(__dirname, '..', '..', 'migrations', '007_interactive_sessions.sql'),
-        'utf-8'
-      ));
-    });
+    // Migration 007: Interactive Sessions Support (REMOVED - feature rewritten with tmux)
+    // Migration 007 deleted - table will be dropped by migration 028
 
     // Migration 008: PR Review Comments Tracking
     this.applyMigration('008_pr_review_comments', () => {
@@ -416,6 +411,14 @@ export class DevBotsDatabase {
       if (!columnNames.includes('meta')) {
         this.db.exec('ALTER TABLE issues ADD COLUMN meta TEXT;');
       }
+    });
+
+    // Migration 028: Drop interactive_sessions table - feature rewritten with tmux
+    this.applyMigration('028_drop_interactive_sessions', () => {
+      this.db.exec(fs.readFileSync(
+        path.join(__dirname, '..', '..', 'migrations', '028_drop_interactive_sessions.sql'),
+        'utf-8'
+      ));
     });
   }
 

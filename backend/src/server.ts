@@ -21,12 +21,9 @@ import type {
   InterServerEvents,
   SocketData,
 } from './types/socketEvents.js';
-import { SocketIOTerminalHandler } from './services/socketIOTerminalHandler.js';
-
 // Export services for API access
 export let devBotsManager: DevBotsManager | undefined;
 export let connectionManager: ConnectionManager;
-export let terminalHandler: SocketIOTerminalHandler | undefined;
 
 export interface CreateAppOverrides {
   devBotsManager?: DevBotsManager | null;
@@ -186,80 +183,8 @@ export async function createApp(options: CreateAppOptions = {}) {
       });
     });
 
-    // Initialize Socket.IO Terminal Handler with Docker instance
-    const dockerManager = devBotsManager.getDockerManager();
-    const docker = dockerManager.getDocker();
-
-    terminalHandler = new SocketIOTerminalHandler({
-      io,
-      docker,
-      backlogLimit: config.interactiveTerminal.backlogLimit,
-      shellCommand: [config.interactiveTerminal.shellCommand],
-    });
-
-    logger.info({
-      category: 'interactive_terminal',
-      action: 'handler_initialized',
-      message: 'Socket.IO terminal handler initialized (unified architecture)',
-      details: {
-        backlogLimit: config.interactiveTerminal.backlogLimit,
-        shellCommand: config.interactiveTerminal.shellCommand,
-      },
-    });
-
-    // Wire up InteractiveSessionManager events to Socket.IO terminal handler
-    const sessionManager = devBotsManager.getInteractiveSessionManager();
-
-    sessionManager.on('sessionUpdated', async (session) => {
-      // Start terminal streaming when session transitions to 'running' with containerId
-      if (session.status === 'running' && session.containerId && terminalHandler) {
-        try {
-          await terminalHandler.startSession(session.id, session.containerId);
-          logger.info({
-            category: 'interactive_terminal',
-            action: 'socketio_streaming_started',
-            message: 'Socket.IO terminal streaming started for session',
-            details: { sessionId: session.id, containerId: session.containerId },
-          });
-        } catch (error) {
-          logger.error({
-            category: 'interactive_terminal',
-            action: 'socketio_streaming_start_failed',
-            message: 'Failed to start Socket.IO terminal streaming',
-            error,
-            details: { sessionId: session.id, containerId: session.containerId },
-          });
-        }
-      }
-    });
-
-    sessionManager.on('sessionEnded', async (session) => {
-      if (terminalHandler) {
-        try {
-          await terminalHandler.stopSession(session.id);
-          logger.info({
-            category: 'interactive_terminal',
-            action: 'socketio_streaming_stopped',
-            message: 'Socket.IO terminal streaming stopped for session',
-            details: { sessionId: session.id },
-          });
-        } catch (error) {
-          logger.error({
-            category: 'interactive_terminal',
-            action: 'socketio_streaming_stop_failed',
-            message: 'Failed to stop Socket.IO terminal streaming',
-            error,
-            details: { sessionId: session.id },
-          });
-        }
-      }
-    });
-
-    logger.info({
-      category: 'interactive_terminal',
-      action: 'event_listeners_wired',
-      message: 'Interactive session events wired to Socket.IO terminal handler',
-    });
+    // Terminal handler removed - will be replaced with simplified tmux-based solution
+    // (Previously initialized Socket.IO Terminal Handler with Docker instance here)
   }
 
   // Initialize GitHub Webhook Handler

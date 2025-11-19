@@ -19,6 +19,7 @@ import { sendSuccess, sendError } from '../../utils/apiResponse.js';
 import { WorkerLogLocator } from '../../services/taskLogLocator.js';
 import { getTaskContextService } from '../../services/taskContext.service.js';
 import { taskAutoDetectionService } from '../../services/taskAutoDetection.service.js';
+import { TaskCreationGuidelinesManager } from '../../services/taskCreationGuidelines.js';
 import { PHASE_NAMES } from '../../services/phaseConstants.js';
 import type {
   MinimalTaskPayload,
@@ -44,6 +45,7 @@ import {
 export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   const router = Router();
   const workerLogLocator = new WorkerLogLocator();
+  const taskCreationGuidelinesManager = new TaskCreationGuidelinesManager();
 
   // ============================================================================
   // Task CRUD Operations
@@ -214,6 +216,38 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
           chainId: payload.chainId
         }
       };
+
+      // --- NEW VALIDATION STEP ---
+      const validationResult = taskCreationGuidelinesManager.validateTaskData(taskData, taskData.type);
+
+      if (!validationResult.isValid) {
+        // Log the validation errors before sending to client
+        logger.warn({
+          category: 'api',
+          action: 'task_validation_failed',
+          message: 'Task submitted via minimal API failed validation',
+          details: {
+            taskType: taskData.type,
+            errors: validationResult.errors,
+            warnings: validationResult.warnings
+          }
+        });
+
+        // Send 400 Bad Request with detailed errors
+        return sendError(
+          res,
+          'Task validation failed',
+          400, // Explicitly 400 Bad Request
+          {
+            details: {
+              errors: validationResult.errors,
+              warnings: validationResult.warnings,
+              suggestions: validationResult.suggestions
+            }
+          }
+        );
+      }
+      // --- END NEW VALIDATION STEP ---
       
       // Create task using existing service
       const result = await devBotsManager.addTask(taskData);

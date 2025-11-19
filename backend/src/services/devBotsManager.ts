@@ -27,7 +27,7 @@ import {
   type ActivityKind,
   type AllowedInteractiveModel,
 } from './InteractiveSessionManager.js';
-import type { InteractiveSessionRecord } from './database.js';
+import type { InteractiveSessionRecord } from './InteractiveSessionManager.js';
 import type { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
 
 export interface RetryAttempt {
@@ -285,7 +285,7 @@ export class DevBotsManager extends EventEmitter {
   }
 
   public async endInteractiveSession(sessionId: string, reason?: string): Promise<void> {
-    await this.interactiveSessionManager.endSession(sessionId, reason);
+    await this.interactiveSessionManager.endSession(sessionId, reason || 'user_requested');
   }
 
   // Note: sendInput and sendSignal are now handled directly via Socket.IO
@@ -298,9 +298,9 @@ export class DevBotsManager extends EventEmitter {
   public updateInteractiveContext(
     sessionId: string,
     contextSnapshot?: unknown,
-    metadata?: Record<string, unknown>,
+    _metadata?: Record<string, unknown>,
   ): void {
-    this.interactiveSessionManager.updateContext(sessionId, contextSnapshot, metadata);
+    this.interactiveSessionManager.updateContext(sessionId, contextSnapshot);
   }
 
   public getInteractiveIdleTimeoutMs(): number {

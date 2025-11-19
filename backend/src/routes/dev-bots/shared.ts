@@ -10,7 +10,7 @@
 
 import { Request, Response } from 'express';
 import type { Task, TaskExecution } from '../../services/taskQueue.sqlite.js';
-import type { InteractiveSessionRecord } from '../../services/database.js';
+import type { InteractiveSessionRecord } from '../../services/InteractiveSessionManager.js';
 import type { TaskLogFileDescriptor } from '../../services/taskLogLocator.js';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
 import type { 
