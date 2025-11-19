@@ -476,6 +476,9 @@ export class TaskQueueService {
         blocked_reason TEXT,
         blocked_at INTEGER,
         blocked_by TEXT,
+        -- Migration 030 columns (resume tracking)
+        resumed_by TEXT,
+        resumed_at INTEGER,
         -- Migration 013 columns (phase system)
         phase_index INTEGER DEFAULT 1,
         phase_name TEXT,
