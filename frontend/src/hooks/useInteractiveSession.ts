@@ -6,7 +6,6 @@ import {
   startDevBotsInteractiveSession,
   endDevBotsInteractiveSession,
   sendDevBotsInteractiveInput,
-  sendDevBotsInteractiveInterrupt,
   sendDevBotsInteractiveHeartbeat,
 } from '@/services/api';
 import { BoundedLogBuffer } from '@/utils/boundedLogBuffer';
@@ -148,10 +147,10 @@ export function useInteractiveSession(
       });
     };
 
-    // Handle terminal:output (stdout/stderr)
+    // Handle terminal:output (stdout/system only - TTY mode merges stderr into stdout)
     const onOutput = (data: {
       sessionId: string;
-      stream: 'stdout' | 'stderr' | 'system';
+      stream: 'stdout' | 'system';
       text: string;
       timestamp: string;
     }) => {
@@ -164,10 +163,10 @@ export function useInteractiveSession(
       });
     };
 
-    // Handle terminal:status (connected/ended/error)
+    // Handle terminal:status (connected/ended only)
     const onStatus = (data: {
       sessionId: string;
-      state: 'connected' | 'running' | 'ended' | 'error';
+      state: 'connected' | 'ended';
       reason?: string;
     }) => {
       if (!isMountedRef.current) return;
@@ -437,13 +436,11 @@ export function useInteractiveSession(
     }
 
     try {
-      // Send interrupt via Socket.IO
-      if (socket && socketConnected && joinedSessionRef.current === sessionId) {
-        socket.emit('terminal:signal', { sessionId, signal: 'interrupt' });
-      } else {
-        // Fallback to REST API
-        await sendDevBotsInteractiveInterrupt(sessionId);
+      // Send interrupt via Socket.IO (REST API endpoint is deprecated and returns 410)
+      if (!socket || !socketConnected || joinedSessionRef.current !== sessionId) {
+        throw new Error('Socket.IO connection not available. Please reconnect and try again.');
       }
+      socket.emit('terminal:signal', { sessionId, signal: 'interrupt' });
 
       appendLog({
         id: 'system-' + Date.now(),
