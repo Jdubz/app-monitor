@@ -11,6 +11,7 @@ import type { DevBotsManagerDependencies } from './services/devBotsManager.inter
 import { ConnectionManager, setConnectionManagerInstance } from './services/connectionManager.js';
 import { GitHubWebhookHandler } from './services/githubWebhookHandler.service.js';
 import { setWebhookHandler } from './routes/github-webhooks.routes.js';
+import { TerminalService } from './services/TerminalService.js';
 import { logger } from './utils/logger.js';
 
 // CORS allowed headers for both HTTP and WebSocket
@@ -24,6 +25,7 @@ import type {
 // Export services for API access
 export let devBotsManager: DevBotsManager | undefined;
 export let connectionManager: ConnectionManager;
+export let terminalService: TerminalService | undefined;
 
 export interface CreateAppOverrides {
   devBotsManager?: DevBotsManager | null;
@@ -183,8 +185,18 @@ export async function createApp(options: CreateAppOptions = {}) {
       });
     });
 
-    // Terminal handler removed - will be replaced with simplified tmux-based solution
-    // (Previously initialized Socket.IO Terminal Handler with Docker instance here)
+    // Initialize TerminalService with tmux for persistent sessions
+    terminalService = new TerminalService({
+      io,
+      idleTimeoutMs: 30 * 60 * 1000, // 30 minutes
+      shellCommand: '/bin/bash',
+    });
+
+    logger.info({
+      category: 'system',
+      action: 'terminal_service_initialized',
+      message: 'TerminalService initialized with tmux support'
+    });
   }
 
   // Initialize GitHub Webhook Handler
@@ -331,6 +343,7 @@ export async function createApp(options: CreateAppOptions = {}) {
   const apiRouter = createApiRouter({
     devBotsManager: devBotsManager ?? undefined,
     connectionManager,
+    terminalService: terminalService ?? undefined,
   });
 
   app.use('/api', apiRouter);
