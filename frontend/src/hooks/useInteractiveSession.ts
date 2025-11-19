@@ -32,7 +32,6 @@ export interface InteractiveLogEntry {
 }
 
 export interface UseInteractiveSessionOptions {
-  enabled?: boolean;
   maxLogEntries?: number;
 }
 
@@ -59,9 +58,7 @@ export interface UseInteractiveSessionResult {
 export function useInteractiveSession(
   options: UseInteractiveSessionOptions = {},
 ): UseInteractiveSessionResult {
-  const isManuallyEnabled = options.enabled ?? true;
   const maxLogEntries = options.maxLogEntries ?? DEFAULT_LOG_CAPACITY;
-  const isEnabled = isManuallyEnabled;
 
   // Use Socket.IO instead of native WebSocket
   const { socket, isConnected: socketConnected } = useEnhancedSocket();
@@ -129,7 +126,7 @@ export function useInteractiveSession(
 
   // Setup Socket.IO event listeners for terminal events
   useEffect(() => {
-    if (!socket || !isEnabled) {
+    if (!socket) {
       return;
     }
 
@@ -217,7 +214,7 @@ export function useInteractiveSession(
       socket.off('terminal:status', onStatus);
       socket.off('terminal:error', onError);
     };
-  }, [socket, isEnabled, appendLog]);
+  }, [socket, appendLog]);
 
   // Auto-join terminal session when socket connects and session exists
   useEffect(() => {
@@ -238,10 +235,6 @@ export function useInteractiveSession(
   }, [socket, socketConnected, joinTerminalSession]);
 
   const refreshSession = useCallback(async () => {
-    if (!isEnabled) {
-      setIsFetching(false);
-      return;
-    }
     setIsFetching(true);
     setError(undefined);
     try {
@@ -277,14 +270,10 @@ export function useInteractiveSession(
         setIsFetching(false);
       }
     }
-  }, [isEnabled, socket, socketConnected, joinTerminalSession, leaveTerminalSession]);
+  }, [socket, socketConnected, joinTerminalSession, leaveTerminalSession]);
 
   const startSession = useCallback(
     async (modelProvider: string, modelName: string) => {
-      if (!isEnabled) {
-        setError('Interactive sessions are disabled');
-        return;
-      }
       setIsStarting(true);
       setError(undefined);
       try {
@@ -323,7 +312,7 @@ export function useInteractiveSession(
         }
       }
     },
-    [appendLog, isEnabled, socket, socketConnected, joinTerminalSession],
+    [appendLog, socket, socketConnected, joinTerminalSession],
   );
 
   const endSession = useCallback(async () => {
@@ -457,12 +446,6 @@ export function useInteractiveSession(
 
   // Initial session load and cleanup
   useEffect(() => {
-    if (!isEnabled) {
-      setIsFetching(false);
-      return () => {
-        isMountedRef.current = false;
-      };
-    }
     void refreshSession();
     return () => {
       isMountedRef.current = false;
@@ -471,7 +454,7 @@ export function useInteractiveSession(
         window.clearInterval(heartbeatTimerRef.current);
       }
     };
-  }, [isEnabled, refreshSession, leaveTerminalSession]);
+  }, [refreshSession, leaveTerminalSession]);
 
   // Heartbeat timer
   useEffect(() => {
