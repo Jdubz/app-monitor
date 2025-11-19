@@ -1,13 +1,13 @@
 # App Monitor Documentation
 
-**Last Updated:** 2025-11-15
+**Last Updated:** 2025-11-18
 
 ## Quick Navigation
 
 ### 🎯 Start Here
 - [Master Design Intent](architecture/master-design-intent.md) - THE source of truth for architecture
 - [Prioritized Roadmap](plans/PRIORITIZED_FEATURE_ROADMAP.md) - What to work on next
-- [Stabilization Plan](plans/APP_MONITOR_STABILIZATION_PLAN.md) - Current phase priorities
+- [Documentation System](guides/DOCUMENTATION_SYSTEM.md) - How to use this documentation
 
 ### 📖 Common Tasks
 - **Setup:** [Environment Setup](setup/ENVIRONMENT_SETUP.md) | [Production Deployment](guides/PRODUCTION_DEPLOYMENT.md)
@@ -18,60 +18,19 @@
 
 ### `/architecture` - System Design
 Core architecture and design decisions.
-- **master-design-intent.md** - Authoritative architecture document
-- **system-overview.md** - Component relationships and data flow
-
-### `/plans` - Active Roadmaps
-Current and upcoming work plans.
-- **PRIORITIZED_FEATURE_ROADMAP.md** - Feature priorities and timeline
-- **APP_MONITOR_STABILIZATION_PLAN.md** - Pre-POC stabilization work
-- **CONTEXT_MANAGEMENT_COMPLETION_PLAN.md** - Context system roadmap
-
-### `/technicalDesigns` - Unimplemented Features
-Designs for features not yet implemented.
-- **integrated-planning-system-implementation-plan.md** - Planning system design
-- **agent-selector-gemini-offload.md** - Gemini delegation strategy
-- **error-detection-and-recovery-design.md** - Recovery system design
-- **staged-task-queue.md** - Queue architecture (implemented, kept for reference)
 
 ### `/guides` - How-To & Reference
 Practical guides for development and operations.
-- **Task Management:** submission, execution, examples
-- **Development:** frontend, API, authentication, webhooks
-- **Deployment:** production setup, CI/CD, Docker
-- **Troubleshooting:** failure recovery, logging
 
-### `/setup` - Installation & Configuration
-Environment setup and deployment instructions.
-- **ENVIRONMENT_SETUP.md** - Development environment
-- **PRODUCTION_SETUP_QUICKSTART.md** - Production deployment
-- **CI_CD_SETUP.md** - Continuous integration
-- **ENV_CONFIGURATION_UPDATE.md** - Environment variable guide
+### `/plans` - Active Roadmaps
+Current and upcoming work plans.
 
-### `/analysis` - Technical Analysis
-In-depth analysis of system components (kept for reference).
-- **ECOSYSTEM_ANALYSIS.md** - Related repositories and integration points
+### `/technicalDesigns` - Unimplemented Features
+Designs for features not yet implemented.
 
-## Documentation Principles
-
-1. **Actionable** - Every document should guide action or decision-making
-2. **Current** - Remove completed work that provides no ongoing value
-3. **Organized** - Clear hierarchy: Architecture → Plans → Designs → Guides
-4. **Concise** - Direct communication, minimal fluff
-
-## Finding What You Need
-
-**I want to...**
-- *Understand the system* → Start with `architecture/master-design-intent.md`
-- *Know what to build next* → See `plans/PRIORITIZED_FEATURE_ROADMAP.md`
-- *Submit a task* → Use `guides/MINIMAL_TASK_SUBMISSION_GUIDE.md`
-- *Deploy to production* → Follow `guides/PRODUCTION_DEPLOYMENT.md`
-- *Set up dev environment* → See `setup/ENVIRONMENT_SETUP.md`
-- *Understand a feature design* → Check `technicalDesigns/`
+### `/archive` - Archived Documents
+Outdated or completed documents.
 
 ## Maintenance
 
-- **Remove** completed work with no future reference value
-- **Consolidate** duplicate or overlapping documentation
-- **Update** architecture docs when fundamental changes occur
-- **Archive** historical analysis that doesn't inform future decisions
+Please refer to the [Documentation System](guides/DOCUMENTATION_SYSTEM.md) guide for information on how to maintain this documentation.
