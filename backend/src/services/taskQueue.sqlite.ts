@@ -81,6 +81,39 @@ export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cance
 // Worker status enum
 export type WorkerStatus = 'starting' | 'running' | 'stopping' | 'stopped';
 
+/**
+ * Phase payload structure for preserving task context across attempts and blocks.
+ * Stored in tasks.phase_payload as JSON.
+ *
+ * This lightweight structure preserves only essential context for task resumption:
+ * - Git branch NAME (not content) for identifying where work happened
+ * - Last execution timestamp for staleness detection
+ * - Validation artifacts for understanding what passed/failed
+ * - Recovery metadata for understanding retry history
+ */
+export interface PhasePayload {
+  /** Git branch name for this task (e.g., "feature/task-123") */
+  gitBranch?: string;
+
+  /** Last successful commit SHA on the task branch */
+  lastCommitSha?: string;
+
+  /** Partial artifacts from last phase execution (e.g., test results, build outputs) */
+  artifacts?: Record<string, unknown>;
+
+  /** Number of recovery attempts within current phase */
+  recoveryAttempts?: number;
+
+  /** Timestamp of last phase execution */
+  lastExecutionAt?: number;
+
+  /** Environment variables relevant to task execution */
+  environmentVars?: Record<string, string>;
+
+  /** Additional metadata for extensibility */
+  metadata?: Record<string, unknown>;
+}
+
 export interface Task {
   id: string;
   type: string;
@@ -2049,6 +2082,97 @@ export class TaskQueueService {
    */
   getBlockedChains() {
     return this.chainTracker.getBlockedChains();
+  }
+
+  // ==========================================================================
+  // Phase Payload Methods (Context Preservation)
+  // ==========================================================================
+
+  /**
+   * Get phase payload for a task.
+   * Returns parsed JSON or empty object if not set.
+   */
+  getPhasePayload(taskId: string): PhasePayload {
+    const task = this.getTask(taskId);
+    if (!task || !task.phase_payload) {
+      return {};
+    }
+
+    try {
+      const payload = JSON.parse(task.phase_payload);
+      return payload as PhasePayload;
+    } catch (error) {
+      logger.warn({
+        category: 'database',
+        action: 'phase_payload_parse_error',
+        message: `Failed to parse phase_payload for task ${taskId}`,
+        error
+      });
+      return {};
+    }
+  }
+
+  /**
+   * Update phase payload for a task.
+   * Merges with existing payload, does not replace entirely.
+   * This allows incremental updates to context while preserving other fields.
+   */
+  updatePhasePayload(taskId: string, payload: Partial<PhasePayload>): void {
+    return this.transaction(() => {
+      const existingPayload = this.getPhasePayload(taskId);
+      const mergedPayload: PhasePayload = {
+        ...existingPayload,
+        ...payload,
+        // Deep merge artifacts if both exist
+        ...(existingPayload.artifacts && payload.artifacts
+          ? {
+              artifacts: {
+                ...existingPayload.artifacts,
+                ...payload.artifacts
+              }
+            }
+          : {})
+      };
+
+      const stmt = this.db.prepare(`
+        UPDATE tasks
+        SET phase_payload = ?
+        WHERE id = ?
+      `);
+
+      stmt.run(JSON.stringify(mergedPayload), taskId);
+
+      logger.debug({
+        category: 'database',
+        action: 'phase_payload_updated',
+        message: `Updated phase_payload for task ${taskId}`,
+        details: {
+          taskId,
+          updatedFields: Object.keys(payload)
+        }
+      });
+    });
+  }
+
+  /**
+   * Clear phase payload for a task.
+   * Called when task completes a phase or is reset.
+   */
+  clearPhasePayload(taskId: string): void {
+    const stmt = this.db.prepare(`
+      UPDATE tasks
+      SET phase_payload = NULL
+      WHERE id = ?
+    `);
+
+    stmt.run(taskId);
+
+    logger.debug({
+      category: 'database',
+      action: 'phase_payload_cleared',
+      message: `Cleared phase_payload for task ${taskId}`,
+      details: { taskId }
+    });
   }
 
   // ==========================================================================

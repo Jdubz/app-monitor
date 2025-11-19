@@ -635,6 +635,30 @@ export class TaskExecutionService {
           result.exitCode || 0
         );
 
+        // Persist phase execution context (git branch + artifacts) for resume capability
+        this.taskQueue.updatePhasePayload(nextTask.id, {
+          gitBranch: phaseValidation.gitBranch,
+          lastExecutionAt: Date.now(),
+          artifacts: {
+            validationPassed: phaseValidation.passed,
+            validationErrors: phaseValidation.errors,
+            phaseIndex: nextTask.phase_index,
+            phaseName: nextTask.phase_name
+          }
+        });
+
+        logger.debug({
+          category: 'phase',
+          action: 'phase_payload_updated',
+          message: `Updated phase_payload for task ${nextTask.id}`,
+          details: {
+            taskId: nextTask.id,
+            phaseIndex: nextTask.phase_index,
+            gitBranch: phaseValidation.gitBranch,
+            validationPassed: phaseValidation.passed
+          }
+        });
+
         // Check if validation passed
         if (phaseValidation.passed) {
           // Phase validated successfully - complete task
