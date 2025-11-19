@@ -939,7 +939,7 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       });
       sendError(res, 'Failed to resume task', 500, {
         message: error instanceof Error ? error.message : String(error),
-        taskId: req.params.taskId
+        details: { taskId: req.params.taskId }
       });
     }
   });

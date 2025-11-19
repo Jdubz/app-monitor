@@ -25,6 +25,7 @@ export interface DevBotsStatus {
   tasks: {
     pending: Task[];
     active: Task[];
+    blocked: Task[];
     completed: Task[];
     failed: Task[];
   };
