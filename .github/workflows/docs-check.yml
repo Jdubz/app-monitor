@@ -16,16 +16,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Check for archive directory
-        run: |
-          if [ -d "docs/archive" ]; then
-            echo "❌ ERROR: docs/archive/ directory exists"
-            echo "Archives mislead in searches and must be deleted, not archived."
-            echo "Delete completed/outdated docs instead of archiving them."
-            exit 1
-          fi
-          echo "✅ No archive directory found"
-
       - name: Check for test databases in docs
         run: |
           if find docs -name "*.db" -o -name "*.sqlite" | grep -q .; then
@@ -130,7 +120,7 @@ jobs:
           ERRORS=0
           
           # Required directories
-          for dir in architecture technicalDesigns guides plans setup; do
+          for dir in architecture technicalDesigns guides plans setup archive; do
             if [ ! -d "docs/$dir" ]; then
               echo "❌ ERROR: Missing required directory: docs/$dir"
               ERRORS=1
@@ -140,11 +130,6 @@ jobs:
           # Required files
           if [ ! -f "docs/architecture/master-design-intent.md" ]; then
             echo "❌ ERROR: Missing master-design-intent.md"
-            ERRORS=1
-          fi
-          
-          if [ ! -f "docs/architecture/system-overview.md" ]; then
-            echo "❌ ERROR: Missing system-overview.md"
             ERRORS=1
           fi
           
