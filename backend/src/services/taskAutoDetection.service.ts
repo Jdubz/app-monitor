@@ -10,36 +10,10 @@
 
 import { simpleGit, SimpleGit } from 'simple-git';
 import { logger } from '../utils/logger.js';
+import { inferRiskLevelFromFiles } from '../utils/riskAssessment.js';
 import { ContextRecipeSelector } from './context/contextRecipeSelector.js';
 import type { RecipeTaskType } from '../types/contextRecipe.js';
 import type { MinimalTaskPayload, TaskAutoDetectionResult } from '@app-monitor/api-contracts';
-
-// Centralized risk pattern schemas available for future content-based risk assessment
-// Currently using FILE_RISK_PATTERNS for path-based detection
-// Future: Use RISK_PATTERNS and assessRiskFromContent() from '../config/schemas.js'
-
-// File-based risk patterns (complement content-based risk assessment)
-interface FileRiskPattern {
-  pattern: RegExp;
-  level: 'minimal' | 'low' | 'medium' | 'high';
-}
-
-const FILE_RISK_PATTERNS: FileRiskPattern[] = [
-  { pattern: /docker\//i, level: 'high' },
-  { pattern: /migrations?\//i, level: 'high' },
-  { pattern: /\.env|secrets|credentials|keys/i, level: 'high' },
-  { pattern: /scripts\/deploy|scripts\/production/i, level: 'high' },
-  { pattern: /backend\/src\/services\//i, level: 'medium' },
-  { pattern: /backend\/src\/routes\//i, level: 'medium' },
-  { pattern: /database|sql|schema/i, level: 'medium' },
-  { pattern: /config\//i, level: 'medium' },
-  { pattern: /frontend\/src\/components\//i, level: 'low' },
-  { pattern: /frontend\/src\/services\//i, level: 'low' },
-  { pattern: /tests?\//i, level: 'low' },
-  { pattern: /\.test\.|\.spec\./i, level: 'low' },
-  { pattern: /docs?\//i, level: 'minimal' },
-  { pattern: /readme|contributing|changelog/i, level: 'minimal' },
-];
 
 const DEFAULT_OUTPUTS: Record<string, string[]> = {
   implementation: ['unit-tests', 'integration-tests', 'documentation'],
@@ -169,38 +143,10 @@ export class TaskAutoDetectionService {
   
   /**
    * Infer risk level from file paths using pattern matching
-   * Returns highest risk level found across all files
+   * Delegates to centralized risk assessment utility
    */
   private inferRiskLevel(files: string[]): 'minimal' | 'low' | 'medium' | 'high' {
-    if (files.length === 0) return 'low';
-
-    const riskScores = { minimal: 0, low: 0, medium: 0, high: 0 };
-
-    for (const file of files) {
-      const match = FILE_RISK_PATTERNS.find(p => p.pattern.test(file));
-      if (match) {
-        riskScores[match.level]++;
-      } else {
-        riskScores.low++;  // Default to low if no pattern matches
-      }
-    }
-
-    logger.debug({
-      category: 'context',
-      action: 'risk_level_inferred',
-      message: 'Inferred risk level from file patterns',
-      details: {
-        filesCount: files.length,
-        riskScores,
-        note: 'Uses FILE_RISK_PATTERNS for path-based detection. Content-based risk assessment available via assessRiskFromContent()'
-      }
-    });
-
-    // Return highest risk level with non-zero count
-    if (riskScores.high > 0) return 'high';
-    if (riskScores.medium > 0) return 'medium';
-    if (riskScores.low > 0) return 'low';
-    return 'minimal';
+    return inferRiskLevelFromFiles(files);
   }
 }
 

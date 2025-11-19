@@ -16,11 +16,10 @@ import type { DevBotsManager } from '../../services/devBotsManager.js';
 import type { TaskQueueService } from '../../services/taskQueue.sqlite.js';
 import { logger } from '../../utils/logger.js';
 import { sendSuccess, sendError } from '../../utils/apiResponse.js';
-import { ValidationError, BadRequestError } from '../../errors/ValidationError.js';
+import { BadRequestError } from '../../errors/ValidationError.js';
 import { WorkerLogLocator } from '../../services/taskLogLocator.js';
 import { getTaskContextService } from '../../services/taskContext.service.js';
 import { taskAutoDetectionService } from '../../services/taskAutoDetection.service.js';
-import { TaskCreationGuidelinesManager } from '../../services/taskCreationGuidelines.js';
 import { PHASE_NAMES } from '../../services/phaseConstants.js';
 import type {
   MinimalTaskPayload,
@@ -46,7 +45,6 @@ import {
 export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   const router = Router();
   const workerLogLocator = new WorkerLogLocator();
-  const taskCreationGuidelinesManager = new TaskCreationGuidelinesManager();
 
   // ============================================================================
   // Task CRUD Operations
@@ -175,17 +173,17 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
     try {
       const payload: MinimalTaskPayload = req.body;
 
-      // Validate required fields
+      // Validate required fields only
       if (!payload.title || !payload.taskType || !payload.intent) {
         throw new BadRequestError('Missing required fields', {
           provided: Object.keys(payload),
           required: ['title', 'taskType', 'intent']
         });
       }
-      
+
       // Auto-detect missing fields
       const detected = await taskAutoDetectionService.detectFields(payload);
-      
+
       // Convert to SimpleTaskData format (matches existing task creation)
       const taskData = {
         type: payload.taskType,
@@ -210,28 +208,18 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         }
       };
 
-      // --- STRUCTURED VALIDATION ---
-      const validationResult = taskCreationGuidelinesManager.validateTaskData(taskData, taskData.type);
-
-      // Merge auto-detection warnings into validation warnings
-      const allWarnings = [
-        ...validationResult.warnings,
-        ...detected.warnings.map(w => `Auto-detection: ${w}`)
-      ];
-
-      if (!validationResult.isValid) {
-        // Throw ValidationError which will be caught by error middleware
-        throw new ValidationError('Task validation failed', {
-          errors: validationResult.errors,
-          warnings: allWarnings,
-          suggestions: validationResult.suggestions
-        });
-      }
-      // --- END VALIDATION ---
-      
-      // Create task using existing service
+      // Create task using existing service (validation happens in service layer)
       const result = await devBotsManager.addTask(taskData);
-      
+
+      // Merge auto-detection warnings into validation result
+      const mergedValidation = {
+        ...result.validation,
+        warnings: [
+          ...result.validation.warnings,
+          ...detected.warnings.map(w => `Auto-detection: ${w}`)
+        ]
+      };
+
       logger.info({
         category: 'api',
         action: 'task_created_minimal',
@@ -245,12 +233,12 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
           hasWarnings: detected.warnings.length > 0
         }
       });
-      
+
       sendSuccess(
         res,
         {
           task: mapTaskToContract(result.task),
-          validation: result.validation,
+          validation: mergedValidation,
           autoDetection: detected
         },
         201
