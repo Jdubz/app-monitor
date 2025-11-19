@@ -30,7 +30,6 @@ Current and upcoming work plans.
 ### `/technicalDesigns` - Unimplemented Features
 Designs for features not yet implemented.
 - **integrated-planning-system-implementation-plan.md** - Planning system design
-- **agent-selector-gemini-offload.md** - Gemini delegation strategy
 - **error-detection-and-recovery-design.md** - Recovery system design
 - **staged-task-queue.md** - Queue architecture (implemented, kept for reference)
 
