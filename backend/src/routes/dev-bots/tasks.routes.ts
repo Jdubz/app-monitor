@@ -312,8 +312,10 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
           'Task submission failed validation',
           400,
           {
-            errors: submissionValidation.errors,
-            warnings: submissionValidation.warnings
+            details: {
+              errors: submissionValidation.errors,
+              warnings: submissionValidation.warnings
+            }
           }
         );
       }
