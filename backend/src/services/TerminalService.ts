@@ -173,6 +173,9 @@ export class TerminalService extends EventEmitter {
         env: process.env as { [key: string]: string },
       });
 
+      // Join socket to room for broadcasting
+      await socket.join(`terminal:${sanitizedId}`);
+
       // Store session
       const session: TerminalSession = {
         id: sanitizedId,
@@ -184,27 +187,39 @@ export class TerminalService extends EventEmitter {
       };
       this.sessions.set(sanitizedId, session);
 
-      // Forward output to all connected clients (broadcast)
+      // Forward output to all connected clients (broadcast using Socket.IO rooms)
       const dataHandler = ptyProcess.onData((data: string) => {
         session.lastActivity = new Date();
-        // Broadcast to all connected clients
-        for (const clientId of session.connectedClients) {
-          this.io.to(clientId).emit('terminal:output', data);
-        }
+        // Broadcast to all clients in the terminal's room
+        this.io.to(`terminal:${sanitizedId}`).emit('terminal:output', data);
       });
 
-      // Handle process exit
-      const exitHandler = ptyProcess.onExit(({ exitCode }) => {
+      // Handle process exit (including startup failures)
+      const exitHandler = ptyProcess.onExit(({ exitCode, signal }) => {
         logger.info({
           category: 'interactive_terminal',
           action: 'process_exited',
           message: 'Terminal process exited',
-          details: { sessionId: sanitizedId, exitCode }
+          details: { sessionId: sanitizedId, exitCode, signal }
         });
-        // Notify all connected clients
-        for (const clientId of session.connectedClients) {
-          this.io.to(clientId).emit('terminal:closed', { exitCode });
+
+        // Check if this was a startup failure (quick exit with error code)
+        const sessionAge = Date.now() - session.createdAt.getTime();
+        if (exitCode !== 0 && sessionAge < 1000) {
+          // Process failed within 1 second - likely a startup error
+          logger.error({
+            category: 'interactive_terminal',
+            action: 'startup_failed',
+            message: 'Terminal process failed to start',
+            details: { sessionId: sanitizedId, exitCode, signal }
+          });
+          this.io.to(`terminal:${sanitizedId}`).emit('terminal:error', {
+            message: `Failed to start terminal: exit code ${exitCode}`
+          });
         }
+
+        // Notify all connected clients in the room
+        this.io.to(`terminal:${sanitizedId}`).emit('terminal:closed', { exitCode });
         this.cleanupSession(sanitizedId);
       });
 
@@ -276,6 +291,9 @@ export class TerminalService extends EventEmitter {
           env: process.env as { [key: string]: string },
         });
 
+        // Join socket to room for broadcasting
+        await socket.join(`terminal:${sanitizedId}`);
+
         // Recreate session object
         const newSession: TerminalSession = {
           id: sanitizedId,
@@ -287,27 +305,39 @@ export class TerminalService extends EventEmitter {
         };
         this.sessions.set(sanitizedId, newSession);
 
-        // Forward output to all connected clients (broadcast)
+        // Forward output to all connected clients (broadcast using Socket.IO rooms)
         const dataHandler = ptyProcess.onData((data: string) => {
           newSession.lastActivity = new Date();
-          // Broadcast to all connected clients
-          for (const clientId of newSession.connectedClients) {
-            this.io.to(clientId).emit('terminal:output', data);
-          }
+          // Broadcast to all clients in the terminal's room
+          this.io.to(`terminal:${sanitizedId}`).emit('terminal:output', data);
         });
 
-        // Handle process exit
-        const exitHandler = ptyProcess.onExit(({ exitCode }) => {
+        // Handle process exit (including attach failures)
+        const exitHandler = ptyProcess.onExit(({ exitCode, signal }) => {
           logger.info({
             category: 'interactive_terminal',
             action: 'process_exited',
             message: 'Terminal process exited',
-            details: { sessionId: sanitizedId, exitCode }
+            details: { sessionId: sanitizedId, exitCode, signal }
           });
-          // Notify all connected clients
-          for (const clientId of newSession.connectedClients) {
-            this.io.to(clientId).emit('terminal:closed', { exitCode });
+
+          // Check if this was an attach failure (quick exit with error code)
+          const sessionAge = Date.now() - newSession.createdAt.getTime();
+          if (exitCode !== 0 && sessionAge < 1000) {
+            // Process failed within 1 second - likely an attach error
+            logger.error({
+              category: 'interactive_terminal',
+              action: 'attach_failed',
+              message: 'Terminal process failed to attach',
+              details: { sessionId: sanitizedId, exitCode, signal }
+            });
+            this.io.to(`terminal:${sanitizedId}`).emit('terminal:error', {
+              message: `Failed to attach to terminal: exit code ${exitCode}`
+            });
           }
+
+          // Notify all connected clients in the room
+          this.io.to(`terminal:${sanitizedId}`).emit('terminal:closed', { exitCode });
           this.cleanupSession(sanitizedId);
         });
 
@@ -321,6 +351,7 @@ export class TerminalService extends EventEmitter {
         this.emit('sessionReattached', newSession);
       } else {
         // Session exists in memory, just add this client
+        await socket.join(`terminal:${sanitizedId}`);
         session.connectedClients.add(socket.id);
         session.lastActivity = new Date();
         socket.data.sessionId = sanitizedId;
@@ -395,6 +426,9 @@ export class TerminalService extends EventEmitter {
     if (!sessionId) {
       return;
     }
+
+    // Leave the Socket.IO room
+    socket.leave(`terminal:${sessionId}`);
 
     const session = this.sessions.get(sessionId);
     if (session) {

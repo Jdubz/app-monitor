@@ -38,11 +38,11 @@ export class SocketIOTerminalHandler {
     // Stub - does nothing
   }
 
-  getSession(_sessionId: string): unknown | undefined {
+  getSession(_sessionId: string): undefined {
     return undefined;
   }
 
-  getAllSessions(): unknown[] {
+  getAllSessions(): never[] {
     return [];
   }
 }

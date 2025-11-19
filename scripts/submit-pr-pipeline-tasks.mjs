@@ -40,7 +40,8 @@ async function submitTask(task) {
   };
 
   if (!minimalPayload.intent) {
-    console.error('❌ Error: Task intent is missing. Please provide "investigation" or "constraints" in your task definition.');
+    console.error('❌ Error: Task intent is missing. Please provide at least one of "investigation" or "constraints" in your task definition.');
+    console.error('   The intent field describes what the task should accomplish.');
     throw new Error('Task intent missing.');
   }
 
