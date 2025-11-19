@@ -826,6 +826,45 @@ export class EphemeralWorkerService {
         },
       });
 
+      // Step 1.5: Extract git branch name from container for context preservation
+      let gitBranch: string | undefined;
+      try {
+        const Docker = (await import('dockerode')).default;
+        const docker = new Docker();
+        const container = docker.getContainer(containerId);
+        const branchExec = await container.exec({
+          Cmd: ['git', 'branch', '--show-current'],
+          AttachStdout: true,
+          AttachStderr: true,
+          WorkingDir: '/workspace'
+        });
+        const branchStream = await branchExec.start({ Detach: false });
+        const branchOutput = await new Promise<string>((resolve) => {
+          let output = '';
+          branchStream.on('data', (chunk: Buffer) => {
+            output += chunk.toString();
+          });
+          branchStream.on('end', () => resolve(output));
+        });
+        // Parse git output (strip Docker stream headers and whitespace)
+        gitBranch = branchOutput.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim();
+        if (gitBranch) {
+          logger.debug({
+            category: 'phase',
+            action: 'git_branch_extracted',
+            message: `Extracted git branch "${gitBranch}" from container`,
+            details: { taskId: task.id, gitBranch, containerId }
+          });
+        }
+      } catch (error) {
+        logger.warn({
+          category: 'phase',
+          action: 'git_branch_extraction_failed',
+          message: `Failed to extract git branch: ${error instanceof Error ? error.message : String(error)}`,
+          details: { taskId: task.id, containerId, error }
+        });
+      }
+
       // Step 2: Run phase validation
       logger.info({
         category: 'phase',
@@ -950,7 +989,29 @@ export class EphemeralWorkerService {
           JSON.stringify(recoveryResult),
           recoveryResult.success ? 'success' : 'failed'
         );
+
+        // Save recovery context to phase_payload
+        this.taskQueue.updatePhasePayload(task.id, {
+          recoveryAttempts: task.phase_attempts,
+          lastExecutionAt: Date.now(),
+          metadata: {
+            lastRecoveryCategory: recoveryResult.category,
+            lastRecoveryDiagnosis: recoveryResult.diagnosis
+          }
+        });
       }
+
+      // Save phase execution context to phase_payload (including git branch)
+      this.taskQueue.updatePhasePayload(task.id, {
+        gitBranch: gitBranch || undefined,
+        lastExecutionAt: Date.now(),
+        artifacts: {
+          validationPassed: validation.passed,
+          validationErrors: validation.errors,
+          phaseIndex: task.phase_index,
+          phaseName: task.phase_name
+        }
+      });
 
       // Step 5: Advance phase if validation passed
       if (validation.passed) {
