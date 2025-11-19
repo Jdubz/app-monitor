@@ -15,12 +15,12 @@ describe('ContextRecipeLoader', () => {
   });
 
   describe('loadRecipe()', () => {
-    it('should load deployment recipe successfully', async () => {
-      const result = await loader.loadRecipe('deployment');
+    it('should load fix-debugging recipe successfully', async () => {
+      const result = await loader.loadRecipe('fix-debugging');
 
       expect(result.success).toBe(true);
       expect(result.recipe).toBeDefined();
-      expect(result.recipe?.profile).toBe('deployment');
+      expect(result.recipe?.profile).toBe('fix-debugging');
       expect(result.recipe?.version).toMatch(/^\d+\.\d+\.\d+$/);
       expect(result.recipe?.sources).toBeInstanceOf(Array);
       expect(result.recipe?.sources.length).toBeGreaterThan(0);
@@ -71,8 +71,8 @@ describe('ContextRecipeLoader', () => {
     });
 
     it('should cache loaded recipes', async () => {
-      const result1 = await loader.loadRecipe('deployment');
-      const result2 = await loader.loadRecipe('deployment');
+      const result1 = await loader.loadRecipe('fix-debugging');
+      const result2 = await loader.loadRecipe('fix-debugging');
 
       expect(result1.success).toBe(true);
       expect(result2.success).toBe(true);
@@ -82,8 +82,8 @@ describe('ContextRecipeLoader', () => {
     it('should not cache when caching is disabled', async () => {
       const noCacheLoader = new ContextRecipeLoader({ cacheRecipes: false });
 
-      const result1 = await noCacheLoader.loadRecipe('deployment');
-      const result2 = await noCacheLoader.loadRecipe('deployment');
+      const result1 = await noCacheLoader.loadRecipe('fix-debugging');
+      const result2 = await noCacheLoader.loadRecipe('fix-debugging');
 
       expect(result1.success).toBe(true);
       expect(result2.success).toBe(true);
@@ -97,7 +97,7 @@ describe('ContextRecipeLoader', () => {
       const recipes = await loader.loadAllRecipes();
 
       expect(recipes.size).toBeGreaterThanOrEqual(5);
-      expect(recipes.has('deployment')).toBe(true);
+      expect(recipes.has('fix-debugging')).toBe(true);
       expect(recipes.has('pr-workflow')).toBe(true);
       expect(recipes.has('failure-recovery')).toBe(true);
       expect(recipes.has('dev-monitor')).toBe(true);
@@ -119,18 +119,18 @@ describe('ContextRecipeLoader', () => {
   });
 
   describe('validateRecipeFile()', () => {
-    it('should validate deployment recipe file', async () => {
-      const filePath = `${loader.getRecipeDir()}/deployment.yaml`;
+    it('should validate fix-debugging recipe file', async () => {
+      const filePath = `${loader.getRecipeDir()}/fix-debugging.yaml`;
       const result = await loader.validateRecipeFile(filePath);
 
       expect(result.valid).toBe(true);
       expect(result.errors).toHaveLength(0);
-      expect(result.profile).toBe('deployment');
+      expect(result.profile).toBe('fix-debugging');
     });
 
     it('should validate all recipe files', async () => {
       const recipeFiles = [
-        'deployment.yaml',
+        'fix-debugging.yaml',
         'pr-workflow.yaml',
         'failure-recovery.yaml',
         'dev-monitor.yaml',
@@ -162,7 +162,7 @@ describe('ContextRecipeLoader', () => {
 
   describe('default application', () => {
     it('should apply default size limits', async () => {
-      const result = await loader.loadRecipe('deployment');
+      const result = await loader.loadRecipe('fix-debugging');
 
       expect(result.success).toBe(true);
       expect(result.recipe?.sizeLimit).toBeDefined();
@@ -171,7 +171,7 @@ describe('ContextRecipeLoader', () => {
     });
 
     it('should apply default output configuration', async () => {
-      const result = await loader.loadRecipe('deployment');
+      const result = await loader.loadRecipe('fix-debugging');
 
       expect(result.success).toBe(true);
       expect(result.recipe?.outputs).toBeDefined();
@@ -181,7 +181,7 @@ describe('ContextRecipeLoader', () => {
     });
 
     it('should apply default TTL', async () => {
-      const result = await loader.loadRecipe('deployment');
+      const result = await loader.loadRecipe('fix-debugging');
 
       expect(result.success).toBe(true);
       expect(result.recipe?.ttl).toBeDefined();
@@ -189,7 +189,7 @@ describe('ContextRecipeLoader', () => {
     });
 
     it('should ensure arrays exist', async () => {
-      const result = await loader.loadRecipe('deployment');
+      const result = await loader.loadRecipe('fix-debugging');
 
       expect(result.success).toBe(true);
       expect(result.recipe?.taskTypes).toBeInstanceOf(Array);
@@ -199,7 +199,7 @@ describe('ContextRecipeLoader', () => {
     });
 
     it('should ensure required is boolean', async () => {
-      const result = await loader.loadRecipe('deployment');
+      const result = await loader.loadRecipe('fix-debugging');
 
       expect(result.success).toBe(true);
       expect(typeof result.recipe?.required).toBe('boolean');
@@ -234,7 +234,7 @@ describe('ContextRecipeLoader', () => {
     });
 
     it('should have valid sources in all recipes', async () => {
-      const recipeNames = ['deployment', 'pr-workflow', 'failure-recovery', 'dev-monitor', 'scope-control'];
+      const recipeNames = ['fix-debugging', 'pr-workflow', 'failure-recovery', 'dev-monitor', 'scope-control'];
 
       for (const name of recipeNames) {
         const result = await loader.loadRecipe(name);
@@ -255,14 +255,14 @@ describe('ContextRecipeLoader', () => {
   describe('cache management', () => {
     it('should clear cache successfully', async () => {
       // Load a recipe to cache it
-      const result1 = await loader.loadRecipe('deployment');
+      const result1 = await loader.loadRecipe('fix-debugging');
       expect(result1.success).toBe(true);
 
       // Clear cache
       loader.clearCache();
 
       // Load again (should read from file, not cache)
-      const result2 = await loader.loadRecipe('deployment');
+      const result2 = await loader.loadRecipe('fix-debugging');
       expect(result2.success).toBe(true);
 
       // Different instances after cache clear

@@ -1,16 +1,18 @@
 /**
  * Context Delivery Service
- * 
+ *
  * Manages context bundle generation and delivery to worker containers.
  * Extracted from EphemeralWorkerService to apply Single Responsibility Principle.
- * 
+ *
  * Part of P1 refactoring plan - Week 2: Extract Context Management
  */
 
 import fs from 'fs';
 import tar from 'tar-fs';
 import type Docker from 'dockerode';
+import { TASK_TYPES } from '@app-monitor/api-contracts';
 import { logger } from '../utils/logger.js';
+import { mapTaskType } from '../utils/taskTypeMapper.js';
 import { ContextBundleGenerator } from './context/index.js';
 import type { Task } from './taskQueue.sqlite.js';
 
@@ -67,7 +69,7 @@ export class ContextDeliveryService {
     try {
       // Regenerate bundle (will use cache if available)
       const contextResult = await this.contextGenerator.generateBundle({
-        taskType: (task.type || 'implementation') as 'implementation' | 'fix' | 'review' | 'deployment' | 'pr-follow-up' | 'analysis',
+        taskType: mapTaskType(task.type || TASK_TYPES.IMPLEMENTATION),
         targetFiles: task.files,
         force: false  // Use cached bundle if available
       });
@@ -188,7 +190,7 @@ export class ContextDeliveryService {
 
     try {
       const contextResult = await this.contextGenerator.generateBundle({
-        taskType: (task.type || 'implementation') as 'implementation' | 'fix' | 'review' | 'deployment' | 'pr-follow-up' | 'analysis',
+        taskType: mapTaskType(task.type || TASK_TYPES.IMPLEMENTATION),
         targetFiles: task.files!,
         force: false
       });

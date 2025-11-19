@@ -1,20 +1,45 @@
 import { AppMonitorMcpServer } from '../server';
 import Database from 'better-sqlite3';
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 describe('MCP Server Integration', () => {
   let server: AppMonitorMcpServer;
   let db: Database.Database;
+  let mockServices: any;
 
   beforeEach(() => {
     db = new Database(':memory:');
-    server = new AppMonitorMcpServer({ databasePath: ':memory:' });
+
+    // Mock services
+    mockServices = {
+        devBotsManager: {
+            getTaskQueue: vi.fn().mockReturnValue({
+                createTask: vi.fn(),
+                getTask: vi.fn(),
+                listTasks: vi.fn(),
+                unblockTask: vi.fn(),
+                cancelTask: vi.fn(),
+                completeTask: vi.fn(),
+                failTask: vi.fn(),
+            }),
+            getActiveBots: vi.fn(),
+            getBotStatus: vi.fn(),
+            recoverBot: vi.fn(),
+            getHeartbeatStatus: vi.fn(),
+            getPRWorkflowOrchestrator: vi.fn().mockReturnValue({
+                evaluatePR: vi.fn(),
+                getPRStatus: vi.fn(),
+            }),
+        }
+    };
+
+    server = new AppMonitorMcpServer({
+        databasePath: ':memory:',
+        services: mockServices
+    });
   });
 
   it('should initialize the server without errors', async () => {
-    // If the server initializes without throwing an error,
-    // we can infer that all tools were registered correctly.
     expect(server).toBeInstanceOf(AppMonitorMcpServer);
   });
 });

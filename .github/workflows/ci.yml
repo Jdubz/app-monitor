@@ -159,6 +159,9 @@ jobs:
             shared/api-contracts/node_modules
           key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
 
+      - name: Build api-contracts
+        run: npm run build -w @app-monitor/api-contracts
+
       - name: Test backend
         run: npm run test -w backend
         env:
@@ -187,6 +190,9 @@ jobs:
             frontend/node_modules
             shared/api-contracts/node_modules
           key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Build api-contracts
+        run: npm run build -w @app-monitor/api-contracts
 
       - name: Run all backend integration tests
         working-directory: backend

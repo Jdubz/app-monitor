@@ -67,6 +67,19 @@ test.describe('Plans - Plan List Display', () => {
     expect(count).toBeGreaterThanOrEqual(0);
   });
 
+  test('should confine long plan lists to their scroll region', async ({ page }) => {
+    await page.waitForTimeout(2000);
+
+    const listRegion = page.getByTestId('list-scroll-region');
+    const visible = await listRegion.isVisible().catch(() => false);
+    if (!visible) {
+      test.skip('Plan list empty - nothing to verify');
+    }
+
+    const hasOverflow = await listRegion.evaluate((el) => el.className.includes('overflow-y-auto'));
+    expect(hasOverflow).toBeTruthy();
+  });
+
   test('should show plan metadata (created date, author, etc.)', async ({ page }) => {
     await page.waitForTimeout(2000);
 

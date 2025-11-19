@@ -1,10 +1,13 @@
 import * as crypto from 'crypto';
 import { logger } from '../utils/logger.js';
+import { determineRiskLevel } from '../utils/riskAssessment.js';
+import { mapTaskType } from '../utils/taskTypeMapper.js';
 import { TaskQueueService, Task } from './taskQueue.sqlite.js';
 import { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js';
 import { EnhancedTaskData } from './taskMetadataFields.js';
 import { ContextBundleGenerator } from './context/index.js';
 import { ContextRecipeSelector } from './context/contextRecipeSelector.js';
+import { ValidationError, ConflictError } from '../errors/ValidationError.js';
 import type { ContextBundle } from '../types/contextBundle.js';
 import type { RecipeTaskType } from '../types/contextRecipe.js';
 
@@ -252,8 +255,14 @@ export class TaskCreationService {
         action: 'duplicate_task_detected',
         message: `Duplicate task detected: "${normalizedData.title}" matches existing task ${duplicateTask.id} (${duplicateTask.status})`
       });
-      throw new Error(
-        `Duplicate task detected. Task "${duplicateTask.title}" (${duplicateTask.id}) is already ${duplicateTask.status}. Wait for it to complete or modify your task to be unique.`
+      throw new ConflictError(
+        `Duplicate task detected. Task "${duplicateTask.title}" (${duplicateTask.id}) is already ${duplicateTask.status}. Wait for it to complete or modify your task to be unique.`,
+        'duplicate_task',
+        {
+          existingTaskId: duplicateTask.id,
+          existingTaskTitle: duplicateTask.title,
+          existingTaskStatus: duplicateTask.status
+        }
       );
     }
   }
@@ -301,7 +310,7 @@ export class TaskCreationService {
         suggestions: []
       };
     }
-    
+
     const validation = this.guidelinesManager.validateTaskData(normalizedData, normalizedData.type);
 
     if (!validation.isValid) {
@@ -310,7 +319,11 @@ export class TaskCreationService {
         action: 'task_validation_failed',
         message: `Task validation failed: ${validation.errors.join(', ')}`
       });
-      throw new Error(`Task validation failed: ${validation.errors.join(', ')}`);
+      throw new ValidationError('Task validation failed', {
+        errors: validation.errors,
+        warnings: validation.warnings,
+        suggestions: validation.suggestions
+      });
     }
 
     // Log warnings and suggestions
@@ -343,8 +356,11 @@ export class TaskCreationService {
   ): Task {
     const fingerprint = this.calculateTaskFingerprint(normalizedData);
 
-    // Determine risk level from files or complexity
-    const riskLevel = this.determineRiskLevel(normalizedData);
+    // Determine risk level from files and complexity using centralized utility
+    const riskLevel = determineRiskLevel(
+      normalizedData.files || [],
+      normalizedData.estimatedEffort?.complexity
+    );
 
     const sqliteTask = this.taskQueue.createTask({
       type: normalizedData.type,
@@ -378,67 +394,6 @@ export class TaskCreationService {
    * Map task type to recipe task type
    */
   private mapToRecipeTaskType(taskType: string): RecipeTaskType {
-    const typeMap: Record<string, RecipeTaskType> = {
-      'implementation': 'implementation',
-      'fix': 'fix',
-      'bugfix': 'fix',
-      'review': 'review',
-      'deployment': 'deployment',
-      'pr-follow-up': 'pr-follow-up',
-      'analysis': 'analysis'
-    };
-
-    return (typeMap[taskType.toLowerCase()] || 'implementation') as RecipeTaskType;
-  }
-
-  /**
-   * Determine risk level based on files and complexity
-   */
-  private determineRiskLevel(taskData: EnhancedTaskData): 'minimal' | 'low' | 'medium' | 'high' {
-    const files = taskData.files || [];
-    const complexity = taskData.estimatedEffort?.complexity || 'simple';
-
-    // Minimal risk: Documentation only
-    if (files.length > 0 && files.every(f => f.includes('docs/') || f.endsWith('.md'))) {
-      return 'minimal';
-    }
-
-    // High risk: Docker, migrations, production scripts
-    if (files.some(f => 
-      f.includes('docker') || 
-      f.includes('migration') || 
-      f.includes('deploy') ||
-      f.includes('production')
-    )) {
-      return 'high';
-    }
-
-    // Medium risk: Core services, authentication, database
-    if (files.some(f => 
-      f.includes('backend/src/services') || 
-      f.includes('auth') ||
-      f.includes('database')
-    )) {
-      return complexity === 'expert' || complexity === 'complex' ? 'high' : 'medium';
-    }
-
-    // Low risk: Frontend, tests, documentation
-    if (files.some(f => 
-      f.includes('frontend/') || 
-      f.includes('test') ||
-      f.includes('docs/')
-    )) {
-      return complexity === 'complex' ? 'medium' : 'low';
-    }
-
-    // Default based on complexity
-    const riskMap = {
-      'simple': 'low' as const,
-      'medium': 'medium' as const,
-      'complex': 'medium' as const,
-      'expert': 'high' as const
-    };
-
-    return riskMap[complexity] || 'low';
+    return mapTaskType(taskType) as RecipeTaskType;
   }
 }
