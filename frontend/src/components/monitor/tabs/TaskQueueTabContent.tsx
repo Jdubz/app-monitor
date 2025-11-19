@@ -281,26 +281,28 @@ export function TaskQueueTabContent() {
   }
 
   return (
-    <div className="h-full">
-      <div className="mb-4">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="mb-4 shrink-0">
         <h2 className="text-lg font-semibold">Task Queue</h2>
         <p className="text-sm text-muted-foreground">
           Monitor all tasks in the dev-bots queue (Workers: {status?.workerCount ?? 0}/{status?.maxWorkers ?? 0})
         </p>
       </div>
-      <ListDetailLayout<DevBotsTask, QueueFilter>
-        summaryCards={summaryCards}
-        filterTabs={filterTabs}
-        activeFilter={activeFilter}
-        onFilterChange={setActiveFilter}
-        items={filteredTasks}
-        selectedItem={selectedTask}
-        onSelectItem={selectTask}
-        renderListItem={renderListItem}
-        renderDetail={renderDetail}
-        getItemKey={(task) => task.id}
-        emptyMessage={`No ${activeFilter} tasks`}
-      />
+      <div className="flex-1 min-h-0">
+        <ListDetailLayout<DevBotsTask, QueueFilter>
+          summaryCards={summaryCards}
+          filterTabs={filterTabs}
+          activeFilter={activeFilter}
+          onFilterChange={setActiveFilter}
+          items={filteredTasks}
+          selectedItem={selectedTask}
+          onSelectItem={selectTask}
+          renderListItem={renderListItem}
+          renderDetail={renderDetail}
+          getItemKey={(task) => task.id}
+          emptyMessage={`No ${activeFilter} tasks`}
+        />
+      </div>
     </div>
   );
 }

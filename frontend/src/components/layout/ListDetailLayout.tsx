@@ -87,6 +87,7 @@ const ListItemComponent = <TItem,>({
 }: Omit<ListItemProps<TItem>, 'itemKey'>) => {
   return (
     <div
+      data-testid="list-detail-item"
       onClick={() => onSelectItem(item)}
       className={cn(
         'cursor-pointer rounded-md border p-3 transition-colors',
@@ -137,7 +138,7 @@ export function ListDetailLayout<TItem, TFilter extends string>({
   emptyMessage = 'No items to display',
 }: ListDetailLayoutProps<TItem, TFilter>) {
   const leftPane = (
-    <div className="flex h-full flex-col gap-4 p-4">
+    <div className="flex h-full min-h-0 flex-col gap-4 p-4">
       {/* Summary Cards */}
       {summaryCards.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -159,7 +160,11 @@ export function ListDetailLayout<TItem, TFilter extends string>({
       )}
 
       {/* Filter Tabs */}
-      <Tabs value={activeFilter} onValueChange={onFilterChange as (value: string) => void}>
+      <Tabs
+        value={activeFilter}
+        onValueChange={onFilterChange as (value: string) => void}
+        className="flex min-h-0 flex-col"
+      >
         <TabsList className="w-full min-w-0 overflow-x-auto sm:snap-x">
           {filterTabs.map((tab) => (
             <TabsTrigger key={tab.value} value={tab.value} className="flex-1 min-w-[80px] sm:min-w-[100px] snap-start">
@@ -172,26 +177,31 @@ export function ListDetailLayout<TItem, TFilter extends string>({
         </TabsList>
 
         {/* List Content */}
-        <TabsContent value={activeFilter} className="mt-4 h-full">
+        <TabsContent value={activeFilter} className="mt-4 flex-1 overflow-hidden">
           {items.length === 0 ? (
-            <div className="flex items-center justify-center rounded-md border border-dashed border-muted-foreground/30 p-8 text-center">
+            <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-muted-foreground/30 p-8 text-center">
               <p className="text-sm text-muted-foreground">{emptyMessage}</p>
             </div>
           ) : (
-            <div className="space-y-2">
-              {items.map((item) => {
-                const key = getItemKey(item);
-                const isSelected = selectedItem ? getItemKey(selectedItem) === key : false;
-                return (
-                  <MemoizedListItem
-                    key={key}
-                    item={item}
-                    isSelected={isSelected}
-                    onSelectItem={onSelectItem}
-                    renderListItem={renderListItem}
-                  />
-                );
-              })}
+            <div className="flex h-full min-h-0 flex-col">
+              <div
+                data-testid="list-scroll-region"
+                className="flex-1 space-y-2 overflow-y-auto pr-1"
+              >
+                {items.map((item) => {
+                  const key = getItemKey(item);
+                  const isSelected = selectedItem ? getItemKey(selectedItem) === key : false;
+                  return (
+                    <MemoizedListItem
+                      key={key}
+                      item={item}
+                      isSelected={isSelected}
+                      onSelectItem={onSelectItem}
+                      renderListItem={renderListItem}
+                    />
+                  );
+                })}
+              </div>
             </div>
           )}
         </TabsContent>
@@ -200,8 +210,13 @@ export function ListDetailLayout<TItem, TFilter extends string>({
   );
 
   const rightPane = (
-    <div className="h-full p-4">
-      {renderDetail(selectedItem)}
+    <div className="flex h-full min-h-0 flex-col gap-4 p-4">
+      <div
+        data-testid="detail-scroll-region"
+        className="flex-1 overflow-y-auto pr-1"
+      >
+        {renderDetail(selectedItem)}
+      </div>
     </div>
   );
 
