@@ -1,12 +1,12 @@
 import { logger } from '../utils/logger.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
-import type { InteractiveSessionManager } from './InteractiveSessionManager.js';
+// InteractiveSessionManager import removed - migrated to tmux-based TerminalService
 
 export interface SystemLifecycleComponents {
   ephemeralWorkerService: EphemeralWorkerService;
   workerHealthMonitor: WorkerHealthMonitor;
-  interactiveSessionService: InteractiveSessionManager;
+  // interactiveSessionService removed - migrated to tmux-based TerminalService
   taskQueueWorker?: { stop: () => Promise<void> };
   metricsEmitter?: { stop: () => void };
 }
@@ -76,8 +76,7 @@ export class SystemLifecycleService {
     // Stop health monitoring
     this.components.workerHealthMonitor.stop();
 
-    // Stop interactive session idle watchdog
-    this.components.interactiveSessionService.stopIdleWatchdog();
+    // Interactive session idle watchdog removed - migrated to tmux-based TerminalService
 
     // Stop background task queue worker
     if (this.components.taskQueueWorker) {

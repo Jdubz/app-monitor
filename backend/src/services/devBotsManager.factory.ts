@@ -11,7 +11,8 @@ import { TaskPromptTemplateManager } from './taskPromptTemplates.js';
 import { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js';
 import { DockerManager } from './dockerManager.js';
 import { RetryManager, RetryConfig } from './retryManager.js';
-import { MS_PER_HOUR, WORKER_IDLE_TIMEOUT_MS } from '../constants/timeouts.js';
+import { MS_PER_HOUR } from '../constants/timeouts.js';
+// WORKER_IDLE_TIMEOUT_MS removed - no longer used after InteractiveSessionManager removal
 // TaskPersistence removed - using SQLite directly
 // WorkspaceOrchestrator removed - using container isolation
 import { ScopeControlService } from './scopeControl.service.js';
@@ -155,18 +156,8 @@ export async function createDevBotsManagerDependencies(
   // Initialize PR monitoring for existing unmerged PRs
   await prWorkflowOrchestrator.initialize();
 
-  // Note: Terminal streaming is now handled by SocketIOTerminalHandler
-  // which is initialized in server.ts and wired to InteractiveSessionManager events
-
-  // Create InteractiveSessionManager (consolidated from 4 services)
-  const interactiveSessionManager = new InteractiveSessionManager({
-    idleTimeoutMs: WORKER_IDLE_TIMEOUT_MS,
-    allowedModels: [
-      { provider: 'claude', name: '*' },
-      { provider: 'codex', name: '*' },
-    ],
-    workerService: ephemeralWorkerService,
-  });
+  // InteractiveSessionManager removed - migrated to tmux-based TerminalService
+  // Terminal streaming is now handled by TerminalService via Socket.IO events
 
   // Note: TaskCompletionService and WorkerHealthMonitor require DevBotsManager instance
   // They will be created/initialized after DevBotsManager is instantiated
@@ -189,7 +180,7 @@ export async function createDevBotsManagerDependencies(
     {
       ephemeralWorkerService,
       workerHealthMonitor,
-      interactiveSessionService: interactiveSessionManager,
+      // interactiveSessionService removed - migrated to tmux-based TerminalService
       // taskQueueWorker and metricsEmitter will be set dynamically by DevBotsManager
     },
     () => {}, // emit function placeholder
@@ -203,7 +194,7 @@ export async function createDevBotsManagerDependencies(
       taskQueue,
       taskExecutionService,
       ephemeralWorkerService,
-      interactiveSessionService: interactiveSessionManager,
+      // interactiveSessionService removed - migrated to tmux-based TerminalService
       systemLifecycleService
     },
     () => {}, // emit function placeholder
@@ -245,7 +236,7 @@ export async function createDevBotsManagerDependencies(
     taskExecutionService,
     taskCompletionService,
     prWorkflowOrchestrator,
-    interactiveSessionManager,
+    // interactiveSessionManager removed - migrated to tmux-based TerminalService
     workerHealthMonitor,
     systemLifecycleService,
     systemInitializationService,
