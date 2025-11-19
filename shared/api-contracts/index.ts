@@ -102,10 +102,24 @@ export interface TokenCanUsePayload {
 // Context-Aware Task Submission (Minimal API)
 // ============================================================================
 
+/**
+ * Supported task types for dev-bots task creation
+ * Single source of truth for all task type definitions
+ */
+export const TASK_TYPES = {
+  IMPLEMENTATION: 'implementation',
+  REVIEW: 'review',
+  FIX: 'fix',
+  PR_FOLLOW_UP: 'pr-follow-up',
+  ANALYSIS: 'analysis',
+} as const;
+
+export type TaskType = typeof TASK_TYPES[keyof typeof TASK_TYPES];
+
 export interface MinimalTaskPayload {
   // Required fields (3 only)
   title: string;
-  taskType: 'implementation' | 'review' | 'fix' | 'pr-follow-up' | 'analysis';
+  taskType: TaskType;
   intent: string;  // Replaces 'description' and 'documentation'
   
   // Optional overrides (auto-detected if omitted)

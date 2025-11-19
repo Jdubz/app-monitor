@@ -5,10 +5,13 @@
  * generate context bundles for dev-bot tasks.
  */
 
+import type { TaskType } from '@app-monitor/api-contracts';
+
 /**
  * Valid task types for context recipes
+ * Uses centralized TaskType from api-contracts as single source of truth
  */
-export type RecipeTaskType = 'implementation' | 'fix' | 'review' | 'deployment' | 'pr-follow-up' | 'analysis';
+export type RecipeTaskType = TaskType;
 
 /**
  * Valid source types for recipe sources

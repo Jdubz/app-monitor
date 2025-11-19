@@ -1,11 +1,12 @@
 /**
  * Task Creation Guidelines Service
- * 
+ *
  * Ensures all tasks are detailed, specific, and actionable with comprehensive
  * guidelines for high-quality task creation
  */
 
 // import { logger } from '../utils/logger.js';
+import { TASK_TYPES, type TaskType } from '@app-monitor/api-contracts';
 import {
   EnhancedTaskData,
   ensureTaskMetadataFieldKeys,
@@ -38,8 +39,6 @@ export interface TaskExample {
   example: Record<string, unknown>;
 }
 
-type GuidelineType = 'implementation' | 'review' | 'testing' | 'feature';
-
 type GuidelineFieldSet = {
   required: readonly TaskMetadataFieldKey[];
   optional: readonly TaskMetadataFieldKey[];
@@ -61,23 +60,12 @@ const BASE_OPTIONAL_FIELDS = ensureTaskMetadataFieldKeys([
   'relatedTasks'
 ] as const);
 
-const GUIDELINE_FIELD_DEFINITIONS: Readonly<Record<GuidelineType, GuidelineFieldSet>> = {
-  feature: {
-    required: ensureTaskMetadataFieldKeys([
-      'title',
-      'description',
-      'acceptanceCriteria'
-    ] as const),
-    optional: ensureTaskMetadataFieldKeys([
-      ...BASE_OPTIONAL_FIELDS,
-      'validationSteps',
-      'successMetrics',
-      'assignedAgent',
-      'estimatedEffort',
-      'dependencies'
-    ] as const)
-  },
-  implementation: {
+/**
+ * Field definitions for each task type
+ * Uses centralized TASK_TYPES as single source of truth
+ */
+const GUIDELINE_FIELD_DEFINITIONS: Readonly<Record<TaskType, GuidelineFieldSet>> = {
+  [TASK_TYPES.IMPLEMENTATION]: {
     required: ensureTaskMetadataFieldKeys([
       ...BASE_REQUIRED_FIELDS,
       'architectureReferences',
@@ -91,7 +79,7 @@ const GUIDELINE_FIELD_DEFINITIONS: Readonly<Record<GuidelineType, GuidelineField
       'parentInitiative'
     ] as const)
   },
-  review: {
+  [TASK_TYPES.REVIEW]: {
     required: ensureTaskMetadataFieldKeys([
       ...BASE_REQUIRED_FIELDS,
       'testingRequirements'
@@ -101,14 +89,46 @@ const GUIDELINE_FIELD_DEFINITIONS: Readonly<Record<GuidelineType, GuidelineField
       'architectureReferences'
     ] as const)
   },
-  testing: {
+  [TASK_TYPES.FIX]: {
     required: ensureTaskMetadataFieldKeys([
-      ...BASE_REQUIRED_FIELDS,
-      'testingRequirements'
+      'title',
+      'description',
+      'acceptanceCriteria',
+      'validationSteps'
     ] as const),
     optional: ensureTaskMetadataFieldKeys([
       ...BASE_OPTIONAL_FIELDS,
-      'estimatedEffort'
+      'successMetrics',
+      'assignedAgent',
+      'testingRequirements',
+      'rollbackPlan'
+    ] as const)
+  },
+  [TASK_TYPES.PR_FOLLOW_UP]: {
+    required: ensureTaskMetadataFieldKeys([
+      'title',
+      'description',
+      'acceptanceCriteria'
+    ] as const),
+    optional: ensureTaskMetadataFieldKeys([
+      ...BASE_OPTIONAL_FIELDS,
+      'validationSteps',
+      'testingRequirements',
+      'assignedAgent'
+    ] as const)
+  },
+  [TASK_TYPES.ANALYSIS]: {
+    required: ensureTaskMetadataFieldKeys([
+      'title',
+      'description',
+      'successMetrics'
+    ] as const),
+    optional: ensureTaskMetadataFieldKeys([
+      ...BASE_OPTIONAL_FIELDS,
+      'acceptanceCriteria',
+      'validationSteps',
+      'assignedAgent',
+      'architectureReferences'
     ] as const)
   }
 } as const;
@@ -143,54 +163,13 @@ export class TaskCreationGuidelinesManager {
   }
 
   private initializeGuidelines(): void {
-    // Feature Task Guidelines (Simplified)
-    this.guidelines.set('feature', {
-      id: 'feature',
-      name: 'Feature Task Guidelines',
-      description: 'Guidelines for creating simple feature tasks with minimal requirements',
-      requiredFields: GUIDELINE_FIELD_DEFINITIONS.feature.required,
-      optionalFields: GUIDELINE_FIELD_DEFINITIONS.feature.optional,
-      validationRules: [
-        {
-          field: 'acceptanceCriteria',
-          rule: 'minLength:1',
-          message: 'Must have at least 1 acceptance criterion',
-          severity: 'error'
-        }
-      ],
-      examples: [
-        {
-          type: 'feature',
-          title: 'Add user profile endpoint',
-          description: 'Create a simple REST endpoint to fetch user profile data',
-          example: {
-            title: 'Add user profile endpoint',
-            description: 'Create GET /api/users/:id endpoint that returns user profile information',
-            acceptanceCriteria: [
-              'GET /api/users/:id returns user data',
-              'Returns 404 if user not found',
-              'Returns proper JSON response'
-            ],
-            files: ['backend/src/routes/users.ts'],
-            assignedAgent: 'backend-specialist'
-          }
-        }
-      ],
-      bestPractices: [
-        'Keep tasks focused and small',
-        'Include clear acceptance criteria',
-        'Specify which files need changes'
-      ],
-      dryGuidelines: []
-    });
-
     // Implementation Task Guidelines
-    this.guidelines.set('implementation', {
-      id: 'implementation',
+    this.guidelines.set(TASK_TYPES.IMPLEMENTATION, {
+      id: TASK_TYPES.IMPLEMENTATION,
       name: 'Implementation Task Guidelines',
       description: 'Guidelines for creating detailed implementation tasks',
-      requiredFields: GUIDELINE_FIELD_DEFINITIONS.implementation.required,
-      optionalFields: GUIDELINE_FIELD_DEFINITIONS.implementation.optional,
+      requiredFields: GUIDELINE_FIELD_DEFINITIONS[TASK_TYPES.IMPLEMENTATION].required,
+      optionalFields: GUIDELINE_FIELD_DEFINITIONS[TASK_TYPES.IMPLEMENTATION].optional,
       validationRules: [
         {
           field: 'acceptanceCriteria',
@@ -277,12 +256,12 @@ export class TaskCreationGuidelinesManager {
     });
 
     // Review Task Guidelines
-    this.guidelines.set('review', {
-      id: 'review',
+    this.guidelines.set(TASK_TYPES.REVIEW, {
+      id: TASK_TYPES.REVIEW,
       name: 'Code Review Task Guidelines',
       description: 'Guidelines for creating comprehensive code review tasks',
-      requiredFields: GUIDELINE_FIELD_DEFINITIONS.review.required,
-      optionalFields: GUIDELINE_FIELD_DEFINITIONS.review.optional,
+      requiredFields: GUIDELINE_FIELD_DEFINITIONS[TASK_TYPES.REVIEW].required,
+      optionalFields: GUIDELINE_FIELD_DEFINITIONS[TASK_TYPES.REVIEW].optional,
       validationRules: [
         {
           field: 'acceptanceCriteria',
@@ -352,92 +331,171 @@ export class TaskCreationGuidelinesManager {
       ]
     });
 
-    // Testing Task Guidelines
-    this.guidelines.set('testing', {
-      id: 'testing',
-      name: 'Testing Task Guidelines',
-      description: 'Guidelines for creating comprehensive testing tasks',
-      requiredFields: GUIDELINE_FIELD_DEFINITIONS.testing.required,
-      optionalFields: GUIDELINE_FIELD_DEFINITIONS.testing.optional,
+    // Fix Task Guidelines
+    this.guidelines.set(TASK_TYPES.FIX, {
+      id: TASK_TYPES.FIX,
+      name: 'Fix Task Guidelines',
+      description: 'Guidelines for creating bug fix tasks with clear reproduction and validation',
+      requiredFields: GUIDELINE_FIELD_DEFINITIONS[TASK_TYPES.FIX].required,
+      optionalFields: GUIDELINE_FIELD_DEFINITIONS[TASK_TYPES.FIX].optional,
       validationRules: [
         {
-          field: 'testingRequirements',
-          rule: 'minLength:3',
-          message: 'Must specify at least 3 testing requirements',
-          severity: 'error'
+          field: 'description',
+          rule: 'includesReproductionSteps',
+          message: 'Must include steps to reproduce the bug',
+          severity: 'warning'
         },
         {
           field: 'acceptanceCriteria',
-          rule: 'minLength:4',
-          message: 'Must have at least 4 test acceptance criteria',
+          rule: 'minLength:2',
+          message: 'Must have at least 2 acceptance criteria (fix + verification)',
           severity: 'error'
         }
       ],
       examples: [
         {
-          type: 'testing',
-          title: 'Unit Tests for User Service',
-          description: 'Create comprehensive unit tests for the user service including all CRUD operations and edge cases',
+          type: TASK_TYPES.FIX,
+          title: 'Fix: Null pointer error in user profile update',
+          description: 'Users are experiencing null pointer errors when updating their profile',
           example: {
-            title: 'Unit Tests for User Service',
-            description: 'Implement comprehensive unit tests for user service covering all methods, error scenarios, and edge cases.',
+            title: 'Fix: Null pointer error in user profile update',
+            description: 'Users report getting null pointer errors when trying to update their profile. Error occurs when optional bio field is left empty. Stack trace points to UserService.updateProfile line 45.',
             acceptanceCriteria: [
-              'All public methods have unit tests',
-              'Test coverage is at least 90%',
-              'Error scenarios are tested',
-              'Edge cases are covered',
-              'Tests are maintainable and readable',
-              'Mocking is used appropriately'
-            ],
-            testingRequirements: [
-              'Use Jest testing framework',
-              'Mock external dependencies',
-              'Test both success and failure scenarios',
-              'Include integration tests for database operations',
-              'Test validation and error handling'
+              'Profile updates work with empty bio field',
+              'No null pointer errors in logs',
+              'Existing unit tests still pass',
+              'New test case added for empty optional fields'
             ],
             files: [
-              'src/users/users.service.spec.ts',
-              'src/users/users.controller.spec.ts',
-              'src/users/dto/user.dto.spec.ts'
+              'src/users/users.service.ts',
+              'src/users/users.service.spec.ts'
             ],
             validationSteps: [
-              'Run test suite and verify all tests pass',
-              'Check test coverage report',
-              'Review test quality and maintainability',
-              'Verify error scenarios are tested',
-              'Ensure tests run in CI/CD pipeline'
-            ],
-            successMetrics: [
-              'Test coverage >= 90%',
-              'All tests pass consistently',
-              'No flaky tests',
-              'Tests run in under 30 seconds',
-              'Code quality metrics maintained'
+              'Test profile update with empty bio',
+              'Run existing test suite',
+              'Check error logs for null pointers',
+              'Verify fix in staging environment'
             ]
           }
         }
       ],
       bestPractices: [
-        'Test behavior, not implementation',
-        'Use descriptive test names',
-        'Follow AAA pattern (Arrange, Act, Assert)',
-        'Mock external dependencies',
-        'Test edge cases and error scenarios',
-        'Maintain test data separately'
+        'Include reproduction steps',
+        'Reference error logs or stack traces',
+        'Add regression tests',
+        'Verify fix doesn\'t introduce new bugs',
+        'Document root cause'
       ],
       dryGuidelines: [
-        'MANDATORY: Check for existing test utilities and helpers',
-        'Reference existing test patterns and frameworks',
-        'Reuse existing test data and fixtures where possible',
-        'Extend existing test utilities instead of creating new ones',
-        'Check for existing test coverage tools and configurations',
-        'Reference existing test standards and conventions',
-        'Ensure new tests follow established patterns',
-        'Document how new tests will be reusable for future testing',
-        'MANDATORY: Update existing test documentation instead of creating new files',
-        'Specify which existing documentation should be updated with test changes',
-        'Consolidate test updates into existing testing documentation'
+        'MANDATORY: Search for similar existing bugs and fixes',
+        'Check if this bug was previously fixed and regressed',
+        'Reference existing bug fix patterns and utilities',
+        'Document how this fix prevents similar issues in the future'
+      ]
+    });
+
+    // PR Follow-up Task Guidelines
+    this.guidelines.set(TASK_TYPES.PR_FOLLOW_UP, {
+      id: TASK_TYPES.PR_FOLLOW_UP,
+      name: 'PR Follow-up Task Guidelines',
+      description: 'Guidelines for creating tasks to address PR review feedback',
+      requiredFields: GUIDELINE_FIELD_DEFINITIONS[TASK_TYPES.PR_FOLLOW_UP].required,
+      optionalFields: GUIDELINE_FIELD_DEFINITIONS[TASK_TYPES.PR_FOLLOW_UP].optional,
+      validationRules: [
+        {
+          field: 'description',
+          rule: 'includesPRReference',
+          message: 'Should reference the PR number or URL',
+          severity: 'warning'
+        }
+      ],
+      examples: [
+        {
+          type: TASK_TYPES.PR_FOLLOW_UP,
+          title: 'Address PR #123 review comments on error handling',
+          description: 'Implement error handling improvements suggested in PR review',
+          example: {
+            title: 'Address PR #123 review comments on error handling',
+            description: 'PR #123 review identified missing error handling in API endpoints. Need to add proper try-catch blocks and error responses.',
+            acceptanceCriteria: [
+              'All API endpoints have proper error handling',
+              'Error responses follow API standards',
+              'PR reviewer approves changes'
+            ],
+            files: [
+              'src/api/users.controller.ts',
+              'src/api/posts.controller.ts'
+            ]
+          }
+        }
+      ],
+      bestPractices: [
+        'Reference specific PR comments',
+        'Link to the original PR',
+        'Keep scope focused on review feedback',
+        'Tag PR reviewer for final approval'
+      ],
+      dryGuidelines: [
+        'Check if review feedback applies to other similar code',
+        'Reference existing patterns that should be followed',
+        'Update relevant documentation with lessons learned'
+      ]
+    });
+
+    // Analysis Task Guidelines
+    this.guidelines.set(TASK_TYPES.ANALYSIS, {
+      id: TASK_TYPES.ANALYSIS,
+      name: 'Analysis Task Guidelines',
+      description: 'Guidelines for creating code analysis and investigation tasks',
+      requiredFields: GUIDELINE_FIELD_DEFINITIONS[TASK_TYPES.ANALYSIS].required,
+      optionalFields: GUIDELINE_FIELD_DEFINITIONS[TASK_TYPES.ANALYSIS].optional,
+      validationRules: [
+        {
+          field: 'successMetrics',
+          rule: 'minLength:1',
+          message: 'Must define what constitutes successful analysis',
+          severity: 'error'
+        }
+      ],
+      examples: [
+        {
+          type: TASK_TYPES.ANALYSIS,
+          title: 'Analyze performance bottlenecks in user search',
+          description: 'Investigate why user search is slow and identify optimization opportunities',
+          example: {
+            title: 'Analyze performance bottlenecks in user search',
+            description: 'User search queries are taking 2-3 seconds on average. Need to analyze the query patterns, database indexes, and caching strategy to identify bottlenecks and recommend optimizations.',
+            successMetrics: [
+              'Root cause of slow queries identified',
+              'Performance metrics collected and documented',
+              'Optimization recommendations provided with estimated impact',
+              'Analysis documented in architecture docs'
+            ],
+            files: [
+              'src/search/search.service.ts',
+              'src/database/queries/user-search.sql'
+            ],
+            acceptanceCriteria: [
+              'Complete analysis report generated',
+              'Bottlenecks identified with evidence',
+              'Actionable recommendations provided'
+            ]
+          }
+        }
+      ],
+      bestPractices: [
+        'Define clear analysis objectives',
+        'Use profiling and monitoring tools',
+        'Document findings with evidence',
+        'Provide actionable recommendations',
+        'Consider multiple solutions'
+      ],
+      dryGuidelines: [
+        'MANDATORY: Check for existing analysis and investigations',
+        'Reference previous performance audits and findings',
+        'Reuse existing profiling and monitoring tools',
+        'Document findings in existing architecture documentation',
+        'Avoid creating new documentation files for analysis results'
       ]
     });
   }

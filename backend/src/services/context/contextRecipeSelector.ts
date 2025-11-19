@@ -1,13 +1,13 @@
 /**
  * Context Recipe Selector
- * 
+ *
  * Intelligently selects which context recipes to include based on:
  * - Task type
  * - Target files
  * - Manual overrides
  */
 
-type TaskType = string;
+import { TASK_TYPES, type TaskType } from '@app-monitor/api-contracts';
 
 export interface RecipeSelectionOptions {
   taskType: TaskType;
@@ -27,47 +27,28 @@ export class ContextRecipeSelector {
   /**
    * Task-type to recipe mapping
    * Defines which recipes are required/recommended for each task type
+   * Uses centralized TASK_TYPES as single source of truth
    */
   private static readonly TASK_TYPE_RECIPES: Record<TaskType, { required: string[]; recommended: string[] }> = {
-    implementation: {
+    [TASK_TYPES.IMPLEMENTATION]: {
       required: ['scope-control', 'dev-monitor'],
       recommended: ['implementation-patterns', 'pr-workflow']
     },
-    review: {
+    [TASK_TYPES.REVIEW]: {
       required: ['scope-control', 'review-checklist'],
       recommended: ['dev-monitor', 'pr-workflow']
     },
-    fix: {
+    [TASK_TYPES.FIX]: {
       required: ['scope-control', 'fix-debugging', 'failure-recovery'],
       recommended: ['dev-monitor']
     },
-    bug: {
-      required: ['scope-control', 'fix-debugging', 'failure-recovery'],
-      recommended: ['dev-monitor']
+    [TASK_TYPES.PR_FOLLOW_UP]: {
+      required: ['scope-control', 'pr-workflow'],
+      recommended: ['dev-monitor', 'review-checklist']
     },
-    documentation: {
+    [TASK_TYPES.ANALYSIS]: {
       required: ['scope-control'],
       recommended: ['dev-monitor']
-    },
-    refactor: {
-      required: ['scope-control', 'dev-monitor'],
-      recommended: ['implementation-patterns']
-    },
-    test: {
-      required: ['scope-control', 'dev-monitor'],
-      recommended: ['implementation-patterns']
-    },
-    analysis: {
-      required: ['scope-control'],
-      recommended: ['dev-monitor']
-    },
-    deployment: {
-      required: ['scope-control', 'deployment', 'failure-recovery'],
-      recommended: ['pr-workflow']
-    },
-    maintenance: {
-      required: ['scope-control'],
-      recommended: ['dev-monitor', 'failure-recovery']
     }
   };
 
