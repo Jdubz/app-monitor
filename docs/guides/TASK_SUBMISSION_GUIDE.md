@@ -1,4 +1,4 @@
-# Minimal Task Submission Guide
+# Task Submission Guide
 
 **Version:** 1.0  
 **Date:** 2025-11-14  
@@ -148,44 +148,48 @@ Additional profiles added based on file paths:
 - Security review requires explicit file list
 - Risk level raised from auto-detected "medium" to "high"
 
-## Auto-Detection Details
+## Preview Auto-Detection
 
-When you create a task, the response includes auto-detection details showing what was inferred:
+Test auto-detection without creating a task:
 
-Response includes:
+```bash
+curl -X POST http://localhost:5000/api/dev-bots/tasks/preview-detection \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "My task",
+    "taskType": "implementation",
+    "intent": "Do something"
+  }'
+```
+
+Response:
 ```json
 {
   "data": {
-    "task": { /* task details */ },
-    "autoDetection": {
-      "detectedFiles": ["frontend/src/App.tsx"],
-      "inferredRiskLevel": "low",
-      "selectedProfiles": ["scope-control", "dev-monitor"],
-      "recommendedOutputs": ["unit-tests", "documentation"],
-      "confidence": {
-        "files": 0.7,
-        "riskLevel": 0.8,
-        "profiles": 0.9
-      },
-      "warnings": []
-    }
+    "detectedFiles": ["frontend/src/App.tsx"],
+    "inferredRiskLevel": "low",
+    "selectedProfiles": ["scope-control", "dev-monitor"],
+    "recommendedOutputs": ["unit-tests", "documentation"],
+    "confidence": {
+      "files": 0.7,
+      "riskLevel": 0.8,
+      "profiles": 0.9
+    },
+    "warnings": []
   }
 }
 ```
 
 ## What Happens Automatically
 
-Once you submit a minimal task, the system:
+Once you submit a task, the system:
 
-1. **Validates Required Fields** - Ensures title, taskType, and intent are present (400 error if missing)
-2. **Auto-Detects** missing fields (files, risk, profiles, outputs)
-3. **Validates Task Data** - Single validation in service layer (400 error with structured details if invalid)
-4. **Checks for Duplicates** - Fingerprint-based duplicate detection (409 error if duplicate found)
-5. **Generates Context Bundle** from YAML recipes (cached by git hash)
-6. **Creates Task** in queue with auto-detected and validated data
-7. **Copies Context** to container at `/workspace/context/`
-8. **Launches Container** with context files available
-9. **Tracks Execution** with metadata for debugging
+1. **Auto-Detects** missing fields (files, risk, profiles, outputs)
+2. **Generates Context Bundle** from YAML recipes (cached by git hash)
+3. **Copies Context** to container at `/workspace/context/`
+4. **Assembles Prompt** with investigation steps, constraints, checklists
+5. **Launches Container** with context files available
+6. **Tracks Execution** with metadata for debugging
 
 ## Context Files Available to Bots
 
@@ -249,73 +253,17 @@ Each file includes:
 
 **Everything else is auto-generated from context bundles.**
 
-## Error Handling
-
-The system uses structured error responses with appropriate HTTP status codes:
-
-### 400 Bad Request - Missing Required Fields
-```json
-{
-  "error": "Missing required fields",
-  "statusCode": 400,
-  "details": {
-    "provided": ["title", "taskType"],
-    "required": ["title", "taskType", "intent"]
-  }
-}
-```
-
-### 400 Bad Request - Validation Failed
-```json
-{
-  "error": "Task validation failed",
-  "statusCode": 400,
-  "details": {
-    "errors": [
-      "Title must be at least 10 characters",
-      "Intent must clearly describe the goal"
-    ],
-    "warnings": [
-      "No files detected - consider specifying targetFiles"
-    ],
-    "suggestions": [
-      "Add more context to the intent field",
-      "Specify targetFiles explicitly if working with specific components"
-    ]
-  }
-}
-```
-
-### 409 Conflict - Duplicate Task
-```json
-{
-  "error": "Duplicate task detected. Task 'Fix login bug' (abc123) is already pending.",
-  "statusCode": 409,
-  "details": {
-    "conflictType": "duplicate_task",
-    "existingTaskId": "abc123",
-    "existingTaskTitle": "Fix login bug",
-    "existingTaskStatus": "pending"
-  }
-}
-```
-
 ## Troubleshooting
 
 ### Auto-Detection Warnings
 
-If confidence is low (<0.7), you'll get warnings in the validation response:
+If confidence is low (<0.7), you'll get warnings:
 ```json
 {
-  "validation": {
-    "isValid": true,
-    "errors": [],
-    "warnings": [
-      "Auto-detection: No files detected - risk level defaulted to low. Consider specifying targetFiles.",
-      "Auto-detection: Large file count (53) - consider narrowing scope"
-    ],
-    "suggestions": []
-  }
+  "warnings": [
+    "No files detected - risk level defaulted to low. Consider specifying targetFiles.",
+    "Large file count (53) - consider narrowing scope"
+  ]
 }
 ```
 
@@ -327,7 +275,7 @@ If context bundle fails to generate, task proceeds without context (degraded mod
 Check logs for:
 ```
 category: 'context'
-action: 'bundle_generation_failed'
+action: 'context_bundle_generation_failed'
 ```
 
 **Solution:** Verify YAML recipes are valid and accessible.
@@ -359,19 +307,26 @@ node scripts/submit-task.js \
   --intent "Increase connection timeout from 5s to 30s"
 
 # Using curl (for automation)
-# Create the task
 curl -X POST http://localhost:5000/api/dev-bots/tasks \
+  -H "Content-Type: application/json" \
+  -d @task.json
+
+# Preview before submitting
+curl -X POST http://localhost:5000/api/dev-bots/tasks/preview-detection \
   -H "Content-Type: application/json" \
   -d @task.json
 ```
 
 ## FAQ
 
-**Q: How accurate is auto-detection?**
+**Q: Can I still use the old V3 template format?**  
+A: No. The legacy endpoint has been removed; `/api/dev-bots/tasks` is the single submission path.
+
+**Q: How accurate is auto-detection?**  
 A: >90% accuracy measured in testing. Low-confidence detections include warnings.
 
-**Q: Can I see what will be auto-detected before submitting?**
-A: Yes! The task creation response includes full auto-detection details in the `autoDetection` field.
+**Q: Can I see what will be auto-detected before submitting?**  
+A: Yes! Use `POST /api/dev-bots/tasks/preview-detection` to preview without creating a task.
 
 **Q: What if auto-detection is wrong?**  
 A: Provide manual overrides via optional fields (`targetFiles`, `riskLevel`, `contextProfiles`).
@@ -392,22 +347,6 @@ A: Yes! Add new `.yaml` files to `backend/config/context-recipes/` following the
 
 ---
 
-## Architecture Notes
-
-### Validation Flow
-- **Single Validation Point**: Validation happens once in `TaskCreationService.validateTask()`
-- **No Route-Level Validation**: Routes only check required fields are present
-- **Structured Errors**: All validation errors throw `ValidationError` with 400 status
-- **Duplicate Detection**: Fingerprint-based detection throws `ConflictError` with 409 status
-
-### Risk Assessment
-- **Centralized Logic**: All risk assessment uses `utils/riskAssessment.ts`
-- **File-Based**: Primary assessment from file path patterns (FILE_RISK_PATTERNS)
-- **Complexity-Aware**: `determineRiskLevel()` factors in task complexity
-- **Consistent**: Same logic used by auto-detection and full task creation
-
----
-
-**Last Updated:** 2025-11-19
-**Status:** Production Ready
+**Last Updated:** 2025-11-14  
+**Status:** Production Ready  
 **API Version:** v1

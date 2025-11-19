@@ -152,7 +152,7 @@ describe('API Contract Compliance - Dev-Bots Endpoints', () => {
 
   describe.skip('POST /api/dev-bots/tasks - DEPRECATED', () => {
     // NOTE: This endpoint no longer exists. Task creation now happens through
-    // POST /api/dev-bots/tasks/minimal or other specialized endpoints.
+    // POST /api/dev-bots/tasks or other specialized endpoints.
     it('should handle task creation (adapts to environment)', async () => {
       const taskPayload = {
         type: 'implementation',

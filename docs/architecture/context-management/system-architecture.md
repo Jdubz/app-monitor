@@ -447,7 +447,7 @@ private sortedCopy(arr?: string[]): string[] {
 3. Manual recipe authoring (could add recipe templates/generators)
 
 ### Future Enhancements
-1. **Minimal Task API** (2-3 weeks)
+1. **Task Submission API** (2-3 weeks)
    - Reduce submission to 3 fields: title, type, intent
    - Auto-detect target files, risk level, context profiles
    - Simplified frontend task creation form

@@ -16,13 +16,13 @@ import type { DevBotsManager } from '../../services/devBotsManager.js';
 import type { TaskQueueService } from '../../services/taskQueue.sqlite.js';
 import { logger } from '../../utils/logger.js';
 import { sendSuccess, sendError } from '../../utils/apiResponse.js';
-import { BadRequestError } from '../../errors/ValidationError.js';
 import { WorkerLogLocator } from '../../services/taskLogLocator.js';
 import { getTaskContextService } from '../../services/taskContext.service.js';
 import { taskAutoDetectionService } from '../../services/taskAutoDetection.service.js';
 import { PHASE_NAMES } from '../../services/phaseConstants.js';
 import type {
-  MinimalTaskPayload,
+  TaskSubmissionPayload,
+  TaskAutoDetectionResult,
   DevBotsReportCompletionPayload,
   DevBotsReportCompletionResponse
 } from '@app-monitor/api-contracts';
@@ -38,6 +38,138 @@ import {
   type TaskLogsResponsePayload,
   type LogStreamType,
 } from './shared.js';
+import { validateTaskSubmissionPayload } from '../../services/taskSubmissionValidator.js';
+
+const MAX_INTENT_SUMMARY_LENGTH = 240;
+
+function summarizeIntent(intent: string): string {
+  const summaryLine = intent
+    .split(/\r?\n+/)
+    .map(line => line.trim())
+    .find(Boolean) ?? '';
+
+  if (summaryLine.length <= MAX_INTENT_SUMMARY_LENGTH) {
+    return summaryLine;
+  }
+
+  return summaryLine.slice(0, MAX_INTENT_SUMMARY_LENGTH - 3).trimEnd() + '...';
+}
+
+function cleanList(values?: string[]): string[] {
+  if (!values) return [];
+  const seen = new Set<string>();
+  const cleaned: string[] = [];
+
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (trimmed && !seen.has(trimmed)) {
+      seen.add(trimmed);
+      cleaned.push(trimmed);
+    }
+  }
+
+  return cleaned;
+}
+
+function pickValues(
+  preferred: string[] | undefined,
+  fallback: string[]
+): { values: string[]; qualifier?: string } {
+  const preferredValues = cleanList(preferred);
+  if (preferredValues.length) {
+    return { values: preferredValues, qualifier: 'submitted' };
+  }
+
+  const fallbackValues = cleanList(fallback);
+  return {
+    values: fallbackValues,
+    qualifier: fallbackValues.length ? 'auto-detected' : undefined
+  };
+}
+
+function formatListSection(title: string, values: string[], qualifier?: string): string | null {
+  if (!values.length) {
+    return null;
+  }
+
+  const heading = qualifier ? title + ' (' + qualifier + ')' : title;
+  const items = values.map(value => '- ' + value).join('\n');
+  return '## ' + heading + '\n' + items;
+}
+
+function buildTaskDocumentation(
+  payload: TaskSubmissionPayload,
+  detected: TaskAutoDetectionResult
+): string {
+  const sections: string[] = [];
+  const trimmedIntent = payload.intent.trim();
+
+  if (trimmedIntent) {
+    sections.push('## Intent\n' + trimmedIntent);
+  }
+
+  const fileSection = pickValues(payload.targetFiles, detected.detectedFiles);
+  const files = formatListSection('Target Files', fileSection.values, fileSection.qualifier);
+  if (files) {
+    sections.push(files);
+  }
+
+  const outputsSection = pickValues(payload.desiredOutputs, detected.recommendedOutputs);
+  const outputs = formatListSection('Desired Outputs', outputsSection.values, outputsSection.qualifier);
+  if (outputs) {
+    sections.push(outputs);
+  }
+
+  const profilesSection = pickValues(payload.contextProfiles, detected.selectedProfiles);
+  const profiles = formatListSection('Context Profiles', profilesSection.values, profilesSection.qualifier);
+  if (profiles) {
+    sections.push(profiles);
+  }
+
+  const riskLevel = payload.riskLevel ?? detected.inferredRiskLevel;
+  const priority = payload.priority ?? 1;
+  sections.push('## Risk & Priority\n- Risk level: ' + riskLevel + '\n- Priority: ' + priority);
+
+  if (detected.warnings.length) {
+    const warnings = formatListSection('Auto-detection Warnings', detected.warnings);
+    if (warnings) {
+      sections.push(warnings);
+    }
+  }
+
+  return sections.join('\n\n');
+}
+
+function buildAcceptanceCriteria(
+  payload: TaskSubmissionPayload,
+  detected: TaskAutoDetectionResult,
+  intentSummary: string
+): string[] {
+  const criteria: string[] = [];
+  const summary = intentSummary || payload.intent.trim();
+
+  if (summary) {
+    criteria.push('Delivers intent: ' + summary);
+  }
+
+  const outputsSection = pickValues(payload.desiredOutputs, detected.recommendedOutputs);
+  outputsSection.values.forEach(output => {
+    criteria.push('Produces output: ' + output);
+  });
+
+  const scopeSection = pickValues(payload.targetFiles, detected.detectedFiles);
+  if (scopeSection.values.length) {
+    criteria.push('Respects scope: ' + scopeSection.values.join(', '));
+  }
+
+  if (detected.warnings.length) {
+    criteria.push('Resolves auto-detection warnings before completion');
+  }
+
+  criteria.push('Provides verification evidence appropriate for the task type');
+
+  return criteria.filter((value, index, self) => self.indexOf(value) === index);
+}
 
 /**
  * Create task management routes
@@ -161,36 +293,48 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   });
 
   // ============================================================================
-  // Task Creation
+  // Context-Aware Task Creation (NEW)
   // ============================================================================
 
   /**
    * POST /tasks
-   * Create task with minimal payload (3 required fields: title, taskType, intent)
+   * Create task with the standard payload (3 required fields)
    * Auto-detects: files, risk level, context profiles, outputs
    */
-  router.post('/tasks', async (req: Request, res: Response, next) => {
+  router.post('/tasks', async (req: Request, res: Response) => {
     try {
-      const payload: MinimalTaskPayload = req.body;
+      const submissionPayload: TaskSubmissionPayload = req.body;
+      const submissionValidation = validateTaskSubmissionPayload(submissionPayload);
 
-      // Validate required fields only
-      if (!payload.title || !payload.taskType || !payload.intent) {
-        throw new BadRequestError('Missing required fields', {
-          provided: Object.keys(payload),
-          required: ['title', 'taskType', 'intent']
-        });
+      if (!submissionValidation.isValid) {
+        return sendError(
+          res,
+          'Task submission failed validation',
+          400,
+          {
+            details: {
+              errors: submissionValidation.errors,
+              warnings: submissionValidation.warnings
+            }
+          }
+        );
       }
+
+      const payload = submissionValidation.normalized;
 
       // Auto-detect missing fields
       const detected = await taskAutoDetectionService.detectFields(payload);
-
+      const intentSummary = summarizeIntent(payload.intent);
+      const documentation = buildTaskDocumentation(payload, detected);
+      const acceptanceCriteria = buildAcceptanceCriteria(payload, detected, intentSummary);
+      
       // Convert to SimpleTaskData format (matches existing task creation)
       const taskData = {
         type: payload.taskType,
         title: payload.title,
-        description: payload.intent,
-        documentation: payload.intent,  // Use intent as documentation
-        acceptanceCriteria: [`Task must accomplish: ${payload.intent}`],
+        description: intentSummary || payload.intent,
+        documentation,
+        acceptanceCriteria,
         files: detected.detectedFiles,
         dependencies: [],
         project: 'app-monitor',  // Default project
@@ -202,28 +346,27 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
           desiredOutputs: detected.recommendedOutputs,
           autoDetectionConfidence: detected.confidence,
           autoDetectionWarnings: detected.warnings,
-          submissionMode: 'minimal',
+          submissionMode: 'standard',
           followUpOf: payload.followUpOf,
-          chainId: payload.chainId
+          chainId: payload.chainId,
+          submissionOverrides: {
+            targetFiles: cleanList(payload.targetFiles),
+            desiredOutputs: cleanList(payload.desiredOutputs),
+            contextProfiles: cleanList(payload.contextProfiles),
+            riskLevel: payload.riskLevel,
+            priority: payload.priority
+          },
+          submissionIntentLength: payload.intent.length
         }
       };
 
-      // Create task using existing service (validation happens in service layer)
-      const result = await devBotsManager.addTask(taskData);
-
-      // Merge auto-detection warnings into validation result
-      const mergedValidation = {
-        ...result.validation,
-        warnings: [
-          ...result.validation.warnings,
-          ...detected.warnings.map(w => `Auto-detection: ${w}`)
-        ]
-      };
-
+      // Create task using existing service
+      const result = await devBotsManager.addTask(taskData, { submission: true });
+      
       logger.info({
         category: 'api',
-        action: 'task_created_minimal',
-        message: `Created task ${result.task.id} via minimal API`,
+        action: 'task_created_submission',
+        message: `Created task ${result.task.id} via task submission API`,
         details: {
           taskId: result.task.id,
           taskType: payload.taskType,
@@ -233,19 +376,84 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
           hasWarnings: detected.warnings.length > 0
         }
       });
-
+      
       sendSuccess(
         res,
         {
           task: mapTaskToContract(result.task),
-          validation: mergedValidation,
+          validation: result.validation,
           autoDetection: detected
         },
         201
       );
     } catch (error) {
-      // Pass error to global error handler middleware
-      next(error);
+      if (error instanceof Error && error.message.startsWith('Duplicate task detected')) {
+        return sendError(
+          res,
+          'Duplicate task detected',
+          409,
+          { message: error.message }
+        );
+      }
+
+      logger.error({
+        category: 'api',
+        action: 'task_creation_submission_failed',
+        message: `Failed to create task via task submission API: ${error}`,
+        error
+      });
+      sendError(
+        res,
+        'Failed to create task',
+        500,
+        { message: error instanceof Error ? error.message : String(error) }
+      );
+    }
+  });
+
+  /**
+   * POST /tasks/preview-detection
+   * Preview auto-detection without creating task
+   * Useful for UX to show what will be detected before submission
+   */
+  router.post('/tasks/preview-detection', async (req: Request, res: Response) => {
+    try {
+      const payload: TaskSubmissionPayload = req.body;
+      
+      // Validate at least task type is provided
+      if (!payload.taskType) {
+        return sendError(
+          res,
+          'Missing taskType',
+          400,
+          { message: 'taskType is required for preview' }
+        );
+      }
+      
+      const detected = await taskAutoDetectionService.detectFields(payload);
+      
+      logger.debug({
+        category: 'api',
+        action: 'preview_detection',
+        message: `Preview detection for ${payload.taskType} task`,
+        details: {
+          taskType: payload.taskType,
+          filesDetected: detected.detectedFiles.length,
+          riskLevel: detected.inferredRiskLevel,
+          profilesSelected: detected.selectedProfiles.length
+        }
+      });
+      
+      sendSuccess(res, detected);
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'preview_detection_failed',
+        message: `Failed to preview detection: ${error}`,
+        error
+      });
+      sendError(res, 'Failed to preview detection', 500, { message: error instanceof Error ? error.message : String(error)
+       });
     }
   });
 

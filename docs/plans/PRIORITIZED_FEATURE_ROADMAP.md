@@ -180,19 +180,21 @@ Migrate work-target metadata from JSON config files to SQLite with backwards com
 
 ---
 
-### P0.4: Prompt Engineering V3 Implementation (PE-1 through PE-6) ✅ **COMPLETE - SUPERSEDED BY MINIMAL API**
+### P0.4: Prompt Engineering V3 Implementation (PE-1 through PE-6) ✅ **COMPLETE - SUPERSEDED BY TASK SUBMISSION API**
 **Plan:** BOT_PROMPT_ENGINEERING_V3.md (ARCHIVED 2025-11-14)
 **Owner:** Platform Tooling
 **Duration:** N/A
-**Status:** ✅ **COMPLETE** (Implemented as context-aware minimal API)
+**Status:** ✅ **COMPLETE** (Implemented as context-aware task submission API)
 
 **Original Goal:** Manual v3 template validation  
 **Actual Implementation:** Context-aware auto-generation (simpler and better)
 
-**What Was Delivered (2025-11-14, Updated 2025-11-19):**
-- ✅ **Minimal Task API:** 3-field submission (title, taskType, intent)
+**What Was Delivered (2025-11-14):**
+- ✅ **Task Submission API:** 3-field submission (title, taskType, intent)
 - ✅ **Auto-Detection Service:** Automatically infers files, risk level, context profiles
-- ✅ **Single Endpoint:** POST `/api/dev-bots/tasks` - Create task with minimal payload
+- ✅ **New Endpoints:** 
+  - POST `/api/dev-bots/tasks` - Create task with concise payload
+  - POST `/api/dev-bots/tasks/preview-detection` - Preview auto-detection
 - ✅ **Backend Complete:** Full integration with existing task creation
 - ⏳ **Frontend Pending:** UI form component not yet created
 
@@ -201,7 +203,11 @@ Migrate work-target metadata from JSON config files to SQLite with backwards com
 - Automated investigation steps via context bundles
 - Constraints auto-injected from recipes
 - Task submission time reduced from ~10 min to <2 min (estimated)
-- Frontend will use new minimal API when form component created
+
+**Migration Path:**
+- Old POST `/api/dev-bots/tasks` endpoint marked deprecated
+- Both endpoints functional (backward compatible)
+- Frontend will use new task submission API when form component created
 - Full migration target: 2 weeks
 
 **Dependencies:** None (feature replaced by superior approach)
@@ -282,18 +288,19 @@ Separate work-target development path from production deployment with artifact h
 ### P1.2: Context-Aware Task Submission ✅ **100% COMPLETE - PRODUCTION READY**
 **Plan:** dev-bot-context-management.md
 **Owner:** Platform Tooling
-**Completion Date:** 2025-11-19 (Refactoring Complete)
-**Status:** 🟢 **PRODUCTION READY** - Backend 100% Complete | Frontend Awaiting UI Component
+**Completion Date:** 2025-11-14
+**Status:** 🟢 **OPERATIONAL** - Backend 100% | Frontend awaiting UI component
 
 **Description:**
-**HIGHEST IMPACT FEATURE** - Transforms task submission from 15+ manual fields to just 3 (title, taskType, intent) with auto-generated prompts from context bundles.
+**HIGHEST IMPACT FEATURE** - Transforms task submission from 15+ manual fields to just 3 (title, type, intent) with auto-generated prompts from context bundles.
 
-**✅ Complete Implementation (2025-11-14 + Refactoring 2025-11-19):**
-- ✅ **Minimal Task API Endpoint (PRODUCTION READY):**
-  - POST `/api/dev-bots/tasks` - Create task with 3 required fields (title, taskType, intent)
+**✅ Complete Implementation (2025-11-14):**
+- ✅ **Task Submission API Endpoints (PRODUCTION READY):**
+  - POST `/api/dev-bots/tasks` - Create task with 3 fields
+  - POST `/api/dev-bots/tasks/preview-detection` - Preview auto-detection
 - ✅ **Auto-Detection Service (FULLY OPERATIONAL):**
   - File detection from git status (staged + modified + created)
-  - Risk level inference from centralized utility (utils/riskAssessment.ts)
+  - Risk level inference from file path patterns  
   - Context profile selection via ContextRecipeSelector
   - Default outputs per task type
   - Confidence scoring (0-1) for each detected field
@@ -310,22 +317,12 @@ Separate work-target development path from production deployment with artifact h
 - ✅ Prompt auto-generation functional
 - ✅ Cache hit rate >90%
 - ✅ Legacy endpoint marked deprecated (backward compatible)
-- ✅ **Error Handling Refactoring (2025-11-19):**
-  - Custom error classes (ValidationError, ConflictError, BadRequestError)
-  - Global error handling middleware
-  - Proper HTTP status codes (400, 409) instead of 500
-  - Structured error responses with errors/warnings/suggestions
-- ✅ **Code Quality Improvements (2025-11-19):**
-  - Removed dead code (545 lines - taskCreationTemplate.ts)
-  - Eliminated validation duplication (single validation point)
-  - Centralized risk assessment logic
-  - Single source of truth for task types (TASK_TYPES constant)
-  - All 1,794 tests passing
 
 **Remaining Work (Non-Blocking):**
-- Frontend minimal task form component (can use API directly until UI created)
+- Frontend task submission form component (can use API directly until UI created)
 - Auto-detection preview in UI (API provides this already)
-- Migration of remaining endpoints to use custom error classes (low priority)
+- V3 template code cleanup (deprecated but not yet removed)
+- Full end-to-end integration testing
 
 **Achievement:**
 - ✅ Eliminates 80% of manual task authoring work
@@ -347,7 +344,7 @@ curl -X POST http://localhost:5000/api/dev-bots/tasks \
 **Next Steps (Low Priority):**
 1. Create React form component (UI convenience, not functionality blocker)
 2. Remove legacy V3 template code (cleanup)
-3. Update documentation to show only minimal API
+3. Update documentation to show only task submission API
 
 ---
 

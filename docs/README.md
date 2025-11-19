@@ -11,7 +11,7 @@
 
 ### 📖 Common Tasks
 - **Setup:** [Environment Setup](setup/ENVIRONMENT_SETUP.md) | [Production Deployment](guides/PRODUCTION_DEPLOYMENT.md)
-- **Development:** [Task Submission](guides/MINIMAL_TASK_SUBMISSION_GUIDE.md) | [Frontend Dev](guides/FRONTEND_DEVELOPMENT.md)
+- **Development:** [Task Submission](guides/TASK_SUBMISSION_GUIDE.md) | [Frontend Dev](guides/FRONTEND_DEVELOPMENT.md)
 - **Reference:** [API Docs](guides/API_REFERENCE.md) | [Agent Personalities](guides/agent-personalities.md)
 
 ## Documentation Structure
@@ -64,7 +64,7 @@ In-depth analysis of system components (kept for reference).
 **I want to...**
 - *Understand the system* → Start with `architecture/master-design-intent.md`
 - *Know what to build next* → See `plans/PRIORITIZED_FEATURE_ROADMAP.md`
-- *Submit a task* → Use `guides/MINIMAL_TASK_SUBMISSION_GUIDE.md`
+- *Submit a task* → Use `guides/TASK_SUBMISSION_GUIDE.md`
 - *Deploy to production* → Follow `guides/PRODUCTION_DEPLOYMENT.md`
 - *Set up dev environment* → See `setup/ENVIRONMENT_SETUP.md`
 - *Understand a feature design* → Check `technicalDesigns/`

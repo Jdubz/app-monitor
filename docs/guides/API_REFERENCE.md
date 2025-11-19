@@ -610,6 +610,6 @@ socket.on('claude:systemStatusChange', (status) => {
 
 - [Task Examples](task-examples.md)
 - [Agent Personalities](agent-personalities.md)
-- [Task Submission Guide](MINIMAL_TASK_SUBMISSION_GUIDE.md)
+- [Task Submission Guide](TASK_SUBMISSION_GUIDE.md)
 - [System Architecture](../architecture/system-overview.md)
 - [Production Deployment](PRODUCTION_DEPLOYMENT.md)
