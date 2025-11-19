@@ -70,6 +70,19 @@ test.describe('PR Tracking - PR List Display', () => {
     expect(count).toBeGreaterThanOrEqual(0);
   });
 
+  test('should keep long PR lists inside a scroll region', async ({ page }) => {
+    await page.waitForTimeout(2000);
+
+    const listRegion = page.getByTestId('list-scroll-region');
+    const visible = await listRegion.isVisible().catch(() => false);
+    if (!visible) {
+      test.skip('PR list empty - nothing to verify');
+    }
+
+    const hasOverflow = await listRegion.evaluate((el) => el.className.includes('overflow-y-auto'));
+    expect(hasOverflow).toBeTruthy();
+  });
+
   test('should display PR metadata (author, timestamp, etc.)', async ({ page }) => {
     await page.waitForTimeout(2000);
 

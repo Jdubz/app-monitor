@@ -62,6 +62,19 @@ test.describe('Task Queue - Navigation and Layout', () => {
     const pageContent = await page.content();
     expect(pageContent).toContain('root');
   });
+
+  test('should keep long task lists inside an internal scroll region', async ({ page }) => {
+    await page.waitForTimeout(2000);
+
+    const listRegion = page.getByTestId('list-scroll-region');
+    const visible = await listRegion.isVisible().catch(() => false);
+    if (!visible) {
+      test.skip('Task queue empty - no list to validate');
+    }
+
+    const hasOverflow = await listRegion.evaluate((el) => el.className.includes('overflow-y-auto'));
+    expect(hasOverflow).toBeTruthy();
+  });
 });
 
 test.describe('Task Queue - Task List Display', () => {
