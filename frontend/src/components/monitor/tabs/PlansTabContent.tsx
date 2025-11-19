@@ -89,7 +89,6 @@ const STUB_PLANS: Plan[] = [
  * PlansTabContent - Plans system overview
  *
  * Displays active plans with:
- * - Summary metrics (active, blocked, completed)
  * - Filterable list by status
  * - Detail view with milestones and progress
  *
@@ -122,19 +121,6 @@ export function PlansTabContent({ plansData = STUB_PLANS }: PlansTabContentProps
         return plans;
     }
   }, [plans, activeFilter]);
-
-  // Summary cards
-  const summaryCards = useMemo(() => {
-    const activeCount = plans.filter((p) => ['planning', 'in_progress'].includes(p.status)).length;
-    const blockedCount = plans.filter((p) => p.status === 'blocked').length;
-    const completedCount = plans.filter((p) => p.status === 'completed').length;
-
-    return [
-      { label: 'Active Plans', value: activeCount, className: 'text-blue-600' },
-      { label: 'Blocked', value: blockedCount, className: blockedCount > 0 ? 'text-red-600' : '' },
-      { label: 'Completed', value: completedCount, className: 'text-green-600' },
-    ];
-  }, [plans]);
 
   // Filter tabs
   const filterTabs = useMemo(() => {
@@ -345,7 +331,6 @@ export function PlansTabContent({ plansData = STUB_PLANS }: PlansTabContentProps
         </p>
       </div>
       <ListDetailLayout<Plan, PlanFilter>
-        summaryCards={summaryCards}
         filterTabs={filterTabs}
         activeFilter={activeFilter}
         onFilterChange={setActiveFilter}

@@ -21,7 +21,6 @@ type ChainFilter = 'all' | 'blocked' | 'quarantined';
  * DevBotsTabContent - Dev-Bots monitoring tab using ListDetailLayout
  *
  * Displays automation chains (tasks) with:
- * - Summary metrics (queue size, workers, active tasks)
  * - Filterable list (all, blocked, quarantined)
  * - Detail view with intervention controls
  */
@@ -35,7 +34,7 @@ type DialogState =
   | { type: 'error'; message: string };
 
 export function DevBotsTabContent() {
-  const { status, queueRows, isLoading, refreshStatus } = useDevBotsStore();
+  const { queueRows, isLoading, refreshStatus } = useDevBotsStore();
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState<ChainFilter>('all');
   const [interventionLoading, setInterventionLoading] = useState<string | null>(null);
@@ -72,20 +71,6 @@ export function DevBotsTabContent() {
     }
     return result;
   }, [chains, activeFilter]);
-
-  // Summary cards
-  const summaryCards = useMemo(() => {
-    const queueSize = status?.queueSize ?? 0;
-    const activeWorkers = status?.workerCount ?? 0;
-    const maxWorkers = status?.maxWorkers ?? 0;
-    const activeTasks = status?.activeTasks ?? 0;
-
-    return [
-      { label: 'Queue Size', value: queueSize },
-      { label: 'Workers', value: `${activeWorkers}/${maxWorkers}` },
-      { label: 'Active Tasks', value: activeTasks },
-    ];
-  }, [status]);
 
   // Filter tabs
   const filterTabs = useMemo(() => {
@@ -405,7 +390,6 @@ export function DevBotsTabContent() {
   return (
     <>
       <ListDetailLayout<DevBotsTask, ChainFilter>
-        summaryCards={summaryCards}
         filterTabs={filterTabs}
         activeFilter={activeFilter}
         onFilterChange={setActiveFilter}

@@ -8,7 +8,6 @@ describe('ListDetailLayout long list handling', () => {
 
     render(
       <ListDetailLayout
-        summaryCards={[]}
         filterTabs={[{ value: 'all', label: 'All', count: items.length }]}
         activeFilter="all"
         onFilterChange={() => {}}
