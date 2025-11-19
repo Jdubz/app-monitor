@@ -21,10 +21,12 @@ import type {
   InterServerEvents,
   SocketData,
 } from './types/socketEvents.js';
+import { SocketIOTerminalHandler } from './services/socketIOTerminalHandler.js';
 
 // Export services for API access
 export let devBotsManager: DevBotsManager | undefined;
 export let connectionManager: ConnectionManager;
+export let terminalHandler: SocketIOTerminalHandler | undefined;
 
 export interface CreateAppOverrides {
   devBotsManager?: DevBotsManager | null;
@@ -113,9 +115,15 @@ export async function createApp(options: CreateAppOptions = {}) {
 
   // Set Socket.IO instance for broadcasting
   connectionManager.setIO(io);
-  
+
   // Set global instance for service access
   setConnectionManagerInstance(connectionManager);
+
+  // Initialize Socket.IO Terminal Handler (unified architecture)
+  // This will be used instead of the native WebSocket implementation (InteractiveSessionStreaming)
+  // Note: Docker instance will be available after DevBotsManager initialization
+  // Terminal handler initialization happens after DevBotsManager is created
+  // (moved to after DevBotsManager initialization below)
 
   if (overrides.devBotsManager === null) {
     devBotsManager = undefined;
@@ -181,6 +189,27 @@ export async function createApp(options: CreateAppOptions = {}) {
         message: 'Docker warning emitted to clients',
         details: { warning },
       });
+    });
+
+    // Initialize Socket.IO Terminal Handler with Docker instance
+    const dockerManager = devBotsManager.getDockerManager();
+    const docker = dockerManager.getDocker();
+
+    terminalHandler = new SocketIOTerminalHandler({
+      io,
+      docker,
+      backlogLimit: 200,
+      shellCommand: ['/bin/bash'],
+    });
+
+    logger.info({
+      category: 'interactive_terminal',
+      action: 'handler_initialized',
+      message: 'Socket.IO terminal handler initialized (unified architecture)',
+      details: {
+        backlogLimit: 200,
+        shellCommand: ['/bin/bash'],
+      },
     });
   }
 
