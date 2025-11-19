@@ -323,6 +323,14 @@ export class DevBotsManager extends EventEmitter {
   }
 
   /**
+   * Get the interactive session manager
+   * Useful for wiring up event listeners (e.g., for Socket.IO terminal handler)
+   */
+  public getInteractiveSessionManager(): InteractiveSessionManager {
+    return this.interactiveSessionManager;
+  }
+
+  /**
    * Manually timeout a task after verification
    */
   public manuallyTimeoutTask(taskId: string, reason: string) {

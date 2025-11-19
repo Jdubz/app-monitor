@@ -211,6 +211,59 @@ export async function createApp(options: CreateAppOptions = {}) {
         shellCommand: ['/bin/bash'],
       },
     });
+
+    // Wire up InteractiveSessionManager events to Socket.IO terminal handler
+    const sessionManager = devBotsManager.getInteractiveSessionManager();
+
+    sessionManager.on('sessionStarted', async (session) => {
+      if (session.containerId && terminalHandler) {
+        try {
+          await terminalHandler.startSession(session.id, session.containerId);
+          logger.info({
+            category: 'interactive_terminal',
+            action: 'socketio_streaming_started',
+            message: 'Socket.IO terminal streaming started for session',
+            details: { sessionId: session.id, containerId: session.containerId },
+          });
+        } catch (error) {
+          logger.error({
+            category: 'interactive_terminal',
+            action: 'socketio_streaming_start_failed',
+            message: 'Failed to start Socket.IO terminal streaming',
+            error,
+            details: { sessionId: session.id, containerId: session.containerId },
+          });
+        }
+      }
+    });
+
+    sessionManager.on('sessionEnded', async (session) => {
+      if (terminalHandler) {
+        try {
+          await terminalHandler.stopSession(session.id);
+          logger.info({
+            category: 'interactive_terminal',
+            action: 'socketio_streaming_stopped',
+            message: 'Socket.IO terminal streaming stopped for session',
+            details: { sessionId: session.id },
+          });
+        } catch (error) {
+          logger.error({
+            category: 'interactive_terminal',
+            action: 'socketio_streaming_stop_failed',
+            message: 'Failed to stop Socket.IO terminal streaming',
+            error,
+            details: { sessionId: session.id },
+          });
+        }
+      }
+    });
+
+    logger.info({
+      category: 'interactive_terminal',
+      action: 'event_listeners_wired',
+      message: 'Interactive session events wired to Socket.IO terminal handler',
+    });
   }
 
   // Initialize GitHub Webhook Handler
