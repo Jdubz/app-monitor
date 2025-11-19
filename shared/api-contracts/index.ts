@@ -279,7 +279,7 @@ export interface DevBotsStatus {
   tasks: DevBotsTaskCollections;
 }
 
-export type DevBotsQueueBucket = 'pending' | 'active' | 'completed' | 'failed';
+export type DevBotsQueueBucket = 'pending' | 'active' | 'blocked' | 'completed' | 'failed';
 
 export interface DevBotsQueueItem {
   bucket: DevBotsQueueBucket;
@@ -291,6 +291,7 @@ export interface DevBotsQueueSummary {
   counts: {
     pending: number;
     active: number;
+    blocked: number;
     completed: number;
     failed: number;
   };

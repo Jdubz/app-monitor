@@ -11,12 +11,14 @@ import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/utils/dateFormatters';
 import { PhaseProgressBar, PhaseBadge } from './PhaseProgress';
 
-type QueueBucket = 'pending' | 'active' | 'completed' | 'failed';
+type QueueBucket = 'pending' | 'active' | 'blocked' | 'completed' | 'failed';
 
 const getStatusBadgeVariant = (status: DevBotsTask['status']) => {
   switch (status) {
     case 'active':
       return { variant: 'outline' as const, className: 'border-amber-500 text-amber-500' };
+    case 'blocked':
+      return { variant: 'outline' as const, className: 'border-amber-600 text-amber-600' };
     case 'completed':
       return { variant: 'outline' as const, className: 'border-emerald-500 text-emerald-500' };
     case 'failed':
@@ -29,8 +31,9 @@ const getStatusBadgeVariant = (status: DevBotsTask['status']) => {
 const bucketCopy: Record<QueueBucket, { label: string; helper: string }> = {
   pending: { label: 'Pending', helper: 'Awaiting assignment' },
   active: { label: 'Active', helper: 'Workers currently executing' },
+  blocked: { label: 'Blocked', helper: 'Awaiting manual intervention' },
   completed: { label: 'Completed', helper: 'Recently finished tasks' },
-  failed: { label: 'Failed', helper: 'Needs intervention' },
+  failed: { label: 'Failed', helper: 'Permanently failed tasks' },
 };
 
 export function TaskQueuePanel() {
@@ -50,17 +53,19 @@ export function TaskQueuePanel() {
 
   const filters = useMemo(
     () =>
-      (['pending', 'active', 'completed', 'failed'] as QueueBucket[]).map((bucket) => ({
+      (['pending', 'active', 'blocked', 'completed', 'failed'] as QueueBucket[]).map((bucket) => ({
         bucket,
         label: bucketCopy[bucket].label,
         count:
           bucket === 'failed'
             ? counts?.failed ?? 0
-            : bucket === 'active'
-              ? counts?.active ?? 0
-              : bucket === 'completed'
-                ? counts?.completed ?? 0
-                : counts?.pending ?? 0,
+            : bucket === 'blocked'
+              ? counts?.blocked ?? 0
+              : bucket === 'active'
+                ? counts?.active ?? 0
+                : bucket === 'completed'
+                  ? counts?.completed ?? 0
+                  : counts?.pending ?? 0,
       })),
     [counts],
   );

@@ -27,7 +27,7 @@ import {
   getDevBotsTaskLogs,
 } from '@/services/api';
 
-type QueueFilter = 'pending' | 'active' | 'completed' | 'failed';
+type QueueFilter = 'pending' | 'active' | 'blocked' | 'completed' | 'failed';
 type QueueRow = DevBotsQueueSummary['items'][number];
 
 type TaskLogsDescriptor = DevBotsTaskLogsResponse;

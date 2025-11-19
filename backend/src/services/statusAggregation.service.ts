@@ -90,6 +90,7 @@ export class StatusAggregationService {
       tasks: {
         pending: this.taskQueue.getTasksByStatus('pending'),
         active: this.taskQueue.getTasksByStatus('running'),
+        blocked: this.taskQueue.getTasksByStatus('blocked'),
         completed: this.taskQueue.getTasksByStatus('completed').slice(-50), // Keep last 50 completed tasks
         failed: this.taskQueue.getTasksByStatus('failed')
       }
@@ -99,10 +100,11 @@ export class StatusAggregationService {
   /**
    * Get tasks grouped by status
    */
-  async getTasks(): Promise<{ pending: Task[]; active: Task[]; completed: Task[]; failed: Task[] }> {
+  async getTasks(): Promise<{ pending: Task[]; active: Task[]; blocked: Task[]; completed: Task[]; failed: Task[] }> {
     return {
       pending: this.taskQueue.getTasksByStatus('pending'),
       active: this.taskQueue.getTasksByStatus('running'),
+      blocked: this.taskQueue.getTasksByStatus('blocked'),
       completed: this.taskQueue.getTasksByStatus('completed').slice(-50),
       failed: this.taskQueue.getTasksByStatus('failed')
     };
