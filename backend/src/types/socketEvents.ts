@@ -21,13 +21,24 @@ export interface ClientToServerEvents {
       timestamps?: boolean;
     };
   }) => void;
-  
+
   'docker:stopStream': (data: { containerId: string }) => void;
-  
+
   'docker:startMonitor': (data: { containerId: string }) => void;
-  
+
   'docker:stopMonitor': (data: { containerId: string }) => void;
-  
+
+  // Interactive terminal events
+  'terminal:join': (data: { sessionId: string }) => void;
+
+  'terminal:leave': (data: { sessionId: string }) => void;
+
+  'terminal:input': (data: { sessionId: string; data: string }) => void;
+
+  'terminal:signal': (data: { sessionId: string; signal: 'interrupt' | 'terminate' }) => void;
+
+  'terminal:resize': (data: { sessionId: string; rows: number; cols: number }) => void;
+
   // Connection health events
   'ping': () => void;
 }
@@ -103,6 +114,27 @@ export interface ServerToClientEvents {
   'task:started': (task: Record<string, unknown>) => void;
   'task:completed': (task: Record<string, unknown>) => void;
   'task:failed': (task: Record<string, unknown>) => void;
+
+  // Interactive terminal events
+  'terminal:joined': (data: { sessionId: string }) => void;
+
+  'terminal:output': (data: {
+    sessionId: string;
+    stream: 'stdout' | 'stderr' | 'system';
+    text: string;
+    timestamp: string;
+  }) => void;
+
+  'terminal:status': (data: {
+    sessionId: string;
+    state: 'connected' | 'running' | 'ended' | 'error';
+    reason?: string;
+  }) => void;
+
+  'terminal:error': (data: {
+    sessionId: string;
+    message: string;
+  }) => void;
 }
 
 // ============================================================================
@@ -121,4 +153,5 @@ export interface InterServerEvents {
 export interface SocketData {
   userId?: string;
   monitorIntervals?: Record<string, NodeJS.Timeout>;
+  terminalSessions?: Set<string>; // Track which terminal sessions this socket is subscribed to
 }
