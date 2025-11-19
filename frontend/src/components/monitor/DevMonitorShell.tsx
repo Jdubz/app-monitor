@@ -119,7 +119,7 @@ export function DevMonitorShell({ socket }: DevMonitorShellProps) {
             </TabsContent>
 
             <TabsContent value="interactive" className="flex-1 overflow-hidden">
-              <InteractiveTerminalTabContent />
+              <InteractiveTerminalTabContent socket={socket} />
             </TabsContent>
           </Tabs>
         </div>
