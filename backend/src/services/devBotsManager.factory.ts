@@ -20,7 +20,7 @@ import { resolveArtifactsDir } from '../utils/repoPaths.js';
 import { TaskExecutionService } from './taskExecution.service.js';
 import { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 import { TaskCompletionService } from './taskCompletion.service.js';
-import { InteractiveSessionManager } from './InteractiveSessionManager.js';
+// InteractiveSessionManager import removed - migrated to tmux-based TerminalService
 import { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
 import { TaskCreationService } from './taskCreation.service.js';
 import { StatusAggregationService } from './statusAggregation.service.js';

@@ -20,7 +20,7 @@ import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskExecutionService } from './taskExecution.service.js';
 import type { TaskCompletionService } from './taskCompletion.service.js';
 import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
-import type { InteractiveSessionManager } from './InteractiveSessionManager.js';
+// InteractiveSessionManager import removed - migrated to tmux-based TerminalService
 import type { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
 import type { TaskCreationService } from './taskCreation.service.js';
 import type { StatusAggregationService } from './statusAggregation.service.js';
@@ -63,8 +63,7 @@ export interface DevBotsManagerDependencies {
   // PR workflow orchestration
   prWorkflowOrchestrator: PRWorkflowOrchestrator;
 
-  // Interactive sessions
-  interactiveSessionManager: InteractiveSessionManager;
+  // Interactive sessions - REMOVED (migrated to tmux-based TerminalService)
 
   // Worker health monitoring
   workerHealthMonitor: WorkerHealthMonitor;

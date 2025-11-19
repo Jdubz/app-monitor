@@ -1,15 +1,20 @@
-import { InteractiveSessionTab } from '@/components/dev-bots/interactive/InteractiveSessionTab';
+import type { Socket } from 'socket.io-client';
+import { Terminal } from '@/components/dev-bots/Terminal';
+
+interface InteractiveTerminalTabContentProps {
+  socket: Socket | null;
+}
 
 /**
- * InteractiveTerminalTabContent - Wrapper around InteractiveSessionTab
+ * InteractiveTerminalTabContent - tmux-based persistent terminal
  *
- * Simple wrapper component to integrate the existing interactive session
- * functionality into the monitor shell tab structure.
+ * Simple wrapper component to integrate the new Terminal component
+ * into the monitor shell tab structure.
  */
-export function InteractiveTerminalTabContent() {
+export function InteractiveTerminalTabContent({ socket }: InteractiveTerminalTabContentProps) {
   return (
     <div className="h-full">
-      <InteractiveSessionTab />
+      <Terminal socket={socket} />
     </div>
   );
 }
