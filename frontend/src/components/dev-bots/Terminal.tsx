@@ -91,7 +91,7 @@ export function Terminal({ socket, sessionId: initialSessionId, onSessionCreated
     const handleResize = () => {
       fitAddon.fit();
       if (socket && socket.connected) {
-        socket.emit('terminal:resize', term.cols, term.rows);
+        socket.emit('terminal:resize', { cols: term.cols, rows: term.rows });
       }
     };
 

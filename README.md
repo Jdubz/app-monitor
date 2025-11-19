@@ -73,6 +73,27 @@ App Monitor is a **development-only** web dashboard that provides:
 
 ## Quick Start
 
+### System Requirements
+
+Before installing dependencies, ensure you have the following system requirements:
+
+**Required:**
+- Node.js 18.x or 20.x
+- npm 8.x or higher
+- tmux (for interactive terminal sessions)
+- Build tools for native dependencies:
+  - **Linux**: `build-essential` package
+    ```bash
+    sudo apt-get install build-essential tmux
+    ```
+  - **macOS**: Xcode Command Line Tools
+    ```bash
+    xcode-select --install
+    brew install tmux
+    ```
+
+**Note:** The `node-pty` package requires native compilation and these build tools are necessary for installation. If you encounter errors during `npm install`, ensure these dependencies are installed.
+
 ### Install Dependencies
 ```bash
 cd app-monitor
