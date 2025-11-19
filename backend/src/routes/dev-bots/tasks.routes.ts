@@ -161,15 +161,15 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   });
 
   // ============================================================================
-  // Context-Aware Minimal Task Creation (NEW)
+  // Task Creation
   // ============================================================================
 
   /**
-   * POST /tasks/minimal
-   * Create task with minimal payload (3 required fields)
+   * POST /tasks
+   * Create task with minimal payload (3 required fields: title, taskType, intent)
    * Auto-detects: files, risk level, context profiles, outputs
    */
-  router.post('/tasks/minimal', async (req: Request, res: Response, next) => {
+  router.post('/tasks', async (req: Request, res: Response, next) => {
     try {
       const payload: MinimalTaskPayload = req.body;
 
@@ -246,52 +246,6 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
     } catch (error) {
       // Pass error to global error handler middleware
       next(error);
-    }
-  });
-
-  /**
-   * POST /tasks/preview-detection
-   * Preview auto-detection without creating task
-   * Useful for UX to show what will be detected before submission
-   */
-  router.post('/tasks/preview-detection', async (req: Request, res: Response) => {
-    try {
-      const payload: MinimalTaskPayload = req.body;
-      
-      // Validate at least task type is provided
-      if (!payload.taskType) {
-        return sendError(
-          res,
-          'Missing taskType',
-          400,
-          { message: 'taskType is required for preview' }
-        );
-      }
-      
-      const detected = await taskAutoDetectionService.detectFields(payload);
-      
-      logger.debug({
-        category: 'api',
-        action: 'preview_detection',
-        message: `Preview detection for ${payload.taskType} task`,
-        details: {
-          taskType: payload.taskType,
-          filesDetected: detected.detectedFiles.length,
-          riskLevel: detected.inferredRiskLevel,
-          profilesSelected: detected.selectedProfiles.length
-        }
-      });
-      
-      sendSuccess(res, detected);
-    } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'preview_detection_failed',
-        message: `Failed to preview detection: ${error}`,
-        error
-      });
-      sendError(res, 'Failed to preview detection', 500, { message: error instanceof Error ? error.message : String(error)
-       });
     }
   });
 

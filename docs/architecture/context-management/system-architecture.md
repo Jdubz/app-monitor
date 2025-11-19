@@ -20,7 +20,7 @@ The Context Management System provides dev-bots with accurate, up-to-date contex
 - Docker container delivery via `docker cp` pattern
 - Automatic context bundle generation on task creation
 - Prompt generation with context file references
-- **Minimal 3-field task submission API** (`POST /tasks/minimal` - title, taskType, intent)
+- **Minimal 3-field task submission API** (`POST /tasks` - title, taskType, intent)
 - **Auto-detection** of target files from git status, risk level from file patterns, context profiles from task type
 - **Structured error handling** with proper HTTP status codes (400, 409)
 - **Centralized risk assessment** logic shared across services

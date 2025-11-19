@@ -16,7 +16,7 @@ The system automatically detects files, risk level, and context profiles, then g
 ## API Endpoint
 
 ```
-POST /api/dev-bots/tasks/minimal
+POST /api/dev-bots/tasks
 Content-Type: application/json
 ```
 
@@ -148,34 +148,27 @@ Additional profiles added based on file paths:
 - Security review requires explicit file list
 - Risk level raised from auto-detected "medium" to "high"
 
-## Preview Auto-Detection
+## Auto-Detection Details
 
-Test auto-detection without creating a task:
+When you create a task, the response includes auto-detection details showing what was inferred:
 
-```bash
-curl -X POST http://localhost:5000/api/dev-bots/tasks/preview-detection \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "My task",
-    "taskType": "implementation",
-    "intent": "Do something"
-  }'
-```
-
-Response:
+Response includes:
 ```json
 {
   "data": {
-    "detectedFiles": ["frontend/src/App.tsx"],
-    "inferredRiskLevel": "low",
-    "selectedProfiles": ["scope-control", "dev-monitor"],
-    "recommendedOutputs": ["unit-tests", "documentation"],
-    "confidence": {
-      "files": 0.7,
-      "riskLevel": 0.8,
-      "profiles": 0.9
-    },
-    "warnings": []
+    "task": { /* task details */ },
+    "autoDetection": {
+      "detectedFiles": ["frontend/src/App.tsx"],
+      "inferredRiskLevel": "low",
+      "selectedProfiles": ["scope-control", "dev-monitor"],
+      "recommendedOutputs": ["unit-tests", "documentation"],
+      "confidence": {
+        "files": 0.7,
+        "riskLevel": 0.8,
+        "profiles": 0.9
+      },
+      "warnings": []
+    }
   }
 }
 ```
@@ -366,26 +359,19 @@ node scripts/submit-task.js \
   --intent "Increase connection timeout from 5s to 30s"
 
 # Using curl (for automation)
-curl -X POST http://localhost:5000/api/dev-bots/tasks/minimal \
-  -H "Content-Type: application/json" \
-  -d @task.json
-
-# Preview before submitting
-curl -X POST http://localhost:5000/api/dev-bots/tasks/preview-detection \
+# Create the task
+curl -X POST http://localhost:5000/api/dev-bots/tasks \
   -H "Content-Type: application/json" \
   -d @task.json
 ```
 
 ## FAQ
 
-**Q: Can I still use the old V3 template format?**  
-A: The old endpoint (`POST /api/dev-bots/tasks`) is deprecated but still functional for backward compatibility. It will be removed in a future release. Use `/tasks/minimal` for all new tasks.
-
-**Q: How accurate is auto-detection?**  
+**Q: How accurate is auto-detection?**
 A: >90% accuracy measured in testing. Low-confidence detections include warnings.
 
-**Q: Can I see what will be auto-detected before submitting?**  
-A: Yes! Use `POST /api/dev-bots/tasks/preview-detection` to preview without creating a task.
+**Q: Can I see what will be auto-detected before submitting?**
+A: Yes! The task creation response includes full auto-detection details in the `autoDetection` field.
 
 **Q: What if auto-detection is wrong?**  
 A: Provide manual overrides via optional fields (`targetFiles`, `riskLevel`, `contextProfiles`).

@@ -53,7 +53,7 @@ VITE_PASSWORD=your-secure-frontend-password
 import { apiClient } from '@/utils/apiClient';
 
 const tasks = await apiClient.get('/dev-bots/tasks');
-const newTask = await apiClient.post('/dev-bots/tasks/minimal', {
+const newTask = await apiClient.post('/dev-bots/tasks', {
   title: 'My task',
   taskType: 'implementation',
   intent: 'Accomplish something specific'
@@ -68,7 +68,7 @@ curl -H "X-API-Key: your-api-key-here" \
 
 #### fetch/JavaScript
 ```javascript
-fetch('https://app-monitor.joshwentworth.com/api/dev-bots/tasks/minimal', {
+fetch('https://app-monitor.joshwentworth.com/api/dev-bots/tasks', {
   headers: { 'X-API-Key': 'your-api-key-here' }
 })
 ```
@@ -293,9 +293,7 @@ return ErrorResponses.rateLimitExceeded(
 ```http
 GET    /api/dev-bots/status           # System status
 GET    /api/dev-bots/tasks              # List all tasks
-POST   /api/dev-bots/tasks/minimal     # Create task (minimal payload - RECOMMENDED)
-POST   /api/dev-bots/tasks/preview-detection  # Preview auto-detection
-POST   /api/dev-bots/tasks              # Create task (legacy - DEPRECATED)
+POST   /api/dev-bots/tasks              # Create task (minimal 3-field payload)
 GET    /api/dev-bots/tasks/:id/detail   # Get specific task with history
 POST   /api/dev-bots/tasks/:id/timeout  # Manually timeout task
 ```
@@ -355,9 +353,9 @@ POST   /api/dev-bots/restore          # Restore from backup
 
 ### Request/Response Examples
 
-#### Create Task (Minimal Payload - RECOMMENDED)
+#### Create Task
 ```http
-POST /api/dev-bots/tasks/minimal
+POST /api/dev-bots/tasks
 Content-Type: application/json
 X-API-Key: your-api-key
 

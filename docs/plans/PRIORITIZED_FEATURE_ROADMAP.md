@@ -189,12 +189,10 @@ Migrate work-target metadata from JSON config files to SQLite with backwards com
 **Original Goal:** Manual v3 template validation  
 **Actual Implementation:** Context-aware auto-generation (simpler and better)
 
-**What Was Delivered (2025-11-14):**
+**What Was Delivered (2025-11-14, Updated 2025-11-19):**
 - ✅ **Minimal Task API:** 3-field submission (title, taskType, intent)
 - ✅ **Auto-Detection Service:** Automatically infers files, risk level, context profiles
-- ✅ **New Endpoints:** 
-  - POST `/api/dev-bots/tasks/minimal` - Create task with minimal payload
-  - POST `/api/dev-bots/tasks/preview-detection` - Preview auto-detection
+- ✅ **Single Endpoint:** POST `/api/dev-bots/tasks` - Create task with minimal payload
 - ✅ **Backend Complete:** Full integration with existing task creation
 - ⏳ **Frontend Pending:** UI form component not yet created
 
@@ -203,10 +201,6 @@ Migrate work-target metadata from JSON config files to SQLite with backwards com
 - Automated investigation steps via context bundles
 - Constraints auto-injected from recipes
 - Task submission time reduced from ~10 min to <2 min (estimated)
-
-**Migration Path:**
-- Old POST `/api/dev-bots/tasks` endpoint marked deprecated
-- Both endpoints functional (backward compatible)
 - Frontend will use new minimal API when form component created
 - Full migration target: 2 weeks
 
@@ -295,9 +289,8 @@ Separate work-target development path from production deployment with artifact h
 **HIGHEST IMPACT FEATURE** - Transforms task submission from 15+ manual fields to just 3 (title, taskType, intent) with auto-generated prompts from context bundles.
 
 **✅ Complete Implementation (2025-11-14 + Refactoring 2025-11-19):**
-- ✅ **Minimal Task API Endpoints (PRODUCTION READY):**
-  - POST `/api/dev-bots/tasks/minimal` - Create task with 3 fields
-  - POST `/api/dev-bots/tasks/preview-detection` - Preview auto-detection
+- ✅ **Minimal Task API Endpoint (PRODUCTION READY):**
+  - POST `/api/dev-bots/tasks` - Create task with 3 required fields (title, taskType, intent)
 - ✅ **Auto-Detection Service (FULLY OPERATIONAL):**
   - File detection from git status (staged + modified + created)
   - Risk level inference from centralized utility (utils/riskAssessment.ts)
@@ -342,7 +335,7 @@ Separate work-target development path from production deployment with artifact h
 
 **API Usage (Available Now):**
 ```bash
-curl -X POST http://localhost:5000/api/dev-bots/tasks/minimal \
+curl -X POST http://localhost:5000/api/dev-bots/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Fix login timeout issue",
