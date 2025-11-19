@@ -12,6 +12,7 @@ import { ConnectionManager, setConnectionManagerInstance } from './services/conn
 import { GitHubWebhookHandler } from './services/githubWebhookHandler.service.js';
 import { setWebhookHandler } from './routes/github-webhooks.routes.js';
 import { logger } from './utils/logger.js';
+import { startMcpServer } from './mcp/server.js';
 
 // Conditionally import TerminalService - skip in test environments to avoid node-pty crashes
 type TerminalServiceType = typeof import('./services/TerminalService.js').TerminalService;
@@ -135,6 +136,24 @@ export async function createApp(options: CreateAppOptions = {}) {
     // Create dependencies
     const devBotsDeps = overrides.devBotsDependencies ?? await createDevBotsManagerDependencies();
     devBotsManager = new DevBotsManager(devBotsDeps);
+
+    // Start the MCP server in non-test environments
+    const isTestEnv = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
+    if (!isTestEnv) {
+        startMcpServer({
+            db: devBotsDeps.taskQueue.getDb(),
+            services: {
+                devBotsManager,
+            },
+        }).catch(error => {
+            logger.error({
+                category: 'system',
+                action: 'mcp_startup_error',
+                message: 'Failed to start MCP server',
+                error,
+            });
+        });
+    }
   }
 
   if (devBotsManager) {
