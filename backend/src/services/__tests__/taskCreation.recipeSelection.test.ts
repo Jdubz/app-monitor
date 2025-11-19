@@ -3,6 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { TASK_TYPES } from '@app-monitor/api-contracts';
 import { TaskCreationService } from '../taskCreation.service.js';
 import { TaskQueueService } from '../taskQueue.sqlite.js';
 import { TaskCreationGuidelinesManager } from '../taskCreationGuidelines.js';
@@ -127,27 +128,6 @@ describe('TaskCreation with Intelligent Recipe Selection', () => {
       }
     });
 
-    it('should add deployment recipe for migration files', async () => {
-      const taskData: SimpleTaskData = {
-        type: 'implementation',
-        title: 'Add database migration',
-        description: 'Create migration for new table',
-        files: ['backend/migrations/021_add_users_table.sql'],
-        acceptanceCriteria: ['Migration created', 'Migration tested']
-      };
-
-      const result = await taskCreationService.createTask(taskData);
-
-      expect(result.task).toBeDefined();
-      
-      if (result.contextBundle) {
-        const profiles = result.contextBundle.metadata.profiles;
-        
-        // Should include deployment (file pattern match)
-        expect(profiles).toContain('deployment');
-      }
-    });
-
     it('should add pr-workflow recipe for GitHub workflow files', async () => {
       const taskData: SimpleTaskData = {
         type: 'implementation',
@@ -191,9 +171,6 @@ describe('TaskCreation with Intelligent Recipe Selection', () => {
         
         // Should include implementation-patterns (service file)
         expect(profiles).toContain('implementation-patterns');
-        
-        // Should include deployment (migration + Dockerfile)
-        expect(profiles).toContain('deployment');
       }
     });
 
@@ -222,13 +199,13 @@ describe('TaskCreation with Intelligent Recipe Selection', () => {
   describe('Manual Profile Override', () => {
     it('should respect manual profile overrides in metadata', async () => {
       const taskData: SimpleTaskData = {
-        type: 'documentation',
+        type: TASK_TYPES.IMPLEMENTATION,
         title: 'Update documentation',
         description: 'Update architecture docs',
         files: ['docs/architecture/README.md'],
         acceptanceCriteria: ['Docs updated'],
         metadata: {
-          contextProfiles: ['deployment', 'pr-workflow']
+          contextProfiles: ['pr-workflow', 'review-checklist']
         }
       };
 
@@ -241,12 +218,9 @@ describe('TaskCreation with Intelligent Recipe Selection', () => {
         
         // Should include scope-control (always required)
         expect(profiles).toContain('scope-control');
-        
-        // Should include pr-workflow if sources exist
+
+        // Should include manually specified profile
         expect(profiles).toContain('pr-workflow');
-        
-        // Note: deployment may not be included if source files don't exist
-        // Manual override requests profiles but doesn't create missing source files
       }
     });
   });

@@ -385,7 +385,6 @@ describe('AgentPersonalityManager', () => {
         'implementation',
         'ui-development',
         'testing',
-        'deployment',
         'documentation',
         'api-development',
         'review'

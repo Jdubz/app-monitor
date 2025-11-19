@@ -49,14 +49,14 @@ export function DualPaneLayout({
         className
       )}
     >
-      <PaneWrapper className={cn(asCards && 'flex min-w-0 flex-col overflow-hidden')}>
-        <ScrollArea className="w-full flex-1">
+      <PaneWrapper className={cn('h-full min-h-0', asCards && 'flex min-w-0 flex-col overflow-hidden')}>
+        <ScrollArea className="w-full flex-1 min-h-0">
           {left}
         </ScrollArea>
       </PaneWrapper>
 
-      <PaneWrapper className={cn(asCards && 'flex min-w-0 flex-col overflow-hidden')}>
-        <ScrollArea className="w-full flex-1">
+      <PaneWrapper className={cn('h-full min-h-0', asCards && 'flex min-w-0 flex-col overflow-hidden')}>
+        <ScrollArea className="w-full flex-1 min-h-0">
           {right}
         </ScrollArea>
       </PaneWrapper>

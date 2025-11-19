@@ -45,32 +45,29 @@ describe('ContextRecipeSelector', () => {
         targetFiles: ['backend/src/services/test.service.ts', 'backend/migrations/001_init.sql']
       });
 
-      // Should include implementation-patterns (from service file)
+      // Should include implementation-patterns (from service file and migrations)
       expect(selection.recommended).toContain('implementation-patterns');
-      
-      // Should include deployment (from migrations)
-      expect(selection.recommended).toContain('deployment');
     });
 
     it('should respect manual profile overrides', () => {
       const selection = ContextRecipeSelector.selectRecipes({
         taskType: 'documentation' as RecipeTaskType,
-        manualProfiles: ['deployment', 'pr-workflow']
+        manualProfiles: ['implementation-patterns', 'pr-workflow']
       });
 
       // Manual profiles should be in required
-      expect(selection.required).toContain('deployment');
+      expect(selection.required).toContain('implementation-patterns');
       expect(selection.required).toContain('pr-workflow');
     });
 
     it('should include optional profiles when requested', () => {
       const selection = ContextRecipeSelector.selectRecipes({
-        taskType: 'implementation' as RecipeTaskType,
+        taskType: 'fix' as RecipeTaskType,
         includeOptional: true
       });
 
-      // Should have some optional profiles
-      expect(selection.optional.length).toBeGreaterThan(0);
+      // PR workflow should be optional for fix tasks (not in required or recommended)
+      expect(selection.optional).toContain('pr-workflow');
     });
   });
 
@@ -158,22 +155,22 @@ describe('ContextRecipeSelector', () => {
       expect(selection.recommended).toContain('implementation-patterns');
     });
 
-    it('should add deployment for migration files', () => {
+    it('should add implementation-patterns for migration files', () => {
       const selection = ContextRecipeSelector.selectRecipes({
         taskType: 'implementation' as RecipeTaskType,
         targetFiles: ['backend/migrations/002_add_column.sql']
       });
 
-      expect(selection.recommended).toContain('deployment');
+      expect(selection.recommended).toContain('implementation-patterns');
     });
 
-    it('should add deployment for Docker files', () => {
+    it('should add implementation-patterns for Docker files', () => {
       const selection = ContextRecipeSelector.selectRecipes({
         taskType: 'implementation' as RecipeTaskType,
         targetFiles: ['Dockerfile', 'docker-compose.yml']
       });
 
-      expect(selection.recommended).toContain('deployment');
+      expect(selection.recommended).toContain('implementation-patterns');
     });
 
     it('should add pr-workflow for GitHub workflows', () => {
@@ -196,7 +193,6 @@ describe('ContextRecipeSelector', () => {
       });
 
       expect(selection.recommended).toContain('implementation-patterns');
-      expect(selection.recommended).toContain('deployment');
     });
   });
 

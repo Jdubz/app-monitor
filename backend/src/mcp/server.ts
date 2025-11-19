@@ -7,14 +7,21 @@ import { registerBotsTools } from "./tools/bots.tools.js";
 import { registerPrsTools } from "./tools/prs.tools.js";
 import { registerSystemTools } from "./tools/system.tools.js";
 
+export interface McpServices {
+  devBotsManager: any; // Typed as any to avoid circular deps or complex type imports here
+}
+
 export class AppMonitorMcpServer {
   private server: McpServer;
   private db: Database.Database;
+  private services: McpServices;
 
   constructor(config: {
     databasePath: string;
+    services: McpServices;
   }) {
     this.db = new Database(config.databasePath);
+    this.services = config.services;
 
     this.server = new McpServer({
       name: "app-monitor",
@@ -26,9 +33,9 @@ export class AppMonitorMcpServer {
 
   private registerAllTools() {
     registerPlanTools(this.server, this.db);
-    registerTasksTools(this.server, this.db);
-    registerBotsTools(this.server, this.db);
-    registerPrsTools(this.server, this.db);
+    registerTasksTools(this.server, this.db, this.services);
+    registerBotsTools(this.server, this.db, this.services);
+    registerPrsTools(this.server, this.db, this.services);
     registerSystemTools(this.server, this.db);
   }
 
@@ -41,9 +48,10 @@ export class AppMonitorMcpServer {
   }
 }
 
-export async function startMcpServer(options: { db: Database.Database, services: any }) {
+export async function startMcpServer(options: { db: Database.Database, services: McpServices }) {
     const server = new AppMonitorMcpServer({
         databasePath: options.db.name,
+        services: options.services
     });
     await server.start();
 }

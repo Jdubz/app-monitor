@@ -4,6 +4,7 @@
  * Validates context recipe files against the schema and business rules.
  */
 
+import { TASK_TYPES } from '@app-monitor/api-contracts';
 import type {
   RecipeValidationResult,
   RecipeTaskType,
@@ -16,14 +17,8 @@ const PROFILE_NAME_PATTERN = /^[a-z][a-z0-9-]*$/;
 const SEMVER_PATTERN = /^\d+\.\d+\.\d+$/;
 const FILENAME_PATTERN = /^[a-z0-9][a-z0-9._\-{}]*$/;
 
-const VALID_TASK_TYPES: RecipeTaskType[] = [
-  'implementation',
-  'review',
-  'fix',
-  'deployment',
-  'pr-follow-up',
-  'analysis'
-];
+// Use centralized TASK_TYPES as single source of truth
+const VALID_TASK_TYPES: RecipeTaskType[] = Object.values(TASK_TYPES);
 
 const VALID_SOURCE_TYPES: SourceType[] = [
   'markdown',

@@ -53,7 +53,11 @@ VITE_PASSWORD=your-secure-frontend-password
 import { apiClient } from '@/utils/apiClient';
 
 const tasks = await apiClient.get('/dev-bots/tasks');
-const newTask = await apiClient.post('/dev-bots/tasks', { title: 'My task' });
+const newTask = await apiClient.post('/dev-bots/tasks', {
+  title: 'My task',
+  taskType: 'implementation',
+  intent: 'Accomplish something specific'
+});
 ```
 
 #### curl
@@ -288,12 +292,10 @@ return ErrorResponses.rateLimitExceeded(
 #### Core Task Operations
 ```http
 GET    /api/dev-bots/status           # System status
-GET    /api/dev-bots/tasks            # List all tasks
-POST   /api/dev-bots/tasks            # Create task
-POST   /api/dev-bots/tasks/enhanced   # Create enhanced task
-GET    /api/dev-bots/tasks/:id        # Get specific task
-PUT    /api/dev-bots/tasks/:id        # Update task
-DELETE /api/dev-bots/tasks/:id        # Delete task
+GET    /api/dev-bots/tasks              # List all tasks
+POST   /api/dev-bots/tasks              # Create task (minimal 3-field payload)
+GET    /api/dev-bots/tasks/:id/detail   # Get specific task with history
+POST   /api/dev-bots/tasks/:id/timeout  # Manually timeout task
 ```
 
 #### Task Status Management
@@ -358,17 +360,108 @@ Content-Type: application/json
 X-API-Key: your-api-key
 
 {
-  "type": "feature",
   "title": "Add authentication to dashboard",
-  "documentation": "Add JWT-based authentication...",
-  "acceptanceCriteria": [
-    "Must use Firebase Auth",
-    "Must support JWT tokens"
-  ],
-  "assignedAgent": "backend-specialist",
-  "files": ["src/auth.ts"],
-  "dependencies": ["firebase-admin"],
-  "project": "job-finder-BE"
+  "taskType": "implementation",
+  "intent": "Add JWT-based authentication using Firebase Auth with token validation"
+}
+```
+
+**Response:**
+```json
+{
+  "task": {
+    "id": "task-uuid",
+    "type": "implementation",
+    "title": "Add authentication to dashboard",
+    "status": "pending",
+    "created_at": "2025-11-19T06:00:00Z",
+    "assigned_agent": "claude-sonnet",
+    "risk_level": "high",
+    "files": ["backend/src/middleware/authenticate.ts", "backend/src/services/auth.service.ts"]
+  },
+  "validation": {
+    "isValid": true,
+    "errors": [],
+    "warnings": ["Auto-detection: 2 files detected from git status"],
+    "suggestions": []
+  },
+  "autoDetection": {
+    "detectedFiles": ["backend/src/middleware/authenticate.ts", "backend/src/services/auth.service.ts"],
+    "inferredRiskLevel": "high",
+    "selectedProfiles": ["scope-control", "dev-monitor", "implementation-patterns"],
+    "recommendedOutputs": ["unit-tests", "integration-tests", "documentation"],
+    "confidence": {
+      "files": 0.9,
+      "riskLevel": 0.95,
+      "profiles": 0.9
+    },
+    "warnings": []
+  }
+}
+```
+
+**Error Responses:**
+```json
+// 400 - Missing required fields
+{
+  "error": "Missing required fields",
+  "statusCode": 400,
+  "details": {
+    "provided": ["title", "taskType"],
+    "required": ["title", "taskType", "intent"]
+  }
+}
+
+// 400 - Validation failed
+{
+  "error": "Task validation failed",
+  "statusCode": 400,
+  "details": {
+    "errors": ["Title must be at least 10 characters"],
+    "warnings": [],
+    "suggestions": ["Add more descriptive title"]
+  }
+}
+
+// 409 - Duplicate task
+{
+  "error": "Duplicate task detected. Task 'Add authentication' (abc123) is already pending.",
+  "statusCode": 409,
+  "details": {
+    "conflictType": "duplicate_task",
+    "existingTaskId": "abc123",
+    "existingTaskTitle": "Add authentication to dashboard",
+    "existingTaskStatus": "pending"
+  }
+}
+```
+
+#### Preview Auto-Detection
+```http
+POST /api/dev-bots/tasks/preview-detection
+Content-Type: application/json
+X-API-Key: your-api-key
+
+{
+  "taskType": "fix",
+  "title": "Fix memory leak",
+  "intent": "Prevent OOM errors in log rotation service"
+}
+```
+
+**Response:**
+```json
+{
+  "detectedFiles": ["backend/src/services/logging.service.ts"],
+  "inferredRiskLevel": "medium",
+  "selectedProfiles": ["scope-control", "fix-debugging", "failure-recovery"],
+  "recommendedOutputs": ["patch", "verification-log", "root-cause-analysis"],
+  "confidence": {
+    "files": 0.7,
+    "riskLevel": 0.85,
+    "profiles": 0.9
+  },
+  "warnings": []
 }
 ```
 
