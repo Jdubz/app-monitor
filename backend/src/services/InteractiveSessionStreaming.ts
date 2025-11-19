@@ -178,12 +178,12 @@ export class InteractiveSessionStreaming extends EventEmitter {
       context.stream.removeAllListeners();
       try {
         context.stream.end();
-      } catch (error) {
+      } catch (_error) {
         logger.warn({
           category: 'system',
           action: 'stream_end_failed',
           message: `Failed to end interactive stream for ${context.sessionId}`,
-          error,
+          error: _error,
         });
       }
     }
@@ -230,12 +230,12 @@ export class InteractiveSessionStreaming extends EventEmitter {
         h: size.rows,
         w: size.cols,
       });
-    } catch (error) {
+    } catch (_error) {
       logger.warn({
         category: 'system',
         action: 'pty_resize_failed',
         message: `Failed to resize PTY for session ${sessionId}`,
-        error,
+        error: _error,
       });
     }
   }
@@ -298,7 +298,7 @@ export class InteractiveSessionStreaming extends EventEmitter {
     try {
       const text = typeof raw === 'string' ? raw : raw.toString('utf8');
       payload = JSON.parse(text) as ClientMessage;
-    } catch (error) {
+    } catch (_error) {
       socket.send(JSON.stringify({ type: 'error', message: 'Invalid message payload' }));
       return;
     }
@@ -340,11 +340,11 @@ export class InteractiveSessionStreaming extends EventEmitter {
         default:
           socket.send(JSON.stringify({ type: 'error', message: 'Unknown message type' }));
       }
-    } catch (error) {
+    } catch (_error) {
       socket.send(
         JSON.stringify({
           type: 'error',
-          message: error instanceof Error ? error.message : 'Request failed',
+          message: _error instanceof Error ? _error.message : 'Request failed',
         }),
       );
     }
@@ -435,7 +435,7 @@ export class InteractiveSessionStreaming extends EventEmitter {
 
       this.emit('ready', { sessionId: this.active.sessionId });
       this.pushSystemMessage(this.active, 'Interactive stream ready', 'info');
-    } catch (error) {
+    } catch (_error) {
       if (!this.active) {
         return;
       }
@@ -443,13 +443,13 @@ export class InteractiveSessionStreaming extends EventEmitter {
         category: 'system',
         action: 'stream_init_failed',
         message: `Failed to attach interactive stream for session ${this.active.sessionId}`,
-        error,
+        error: _error,
       });
       this.emit('error', {
         sessionId: this.active.sessionId,
-        error: error instanceof Error ? error : new Error(String(error)),
+        error: _error instanceof Error ? _error : new Error(String(_error)),
       });
-      throw error;
+      throw _error;
     }
   }
 

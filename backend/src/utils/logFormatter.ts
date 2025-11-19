@@ -128,7 +128,7 @@ function extractTimestamp(line: string): string | null {
  * Remove ANSI color codes from text
  */
 function stripAnsiCodes(text: string): string {
-  // eslint-disable-next-line no-control-regex
+   
   return text.replace(/\x1b\[[0-9;]*m/g, '');
 }
 

@@ -55,15 +55,17 @@
     "@types/supertest": "^6.0.3",
     "@types/tar-fs": "^2.0.4",
     "@types/ws": "^8.18.1",
-    "@typescript-eslint/eslint-plugin": "^6.16.0",
-    "@typescript-eslint/parser": "^6.16.0",
+    "@typescript-eslint/eslint-plugin": "^8.47.0",
+    "@typescript-eslint/parser": "^8.47.0",
     "@vitest/coverage-v8": "^1.6.1",
-    "eslint": "^8.56.0",
+    "eslint": "^9.39.1",
     "eslint-plugin-local-rules": "^3.0.2",
+    "globals": "^16.5.0",
     "nodemon": "^3.0.2",
     "supertest": "^7.1.4",
     "tsx": "^4.20.6",
     "typescript": "5.3.3",
+    "typescript-eslint": "^8.47.0",
     "vitest": "^1.6.1"
   }
 }

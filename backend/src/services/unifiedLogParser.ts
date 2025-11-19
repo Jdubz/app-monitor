@@ -251,7 +251,7 @@ export class UnifiedLogParser {
             }
           });
         }
-      } catch (error) {
+      } catch (_error) {
         // Skip invalid lines
       }
     }
@@ -292,7 +292,7 @@ export class UnifiedLogParser {
             metadata: data
           });
         }
-      } catch (error) {
+      } catch (_error) {
         // Skip invalid lines
       }
     }

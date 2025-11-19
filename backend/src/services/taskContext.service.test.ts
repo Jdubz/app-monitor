@@ -20,26 +20,26 @@ describe('TaskContextService', () => {
     // Wrap in try-catch since tables might not exist yet
     try {
       connection.prepare('DELETE FROM task_creation_context WHERE task_id LIKE ?').run('task-test-%');
-    } catch (error) {
+    } catch (_error) {
       // Table might not exist yet, ignore error
     }
     
     try {
       connection.prepare('DELETE FROM task_execution_context WHERE run_id LIKE ?').run('run-%');
-    } catch (error) {
+    } catch (_error) {
       // Table might not exist yet, ignore error
     }
     
     try {
       connection.prepare('DELETE FROM tasks WHERE id LIKE ?').run('task-test-%');
-    } catch (error) {
+    } catch (_error) {
       // Table might not exist yet, ignore error
     }
 
     // Also clean up task_automation_runs table data (migration 004)
     try {
       connection.prepare('DELETE FROM task_automation_runs WHERE task_id LIKE ?').run('task-test-%');
-    } catch (error) {
+    } catch (_error) {
       // Table might not exist yet, ignore error
     }
 
@@ -59,7 +59,7 @@ describe('TaskContextService', () => {
           assigned_agent TEXT
         )
       `);
-    } catch (error) {
+    } catch (_error) {
       // Ignore if table already exists
     }
 
@@ -80,26 +80,26 @@ describe('TaskContextService', () => {
     // Wrap in try-catch since tables might not exist
     try {
       connection.prepare('DELETE FROM task_creation_context WHERE task_id LIKE ?').run('task-test-%');
-    } catch (error) {
+    } catch (_error) {
       // Table might not exist, ignore error
     }
     
     try {
       connection.prepare('DELETE FROM task_execution_context WHERE run_id LIKE ?').run('run-%');
-    } catch (error) {
+    } catch (_error) {
       // Table might not exist, ignore error
     }
     
     try {
       connection.prepare('DELETE FROM tasks WHERE id LIKE ?').run('task-test-%');
-    } catch (error) {
+    } catch (_error) {
       // Table might not exist, ignore error
     }
 
     // Clean up task_automation_runs if table exists
     try {
       connection.prepare('DELETE FROM task_automation_runs WHERE task_id LIKE ?').run('task-test-%');
-    } catch (error) {
+    } catch (_error) {
       // Table might not exist, ignore error
     }
 

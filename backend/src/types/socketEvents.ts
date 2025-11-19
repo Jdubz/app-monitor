@@ -109,6 +109,7 @@ export interface ServerToClientEvents {
 // Inter-server Events (for clusters)
 // ============================================================================
 
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
 export interface InterServerEvents {
   // Can be extended for multi-server setups
 }

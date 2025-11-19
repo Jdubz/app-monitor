@@ -74,7 +74,7 @@ describe('ChainTrackerService', () => {
   afterEach(() => {
     try {
       db.close();
-    } catch (err) {
+    } catch (_err) {
       // Ignore close errors in tests
     }
   });
@@ -293,24 +293,7 @@ describe('ChainTrackerService', () => {
   });
 
   describe('closeCompletedChains', () => {
-    it('should close chains when PR merged and no pending tasks', () => {
-      // Insert PR info (mock - in real system would be in PR table)
-      insertTask(db, {
-        id: 'task-1',
-        status: 'completed',
-        chain_status: 'active',
-        chain_id: 'chain-1',
-        pr_number: 123,
-      });
 
-      // Mock PR as merged (normally would query PR table)
-      // For this test, we'll just verify the query logic works
-
-      chainTracker.closeCompletedChains();
-
-      // Since we don't have PR table in this test, we can't verify full behavior
-      // In integration tests, this will be properly tested
-    });
 
     it('should not close chains with pending tasks', () => {
       insertTask(db, {
