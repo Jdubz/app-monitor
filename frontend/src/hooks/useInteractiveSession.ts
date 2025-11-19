@@ -5,7 +5,6 @@ import {
   getDevBotsInteractiveSession,
   startDevBotsInteractiveSession,
   endDevBotsInteractiveSession,
-  sendDevBotsInteractiveInput,
   sendDevBotsInteractiveHeartbeat,
 } from '@/services/api';
 import { BoundedLogBuffer } from '@/utils/boundedLogBuffer';
@@ -367,30 +366,18 @@ export function useInteractiveSession(
 
       const normalizedChunk = chunk;
 
-      // Send input via Socket.IO
-      if (socket && socketConnected && joinedSessionRef.current === sessionId) {
-        try {
-          socket.emit('terminal:input', { sessionId, data: normalizedChunk });
-        } catch (err) {
-          log.warn('Failed to send input via Socket.IO, falling back to REST', { error: err });
-          // Fallback to REST API if Socket.IO fails
-          try {
-            await sendDevBotsInteractiveInput(sessionId, normalizedChunk);
-          } catch (restErr) {
-            const message = restErr instanceof Error ? restErr.message : 'Failed to send input';
-            setError(message);
-            return;
-          }
-        }
-      } else {
-        // Fallback to REST API if socket not connected
-        try {
-          await sendDevBotsInteractiveInput(sessionId, normalizedChunk);
-        } catch (err) {
-          const message = err instanceof Error ? err.message : 'Failed to send input';
-          setError(message);
-          return;
-        }
+      // Send input via Socket.IO only (REST endpoint deprecated and returns 410)
+      if (!socket || !socketConnected || joinedSessionRef.current !== sessionId) {
+        setError('Socket.IO connection not available. Please reconnect and try again.');
+        return;
+      }
+
+      try {
+        socket.emit('terminal:input', { sessionId, data: normalizedChunk });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to send input';
+        setError(message);
+        return;
       }
 
       // Show user input in logs

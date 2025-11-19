@@ -340,10 +340,20 @@ export class SocketIOTerminalHandler {
           details: { sessionId },
         });
 
+        // Emit error first
         this.io.to(`terminal:${sessionId}`).emit('terminal:error', {
           sessionId,
           message: error.message,
         });
+
+        // Then emit ended status and cleanup
+        this.io.to(`terminal:${sessionId}`).emit('terminal:status', {
+          sessionId,
+          state: 'ended',
+          reason: 'Stream error',
+        });
+
+        this.sessions.delete(sessionId);
       });
 
       // Notify clients that session is ready
