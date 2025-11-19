@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-interface Plan {
+export interface Plan {
   id: string;
   title: string;
   type: 'feature' | 'refactor' | 'fix' | 'investigation';
@@ -95,8 +95,12 @@ const STUB_PLANS: Plan[] = [
  *
  * NOTE: Currently uses stub data. Connect to plans API in the future.
  */
-export function PlansTabContent() {
-  const [plans] = useState<Plan[]>(STUB_PLANS);
+export interface PlansTabContentProps {
+  plansData?: Plan[];
+}
+
+export function PlansTabContent({ plansData = STUB_PLANS }: PlansTabContentProps) {
+  const [plans] = useState<Plan[]>(plansData);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(plans[0]?.id ?? null);
   const [activeFilter, setActiveFilter] = useState<PlanFilter>('all');
 
