@@ -14,7 +14,7 @@ import { setWebhookHandler } from './routes/github-webhooks.routes.js';
 import { logger } from './utils/logger.js';
 
 // CORS allowed headers for both HTTP and WebSocket
-const ALLOWED_CORS_HEADERS = ['Content-Type', 'X-API-Key', 'Authorization'];
+const ALLOWED_CORS_HEADERS = ['Content-Type', 'X-API-Key', 'Authorization', 'X-Trace-Id'];
 import type {
   ClientToServerEvents,
   ServerToClientEvents,
