@@ -398,6 +398,7 @@ export class TaskCreationService {
       'implementation': TASK_TYPES.IMPLEMENTATION,
       'fix': TASK_TYPES.FIX,
       'bugfix': TASK_TYPES.FIX,
+      'bug': TASK_TYPES.FIX,
       'review': TASK_TYPES.REVIEW,
       'pr-follow-up': TASK_TYPES.PR_FOLLOW_UP,
       'analysis': TASK_TYPES.ANALYSIS

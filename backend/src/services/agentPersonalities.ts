@@ -304,7 +304,7 @@ export class AgentPersonalityManager {
         ]
       },
       taskPreferences: {
-        preferredTypes: ['deployment', 'infrastructure', 'monitoring', 'ci-cd'],
+        preferredTypes: ['infrastructure', 'monitoring', 'ci-cd'],
         avoidedTypes: ['ui-development', 'feature-implementation'],
         complexityRange: 'any'
       }
@@ -357,7 +357,7 @@ export class AgentPersonalityManager {
       },
       taskPreferences: {
         preferredTypes: ['documentation', 'technical-writing', 'api-docs', 'user-guides'],
-        avoidedTypes: ['implementation', 'testing', 'deployment'],
+        avoidedTypes: ['implementation', 'testing'],
         complexityRange: 'any'
       }
     });
@@ -386,14 +386,6 @@ export class AgentPersonalityManager {
       recommendedAgents: ['testing-specialist'],
       fallbackAgents: ['review-specialist', 'backend-specialist'],
       requiredSkills: ['test-automation', 'quality-assurance', 'testing-frameworks']
-    });
-
-    // Deployment tasks
-    this.taskTypeMappings.set('deployment', {
-      taskType: 'deployment',
-      recommendedAgents: ['devops-specialist'],
-      fallbackAgents: ['backend-specialist'],
-      requiredSkills: ['infrastructure', 'deployment', 'monitoring']
     });
 
     // Documentation tasks

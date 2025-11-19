@@ -66,16 +66,16 @@ export class ContextRecipeSelector {
     { pattern: /\.service\.ts$/i, profiles: ['implementation-patterns'] },
     
     // Database patterns
-    { pattern: /^backend\/migrations\//i, profiles: ['deployment'] },
-    { pattern: /database/i, profiles: ['deployment'] },
-    
+    { pattern: /^backend\/migrations\//i, profiles: ['implementation-patterns'] },
+    { pattern: /database/i, profiles: ['implementation-patterns'] },
+
     // Docker/deployment
-    { pattern: /dockerfile/i, profiles: ['deployment'] },
-    { pattern: /docker-compose/i, profiles: ['deployment'] },
-    { pattern: /\.sh$/i, profiles: ['deployment'] },
-    
+    { pattern: /dockerfile/i, profiles: ['implementation-patterns'] },
+    { pattern: /docker-compose/i, profiles: ['implementation-patterns'] },
+    { pattern: /\.sh$/i, profiles: ['implementation-patterns'] },
+
     // PR workflow
-    { pattern: /\.github\/workflows\//i, profiles: ['pr-workflow', 'deployment'] },
+    { pattern: /\.github\/workflows\//i, profiles: ['pr-workflow'] },
     
     // Tests
     { pattern: /\.test\.ts$/i, profiles: ['implementation-patterns'] },
@@ -86,7 +86,7 @@ export class ContextRecipeSelector {
     { pattern: /\.md$/i, profiles: [] }, // No extra recipes for docs
     
     // Configuration
-    { pattern: /package\.json$/i, profiles: ['deployment'] },
+    { pattern: /package\.json$/i, profiles: ['implementation-patterns'] },
     { pattern: /tsconfig\.json$/i, profiles: ['implementation-patterns'] }
   ];
 
@@ -123,11 +123,6 @@ export class ContextRecipeSelector {
 
     // Add optional profiles if requested
     if (includeOptional) {
-      // Deployment is optional for most tasks unless explicitly required
-      if (!required.has('deployment') && !recommended.has('deployment')) {
-        optional.add('deployment');
-      }
-      
       // PR workflow is optional for non-PR tasks
       if (!required.has('pr-workflow') && !recommended.has('pr-workflow')) {
         optional.add('pr-workflow');
@@ -140,7 +135,6 @@ export class ContextRecipeSelector {
       'dev-monitor',
       'pr-workflow',
       'failure-recovery',
-      'deployment',
       'implementation-patterns',
       'review-checklist',
       'fix-debugging'

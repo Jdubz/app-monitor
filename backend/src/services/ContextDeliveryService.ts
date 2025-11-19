@@ -66,9 +66,23 @@ export class ContextDeliveryService {
     }
 
     try {
+      // Map raw task type to canonical TaskType (handles aliases like 'bugfix' -> 'fix')
+      const mapTaskType = (type: string): TaskType => {
+        const typeMap: Record<string, TaskType> = {
+          'implementation': TASK_TYPES.IMPLEMENTATION,
+          'fix': TASK_TYPES.FIX,
+          'bugfix': TASK_TYPES.FIX,
+          'bug': TASK_TYPES.FIX,
+          'review': TASK_TYPES.REVIEW,
+          'pr-follow-up': TASK_TYPES.PR_FOLLOW_UP,
+          'analysis': TASK_TYPES.ANALYSIS
+        };
+        return typeMap[type.toLowerCase()] || TASK_TYPES.IMPLEMENTATION;
+      };
+
       // Regenerate bundle (will use cache if available)
       const contextResult = await this.contextGenerator.generateBundle({
-        taskType: (task.type || TASK_TYPES.IMPLEMENTATION) as TaskType,
+        taskType: mapTaskType(task.type || TASK_TYPES.IMPLEMENTATION),
         targetFiles: task.files,
         force: false  // Use cached bundle if available
       });
@@ -188,8 +202,22 @@ export class ContextDeliveryService {
     }
 
     try {
+      // Map raw task type to canonical TaskType (handles aliases like 'bugfix' -> 'fix')
+      const mapTaskType = (type: string): TaskType => {
+        const typeMap: Record<string, TaskType> = {
+          'implementation': TASK_TYPES.IMPLEMENTATION,
+          'fix': TASK_TYPES.FIX,
+          'bugfix': TASK_TYPES.FIX,
+          'bug': TASK_TYPES.FIX,
+          'review': TASK_TYPES.REVIEW,
+          'pr-follow-up': TASK_TYPES.PR_FOLLOW_UP,
+          'analysis': TASK_TYPES.ANALYSIS
+        };
+        return typeMap[type.toLowerCase()] || TASK_TYPES.IMPLEMENTATION;
+      };
+
       const contextResult = await this.contextGenerator.generateBundle({
-        taskType: (task.type || TASK_TYPES.IMPLEMENTATION) as TaskType,
+        taskType: mapTaskType(task.type || TASK_TYPES.IMPLEMENTATION),
         targetFiles: task.files!,
         force: false
       });

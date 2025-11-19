@@ -465,16 +465,6 @@ X-API-Key: your-api-key
 }
 ```
 
-#### Create Task (Legacy - DEPRECATED)
-```http
-POST /api/dev-bots/tasks
-Content-Type: application/json
-X-API-Key: your-api-key
-
-# This endpoint is deprecated. Use /tasks/minimal instead.
-# Will be removed in a future release.
-```
-
 #### Task Response
 ```json
 {
