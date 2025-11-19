@@ -38,12 +38,7 @@ export class AppMonitorMcpServer {
 
     console.error("App Monitor MCP Server started");
     console.error(`Database: ${this.db.name}`);
-    // console.error(`Tools registered: ${this.getToolCount()}`);
   }
-
-  /*private getToolCount(): number {
-    return Object.keys(this.server.tools).length;
-  }*/
 }
 
 export async function startMcpServer(options: { db: Database.Database, services: any }) {

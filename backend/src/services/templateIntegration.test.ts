@@ -358,13 +358,13 @@ describe('Template Integration Tests', () => {
 
   describe('Template Completeness', () => {
     it('should include all required sections for any task type', () => {
-      const minimalTask: Task = {
+      const submissionTask: Task = {
         id: 'minimal-task',
         type: 'feature',
-        title: 'Minimal Task',
-        description: 'Minimal description',
-        documentation: 'Minimal docs',
-        acceptance_criteria: ['Minimal criteria'],
+        title: 'Task Submission',
+        description: 'Concise description',
+        documentation: 'Concise docs',
+        acceptance_criteria: ['Essential criteria'],
         status: 'pending',
         priority: 1,
         created_at: Date.now(),
@@ -375,7 +375,7 @@ describe('Template Integration Tests', () => {
         timeout_ms: null,
       };
 
-      const minimalAgent: any = {
+      const submissionAgent: any = {
         id: 'backend-specialist',
         name: 'Alex',
         role: 'Backend Specialist',
@@ -389,9 +389,9 @@ describe('Template Integration Tests', () => {
       };
 
       const context: TaskContext = {
-        task: minimalTask,
+        task: submissionTask,
         project: 'job-finder-BE',
-        agent: minimalAgent as unknown as AgentPersonality,
+        agent: submissionAgent as unknown as AgentPersonality,
         worktree: '[dynamic workspace provisioned per task]',
         environment: 'development'
       };
