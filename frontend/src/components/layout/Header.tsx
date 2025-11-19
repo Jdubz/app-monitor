@@ -1,5 +1,4 @@
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { ReportIssueButton } from '../ReportIssueButton';
 
@@ -34,9 +33,6 @@ export function Header() {
             Stable
           </div>
           <ReportIssueButton />
-          <Button variant="outline" size="sm">
-            Launch Terminal
-          </Button>
         </div>
       </div>
     </header>
