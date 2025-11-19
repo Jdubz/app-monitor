@@ -207,7 +207,7 @@ export class SocketIOTerminalHandler {
         // Send SIGINT (Ctrl+C)
         session.stream.write('\x03');
       } else if (signal === 'terminate') {
-        // Send SIGTERM
+        // Send EOT (Ctrl+D)
         session.stream.write('\x04');
       }
     } catch (error) {
@@ -227,6 +227,18 @@ export class SocketIOTerminalHandler {
   private async handleResize(sessionId: string, rows: number, cols: number): Promise<void> {
     const session = this.sessions.get(sessionId);
     if (!session?.exec) {
+      return;
+    }
+
+    // Validate dimensions
+    if (!Number.isInteger(rows) || !Number.isInteger(cols) ||
+        rows < 1 || cols < 1 || rows > 1000 || cols > 1000) {
+      logger.warn({
+        category: 'interactive_terminal',
+        action: 'invalid_resize',
+        message: 'Invalid terminal dimensions',
+        details: { sessionId, rows, cols },
+      });
       return;
     }
 
@@ -347,6 +359,9 @@ export class SocketIOTerminalHandler {
         details: { sessionId, containerId },
       });
     } catch (error) {
+      // Clean up session if it was added to prevent memory leak
+      this.sessions.delete(sessionId);
+
       logger.error({
         category: 'interactive_terminal',
         action: 'start_error',
@@ -373,11 +388,13 @@ export class SocketIOTerminalHandler {
       return;
     }
 
+    // Remove from map first to prevent duplicate stops and avoid memory leak
+    this.sessions.delete(sessionId);
+
     try {
       if (session.stream && 'destroy' in session.stream && typeof session.stream.destroy === 'function') {
         session.stream.destroy();
       }
-      this.sessions.delete(sessionId);
 
       this.io.to(`terminal:${sessionId}`).emit('terminal:status', {
         sessionId,

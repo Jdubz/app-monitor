@@ -120,14 +120,14 @@ export interface ServerToClientEvents {
 
   'terminal:output': (data: {
     sessionId: string;
-    stream: 'stdout' | 'stderr' | 'system';
+    stream: 'stdout' | 'system';
     text: string;
     timestamp: string;
   }) => void;
 
   'terminal:status': (data: {
     sessionId: string;
-    state: 'connected' | 'running' | 'ended' | 'error';
+    state: 'connected' | 'ended';
     reason?: string;
   }) => void;
 

@@ -193,8 +193,8 @@ export async function createApp(options: CreateAppOptions = {}) {
     terminalHandler = new SocketIOTerminalHandler({
       io,
       docker,
-      backlogLimit: 200,
-      shellCommand: ['/bin/bash'],
+      backlogLimit: config.interactiveTerminal.backlogLimit,
+      shellCommand: [config.interactiveTerminal.shellCommand],
     });
 
     logger.info({
@@ -202,16 +202,17 @@ export async function createApp(options: CreateAppOptions = {}) {
       action: 'handler_initialized',
       message: 'Socket.IO terminal handler initialized (unified architecture)',
       details: {
-        backlogLimit: 200,
-        shellCommand: ['/bin/bash'],
+        backlogLimit: config.interactiveTerminal.backlogLimit,
+        shellCommand: config.interactiveTerminal.shellCommand,
       },
     });
 
     // Wire up InteractiveSessionManager events to Socket.IO terminal handler
     const sessionManager = devBotsManager.getInteractiveSessionManager();
 
-    sessionManager.on('sessionStarted', async (session) => {
-      if (session.containerId && terminalHandler) {
+    sessionManager.on('sessionUpdated', async (session) => {
+      // Start terminal streaming when session transitions to 'running' with containerId
+      if (session.status === 'running' && session.containerId && terminalHandler) {
         try {
           await terminalHandler.startSession(session.id, session.containerId);
           logger.info({

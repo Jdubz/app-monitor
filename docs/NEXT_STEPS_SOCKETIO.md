@@ -24,9 +24,9 @@
    - Architecture: `docs/architecture/unified-socketio-architecture.md`
    - Migration guide: `docs/MIGRATION_SOCKETIO.md`
 
-### ⏳ Pending
+### ✅ Completed
 
-The handler is initialized but **not yet connected** to the session lifecycle. Sessions are created via REST API, but the terminal handler isn't notified to start PTY streaming.
+The handler is initialized and **connected** to the session lifecycle via event listeners in `backend/src/server.ts`. The terminal handler is now automatically notified when interactive sessions are created or destroyed.
 
 ---
 
@@ -38,106 +38,47 @@ The terminal handler needs to be called when interactive terminal sessions are c
 
 **Current Flow:**
 ```
-REST API → InteractiveTerminalService.startSession() → Container created
-                                                     → (handler not notified)
+REST API → InteractiveSessionManager.startSession() → Container created
+                                                    → sessionUpdated event emitted
+                                                    → terminalHandler.startSession(sessionId, containerId)
 ```
 
-**Target Flow:**
-```
-REST API → InteractiveTerminalService.startSession() → Container created
-                                                     → terminalHandler.startSession(sessionId, containerId)
-```
+**Implementation:**
 
-**Implementation Options:**
-
-#### Option A: Update InteractiveTerminalService (Recommended)
-
-Modify `backend/src/services/interactiveTerminal.service.ts` to call terminal handler:
+The event-based integration has been implemented in `backend/src/server.ts`:
 
 ```typescript
-import { terminalHandler } from '../server.js';
+// Wire up InteractiveSessionManager events to Socket.IO terminal handler
+const sessionManager = devBotsManager.getInteractiveSessionManager();
 
-export class InteractiveTerminalService {
-  async startSession(options: StartSessionOptions): Promise<StartSessionResult> {
-    // ... existing container creation code ...
-
-    // Start Socket.IO terminal streaming
-    if (terminalHandler) {
-      await terminalHandler.startSession(sessionId, containerId);
-    }
-
-    return result;
-  }
-
-  async stopSession(sessionId: string, reason?: string): Promise<void> {
-    // ... existing cleanup code ...
-
-    // Stop Socket.IO terminal streaming
-    if (terminalHandler) {
-      await terminalHandler.stopSession(sessionId);
+sessionManager.on('sessionUpdated', async (session) => {
+  if (session.status === 'running' && session.containerId && terminalHandler) {
+    try {
+      await terminalHandler.startSession(session.id, session.containerId);
+    } catch (error) {
+      logger.error({ /* ... */ });
     }
   }
-}
-```
-
-**Pros:**
-- Clean separation of concerns
-- Terminal streaming independent of container lifecycle
-- Easy to test
-
-**Cons:**
-- Circular dependency (service imports from server.ts)
-- Could use dependency injection instead
-
-#### Option B: Event-Based Integration
-
-Use EventEmitter pattern to decouple:
-
-```typescript
-// In interactiveTerminal.service.ts
-this.emit('session:started', { sessionId, containerId });
-this.emit('session:stopped', { sessionId });
-
-// In server.ts
-terminalService.on('session:started', async ({ sessionId, containerId }) => {
-  await terminalHandler.startSession(sessionId, containerId);
 });
 
-terminalService.on('session:stopped', async ({ sessionId }) => {
-  await terminalHandler.stopSession(sessionId);
+sessionManager.on('sessionEnded', async (session) => {
+  if (terminalHandler) {
+    try {
+      await terminalHandler.stopSession(session.id);
+    } catch (error) {
+      logger.error({ /* ... */ });
+    }
+  }
 });
+
 ```
 
-**Pros:**
+**Benefits of Event-Based Approach:**
 - No circular dependencies
 - Follows existing event patterns in codebase
-- Loosely coupled
-
-**Cons:**
-- More indirection
-- Event listeners need to be set up in server initialization
-
-#### Option C: Pass Handler as Dependency
-
-Inject handler into service via constructor:
-
-```typescript
-export class InteractiveTerminalService {
-  constructor(
-    private readonly db: DevBotsDatabase,
-    private readonly workerService: EphemeralWorkerService,
-    private readonly terminalHandler?: SocketIOTerminalHandler
-  ) {}
-}
-```
-
-**Pros:**
-- Proper dependency injection
-- No circular dependencies
-- Testable with mocks
-
-**Cons:**
-- Requires factory/initialization changes
+- Loosely coupled components
+- Clean separation of concerns
+- Easy to test with mocks
 - Handler is optional (created after service in current setup)
 
 ### Step 2: Frontend Migration

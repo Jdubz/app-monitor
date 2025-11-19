@@ -116,8 +116,8 @@ App-monitor uses a unified Socket.IO architecture for all real-time communicatio
 
 // Server → Client (broadcast to room)
 'terminal:joined'  // Successfully joined session
-'terminal:output'  // Terminal output (stdout/stderr/system)
-'terminal:status'  // Status change (connected/running/ended/error)
+'terminal:output'  // Terminal output (stdout/system)
+'terminal:status'  // Status change (connected/ended)
 'terminal:error'   // Error occurred
 ```
 

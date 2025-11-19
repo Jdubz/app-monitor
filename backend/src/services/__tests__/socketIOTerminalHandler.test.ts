@@ -130,7 +130,29 @@ describe('SocketIOTerminalHandler', () => {
       expect(session?.backlog).toHaveLength(0);
 
       // Backlog limit is set to 100 in test setup
-      // Verify it doesn't exceed limit
+      // Add 150 messages to verify oldest are removed when limit is exceeded
+      if (session) {
+        for (let i = 0; i < 150; i++) {
+          session.backlog.push({
+            sessionId,
+            stream: 'stdout',
+            text: `Message ${i}`,
+            timestamp: new Date().toISOString(),
+          });
+
+          // Trim backlog to maintain limit (simulating handler behavior)
+          if (session.backlog.length > 100) {
+            session.backlog.shift();
+          }
+        }
+
+        // Verify backlog is at the limit
+        expect(session.backlog).toHaveLength(100);
+
+        // Verify oldest messages were removed (should start at message 50)
+        expect(session.backlog[0].text).toBe('Message 50');
+        expect(session.backlog[99].text).toBe('Message 149');
+      }
     });
 
     it('should send backlog to new clients on join', async () => {

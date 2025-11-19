@@ -1,6 +1,6 @@
 # Migration Guide: Unified Socket.IO Architecture
 
-**Date:** November 2025
+**Date:** November 2024
 **Status:** In Progress
 **Impact:** Breaking changes for interactive terminal feature
 
