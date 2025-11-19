@@ -3,75 +3,19 @@ import { bypassPasswordGate } from '../helpers/auth';
 
 /**
  * Interactive Terminal Tab E2E Tests
- * Tests the interactive terminal functionality including sessions, commands, and real-time I/O
+ * Tests the interactive terminal functionality using the new tmux-based TerminalService
+ *
+ * Note: The terminal now uses Socket.IO for real-time communication instead of REST API.
+ * Terminal sessions are managed via Socket.IO events:
+ * - terminal:create - Create new tmux session
+ * - terminal:attach - Attach to existing tmux session
+ * - terminal:input - Send input to terminal
+ * - terminal:output - Receive output from terminal
+ * - terminal:resize - Resize terminal dimensions
  */
-
-// Helper to mock interactive session API (Docker disabled in test env)
-async function mockInteractiveSessionApi(page: Page) {
-  await page.route('**/api/dev-bots/interactive/**', async (route) => {
-    const url = new URL(route.request().url());
-    const pathname = url.pathname;
-    const method = route.request().method();
-
-    // Mock session state endpoint
-    if (pathname.endsWith('/interactive/session') && method === 'GET') {
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          data: {
-            activeSession: null,
-            availableModels: [
-              { provider: 'claude', name: 'sonnet-4-5' },
-              { provider: 'claude', name: 'opus-4' }
-            ],
-            idleTimeoutMs: 300000
-          }
-        })
-      });
-    }
-
-    // Mock session creation (returns mock session data)
-    if (pathname.endsWith('/interactive/session') && method === 'POST') {
-      return route.fulfill({
-        status: 201,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          data: {
-            activeSession: {
-              id: 'mock-session-123',
-              modelProvider: 'claude',
-              modelName: 'sonnet-4-5',
-              status: 'active',
-              startTime: new Date().toISOString()
-            }
-          }
-        })
-      });
-    }
-
-    // Mock command input
-    if (pathname.includes('/interactive/input') || pathname.includes('/interactive/command')) {
-      return route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          success: true,
-          data: { acknowledged: true }
-        })
-      });
-    }
-
-    // Fallback
-    return route.continue();
-  });
-}
 
 // Helper to navigate to Interactive Terminal tab
 async function navigateToInteractiveTerminal(page: Page) {
-  await mockInteractiveSessionApi(page);
   await bypassPasswordGate(page);
   await page.goto('/monitor/interactive');
   await page.waitForLoadState('networkidle');
@@ -610,61 +554,15 @@ test.describe('Interactive Terminal - Real-time Updates', () => {
   });
 });
 
-test.describe('Interactive Terminal - API Integration', () => {
-  test('should establish interactive session via API', async ({ request }) => {
-    const response = await request.post('http://localhost:3002/api/dev-bots/interactive/session', {
-      headers: {
-        'X-API-Key': 'test-e2e-api-key-not-for-production',
-        'Content-Type': 'application/json'
-      },
-      data: {
-        modelProvider: 'claude',
-        modelName: 'sonnet-4-5'
-      }
-    }).catch(() => null);
-
-    if (response) {
-      // In test environment with Docker disabled, expect 500 (service unavailable)
-      // With proper mocking or Docker enabled, expect 200/201 (success) or 400 (validation error)
-      expect([200, 201, 400, 500]).toContain(response.status());
-    }
-  });
-
-  test('should send commands via API', async ({ request }) => {
-    const response = await request.post('http://localhost:3002/api/dev-bots/interactive/command', {
-      headers: {
-        'X-API-Key': 'test-e2e-api-key-not-for-production',
-        'Content-Type': 'application/json'
-      },
-      data: {
-        sessionId: 'test-session',
-        command: 'help'
-      }
-    }).catch(() => null);
-
-    if (response) {
-      expect([200, 404]).toContain(response.status());
-    }
-  });
-
-  test('should handle API errors gracefully', async ({ page }) => {
-    await page.route('**/api/dev-bots/interactive/**', route => route.abort());
-
-    await navigateToInteractiveTerminal(page);
-    await page.waitForTimeout(2000);
-
-    // Should show error state
-    await expect(page.locator('#root')).toBeVisible();
-  });
-});
+// API Integration tests removed - terminal now uses Socket.IO instead of REST API
+// Socket.IO communication is tested via WebSocket tests in interactive-session-auth.spec.ts
 
 test.describe('Interactive Terminal - Error States', () => {
-  test('should display error when session fails to start', async ({ page }) => {
-    await page.route('**/api/dev-bots/interactive/**', route => route.abort());
-
+  test('should handle terminal initialization', async ({ page }) => {
     await navigateToInteractiveTerminal(page);
     await page.waitForTimeout(2000);
 
+    // Terminal should initialize (whether successful or showing error)
     await expect(page.locator('#root')).toBeVisible();
   });
 
