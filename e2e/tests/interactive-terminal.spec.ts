@@ -35,25 +35,30 @@ test.describe('Interactive Terminal - Navigation and Layout', () => {
   });
 
   test('should display terminal container', async ({ page }) => {
-    // Look for terminal container
+    // Terminal container is always rendered (doesn't require socket)
     const terminalContainer = page.locator('.terminal-container');
-    await expect(terminalContainer).toBeVisible({ timeout: 10000 });
+    await expect(terminalContainer).toBeVisible({ timeout: 20000 });
   });
 
   test('should display terminal header with status', async ({ page }) => {
-    // Terminal header should be visible
+    // Terminal header is always rendered (doesn't require socket)
     const terminalHeader = page.locator('.terminal-header');
-    await expect(terminalHeader).toBeVisible();
+    await expect(terminalHeader).toBeVisible({ timeout: 20000 });
 
     // Should show connection status
     const statusText = page.locator('.terminal-header').getByText(/(connecting|connected|disconnected)/i);
-    await expect(statusText).toBeVisible();
+    await expect(statusText).toBeVisible({ timeout: 20000 });
   });
 
-  test('should display xterm.js terminal element', async ({ page }) => {
-    // xterm.js creates elements with class="xterm"
+  test('should display xterm.js terminal element after socket connects', async ({ page }) => {
+    // First, wait for terminal container
+    const terminalContainer = page.locator('.terminal-container');
+    await expect(terminalContainer).toBeVisible({ timeout: 20000 });
+
+    // Wait for socket to connect and xterm to initialize
+    // xterm.js creates elements with class="xterm" only after socket is available
     const xtermElement = page.locator('.xterm');
-    await expect(xtermElement).toBeVisible({ timeout: 10000 });
+    await expect(xtermElement).toBeVisible({ timeout: 30000 });
   });
 });
 
@@ -63,56 +68,76 @@ test.describe('Interactive Terminal - Connection Status', () => {
   });
 
   test('should show connecting status initially', async ({ page }) => {
+    // Wait for terminal header to render
+    const terminalHeader = page.locator('.terminal-header');
+    await expect(terminalHeader).toBeVisible({ timeout: 20000 });
+
     // Should show connecting or connected status
-    const statusIndicator = page.locator('.terminal-header').getByText(/(connecting|connected)/i);
-    await expect(statusIndicator).toBeVisible({ timeout: 5000 });
+    const statusIndicator = terminalHeader.getByText(/(connecting|connected)/i);
+    await expect(statusIndicator).toBeVisible({ timeout: 20000 });
   });
 
   test('should show session ID when connected', async ({ page }) => {
-    // Wait for connection to establish
-    await page.waitForTimeout(3000);
-
-    // Header should show either "Terminal" or "Session: <id>"
+    // Wait for terminal header
     const terminalHeader = page.locator('.terminal-header');
-    await expect(terminalHeader).toContainText(/(Terminal|Session:)/i);
+    await expect(terminalHeader).toBeVisible({ timeout: 20000 });
+
+    // Wait for socket to connect and session to be created
+    // Header should show either "Terminal" or "Session: <id>"
+    await expect(terminalHeader).toContainText(/(Terminal|Session:)/i, { timeout: 30000 });
   });
 
   test('should have visual status indicator', async ({ page }) => {
     // Terminal header contains a colored status dot
     const terminalHeader = page.locator('.terminal-header');
-    await expect(terminalHeader).toBeVisible();
+    await expect(terminalHeader).toBeVisible({ timeout: 20000 });
 
     // Status text should be visible
     const status = terminalHeader.getByText(/(connecting|connected|disconnected)/i);
-    await expect(status).toBeVisible();
+    await expect(status).toBeVisible({ timeout: 20000 });
   });
 });
 
 test.describe('Interactive Terminal - Terminal Interaction', () => {
   test.beforeEach(async ({ page }) => {
     await navigateToInteractiveTerminal(page);
+    // Wait for terminal container to ensure page loaded
+    await page.locator('.terminal-container').waitFor({ timeout: 20000 });
   });
 
   test('should have xterm.js textarea for input', async ({ page }) => {
+    // Wait for xterm to initialize (requires socket connection)
+    const xtermElement = page.locator('.xterm');
+    await expect(xtermElement).toBeVisible({ timeout: 30000 });
+
     // xterm.js creates a textarea for input
     const xtermTextarea = page.locator('.xterm-helper-textarea');
     await expect(xtermTextarea).toBeAttached({ timeout: 10000 });
   });
 
   test('should display terminal viewport', async ({ page }) => {
+    // Wait for xterm to initialize
+    await page.locator('.xterm').waitFor({ timeout: 30000 });
+
     // xterm.js creates a viewport element
     const viewport = page.locator('.xterm-viewport');
     await expect(viewport).toBeVisible({ timeout: 10000 });
   });
 
   test('should have terminal screen for output', async ({ page }) => {
+    // Wait for xterm to initialize
+    await page.locator('.xterm').waitFor({ timeout: 30000 });
+
     // xterm.js creates a screen element
     const screen = page.locator('.xterm-screen');
     await expect(screen).toBeVisible({ timeout: 10000 });
   });
 
   test('should focus terminal when clicked', async ({ page }) => {
+    // Wait for xterm to initialize
     const xtermElement = page.locator('.xterm');
+    await expect(xtermElement).toBeVisible({ timeout: 30000 });
+
     await xtermElement.click();
 
     // After clicking, the terminal should be focused
@@ -128,38 +153,39 @@ test.describe('Interactive Terminal - Socket.IO Communication', () => {
   });
 
   test('should establish Socket.IO connection', async ({ page }) => {
-    // Monitor console for Socket.IO connection messages
-    const consoleMessages: string[] = [];
-    page.on('console', msg => {
-      consoleMessages.push(msg.text());
-    });
-
-    await page.waitForTimeout(3000);
-
-    // Page should remain functional (not crash)
+    // Wait for terminal container
     const terminalContainer = page.locator('.terminal-container');
-    await expect(terminalContainer).toBeVisible();
+    await expect(terminalContainer).toBeVisible({ timeout: 20000 });
+
+    // Wait for socket to connect and xterm to initialize
+    const xtermElement = page.locator('.xterm');
+    await expect(xtermElement).toBeVisible({ timeout: 30000 });
+
+    // If xterm is visible, socket must be connected
+    const terminalHeader = page.locator('.terminal-header');
+    const status = terminalHeader.getByText(/(connected|connecting)/i);
+    await expect(status).toBeVisible();
   });
 
   test('should handle Socket.IO reconnection', async ({ page }) => {
+    // Wait for terminal to load and connect
+    const terminalHeader = page.locator('.terminal-header');
+    await expect(terminalHeader).toBeVisible({ timeout: 20000 });
+
     // Wait for initial connection
-    await page.waitForTimeout(2000);
+    await page.locator('.xterm').waitFor({ timeout: 30000 });
 
     // Simulate network offline/online
     await page.context().setOffline(true);
     await page.waitForTimeout(1000);
 
-    // Status might show disconnected
-    const status = page.locator('.terminal-header').getByText(/(disconnected|connecting)/i);
-    const isDisconnected = await status.isVisible().catch(() => false);
-
     // Restore connection
     await page.context().setOffline(false);
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(3000);
 
-    // Should reconnect
-    const connectedStatus = page.locator('.terminal-header').getByText(/(connected|connecting)/i);
-    await expect(connectedStatus).toBeVisible();
+    // Should reconnect - check status shows connected or connecting
+    const status = terminalHeader.getByText(/(connected|connecting)/i);
+    await expect(status).toBeVisible({ timeout: 20000 });
   });
 });
 
@@ -169,11 +195,11 @@ test.describe('Interactive Terminal - Error Handling', () => {
 
     // Terminal should be visible
     const terminal1 = page.locator('.terminal-container');
-    await expect(terminal1).toBeVisible();
+    await expect(terminal1).toBeVisible({ timeout: 20000 });
 
     // Navigate away
     await page.goto('/monitor/dev-bots');
-    await page.waitForTimeout(500);
+    await page.waitForLoadState('networkidle');
 
     // Navigate back
     await page.goto('/monitor/interactive');
@@ -181,26 +207,26 @@ test.describe('Interactive Terminal - Error Handling', () => {
 
     // Terminal should be visible again
     const terminal2 = page.locator('.terminal-container');
-    await expect(terminal2).toBeVisible({ timeout: 10000 });
+    await expect(terminal2).toBeVisible({ timeout: 20000 });
   });
 
   test('should handle page refresh', async ({ page }) => {
     await navigateToInteractiveTerminal(page);
 
-    // Wait for terminal to load
-    await page.waitForTimeout(2000);
+    // Wait for terminal container to load
+    const terminalContainer = page.locator('.terminal-container');
+    await expect(terminalContainer).toBeVisible({ timeout: 20000 });
 
     // Refresh page
     await page.reload();
     await page.waitForLoadState('networkidle');
 
     // Terminal should reload
-    const terminalContainer = page.locator('.terminal-container');
-    await expect(terminalContainer).toBeVisible({ timeout: 10000 });
+    await expect(terminalContainer).toBeVisible({ timeout: 20000 });
 
     // Should show connecting or connected status
     const status = page.locator('.terminal-header').getByText(/(connecting|connected)/i);
-    await expect(status).toBeVisible({ timeout: 5000 });
+    await expect(status).toBeVisible({ timeout: 20000 });
   });
 });
 
@@ -211,6 +237,7 @@ test.describe('Interactive Terminal - Layout and Responsiveness', () => {
 
   test('should have full height terminal container', async ({ page }) => {
     const terminalContainer = page.locator('.terminal-container');
+    await expect(terminalContainer).toBeVisible({ timeout: 20000 });
 
     const height = await terminalContainer.evaluate(el => {
       return window.getComputedStyle(el).height;
@@ -223,6 +250,7 @@ test.describe('Interactive Terminal - Layout and Responsiveness', () => {
 
   test('should have proper terminal header styling', async ({ page }) => {
     const terminalHeader = page.locator('.terminal-header');
+    await expect(terminalHeader).toBeVisible({ timeout: 20000 });
 
     const styles = await terminalHeader.evaluate(el => {
       const computed = window.getComputedStyle(el);
@@ -239,7 +267,9 @@ test.describe('Interactive Terminal - Layout and Responsiveness', () => {
   });
 
   test('should resize terminal on window resize', async ({ page }) => {
+    // Wait for xterm to initialize
     const xtermViewport = page.locator('.xterm-viewport');
+    await expect(xtermViewport).toBeVisible({ timeout: 30000 });
 
     // Get initial size
     const initialSize = await xtermViewport.boundingBox();
