@@ -2011,14 +2011,19 @@ export class TaskQueueService {
         UPDATE tasks
         SET status = 'pending',
             phase_status = 'ready',
+            phase_attempts = 1,
             blocked_reason = NULL,
             blocked_at = NULL,
             blocked_by = NULL,
+            resumed_by = ?,
+            resumed_at = ?,
             notes = COALESCE(notes || '\n', '') || ?
         WHERE id = ?
       `);
 
       stmt.run(
+        resumedBy,
+        now,
         `[${new Date(now).toISOString()}] Task resumed by ${resumedBy}. Previous block reason: ${task.blocked_reason || 'none'}`,
         taskId
       );

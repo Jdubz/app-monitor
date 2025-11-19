@@ -688,6 +688,7 @@ export class TaskExecutionService {
               this.taskQueue.updateTask(nextTask.id, {
                 status: 'blocked',
                 phase_status: 'blocked',
+                chain_status: 'blocked',
                 blocked_reason: recovery.diagnosis || 'Recovery failed - manual intervention required',
                 blocked_at: Date.now(),
                 blocked_by: 'recovery_agent'
