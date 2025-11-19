@@ -47,7 +47,9 @@ export function useEnhancedSocket() {
       reconnectionAttempts: Infinity,
       timeout: 20000,
       autoConnect: true,
-      transports: ['websocket', 'polling'],
+      // Use polling-only mode to work around Cloudflare Tunnel WebSocket limitations
+      // WebSocket upgrades fail through Cloudflare Free plan tunnels
+      transports: ['polling'],
       auth: {
         apiKey,
       },
