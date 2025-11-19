@@ -145,6 +145,10 @@ Claude (sync) → Checks out Jules' branch → Refines/Fixes → Pushes to same 
 
 ### 4.2 Hybrid Workflow Patterns
 
+**Legend:**
+- Patterns 1-4: **Proactive optimization** (leverage multiple agents for better results)
+- Pattern 5: **Reactive resilience** (emergency fallback when infrastructure fails)
+
 #### Pattern 1: Jules Exploration → Claude Polish
 **Use Case:** Complex implementation where exploration benefits from parallel approaches
 
@@ -310,6 +314,186 @@ await Promise.all(
 - Ultimate hedge against agent failures
 - Empirical winner selection based on tests/metrics
 - Only successful approach survives
+
+#### Pattern 5: Jules as Emergency Fallback (Dangling PR Cleanup)
+**Use Case:** Docker agents blocked, orphaned PR needs completion
+
+```typescript
+/**
+ * When Docker agents are unavailable (infrastructure issues, critical blocker),
+ * use Jules to complete work on existing branches
+ */
+async rescueDanglingPR(prNumber: number, blocker: string): Promise<void> {
+  const pr = await this.githubPR.getPRStatus(prNumber);
+  const originalTask = await this.taskQueue.findByPRNumber(prNumber)[0];
+  
+  logger.warn({
+    category: 'emergency-fallback',
+    action: 'jules_rescue_initiated',
+    message: `Docker agents blocked (${blocker}), delegating PR #${prNumber} to Jules`,
+    details: { pr_number: prNumber, branch: pr.head_ref, blocker }
+  });
+  
+  // Build rescue prompt that targets existing branch
+  const rescuePrompt = `
+[EMERGENCY FALLBACK - Docker agents unavailable]
+[Task ID: ${originalTask.id}]
+[Target Branch: ${pr.head_ref}]
+
+**Instructions:**
+Checkout the EXISTING branch "${pr.head_ref}" and complete the work:
+
+\`\`\`bash
+git fetch origin ${pr.head_ref}
+git checkout ${pr.head_ref}
+\`\`\`
+
+**Original Task:**
+${originalTask.title}
+
+${originalTask.description}
+
+**Current PR Status:**
+- PR #${prNumber}: ${pr.state}
+- Failing Checks: ${pr.checks.filter(c => c.status === 'failure').map(c => c.name).join(', ')}
+- Merge Conflicts: ${pr.mergeable === 'CONFLICTING' ? 'YES - resolve them' : 'No'}
+- Review Comments: ${pr.reviews.length} (address blocking issues)
+
+**What You Need to Do:**
+1. Work on the EXISTING branch (do NOT create new branch)
+2. Fix failing checks
+3. Resolve merge conflicts if any
+4. Address review comments
+5. Commit directly to ${pr.head_ref}
+6. Push to origin/${pr.head_ref} (this will update PR #${prNumber})
+
+**Acceptance Criteria:**
+${originalTask.acceptance_criteria?.map((c, i) => `${i + 1}. ${c}`).join('\n')}
+
+**Critical:** Push commits to ${pr.head_ref}, NOT a new branch. This updates the existing PR #${prNumber}.
+`;
+
+  const session = await this.julesClient.createSession({
+    prompt: rescuePrompt,
+    repo: this.config.repoOwner + '/' + this.config.repoName
+  });
+  
+  // Track rescue operation
+  await this.taskQueue.updateTask(originalTask.id, {
+    'metadata.jules_rescue': {
+      sessionId: session.id,
+      reason: blocker,
+      originalAgent: originalTask.agent,
+      rescuedAt: Date.now(),
+      targetBranch: pr.head_ref
+    },
+    agent: 'jules',
+    status: 'executing'
+  });
+  
+  logger.info({
+    category: 'emergency-fallback',
+    action: 'jules_rescue_submitted',
+    message: `Jules session ${session.id} rescuing PR #${prNumber}`,
+    details: {
+      session_id: session.id,
+      pr_number: prNumber,
+      branch: pr.head_ref,
+      original_agent: originalTask.agent
+    }
+  });
+}
+
+/**
+ * Detect when Docker agents are blocked and trigger Jules fallback
+ */
+async checkDockerAgentsHealth(): Promise<{ healthy: boolean; blocker?: string }> {
+  try {
+    // Check if Docker daemon is responding
+    await execAsync('docker ps', { timeout: 5000 });
+    
+    // Check if dev-bot images are available
+    const images = await execAsync('docker images dev-bot-* --format "{{.Repository}}"');
+    const requiredImages = ['dev-bot-claude', 'dev-bot-codex', 'dev-bot-gemini'];
+    const availableImages = images.stdout.split('\n').filter(Boolean);
+    
+    const missingImages = requiredImages.filter(img => !availableImages.includes(img));
+    if (missingImages.length > 0) {
+      return { 
+        healthy: false, 
+        blocker: `Missing Docker images: ${missingImages.join(', ')}` 
+      };
+    }
+    
+    return { healthy: true };
+  } catch (error) {
+    return { 
+      healthy: false, 
+      blocker: `Docker daemon unreachable: ${error.message}` 
+    };
+  }
+}
+
+/**
+ * Monitor dangling PRs and auto-rescue with Jules when Docker blocked
+ */
+async monitorAndRescueDanglingPRs(): Promise<void> {
+  const dockerHealth = await this.checkDockerAgentsHealth();
+  
+  if (dockerHealth.healthy) {
+    return; // Docker agents working, no rescue needed
+  }
+  
+  // Find PRs stuck in execution with Docker agents
+  const danglingPRs = await this.db.query(`
+    SELECT * FROM tasks 
+    WHERE status = 'executing' 
+    AND agent IN ('claude', 'codex', 'gemini')
+    AND pr_number IS NOT NULL
+    AND updated_at < ?
+    AND metadata->>'jules_rescue.sessionId' IS NULL
+  `, [Date.now() - (30 * 60 * 1000)]); // Stuck for 30+ minutes
+  
+  logger.warn({
+    category: 'emergency-fallback',
+    action: 'dangling_prs_detected',
+    message: `Docker agents blocked: ${dockerHealth.blocker}. Found ${danglingPRs.length} dangling PRs`,
+    details: {
+      blocker: dockerHealth.blocker,
+      dangling_count: danglingPRs.length,
+      pr_numbers: danglingPRs.map(t => t.pr_number)
+    }
+  });
+  
+  // Rescue each dangling PR with Jules
+  for (const task of danglingPRs) {
+    try {
+      await this.rescueDanglingPR(task.pr_number, dockerHealth.blocker);
+    } catch (error) {
+      logger.error({
+        category: 'emergency-fallback',
+        action: 'rescue_failed',
+        message: `Failed to rescue PR #${task.pr_number}`,
+        error,
+        details: { pr_number: task.pr_number, task_id: task.id }
+      });
+    }
+  }
+}
+```
+
+**Benefits:**
+- **Business Continuity:** Work continues even when Docker infrastructure fails
+- **Automatic Recovery:** No manual intervention needed for orphaned PRs
+- **Resource Diversification:** Not dependent on single execution environment
+- **Graceful Degradation:** System remains partially operational during outages
+
+**Rescue Triggers:**
+- Docker daemon unreachable
+- Docker images missing/corrupted
+- Host resource exhaustion preventing container spawn
+- Critical security vulnerability blocking Docker usage
+- Any blocker preventing dev-bot execution > 30 minutes
 
 ### 4.3 Implementation: Branch Handoff Service
 
@@ -530,6 +714,8 @@ private async selectWithHybridStrategy(
 | **Hedging Uncertainty** | Parallel attempts, empirical winner | Jules (3 approaches) + Claude (1) → best wins |
 | **Resource Optimization** | Async work during sync agent busy times | Jules works while Claude handles other task |
 | **Continuous Integration** | Single PR, multiple agents contributing | Cleaner git history, easier review |
+| **🚨 Emergency Fallback** | **Jules rescues when Docker blocked** | **Docker down → Jules completes dangling PRs** |
+| **Infrastructure Resilience** | **No single point of failure** | **Cloud VM backup when local resources fail** |
 
 ---
 
@@ -910,10 +1096,12 @@ async cleanupStaleSessions(): Promise<void> {
 - `jules_revision_count_per_task`
 - `jules_success_rate_by_category`
 - `jules_quota_remaining_daily`
-- **`hybrid_handoff_total` (by pattern: sequential/parallel)**
+- **`hybrid_handoff_total` (by pattern: sequential/parallel/rescue)**
 - **`hybrid_handoff_latency_seconds`**
 - **`hybrid_competition_winner_margin` (quality delta between winner and losers)**
 - **`branch_handoff_race_conditions_detected`**
+- **`jules_rescue_operations_total`**
+- **`docker_agents_downtime_seconds`**
 
 **Alerts:**
 - Jules quota < 20% remaining
@@ -922,6 +1110,8 @@ async cleanupStaleSessions(): Promise<void> {
 - Jules success rate < 70% (escalation threshold)
 - **Hybrid handoff latency > 10 minutes (branch sync issues)**
 - **Branch handoff race condition detected (concurrent checkout attempts)**
+- **🚨 Docker agents unhealthy AND dangling PRs detected (trigger rescue)**
+- **Jules rescue operation failed (critical - manual intervention needed)**
 
 ---
 
@@ -954,6 +1144,8 @@ async cleanupStaleSessions(): Promise<void> {
 - [ ] Telemetry and dashboard updates
 - [ ] Documentation and runbooks
 - [ ] Load testing with parallel sessions
+- [ ] **Emergency rescue monitoring and automation**
+- [ ] **Docker health checks and failover logic**
 
 ### Phase 5: Optimization (Week 5+)
 - [ ] ML-based selection tuning (Jules vs Claude vs Hybrid)
@@ -976,6 +1168,8 @@ async cleanupStaleSessions(): Promise<void> {
 | **Quality regression** | Poor code merged | Same review gates as Claude (no shortcuts) |
 | **Cost overrun** | Unexpected paid tier charges | Daily budget alerts, kill switch |
 | **Session state mismatch** | Task/PR out of sync | Periodic reconciliation job |
+| **🚨 Docker infrastructure failure** | **All local agents blocked** | **Jules emergency rescue for dangling PRs (Pattern 5)** |
+| **Branch target mismatch** | **Jules creates new branch instead of using existing** | **Explicit checkout instructions in prompt + verification** |
 
 ---
 
@@ -996,6 +1190,8 @@ async cleanupStaleSessions(): Promise<void> {
 - **Branch Handoff Latency:** < 5 minutes between Jules PR creation and Claude checkout
 - **Multi-Agent Quality Lift:** Hybrid PRs score ≥ 10% higher than single-agent PRs
 - **Resource Efficiency:** Hybrid sequential cost < 2× single-agent, parallel < 3× single-agent
+- **🚨 Emergency Rescue Success:** ≥ 90% of dangling PRs completed successfully via Jules fallback
+- **Infrastructure Resilience:** Zero PR abandonment during Docker outages
 
 **Monitoring:**
 - Weekly dashboard review (single-agent + hybrid breakdowns)
@@ -1014,6 +1210,8 @@ async cleanupStaleSessions(): Promise<void> {
 6. **Hybrid Workflow Triggers:** When should we automatically invoke hybrid patterns vs. single-agent? (Need heuristics)
 7. **Branch Handoff Race Conditions:** How to handle if Claude checks out Jules branch before Jules finishes committing? (Locking strategy)
 8. **Parallel Competition Resource Limits:** Should we cap total concurrent agents (Jules + Claude) to prevent resource exhaustion? (Budget vs. speed)
+9. **🚨 Rescue Priority:** Should emergency rescue pre-empt normal Jules work? (Quota allocation during outages)
+10. **Branch Target Verification:** How to verify Jules actually checked out existing branch vs. creating new one? (Post-session validation)
 
 ---
 
@@ -1026,6 +1224,7 @@ Jules represents a **paradigm shift** from synchronous Docker-based agents to **
 1. **Pure Async Delegation:** Submit to Jules → Monitor PR → Review (original design)
 2. **Hybrid Sequential:** Jules explores → Claude polishes (same branch handoff)
 3. **Hybrid Parallel:** Jules + Claude compete → Best PR wins (empirical selection)
+4. **🚨 Emergency Rescue:** Docker blocked → Jules completes dangling PRs (infrastructure resilience)
 
 **Architectural Requirements:**
 
@@ -1047,8 +1246,9 @@ Start with non-critical tasks in free tier, expanding to paid tier based on ROI 
 2. **Branch as Integration Point:** GitHub branches enable seamless multi-agent collaboration without custom infrastructure
 3. **Empirical Selection:** Let tests/metrics decide winners in competition mode, not heuristics
 4. **Graceful Degradation:** If Jules unavailable or hybrid patterns fail, fallback to proven single-agent (Claude) workflows
+5. **🚨 Infrastructure Resilience:** Jules provides emergency continuity when Docker infrastructure fails - zero abandoned PRs during outages
 
-**Unique Advantage:** Unlike competitors who force single-agent choices, our system can **dynamically compose agent teams** on the same branch, leveraging each agent's strengths while maintaining single PR clarity and review workflow.
+**Unique Advantage:** Unlike competitors who force single-agent choices, our system can **dynamically compose agent teams** on the same branch, leveraging each agent's strengths while maintaining single PR clarity and review workflow. Additionally, **Jules serves as infrastructure insurance** - if local Docker fails, work continues in Google Cloud VMs.
 
 ---
 

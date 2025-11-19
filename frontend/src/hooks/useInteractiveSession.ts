@@ -372,13 +372,8 @@ export function useInteractiveSession(
         return;
       }
 
-      try {
-        socket.emit('terminal:input', { sessionId, data: normalizedChunk });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Failed to send input';
-        setError(message);
-        return;
-      }
+      // socket.emit doesn't throw - network issues are handled by connection state
+      socket.emit('terminal:input', { sessionId, data: normalizedChunk });
 
       // Show user input in logs
       if (normalizedChunk.endsWith('\n')) {
@@ -422,23 +417,21 @@ export function useInteractiveSession(
       return;
     }
 
-    try {
-      // Send interrupt via Socket.IO (REST API endpoint is deprecated and returns 410)
-      if (!socket || !socketConnected || joinedSessionRef.current !== sessionId) {
-        throw new Error('Socket.IO connection not available. Please reconnect and try again.');
-      }
-      socket.emit('terminal:signal', { sessionId, signal: 'interrupt' });
-
-      appendLog({
-        id: 'system-' + Date.now(),
-        body: 'Sent interrupt signal to session.',
-        source: 'system',
-        timestamp: Date.now(),
-      });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to interrupt session';
-      setError(message);
+    // Send interrupt via Socket.IO (REST API endpoint is deprecated and returns 410)
+    if (!socket || !socketConnected || joinedSessionRef.current !== sessionId) {
+      setError('Socket.IO connection not available. Please reconnect and try again.');
+      return;
     }
+
+    // socket.emit doesn't throw - network issues are handled by connection state
+    socket.emit('terminal:signal', { sessionId, signal: 'interrupt' });
+
+    appendLog({
+      id: 'system-' + Date.now(),
+      body: 'Sent interrupt signal to session.',
+      source: 'system',
+      timestamp: Date.now(),
+    });
   }, [appendLog, socket, socketConnected]);
 
   const keepAlive = useCallback(async (source: 'user' | 'agent' = 'user') => {
