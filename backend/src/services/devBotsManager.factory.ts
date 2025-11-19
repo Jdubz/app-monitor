@@ -204,7 +204,6 @@ export async function createDevBotsManagerDependencies(
       taskExecutionService,
       ephemeralWorkerService,
       interactiveSessionService: interactiveSessionManager,
-      interactiveSessionStreamManager: interactiveSessionStreaming,
       systemLifecycleService
     },
     () => {}, // emit function placeholder
@@ -247,7 +246,6 @@ export async function createDevBotsManagerDependencies(
     taskCompletionService,
     prWorkflowOrchestrator,
     interactiveSessionManager,
-    interactiveSessionStreaming,
     workerHealthMonitor,
     systemLifecycleService,
     systemInitializationService,

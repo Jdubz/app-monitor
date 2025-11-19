@@ -166,13 +166,25 @@ export class InteractiveSessionGateway {
     try {
       switch (payload.type) {
         case 'input': {
-          if (typeof payload.data === 'string') {
-            this.devBotsManager.sendInteractiveInput(sessionId, payload.data);
-          }
+          // Note: Input is now sent directly via Socket.IO (terminal:input event)
+          // This WebSocket command path is deprecated
+          logger.warn({
+            category: 'system',
+            action: 'deprecated_input_command',
+            message: 'Client using deprecated WebSocket input command. Use Socket.IO terminal:input instead.',
+            details: { sessionId }
+          });
           break;
         }
         case 'signal': {
-          this.devBotsManager.sendInteractiveSignal(sessionId, payload.signal ?? 'interrupt');
+          // Note: Signals are now sent directly via Socket.IO (terminal:signal event)
+          // This WebSocket command path is deprecated
+          logger.warn({
+            category: 'system',
+            action: 'deprecated_signal_command',
+            message: 'Client using deprecated WebSocket signal command. Use Socket.IO terminal:signal instead.',
+            details: { sessionId }
+          });
           break;
         }
         case 'resize': {
