@@ -13,7 +13,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 import dotenv from 'dotenv';
-dotenv.config({ path: path.resolve(__dirname, '../../frontend/.env.production') });
+// Load API_KEY from root-level .env file or environment variables
+dotenv.config({ path: path.resolve(__dirname, '..', '.env') });
 
 const API_BASE_URL = process.env.API_URL || 'https://app-monitor.joshwentworth.com/api';
 const TASKS_FILE = path.join(__dirname, '..', 'pr-pipeline-enhancement-tasks.json');
