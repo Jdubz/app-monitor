@@ -1,9 +1,9 @@
 # Jules Agent Integration Design
 
-**Date:** 2025-11-19  
-**Author:** GitHub Copilot CLI  
-**Status:** Draft (Proposal)  
-**Related Docs:** `agent-selector-gemini-offload.md`, `master-design-intent.md`, `dev-bot-context-management.md`
+**Date:** 2025-11-19
+**Author:** GitHub Copilot CLI
+**Status:** Draft (Proposal)
+**Related Docs:** `master-design-intent.md`, `dev-bot-context-management.md`
 
 ---
 

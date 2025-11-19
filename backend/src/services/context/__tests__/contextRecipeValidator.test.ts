@@ -162,7 +162,7 @@ describe('ContextRecipeValidator', () => {
     });
 
     it('should validate all valid task types', () => {
-      const validTypes = ['implementation', 'review', 'fix', 'deployment', 'pr-follow-up', 'analysis'];
+      const validTypes = ['implementation', 'review', 'fix', 'pr-follow-up', 'analysis'];
       const recipe = mockRecipe({ taskTypes: validTypes as any });
       const result = validator.validate(recipe);
       expect(result.valid).toBe(true);

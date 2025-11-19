@@ -99,7 +99,7 @@ export class ContextCache {
     gitCommitHash?: string
   ): Promise<string> {
     // Validate task type
-    const validTaskTypes = ['implementation', 'fix', 'review', 'deployment', 'pr-follow-up', 'analysis'];
+    const validTaskTypes = ['implementation', 'fix', 'review', 'pr-follow-up', 'analysis'];
     if (!validTaskTypes.includes(options.taskType)) {
       throw new Error(`Invalid task type: ${options.taskType}`);
     }

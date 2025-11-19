@@ -12,6 +12,7 @@ import { ConnectionManager, setConnectionManagerInstance } from './services/conn
 import { GitHubWebhookHandler } from './services/githubWebhookHandler.service.js';
 import { setWebhookHandler } from './routes/github-webhooks.routes.js';
 import { logger } from './utils/logger.js';
+import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 
 // Conditionally import TerminalService - skip in test environments to avoid node-pty crashes
 type TerminalServiceType = typeof import('./services/TerminalService.js').TerminalService;
@@ -373,6 +374,10 @@ export async function createApp(options: CreateAppOptions = {}) {
       status: 'running',
     });
   });
+
+  // Error handling middleware (must be after all routes)
+  app.use(notFoundHandler);
+  app.use(errorHandler);
 
   return httpServer;
 }
