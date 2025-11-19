@@ -53,7 +53,6 @@ describe('Phase Integration Tests', () => {
       let transition = orchestrator.determineNextPhase(1, {
         passed: true,
         errors: [],
-        metadata: {}
       });
       expect(transition.toPhase).toBe(2);
       expect(transition.resetAttempts).toBe(true);
@@ -62,7 +61,6 @@ describe('Phase Integration Tests', () => {
       transition = orchestrator.determineNextPhase(2, {
         passed: true,
         errors: [],
-        metadata: { pr_created: true }
       });
       expect(transition.toPhase).toBe(3);
 
@@ -71,7 +69,6 @@ describe('Phase Integration Tests', () => {
         passed: true,
         issuesFound: false,
         errors: [],
-        metadata: { total_issues: 0 }
       });
       expect(transition.toPhase).toBe(5); // Skip Phase 4
 
@@ -80,7 +77,6 @@ describe('Phase Integration Tests', () => {
         passed: true,
         allGatesPassing: true,
         errors: [],
-        metadata: { all_tests_passing: true, coverage_passing: true }
       });
       expect(transition.toPhase).toBe(6);
 
@@ -88,7 +84,6 @@ describe('Phase Integration Tests', () => {
       transition = orchestrator.determineNextPhase(6, {
         passed: true,
         errors: [],
-        metadata: { docs_updated: true }
       });
       expect(transition.toPhase).toBe(7);
 
@@ -97,7 +92,6 @@ describe('Phase Integration Tests', () => {
         passed: true,
         allGatesPassing: true,
         errors: [],
-        metadata: { pr_merged: true }
       });
       expect(transition.toPhase).toBe(7); // Stay in phase 7 (task marked complete elsewhere)
     });
@@ -109,7 +103,6 @@ describe('Phase Integration Tests', () => {
       let transition = orchestrator.determineNextPhase(3, {
         passed: false,
         errors: ['Issue 1', 'Issue 2'],
-        metadata: { issues_found: true, total_issues: 2 }
       });
       expect(transition.toPhase).toBe(4); // Go to fixes
 
@@ -117,7 +110,6 @@ describe('Phase Integration Tests', () => {
       transition = orchestrator.determineNextPhase(4, {
         passed: true,
         errors: [],
-        metadata: { all_issues_addressed: true }
       });
       expect(transition.toPhase).toBe(3); // Re-review
 
@@ -125,7 +117,6 @@ describe('Phase Integration Tests', () => {
       transition = orchestrator.determineNextPhase(3, {
         passed: true,
         errors: [],
-        metadata: { issues_found: false, total_issues: 0 }
       });
       expect(transition.toPhase).toBe(5); // Proceed to tests
     });
@@ -134,7 +125,6 @@ describe('Phase Integration Tests', () => {
       const transition = orchestrator.determineNextPhase(4, {
         passed: false,
         errors: ['Still 1 issue remaining'],
-        metadata: { all_issues_addressed: false }
       });
       expect(transition.toPhase).toBe(4); // Stay in fixes
     });
@@ -158,7 +148,6 @@ describe('Phase Integration Tests', () => {
       let transition = orchestrator.determineNextPhase(5, {
         passed: false,
         errors: ['Test failure: auth.test.ts'],
-        metadata: { all_tests_passing: false, coverage_passing: false }
       });
       expect(transition.toPhase).toBe(5); // Stay in Phase 5
 
@@ -167,7 +156,6 @@ describe('Phase Integration Tests', () => {
         passed: true,
         allTestsPassing: true,
         errors: [],
-        metadata: { all_tests_passing: true, coverage_passing: true }
       });
       expect(transition.toPhase).toBe(6); // Advance to cleanup
     });
@@ -191,7 +179,6 @@ describe('Phase Integration Tests', () => {
         passed: true,
         taskObsolete: true,
         errors: [],
-        metadata: { obsolete: true, obsolete_reason: 'Already implemented' }
       });
       expect(transition.toPhase).toBe(null); // Cancel task
     });
@@ -200,15 +187,12 @@ describe('Phase Integration Tests', () => {
       const result: ValidationResult = {
         passed: true,
         errors: [],
-        metadata: {
-          task_realigned: true,
-          realignment_details: 'Updated to focus on backend only'
-        }
+        taskRealigned: true
       };
 
       const transition = orchestrator.determineNextPhase(1, result);
       expect(transition.toPhase).toBe(2); // Continue but with updated context
-      expect(result.metadata.task_realigned).toBe(true);
+      expect(result.taskRealigned).toBe(true);
     });
   });
 
@@ -256,7 +240,6 @@ describe('Phase Integration Tests', () => {
       const validation: ValidationResult = {
         passed: true,
         errors: [],
-        metadata: { total_issues: 0 }
       };
       const transition = orchestrator.advancePhase(task, validation);
 
@@ -278,7 +261,6 @@ describe('Phase Integration Tests', () => {
       const validation: ValidationResult = {
         passed: false,
         errors: ['Test failure'],
-        metadata: { all_tests_passing: false }
       };
       const transition = orchestrator.advancePhase(task, validation);
 
@@ -317,12 +299,10 @@ describe('Phase Integration Tests', () => {
         phases.push(current);
         const transition = orchestrator.determineNextPhase(current, validation);
         if (transition.toPhase !== null && transition.toPhase !== current) {
-          trackPhase(transition.toPhase, { passed: true, errors: [], metadata: {} });
         }
       };
 
       // Start with Phase 1
-      trackPhase(1, { passed: true, errors: [], metadata: {} });
 
       // Expected: 1, 2, 3, 5, 6, 7 (no issues = skip phase 4)
       expect(phases).toEqual([1, 2, 3, 5, 6, 7]);
@@ -333,11 +313,9 @@ describe('Phase Integration Tests', () => {
       const progression: number[] = [currentPhase];
 
       // Phase 1 → 2
-      currentPhase = orchestrator.determineNextPhase(currentPhase, { passed: true, errors: [], metadata: {} }).toPhase!;
       progression.push(currentPhase);
 
       // Phase 2 → 3
-      currentPhase = orchestrator.determineNextPhase(currentPhase, { passed: true, errors: [], metadata: { pr_created: true } }).toPhase!;
       progression.push(currentPhase);
 
       // Phase 3 finds issues → 4
@@ -345,7 +323,6 @@ describe('Phase Integration Tests', () => {
         passed: false,
         issuesFound: true,
         errors: ['Issue'],
-        metadata: { issues_found: true, total_issues: 1 }
       }).toPhase!;
       progression.push(currentPhase);
 
@@ -353,7 +330,6 @@ describe('Phase Integration Tests', () => {
       currentPhase = orchestrator.determineNextPhase(currentPhase, {
         passed: true,
         errors: [],
-        metadata: { all_issues_addressed: true }
       }).toPhase!;
       progression.push(currentPhase);
 
@@ -362,7 +338,6 @@ describe('Phase Integration Tests', () => {
         passed: true,
         issuesFound: false,
         errors: [],
-        metadata: { issues_found: false }
       }).toPhase!;
       progression.push(currentPhase);
 

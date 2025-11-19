@@ -102,10 +102,14 @@ export interface TokenCanUsePayload {
 // Context-Aware Task Submission (Standard API)
 // ============================================================================
 
+// Task types
+export type TaskType = 'implementation' | 'review' | 'fix' | 'pr-follow-up' | 'analysis';
+export const TASK_TYPES: TaskType[] = ['implementation', 'review', 'fix', 'pr-follow-up', 'analysis'];
+
 export interface TaskSubmissionPayload {
   // Required fields (3 only)
   title: string;
-  taskType: 'implementation' | 'review' | 'fix' | 'pr-follow-up' | 'analysis';
+  taskType: TaskType;
   intent: string;  // Replaces 'description' and 'documentation'
   
   // Optional overrides (auto-detected if omitted)

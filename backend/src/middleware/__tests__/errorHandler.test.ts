@@ -23,20 +23,20 @@ describe('Error Handler Middleware', () => {
 
   beforeEach(() => {
     jsonSpy = vi.fn();
-    statusSpy = vi.fn().mockReturnValue({ json: jsonSpy });
+    statusSpy = vi.fn().mockReturnValue({ json: jsonSpy }) as any;
 
     mockRequest = {
       method: 'POST',
       path: '/api/test',
       query: {}
-    };
+    } as Request;
 
     mockResponse = {
       status: statusSpy,
       json: jsonSpy
-    };
+    } as unknown as Response;
 
-    mockNext = vi.fn();
+    mockNext = vi.fn() as unknown as NextFunction;
   });
 
   describe('errorHandler', () => {
@@ -201,9 +201,11 @@ describe('Error Handler Middleware', () => {
 
   describe('notFoundHandler', () => {
     it('should return 404 with route information', () => {
-      mockRequest.method = 'GET';
-      mockRequest.path = '/api/nonexistent';
-      mockRequest.query = { param: 'value' };
+      mockRequest = {
+        method: 'GET',
+        path: '/api/nonexistent',
+        query: { param: 'value' }
+      } as unknown as Request;
 
       notFoundHandler(mockRequest as Request, mockResponse as Response);
 
@@ -219,8 +221,11 @@ describe('Error Handler Middleware', () => {
     });
 
     it('should handle POST requests', () => {
-      mockRequest.method = 'POST';
-      mockRequest.path = '/api/tasks/invalid';
+      mockRequest = {
+        method: 'POST',
+        path: '/api/tasks/invalid',
+        query: {}
+      } as Request;
 
       notFoundHandler(mockRequest as Request, mockResponse as Response);
 
