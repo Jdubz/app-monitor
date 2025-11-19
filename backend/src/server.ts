@@ -129,15 +129,10 @@ export async function createApp(options: CreateAppOptions = {}) {
     devBotsManager = undefined;
   } else if (overrides.devBotsManager) {
     devBotsManager = overrides.devBotsManager;
-    // Note: InteractiveSessionStreaming is now created inside the factory
-    // and automatically handles WebSocket connections via the HTTP server
   } else {
-    // Create dependencies with HTTP server for InteractiveSessionStreaming
-    const devBotsDeps = overrides.devBotsDependencies ?? await createDevBotsManagerDependencies({
-      httpServer
-    });
+    // Create dependencies
+    const devBotsDeps = overrides.devBotsDependencies ?? await createDevBotsManagerDependencies();
     devBotsManager = new DevBotsManager(devBotsDeps);
-    // Note: InteractiveSessionStreaming WebSocket gateway is already initialized
   }
 
   if (devBotsManager) {

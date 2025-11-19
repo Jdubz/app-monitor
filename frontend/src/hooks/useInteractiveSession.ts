@@ -8,13 +8,12 @@ import {
   sendDevBotsInteractiveInput,
   sendDevBotsInteractiveInterrupt,
   sendDevBotsInteractiveHeartbeat,
-  getDevBotsInteractiveStreamUrl,
 } from '@/services/api';
 import { BoundedLogBuffer } from '@/utils/boundedLogBuffer';
 import { createLogger } from '@/utils/logger';
+import { useEnhancedSocket } from './useEnhancedSocket';
 
 const DEFAULT_LOG_CAPACITY = 2000;
-const SOCKET_RECONNECT_DELAY_MS = 3000;
 const log = createLogger('useInteractiveSession');
 
 // Type guard for NotImplementedError (501 response)
@@ -26,33 +25,6 @@ function isNotImplementedError(error: unknown): boolean {
 
 export type ConnectionState = 'disconnected' | 'connecting' | 'connected';
 type LogSource = 'system' | 'agent' | 'user';
-
-type StreamSocketPayload = {
-  type: 'stream';
-  stream: 'stdout' | 'stderr' | 'system';
-  text: string;
-  timestamp?: string;
-  level?: string;
-};
-
-type StatusSocketPayload = {
-  type: 'status';
-  state: string;
-  reason?: string;
-};
-
-type ErrorSocketPayload = {
-  type: 'error';
-  message: string;
-};
-
-type ConnectedSocketPayload = {
-  type: 'connected';
-  sessionId: string;
-  timestamp: string;
-};
-
-type SocketPayload = StreamSocketPayload | StatusSocketPayload | ErrorSocketPayload | ConnectedSocketPayload;
 
 export interface InteractiveLogEntry {
   id: string;
@@ -93,6 +65,9 @@ export function useInteractiveSession(
   const maxLogEntries = options.maxLogEntries ?? DEFAULT_LOG_CAPACITY;
   const isEnabled = isManuallyEnabled;
 
+  // Use Socket.IO instead of native WebSocket
+  const { socket, isConnected: socketConnected } = useEnhancedSocket();
+
   const [sessionState, setSessionState] = useState<DevBotsInteractiveSessionState | null>(null);
   const [connectionState, setConnectionState] = useState<ConnectionState>('disconnected');
   const [isFetching, setIsFetching] = useState(true);
@@ -103,13 +78,10 @@ export function useInteractiveSession(
   const [lastHeartbeatAt, setLastHeartbeatAt] = useState<number | null>(null);
 
   const logBufferRef = useRef(new BoundedLogBuffer<InteractiveLogEntry>(maxLogEntries));
-  const socketRef = useRef<WebSocket | null>(null);
   const sessionIdRef = useRef<string | null>(null);
-  const reconnectTimerRef = useRef<number>();
   const heartbeatTimerRef = useRef<number>();
   const isMountedRef = useRef(true);
-  const latestStreamUrlRef = useRef<string | undefined>(undefined);
-  const suppressNextReconnectRef = useRef(false);
+  const joinedSessionRef = useRef<string | null>(null);
 
   const logs = useMemo(() => logBufferRef.current.toArray(), [logsVersion]);
 
@@ -123,173 +95,143 @@ export function useInteractiveSession(
     setLogsVersion((value) => value + 1);
   }, []);
 
-  const parseSocketPayload = useCallback((raw: string): SocketPayload | null => {
-    try {
-      return JSON.parse(raw) as SocketPayload;
-    } catch {
-      return null;
-    }
-  }, []);
-
-  const sendSocketPayload = useCallback((payload: Record<string, unknown>): boolean => {
-    const socket = socketRef.current;
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      return false;
-    }
-    try {
-      socket.send(JSON.stringify(payload));
-      return true;
-    } catch (error: unknown) {
-      log.warn('Failed to send socket payload', { error });
-      return false;
-    }
-  }, []);
-
-  const closeSocket = useCallback((options?: { suppressReconnect?: boolean }) => {
-    if (options?.suppressReconnect) {
-      suppressNextReconnectRef.current = true;
-      latestStreamUrlRef.current = undefined;
-    }
-    if (reconnectTimerRef.current) {
-      window.clearTimeout(reconnectTimerRef.current);
-      reconnectTimerRef.current = undefined;
-    }
-    if (socketRef.current) {
-      try {
-        socketRef.current.close();
-      } catch (err) {
-        log.warn('Failed to close socket', err);
-      }
-      socketRef.current = null;
-    }
-    setConnectionState('disconnected');
-  }, []);
-
-  const connectToStream = useCallback(
-    (sessionId: string, streamUrl?: string) => {
-      if (!isEnabled) {
+  // Join terminal session via Socket.IO
+  const joinTerminalSession = useCallback(
+    (sessionId: string) => {
+      if (!socket || !socketConnected) {
+        log.warn('Cannot join terminal session - socket not connected', { sessionId });
         return;
       }
-      if (typeof window === 'undefined' || typeof window.WebSocket === 'undefined') {
+
+      if (joinedSessionRef.current === sessionId) {
+        log.debug('Already joined terminal session', { sessionId });
+        return;
+      }
+
+      log.info('Joining terminal session via Socket.IO', { sessionId });
+      socket.emit('terminal:join', { sessionId });
+      joinedSessionRef.current = sessionId;
+      setConnectionState('connecting');
+    },
+    [socket, socketConnected],
+  );
+
+  // Leave terminal session via Socket.IO
+  const leaveTerminalSession = useCallback(() => {
+    if (!socket || !joinedSessionRef.current) {
+      return;
+    }
+
+    const sessionId = joinedSessionRef.current;
+    log.info('Leaving terminal session via Socket.IO', { sessionId });
+    socket.emit('terminal:leave', { sessionId });
+    joinedSessionRef.current = null;
+    setConnectionState('disconnected');
+  }, [socket]);
+
+  // Setup Socket.IO event listeners for terminal events
+  useEffect(() => {
+    if (!socket || !isEnabled) {
+      return;
+    }
+
+    // Handle terminal:joined confirmation
+    const onJoined = (data: { sessionId: string }) => {
+      if (!isMountedRef.current) return;
+      log.info('Terminal session joined', data);
+      setConnectionState('connected');
+      appendLog({
+        id: 'system-' + Date.now(),
+        body: 'Connected to interactive terminal.',
+        source: 'system',
+        timestamp: Date.now(),
+      });
+    };
+
+    // Handle terminal:output (stdout/stderr)
+    const onOutput = (data: {
+      sessionId: string;
+      stream: 'stdout' | 'stderr' | 'system';
+      text: string;
+      timestamp: string;
+    }) => {
+      if (!isMountedRef.current) return;
+      appendLog({
+        id: 'agent-' + Date.now(),
+        body: data.text,
+        source: data.stream === 'system' ? 'system' : 'agent',
+        timestamp: data.timestamp ? Date.parse(data.timestamp) : Date.now(),
+      });
+    };
+
+    // Handle terminal:status (connected/ended/error)
+    const onStatus = (data: {
+      sessionId: string;
+      state: 'connected' | 'running' | 'ended' | 'error';
+      reason?: string;
+    }) => {
+      if (!isMountedRef.current) return;
+
+      if (data.state === 'connected') {
+        setConnectionState('connected');
         appendLog({
-          id: 'log-' + Date.now(),
-          body: 'Interactive streaming is not supported in this environment.',
+          id: 'system-' + Date.now(),
+          body: 'Interactive terminal ready.',
           source: 'system',
           timestamp: Date.now(),
         });
-        setError('Interactive streaming unsupported');
-        return;
-      }
-
-      closeSocket({ suppressReconnect: true });
-      const url = streamUrl ?? getDevBotsInteractiveStreamUrl(sessionId);
-      latestStreamUrlRef.current = url;
-      setConnectionState('connecting');
-      try {
-        const socket = new WebSocket(url);
-        socketRef.current = socket;
-
-        socket.addEventListener('open', () => {
-          if (!isMountedRef.current) return;
-          suppressNextReconnectRef.current = false;
-          setConnectionState('connected');
-          appendLog({
-            id: 'system-' + Date.now(),
-            body: 'Connected to interactive stream.',
-            source: 'system',
-            timestamp: Date.now(),
-          });
-        });
-
-        socket.addEventListener('message', (event) => {
-          if (!isMountedRef.current) return;
-          const raw = typeof event.data === 'string' ? event.data : '';
-          if (!raw) {
-            return;
-          }
-          const payload = parseSocketPayload(raw);
-          if (!payload) {
-            appendLog({
-              id: 'agent-' + Date.now(),
-              body: raw,
-              source: 'agent',
-              timestamp: Date.now(),
-            });
-            return;
-          }
-
-          switch (payload.type) {
-            case 'stream':
-              appendLog({
-                id: 'agent-' + Date.now(),
-                body: payload.text,
-                source: payload.stream === 'system' ? 'system' : 'agent',
-                timestamp: payload.timestamp ? Date.parse(payload.timestamp) : Date.now(),
-              });
-              break;
-            case 'status':
-              appendLog({
-                id: 'system-' + Date.now(),
-                body: payload.reason ? `Session ${payload.state}: ${payload.reason}` : `Session ${payload.state}`,
-                source: 'system',
-                timestamp: Date.now(),
-              });
-              if (payload.state === 'closed') {
-                sessionIdRef.current = null;
-                setSessionState((state) => (state ? { ...state, session: null } : state));
-              }
-              break;
-            case 'error':
-              setError(payload.message);
-              appendLog({
-                id: 'system-' + Date.now(),
-                body: `Stream error: ${payload.message}`,
-                source: 'system',
-                timestamp: Date.now(),
-              });
-              break;
-            case 'connected':
-              appendLog({
-                id: 'system-' + Date.now(),
-                body: 'Interactive stream ready.',
-                source: 'system',
-                timestamp: Date.now(),
-              });
-              break;
-            default:
-              break;
-          }
-        });
-
-        socket.addEventListener('close', () => {
-          if (!isMountedRef.current) return;
-          setConnectionState('disconnected');
-          if (suppressNextReconnectRef.current) {
-            suppressNextReconnectRef.current = false;
-            return;
-          }
-          if (reconnectTimerRef.current || !sessionIdRef.current || !latestStreamUrlRef.current) {
-            return;
-          }
-          reconnectTimerRef.current = window.setTimeout(() => {
-            reconnectTimerRef.current = undefined;
-            if (sessionIdRef.current && latestStreamUrlRef.current) {
-              connectToStream(sessionIdRef.current, latestStreamUrlRef.current);
-            }
-          }, SOCKET_RECONNECT_DELAY_MS) as unknown as number;
-        });
-
-        socket.addEventListener('error', (event) => {
-          log.warn('websocket error', { event });
-          setConnectionState('disconnected');
-        });
-      } catch (err) {
+      } else if (data.state === 'ended') {
         setConnectionState('disconnected');
-        setError(err instanceof Error ? err.message : 'Unable to open interactive stream');
+        appendLog({
+          id: 'system-' + Date.now(),
+          body: data.reason ? `Session ended: ${data.reason}` : 'Session ended',
+          source: 'system',
+          timestamp: Date.now(),
+        });
+        sessionIdRef.current = null;
+        joinedSessionRef.current = null;
+        setSessionState((state) => (state ? { ...state, session: null } : state));
       }
-    },
-    [appendLog, closeSocket, isEnabled, parseSocketPayload],
-  );
+    };
+
+    // Handle terminal:error
+    const onError = (data: { sessionId: string; message: string }) => {
+      if (!isMountedRef.current) return;
+      setError(data.message);
+      appendLog({
+        id: 'system-' + Date.now(),
+        body: `Terminal error: ${data.message}`,
+        source: 'system',
+        timestamp: Date.now(),
+      });
+    };
+
+    // Register Socket.IO event listeners
+    socket.on('terminal:joined', onJoined);
+    socket.on('terminal:output', onOutput);
+    socket.on('terminal:status', onStatus);
+    socket.on('terminal:error', onError);
+
+    // Cleanup listeners on unmount
+    return () => {
+      socket.off('terminal:joined', onJoined);
+      socket.off('terminal:output', onOutput);
+      socket.off('terminal:status', onStatus);
+      socket.off('terminal:error', onError);
+    };
+  }, [socket, isEnabled, appendLog]);
+
+  // Auto-join terminal session when socket connects and session exists
+  useEffect(() => {
+    if (!socket || !socketConnected || !sessionIdRef.current) {
+      return;
+    }
+
+    // If we have a session but haven't joined yet, join now
+    if (sessionIdRef.current && joinedSessionRef.current !== sessionIdRef.current) {
+      joinTerminalSession(sessionIdRef.current);
+    }
+  }, [socket, socketConnected, joinTerminalSession]);
 
   const refreshSession = useCallback(async () => {
     if (!isEnabled) {
@@ -304,11 +246,12 @@ export function useInteractiveSession(
       setSessionState(state);
       const activeSession = state.session;
       sessionIdRef.current = activeSession?.id ?? null;
-      if (activeSession?.id) {
-        const streamUrl = state.stream?.url ?? getDevBotsInteractiveStreamUrl(activeSession.id);
-        connectToStream(activeSession.id, streamUrl);
-      } else {
-        closeSocket({ suppressReconnect: true });
+
+      // Join terminal session via Socket.IO if session exists
+      if (activeSession?.id && socket && socketConnected) {
+        joinTerminalSession(activeSession.id);
+      } else if (!activeSession?.id) {
+        leaveTerminalSession();
       }
     } catch (err: unknown) {
       if (!isMountedRef.current) return;
@@ -316,7 +259,7 @@ export function useInteractiveSession(
       // Check if this is a 501 Not Implemented error - feature is disabled
       if (isNotImplementedError(err)) {
         // Silently disable the feature - no logging spam
-        closeSocket({ suppressReconnect: true });
+        leaveTerminalSession();
         setIsFetching(false);
         return;
       }
@@ -324,13 +267,13 @@ export function useInteractiveSession(
       const message = err instanceof Error ? err.message : 'Failed to load interactive session';
       log.error('Failed to refresh interactive session', { error: err, message });
       setError(message);
-      closeSocket({ suppressReconnect: true });
+      leaveTerminalSession();
     } finally {
       if (isMountedRef.current) {
         setIsFetching(false);
       }
     }
-  }, [closeSocket, connectToStream, isEnabled]);
+  }, [isEnabled, socket, socketConnected, joinTerminalSession, leaveTerminalSession]);
 
   const startSession = useCallback(
     async (modelProvider: string, modelName: string) => {
@@ -354,9 +297,10 @@ export function useInteractiveSession(
           source: 'system',
           timestamp: Date.now(),
         });
-        if (activeSession?.id) {
-          const streamUrl = state.stream?.url ?? getDevBotsInteractiveStreamUrl(activeSession.id);
-          connectToStream(activeSession.id, streamUrl);
+
+        // Join terminal session via Socket.IO
+        if (activeSession?.id && socket && socketConnected) {
+          joinTerminalSession(activeSession.id);
         }
       } catch (err) {
         if (!isMountedRef.current) return;
@@ -375,7 +319,7 @@ export function useInteractiveSession(
         }
       }
     },
-    [appendLog, connectToStream, isEnabled],
+    [appendLog, isEnabled, socket, socketConnected, joinTerminalSession],
   );
 
   const endSession = useCallback(async () => {
@@ -389,7 +333,7 @@ export function useInteractiveSession(
       if (!isMountedRef.current) return;
       setSessionState(state);
       sessionIdRef.current = null;
-      closeSocket({ suppressReconnect: true });
+      leaveTerminalSession();
       appendLog({
         id: 'system-' + Date.now(),
         body: 'Interactive session ended.',
@@ -412,7 +356,7 @@ export function useInteractiveSession(
         setIsEnding(false);
       }
     }
-  }, [appendLog, closeSocket]);
+  }, [appendLog, leaveTerminalSession]);
 
   const streamInput = useCallback(
     async (chunk: string) => {
@@ -421,9 +365,26 @@ export function useInteractiveSession(
         setError('No active interactive session.');
         return;
       }
+
       const normalizedChunk = chunk;
-      const sent = sendSocketPayload({ type: 'input', data: normalizedChunk });
-      if (!sent) {
+
+      // Send input via Socket.IO
+      if (socket && socketConnected && joinedSessionRef.current === sessionId) {
+        try {
+          socket.emit('terminal:input', { sessionId, data: normalizedChunk });
+        } catch (err) {
+          log.warn('Failed to send input via Socket.IO, falling back to REST', { error: err });
+          // Fallback to REST API if Socket.IO fails
+          try {
+            await sendDevBotsInteractiveInput(sessionId, normalizedChunk);
+          } catch (restErr) {
+            const message = restErr instanceof Error ? restErr.message : 'Failed to send input';
+            setError(message);
+            return;
+          }
+        }
+      } else {
+        // Fallback to REST API if socket not connected
         try {
           await sendDevBotsInteractiveInput(sessionId, normalizedChunk);
         } catch (err) {
@@ -432,6 +393,8 @@ export function useInteractiveSession(
           return;
         }
       }
+
+      // Show user input in logs
       if (normalizedChunk.endsWith('\n')) {
         const display = normalizedChunk.replace(/\n$/, '');
         if (display) {
@@ -444,14 +407,18 @@ export function useInteractiveSession(
         }
       }
     },
-    [appendLog, sendSocketPayload],
+    [appendLog, socket, socketConnected],
   );
 
   const notifyResize = useCallback(
     (size: { cols: number; rows: number }) => {
-      sendSocketPayload({ type: 'resize', cols: size.cols, rows: size.rows });
+      const sessionId = sessionIdRef.current;
+      if (!sessionId || !socket || !socketConnected || joinedSessionRef.current !== sessionId) {
+        return;
+      }
+      socket.emit('terminal:resize', { sessionId, rows: size.rows, cols: size.cols });
     },
-    [sendSocketPayload],
+    [socket, socketConnected],
   );
 
   const sendInput = useCallback(
@@ -468,11 +435,16 @@ export function useInteractiveSession(
       setError('No active interactive session.');
       return;
     }
+
     try {
-      const sent = sendSocketPayload({ type: 'signal', signal: 'interrupt' });
-      if (!sent) {
+      // Send interrupt via Socket.IO
+      if (socket && socketConnected && joinedSessionRef.current === sessionId) {
+        socket.emit('terminal:signal', { sessionId, signal: 'interrupt' });
+      } else {
+        // Fallback to REST API
         await sendDevBotsInteractiveInterrupt(sessionId);
       }
+
       appendLog({
         id: 'system-' + Date.now(),
         body: 'Sent interrupt signal to session.',
@@ -483,7 +455,7 @@ export function useInteractiveSession(
       const message = err instanceof Error ? err.message : 'Failed to interrupt session';
       setError(message);
     }
-  }, [appendLog, sendSocketPayload]);
+  }, [appendLog, socket, socketConnected]);
 
   const keepAlive = useCallback(async (source: 'user' | 'agent' = 'user') => {
     const sessionId = sessionIdRef.current;
@@ -500,6 +472,7 @@ export function useInteractiveSession(
     }
   }, []);
 
+  // Initial session load and cleanup
   useEffect(() => {
     if (!isEnabled) {
       setIsFetching(false);
@@ -510,13 +483,14 @@ export function useInteractiveSession(
     void refreshSession();
     return () => {
       isMountedRef.current = false;
-      closeSocket({ suppressReconnect: true });
+      leaveTerminalSession();
       if (heartbeatTimerRef.current) {
         window.clearInterval(heartbeatTimerRef.current);
       }
     };
-  }, [closeSocket, isEnabled, refreshSession]);
+  }, [isEnabled, refreshSession, leaveTerminalSession]);
 
+  // Heartbeat timer
   useEffect(() => {
     if (!sessionState?.session?.id) {
       if (heartbeatTimerRef.current) {

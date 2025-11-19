@@ -12,6 +12,7 @@ import {
 } from '@/services/api';
 import { useInteractiveSession } from './useInteractiveSession';
 
+// Mock the API services
 vi.mock('@/services/api', () => ({
   getDevBotsInteractiveSession: vi.fn(),
   startDevBotsInteractiveSession: vi.fn(),
@@ -19,9 +20,20 @@ vi.mock('@/services/api', () => ({
   sendDevBotsInteractiveInput: vi.fn(),
   sendDevBotsInteractiveInterrupt: vi.fn(),
   sendDevBotsInteractiveHeartbeat: vi.fn(),
-  getDevBotsInteractiveStreamUrl: vi.fn((sessionId: string) =>
-    'ws://localhost/api/dev-bots/interactive/session/' + sessionId + '/stream',
-  ),
+}));
+
+// Mock Socket.IO client
+const mockSocket = {
+  emit: vi.fn(),
+  on: vi.fn(),
+  off: vi.fn(),
+};
+
+vi.mock('./useEnhancedSocket', () => ({
+  useEnhancedSocket: vi.fn(() => ({
+    socket: mockSocket,
+    isConnected: true,
+  })),
 }));
 
 describe('useInteractiveSession', () => {
@@ -35,41 +47,7 @@ describe('useInteractiveSession', () => {
     idleTimeoutSeconds: 300,
   };
 
-  class MockWebSocket {
-    static instances: MockWebSocket[] = [];
-    public url: string;
-    public onopen: (() => void) | null = null;
-    public onmessage: ((event: MessageEvent) => void) | null = null;
-    public onclose: (() => void) | null = null;
-    public onerror: (() => void) | null = null;
-
-    constructor(url: string) {
-      this.url = url;
-      MockWebSocket.instances.push(this);
-      setTimeout(() => {
-        this.onopen?.();
-      }, 0);
-    }
-
-    addEventListener(type: string, handler: any) {
-      if (type === 'open') this.onopen = handler;
-      if (type === 'message') this.onmessage = handler;
-      if (type === 'close') this.onclose = handler;
-      if (type === 'error') this.onerror = handler;
-    }
-
-    removeEventListener() {}
-    send() {}
-    close() {
-      this.onclose?.();
-    }
-  }
-
-  const originalWebSocket = globalThis.WebSocket;
-
   beforeEach(() => {
-    (globalThis as unknown as { WebSocket: typeof WebSocket }).WebSocket =
-      MockWebSocket as unknown as typeof WebSocket;
     vi.mocked(getDevBotsInteractiveSession).mockResolvedValue(baseState);
     vi.mocked(startDevBotsInteractiveSession).mockResolvedValue({ ...baseState });
     vi.mocked(endDevBotsInteractiveSession).mockResolvedValue(baseState);
@@ -79,9 +57,7 @@ describe('useInteractiveSession', () => {
   });
 
   afterEach(() => {
-    (globalThis as unknown as { WebSocket: typeof WebSocket }).WebSocket = originalWebSocket;
     vi.clearAllMocks();
-    MockWebSocket.instances = [];
   });
 
   it('loads session state on mount', async () => {
@@ -95,7 +71,7 @@ describe('useInteractiveSession', () => {
     expect(result.current.sessionState).toEqual(baseState);
   });
 
-  it('starts a session and connects to the stream', async () => {
+  it('starts a session and uses Socket.IO', async () => {
     const runningState: DevBotsInteractiveSessionState = {
       ...baseState,
       session: {
@@ -106,10 +82,6 @@ describe('useInteractiveSession', () => {
         status: 'running',
         startedAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      },
-      stream: {
-        sessionId: 'session-1',
-        url: 'ws://localhost/dev-bots/session-1',
       },
     };
     vi.mocked(startDevBotsInteractiveSession).mockResolvedValue(runningState);
@@ -129,7 +101,6 @@ describe('useInteractiveSession', () => {
     await waitFor(() => {
       expect(result.current.sessionState?.session?.id).toBe('session-1');
     });
-    expect(MockWebSocket.instances[0]?.url).toBe('ws://localhost/dev-bots/session-1');
   });
 
   it('prevents sending input when no session is active', async () => {
