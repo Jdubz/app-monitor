@@ -20,11 +20,7 @@
     "clean": "pkill -f 'nodemon.*app-monitor' 2>/dev/null || true",
     "stop": "pkill -f 'nodemon.*app-monitor' 2>/dev/null || true",
     "type-check": "tsc --project tsconfig.typecheck.json",
-    "migrate": "node --loader ts-node/esm src/scripts/migrate.ts",
-    "migrate:status": "tsx src/scripts/migrate.ts status",
-    "migrate:up": "tsx src/scripts/migrate.ts up",
-    "migrate:validate": "tsx src/scripts/validate-schema.ts",
-    "migrate:validate:prod": "tsx src/scripts/validate-schema.ts --prod"
+    "migrate": "node --loader ts-node/esm src/scripts/migrate.ts"
   },
   "keywords": [
     "express",

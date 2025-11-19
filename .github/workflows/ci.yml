@@ -69,42 +69,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Restore node_modules
-        uses: actions/cache/restore@v4
-        with:
-          path: |
-            node_modules
-            backend/node_modules
-            frontend/node_modules
-            shared/api-contracts/node_modules
-          key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
-
       - name: Validate migration files
         run: |
           echo "🗄️ Validating database migration files..."
           chmod +x scripts/validate-migrations.sh
           ./scripts/validate-migrations.sh
-
-      - name: Build backend (required for migration validation)
-        working-directory: backend
-        run: npm run build
-
-      - name: Run migrations on test database
-        working-directory: backend
-        run: |
-          echo "🔄 Running migrations on test database..."
-          npm run migrate:up
-
-      - name: Validate schema after migrations
-        working-directory: backend
-        run: |
-          echo "✅ Validating database schema..."
-          npm run migrate:validate
 
   # CRITICAL: Smoke test deployment process before merge
   deployment-smoke-test:

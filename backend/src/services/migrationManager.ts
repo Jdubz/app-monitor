@@ -56,21 +56,6 @@ export interface MigrationResult {
   }>;
 }
 
-export interface SchemaValidationResult {
-  valid: boolean;
-  errors: Array<{
-    table: string;
-    column: string;
-    expectedType: string;
-    actualType?: string;
-    issue: 'missing' | 'type_mismatch';
-  }>;
-  warnings: Array<{
-    table: string;
-    message: string;
-  }>;
-}
-
 export class MigrationManager {
   private db: Database.Database;
   private migrationsDir: string;
@@ -191,7 +176,7 @@ export class MigrationManager {
    */
   private applyMigration(migration: Migration): { success: boolean; error?: string; duration: number } {
     const startTime = Date.now();
-
+    
     try {
       logger.info({
         category: 'database',
@@ -202,29 +187,8 @@ export class MigrationManager {
 
       // Execute migration in a transaction
       const transaction = this.db.transaction(() => {
-        try {
-          // Execute the SQL
-          this.db.exec(migration.sql!);
-        } catch (execError: unknown) {
-          // Handle idempotent migration errors (e.g., duplicate column)
-          // These are expected for ALTER TABLE ADD COLUMN when column exists
-          if (execError instanceof Error && execError.message?.includes('duplicate column')) {
-            logger.info({
-              category: 'database',
-              action: 'migration_already_applied',
-              message: `Migration ${migration.id} changes already applied (idempotent)`,
-              details: {
-                id: migration.id,
-                name: migration.name,
-                reason: 'duplicate_column'
-              }
-            });
-            // Continue to record as successfully applied
-          } else {
-            // Re-throw non-idempotent errors
-            throw execError;
-          }
-        }
+        // Execute the SQL
+        this.db.exec(migration.sql!);
 
         // Record successful migration
         const checksum = this.calculateChecksum(migration.sql!);
@@ -487,125 +451,10 @@ export class MigrationManager {
       id: m.id,
       name: m.name,
       filename: m.filename,
-      status: applied.has(m.id)
+      status: applied.has(m.id) 
         ? (applied.get(m.id)!.status === 'failed' ? 'failed' : 'applied')
         : 'pending',
       applied_at: applied.get(m.id)?.applied_at
     }));
-  }
-
-  /**
-   * Validate critical schema columns exist
-   * This catches schema drift between migrations and actual database
-   */
-  validateSchema(): SchemaValidationResult {
-    const errors: SchemaValidationResult['errors'] = [];
-    const warnings: SchemaValidationResult['warnings'] = [];
-
-    // Critical columns that MUST exist
-    const criticalColumns: Array<{ table: string; column: string; type: string }> = [
-      // task_stage_runs - phase system tracking
-      { table: 'task_stage_runs', column: 'recovery_diagnosis', type: 'TEXT' },
-      { table: 'task_stage_runs', column: 'artifacts_blob', type: 'TEXT' },
-      { table: 'task_stage_runs', column: 'phase_index', type: 'INTEGER' },
-      { table: 'task_stage_runs', column: 'phase_name', type: 'TEXT' },
-
-      // tasks - phase tracking
-      { table: 'tasks', column: 'phase_index', type: 'INTEGER' },
-      { table: 'tasks', column: 'phase_name', type: 'TEXT' },
-      { table: 'tasks', column: 'phase_status', type: 'TEXT' },
-      { table: 'tasks', column: 'phase_attempts', type: 'INTEGER' },
-      { table: 'tasks', column: 'phase_payload', type: 'TEXT' },
-
-      // tasks - other critical
-      { table: 'tasks', column: 'fingerprint', type: 'TEXT' },
-      { table: 'tasks', column: 'chain_id', type: 'TEXT' },
-    ];
-
-    for (const { table, column, type } of criticalColumns) {
-      try {
-        const tableInfo = this.db.pragma(`table_info(${table})`) as Array<{
-          cid: number;
-          name: string;
-          type: string;
-          notnull: number;
-          dflt_value: unknown;
-          pk: number;
-        }>;
-
-        const columnInfo = tableInfo.find(c => c.name === column);
-
-        if (!columnInfo) {
-          errors.push({
-            table,
-            column,
-            expectedType: type,
-            issue: 'missing'
-          });
-        } else if (columnInfo.type !== type) {
-          errors.push({
-            table,
-            column,
-            expectedType: type,
-            actualType: columnInfo.type,
-            issue: 'type_mismatch'
-          });
-        }
-      } catch (error) {
-        warnings.push({
-          table,
-          message: `Could not validate table ${table}: ${error instanceof Error ? error.message : String(error)}`
-        });
-      }
-    }
-
-    return {
-      valid: errors.length === 0,
-      errors,
-      warnings
-    };
-  }
-
-  /**
-   * Check if column exists in table
-   */
-  private columnExists(table: string, column: string): boolean {
-    try {
-      const tableInfo = this.db.pragma(`table_info(${table})`) as Array<{ name: string }>;
-      return tableInfo.some(c => c.name === column);
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Get helpful error message for schema mismatch
-   */
-  getSchemaErrorHelp(error: Error): string | null {
-    const message = error.message;
-
-    // Check for column not found errors
-    const columnMatch = message.match(/table (\w+) has no column named (\w+)/i);
-    if (columnMatch) {
-      const [, table, column] = columnMatch;
-      return `
-Schema mismatch detected: column '${column}' missing from table '${table}'
-
-This usually means migrations are out of sync with the database.
-
-To fix:
-1. Run schema validation: npm run migrate:validate
-2. Check pending migrations: npm run migrate:status
-3. Apply migrations: npm run migrate:up
-4. If issue persists, check: docs/migrations/troubleshooting.md
-
-The missing column should be added by a migration file.
-Check backend/migrations/ for ALTER TABLE statements that add this column.
-
-Original error: ${message}
-      `.trim();
-    }
-
-    return null;
   }
 }

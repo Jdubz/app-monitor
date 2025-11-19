@@ -235,17 +235,9 @@ export class PhaseOrchestratorService {
       SET phase_index = ?,
           phase_name = ?,
           phase_attempts = ?,
-          phase_status = 'ready',
-          phase_payload = NULL
+          phase_status = 'ready'
       WHERE id = ?
     `).run(transition.toPhase, newPhaseName, newAttempts, task.id);
-
-    logger.debug({
-      category: 'phase',
-      action: 'phase_payload_cleared_on_advance',
-      message: `Cleared phase_payload for task ${task.id} when advancing to phase ${transition.toPhase}`,
-      details: { taskId: task.id, newPhase: transition.toPhase }
-    });
 
     return transition;
   }

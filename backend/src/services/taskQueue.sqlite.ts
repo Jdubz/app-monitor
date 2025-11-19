@@ -81,33 +81,6 @@ export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cance
 // Worker status enum
 export type WorkerStatus = 'starting' | 'running' | 'stopping' | 'stopped';
 
-/**
- * Phase payload structure for preserving task context across attempts and blocks.
- * Stored in tasks.phase_payload as JSON.
- */
-export interface PhasePayload {
-  /** Git branch name for this task (e.g., "feature/task-123") */
-  gitBranch?: string;
-
-  /** Last successful commit SHA on the task branch */
-  lastCommitSha?: string;
-
-  /** Partial artifacts from last phase execution (e.g., test results, build outputs) */
-  artifacts?: Record<string, unknown>;
-
-  /** Number of recovery attempts within current phase */
-  recoveryAttempts?: number;
-
-  /** Timestamp of last phase execution */
-  lastExecutionAt?: number;
-
-  /** Container environment variables to restore */
-  environmentVars?: Record<string, string>;
-
-  /** Custom phase-specific data (extensible) */
-  metadata?: Record<string, unknown>;
-}
-
 export interface Task {
   id: string;
   type: string;
@@ -2071,87 +2044,6 @@ export class TaskQueueService {
    */
   getBlockedChains() {
     return this.chainTracker.getBlockedChains();
-  }
-
-  /**
-   * Get phase payload for a task.
-   * Returns parsed JSON or empty object if not set.
-   */
-  getPhasePayload(taskId: string): PhasePayload {
-    const task = this.getTask(taskId);
-    if (!task || !task.phase_payload) {
-      return {};
-    }
-
-    try {
-      return JSON.parse(task.phase_payload) as PhasePayload;
-    } catch (error) {
-      logger.warn({
-        category: 'process',
-        action: 'invalid_phase_payload',
-        message: `Failed to parse phase_payload for task ${taskId}`,
-        details: { taskId, error }
-      });
-      return {};
-    }
-  }
-
-  /**
-   * Update phase payload for a task.
-   * Merges with existing payload, does not replace entirely.
-   */
-  updatePhasePayload(taskId: string, payload: Partial<PhasePayload>): void {
-    return this.transaction(() => {
-      const existingPayload = this.getPhasePayload(taskId);
-      const mergedPayload: PhasePayload = {
-        ...existingPayload,
-        ...payload,
-        // Deep merge metadata if both exist
-        metadata: payload.metadata
-          ? { ...existingPayload.metadata, ...payload.metadata }
-          : existingPayload.metadata,
-        // Deep merge artifacts if both exist
-        artifacts: payload.artifacts
-          ? { ...existingPayload.artifacts, ...payload.artifacts }
-          : existingPayload.artifacts
-      };
-
-      const stmt = this.db.prepare(`
-        UPDATE tasks
-        SET phase_payload = ?
-        WHERE id = ?
-      `);
-
-      stmt.run(JSON.stringify(mergedPayload), taskId);
-
-      logger.debug({
-        category: 'process',
-        action: 'phase_payload_updated',
-        message: `Updated phase_payload for task ${taskId}`,
-        details: { taskId, payload: mergedPayload }
-      });
-    });
-  }
-
-  /**
-   * Clear phase payload for a task.
-   * Used when task completes a phase or is reset.
-   */
-  clearPhasePayload(taskId: string): void {
-    const stmt = this.db.prepare(`
-      UPDATE tasks
-      SET phase_payload = NULL
-      WHERE id = ?
-    `);
-
-    stmt.run(taskId);
-
-    logger.debug({
-      category: 'process',
-      action: 'phase_payload_cleared',
-      message: `Cleared phase_payload for task ${taskId}`,
-      details: { taskId }
-    });
   }
 
   // ==========================================================================
