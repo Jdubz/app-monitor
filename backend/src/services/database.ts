@@ -315,7 +315,7 @@ export class DevBotsDatabase {
           path.join(__dirname, '..', '..', 'migrations', '022_issues_table.sql'),
           'utf-8'
         ));
-      } catch (err) {
+      } catch (_err) {
         // Fallback for in-memory or when file not accessible
         this.db.exec(`
           CREATE TABLE IF NOT EXISTS issues (
