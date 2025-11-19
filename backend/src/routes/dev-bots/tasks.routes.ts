@@ -16,6 +16,7 @@ import type { DevBotsManager } from '../../services/devBotsManager.js';
 import type { TaskQueueService } from '../../services/taskQueue.sqlite.js';
 import { logger } from '../../utils/logger.js';
 import { sendSuccess, sendError } from '../../utils/apiResponse.js';
+import { ValidationError, BadRequestError } from '../../errors/ValidationError.js';
 import { WorkerLogLocator } from '../../services/taskLogLocator.js';
 import { getTaskContextService } from '../../services/taskContext.service.js';
 import { taskAutoDetectionService } from '../../services/taskAutoDetection.service.js';
@@ -170,24 +171,16 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
    * Create task with minimal payload (3 required fields)
    * Auto-detects: files, risk level, context profiles, outputs
    */
-  router.post('/tasks/minimal', async (req: Request, res: Response) => {
+  router.post('/tasks/minimal', async (req: Request, res: Response, next) => {
     try {
       const payload: MinimalTaskPayload = req.body;
-      
+
       // Validate required fields
       if (!payload.title || !payload.taskType || !payload.intent) {
-        return sendError(
-          res,
-          'Missing required fields',
-          400,
-          {
-            message: 'title, taskType, and intent are required',
-            details: {
-              provided: Object.keys(payload),
-              required: ['title', 'taskType', 'intent']
-            }
-          }
-        );
+        throw new BadRequestError('Missing required fields', {
+          provided: Object.keys(payload),
+          required: ['title', 'taskType', 'intent']
+        });
       }
       
       // Auto-detect missing fields
@@ -217,37 +210,24 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         }
       };
 
-      // --- NEW VALIDATION STEP ---
+      // --- STRUCTURED VALIDATION ---
       const validationResult = taskCreationGuidelinesManager.validateTaskData(taskData, taskData.type);
 
-      if (!validationResult.isValid) {
-        // Log the validation errors before sending to client
-        logger.warn({
-          category: 'api',
-          action: 'task_validation_failed',
-          message: 'Task submitted via minimal API failed validation',
-          details: {
-            taskType: taskData.type,
-            errors: validationResult.errors,
-            warnings: validationResult.warnings
-          }
-        });
+      // Merge auto-detection warnings into validation warnings
+      const allWarnings = [
+        ...validationResult.warnings,
+        ...detected.warnings.map(w => `Auto-detection: ${w}`)
+      ];
 
-        // Send 400 Bad Request with detailed errors
-        return sendError(
-          res,
-          'Task validation failed',
-          400, // Explicitly 400 Bad Request
-          {
-            details: {
-              errors: validationResult.errors,
-              warnings: validationResult.warnings,
-              suggestions: validationResult.suggestions
-            }
-          }
-        );
+      if (!validationResult.isValid) {
+        // Throw ValidationError which will be caught by error middleware
+        throw new ValidationError('Task validation failed', {
+          errors: validationResult.errors,
+          warnings: allWarnings,
+          suggestions: validationResult.suggestions
+        });
       }
-      // --- END NEW VALIDATION STEP ---
+      // --- END VALIDATION ---
       
       // Create task using existing service
       const result = await devBotsManager.addTask(taskData);
@@ -276,18 +256,8 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         201
       );
     } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'task_creation_minimal_failed',
-        message: `Failed to create task via minimal API: ${error}`,
-        error
-      });
-      sendError(
-        res,
-        'Failed to create task',
-        500,
-        { message: error instanceof Error ? error.message : String(error) }
-      );
+      // Pass error to global error handler middleware
+      next(error);
     }
   });
 

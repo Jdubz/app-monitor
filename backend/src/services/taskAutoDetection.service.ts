@@ -1,6 +1,6 @@
 /**
  * Task Auto-Detection Service
- * 
+ *
  * Automatically detects missing task fields from minimal payload:
  * - Target files from git status (staged + modified)
  * - Risk level from file path patterns
@@ -14,12 +14,17 @@ import { ContextRecipeSelector } from './context/contextRecipeSelector.js';
 import type { RecipeTaskType } from '../types/contextRecipe.js';
 import type { MinimalTaskPayload, TaskAutoDetectionResult } from '@app-monitor/api-contracts';
 
-interface RiskPattern {
+// Centralized risk pattern schemas available for future content-based risk assessment
+// Currently using FILE_RISK_PATTERNS for path-based detection
+// Future: Use RISK_PATTERNS and assessRiskFromContent() from '../config/schemas.js'
+
+// File-based risk patterns (complement content-based risk assessment)
+interface FileRiskPattern {
   pattern: RegExp;
   level: 'minimal' | 'low' | 'medium' | 'high';
 }
 
-const RISK_PATTERNS: RiskPattern[] = [
+const FILE_RISK_PATTERNS: FileRiskPattern[] = [
   { pattern: /docker\//i, level: 'high' },
   { pattern: /migrations?\//i, level: 'high' },
   { pattern: /\.env|secrets|credentials|keys/i, level: 'high' },
@@ -168,28 +173,29 @@ export class TaskAutoDetectionService {
    */
   private inferRiskLevel(files: string[]): 'minimal' | 'low' | 'medium' | 'high' {
     if (files.length === 0) return 'low';
-    
+
     const riskScores = { minimal: 0, low: 0, medium: 0, high: 0 };
-    
+
     for (const file of files) {
-      const match = RISK_PATTERNS.find(p => p.pattern.test(file));
+      const match = FILE_RISK_PATTERNS.find(p => p.pattern.test(file));
       if (match) {
         riskScores[match.level]++;
       } else {
         riskScores.low++;  // Default to low if no pattern matches
       }
     }
-    
+
     logger.debug({
       category: 'context',
       action: 'risk_level_inferred',
       message: 'Inferred risk level from file patterns',
       details: {
         filesCount: files.length,
-        riskScores
+        riskScores,
+        note: 'Uses FILE_RISK_PATTERNS for path-based detection. Content-based risk assessment available via assessRiskFromContent()'
       }
     });
-    
+
     // Return highest risk level with non-zero count
     if (riskScores.high > 0) return 'high';
     if (riskScores.medium > 0) return 'medium';

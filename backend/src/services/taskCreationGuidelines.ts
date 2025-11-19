@@ -7,6 +7,7 @@
 
 // import { logger } from '../utils/logger.js';
 import { TASK_TYPES, type TaskType } from '@app-monitor/api-contracts';
+import { VALID_PROJECTS, VALID_AGENTS } from '../config/schemas.js';
 import {
   EnhancedTaskData,
   ensureTaskMetadataFieldKeys,
@@ -136,26 +137,10 @@ const GUIDELINE_FIELD_DEFINITIONS: Readonly<Record<TaskType, GuidelineFieldSet>>
 export class TaskCreationGuidelinesManager {
   private guidelines: Map<string, TaskCreationGuidelines> = new Map();
   private validationRules: ValidationRule[] = [];
-  private validProjects: string[] = [
-    'dev-bots',
-    'dev-monitor', 
-    'job-finder-FE',
-    'job-finder-BE',
-    'job-finder-shared-types',
-    'job-finder-worker',
-    'docs',
-    'scripts',
-    'infrastructure'
-  ];
 
-  private validAgents: string[] = [
-    'backend-specialist',
-    'frontend-specialist',
-    'review-specialist',
-    'testing-specialist',
-    'devops-specialist',
-    'documentation-specialist'
-  ];
+  // Use centralized configuration schemas
+  private readonly validProjects: readonly string[] = VALID_PROJECTS;
+  private readonly validAgents: readonly string[] = Object.keys(VALID_AGENTS);
 
   constructor() {
     this.initializeGuidelines();
