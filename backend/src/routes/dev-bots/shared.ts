@@ -10,12 +10,11 @@
 
 import { Request, Response } from 'express';
 import type { Task, TaskExecution } from '../../services/taskQueue.sqlite.js';
-import type { InteractiveSessionRecord } from '../../services/InteractiveSessionManager.js';
 import type { TaskLogFileDescriptor } from '../../services/taskLogLocator.js';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
-import type { 
-  DevBotsQueueSummary, 
-  DevBotsQueueItem, 
+import type {
+  DevBotsQueueSummary,
+  DevBotsQueueItem,
   DevBotsTask,
   DevBotsTaskStatus as ApiDevBotsTaskStatus
 } from '@app-monitor/api-contracts';
@@ -30,23 +29,6 @@ export type ContractDevBotsTaskDetail = {
   history: Array<Record<string, unknown>>
 };
 export type DevBotsTaskHistoryEvent = Record<string, unknown>;
-export type DevBotsInteractiveSessionState = Record<string, unknown>;
-export type DevBotsInteractiveSessionStateResponse = { data: Record<string, unknown> };
-export type DevBotsInteractiveSessionModelOption = Record<string, unknown>;
-export type DevBotsInteractiveSession = Record<string, unknown>;
-export type DevBotsInteractiveSessionStartPayload = {
-  modelProvider: string;
-  modelName: string;
-  metadata?: Record<string, unknown>
-};
-export type DevBotsInteractiveSessionInputPayload = { data: string };
-export type DevBotsInteractiveHeartbeatPayload = {
-  sessionId: string;
-  source?: 'agent' | 'user'
-};
-export type DevBotsInteractiveInterruptPayload = { sessionId: string };
-
-export type AllowedInteractiveModel = ReturnType<DevBotsManager['getAllowedInteractiveModels']>[number];
 
 export interface TaskLogsResponsePayload {
   taskId: string;
@@ -79,12 +61,8 @@ const parsedStreamLimit = Number(process.env.MAX_LOG_STREAM_SUBSCRIBERS ?? '5');
 export const MAX_LOG_STREAM_SUBSCRIBERS =
   Number.isFinite(parsedStreamLimit) && parsedStreamLimit > 0 ? parsedStreamLimit : 5;
 
-// Interactive session configuration
-export const DEFAULT_INTERACTIVE_OWNER_EMAIL = (
-  process.env.INTERACTIVE_SESSION_OWNER ?? 'contact@joshwentworth.com'
-).toLowerCase();
-export const INTERACTIVE_STREAM_BASE_PATH = '/api/dev-bots/interactive/session';
-export const INTERACTIVE_HEARTBEAT_INTERVAL_SECONDS = 30;
+// Interactive session configuration - REMOVED
+// These constants are no longer used after migrating to tmux-based terminals
 
 // ============================================================================
 // Request Helper Functions
@@ -138,21 +116,7 @@ export const iso = (value?: number | string | null): string | undefined => {
   return new Date(value).toISOString();
 };
 
-/**
- * Compute idle deadline for interactive session
- */
-export const computeIdleDeadline = (
-  session: InteractiveSessionRecord,
-  idleTimeoutMs: number
-): string | undefined => {
-  const timestamps = [session.startedAt, session.lastUserActivityAt, session.lastAgentActivityAt]
-    .map((value) => (value ? Date.parse(value) : Number.NaN))
-    .filter((value) => Number.isFinite(value)) as number[];
-  if (!timestamps.length) {
-    return undefined;
-  }
-  return new Date(Math.max(...timestamps) + idleTimeoutMs).toISOString();
-};
+// computeIdleDeadline removed - no longer used after interactive session migration
 
 // ============================================================================
 // Task Mapping Functions
@@ -275,81 +239,11 @@ export const buildTaskHistoryEvents = (
   }));
 
 // ============================================================================
-// Interactive Session Mapping Functions
+// Interactive Session Mapping Functions - REMOVED
 // ============================================================================
-
-/**
- * Map interactive session record to API format
- */
-export const mapInteractiveSession = (
-  session: InteractiveSessionRecord,
-  idleTimeoutMs: number
-): DevBotsInteractiveSession => ({
-  id: session.id,
-  ownerEmail: session.ownerEmail,
-  modelProvider: session.modelProvider,
-  modelName: session.modelName,
-  status: session.status,
-  containerId: session.containerId,
-  startedAt: session.startedAt,
-  lastUserActivityAt: session.lastUserActivityAt,
-  lastAgentActivityAt: session.lastAgentActivityAt,
-  lastHeartbeatAt: undefined,
-  idleTimeoutSeconds: Math.floor(idleTimeoutMs / 1000),
-  idleDeadline: computeIdleDeadline(session, idleTimeoutMs),
-  reconnectDeadline: undefined,
-  endedAt: session.endedAt,
-  terminationReason: session.terminationReason,
-  contextSnapshot: (session.contextSnapshot ?? null) as DevBotsInteractiveSession['contextSnapshot'],
-  logPath: session.logPath,
-  metadata: session.metadata,
-});
-
-/**
- * Map interactive model option to API format
- */
-export const mapInteractiveModelOption = (
-  model: AllowedInteractiveModel
-): DevBotsInteractiveSessionModelOption => ({
-  provider: model.provider,
-  model: model.name,
-  displayName:
-    model.displayName ??
-    (model.name === '*' ? `${model.provider.toUpperCase()} (any)` : `${model.provider}:${model.name}`),
-  description: model.description,
-  default: model.default,
-});
-
-/**
- * Build interactive session state for API response
- */
-export const buildInteractiveSessionState = (
-  devBotsManager: DevBotsManager
-): DevBotsInteractiveSessionState => {
-  const idleTimeoutMs = devBotsManager.getInteractiveIdleTimeoutMs();
-  const session = devBotsManager.getActiveInteractiveSession();
-  const mappedSession = session ? mapInteractiveSession(session, idleTimeoutMs) : null;
-  const availableModels = devBotsManager.getAllowedInteractiveModels().map(mapInteractiveModelOption);
-  const baseState: DevBotsInteractiveSessionState = {
-    session: mappedSession,
-    availableModels,
-    heartbeatIntervalSeconds: INTERACTIVE_HEARTBEAT_INTERVAL_SECONDS,
-    idleTimeoutSeconds: Math.floor(idleTimeoutMs / 1000),
-    stream: mappedSession
-      ? {
-          sessionId: mappedSession.id,
-          url: `${INTERACTIVE_STREAM_BASE_PATH}/${mappedSession.id}/stream`,
-        }
-      : undefined,
-  };
-  if (!mappedSession) {
-    return {
-      ...baseState,
-      warnings: ['No active interactive session'],
-    };
-  }
-  return baseState;
-};
+// All interactive session mapping functions have been removed as part of the
+// migration to the new tmux-based terminal system. The old InteractiveSessionManager
+// has been replaced with a stub, and these mapping functions are no longer used.
 
 // ============================================================================
 // Server-Sent Events (SSE) Utilities
