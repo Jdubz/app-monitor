@@ -16,6 +16,8 @@
  */
 
 import { EventEmitter } from 'events';
+import { randomUUID } from 'crypto';
+import { execSync } from 'child_process';
 import * as pty from 'node-pty';
 import type { Server as SocketIOServer, Socket } from 'socket.io';
 import { logger } from '../utils/logger.js';
@@ -77,44 +79,42 @@ export class TerminalService extends EventEmitter {
   }
 
   /**
-   * Verify tmux is available on the system
+   * Verify tmux is available on the system (synchronous check)
    */
   private verifyTmuxAvailable(): void {
     try {
-      const checkProcess = pty.spawn('which', ['tmux'], {
-        name: 'xterm-256color',
-        cols: DEFAULT_TERMINAL_COLS,
-        rows: DEFAULT_TERMINAL_ROWS,
-      });
-
-      checkProcess.onExit(({ exitCode }) => {
-        if (exitCode !== 0) {
-          logger.error({
-            category: 'interactive_terminal',
-            action: 'tmux_not_found',
-            message: 'tmux is not installed or not in PATH',
-            error: 'tmux command not found'
-          });
-          throw new Error('tmux is required but not installed');
-        }
+      execSync('which tmux', { stdio: 'pipe' });
+      logger.info({
+        category: 'interactive_terminal',
+        action: 'tmux_verified',
+        message: 'tmux is available on the system'
       });
     } catch (error) {
       logger.error({
         category: 'interactive_terminal',
-        action: 'tmux_verification_failed',
-        message: 'Failed to verify tmux availability',
-        error
+        action: 'tmux_not_found',
+        message: 'tmux is not installed or not in PATH. Please install tmux to use terminal sessions.',
+        error: error instanceof Error ? error.message : 'tmux command not found'
       });
-      throw error;
+      throw new Error('tmux is required but not installed. Please install tmux to use terminal sessions.');
     }
   }
 
   /**
-   * Sanitize session ID to prevent command injection
+   * Validate and sanitize session ID to prevent command injection
    */
   private sanitizeSessionId(sessionId: string): string {
     // Only allow alphanumeric characters, hyphens, and underscores
-    return sessionId.replace(/[^a-zA-Z0-9-_]/g, '');
+    if (!/^[a-zA-Z0-9-_]+$/.test(sessionId)) {
+      logger.warn({
+        category: 'interactive_terminal',
+        action: 'invalid_session_id',
+        message: 'Session ID contains invalid characters',
+        details: { original: sessionId }
+      });
+      throw new Error('Session ID contains invalid characters');
+    }
+    return sessionId;
   }
 
   /**
@@ -139,7 +139,7 @@ export class TerminalService extends EventEmitter {
       socket.on('terminal:create', () => this.handleCreate(socket));
       socket.on('terminal:attach', (sessionId: string) => this.handleAttach(socket, sessionId));
       socket.on('terminal:input', (data: string) => this.handleInput(socket, data));
-      socket.on('terminal:resize', (cols: number, rows: number) => this.handleResize(socket, cols, rows));
+      socket.on('terminal:resize', ({ cols, rows }: { cols: number; rows: number }) => this.handleResize(socket, cols, rows));
       socket.on('disconnect', () => this.handleDisconnect(socket));
     });
   }
@@ -451,8 +451,20 @@ export class TerminalService extends EventEmitter {
 
   /**
    * Check if tmux session exists
+   * Note: sessionName must be validated before calling this method to prevent command injection
    */
   private async checkTmuxSessionExists(sessionName: string): Promise<boolean> {
+    // Explicit validation to prevent command injection, even if called from other contexts
+    if (!/^terminal-[a-zA-Z0-9-_]+$/.test(sessionName)) {
+      logger.error({
+        category: 'interactive_terminal',
+        action: 'invalid_tmux_session_name',
+        message: 'Invalid tmux session name format',
+        details: { sessionName }
+      });
+      throw new Error('Invalid tmux session name format');
+    }
+
     return new Promise((resolve, reject) => {
       try {
         const checkProcess = pty.spawn('tmux', ['has-session', '-t', sessionName], {
@@ -596,10 +608,10 @@ export class TerminalService extends EventEmitter {
   }
 
   /**
-   * Generate unique session ID
+   * Generate unique session ID using cryptographically secure random UUID
    */
   private generateSessionId(): string {
-    return `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    return randomUUID();
   }
 
   /**
