@@ -21,6 +21,13 @@ module.exports = {
     '@typescript-eslint/no-explicit-any': 'warn',
     '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     'local-rules/no-direct-db-in-routes': 'error',
+    // Disable base rule and use TypeScript version
+    'no-unused-expressions': 'off',
+    '@typescript-eslint/no-unused-expressions': ['error', {
+      allowShortCircuit: true,
+      allowTernary: true,
+      allowTaggedTemplates: true,
+    }],
   },
   overrides: [
     {
