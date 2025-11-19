@@ -222,11 +222,17 @@ export function useInteractiveSession(
   // Auto-join terminal session when socket connects and session exists
   useEffect(() => {
     if (!socket || !socketConnected || !sessionIdRef.current) {
+      log.debug('Socket join condition not met', {
+        hasSocket: !!socket,
+        socketConnected,
+        sessionId: sessionIdRef.current
+      });
       return;
     }
 
     // If we have a session but haven't joined yet, join now
     if (sessionIdRef.current && joinedSessionRef.current !== sessionIdRef.current) {
+      log.info('Auto-joining terminal session on socket connect', { sessionId: sessionIdRef.current });
       joinTerminalSession(sessionIdRef.current);
     }
   }, [socket, socketConnected, joinTerminalSession]);
