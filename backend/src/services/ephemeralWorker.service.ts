@@ -70,6 +70,16 @@ export interface TaskExecutionResult {
   error?: Error;
 }
 
+/**
+ * Phase completion result including validation and extracted context.
+ * Returned by completePhaseExecution() to provide both validation status
+ * and git context for persistence by the orchestration layer.
+ */
+export interface PhaseCompletionResult extends ValidationResult {
+  /** Git branch name extracted from container (if available) */
+  gitBranch?: string;
+}
+
 export interface EphemeralWorkerServiceConfig {
   maxConcurrentWorkers: number;
   dockerImage: string;
@@ -759,22 +769,23 @@ export class EphemeralWorkerService {
    * Complete phase execution with validation and recovery
    * This is the NEW phase-aware completion flow that:
    * 1. Extracts artifacts from container
-   * 2. Runs phase validation
-   * 3. Handles recovery if validation fails
-   * 4. Only destroys container after validation/recovery complete
-   * 
+   * 2. Extracts git branch name for context preservation
+   * 3. Runs phase validation
+   * 4. Handles recovery if validation fails
+   * 5. Only destroys container after validation/recovery complete
+   *
    * @param worker - Ephemeral worker
    * @param output - Task execution output
    * @param errorOutput - Task execution error output
    * @param exitCode - Task execution exit code
-   * @returns Phase validation result
+   * @returns Phase completion result (validation + git branch)
    */
   async completePhaseExecution(
     worker: EphemeralWorker,
     output: string,
     errorOutput: string,
     exitCode: number
-  ): Promise<ValidationResult> {
+  ): Promise<PhaseCompletionResult> {
     const task = worker.task;
     const containerId = worker.containerId;
 
@@ -825,6 +836,9 @@ export class EphemeralWorkerService {
           ),
         },
       });
+
+      // Step 1.5: Extract git branch name for context preservation
+      const gitBranch = await this.extractGitBranch(containerId);
 
       // Step 2: Run phase validation
       logger.info({
@@ -979,7 +993,11 @@ export class EphemeralWorkerService {
         }
       }
 
-      return validation;
+      // Return validation result with git branch for persistence by orchestration layer
+      return {
+        ...validation,
+        gitBranch
+      };
 
     } catch (error) {
       logger.error({
@@ -989,7 +1007,7 @@ export class EphemeralWorkerService {
         error,
       });
 
-      // Return failed validation on error
+      // Return failed validation on error (no git branch on error path)
       return {
         passed: false,
         errors: [
@@ -1000,13 +1018,69 @@ export class EphemeralWorkerService {
   }
 
   /**
+   * Extract git branch name from container.
+   * This is a lightweight operation that only extracts the branch NAME (not content).
+   *
+   * @param containerId - Docker container ID
+   * @returns Branch name or undefined if extraction fails
+   * @private
+   */
+  private async extractGitBranch(containerId: string): Promise<string | undefined> {
+    try {
+      const Docker = (await import('dockerode')).default;
+      const docker = new Docker();
+      const container = docker.getContainer(containerId);
+
+      const branchExec = await container.exec({
+        Cmd: ['git', 'branch', '--show-current'],
+        AttachStdout: true,
+        AttachStderr: true,
+        WorkingDir: '/workspace'
+      });
+
+      const branchStream = await branchExec.start({ hijack: true, stdin: false });
+
+      let branchOutput = '';
+      await new Promise<void>((resolve) => {
+        branchStream.on('data', (chunk: Buffer) => {
+          branchOutput += chunk.toString();
+        });
+        branchStream.on('end', () => resolve());
+      });
+
+      // Parse git output (strip Docker stream headers and whitespace)
+      const gitBranch = branchOutput.replace(/[\x00-\x1F\x7F-\x9F]/g, '').trim();
+
+      if (gitBranch) {
+        logger.debug({
+          category: 'phase',
+          action: 'git_branch_extracted',
+          message: `Extracted git branch "${gitBranch}" from container`,
+          details: { containerId, gitBranch }
+        });
+        return gitBranch;
+      }
+
+      return undefined;
+    } catch (error) {
+      logger.warn({
+        category: 'phase',
+        action: 'git_branch_extraction_failed',
+        message: `Failed to extract git branch: ${error instanceof Error ? error.message : String(error)}`,
+        details: { containerId, error }
+      });
+      return undefined;
+    }
+  }
+
+  /**
    * Generate task execution command with worker-specific logging
-   * 
+   *
    * Note: Model versions are determined by CLI defaults, not explicitly specified:
    * - claude CLI → claude-3-5-sonnet-20241022 (default)
    * - codex CLI → gpt-5.1-codex (default)
    * - gemini CLI → Gemini 2.5 Pro (default)
-   * 
+   *
    * This ensures automatic updates when CLI packages are upgraded.
    */
   private generateTaskExecutionCommandWithLogging(
