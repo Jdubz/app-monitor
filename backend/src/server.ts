@@ -11,6 +11,7 @@ import type { DevBotsManagerDependencies } from './services/devBotsManager.inter
 import { ConnectionManager, setConnectionManagerInstance } from './services/connectionManager.js';
 import { GitHubWebhookHandler } from './services/githubWebhookHandler.service.js';
 import { setWebhookHandler } from './routes/github-webhooks.routes.js';
+import { TerminalService } from './services/TerminalService.js';
 import { logger } from './utils/logger.js';
 
 // CORS allowed headers for both HTTP and WebSocket
@@ -21,12 +22,10 @@ import type {
   InterServerEvents,
   SocketData,
 } from './types/socketEvents.js';
-import { SocketIOTerminalHandler } from './services/socketIOTerminalHandler.js';
-
 // Export services for API access
 export let devBotsManager: DevBotsManager | undefined;
 export let connectionManager: ConnectionManager;
-export let terminalHandler: SocketIOTerminalHandler | undefined;
+export let terminalService: TerminalService | undefined;
 
 export interface CreateAppOverrides {
   devBotsManager?: DevBotsManager | null;
@@ -186,79 +185,17 @@ export async function createApp(options: CreateAppOptions = {}) {
       });
     });
 
-    // Initialize Socket.IO Terminal Handler with Docker instance
-    const dockerManager = devBotsManager.getDockerManager();
-    const docker = dockerManager.getDocker();
-
-    terminalHandler = new SocketIOTerminalHandler({
+    // Initialize TerminalService with tmux for persistent sessions
+    terminalService = new TerminalService({
       io,
-      docker,
-      backlogLimit: config.interactiveTerminal.backlogLimit,
-      shellCommand: [config.interactiveTerminal.shellCommand],
+      idleTimeoutMs: 30 * 60 * 1000, // 30 minutes
+      shellCommand: '/bin/bash',
     });
 
     logger.info({
-      category: 'interactive_terminal',
-      action: 'handler_initialized',
-      message: 'Socket.IO terminal handler initialized (unified architecture)',
-      details: {
-        backlogLimit: config.interactiveTerminal.backlogLimit,
-        shellCommand: config.interactiveTerminal.shellCommand,
-      },
-    });
-
-    // Wire up InteractiveSessionManager events to Socket.IO terminal handler
-    const sessionManager = devBotsManager.getInteractiveSessionManager();
-
-    sessionManager.on('sessionUpdated', async (session) => {
-      // Start terminal streaming when session transitions to 'running' with containerId
-      if (session.status === 'running' && session.containerId && terminalHandler) {
-        try {
-          await terminalHandler.startSession(session.id, session.containerId);
-          logger.info({
-            category: 'interactive_terminal',
-            action: 'socketio_streaming_started',
-            message: 'Socket.IO terminal streaming started for session',
-            details: { sessionId: session.id, containerId: session.containerId },
-          });
-        } catch (error) {
-          logger.error({
-            category: 'interactive_terminal',
-            action: 'socketio_streaming_start_failed',
-            message: 'Failed to start Socket.IO terminal streaming',
-            error,
-            details: { sessionId: session.id, containerId: session.containerId },
-          });
-        }
-      }
-    });
-
-    sessionManager.on('sessionEnded', async (session) => {
-      if (terminalHandler) {
-        try {
-          await terminalHandler.stopSession(session.id);
-          logger.info({
-            category: 'interactive_terminal',
-            action: 'socketio_streaming_stopped',
-            message: 'Socket.IO terminal streaming stopped for session',
-            details: { sessionId: session.id },
-          });
-        } catch (error) {
-          logger.error({
-            category: 'interactive_terminal',
-            action: 'socketio_streaming_stop_failed',
-            message: 'Failed to stop Socket.IO terminal streaming',
-            error,
-            details: { sessionId: session.id },
-          });
-        }
-      }
-    });
-
-    logger.info({
-      category: 'interactive_terminal',
-      action: 'event_listeners_wired',
-      message: 'Interactive session events wired to Socket.IO terminal handler',
+      category: 'system',
+      action: 'terminal_service_initialized',
+      message: 'TerminalService initialized with tmux support'
     });
   }
 
@@ -406,6 +343,7 @@ export async function createApp(options: CreateAppOptions = {}) {
   const apiRouter = createApiRouter({
     devBotsManager: devBotsManager ?? undefined,
     connectionManager,
+    terminalService: terminalService ?? undefined,
   });
 
   app.use('/api', apiRouter);
