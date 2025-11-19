@@ -393,8 +393,11 @@ If issues arise, rollback steps:
   - ✅ Add event types
   - ✅ Write tests
   - ✅ Update documentation
+  - ✅ Integrate handler into server.ts (Step 2A complete)
 
-- **Week 2:** Frontend migration (IN PROGRESS)
+- **Week 2:** API Integration & Frontend migration (IN PROGRESS)
+  - ✅ Handler exported from server.ts for API access
+  - ⏳ Wire handler into session lifecycle (Step 2B-C)
   - ⏳ Update `useInteractiveSession` hook
   - ⏳ Remove WebSocket code
   - ⏳ Update tests
