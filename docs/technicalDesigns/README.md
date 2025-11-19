@@ -9,14 +9,8 @@ Feature designs that are ready or being planned for implementation.
 
 ## Future Features
 
-### [Agent Selector Gemini Offload](agent-selector-gemini-offload.md)
-Delegate agent selection decisions to Gemini for intelligent task routing.
-
 ### [Error Detection & Recovery](error-detection-and-recovery-design.md)
 Automated detection and self-healing for common failure patterns.
-
-### [Frontend Tabbed Intervention Panel](FRONTEND_TABBED_INTERVENTION_PANEL_PLAN.md)
-Unified intervention UI for managing bot tasks and chains.
 
 ## Design Lifecycle
 

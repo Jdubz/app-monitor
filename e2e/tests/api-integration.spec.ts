@@ -68,10 +68,9 @@ test.describe('Dev-Bots Queue Endpoints', () => {
     const response = await request.post(`${API_BASE_URL}/api/dev-bots/tasks`, {
       headers,
       data: {
-        type: 'implementation',
+        taskType: 'implementation',
         title: 'E2E Test Task',
-        description: 'E2E test task description',
-        acceptanceCriteria: ['Task created successfully', 'Returns valid task ID'],
+        intent: 'E2E test task description',
       },
     }).catch(() => null);
 
@@ -224,9 +223,9 @@ test.describe('Dev-Bots Plans Endpoints', () => {
 });
 
 test.describe('Dev-Bots Interactive Session Endpoints', () => {
-  test('POST /api/dev-bots/interactive/session should validate input and return proper response', async ({ request }) => {
-    // NOTE: Interactive sessions require Docker which is disabled in non-prod environments.
-    // This test validates the endpoint exists and handles requests properly.
+  test.skip('POST /api/dev-bots/interactive/session should validate input and return proper response', async ({ request }) => {
+    // NOTE: Interactive sessions were deprecated and removed in migration 028_drop_interactive_sessions
+    // This endpoint no longer exists
     const response = await request.post(`${API_BASE_URL}/api/dev-bots/interactive/session`, {
       headers,
       data: {
@@ -254,7 +253,8 @@ test.describe('Dev-Bots Interactive Session Endpoints', () => {
     }
   });
 
-  test('POST /api/dev-bots/interactive/command should send command', async ({ request }) => {
+  test.skip('POST /api/dev-bots/interactive/command should send command', async ({ request }) => {
+    // NOTE: Interactive sessions were deprecated and removed in migration 028
     const response = await request.post(`${API_BASE_URL}/api/dev-bots/interactive/command`, {
       headers,
       data: {
@@ -268,7 +268,8 @@ test.describe('Dev-Bots Interactive Session Endpoints', () => {
     }
   });
 
-  test('DELETE /api/dev-bots/interactive/session/:sessionId should end session', async ({ request }) => {
+  test.skip('DELETE /api/dev-bots/interactive/session/:sessionId should end session', async ({ request }) => {
+    // NOTE: Interactive sessions were deprecated and removed in migration 028
     const response = await request.delete(`${API_BASE_URL}/api/dev-bots/interactive/session/test-session`, {
       headers,
     }).catch(() => null);

@@ -471,7 +471,7 @@ export class ContextBundleGenerator {
     if (!options.taskType || typeof options.taskType !== 'string') {
       errors.push('taskType is required and must be a string');
     } else {
-      const validTaskTypes = ['implementation', 'fix', 'review', 'deployment', 'pr-follow-up', 'analysis'];
+      const validTaskTypes = ['implementation', 'fix', 'review', 'pr-follow-up', 'analysis'];
       if (!validTaskTypes.includes(options.taskType)) {
         errors.push(`Invalid taskType: '${options.taskType}'. Must be one of: ${validTaskTypes.join(', ')}`);
       }
