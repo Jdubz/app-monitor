@@ -23,7 +23,7 @@ describe('TaskQueueService - Phase Integration', () => {
   afterEach(() => {
     try {
       taskQueue.close();
-    } catch (err) {
+    } catch (_err) {
       // Ignore close errors in tests
     }
   });

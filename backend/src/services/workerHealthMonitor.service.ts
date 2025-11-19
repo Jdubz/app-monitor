@@ -291,7 +291,7 @@ export class WorkerHealthMonitor {
       try {
         const ping = await this.dockerManager.getDocker().ping();
         this.isHealthy = !!ping;
-      } catch (error) {
+      } catch (_error) {
         this.isHealthy = false;
       }
 

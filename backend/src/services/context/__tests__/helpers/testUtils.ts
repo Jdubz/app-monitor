@@ -42,7 +42,7 @@ export async function createTempFile(content: string, filename = 'test.txt', dir
 export async function removeDir(dirPath: string): Promise<void> {
   try {
     await fs.rm(dirPath, { recursive: true, force: true });
-  } catch (error) {
+  } catch (_error) {
     // Ignore errors (directory might not exist)
   }
 }

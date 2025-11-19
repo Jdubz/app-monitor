@@ -158,7 +158,7 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
     try {
       devBotsManager.sendInteractiveInput(sessionId, data);
       sendSuccess(res, { accepted: true });
-    } catch (error) {
+    } catch (_error) {
       sendError(res, 'not_found', 404, { message: 'Session not found or already ended' });
     }
   });
@@ -202,7 +202,7 @@ export function createInteractiveRoutes(devBotsManager: DevBotsManager): Router 
     try {
       devBotsManager.sendInteractiveSignal(sessionId, 'interrupt');
       sendSuccess(res, { message: 'Interrupt signal sent' });
-    } catch (error) {
+    } catch (_error) {
       sendError(
         res,
         'not_found',

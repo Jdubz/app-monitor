@@ -40,7 +40,7 @@ describe('TokenTrackingService', () => {
     resetTokenTrackingServiceFn();
     try {
       db.close();
-    } catch (err) {
+    } catch (_err) {
       // Ignore close errors in tests
     }
   });

@@ -153,7 +153,7 @@ export class DevBotContainerLifecycle {
 
     try {
       await this.stop(containerId, stopTimeout);
-    } catch (error) {
+    } catch (_error) {
       logger.warn({
         category: 'system',
         action: 'stop_failed_proceeding_to_remove',
@@ -413,12 +413,12 @@ export class DevBotContainerLifecycle {
         try {
           await this.remove(containerInfo.Id, true);
           cleanedCount++;
-        } catch (error) {
+        } catch (_error) {
           logger.warn({
             category: 'system',
             action: 'failed_to_cleanup_container',
             message: `Failed to remove container ${containerInfo.Id}`,
-            error,
+            error: _error,
           });
         }
       }

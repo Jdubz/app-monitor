@@ -315,7 +315,7 @@ export class DevBotsDatabase {
           path.join(__dirname, '..', '..', 'migrations', '022_issues_table.sql'),
           'utf-8'
         ));
-      } catch (err) {
+      } catch (_err) {
         // Fallback for in-memory or when file not accessible
         this.db.exec(`
           CREATE TABLE IF NOT EXISTS issues (
@@ -445,9 +445,9 @@ export class DevBotsDatabase {
         applied = this.db.prepare(
           'SELECT 1 FROM migrations WHERE name = ?'
         ).get(name);
-      } catch (err: unknown) {
+      } catch (_err: unknown) {
         // If the migrations table does not exist, create it
-        const errorMsg = err instanceof Error ? err.message : String(err);
+        const errorMsg = _err instanceof Error ? _err.message : String(_err);
         if (errorMsg.includes('no such table: migrations')) {
           this.db.exec(`
             CREATE TABLE IF NOT EXISTS migrations (
@@ -457,7 +457,7 @@ export class DevBotsDatabase {
           `);
           applied = undefined;
         } else {
-          throw err;
+          throw _err;
         }
       }
 
