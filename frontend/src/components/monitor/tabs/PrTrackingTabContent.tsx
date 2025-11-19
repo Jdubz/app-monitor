@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 
-interface PullRequest {
+export interface PullRequest {
   id: string;
   number: number;
   title: string;
@@ -78,8 +78,12 @@ const STUB_PRS: PullRequest[] = [
  *
  * NOTE: Currently uses stub data. Connect to GitHub API in the future.
  */
-export function PrTrackingTabContent() {
-  const [prs] = useState<PullRequest[]>(STUB_PRS);
+export interface PrTrackingTabContentProps {
+  prsData?: PullRequest[];
+}
+
+export function PrTrackingTabContent({ prsData = STUB_PRS }: PrTrackingTabContentProps = {}) {
+  const [prs] = useState<PullRequest[]>(prsData);
   const [selectedPrId, setSelectedPrId] = useState<string | null>(prs[0]?.id ?? null);
   const [activeFilter, setActiveFilter] = useState<PrFilter>('all');
 

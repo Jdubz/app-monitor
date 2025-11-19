@@ -87,6 +87,7 @@ const ListItemComponent = <TItem,>({
 }: Omit<ListItemProps<TItem>, 'itemKey'>) => {
   return (
     <div
+      data-testid="list-detail-item"
       onClick={() => onSelectItem(item)}
       className={cn(
         'cursor-pointer rounded-md border p-3 transition-colors',
@@ -183,7 +184,10 @@ export function ListDetailLayout<TItem, TFilter extends string>({
             </div>
           ) : (
             <div className="flex h-full min-h-0 flex-col">
-              <div className="flex-1 space-y-2 overflow-y-auto pr-1">
+              <div
+                data-testid="list-scroll-region"
+                className="flex-1 space-y-2 overflow-y-auto pr-1"
+              >
                 {items.map((item) => {
                   const key = getItemKey(item);
                   const isSelected = selectedItem ? getItemKey(selectedItem) === key : false;
@@ -207,7 +211,10 @@ export function ListDetailLayout<TItem, TFilter extends string>({
 
   const rightPane = (
     <div className="flex h-full min-h-0 flex-col gap-4 p-4">
-      <div className="flex-1 overflow-y-auto pr-1">
+      <div
+        data-testid="detail-scroll-region"
+        className="flex-1 overflow-y-auto pr-1"
+      >
         {renderDetail(selectedItem)}
       </div>
     </div>
