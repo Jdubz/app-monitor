@@ -110,11 +110,22 @@ function ReportIssueModal({ isOpen, onClose, onSubmit }: ReportIssueModalProps) 
       // Wait briefly for any animations to settle
       await new Promise(resolve => setTimeout(resolve, 100));
 
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+
       const canvas = await html2canvas(document.body, {
         allowTaint: true,
         useCORS: true,
         logging: false,
-        scale: 0.4, // Reduce file size further to prevent 413 errors
+        scale: 0.4, // keep compression but only for the current viewport
+        width: viewportWidth,
+        height: viewportHeight,
+        windowWidth: viewportWidth,
+        windowHeight: viewportHeight,
+        x: window.scrollX,
+        y: window.scrollY,
+        scrollX: window.scrollX,
+        scrollY: window.scrollY,
         ignoreElements: (element) => {
           // Also ignore elements with data-html2canvas-ignore attribute
           return element.getAttribute('data-html2canvas-ignore') === 'true';
