@@ -847,7 +847,7 @@ Comprehensive system overview
 - **Multi-Phase Plan System:** `docs/technicalDesigns/multi-phase-plan-system.md`
 - **Master Design Intent:** `docs/architecture/master-design-intent.md`
 - **Dev-Bots Overview:** `docs/architecture/dev-bots-overview.md`
-- **Original MCP Proposal:** `docs/technicalDesigns/app-monitor-mcp-server-ORIGINAL.md` (backup)
+- **Original MCP Proposal:** Content merged into `docs/technicalDesigns/app-monitor-mcp-server.md`; no separate backup retained
 
 ---
 

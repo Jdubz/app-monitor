@@ -115,7 +115,7 @@ export class PRMonitorService {
 
   /**
    * Create an adoption task for an orphaned system PR
-   * Attempts to reconstruct minimal task metadata from PR information
+   * Attempts to reconstruct submitted task metadata from PR information
    */
   async adoptOrphanedSystemPR(
     prNumber: number,

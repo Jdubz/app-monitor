@@ -7,7 +7,7 @@
  * Design: docs/technicalDesigns/agent-selector-gemini-offload.md
  * Requirements per section 4.3:
  * 1. Task Risk Score - Block high-risk tasks (>= 5)
- * 2. Context Readiness - Ensure MinimalTaskPayload + context bundles exist
+ * 2. Context Readiness - Ensure TaskSubmissionPayload + context bundles exist
  * 3. Quota Health - >= 10% quota remaining (60 rpm, 1000 rpd for Gemini)
  * 4. Policy Overrides - Ops can block Gemini per project/branch
  */
@@ -131,7 +131,7 @@ export class AgentEligibilityServiceImpl implements AgentEligibilityService {
 
   /**
    * Design requirement 4.3.2: Context Readiness
-   * Ensure MinimalTaskPayload + context bundles exist
+   * Ensure TaskSubmissionPayload + context bundles exist
    */
   private async isContextReady(task: Task): Promise<boolean> {
     const hasBasicContext = !!(task.title && task.description);

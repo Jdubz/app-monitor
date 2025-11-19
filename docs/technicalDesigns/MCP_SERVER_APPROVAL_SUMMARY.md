@@ -152,7 +152,7 @@ if (isDevBot && env === "production") {
 ## Documentation
 
 **Implementation Spec:** `MCP_SERVER_IMPLEMENTATION_SPEC.md` (this directory)
-**Original Proposal:** `app-monitor-mcp-server-ORIGINAL.md` (backup)
+**Original Proposal:** Consolidated into `app-monitor-mcp-server.md` to keep a single canonical design
 **Plan System:** `multi-phase-plan-system.md` (updated with correct workflow)
 
 ---

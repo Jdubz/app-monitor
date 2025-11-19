@@ -8,7 +8,7 @@
     "metadata": {
       "promptEngineeringVersion": "3.0"
     },
-    "investigation": "As a test for the app-monitor system, introduce a new minor UI element. The goal is to verify that a task submitted through the minimal API successfully triggers a PR creation by the dev-bot, and that the PR tracker accurately updates the status of the created Pull Request throughout its lifecycle until merge. The primary project involved is 'dev-monitor'.",
+    "investigation": "As a test for the app-monitor system, introduce a new minor UI element. The goal is to verify that a task submitted through the task submission API successfully triggers a PR creation by the dev-bot, and that the PR tracker accurately updates the status of the created Pull Request throughout its lifecycle until merge. The primary project involved is 'dev-monitor'.",
     "constraints": "Ensure no destructive actions are performed. This is a read-only or metadata-only task."
   }
 ]

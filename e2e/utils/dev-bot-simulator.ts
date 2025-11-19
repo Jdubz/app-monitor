@@ -603,7 +603,7 @@ export async function createTask(
   },
   apiBaseUrl: string = 'http://localhost:3002'
 ): Promise<{ id: string }> {
-  const response = await fetch(`${apiBaseUrl}/api/dev-bots/tasks/minimal`, {
+  const response = await fetch(`${apiBaseUrl}/api/dev-bots/tasks`, {
     method: 'POST',
     headers: { 
       'Content-Type': 'application/json',

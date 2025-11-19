@@ -100,7 +100,7 @@
   - **Status:** ✅ **100% OPERATIONAL** (2025-11-14)
     - ✅ Context infrastructure complete (~2400 lines, fully tested)
     - ✅ 8 YAML recipes operational
-    - ✅ Minimal API endpoints live (/tasks/minimal, /tasks/preview-detection)
+    - ✅ Task submission endpoint live (/tasks, /tasks/preview-detection)
     - ✅ Auto-detection service functional
     - ✅ Prompt generation from context bundles working
   - **Migration:** Manual v3 prompt templates superseded by context-aware auto-generation

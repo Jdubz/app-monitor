@@ -180,20 +180,20 @@ Migrate work-target metadata from JSON config files to SQLite with backwards com
 
 ---
 
-### P0.4: Prompt Engineering V3 Implementation (PE-1 through PE-6) ✅ **COMPLETE - SUPERSEDED BY MINIMAL API**
+### P0.4: Prompt Engineering V3 Implementation (PE-1 through PE-6) ✅ **COMPLETE - SUPERSEDED BY TASK SUBMISSION API**
 **Plan:** BOT_PROMPT_ENGINEERING_V3.md (ARCHIVED 2025-11-14)
 **Owner:** Platform Tooling
 **Duration:** N/A
-**Status:** ✅ **COMPLETE** (Implemented as context-aware minimal API)
+**Status:** ✅ **COMPLETE** (Implemented as context-aware task submission API)
 
 **Original Goal:** Manual v3 template validation  
 **Actual Implementation:** Context-aware auto-generation (simpler and better)
 
 **What Was Delivered (2025-11-14):**
-- ✅ **Minimal Task API:** 3-field submission (title, taskType, intent)
+- ✅ **Task Submission API:** 3-field submission (title, taskType, intent)
 - ✅ **Auto-Detection Service:** Automatically infers files, risk level, context profiles
 - ✅ **New Endpoints:** 
-  - POST `/api/dev-bots/tasks/minimal` - Create task with minimal payload
+  - POST `/api/dev-bots/tasks` - Create task with concise payload
   - POST `/api/dev-bots/tasks/preview-detection` - Preview auto-detection
 - ✅ **Backend Complete:** Full integration with existing task creation
 - ⏳ **Frontend Pending:** UI form component not yet created
@@ -207,7 +207,7 @@ Migrate work-target metadata from JSON config files to SQLite with backwards com
 **Migration Path:**
 - Old POST `/api/dev-bots/tasks` endpoint marked deprecated
 - Both endpoints functional (backward compatible)
-- Frontend will use new minimal API when form component created
+- Frontend will use new task submission API when form component created
 - Full migration target: 2 weeks
 
 **Dependencies:** None (feature replaced by superior approach)
@@ -295,8 +295,8 @@ Separate work-target development path from production deployment with artifact h
 **HIGHEST IMPACT FEATURE** - Transforms task submission from 15+ manual fields to just 3 (title, type, intent) with auto-generated prompts from context bundles.
 
 **✅ Complete Implementation (2025-11-14):**
-- ✅ **Minimal Task API Endpoints (PRODUCTION READY):**
-  - POST `/api/dev-bots/tasks/minimal` - Create task with 3 fields
+- ✅ **Task Submission API Endpoints (PRODUCTION READY):**
+  - POST `/api/dev-bots/tasks` - Create task with 3 fields
   - POST `/api/dev-bots/tasks/preview-detection` - Preview auto-detection
 - ✅ **Auto-Detection Service (FULLY OPERATIONAL):**
   - File detection from git status (staged + modified + created)
@@ -319,7 +319,7 @@ Separate work-target development path from production deployment with artifact h
 - ✅ Legacy endpoint marked deprecated (backward compatible)
 
 **Remaining Work (Non-Blocking):**
-- Frontend minimal task form component (can use API directly until UI created)
+- Frontend task submission form component (can use API directly until UI created)
 - Auto-detection preview in UI (API provides this already)
 - V3 template code cleanup (deprecated but not yet removed)
 - Full end-to-end integration testing
@@ -332,7 +332,7 @@ Separate work-target development path from production deployment with artifact h
 
 **API Usage (Available Now):**
 ```bash
-curl -X POST http://localhost:5000/api/dev-bots/tasks/minimal \
+curl -X POST http://localhost:5000/api/dev-bots/tasks \
   -H "Content-Type: application/json" \
   -d '{
     "title": "Fix login timeout issue",
@@ -344,7 +344,7 @@ curl -X POST http://localhost:5000/api/dev-bots/tasks/minimal \
 **Next Steps (Low Priority):**
 1. Create React form component (UI convenience, not functionality blocker)
 2. Remove legacy V3 template code (cleanup)
-3. Update documentation to show only minimal API
+3. Update documentation to show only task submission API
 
 ---
 

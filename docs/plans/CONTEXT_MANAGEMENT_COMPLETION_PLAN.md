@@ -11,7 +11,7 @@
 
 The Context Management System is **95% functionally complete** but lacks user-facing integration. Backend infrastructure (~2,400 lines) is production-ready with 9 YAML recipes, comprehensive testing, and full Docker integration via `docker cp` pattern. 
 
-**CRITICAL FINDING:** Tasks still use complex `EnhancedTaskData` schema with 15+ fields. The promised "3-field minimal API" (title, type, intent) has **NOT been implemented**.
+**CRITICAL FINDING:** Tasks still use complex `EnhancedTaskData` schema with 15+ fields. The promised "3-field task submission API" (title, type, intent) has **NOT been implemented**.
 
 **TIME TO COMPLETION:** 2-3 weeks (UX layer only)
 
@@ -132,14 +132,14 @@ The Context Management System is **95% functionally complete** but lacks user-fa
 
 ## Implementation Plan (2-3 Weeks)
 
-### Week 1: Minimal Task API (5 days)
+### Week 1: Task Submission API (5 days)
 
 #### Day 1-2: API Endpoint & Schema
 **File:** `backend/src/routes/tasks.routes.ts`
 
 Create new endpoint accepting minimal schema:
 ```typescript
-interface MinimalTaskPayload {
+interface TaskSubmissionPayload {
   title: string;           // Required
   taskType: TaskType;      // Required: implementation|review|fix|analysis
   intent: string;          // Required: Brief description
@@ -153,7 +153,7 @@ interface MinimalTaskPayload {
 }
 
 router.post('/api/v2/tasks', async (req, res) => {
-  const payload = req.body as MinimalTaskPayload;
+  const payload = req.body as TaskSubmissionPayload;
   
   // Validate minimal schema
   const validation = validateMinimalPayload(payload);
@@ -182,7 +182,7 @@ router.post('/api/v2/tasks', async (req, res) => {
 
 ```typescript
 export class TaskNormalizer {
-  async normalizePayload(payload: MinimalTaskPayload): Promise<EnhancedTaskData> {
+  async normalizePayload(payload: TaskSubmissionPayload): Promise<EnhancedTaskData> {
     return {
       ...payload,
       files: payload.targetFiles ?? await this.detectTargetFiles(),
@@ -198,7 +198,7 @@ export class TaskNormalizer {
     // 3. Fallback: Return empty array (prompt user)
   }
 
-  private async inferRiskLevel(payload: MinimalTaskPayload): Promise<string> {
+  private async inferRiskLevel(payload: TaskSubmissionPayload): Promise<string> {
     const files = payload.targetFiles ?? [];
     // Risk rules:
     // - docker/** → high
@@ -207,7 +207,7 @@ export class TaskNormalizer {
     // - docs/** → minimal
   }
 
-  private async selectContextProfiles(payload: MinimalTaskPayload): Promise<string[]> {
+  private async selectContextProfiles(payload: TaskSubmissionPayload): Promise<string[]> {
     // Use existing ContextRecipeSelector.getProfilesToInclude()
   }
 }
@@ -220,18 +220,18 @@ export class TaskNormalizer {
 - [x] Unit tests cover all detection logic
 
 #### Day 5: Integration Testing
-- Test minimal API end-to-end
+- Test task submission API end-to-end
 - Verify auto-detection accuracy
 - Fix edge cases
 - Performance testing (<200ms for normalization)
 
 ### Week 2: Frontend & Documentation (5 days)
 
-#### Day 1-2: Minimal Task Creation Form
-**File:** `frontend/src/components/TaskCreation/MinimalTaskForm.tsx` (new)
+#### Day 1-2: Task Submission Creation Form
+**File:** `frontend/src/components/TaskCreation/TaskSubmissionForm.tsx` (new)
 
 ```tsx
-export function MinimalTaskForm() {
+export function TaskSubmissionForm() {
   const [title, setTitle] = useState('');
   const [taskType, setTaskType] = useState<TaskType>('implementation');
   const [intent, setIntent] = useState('');
@@ -266,7 +266,7 @@ export function MinimalTaskForm() {
 - [x] Form has ONLY 3 required fields
 - [x] Auto-detected values displayed (read-only)
 - [x] Override button available if detection fails
-- [x] Integration with minimal API endpoint
+- [x] Integration with task submission API endpoint
 
 #### Day 3: Update Existing Form (Deprecation Path)
 **File:** `frontend/src/components/EnhancedTaskCreationForm.tsx`
@@ -301,7 +301,7 @@ Keep existing form for power users (temporary).
 - `backend/src/services/failureRecovery.ts` - FIX task creation
 - `backend/src/services/stuckTaskDetector.ts` - Recovery tasks
 
-Convert all to use minimal API:
+Convert all to use task submission API:
 ```typescript
 // Before (v3 template)
 const task = await taskQueue.createTask({
@@ -312,8 +312,8 @@ const task = await taskQueue.createTask({
   // ... many more fields
 });
 
-// After (minimal)
-const task = await minimalTaskAPI.createTask({
+// After (task submission)
+const task = await taskSubmissionAPI.createTask({
   title: 'Review PR implementation',
   taskType: 'review',
   intent: 'Analyze implementation and determine next action',
@@ -334,7 +334,7 @@ const task = await minimalTaskAPI.createTask({
 
 #### Day 4: Frontend Migration
 **Phase Out Old Form:**
-- Make `MinimalTaskForm` the default
+- Make `TaskSubmissionForm` the default
 - Move `EnhancedTaskCreationForm` to "Advanced" tab
 - Add deprecation notice
 
@@ -390,7 +390,7 @@ const task = await minimalTaskAPI.createTask({
 - [x] Task execution time: No regression
 - [x] Stale context incidents: 0
 - [x] Docker cp pattern working (no mounts)
-- [ ] Minimal API endpoint operational
+- [ ] Task submission API endpoint operational
 - [ ] Auto-detection accuracy >90%
 - [ ] Frontend form simplified to 3 fields
 - [ ] All automated task creators migrated
@@ -478,7 +478,7 @@ Docker CP pattern provides better isolation, security, and reproducibility at mi
 ## Rollback Procedures
 
 ### If Critical Bug Found (Before Week 3 Cleanup)
-1. Disable minimal API endpoint (feature flag)
+1. Disable task submission API endpoint (feature flag)
 2. Keep using enhanced form
 3. Fix bug in staging
 4. Re-enable after validation
@@ -514,7 +514,7 @@ Docker CP pattern provides better isolation, security, and reproducibility at mi
    - Fix 5 failing recipe validation tests
    - Ensure 100% test pass rate
    
-2. **MINIMAL API** (Week 1)
+2. **TASK SUBMISSION API** (Week 1)
    - Implement endpoint
    - Add auto-detection
    - Integration tests
