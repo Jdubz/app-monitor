@@ -1,7 +1,7 @@
 import * as crypto from 'crypto';
-import { TASK_TYPES } from '@app-monitor/api-contracts';
 import { logger } from '../utils/logger.js';
 import { determineRiskLevel } from '../utils/riskAssessment.js';
+import { mapTaskType } from '../utils/taskTypeMapper.js';
 import { TaskQueueService, Task } from './taskQueue.sqlite.js';
 import { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js';
 import { EnhancedTaskData } from './taskMetadataFields.js';
@@ -394,16 +394,6 @@ export class TaskCreationService {
    * Map task type to recipe task type
    */
   private mapToRecipeTaskType(taskType: string): RecipeTaskType {
-    const typeMap: Record<string, RecipeTaskType> = {
-      'implementation': TASK_TYPES.IMPLEMENTATION,
-      'fix': TASK_TYPES.FIX,
-      'bugfix': TASK_TYPES.FIX,
-      'bug': TASK_TYPES.FIX,
-      'review': TASK_TYPES.REVIEW,
-      'pr-follow-up': TASK_TYPES.PR_FOLLOW_UP,
-      'analysis': TASK_TYPES.ANALYSIS
-    };
-
-    return (typeMap[taskType.toLowerCase()] || TASK_TYPES.IMPLEMENTATION) as RecipeTaskType;
+    return mapTaskType(taskType) as RecipeTaskType;
   }
 }

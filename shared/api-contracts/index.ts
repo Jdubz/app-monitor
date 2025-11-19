@@ -113,8 +113,6 @@ export const TASK_TYPES = {
   ANALYSIS: 'analysis' as const
 } as const;
 
-export type TaskTypeEnum = typeof TASK_TYPES[keyof typeof TASK_TYPES];
-
 export interface TaskSubmissionPayload {
   // Required fields (3 only)
   title: string;
