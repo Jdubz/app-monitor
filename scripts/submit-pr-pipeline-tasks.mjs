@@ -12,24 +12,53 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+import dotenv from 'dotenv';
+dotenv.config({ path: path.resolve(__dirname, '../../frontend/.env.production') });
+
 const API_BASE_URL = process.env.API_URL || 'https://app-monitor.joshwentworth.com/api';
 const TASKS_FILE = path.join(__dirname, '..', 'pr-pipeline-enhancement-tasks.json');
 
 async function submitTask(task) {
-  const url = `${API_BASE_URL}/dev-bots/tasks`;
+  const url = `${API_BASE_URL}/dev-bots/tasks/minimal`;
   
-  console.log(`\n📤 Submitting task: ${task.title}`);
-  console.log(`   Type: ${task.type}`);
-  console.log(`   Priority: ${task.priority}`);
-  console.log(`   Agent: ${task.assignedAgent}`);
+  const API_KEY = process.env.API_KEY; // Get API key from env
+
+  if (!API_KEY) {
+    console.error('❌ Error: API_KEY environment variable is not set.');
+    console.error('Please ensure the correct API_KEY is set in your environment or .env file.');
+    throw new Error('API key missing.'); // Throw an error to stop submission
+  }
+
+  // Construct MinimalTaskPayload
+  const minimalPayload = {
+    title: task.title,
+    taskType: task.taskType, // Map 'taskType' from our task to 'taskType' of minimalPayload
+    intent: `${task.investigation || ''} ${task.constraints || ''}`.trim(),
+    // Optional fields if they align with MinimalTaskPayload or are handled by the API
+    assignedAgent: task.assignedAgent,
+    priority: task.priority
+  };
+
+  if (!minimalPayload.intent) {
+    console.error('❌ Error: Task intent is missing. Please provide at least one of "investigation" or "constraints" in your task definition.');
+    console.error('   The intent field describes what the task should accomplish.');
+    throw new Error('Task intent missing.');
+  }
+
+  console.log(`\n📤 Submitting task: ${minimalPayload.title}`);
+  console.log(`   Type: ${minimalPayload.taskType}`);
+  console.log(`   Intent: ${minimalPayload.intent.substring(0, 70)}...`); // Log truncated intent
+  console.log(`   Priority: ${minimalPayload.priority}`);
+  console.log(`   Agent: ${minimalPayload.assignedAgent}`);
   
   try {
     const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'X-API-Key': API_KEY, // Use the retrieved API key
       },
-      body: JSON.stringify(task)
+      body: JSON.stringify(minimalPayload) // Send the minimalPayload
     });
     
     if (!response.ok) {
@@ -40,15 +69,15 @@ async function submitTask(task) {
     const result = await response.json();
     
     if (result.success) {
-      console.log(`   ✅ Created task ID: ${result.data.id}`);
-      return { success: true, taskId: result.data.id, task };
+      console.log(`   ✅ Created task ID: ${result.data.task.id}`); // Access task.id from result.data.task
+      return { success: true, taskId: result.data.task.id, task: minimalPayload };
     } else {
       console.log(`   ❌ Failed: ${result.error}`);
-      return { success: false, error: result.error, task };
+      return { success: false, error: result.error, task: minimalPayload };
     }
   } catch (error) {
     console.log(`   ❌ Error: ${error.message}`);
-    return { success: false, error: error.message, task };
+    return { success: false, error: error.message, task: minimalPayload };
   }
 }
 

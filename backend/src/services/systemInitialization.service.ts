@@ -3,7 +3,7 @@ import type { DockerManager, DockerValidationResult } from './dockerManager.js';
 import type { TaskQueueService } from './taskQueue.sqlite.js';
 import type { TaskExecutionService } from './taskExecution.service.js';
 import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
-import type { InteractiveSessionManager } from './InteractiveSessionManager.js';
+// InteractiveSessionManager import removed - migrated to tmux-based TerminalService
 import type { SystemLifecycleService } from './systemLifecycle.service.js';
 import { MetricsEmitter } from './metricsEmitter.js';
 
@@ -12,7 +12,7 @@ export interface InitializationComponents {
   taskQueue: TaskQueueService;
   taskExecutionService: TaskExecutionService;
   ephemeralWorkerService: EphemeralWorkerService;
-  interactiveSessionService: InteractiveSessionManager;
+  // interactiveSessionService removed - migrated to tmux-based TerminalService
   systemLifecycleService: SystemLifecycleService;
 }
 
@@ -149,8 +149,7 @@ export class SystemInitializationService {
     // Start metrics emitter
     this.startMetricsEmitter();
 
-    // Start interactive session idle watchdog
-    this.startInteractiveIdleWatchdog();
+    // Interactive session idle watchdog removed - migrated to tmux-based TerminalService
 
     // Always start the dev-bots system after initialization
     this.components.systemLifecycleService.startSystem();
@@ -232,32 +231,9 @@ export class SystemInitializationService {
   }
 
   /**
-   * Start interactive session idle timeout watchdog
+   * startInteractiveIdleWatchdog - REMOVED
+   * Interactive session idle timeout is now handled by TerminalService
    */
-  private startInteractiveIdleWatchdog(): void {
-    this.components.interactiveSessionService.startIdleWatchdog((sessionId, idleDuration) => {
-      const idleTimeout = this.components.interactiveSessionService.getIdleTimeoutMs();
-      logger.warn({
-        category: 'system',
-        action: 'idle_timeout',
-        message: 'Interactive session exceeded idle timeout',
-        details: {
-          sessionId,
-          idleDurationMs: idleDuration,
-          idleTimeoutMs: idleTimeout,
-        },
-      });
-
-      void this.endInteractiveSession(sessionId, 'Idle timeout (no activity)').catch((error) => {
-        logger.error({
-          category: 'system',
-          action: 'idle_timeout_cleanup_failed',
-          message: `Failed to stop idle interactive session ${sessionId}`,
-          error,
-        });
-      });
-    });
-  }
 
   /**
    * Get Docker validation result

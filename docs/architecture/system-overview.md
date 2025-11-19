@@ -47,7 +47,7 @@
 | `EphemeralWorkerService` | Container lifecycle + context management, heartbeats every 15s |
 | `RecoveryAgent` | Diagnoses phase validation failures, suggests fixes |
 | `ScopeControlService` | Scope creep detection, context isolation, cleanup scheduling |
-| `InteractiveSessionService` | Human-in-the-loop shells with same isolation guarantees |
+| `TerminalService` | Persistent tmux-based terminal sessions via Socket.IO |
 
 **Agent Types:**
 - **Claude**: Primary implementation agent (code, refactoring)

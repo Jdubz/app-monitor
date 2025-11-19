@@ -21,13 +21,7 @@ import { TaskCompletionService } from './taskCompletion.service.js';
 import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 import { AgentEligibilityServiceImpl } from './agentEligibility.service.js';
 import { AgentSelector } from './agentSelector.js';
-import {
-  InteractiveSessionManager,
-  type StartInteractiveSessionOptions,
-  type ActivityKind,
-  type AllowedInteractiveModel,
-} from './InteractiveSessionManager.js';
-import type { InteractiveSessionRecord } from './database.js';
+// InteractiveSessionManager imports removed - migrated to tmux-based TerminalService
 import type { WorkerHealthMonitor } from './workerHealthMonitor.service.js';
 
 export interface RetryAttempt {
@@ -73,7 +67,7 @@ export class DevBotsManager extends EventEmitter {
   private taskExecutionService!: TaskExecutionService;
   private taskCompletionService!: TaskCompletionService;
   private prWorkflowOrchestrator!: PRWorkflowOrchestrator;
-  private interactiveSessionManager!: InteractiveSessionManager;
+  // interactiveSessionManager removed - migrated to tmux-based TerminalService
   private systemLifecycleService!: import('./systemLifecycle.service.js').SystemLifecycleService;
   private systemInitializationService!: import('./systemInitialization.service.js').SystemInitializationService;
   private cleanupCoordinator!: import('./cleanupCoordinator.service.js').CleanupCoordinator;
@@ -103,7 +97,7 @@ export class DevBotsManager extends EventEmitter {
     this.ephemeralWorkerService = dependencies.ephemeralWorkerService;
     // taskExecutionService is initialized later with agent selector (line 242-248)
     this.prWorkflowOrchestrator = dependencies.prWorkflowOrchestrator;
-    this.interactiveSessionManager = dependencies.interactiveSessionManager;
+    // interactiveSessionManager removed - migrated to tmux-based TerminalService
     this.workerHealthMonitor = dependencies.workerHealthMonitor;
     this.systemLifecycleService = dependencies.systemLifecycleService;
     this.systemInitializationService = dependencies.systemInitializationService;
@@ -144,13 +138,13 @@ export class DevBotsManager extends EventEmitter {
     // Type helper for dependency injection
     interface SystemInitCallbackDeps {
       emitEvent: (event: string, data: unknown) => void;
-      endInteractiveSession: (sessionId: string, reason: string) => Promise<void>;
+      // endInteractiveSession removed - migrated to tmux-based TerminalService
     }
 
-    // Update SystemInitializationService with emit and endInteractiveSession callbacks
+    // Update SystemInitializationService with emit callback
     // Note: SystemInitializationService is injected but needs these callbacks from DevBotsManager
     (this.systemInitializationService as unknown as SystemInitCallbackDeps).emitEvent = this.emit.bind(this);
-    (this.systemInitializationService as unknown as SystemInitCallbackDeps).endInteractiveSession = this.endInteractiveSession.bind(this);
+    // endInteractiveSession removed - migrated to tmux-based TerminalService
 
     // Update CleanupCoordinator with assignNextTask callback
     // Note: CleanupCoordinator is injected but needs this callback from DevBotsManager
@@ -260,64 +254,21 @@ export class DevBotsManager extends EventEmitter {
   }
 
   // ============================================================================
-  // Interactive Sessions
+  // Interactive Sessions - REMOVED
   // ============================================================================
 
   /**
-   * Interactive session methods - delegated to InteractiveSessionManager
+   * All interactive session methods have been removed as part of the migration
+   * to the new tmux-based terminal system. Interactive terminals are now managed
+   * by the TerminalService and accessed via Socket.IO events:
+   * - terminal:create
+   * - terminal:attach
+   * - terminal:input
+   * - terminal:resize
+   * - terminal:output
+   *
+   * See TerminalService.ts for the new implementation.
    */
-  public getActiveInteractiveSession(): InteractiveSessionRecord | null {
-    return this.interactiveSessionManager.getActiveSession();
-  }
-
-  public getInteractiveSession(sessionId: string): InteractiveSessionRecord | null {
-    return this.interactiveSessionManager.getSessionById(sessionId);
-  }
-
-  public listInteractiveSessions(limit = 20): InteractiveSessionRecord[] {
-    return this.interactiveSessionManager.listRecentSessions(limit);
-  }
-
-  public async launchInteractiveSession(
-    options: StartInteractiveSessionOptions,
-  ): Promise<InteractiveSessionRecord> {
-    return await this.interactiveSessionManager.launchSession(options);
-  }
-
-  public async endInteractiveSession(sessionId: string, reason?: string): Promise<void> {
-    await this.interactiveSessionManager.endSession(sessionId, reason);
-  }
-
-  // Note: sendInput and sendSignal are now handled directly via Socket.IO
-  // Clients emit 'terminal:input' and 'terminal:signal' events to the SocketIOTerminalHandler
-
-  public recordInteractiveActivity(sessionId: string, kind: ActivityKind): void {
-    this.interactiveSessionManager.recordActivity(sessionId, kind);
-  }
-
-  public updateInteractiveContext(
-    sessionId: string,
-    contextSnapshot?: unknown,
-    metadata?: Record<string, unknown>,
-  ): void {
-    this.interactiveSessionManager.updateContext(sessionId, contextSnapshot, metadata);
-  }
-
-  public getInteractiveIdleTimeoutMs(): number {
-    return this.interactiveSessionManager.getIdleTimeoutMs();
-  }
-
-  public getAllowedInteractiveModels(): AllowedInteractiveModel[] {
-    return this.interactiveSessionManager.getAllowedModels();
-  }
-
-  /**
-   * Get the interactive session manager
-   * Useful for wiring up event listeners (e.g., for Socket.IO terminal handler)
-   */
-  public getInteractiveSessionManager(): InteractiveSessionManager {
-    return this.interactiveSessionManager;
-  }
 
   /**
    * Manually timeout a task after verification

@@ -304,29 +304,30 @@ canStartNewChain(): boolean {
 
 ---
 
-## Interactive Sessions
+## Interactive Terminal
 
-### Human-in-the-Loop Execution
+### Developer Terminal Access
 
-**Use Case:** Developer needs direct shell access to running container.
+**Use Case:** Developer needs direct shell access for debugging or manual operations.
 
 **Architecture:**
-- Same isolation guarantees as dev-bot tasks
+- Persistent tmux sessions (survive disconnects)
 - Bidirectional terminal I/O via Socket.IO
-- Session timeout: 30 minutes inactive
-- Context pre-loaded same as automated tasks
+- Session timeout: 1 hour idle
+- No database persistence - sessions managed by tmux
 
 **Workflow:**
-1. User requests interactive session
-2. Container provisioned with `/bin/bash`
-3. Terminal streamed to frontend
+1. User creates new session or attaches to existing
+2. tmux session spawned via node-pty
+3. Terminal streamed to frontend via xterm.js
 4. User executes commands
-5. Artifacts saved on session end
+5. Session persists until explicitly killed or idle timeout
 
 **Security:**
-- Only authenticated users can start sessions
-- Same API key restrictions as bots
-- Audit log of all commands executed
+- Socket.IO authentication required
+- Session ID sanitization (command injection prevention)
+- Session whitelist validation
+- Sessions isolated per user
 
 ---
 

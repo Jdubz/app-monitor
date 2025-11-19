@@ -21,7 +21,7 @@ import type { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import type { TaskExecutionService } from './taskExecution.service.js';
 import type { TaskCompletionService } from './taskCompletion.service.js';
 import type { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
-import type { InteractiveSessionManager } from './InteractiveSessionManager.js';
+// InteractiveSessionManager import removed - migrated to tmux-based TerminalService
 import type { TaskCreationService } from './taskCreation.service.js';
 import type { StatusAggregationService } from './statusAggregation.service.js';
 import type { RetryCoordinationService } from './retryCoordination.service.js';
@@ -600,21 +600,7 @@ export function createMockDevBotsManagerDependencies(): DevBotsManagerDependenci
       }),
       stop: vi.fn()
     } as unknown as PRWorkflowOrchestrator,
-    interactiveSessionManager: {
-      createSession: vi.fn().mockReturnValue({
-        id: 'session-1',
-        status: 'active',
-        startedAt: new Date().toISOString()
-      }),
-      getSessionById: vi.fn().mockReturnValue(null),
-      endSession: vi.fn(),
-      recordActivity: vi.fn(),
-      getIdleTimeoutMs: vi.fn().mockReturnValue(300000),
-      listActiveSessions: vi.fn().mockReturnValue([]),
-      startIdleWatchdog: vi.fn(),
-      stopIdleWatchdog: vi.fn(),
-      setStatus: vi.fn()
-    } as unknown as InteractiveSessionManager,
+    // interactiveSessionManager removed - migrated to tmux-based TerminalService
     workerHealthMonitor: {
       start: vi.fn(),
       stop: vi.fn(),
