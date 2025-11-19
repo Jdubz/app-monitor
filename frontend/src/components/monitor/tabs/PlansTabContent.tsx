@@ -99,7 +99,7 @@ export interface PlansTabContentProps {
   plansData?: Plan[];
 }
 
-export function PlansTabContent({ plansData = STUB_PLANS }: PlansTabContentProps = {}) {
+export function PlansTabContent({ plansData = STUB_PLANS }: PlansTabContentProps) {
   const [plans] = useState<Plan[]>(plansData);
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(plans[0]?.id ?? null);
   const [activeFilter, setActiveFilter] = useState<PlanFilter>('all');

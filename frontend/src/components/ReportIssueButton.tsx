@@ -120,12 +120,8 @@ function ReportIssueModal({ isOpen, onClose, onSubmit }: ReportIssueModalProps) 
         scale: 0.4, // keep compression but only for the current viewport
         width: viewportWidth,
         height: viewportHeight,
-        windowWidth: viewportWidth,
-        windowHeight: viewportHeight,
         x: window.scrollX,
         y: window.scrollY,
-        scrollX: window.scrollX,
-        scrollY: window.scrollY,
         ignoreElements: (element) => {
           // Also ignore elements with data-html2canvas-ignore attribute
           return element.getAttribute('data-html2canvas-ignore') === 'true';

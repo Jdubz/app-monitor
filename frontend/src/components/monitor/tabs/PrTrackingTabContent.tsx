@@ -82,7 +82,7 @@ export interface PrTrackingTabContentProps {
   prsData?: PullRequest[];
 }
 
-export function PrTrackingTabContent({ prsData = STUB_PRS }: PrTrackingTabContentProps = {}) {
+export function PrTrackingTabContent({ prsData = STUB_PRS }: PrTrackingTabContentProps) {
   const [prs] = useState<PullRequest[]>(prsData);
   const [selectedPrId, setSelectedPrId] = useState<string | null>(prs[0]?.id ?? null);
   const [activeFilter, setActiveFilter] = useState<PrFilter>('all');

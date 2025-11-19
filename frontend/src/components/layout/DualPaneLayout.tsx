@@ -50,13 +50,13 @@ export function DualPaneLayout({
       )}
     >
       <PaneWrapper className={cn('h-full min-h-0', asCards && 'flex min-w-0 flex-col overflow-hidden')}>
-        <ScrollArea className="flex-1 min-h-0">
+        <ScrollArea className="w-full flex-1 min-h-0">
           {left}
         </ScrollArea>
       </PaneWrapper>
 
       <PaneWrapper className={cn('h-full min-h-0', asCards && 'flex min-w-0 flex-col overflow-hidden')}>
-        <ScrollArea className="flex-1 min-h-0">
+        <ScrollArea className="w-full flex-1 min-h-0">
           {right}
         </ScrollArea>
       </PaneWrapper>
