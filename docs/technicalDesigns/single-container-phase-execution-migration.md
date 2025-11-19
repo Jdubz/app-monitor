@@ -94,6 +94,12 @@ Phase 2: Implementation
 Task Completion:
   ├─ Extract final artifacts
   └─ Destroy container (once)
+
+Task Blocked (max attempts exceeded):
+  ├─ Mark task as blocked
+  ├─ KEEP CONTAINER ALIVE for debugging
+  ├─ Container counts towards max dev-bots capacity
+  └─ Requires manual intervention to unblock/cleanup
 ```
 
 **Performance Improvement:**
@@ -103,6 +109,12 @@ Task Completion:
 - Container destruction: 3s (once, not 7×)
 - **Total overhead per task:** ~18s (single container lifecycle)
 - **Savings:** 108 seconds per task (~85% reduction)
+
+**Capacity Management:**
+- Blocked containers stay alive (count towards max dev-bots)
+- When all slots blocked → system blocked (no new tasks)
+- Manual intervention required to unblock/cleanup
+- Blocked containers preserve state for debugging
 
 ---
 
@@ -117,6 +129,7 @@ type ContainerLifecycleState =
   | 'ready'         // Ready for phase execution
   | 'executing'     // Phase in progress
   | 'idle'          // Waiting for next phase
+  | 'blocked'       // Task blocked, container alive for debugging
   | 'completing'    // Final artifact extraction
   | 'destroyed';    // Container removed
 
@@ -128,6 +141,8 @@ interface TaskContainer {
   createdAt: number;
   currentPhase: number;
   phaseHistory: PhaseExecutionRecord[];
+  blockedAt?: number;       // When task was blocked
+  blockedReason?: string;   // Why task blocked
 }
 ```
 
@@ -357,6 +372,134 @@ async assignNextTask() {
 }
 ```
 
+### 4. Concurrency & Capacity Management
+
+**Critical Change: Blocked Containers Count Towards Capacity**
+
+```typescript
+// File: backend/src/services/TaskContainerManager.ts
+
+export class TaskContainerManager {
+  /**
+   * Get active container count (including blocked)
+   * Blocked containers stay alive and count towards capacity
+   */
+  getActiveContainerCount(): number {
+    return Array.from(this.taskContainers.values()).filter(
+      c => c.state !== 'destroyed'
+    ).length;
+  }
+
+  /**
+   * Get blocked container count
+   * When blocked count reaches max dev-bots, system is blocked
+   */
+  getBlockedContainerCount(): number {
+    return Array.from(this.taskContainers.values()).filter(
+      c => c.state === 'blocked'
+    ).length;
+  }
+
+  /**
+   * Check if system is blocked (all capacity used by blocked tasks)
+   */
+  isSystemBlocked(): boolean {
+    const blockedCount = this.getBlockedContainerCount();
+    const maxWorkers = this.config.maxConcurrentWorkers;
+    
+    if (blockedCount >= maxWorkers) {
+      logger.error({
+        category: 'system',
+        action: 'system_blocked',
+        message: `All ${maxWorkers} dev-bot slots occupied by blocked tasks`,
+        details: {
+          blockedCount,
+          maxWorkers,
+          blockedTasks: Array.from(this.taskContainers.values())
+            .filter(c => c.state === 'blocked')
+            .map(c => ({ taskId: c.taskId, reason: c.blockedReason }))
+        }
+      });
+      return true;
+    }
+    return false;
+  }
+
+  /**
+   * Manually unblock and cleanup container (admin action)
+   */
+  async unblockAndDestroyContainer(taskId: string): Promise<void> {
+    const container = this.taskContainers.get(taskId);
+    if (!container || container.state !== 'blocked') {
+      throw new Error(`Task ${taskId} is not blocked`);
+    }
+
+    logger.info({
+      category: 'admin',
+      action: 'unblock_container',
+      message: `Manually unblocking and destroying container for task ${taskId}`,
+      details: { 
+        taskId, 
+        containerId: container.containerId,
+        blockedReason: container.blockedReason,
+        blockedDuration: Date.now() - (container.blockedAt || 0)
+      }
+    });
+
+    await this.destroyTaskContainer(taskId);
+    
+    // Free up capacity slot
+    this.eventBus.emit('capacity:freed', {
+      taskId,
+      newCapacity: this.getActiveContainerCount()
+    });
+  }
+}
+```
+
+**Task Assignment with Capacity Check:**
+
+```typescript
+// File: backend/src/services/TaskPhaseOrchestrator.ts
+
+async canAssignNewTask(): Promise<boolean> {
+  // Check if system is blocked
+  if (this.containerManager.isSystemBlocked()) {
+    logger.error({
+      category: 'system',
+      action: 'assignment_blocked',
+      message: 'Cannot assign new task - all dev-bot slots blocked',
+      details: {
+        blockedCount: this.containerManager.getBlockedContainerCount(),
+        maxWorkers: this.config.maxConcurrentWorkers,
+        recommendation: 'Unblock tasks or increase max workers'
+      }
+    });
+    return false;
+  }
+
+  // Check normal capacity
+  const activeCount = this.containerManager.getActiveContainerCount();
+  const maxWorkers = this.config.maxConcurrentWorkers;
+  
+  if (activeCount >= maxWorkers) {
+    logger.info({
+      category: 'system',
+      action: 'capacity_full',
+      message: `All ${maxWorkers} dev-bot slots in use`,
+      details: {
+        active: activeCount,
+        blocked: this.containerManager.getBlockedContainerCount(),
+        running: activeCount - this.containerManager.getBlockedContainerCount()
+      }
+    });
+    return false;
+  }
+
+  return true;
+}
+```
+
 **New Orchestration:**
 ```typescript
 // File: backend/src/services/TaskPhaseOrchestrator.ts (NEW)
@@ -370,7 +513,7 @@ export class TaskPhaseOrchestrator {
 
   /**
    * Main orchestration loop - executes all phases for a task
-   * Container persists across all phases
+   * Container persists across all phases AND when blocked
    */
   async executeTask(task: Task): Promise<void> {
     try {
@@ -384,7 +527,7 @@ export class TaskPhaseOrchestrator {
           task.phase_attempts = 1; // Reset attempts for new phase
           
           if (task.phase_index > 7) {
-            // All phases complete
+            // All phases complete - NOW cleanup container
             await this.phaseExecutor.completeTask(task);
             await this.taskQueue.completeTask(task.id);
             break;
@@ -395,9 +538,10 @@ export class TaskPhaseOrchestrator {
             task.phase_attempts++;
             // Retry same phase in same container
           } else {
-            // Block task
+            // Block task - KEEP CONTAINER ALIVE
             await this.blockTask(task, validation);
-            await this.phaseExecutor.completeTask(task); // Cleanup container
+            // DON'T cleanup container - it stays alive when blocked
+            // This counts towards max dev-bots capacity
             break;
           }
         }
@@ -409,7 +553,7 @@ export class TaskPhaseOrchestrator {
         });
       }
     } catch (error) {
-      // Error during execution - cleanup container
+      // Error during execution - STILL keep container alive for debugging
       logger.error({
         category: 'phase',
         action: 'task_execution_error',
@@ -417,9 +561,55 @@ export class TaskPhaseOrchestrator {
         details: { taskId: task.id, phase: task.phase_index }
       });
       
-      await this.phaseExecutor.completeTask(task); // Ensure cleanup
+      // Mark as blocked but DON'T destroy container
+      await this.blockTask(task, { 
+        passed: false, 
+        message: error.message 
+      });
+      
+      // Container stays alive for human investigation
       throw error;
     }
+  }
+
+  /**
+   * Block task but keep container alive
+   * Blocked containers count towards max dev-bots capacity
+   */
+  private async blockTask(task: Task, validation: ValidationResult): Promise<void> {
+    await this.taskQueue.updateTask(task.id, {
+      status: 'blocked',
+      phase_status: 'blocked',
+      blocked_at: Date.now(),
+      blocked_reason: validation.message
+    });
+
+    // Update container state to blocked (but keep alive)
+    const container = this.containerManager.getContainer(task.id);
+    if (container) {
+      container.state = 'blocked';
+    }
+
+    logger.warn({
+      category: 'phase',
+      action: 'task_blocked',
+      message: `Task ${task.id} blocked at phase ${task.phase_index}`,
+      details: {
+        taskId: task.id,
+        phase: task.phase_index,
+        reason: validation.message,
+        containerAlive: !!container,
+        note: 'Container kept alive for debugging - counts towards capacity'
+      }
+    });
+
+    // Emit event for monitoring
+    this.eventBus.emit('task:blocked', {
+      taskId: task.id,
+      phase: task.phase_index,
+      containerId: container?.containerId,
+      containerState: container?.state
+    });
   }
 
   /**
@@ -778,7 +968,15 @@ describe('Performance Comparison', () => {
 
 **Performance Regression:**
 - **Risk:** Long-running containers consume more memory
-- **Mitigation:** Container resource limits, monitoring, automatic cleanup
+- **Mitigation:** Container resource limits, monitoring, manual cleanup for blocked
+
+**System Blocked by Blocked Tasks:**
+- **Risk:** All dev-bot slots occupied by blocked tasks, no new tasks can start
+- **Mitigation:** 
+  - Monitoring/alerting when blocked count > 50% capacity
+  - Admin API to force-unblock containers
+  - Dashboard showing blocked tasks with "Unblock" button
+  - Automatic alerts to human operators
 
 **Concurrency Issues:**
 - **Risk:** Multiple phases try to execute simultaneously in same container
@@ -1446,15 +1644,20 @@ export class MockTaskContainerManager {
 ### Files to Update
 
 **Architecture Docs:**
-- `docs/architecture/phase-system-architecture.md` - Update execution flow
-- `docs/architecture/dev-bots-overview.md` - Update container lifecycle
+- `docs/architecture/phase-system-architecture.md` - Update execution flow, blocked container behavior
+- `docs/architecture/dev-bots-overview.md` - Update container lifecycle, capacity management
 
 **Technical Designs:**
 - `docs/technicalDesigns/task-processing-stage-implementation-roadmap.md` - Remove multi-container details
 
 **Guides:**
-- `docs/guides/troubleshooting.md` - Update container debugging section
+- `docs/guides/troubleshooting.md` - Update container debugging section, blocked task recovery
+- `docs/guides/admin-operations.md` - Add unblocking procedures
 - `docs/CONTRIBUTING.md` - Update dev-bot development guide
+
+**Runbooks:**
+- `docs/runbooks/system-blocked-recovery.md` (NEW) - How to recover when all slots blocked
+- `docs/runbooks/container-debugging.md` (UPDATE) - Debugging blocked containers
 
 ---
 

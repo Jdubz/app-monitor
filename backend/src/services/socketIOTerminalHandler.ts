@@ -63,8 +63,21 @@ export class SocketIOTerminalHandler {
    */
   private setupSocketHandlers(): void {
     this.io.on('connection', (socket) => {
+      logger.debug({
+        category: 'interactive_terminal',
+        action: 'socket_connected',
+        message: 'Socket.IO client connected',
+        details: { socketId: socket.id },
+      });
+
       // Handle terminal join requests
       socket.on('terminal:join', async ({ sessionId }) => {
+        logger.debug({
+          category: 'interactive_terminal',
+          action: 'join_request',
+          message: 'Terminal join request received',
+          details: { sessionId, socketId: socket.id },
+        });
         await this.handleJoin(socket, sessionId);
       });
 
@@ -265,6 +278,13 @@ export class SocketIOTerminalHandler {
    * Start a new terminal session
    */
   async startSession(sessionId: string, containerId: string): Promise<void> {
+    logger.info({
+      category: 'interactive_terminal',
+      action: 'start_session_called',
+      message: 'Starting terminal session',
+      details: { sessionId, containerId },
+    });
+
     try {
       const container = this.docker.getContainer(containerId);
 

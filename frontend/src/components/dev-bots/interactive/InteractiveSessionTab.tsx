@@ -11,9 +11,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { InteractiveTerminal } from "./InteractiveTerminal";
 import { HotkeysDrawer } from "./HotkeysDrawer";
 
-const INTERACTIVE_FLAG_ENABLED =
-  (import.meta.env.VITE_FEATURE_DEV_BOTS_INTERACTIVE_TAB ?? 'true').toString().toLowerCase() !== 'false';
-
 export function InteractiveSessionTab() {
   const {
     sessionState,
@@ -32,7 +29,7 @@ export function InteractiveSessionTab() {
     streamInput,
     notifyResize,
     clearLogs,
-  } = useInteractiveSession({ enabled: INTERACTIVE_FLAG_ENABLED });
+  } = useInteractiveSession();
 
   const [command, setCommand] = useState("");
   const availableModels = sessionState?.availableModels ?? [];
@@ -166,17 +163,6 @@ export function InteractiveSessionTab() {
 
   return (
     <div className="flex h-full flex-col gap-4">
-      {!INTERACTIVE_FLAG_ENABLED && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Interactive Sessions Disabled</CardTitle>
-            <CardDescription>
-              Set VITE_FEATURE_DEV_BOTS_INTERACTIVE_TAB=false if you need to hide the interactive tab.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      )}
-
       <Card className="border-border/70 bg-card/80">
         <CardHeader className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
