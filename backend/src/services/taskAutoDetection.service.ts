@@ -1,7 +1,7 @@
 /**
  * Task Auto-Detection Service
  * 
- * Automatically detects missing task fields from minimal payload:
+ * Automatically detects missing task fields from the submission payload:
  * - Target files from git status (staged + modified)
  * - Risk level from file path patterns
  * - Context profiles from task type + files
@@ -12,7 +12,7 @@ import { simpleGit, SimpleGit } from 'simple-git';
 import { logger } from '../utils/logger.js';
 import { ContextRecipeSelector } from './context/contextRecipeSelector.js';
 import type { RecipeTaskType } from '../types/contextRecipe.js';
-import type { MinimalTaskPayload, TaskAutoDetectionResult } from '@app-monitor/api-contracts';
+import type { TaskSubmissionPayload, TaskAutoDetectionResult } from '@app-monitor/api-contracts';
 
 interface RiskPattern {
   pattern: RegExp;
@@ -52,9 +52,9 @@ export class TaskAutoDetectionService {
   }
   
   /**
-   * Auto-detect all missing fields from minimal payload
+   * Auto-detect all missing fields from the submission payload
    */
-  async detectFields(payload: MinimalTaskPayload): Promise<TaskAutoDetectionResult> {
+  async detectFields(payload: TaskSubmissionPayload): Promise<TaskAutoDetectionResult> {
     const result: TaskAutoDetectionResult = {
       detectedFiles: payload.targetFiles || await this.detectFilesFromGit(),
       inferredRiskLevel: payload.riskLevel || 'low',

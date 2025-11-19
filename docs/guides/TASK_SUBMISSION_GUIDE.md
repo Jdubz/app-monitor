@@ -1,4 +1,4 @@
-# Minimal Task Submission Guide
+# Task Submission Guide
 
 **Version:** 1.0  
 **Date:** 2025-11-14  
@@ -16,7 +16,7 @@ The system automatically detects files, risk level, and context profiles, then g
 ## API Endpoint
 
 ```
-POST /api/dev-bots/tasks/minimal
+POST /api/dev-bots/tasks
 Content-Type: application/json
 ```
 
@@ -182,7 +182,7 @@ Response:
 
 ## What Happens Automatically
 
-Once you submit a minimal task, the system:
+Once you submit a task, the system:
 
 1. **Auto-Detects** missing fields (files, risk, profiles, outputs)
 2. **Generates Context Bundle** from YAML recipes (cached by git hash)
@@ -307,7 +307,7 @@ node scripts/submit-task.js \
   --intent "Increase connection timeout from 5s to 30s"
 
 # Using curl (for automation)
-curl -X POST http://localhost:5000/api/dev-bots/tasks/minimal \
+curl -X POST http://localhost:5000/api/dev-bots/tasks \
   -H "Content-Type: application/json" \
   -d @task.json
 
@@ -320,7 +320,7 @@ curl -X POST http://localhost:5000/api/dev-bots/tasks/preview-detection \
 ## FAQ
 
 **Q: Can I still use the old V3 template format?**  
-A: The old endpoint (`POST /api/dev-bots/tasks`) is deprecated but still functional for backward compatibility. It will be removed in a future release. Use `/tasks/minimal` for all new tasks.
+A: No. The legacy endpoint has been removed; `/api/dev-bots/tasks` is the single submission path.
 
 **Q: How accurate is auto-detection?**  
 A: >90% accuracy measured in testing. Low-confidence detections include warnings.

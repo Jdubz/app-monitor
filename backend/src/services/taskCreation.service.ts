@@ -19,6 +19,10 @@ export interface TaskCreationResult {
   contextBundle?: ContextBundle;
 }
 
+export interface TaskCreationOptions {
+  submission?: boolean;
+}
+
 export interface SimpleTaskData {
   type: string;
   title: string;
@@ -68,7 +72,14 @@ export class TaskCreationService {
    * Create a new task with validation and deduplication
    * Now includes context bundle generation
    */
-  async createTask(taskData: EnhancedTaskData | SimpleTaskData): Promise<TaskCreationResult> {
+  async createTask(
+    taskData: EnhancedTaskData | SimpleTaskData,
+    options: TaskCreationOptions = {}
+  ): Promise<TaskCreationResult> {
+    const isSubmissionMode =
+      options.submission ||
+      ('metadata' in taskData && taskData.metadata?.submissionMode === 'standard');
+
     // Normalize task data
     const normalizedData = this.normalizeTaskData(taskData);
 
@@ -76,7 +87,7 @@ export class TaskCreationService {
     await this.checkDuplicates(normalizedData);
 
     // Validate task
-    const validation = this.validateTask(normalizedData);
+    const validation = this.validateTask(normalizedData, { skipStrictValidation: isSubmissionMode });
 
     // Generate context bundle (optional - graceful failure)
     let contextBundle: ContextBundle | undefined;
@@ -264,7 +275,18 @@ export class TaskCreationService {
   /**
    * Validate task data against guidelines
    */
-  private validateTask(normalizedData: EnhancedTaskData) {
+  private validateTask(
+    normalizedData: EnhancedTaskData,
+    options?: { skipStrictValidation?: boolean }
+  ) {
+    if (options?.skipStrictValidation) {
+      return {
+        isValid: true,
+        errors: [],
+        warnings: [],
+        suggestions: []
+      };
+    }
     // Skip strict validation in test environment for E2E tests
     if (process.env.NODE_ENV === 'test') {
       logger.debug({

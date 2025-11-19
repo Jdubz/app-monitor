@@ -84,7 +84,7 @@ export interface TokenCanUsePayload {
     canUse: boolean;
     remainingTokens: number;
 }
-export interface MinimalTaskPayload {
+export interface TaskSubmissionPayload {
     title: string;
     taskType: 'implementation' | 'review' | 'fix' | 'pr-follow-up' | 'analysis';
     intent: string;

@@ -389,13 +389,13 @@ describe('TaskPromptTemplateManager', () => {
     });
 
     it('should handle missing optional task fields gracefully', () => {
-      const minimalTask: Task = {
+      const submissionTask: Task = {
         id: 'minimal-task',
         type: 'feature',
-        title: 'Minimal Task',
-        description: 'Minimal description',
-        documentation: 'Minimal docs',
-        acceptance_criteria: ['Minimal criteria'],
+        title: 'Task Submission',
+        description: 'Concise description',
+        documentation: 'Concise docs',
+        acceptance_criteria: ['Essential criteria'],
         status: 'pending',
         priority: 1,
         created_at: Date.now(),
@@ -407,7 +407,7 @@ describe('TaskPromptTemplateManager', () => {
       };
 
       const context: TaskContext = {
-        task: minimalTask,
+        task: submissionTask,
         agent: mockAgent,
         project: 'job-finder-BE',
         worktree: '[dynamic workspace provisioned per task]',
