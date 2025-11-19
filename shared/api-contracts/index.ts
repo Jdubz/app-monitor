@@ -104,7 +104,16 @@ export interface TokenCanUsePayload {
 
 // Task types
 export type TaskType = 'implementation' | 'review' | 'fix' | 'pr-follow-up' | 'analysis';
-export const TASK_TYPES: TaskType[] = ['implementation', 'review', 'fix', 'pr-follow-up', 'analysis'];
+
+export const TASK_TYPES = {
+  IMPLEMENTATION: 'implementation' as const,
+  REVIEW: 'review' as const,
+  FIX: 'fix' as const,
+  PR_FOLLOW_UP: 'pr-follow-up' as const,
+  ANALYSIS: 'analysis' as const
+} as const;
+
+export type TaskTypeEnum = typeof TASK_TYPES[keyof typeof TASK_TYPES];
 
 export interface TaskSubmissionPayload {
   // Required fields (3 only)
