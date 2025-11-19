@@ -1,5 +1,7 @@
 import { Page } from '@playwright/test';
 
+// E2E test password - matches VITE_PASSWORD in playwright.config.ts
+// This is ONLY used for e2e tests, never for production
 const TEST_PASSWORD = 'e2e-test-password';
 
 export async function authenticate(page: Page) {
@@ -33,6 +35,7 @@ export async function bypassPasswordGate(page: Page) {
   if (isPasswordGateVisible) {
     await passwordInput.fill(TEST_PASSWORD);
     await page.getByRole('button', { name: 'Enter' }).click();
-    await page.waitForLoadState('networkidle');
+    // Wait for authentication to complete
+    await page.waitForSelector('button:has-text("Logout")', { timeout: 10000 });
   }
 }

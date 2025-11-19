@@ -97,8 +97,8 @@ Adds rich diagnostic context capture for dev-bot automation runs. Tracks every e
 ### 005_quality_observations.sql  
 **Purpose**: Quality observations and metrics
 
-### 007_interactive_sessions.sql
-**Purpose**: Interactive session management
+### 007_interactive_sessions.sql (OBSOLETE)
+**Purpose**: Interactive session management (removed in migration 028 - replaced with tmux-based terminal)
 
 ### 008_pr_review_comments.sql
 **Purpose**: PR review comment tracking and fingerprinting
@@ -187,6 +187,19 @@ Branch names can be fetched on-demand using pr_number.
 
 **Columns Removed**:
 - `branch` - Redundant (available via pr_number lookup)
+
+### 028_drop_interactive_sessions.sql ✨ **[Terminal Simplification]**
+**Purpose**: Remove interactive_sessions table - replaced with tmux-based terminal
+
+Interactive sessions now use tmux for persistence instead of database tracking. Sessions are managed entirely via TerminalService and Socket.IO events.
+
+**Tables Removed**:
+- `interactive_sessions` - Session state now managed by tmux
+
+**Migration Path**:
+- Old REST API endpoints removed
+- InteractiveSessionManager replaced by TerminalService
+- Socket.IO events: `terminal:create`, `terminal:attach`, `terminal:input`, `terminal:output`
 
 ## Migration System
 

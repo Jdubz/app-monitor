@@ -11,8 +11,11 @@ import type { DevBotsManagerDependencies } from './services/devBotsManager.inter
 import { ConnectionManager, setConnectionManagerInstance } from './services/connectionManager.js';
 import { GitHubWebhookHandler } from './services/githubWebhookHandler.service.js';
 import { setWebhookHandler } from './routes/github-webhooks.routes.js';
-import { TerminalService } from './services/TerminalService.js';
 import { logger } from './utils/logger.js';
+
+// Conditionally import TerminalService - skip in test environments to avoid node-pty crashes
+type TerminalServiceType = typeof import('./services/TerminalService.js').TerminalService;
+let TerminalServiceClass: TerminalServiceType | undefined;
 
 // CORS allowed headers for both HTTP and WebSocket
 const ALLOWED_CORS_HEADERS = ['Content-Type', 'X-API-Key', 'Authorization', 'X-Trace-Id'];
@@ -25,7 +28,7 @@ import type {
 // Export services for API access
 export let devBotsManager: DevBotsManager | undefined;
 export let connectionManager: ConnectionManager;
-export let terminalService: TerminalService | undefined;
+export let terminalService: InstanceType<TerminalServiceType> | undefined;
 
 export interface CreateAppOverrides {
   devBotsManager?: DevBotsManager | null;
@@ -186,17 +189,32 @@ export async function createApp(options: CreateAppOptions = {}) {
     });
 
     // Initialize TerminalService with tmux for persistent sessions
-    terminalService = new TerminalService({
-      io,
-      idleTimeoutMs: 30 * 60 * 1000, // 30 minutes
-      shellCommand: '/bin/bash',
-    });
+    // Skip in test environments to avoid node-pty crashes
+    const isTestEnv = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
+    if (!isTestEnv) {
+      if (!TerminalServiceClass) {
+        const module = await import('./services/TerminalService.js');
+        TerminalServiceClass = module.TerminalService;
+      }
 
-    logger.info({
-      category: 'system',
-      action: 'terminal_service_initialized',
-      message: 'TerminalService initialized with tmux support'
-    });
+      terminalService = new TerminalServiceClass({
+        io,
+        idleTimeoutMs: 30 * 60 * 1000, // 30 minutes
+        shellCommand: '/bin/bash',
+      });
+
+      logger.info({
+        category: 'system',
+        action: 'terminal_service_initialized',
+        message: 'TerminalService initialized with tmux support'
+      });
+    } else {
+      logger.info({
+        category: 'system',
+        action: 'terminal_service_skipped',
+        message: 'TerminalService skipped in test environment'
+      });
+    }
   }
 
   // Initialize GitHub Webhook Handler

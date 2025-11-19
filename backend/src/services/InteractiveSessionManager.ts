@@ -1,10 +1,15 @@
 /**
+ * @deprecated This class has been replaced by TerminalService (tmux-based terminal)
+ *
  * STUB: Interactive Session Manager
  *
- * This is a temporary stub to prevent compilation errors while we rebuild
- * the terminal feature with tmux. All methods are no-ops.
+ * This stub exists for backwards compatibility during the migration period.
+ * All methods are no-ops that either return empty results or throw errors.
  *
- * TODO: Remove this stub and all references once new TerminalService is complete
+ * Migration completed: 2025-11-18
+ * New implementation: TerminalService (backend/src/services/TerminalService.ts)
+ *
+ * TODO: Remove this stub once all references are cleaned up (Phase 3 cleanup)
  */
 
 import { EventEmitter } from 'events';

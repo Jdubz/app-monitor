@@ -96,28 +96,30 @@ App-monitor uses a unified Socket.IO architecture for all real-time communicatio
 'docker:monitorError'     // Monitoring error
 ```
 
-### 3. Interactive Terminal (Session Rooms)
+### 3. Interactive Terminal (tmux-based)
 
-**Purpose:** Real-time terminal I/O for interactive sessions
+**Purpose:** Persistent terminal sessions using tmux
 
 **Architecture:**
-- Uses Socket.IO rooms for session isolation
-- Room name: `terminal:${sessionId}`
-- Multiple clients can join same session (collaborative terminal)
+- Uses `tmux` for session persistence (sessions survive disconnects)
+- Uses `node-pty` to spawn/attach to tmux sessions
+- No database persistence needed
+- Sessions identified by sanitized session IDs
+- Multiple clients can connect to same session (broadcast output)
 
 **Events:**
 ```typescript
 // Client → Server
-'terminal:join'    // Join terminal session (joins room)
-'terminal:leave'   // Leave terminal session
+'terminal:create'  // Create new tmux session
+'terminal:attach'  // Attach to existing tmux session
 'terminal:input'   // Send input to terminal (stdin)
-'terminal:signal'  // Send signal (interrupt/terminate)
 'terminal:resize'  // Resize terminal (rows/cols)
 
-// Server → Client (broadcast to room)
-'terminal:joined'  // Successfully joined session
-'terminal:output'  // Terminal output (stdout/system)
-'terminal:status'  // Status change (connected/ended)
+// Server → Client
+'terminal:created' // Session created successfully
+'terminal:attached'// Attached to session
+'terminal:output'  // Terminal output (stdout)
+'terminal:closed'  // Terminal session ended
 'terminal:error'   // Error occurred
 ```
 
@@ -149,24 +151,25 @@ export interface ServerToClientEvents {
 
 ---
 
-## Socket.IO Terminal Handler
+## Terminal Service
 
-**Location:** `/backend/src/services/socketIOTerminalHandler.ts`
+**Location:** `/backend/src/services/TerminalService.ts`
 
 **Responsibilities:**
-1. **Session Management** - Start/stop terminal sessions
-2. **PTY Streaming** - Forward Docker exec PTY streams
-3. **Client Management** - Handle join/leave with Socket.IO rooms
-4. **Backlog** - Maintain recent output history (configurable limit)
-5. **Event Broadcasting** - Send output to all clients in session room
+1. **Session Management** - Create/attach to tmux sessions
+2. **PTY Streaming** - Spawn/attach to tmux sessions via node-pty
+3. **Session Persistence** - Sessions survive across disconnects (tmux)
+4. **Backlog** - Maintain recent output history for reconnecting clients
+5. **Event Broadcasting** - Send output to all connected clients
 
 **Key Methods:**
 ```typescript
-class SocketIOTerminalHandler {
-  async startSession(sessionId: string, containerId: string): Promise<void>
-  async stopSession(sessionId: string): Promise<void>
-  getSession(sessionId: string): TerminalSession | undefined
-  getAllSessions(): TerminalSession[]
+class TerminalService {
+  async createSession(sessionId: string): Promise<void>
+  async attachToSession(sessionId: string, socket: Socket): Promise<void>
+  async killSession(sessionId: string): Promise<void>
+  getActiveSession(sessionId: string): ActiveTerminalSession | undefined
+  listActiveSessions(): ActiveTerminalSession[]
 }
 ```
 
@@ -189,12 +192,11 @@ const io = new SocketIOServer(httpServer, {
   allowEIO3: true,
 });
 
-// Initialize terminal handler
-const terminalHandler = new SocketIOTerminalHandler({
+// Initialize terminal service
+const terminalService = new TerminalService({
   io,
-  docker,
-  backlogLimit: 200,
-  shellCommand: ['/bin/bash'],
+  backlogLimit: 1000,
+  idleTimeout: 3600000, // 1 hour
 });
 ```
 
@@ -236,9 +238,10 @@ const service = createSocketService({
 
 ### Breaking Changes
 1. **Frontend:** Interactive terminal must use Socket.IO events instead of native WebSocket
-2. **Backend:** `InteractiveSessionStreaming` replaced by `SocketIOTerminalHandler`
-3. **Events:** Terminal events renamed to `terminal:*` pattern
-4. **Connection:** Clients must use `terminal:join` instead of WebSocket URL
+2. **Backend:** `InteractiveSessionManager` and `InteractiveSessionStreaming` replaced by `TerminalService`
+3. **Events:** Terminal events changed to `terminal:create/attach/input/output` pattern
+4. **Connection:** Clients use `terminal:create` or `terminal:attach` instead of REST API
+5. **Database:** `interactive_sessions` table removed - sessions managed by tmux
 
 ---
 
@@ -248,13 +251,17 @@ const service = createSocketService({
 - Single WebSocket library to maintain
 - Fewer dependencies (`ws` library removed)
 - Consistent event handling patterns
-- ~500 lines of code removed
+- ~4,700 lines of code removed (including tests and legacy services)
+- Single TerminalService instead of 5 separate services
 
 ### 2. Better Reliability
 - Built-in reconnection with exponential backoff
 - Automatic heartbeat/ping-pong
 - Polling fallback for restricted environments
 - Connection state management
+- Sessions persist across disconnects (tmux)
+- No orphaned database records
+- Proper PTY cleanup on disconnect
 
 ### 3. Enhanced Developer Experience
 - Type-safe events with TypeScript
@@ -315,20 +322,22 @@ location /socket.io/ {
 ## Testing
 
 ### Unit Tests
-- **Location:** `/backend/src/services/__tests__/socketIOTerminalHandler.test.ts`
-- **Coverage:** Session management, event handling, backlog, error handling
+- **Location:** `/backend/src/services/__tests__/TerminalService.test.ts`
+- **Coverage:** Session creation/attachment, tmux integration, event handling, backlog, error handling
 
 ### Integration Tests
 - Socket.IO connection lifecycle
-- Event broadcasting to rooms
-- PTY streaming integration
+- Tmux session creation/attachment
+- PTY streaming via node-pty
 - Error scenarios
+- Session persistence across disconnects
 
 ### E2E Tests
-- Full terminal session workflow
-- Multiple client connections
-- Reconnection scenarios
-- Network interruption recovery
+- **Location:** `/e2e/tests/interactive-terminal.spec.ts`
+- Full terminal session workflow (create/attach)
+- Terminal input/output via xterm.js
+- UI error states
+- Terminal initialization
 
 ---
 
@@ -343,38 +352,50 @@ location /socket.io/ {
 4. Check browser console for upgrade errors
 
 ### Issue: Terminal output not received
-**Symptoms:** Terminal joins but no output
+**Symptoms:** Terminal created/attached but no output
 **Solutions:**
-1. Verify session exists: `terminalHandler.getSession(sessionId)`
-2. Check PTY stream is active
-3. Verify client joined room: `socket.rooms.has('terminal:${sessionId}')`
-4. Check for Docker exec errors in logs
+1. Verify session exists: `terminalService.getActiveSession(sessionId)`
+2. Check tmux session is running: `tmux list-sessions`
+3. Check PTY stream is active and attached
+4. Verify Socket.IO connection is established
+5. Check backend logs for node-pty errors
 
 ### Issue: Multiple clients not seeing same output
 **Symptoms:** One client sees output, others don't
 **Solutions:**
-1. Verify all clients joined the room via `terminal:join`
-2. Check Socket.IO room broadcasting
+1. Verify all clients attached to session via `terminal:attach`
+2. Check Socket.IO broadcast mechanism
 3. Verify session ID matches across clients
+4. Check backlog is being replayed on attach
+
+### Issue: Session not persisting
+**Symptoms:** Session lost on disconnect/reconnect
+**Solutions:**
+1. Verify tmux is installed: `which tmux`
+2. Check tmux session exists: `tmux list-sessions`
+3. Verify session ID is sanitized properly
+4. Check for tmux timeout/kill settings
 
 ---
 
 ## Future Enhancements
 
 1. **Collaborative Features**
-   - Multi-user terminal sessions
-   - User cursors and presence
-   - Session recording/replay
+   - Multi-user terminal sessions with shared input
+   - User cursors and presence indicators
+   - Session recording/replay from backlog
 
 2. **Performance Optimization**
-   - Binary transport for terminal data
+   - Binary transport for terminal data (msgpack)
    - Compression for large outputs
-   - Adaptive backlog sizing
+   - Adaptive backlog sizing based on memory
+   - Output throttling for high-frequency updates
 
 3. **Advanced Features**
-   - Terminal tabs/splits
+   - Terminal tabs/splits in UI
    - File transfer over Socket.IO
-   - Session persistence/resume
+   - Session history/search
+   - Custom shell profiles per session
 
 ---
 
@@ -383,4 +404,6 @@ location /socket.io/ {
 - [Socket.IO Documentation](https://socket.io/docs/v4/)
 - [Cloudflare Tunnel WebSocket Support](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/configuration/local-management/ingress/#websocket)
 - [TypeScript Socket.IO Types](https://socket.io/docs/v4/typescript/)
-- [Interactive Terminal Design](/docs/technicalDesigns/interactive-terminal-reset.md)
+- [Interactive Terminal Simplification](/docs/technicalDesigns/interactive-terminal-simplification.md)
+- [node-pty Documentation](https://github.com/microsoft/node-pty)
+- [tmux Manual](https://man7.org/linux/man-pages/man1/tmux.1.html)

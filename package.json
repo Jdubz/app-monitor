@@ -23,7 +23,7 @@
     "test:backend": "npm run test -w backend",
     "test:frontend": "npm run test -w frontend",
     "test:e2e:auth": "node test-e2e-auth.js",
-    "e2e:frontend": "cd frontend && VITE_API_BASE_URL=${VITE_API_BASE_URL:-http://localhost:3002} VITE_API_KEY=${VITE_API_KEY:-test-e2e-api-key-not-for-production} VITE_PASSWORD=${VITE_PASSWORD:-e2e-test-password} vite --port 5174 --strictPort --host",
+    "e2e:frontend": "cd frontend && vite --mode test --port 5174 --strictPort --host",
     "lint": "npm run lint --workspaces",
     "lint:fix": "npm run lint:fix --workspaces",
     "clean": "npm run clean --workspaces",

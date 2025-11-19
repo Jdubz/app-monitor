@@ -138,13 +138,13 @@ export class DevBotsManager extends EventEmitter {
     // Type helper for dependency injection
     interface SystemInitCallbackDeps {
       emitEvent: (event: string, data: unknown) => void;
-      endInteractiveSession: (sessionId: string, reason: string) => Promise<void>;
+      // endInteractiveSession removed - migrated to tmux-based TerminalService
     }
 
-    // Update SystemInitializationService with emit and endInteractiveSession callbacks
+    // Update SystemInitializationService with emit callback
     // Note: SystemInitializationService is injected but needs these callbacks from DevBotsManager
     (this.systemInitializationService as unknown as SystemInitCallbackDeps).emitEvent = this.emit.bind(this);
-    (this.systemInitializationService as unknown as SystemInitCallbackDeps).endInteractiveSession = this.endInteractiveSession.bind(this);
+    // endInteractiveSession removed - migrated to tmux-based TerminalService
 
     // Update CleanupCoordinator with assignNextTask callback
     // Note: CleanupCoordinator is injected but needs this callback from DevBotsManager
