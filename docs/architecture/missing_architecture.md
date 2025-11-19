@@ -1,6 +1,6 @@
 # Missing Architecture Documentation
 
-This document outlines the areas of the codebase that currently lack dedicated architecture documentation as per the guidelines in `DOCUMENTATION_SYSTEM.md`.
+**Purpose:** Identifies gaps in architecture documentation to guide future documentation efforts.
 
 ---
 

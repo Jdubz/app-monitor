@@ -1,6 +1,6 @@
 # Refactoring Backlog
 
-This file contains a list of outstanding refactoring tasks.
+**Purpose:** Tracks planned refactoring tasks to reduce complexity and improve maintainability.
 
 ---
 

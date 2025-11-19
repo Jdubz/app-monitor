@@ -57,10 +57,10 @@
   },
   "lint-staged": {
     "backend/**/*.ts": [
-      "npx eslint --fix"
+      "bash -c 'cd backend && npx eslint --fix \"$@\"' --"
     ],
     "frontend/**/*.{ts,tsx}": [
-      "npx eslint --fix"
+      "bash -c 'cd frontend && npx eslint --fix \"$@\"' --"
     ]
   }
 }

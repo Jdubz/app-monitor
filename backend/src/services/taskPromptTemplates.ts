@@ -5,8 +5,6 @@
  * Task-type-specific guidelines are loaded from taskTypeGuidelines.ts
  */
 
- 
-
 import { logger } from '../utils/logger.js';
 import { Task } from './taskQueue.sqlite.js';
 import { AgentPersonality } from './agentPersonalities.js';

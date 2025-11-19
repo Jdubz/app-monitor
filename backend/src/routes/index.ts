@@ -47,7 +47,6 @@ export function createApiRouter(deps: {
   // Initialize logs and issues routes with database and task queue from devBotsManager
   if (deps.devBotsManager) {
     const taskQueue = deps.devBotsManager.getTaskQueue();
-     
     const db = taskQueue.getDatabase();
     initializeLogsRoutes(db);
     initializeIssuesRoutes(db, taskQueue);
@@ -69,7 +68,6 @@ export function createApiRouter(deps: {
     // Note: This will be false in test environment where index module isn't loaded
     let shuttingDown = false;
     try {
-       
       const indexModule = await import('../index.js');
       shuttingDown = indexModule.isShuttingDown || false;
     } catch {

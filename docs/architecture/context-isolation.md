@@ -1,5 +1,9 @@
 # Context Isolation Analysis & Solutions
 
+**Purpose:** Analyzes the context isolation problem in dev-bots and proposes Docker-based solutions.
+
+---
+
 ## 🚨 **Critical Problem Identified**
 
 You've identified a **fundamental design flaw** in the current system:
