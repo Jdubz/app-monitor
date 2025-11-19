@@ -193,7 +193,7 @@ export interface QualityGateResetPayload {
 // Dev-Bots Contracts
 // -----------------------------------------------------------------------------
 
-export type DevBotsTaskStatus = 'pending' | 'assigned' | 'active' | 'completed' | 'failed';
+export type DevBotsTaskStatus = 'pending' | 'assigned' | 'active' | 'completed' | 'failed' | 'blocked';
 
 export interface DevBotsTaskScope {
   type: string;

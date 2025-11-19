@@ -684,10 +684,30 @@ export class TaskExecutionService {
               }
               this.taskQueue.requeueTaskForPhaseRetry(nextTask.id);
             } else if (recovery.category === 'chain_blocked') {
-              // Block entire chain - requires human intervention
+              // Block task immediately - requires human intervention
+              this.taskQueue.updateTask(nextTask.id, {
+                status: 'blocked',
+                phase_status: 'blocked',
+                blocked_reason: recovery.diagnosis || 'Recovery failed - manual intervention required',
+                blocked_at: Date.now(),
+                blocked_by: 'recovery_agent'
+              });
+
+              // Also block the entire chain if task is part of one
               if (nextTask.chain_id) {
                 this.taskQueue.blockChain(nextTask.chain_id, recovery.diagnosis || 'Unrecoverable failure', 'recovery_agent');
               }
+
+              logger.warn({
+                category: 'phase',
+                action: 'task_blocked_by_recovery',
+                message: `Task ${nextTask.id} blocked by recovery agent`,
+                details: {
+                  taskId: nextTask.id,
+                  chainId: nextTask.chain_id,
+                  diagnosis: recovery.diagnosis
+                }
+              });
             } else if (recovery.category === 'system_blocked') {
               // Global pause - emit event for system-wide handling
               logger.error({

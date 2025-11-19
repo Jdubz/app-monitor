@@ -886,6 +886,65 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   });
 
   /**
+   * POST /tasks/:taskId/resume
+   * Resume a single blocked task after manual intervention
+   * Body: { resumedBy: string }
+   */
+  router.post('/tasks/:taskId/resume', (req: Request, res: Response) => {
+    try {
+      const { taskId } = req.params;
+      const { resumedBy } = req.body;
+
+      // Validate taskId
+      if (!taskId || taskId.trim().length === 0) {
+        return sendError(res, 'Invalid request', 400, {
+          message: 'taskId is required'
+        });
+      }
+
+      // Validate resumedBy
+      if (
+        !resumedBy ||
+        typeof resumedBy !== 'string' ||
+        resumedBy.trim().length === 0
+      ) {
+        return sendError(res, 'Invalid request', 400, {
+          message: 'resumedBy is required and must be a non-empty string'
+        });
+      }
+
+      const normalizedResumedBy = resumedBy.trim();
+
+      // Resume the task
+      devBotsManager.getTaskQueue().resumeTask(taskId, normalizedResumedBy);
+
+      logger.info({
+        category: 'api',
+        action: 'task_resumed',
+        message: `Task ${taskId} resumed by ${normalizedResumedBy}`,
+        details: { taskId, resumedBy: normalizedResumedBy }
+      });
+
+      sendSuccess(res, {
+        message: `Task ${taskId} has been resumed`,
+        taskId,
+        resumedBy: normalizedResumedBy
+      });
+    } catch (error) {
+      logger.error({
+        category: 'api',
+        action: 'error_resuming_task',
+        message: `Error resuming task: ${error}`,
+        error
+      });
+      sendError(res, 'Failed to resume task', 500, {
+        message: error instanceof Error ? error.message : String(error),
+        taskId: req.params.taskId
+      });
+    }
+  });
+
+  /**
    * POST /chains/:chainId/unblock
    * Unblock a chain after manual intervention
    * Body: { unblockedBy: string }

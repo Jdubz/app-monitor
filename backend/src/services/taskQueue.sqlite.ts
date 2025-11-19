@@ -76,7 +76,7 @@ export type {
 export { summarizeAgentComparisonMetrics };
 
 // Task status enum
-export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timeout';
+export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timeout' | 'blocked';
 
 // Worker status enum
 export type WorkerStatus = 'starting' | 'running' | 'stopping' | 'stopped';
@@ -203,6 +203,7 @@ export interface QueueMetrics {
   failed: number;
   cancelled: number;
   timeout: number;
+  blocked: number;
   total: number;
   avg_completion_time_ms?: number;
   oldest_pending_age_ms?: number;
@@ -347,6 +348,50 @@ export class TaskQueueService {
 
 
   private createSchema(): void {
+    // ⚠️  CRITICAL: DUAL SCHEMA MANAGEMENT ANTI-PATTERN
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //
+    // This method creates schema for tests/dev, but production uses migrations/*.sql
+    // This is an ANTI-PATTERN that caused production failure (Nov 19, 2025).
+    //
+    // PROBLEM:
+    // - Two sources of truth: this code AND migration files
+    // - Schema drift is INEVITABLE
+    // - Tests pass with different schema than production → production failures
+    // - Column added here but not in migrations → missing in production
+    //
+    // INCIDENT:
+    // - recovery_diagnosis column added here (line 480)
+    // - Migration 026 used CREATE TABLE IF NOT EXISTS (silently skipped in prod)
+    // - Production database missing column → 100% task failure rate
+    // - Required emergency hotfix + migration 029
+    //
+    // SOLUTION OPTIONS:
+    //
+    // Option A: Use ONLY migrations (recommended)
+    //   1. Remove this createSchema() method
+    //   2. Tests call MigrationManager.runMigrations()
+    //   3. One source of truth, guaranteed consistency
+    //
+    // Option B: Sync from migrations
+    //   1. Auto-generate this from migration files
+    //   2. Validate on startup that schemas match
+    //   3. More complex but keeps code-based schema
+    //
+    // CURRENT STATE:
+    // - Emergency fixes applied (migration 029)
+    // - Schema validation tools added
+    // - CI/CD validation in place
+    // - This method still exists as interim solution
+    //
+    // ACTION REQUIRED:
+    // - Plan migration to Option A (single source of truth)
+    // - Update all tests to use MigrationManager
+    // - Remove this method
+    // - See: docs/migrations/best-practices.md
+    //
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    //
     // NOTE: In production, the tasks table is created by migrations (002_tasks_table.sql + 016_add_fingerprint_column.sql)
     // However, for tests and standalone usage, we need to create it here with a compatible schema
     // This table definition includes ALL columns from migrations to ensure compatibility
@@ -361,7 +406,7 @@ export class TaskQueueService {
         description TEXT,
         documentation TEXT,
         notes TEXT,
-        status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled', 'timeout', 'assigned', 'active', 'retrying')),
+        status TEXT NOT NULL CHECK(status IN ('pending', 'running', 'completed', 'failed', 'cancelled', 'timeout', 'assigned', 'active', 'retrying', 'blocked')),
         priority INTEGER NOT NULL DEFAULT 5,
         created_at INTEGER NOT NULL,
         assigned_at INTEGER,
@@ -1245,19 +1290,51 @@ export class TaskQueueService {
     return this.transaction(() => {
       const stalledWorkers = this.workerLifecycle.handleStalledWorkers();
       const now = Date.now();
+      const MAX_PHASE_ATTEMPTS = 4;
 
-      // Fail tasks for stalled workers
+      // Handle tasks for stalled workers - retry or block based on attempts
       for (const worker of stalledWorkers) {
         if (worker.task_id) {
-          const updateTaskStmt = this.db.prepare(`
-            UPDATE tasks
-            SET status = 'failed',
-                error = 'Worker heartbeat timeout',
-                completed_at = ?
-            WHERE id = ?
-          `);
+          const task = this.getTask(worker.task_id);
 
-          updateTaskStmt.run(now, worker.task_id);
+          if (task) {
+            const phaseAttempts = task.phase_attempts ?? 1;
+
+            if (phaseAttempts < MAX_PHASE_ATTEMPTS) {
+              // Worker timeout but task can retry - requeue it
+              this.requeueTaskForPhaseRetry(worker.task_id);
+
+              logger.warn({
+                category: 'process',
+                action: 'task_requeued_after_worker_timeout',
+                message: `Task ${worker.task_id} requeued after worker ${worker.id} timeout (attempt ${phaseAttempts + 1}/${MAX_PHASE_ATTEMPTS})`,
+                details: { workerId: worker.id, taskId: worker.task_id, phaseAttempts: phaseAttempts + 1 }
+              });
+            } else {
+              // Attempts exhausted - block the task
+              const updateTaskStmt = this.db.prepare(`
+                UPDATE tasks
+                SET status = 'blocked',
+                    phase_status = 'blocked',
+                    blocked_reason = ?,
+                    blocked_at = ?,
+                    blocked_by = 'worker_timeout'
+                WHERE id = ?
+              `);
+              updateTaskStmt.run(
+                `Worker heartbeat timeout after ${MAX_PHASE_ATTEMPTS} attempts`,
+                now,
+                worker.task_id
+              );
+
+              logger.warn({
+                category: 'process',
+                action: 'task_blocked_after_worker_timeouts',
+                message: `Task ${worker.task_id} blocked after ${MAX_PHASE_ATTEMPTS} worker timeout attempts`,
+                details: { workerId: worker.id, taskId: worker.task_id }
+              });
+            }
+          }
         }
       }
 
@@ -1688,19 +1765,20 @@ export class TaskQueueService {
         const durationMs = now - task.started_at;
         const durationMinutes = Math.round(durationMs / 60000);
 
-        // Mark task as failed
+        // Block orphaned task - don't mark as failed without giving it a chance to recover
         const updateStmt = this.db.prepare(`
           UPDATE tasks
-          SET status = 'failed',
-              error = ?,
-              completed_at = ?,
-              retry_count = retry_count + 1,
+          SET status = 'blocked',
+              phase_status = 'blocked',
+              blocked_reason = ?,
+              blocked_at = ?,
+              blocked_by = 'system_restart',
               assigned_worker = NULL
           WHERE id = ?
         `);
 
         updateStmt.run(
-          `Task was orphaned (server restart or crash). Was running for ${durationMinutes} minutes before server stopped.`,
+          `Task was orphaned (server restart or crash). Was running for ${durationMinutes} minutes before server stopped. Needs manual verification.`,
           now,
           task.id
         );
@@ -1741,8 +1819,8 @@ export class TaskQueueService {
 
         logger.info({
           category: 'recovery',
-          action: 'orphaned_task_recovered',
-          message: `Marked orphaned task ${task.id} as failed`,
+          action: 'orphaned_task_blocked',
+          message: `Blocked orphaned task ${task.id} for manual verification`,
           details: {
             taskId: task.id,
             title: task.title,
@@ -1906,6 +1984,59 @@ export class TaskQueueService {
    */
   unblockChain(chainId: string, unblockedBy: string): void {
     return this.chainTracker.unblockChain(chainId, unblockedBy);
+  }
+
+  /**
+   * Resume a single blocked task manually.
+   * Resets task to pending state while preserving phase progress.
+   *
+   * @param taskId - ID of the blocked task to resume
+   * @param resumedBy - Identifier of who resumed the task (for audit trail)
+   * @throws Error if task is not found or not in blocked status
+   */
+  resumeTask(taskId: string, resumedBy: string): void {
+    return this.transaction(() => {
+      const task = this.getTask(taskId);
+
+      if (!task) {
+        throw new Error(`Task ${taskId} not found`);
+      }
+
+      if (task.status !== 'blocked') {
+        throw new Error(`Task ${taskId} is not blocked (current status: ${task.status})`);
+      }
+
+      const now = Date.now();
+      const stmt = this.db.prepare(`
+        UPDATE tasks
+        SET status = 'pending',
+            phase_status = 'ready',
+            blocked_reason = NULL,
+            blocked_at = NULL,
+            blocked_by = NULL,
+            notes = COALESCE(notes || '\n', '') || ?
+        WHERE id = ?
+      `);
+
+      stmt.run(
+        `[${new Date(now).toISOString()}] Task resumed by ${resumedBy}. Previous block reason: ${task.blocked_reason || 'none'}`,
+        taskId
+      );
+
+      logger.info({
+        category: 'process',
+        action: 'task_resumed',
+        message: `Task ${taskId} manually resumed by ${resumedBy}`,
+        details: {
+          taskId,
+          resumedBy,
+          previousBlockReason: task.blocked_reason,
+          phaseIndex: task.phase_index,
+          phaseName: task.phase_name,
+          phaseAttempts: task.phase_attempts
+        }
+      });
+    });
   }
 
   /**
