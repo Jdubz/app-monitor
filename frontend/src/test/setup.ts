@@ -130,11 +130,17 @@ class MockEventSource {
 global.EventSource = MockEventSource as unknown as typeof EventSource;
 
 // Mock MutationObserver
-global.MutationObserver = vi.fn().mockImplementation(() => ({
-  observe: vi.fn(),
-  disconnect: vi.fn(),
-  takeRecords: vi.fn(),
-}));
+class MockMutationObserver {
+  observe = vi.fn();
+  disconnect = vi.fn();
+  takeRecords = vi.fn(() => []);
+
+  constructor(_callback: MutationCallback) {
+    // Store callback but don't use it in tests
+  }
+}
+
+global.MutationObserver = MockMutationObserver as unknown as typeof MutationObserver;
 
 // Mock HTMLElement.prototype.scrollIntoView
 HTMLElement.prototype.scrollIntoView = vi.fn();

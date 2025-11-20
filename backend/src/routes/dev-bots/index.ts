@@ -5,7 +5,6 @@
  * - Status & Infrastructure (status.routes.ts)
  * - Task Management (tasks.routes.ts)
  * - Agent Management (agents.routes.ts)
- * - Interactive Sessions (interactive.routes.ts)
  * - Templates & Guidelines (templates.routes.ts)
  *
  * All routes maintain flat URL structure (no nested prefixes)
@@ -16,7 +15,6 @@ import type { DevBotsManager } from '../../services/devBotsManager.js';
 import { createStatusRoutes } from './status.routes.js';
 import { createTasksRoutes } from './tasks.routes.js';
 import { createAgentsRoutes } from './agents.routes.js';
-import { createInteractiveRoutes } from './interactive.routes.js';
 import { createTemplatesRoutes } from './templates.routes.js';
 import { createPlansRoutes } from './plans.routes.js';
 import { createSettingsRoutes } from './settings.routes.js';
@@ -60,11 +58,6 @@ export function createDevBotsRouter(devBotsManager: DevBotsManager): Router {
   // Agent Management endpoints
   // Includes: /agents, /agents/valid
   router.use('/', createAgentsRoutes(devBotsManager));
-
-  // Interactive Session endpoints
-  // Includes: /interactive/session, /interactive/session/:id/input,
-  //           /interactive/heartbeat, /interactive/interrupt
-  router.use('/', createInteractiveRoutes(devBotsManager));
 
   // Templates & Guidelines endpoints
   // Includes: /templates, /guidelines, /guidelines/:taskType,

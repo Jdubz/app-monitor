@@ -404,6 +404,5 @@ location /socket.io/ {
 - [Socket.IO Documentation](https://socket.io/docs/v4/)
 - [Cloudflare Tunnel WebSocket Support](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/configuration/local-management/ingress/#websocket)
 - [TypeScript Socket.IO Types](https://socket.io/docs/v4/typescript/)
-- [Interactive Terminal Simplification](/docs/technicalDesigns/interactive-terminal-simplification.md)
 - [node-pty Documentation](https://github.com/microsoft/node-pty)
 - [tmux Manual](https://man7.org/linux/man-pages/man1/tmux.1.html)
