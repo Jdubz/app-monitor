@@ -157,7 +157,12 @@ describe('AdminBotChat', () => {
     const textarea = screen.getByPlaceholderText(/Start a session to send messages/i);
     expect(textarea).toBeDisabled();
 
-    const sendButton = screen.getByRole('button', { name: '', description: /send/i });
+    // Get all buttons and find the send button (the one that's not "Start Session" or "Stop Session")
+    const buttons = screen.getAllByRole('button');
+    const sendButton = buttons.find(btn =>
+      !btn.textContent?.includes('Start Session') &&
+      !btn.textContent?.includes('Stop Session')
+    );
     expect(sendButton).toBeDisabled();
   });
 
@@ -208,10 +213,12 @@ describe('AdminBotChat', () => {
     const textarea = screen.getByPlaceholderText(/Type your message/i);
     await user.type(textarea, 'Hello, bot!');
 
-    // Click send button
-    const sendButton = screen.getAllByRole('button').find((btn) =>
-      btn.querySelector('svg')
+    // Click send button (the icon-only button without text content)
+    const buttons = screen.getAllByRole('button');
+    const sendButton = buttons.find(btn =>
+      !btn.textContent?.trim() && btn.querySelector('svg')
     );
+    expect(sendButton).toBeDefined();
     await user.click(sendButton!);
 
     // Should send message
@@ -346,8 +353,10 @@ describe('AdminBotChat', () => {
     const startButton = screen.getByRole('button', { name: /start session/i });
     await user.click(startButton);
 
-    // Should show loading spinner
-    expect(screen.getByRole('button').querySelector('svg.animate-spin')).toBeInTheDocument();
+    // Should show loading spinner in the start/stop button
+    const loadingButton = screen.getAllByRole('button').find(btn => btn.querySelector('svg.animate-spin'));
+    expect(loadingButton).toBeDefined();
+    expect(loadingButton?.querySelector('svg.animate-spin')).toBeInTheDocument();
   });
 
   it('should display error message inline', async () => {
@@ -448,8 +457,10 @@ describe('AdminBotChat', () => {
     await user.type(textarea, 'User message{Enter}');
 
     await waitFor(() => {
-      const userMessage = screen.getByText('User message').closest('div');
-      expect(userMessage).toHaveClass('bg-blue-500');
+      // Find the user message container (has blue background for user messages)
+      const userMessage = screen.getByText('User message').closest('.bg-blue-500');
+      expect(userMessage).toBeInTheDocument();
+      expect(userMessage).toHaveClass('text-white'); // user messages also have white text
     });
   });
 });

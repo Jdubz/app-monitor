@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, waitFor } from '@testing-library/react';
+import { renderHook } from '@testing-library/react';
 import { useAdminBotSSE } from './useAdminBotSSE';
 
 // Mock EventSource
@@ -99,7 +99,7 @@ describe('useAdminBotSSE', () => {
     expect(EventSource).toHaveBeenCalled();
   });
 
-  it('should call onConnected when connection established', async () => {
+  it('should call onConnected when connection established', () => {
     const onConnected = vi.fn();
 
     renderHook(() =>
@@ -117,12 +117,10 @@ describe('useAdminBotSSE', () => {
     // Simulate connected event
     eventSource.simulateMessage({ type: 'connected', timestamp: Date.now() });
 
-    await waitFor(() => {
-      expect(onConnected).toHaveBeenCalledTimes(1);
-    });
+    expect(onConnected).toHaveBeenCalledTimes(1);
   });
 
-  it('should call onOutput when receiving output events', async () => {
+  it('should call onOutput when receiving output events', () => {
     const onOutput = vi.fn();
 
     renderHook(() =>
@@ -138,12 +136,10 @@ describe('useAdminBotSSE', () => {
 
     eventSource.simulateMessage({ type: 'output', content: 'test output' });
 
-    await waitFor(() => {
-      expect(onOutput).toHaveBeenCalledWith('test output');
-    });
+    expect(onOutput).toHaveBeenCalledWith('test output');
   });
 
-  it('should call onError when receiving error events', async () => {
+  it('should call onError when receiving error events', () => {
     const onError = vi.fn();
 
     renderHook(() =>
@@ -159,12 +155,10 @@ describe('useAdminBotSSE', () => {
 
     eventSource.simulateMessage({ type: 'error', content: 'test error' });
 
-    await waitFor(() => {
-      expect(onError).toHaveBeenCalledWith('test error');
-    });
+    expect(onError).toHaveBeenCalledWith('test error');
   });
 
-  it('should call onExit when receiving exit events', async () => {
+  it('should call onExit when receiving exit events', () => {
     const onExit = vi.fn();
 
     renderHook(() =>
@@ -180,12 +174,10 @@ describe('useAdminBotSSE', () => {
 
     eventSource.simulateMessage({ type: 'exit', code: 0 });
 
-    await waitFor(() => {
-      expect(onExit).toHaveBeenCalledWith(0);
-    });
+    expect(onExit).toHaveBeenCalledWith(0);
   });
 
-  it('should handle exit with null code', async () => {
+  it('should handle exit with null code', () => {
     const onExit = vi.fn();
 
     renderHook(() =>
@@ -201,12 +193,10 @@ describe('useAdminBotSSE', () => {
 
     eventSource.simulateMessage({ type: 'exit', code: null });
 
-    await waitFor(() => {
-      expect(onExit).toHaveBeenCalledWith(null);
-    });
+    expect(onExit).toHaveBeenCalledWith(null);
   });
 
-  it('should not crash on unknown event types', async () => {
+  it('should not crash on unknown event types', () => {
     const onOutput = vi.fn();
 
     renderHook(() =>
@@ -229,7 +219,7 @@ describe('useAdminBotSSE', () => {
     expect(onOutput).not.toHaveBeenCalled();
   });
 
-  it('should handle malformed JSON gracefully', async () => {
+  it('should handle malformed JSON gracefully', () => {
     const onOutput = vi.fn();
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -249,10 +239,7 @@ describe('useAdminBotSSE', () => {
       eventSource.onmessage(new MessageEvent('message', { data: '{invalid json}' }));
     }
 
-    await waitFor(() => {
-      expect(consoleError).toHaveBeenCalled();
-    });
-
+    expect(consoleError).toHaveBeenCalled();
     expect(onOutput).not.toHaveBeenCalled();
 
     consoleError.mockRestore();
@@ -308,7 +295,7 @@ describe('useAdminBotSSE', () => {
     expect(closeSpy).toHaveBeenCalled();
   });
 
-  it('should handle connection errors', async () => {
+  it('should handle connection errors', () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 
     renderHook(() =>
@@ -324,14 +311,12 @@ describe('useAdminBotSSE', () => {
 
     eventSource.simulateError();
 
-    await waitFor(() => {
-      expect(consoleError).toHaveBeenCalled();
-    });
+    expect(consoleError).toHaveBeenCalled();
 
     consoleError.mockRestore();
   });
 
-  it('should update callbacks without reconnecting', async () => {
+  it('should update callbacks without reconnecting', () => {
     const onOutput1 = vi.fn();
     const onOutput2 = vi.fn();
 
@@ -353,9 +338,7 @@ describe('useAdminBotSSE', () => {
     // Send event with first callback
     eventSource1.simulateMessage({ type: 'output', content: 'test1' });
 
-    await waitFor(() => {
-      expect(onOutput1).toHaveBeenCalledWith('test1');
-    });
+    expect(onOutput1).toHaveBeenCalledWith('test1');
 
     // Update callback
     rerender({ onOutput: onOutput2 });
@@ -366,9 +349,7 @@ describe('useAdminBotSSE', () => {
     // Send event with second callback
     eventSource1.simulateMessage({ type: 'output', content: 'test2' });
 
-    await waitFor(() => {
-      expect(onOutput2).toHaveBeenCalledWith('test2');
-    });
+    expect(onOutput2).toHaveBeenCalledWith('test2');
 
     // First callback should not be called again
     expect(onOutput1).toHaveBeenCalledTimes(1);
@@ -404,7 +385,7 @@ describe('useAdminBotSSE', () => {
     expect(eventSource.url).toContain('/api/admin-bot/chat/stream');
   });
 
-  it('should handle multiple output events in sequence', async () => {
+  it('should handle multiple output events in sequence', () => {
     const onOutput = vi.fn();
 
     renderHook(() =>
@@ -422,10 +403,7 @@ describe('useAdminBotSSE', () => {
     eventSource.simulateMessage({ type: 'output', content: 'line 2' });
     eventSource.simulateMessage({ type: 'output', content: 'line 3' });
 
-    await waitFor(() => {
-      expect(onOutput).toHaveBeenCalledTimes(3);
-    });
-
+    expect(onOutput).toHaveBeenCalledTimes(3);
     expect(onOutput).toHaveBeenNthCalledWith(1, 'line 1');
     expect(onOutput).toHaveBeenNthCalledWith(2, 'line 2');
     expect(onOutput).toHaveBeenNthCalledWith(3, 'line 3');
