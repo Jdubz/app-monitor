@@ -43,7 +43,7 @@ export interface SimulatorConfig {
   timeout?: number;
   /** Crash bot at specific phase */
   crashAtPhase?: number;
-  
+
   // Advanced failure simulation
   /** Number of times to fail before succeeding (for retry tests) */
   failCount?: number;
@@ -51,18 +51,26 @@ export interface SimulatorConfig {
   maxFailures?: number;
   /** Flaky failure rate (0.0-1.0) for intermittent failures */
   flakyFailureRate?: number;
-  
+
   // Validation failures
   /** Success criteria that should not be met */
   unmetCriteria?: string[];
   /** Test coverage percentage to report (0-100) */
   coverage?: number;
-  
+
   // State recovery
   /** Resume from this task ID */
   resumeTask?: string;
   /** Phase timeout in milliseconds */
   phaseTimeout?: number;
+
+  // Blocking simulation
+  /** Force task to block at specific phase (simulates unrecoverable error) */
+  blockAtPhase?: number;
+  /** Reason for blocking (for testing) */
+  blockReason?: string;
+  /** Simulate recovery attempts before blocking */
+  recoveryAttemptsBeforeBlock?: number;
 }
 
 export interface BotInstance {
@@ -266,14 +274,33 @@ export class DevBotSimulator extends EventEmitter {
       if (task.status === 'failed') {
         this.instance.status = 'idle';
         this.instance.currentTaskId = undefined;
-        
+
         this.emit('task_failed', { taskId, error: task.error });
-        
+
         return {
           success: false,
           taskId,
           finalPhase: backendPhase,
           error: task.error || 'Task failed in backend'
+        };
+      }
+
+      // Check if task blocked (requires manual intervention)
+      if (task.status === 'blocked') {
+        this.instance.status = 'idle';
+        this.instance.currentTaskId = undefined;
+
+        this.emit('task_blocked', {
+          taskId,
+          phase: backendPhase,
+          reason: task.blocked_reason || task.blockedReason || 'Task blocked'
+        });
+
+        return {
+          success: false,
+          taskId,
+          finalPhase: backendPhase,
+          error: `Task blocked: ${task.blocked_reason || task.blockedReason || 'Manual intervention required'}`
         };
       }
       
@@ -660,13 +687,13 @@ export async function getTaskLogs(
   const response = await fetch(`${apiBaseUrl}/api/dev-bots/tasks/${taskId}/logs`, {
     headers: { 'X-API-Key': API_KEY }
   });
-  
+
   if (!response.ok) {
     throw new Error(`Failed to get logs: ${response.statusText}`);
   }
-  
+
   const result = await response.json();
-  
+
   // The logs endpoint returns descriptors, not actual log content
   // For test purposes, we can return a formatted string of the descriptors
   if (result.data && (result.data.stdout || result.data.stderr)) {
@@ -679,11 +706,37 @@ export async function getTaskLogs(
     }
     return parts.join('\n');
   }
-  
+
   // If logs array exists (old format), join it
   if (result.data && Array.isArray(result.data.logs)) {
     return result.data.logs.join('\n');
   }
-  
+
   return 'No logs available';
+}
+
+/**
+ * Helper to resume a blocked task
+ */
+export async function resumeTask(
+  taskId: string,
+  resumedBy: string,
+  apiBaseUrl: string = 'http://localhost:3002'
+): Promise<any> {
+  const response = await fetch(`${apiBaseUrl}/api/dev-bots/tasks/${taskId}/resume`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-API-Key': API_KEY
+    },
+    body: JSON.stringify({ resumedBy })
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`Failed to resume task (${response.status}): ${response.statusText} - ${errorText}`);
+  }
+
+  const result = await response.json();
+  return result;
 }

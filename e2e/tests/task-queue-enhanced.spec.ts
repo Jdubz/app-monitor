@@ -48,7 +48,7 @@ test.describe('Task Queue - Navigation and Layout', () => {
     // Wait for content using network idle instead of hardcoded timeout
     await page.waitForLoadState('networkidle');
 
-    // Look for state badges (pending, active, completed, failed)
+    // Look for state badges (pending, active, blocked, completed, failed)
     const badges = page.locator('[class*="badge"]');
     const count = await badges.count();
 
@@ -149,7 +149,7 @@ test.describe('Task Queue - Task Filtering', () => {
     await navigateToTaskQueue(page);
   });
 
-  test('should filter tasks by status (pending, active, completed, failed)', async ({ page }) => {
+  test('should filter tasks by status (pending, active, blocked, completed, failed)', async ({ page }) => {
     await page.waitForTimeout(2000);
 
     // Look for status filter buttons
@@ -536,7 +536,7 @@ test.describe('Task Queue - Error States', () => {
         success: true,
         data: {
           items: [],
-          counts: { pending: 0, active: 0, completed: 0, failed: 0 }
+          counts: { pending: 0, active: 0, blocked: 0, completed: 0, failed: 0 }
         }
       })
     }));
@@ -560,7 +560,7 @@ test.describe('Task Queue - Error States', () => {
         success: true,
         data: {
           items: [{ id: 'broken', invalid: 'data' }],
-          counts: { pending: 0, active: 0, completed: 0, failed: 0 }
+          counts: { pending: 0, active: 0, blocked: 0, completed: 0, failed: 0 }
         }
       })
     }));
@@ -603,7 +603,7 @@ test.describe('Task Queue - Performance', () => {
         success: true,
         data: {
           items: manyTasks,
-          counts: { pending: 100, active: 0, completed: 0, failed: 0 }
+          counts: { pending: 100, active: 0, blocked: 0, completed: 0, failed: 0 }
         }
       })
     }));
