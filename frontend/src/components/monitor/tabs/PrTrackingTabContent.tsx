@@ -72,7 +72,6 @@ const STUB_PRS: PullRequest[] = [
  * PrTrackingTabContent - Pull Request tracking tab
  *
  * Displays PR status with:
- * - Summary metrics (open PRs, merged today, needs review)
  * - Filterable list (all, open, merged, needs-review)
  * - Detail view with checks and reviewer status
  *
@@ -105,23 +104,6 @@ export function PrTrackingTabContent({ prsData = STUB_PRS }: PrTrackingTabConten
         return prs;
     }
   }, [prs, activeFilter]);
-
-  // Summary cards
-  const summaryCards = useMemo(() => {
-    const openCount = prs.filter((pr) => pr.status === 'open').length;
-    const mergedToday = prs.filter(
-      (pr) =>
-        pr.status === 'merged' &&
-        new Date(pr.updatedAt).getTime() > Date.now() - 86400000
-    ).length;
-    const needsReview = prs.filter((pr) => pr.status === 'open' && pr.reviewers.length === 0).length;
-
-    return [
-      { label: 'Open PRs', value: openCount },
-      { label: 'Merged Today', value: mergedToday },
-      { label: 'Needs Review', value: needsReview, className: needsReview > 0 ? 'text-orange-600' : '' },
-    ];
-  }, [prs]);
 
   // Filter tabs
   const filterTabs = useMemo(() => {
@@ -310,7 +292,6 @@ export function PrTrackingTabContent({ prsData = STUB_PRS }: PrTrackingTabConten
         </p>
       </div>
       <ListDetailLayout<PullRequest, PrFilter>
-        summaryCards={summaryCards}
         filterTabs={filterTabs}
         activeFilter={activeFilter}
         onFilterChange={setActiveFilter}
