@@ -247,6 +247,13 @@ export interface DevBotsTask {
   phaseName?: string;
   phaseStatus?: PhaseStatus;
   phaseAttempts?: number;
+  // Blocking metadata (added by system when task blocks)
+  blockedReason?: string;
+  blockedAt?: number;
+  blockedBy?: string;
+  // Resume audit trail (added when manually resumed)
+  resumedBy?: string;
+  resumedAt?: number;
 }
 
 export interface DevBotsTaskCollections {
@@ -711,6 +718,7 @@ export interface DevBotsReportCompletionResponse {
 export type DevBotsRetryTaskResponse = ApiSuccess<DevBotsTaskInterventionResponse>;
 export type DevBotsSkipTaskResponse = ApiSuccess<DevBotsTaskInterventionResponse>;
 export type DevBotsCancelTaskResponse = ApiSuccess<DevBotsTaskInterventionResponse>;
+export type DevBotsResumeTaskResponse = ApiSuccess<DevBotsTaskInterventionResponse>;
 export type DevBotsQuarantineChainResponse = ApiSuccess<DevBotsChainInterventionResponse>;
 
 // -----------------------------------------------------------------------------
