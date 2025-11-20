@@ -35,7 +35,7 @@ export interface RetryAttempt {
   agentId?: string;
 }
 
-// TaskStatus and Task interface now imported from taskQueue.sqlite.ts (canonical source per Stabilization Plan)
+// TaskStatus and Task interface now imported from taskQueue.sqlite.ts (database is the sole source of truth)
 export type TaskStatus = SQLiteTaskStatus;
 export type { Task } from './taskQueue.sqlite.js';
 

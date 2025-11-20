@@ -100,8 +100,8 @@
 - **Priority level** - P0, P1, P2, P3
 
 **Examples:**
-- `APP_MONITOR_STABILIZATION_PLAN.md` - Current phase work
 - `PRIORITIZED_FEATURE_ROADMAP.md` - Future features
+- `CONTEXT_MANAGEMENT_COMPLETION_PLAN.md` - Context system finish line
 
 **Prohibited:**
 - "Nice to have" ideas without priority

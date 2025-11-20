@@ -436,35 +436,6 @@ X-API-Key: your-api-key
 }
 ```
 
-#### Preview Auto-Detection
-```http
-POST /api/dev-bots/tasks/preview-detection
-Content-Type: application/json
-X-API-Key: your-api-key
-
-{
-  "taskType": "fix",
-  "title": "Fix memory leak",
-  "intent": "Prevent OOM errors in log rotation service"
-}
-```
-
-**Response:**
-```json
-{
-  "detectedFiles": ["backend/src/services/logging.service.ts"],
-  "inferredRiskLevel": "medium",
-  "selectedProfiles": ["scope-control", "fix-debugging", "failure-recovery"],
-  "recommendedOutputs": ["patch", "verification-log", "root-cause-analysis"],
-  "confidence": {
-    "files": 0.7,
-    "riskLevel": 0.85,
-    "profiles": 0.9
-  },
-  "warnings": []
-}
-```
-
 #### Task Response
 ```json
 {

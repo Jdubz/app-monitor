@@ -2,38 +2,26 @@
 
 Developer monitoring and automation tool for the job-finder-app-manager ecosystem.
 
-## 📊 Project Status: Pre-POC Stabilization
+## 📊 Project Status: Post-Stabilization
 
-**Current Phase:** Stabilization (v0.2.0)
-**Status:** Active Development
-**Last Updated:** November 8, 2025
+**Current Focus:** Production validation & monitoring  
+**Status:** Active Development  
+**Last Updated:** November 20, 2025  
 **Production Deployment:** Automated via GitHub Actions
 
-This project is currently in **pre-POC stabilization** phase, preparing the foundation for an autonomous continuous task queue. Key accomplishments and ongoing work:
+Stabilization (v0.2.0) completed on November 14, 2025 and the dedicated plan was deleted per the Documentation System rules. Current priorities now live exclusively in the [Prioritized Feature Roadmap](./docs/plans/PRIORITIZED_FEATURE_ROADMAP.md).
 
-### ✅ Completed Stabilization Tasks
-- **Frontend Build Health** (FE-1, FE-2): TypeScript compilation and ESLint warnings resolved
-- **Ephemeral Container Architecture** (TC-4, TC-5): Zero filesystem artifacts, automatic cleanup, tar|docker cp pattern
-- **Safety Mechanisms** (TC-6): Uncommitted changes detection, patch files, git status capture
-- **Dev-Bot Credentials** (TC-4): Fixed credentials mounting, workspace permissions
+### ✅ Recent Highlights
+- **Frontend + Backend Baselines:** Builds, linting, and 543 backend tests green after the stabilization push.
+- **Context-Aware Task Submission:** Three-field API with auto-detection fully powering dev-bot intake.
+- **Ephemeral Execution Guarantees:** Tar|docker-cp pattern with automatic cleanup and uncommitted-change safety nets.
 
-### 🚧 In Progress
-- **Backend Test Suite** (BE-1): Resolving hanging ProcessManager integration tests
-- **Work-Target Registry** (WT-1-4): SQLite schema migration for work-target metadata
-- **Prompt Engineering v3** (PE-1-6): Task template validation system to prevent scope creep
-- **Quality Metrics** (QM-1-4): Establishing baseline metrics for bot execution
+### 🚧 Active Initiatives (see roadmap for owners)
+- **Work-Target Registry:** SQLite-first metadata with zero legacy JSON fallbacks.
+- **Quality Metrics:** Instrumentation for scope compliance, duplication rate, and workflow success.
+- **Prompt/Context Iterations:** Continual recipe tuning to keep acceptance checklists and constraints current.
 
-### 📋 Stabilization Goals
-1. Restore green builds/tests so feature work can land safely
-2. Establish SQLite as authoritative work-target registry
-3. Align developer workflows (hooks, scripts, docs) with current tooling
-4. Capture baseline metrics for continuous task queue
-5. Implement v3 prompt engineering to prevent scope creep
-6. Establish quality metrics and monitoring baselines
-
-**Note:** Some TypeScript build errors remain in backend. These are being addressed as part of ongoing stabilization work.
-
-📖 For complete stabilization details, see [Stabilization Plan](./docs/plans/APP_MONITOR_STABILIZATION_PLAN.md).
+**Note:** This internal tool favors immediate cutovers—feature flags, dry runs, or soft-rollouts are intentionally avoided to preserve clarity.
 
 ---
 
@@ -306,7 +294,7 @@ make stop
 - [Frontend Development Guide](./docs/guides/FRONTEND_DEVELOPMENT.md) - Developer workflows and best practices
 
 ### Planning & Roadmap
-- [Stabilization Plan](./docs/plans/APP_MONITOR_STABILIZATION_PLAN.md) - Current phase details
+- [Prioritized Feature Roadmap](./docs/plans/PRIORITIZED_FEATURE_ROADMAP.md) - Current priorities (stabilization complete)
 
 ### Migration & History
 - [Migration Guide](./docs/guides/MIGRATION_GUIDE.md) - Migrating from dev-monitor

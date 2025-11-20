@@ -148,38 +148,6 @@ Additional profiles added based on file paths:
 - Security review requires explicit file list
 - Risk level raised from auto-detected "medium" to "high"
 
-## Preview Auto-Detection
-
-Test auto-detection without creating a task:
-
-```bash
-curl -X POST http://localhost:5000/api/dev-bots/tasks/preview-detection \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "My task",
-    "taskType": "implementation",
-    "intent": "Do something"
-  }'
-```
-
-Response:
-```json
-{
-  "data": {
-    "detectedFiles": ["frontend/src/App.tsx"],
-    "inferredRiskLevel": "low",
-    "selectedProfiles": ["scope-control", "dev-monitor"],
-    "recommendedOutputs": ["unit-tests", "documentation"],
-    "confidence": {
-      "files": 0.7,
-      "riskLevel": 0.8,
-      "profiles": 0.9
-    },
-    "warnings": []
-  }
-}
-```
-
 ## What Happens Automatically
 
 Once you submit a task, the system:
@@ -310,11 +278,6 @@ node scripts/submit-task.js \
 curl -X POST http://localhost:5000/api/dev-bots/tasks \
   -H "Content-Type: application/json" \
   -d @task.json
-
-# Preview before submitting
-curl -X POST http://localhost:5000/api/dev-bots/tasks/preview-detection \
-  -H "Content-Type: application/json" \
-  -d @task.json
 ```
 
 ## FAQ
@@ -325,8 +288,8 @@ A: No. The legacy endpoint has been removed; `/api/dev-bots/tasks` is the single
 **Q: How accurate is auto-detection?**  
 A: >90% accuracy measured in testing. Low-confidence detections include warnings.
 
-**Q: Can I see what will be auto-detected before submitting?**  
-A: Yes! Use `POST /api/dev-bots/tasks/preview-detection` to preview without creating a task.
+**Q: Can I preview the auto-detected fields before submitting?**  
+A: No. Tasks must be submitted to view detection results; use overrides if you need precise control.
 
 **Q: What if auto-detection is wrong?**  
 A: Provide manual overrides via optional fields (`targetFiles`, `riskLevel`, `contextProfiles`).

@@ -7,7 +7,7 @@
 
 import { z } from 'zod';
 
-// Re-export canonical Task type from SQLite (source of truth per Stabilization Plan Objective 2)
+// Re-export canonical Task type from SQLite (database is authoritative per Master Design Intent)
 export type { Task, TaskStatus as SQLiteTaskStatus, Worker } from '../services/taskQueue.sqlite.js';
 
 // Task status enum for Zod validation (matches SQLite values)
