@@ -292,7 +292,7 @@ main() {
     fi
 
     # Check for critical dependencies
-    CRITICAL_DEPS=("express" "socket.io" "better-sqlite3" "dockerode")
+    CRITICAL_DEPS=("express" "socket.io" "better-sqlite3" "dockerode" "@modelcontextprotocol/sdk")
     for dep in "${CRITICAL_DEPS[@]}"; do
         if [ ! -d "node_modules/${dep}" ]; then
             log_error "Critical dependency missing: ${dep}"
