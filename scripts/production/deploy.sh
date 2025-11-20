@@ -322,6 +322,9 @@ main() {
     if [ -f "${RELEASE_DIR}/package.json" ]; then
         mv "${RELEASE_DIR}/package.json" "${RELEASE_DIR}/package.json.deploy-prune.bak"
     fi
+    # Clear any workspace-scoped npm env from earlier commands (e.g. npm run -w backend)
+    unset npm_config_workspace NPM_CONFIG_WORKSPACE
+
     if ! NPM_CONFIG_WORKSPACES=false npm prune --production; then
         log_error "Backend npm prune failed"
         [ -f "${RELEASE_DIR}/package.json.deploy-prune.bak" ] && \
