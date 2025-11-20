@@ -260,9 +260,9 @@ main() {
         mv "${RELEASE_DIR}/package.json" "${RELEASE_DIR}/package.json.bak"
     fi
 
-    # Install dependencies with validation
+    # Install dependencies with validation (includes devDependencies needed for build)
     log_info "Installing backend dependencies..."
-    if ! npm ci --omit=dev --workspaces=false 2>&1 | tee /tmp/npm-ci-backend.log; then
+    if ! npm ci --workspaces=false 2>&1 | tee /tmp/npm-ci-backend.log; then
         log_error "Backend npm ci failed"
         log_error "Last 10 lines of npm output:"
         tail -10 /tmp/npm-ci-backend.log
@@ -318,6 +318,20 @@ main() {
         log_error "Build output missing: dist/index.js not created"
         exit 1
     fi
+
+    # Remove devDependencies after build
+    log_info "Removing devDependencies..."
+    if [ -f "${RELEASE_DIR}/package.json" ]; then
+        mv "${RELEASE_DIR}/package.json" "${RELEASE_DIR}/package.json.prune.bak"
+    fi
+
+    if ! NPM_CONFIG_WORKSPACES=false npm prune --production 2>&1 | tee /tmp/npm-prune-backend.log; then
+        log_warn "npm prune encountered issues, but continuing deployment"
+        tail -10 /tmp/npm-prune-backend.log
+    fi
+
+    [ -f "${RELEASE_DIR}/package.json.prune.bak" ] && \
+        mv "${RELEASE_DIR}/package.json.prune.bak" "${RELEASE_DIR}/package.json"
 
     # Final verification - check filesystem directly to avoid workspace resolution issues
     # Reuses CRITICAL_DEPS array defined earlier for consistency
