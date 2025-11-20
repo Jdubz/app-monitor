@@ -485,9 +485,7 @@ export class MockDevBotsManager extends EventEmitter {
     return true;
   }
 
-  startSystem() {}
 
-  stopSystem() {}
 
   async getTasks() {
     return structuredClone(this.status.tasks);

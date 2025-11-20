@@ -52,6 +52,7 @@ import { randomUUID } from 'node:crypto';
 import { logger } from '../utils/logger.js';
 import { config } from '../config.js';
 import { TaskClassifier } from './taskClassifier.js';
+import { AgentSelector, type AgentSelectionCriteria } from './agentSelector.js';
 import { ChainTrackerService, type ChainStats, type BlockedChain } from './chainTracker.service.js';
 import {
   TaskQueueMetricsService,
@@ -275,6 +276,7 @@ export class TaskQueueService {
   private db: Database.Database;
   private dbPath: string;
   private readonly taskClassifier: TaskClassifier; // Auto-classification (Phase 0.3)
+  private readonly agentSelector: AgentSelector;
   private readonly chainTracker: ChainTrackerService; // Chain lifecycle management (Phase 2)
   private readonly maxConcurrentChains: number; // Chain concurrency limit
   private readonly metricsService: TaskQueueMetricsService; // Metrics and analytics
@@ -289,9 +291,10 @@ export class TaskQueueService {
    * 
    * @param dbPath Path to SQLite database file
    */
-  constructor(dbPath: string) {
+  constructor(dbPath: string, agentSelector?: AgentSelector) {
     this.dbPath = dbPath;
     this.taskClassifier = new TaskClassifier();
+    this.agentSelector = agentSelector ?? new AgentSelector();
     this.ensureDirectory();
     this.db = new Database(dbPath);
     this.initialize();
@@ -691,6 +694,14 @@ export class TaskQueueService {
     // Chain ID determination - all new tasks start their own chain
     const chainId = taskData.chain_id || taskData.id || generatedId;
     
+    const preferredAgent = taskData.preferred_agent || this.selectPreferredAgentSync({
+      taskCategory,
+      filePatterns: this.parseFilePatternArray(filePatterns),
+      complexity: estimatedComplexity,
+      taskTitle: taskData.title,
+      taskDescription: taskData.description
+    });
+
     const task: Task = {
       id: taskData.id || generatedId,
       type: taskData.type || 'implementation',
@@ -714,7 +725,7 @@ export class TaskQueueService {
       task_category: taskCategory,
       file_patterns: filePatterns,
       estimated_complexity: estimatedComplexity,
-      preferred_agent: taskData.preferred_agent,
+      preferred_agent: preferredAgent,
       // Chain tracking
       chain_status: taskData.chain_status || 'pending',
       chain_id: chainId,
@@ -809,6 +820,34 @@ export class TaskQueueService {
     }
 
     return task;
+  }
+
+  private selectPreferredAgentSync(criteria: AgentSelectionCriteria): 'claude' | 'codex' | 'copilot' | undefined {
+    try {
+      const selection = this.agentSelector.selectAgentSync(criteria);
+      if (selection.agent === 'gemini') {
+        return selection.fallbackAgent === 'codex' ? 'codex' : 'claude';
+      }
+      return selection.agent;
+    } catch (error) {
+      logger.warn({
+        category: 'process',
+        action: 'preferred_agent_selection_failed',
+        message: 'Falling back to Claude due to agent selection error',
+        error
+      });
+      return 'claude';
+    }
+  }
+
+  private parseFilePatternArray(filePatterns?: string): string[] | undefined {
+    if (!filePatterns) return undefined;
+    try {
+      const parsed = JSON.parse(filePatterns);
+      return Array.isArray(parsed) ? parsed : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   /**

@@ -17,6 +17,8 @@ import { MS_PER_HOUR } from '../constants/timeouts.js';
 // WorkspaceOrchestrator removed - using container isolation
 import { ScopeControlService } from './scopeControl.service.js';
 import { EphemeralWorkerService } from './ephemeralWorker.service.js';
+import { AgentCliCommandBuilder } from './agentCliCommandBuilder.js';
+import { RecoveryAgentService } from './recoveryAgent.service.js';
 import { resolveArtifactsDir } from '../utils/repoPaths.js';
 import { TaskExecutionService } from './taskExecution.service.js';
 import { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
@@ -48,10 +50,13 @@ export async function createDevBotsManagerDependencies(
   const dockerManager = new DockerManager(dockerSocket);
   const docker = dockerManager.getDocker();
 
+  const agentEligibilityService = new AgentEligibilityServiceImpl();
+  const agentSelector = new AgentSelector(undefined, agentEligibilityService);
+
   // Initialize SQLite task queue - use same database as DevBotsDatabase
   const { config: appConfig } = await import('../config.js');
   const taskQueueDbPath = config.taskQueueDbPath ?? appConfig.databasePath;
-  const taskQueue = new TaskQueueService(taskQueueDbPath);
+  const taskQueue = new TaskQueueService(taskQueueDbPath, agentSelector);
 
   // Register with factory for singleton access
   const { setTaskQueueService } = await import('./taskQueue.factory.js');
@@ -88,6 +93,13 @@ export async function createDevBotsManagerDependencies(
   // Initialize scope control service
   const scopeControl = new ScopeControlService();
 
+  // Initialize intelligent agent tooling shared across services
+  const cliCommandBuilder = new AgentCliCommandBuilder();
+  const recoveryAgentService = new RecoveryAgentService({
+    agentSelector,
+    cliCommandBuilder,
+  });
+
   // Initialize ephemeral worker service
   const ephemeralWorkerService = new EphemeralWorkerService(
     docker,
@@ -107,7 +119,12 @@ export async function createDevBotsManagerDependencies(
         'GIT_COMMITTER_EMAIL'
       ]
     },
-    taskQueue.getDb() // Pass database instance from TaskQueueService
+    taskQueue.getDb(), // Pass database instance from TaskQueueService
+    undefined,
+    {
+      recoveryAgentService,
+      cliCommandBuilder,
+    }
   );
 
   // Initialize status aggregation service
@@ -120,12 +137,6 @@ export async function createDevBotsManagerDependencies(
     () => {}, // emit function placeholder, will be bound by DevBotsManager
     async () => {} // assignNextTask placeholder, will be bound by DevBotsManager
   );
-
-  // Initialize agent eligibility service
-  const agentEligibilityService = new AgentEligibilityServiceImpl();
-
-  // Initialize agent selector
-  const agentSelector = new AgentSelector(undefined, agentEligibilityService);
 
   // Initialize task execution service
   const taskExecutionService = new TaskExecutionService(

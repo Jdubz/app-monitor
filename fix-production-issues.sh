@@ -34,27 +34,28 @@ echo "🔐 Step 2: Checking Gemini credentials on production..."
 ssh jdubz@app-monitor.joshwentworth.com "test -f /home/jdubz/.gemini/credentials.json && echo 'Credentials found ✅' || echo 'Credentials missing ❌'"
 echo ""
 
-# Step 3: Restart system to trigger task assignment
-echo "🔄 Step 3: Restarting system to trigger task assignment..."
-echo "  Stopping system..."
-curl -s -X POST -H "X-API-Key: $API_KEY" "$BASE_URL/api/dev-bots/stop" | jq '.success'
+# Step 3: Check queue health without restarting
+echo "🧪 Step 3: Verifying assignment loop health..."
+STATUS_JSON=$(curl -s -H "X-API-Key: $API_KEY" "$BASE_URL/api/dev-bots/status")
+SYSTEM_STATUS=$(echo "$STATUS_JSON" | jq -r '.data.systemStatus')
+WORKER_COUNT=$(echo "$STATUS_JSON" | jq -r '.data.workerCount')
+MAX_WORKERS=$(echo "$STATUS_JSON" | jq -r '.data.maxWorkers')
 
-sleep 3
+echo "  System status: $SYSTEM_STATUS"
+echo "  Workers active: $WORKER_COUNT / $MAX_WORKERS"
 
-echo "  Starting system..."
-curl -s -X POST -H "X-API-Key: $API_KEY" "$BASE_URL/api/dev-bots/start" | jq '.success'
+if [ "$SYSTEM_STATUS" != "running" ]; then
+  echo "⚠️  Unexpected system status. Dev-Bots now auto-start and should stay running."
+fi
 
-sleep 3
+if [ "$WORKER_COUNT" -eq 0 ]; then
+  echo "⚠️  No active workers. Verify Anthropic/OpenAI/Gemini credentials and task queue health."
+fi
+
 echo ""
 
-# Step 4: Check new status
-echo "📊 Step 4: Checking post-restart status..."
-curl -s -H "X-API-Key: $API_KEY" "$BASE_URL/api/dev-bots/status" | \
-  jq -r '.data | "System: \(.systemStatus), Workers: \(.workerCount)/\(.maxWorkers), Active: \(.activeTasks)"'
-echo ""
-
-# Step 5: Monitor for task assignment
-echo "👀 Step 5: Waiting 10 seconds for task assignment..."
+# Step 4: Monitor for task assignment
+echo "👀 Step 4: Waiting 10 seconds for task assignment..."
 sleep 10
 
 ACTIVE_COUNT=$(curl -s -H "X-API-Key: $API_KEY" "$BASE_URL/api/dev-bots/status" | jq -r '.data.activeTasks')

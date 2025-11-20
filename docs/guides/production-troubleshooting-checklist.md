@@ -4,19 +4,18 @@
 
 ---
 
-## System Won't Start
+## System Health Alert
 
-**Symptoms:** API returns 503, backend not responding
+**Symptoms:** Dashboard shows unhealthy, API returns 503
 
 **Check:**
-1. Verify system status: `curl -H "X-API-Key: $KEY" $URL/api/dev-bots/status`
-2. Check if explicitly stopped: Look for "stopped" in status
-3. Check backend logs: `tail -100 /opt/app-monitor/logs/backend.log`
+1. Verify status: `curl -H "X-API-Key: $KEY" $URL/api/dev-bots/status`
+2. Confirm `systemStatus` is `running` (system now auto-starts and should never read as `stopped`)
+3. Inspect backend logs: `tail -100 /opt/app-monitor/logs/backend.log`
 
 **Fix:**
-```bash
-curl -X POST -H "X-API-Key: $KEY" $URL/api/dev-bots/start
-```
+- Investigate backend logs for crashes instead of restarting Dev-Bots
+- If backend process died, restart via systemd (`sudo systemctl restart app-monitor-backend`) and monitor `/api/health`
 
 ## Tasks Stuck in Pending
 
@@ -33,12 +32,9 @@ curl -X POST -H "X-API-Key: $KEY" $URL/api/dev-bots/start
 - Database lock
 
 **Fix:**
-```bash
-# Restart system to reinitialize assignment loop
-curl -X POST -H "X-API-Key: $KEY" $URL/api/dev-bots/stop
-sleep 3
-curl -X POST -H "X-API-Key: $KEY" $URL/api/dev-bots/start
-```
+1. Verify Anthropic/OpenAI/Gemini credentials exist on the host
+2. Check `/api/dev-bots/status` for `workerCount` (must be >0)
+3. Inspect `/opt/app-monitor/logs/backend.log` for assignment loop errors instead of restarting Dev-Bots
 
 ## Worker Heartbeat Timeout
 
@@ -106,11 +102,6 @@ curl -H "X-API-Key: $KEY" "$URL/api/dev-bots/queue" | \
 - Random failures: Transient errors (retry should work)
 
 ## Emergency Actions
-
-### Stop All Task Processing
-```bash
-curl -X POST -H "X-API-Key: $KEY" "$URL/api/dev-bots/stop"
-```
 
 ### Check System Health
 ```bash

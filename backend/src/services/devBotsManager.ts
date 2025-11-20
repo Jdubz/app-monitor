@@ -51,7 +51,6 @@ export class DevBotsManager extends EventEmitter {
   private docker: Docker;
   private dockerManager: DockerManager;
   private workerHealthMonitor!: WorkerHealthMonitor;
-  private isCoordinatorHealthy: boolean = false;
 
   // Services injected via dependency injection
   private taskQueue!: TaskQueueService;
@@ -393,30 +392,12 @@ export class DevBotsManager extends EventEmitter {
   }
 
   /**
-   * Start the Dev-Bots system
-   * Delegated to SystemLifecycleService
-   */
-  public startSystem(): void {
-    this.systemLifecycleService.startSystem();
-    this.isCoordinatorHealthy = this.systemLifecycleService.isSystemHealthy();
-  }
-
-  /**
-   * Stop the Dev-Bots system
-   * Delegated to SystemLifecycleService
-   */
-  public async stopSystem(): Promise<void> {
-    await this.systemLifecycleService.stopSystem();
-    this.isCoordinatorHealthy = this.systemLifecycleService.isSystemHealthy();
-  }
-
-  /**
    * Get comprehensive system status
    * Delegated to StatusAggregationService
    */
   async getSystemStatus(): Promise<DevBotsStatus> {
     return await this.statusAggregationService.getSystemStatus({
-      isHealthy: this.isCoordinatorHealthy,
+      isHealthy: this.systemLifecycleService.isSystemHealthy(),
       startTime: this.startTime,
       maxWorkers: this.maxWorkers
     });
@@ -439,7 +420,7 @@ export class DevBotsManager extends EventEmitter {
   }
 
   isHealthy(): boolean {
-    return this.isCoordinatorHealthy;
+    return this.systemLifecycleService.isSystemHealthy();
   }
 
   /**

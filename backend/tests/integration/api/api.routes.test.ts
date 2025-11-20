@@ -759,16 +759,6 @@ describe('API Integration Suite', () => {
           expect(res.body?.data?.healthy).toBe(true);
         },
       },
-      {
-        name: 'POST /api/dev-bots/start',
-        method: 'post',
-        url: '/api/dev-bots/start',
-      },
-      {
-        name: 'POST /api/dev-bots/stop',
-        method: 'post',
-        url: '/api/dev-bots/stop',
-      },
     ]);
   });
 
