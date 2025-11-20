@@ -45,7 +45,7 @@ test.describe('Task Queue - Critical Functionality', () => {
 
   test('can view task queue page', async ({ page }) => {
     // beforeEach already navigated to / which redirects to /monitor/dev-bots
-    // Dev-Bots tab shows Queue Size, Workers, and Active Tasks summary cards
+    // Dev-Bots tab now shows a header plus the list/detail workspace
 
     // Wait for API response instead of fixed timeout
     await page.waitForResponse(
@@ -53,18 +53,18 @@ test.describe('Task Queue - Critical Functionality', () => {
       { timeout: 10000 }
     ).catch(() => null);
 
-    // Look for any dev-bots content (loading state, summary cards, or empty state)
+    // Look for any dev-bots content (loading state, header, tabs, list, or empty state)
     const hasLoading = await page.getByText(/Loading dev-bots status/i).isVisible().catch(() => false);
-    const hasQueueSize = await page.getByText(/Queue Size/i).isVisible().catch(() => false);
-    const hasWorkers = await page.getByText(/Workers/i).isVisible().catch(() => false);
-    const hasActiveTasks = await page.getByText(/Active Tasks/i).isVisible().catch(() => false);
-    const hasNoTasks = await page.getByText(/No.*tasks/i).isVisible().catch(() => false);
+    const hasHeader = await page.getByRole('heading', { name: /Dev-Bots Chains/i }).isVisible().catch(() => false);
+    const hasFilters = await page.getByRole('tab', { name: /All/i }).isVisible().catch(() => false);
+    const hasListItem = await page.getByTestId('list-detail-item').first().isVisible().catch(() => false);
+    const hasEmptyState = await page.getByText(/No chains found/i).isVisible().catch(() => false);
 
     // Test passes if page shows ANY dev-bots content (including loading state)
-    expect(hasLoading || hasQueueSize || hasWorkers || hasActiveTasks || hasNoTasks).toBe(true);
+    expect(hasLoading || (hasHeader && hasFilters) || hasListItem || hasEmptyState).toBe(true);
   });
 
-  test('task counts are displayed', async ({ page }) => {
+  test('dev-bots filters are displayed', async ({ page }) => {
     // beforeEach already navigated to / which redirects to /monitor/dev-bots
 
     // Wait for API response instead of fixed timeout
@@ -73,14 +73,14 @@ test.describe('Task Queue - Critical Functionality', () => {
       { timeout: 10000 }
     ).catch(() => null);
 
-    // Verify summary card labels or loading state is visible
+    // Verify tabs (which contain the counts) or loading state is visible
     const hasLoading = await page.getByText(/Loading dev-bots status/i).isVisible().catch(() => false);
-    const hasQueueSize = await page.getByText(/Queue Size/i).isVisible().catch(() => false);
-    const hasWorkers = await page.getByText(/Workers/i).isVisible().catch(() => false);
-    const hasActiveTasks = await page.getByText(/Active Tasks/i).isVisible().catch(() => false);
+    const hasAllTab = await page.getByRole('tab', { name: /All/i }).isVisible().catch(() => false);
+    const hasBlockedTab = await page.getByRole('tab', { name: /Blocked/i }).isVisible().catch(() => false);
+    const hasQuarantinedTab = await page.getByRole('tab', { name: /Quarantined/i }).isVisible().catch(() => false);
 
-    // Test passes if page shows loading or any summary cards
-    expect(hasLoading || hasQueueSize || hasWorkers || hasActiveTasks).toBe(true);
+    // Test passes if loading or all tabs render (counts are shown inside the tab labels)
+    expect(hasLoading || (hasAllTab && hasBlockedTab && hasQuarantinedTab)).toBe(true);
   });
 
   test('API endpoint returns valid data', async ({ page, request }) => {
