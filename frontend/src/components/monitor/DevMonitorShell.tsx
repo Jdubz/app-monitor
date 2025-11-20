@@ -88,7 +88,7 @@ export function DevMonitorShell({ socket }: DevMonitorShellProps) {
   };
 
   return (
-    <DevBotsStoreProvider socket={socket}>
+    <DevBotsStoreProvider>
       <div className="flex h-full flex-col">
         <GlobalStatusStrip />
 
