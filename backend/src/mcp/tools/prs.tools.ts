@@ -6,19 +6,17 @@ import { createJsonResponse, createErrorResponse, createSuccessResponse, withErr
 import type { McpServices } from '../server.js';
 import { getPRConditionStateService } from '../../services/prConditionState.service.js';
 
-type ShapeOf<T extends z.ZodObject<any>> = T extends z.ZodObject<infer Shape, any, any, any> ? Shape : never;
-
 const prTriggerInputSchema = z.object({
   pr_number: z.number().int().positive(),
   force: z.boolean().optional(),
 });
-type PrTriggerInputShape = ShapeOf<typeof prTriggerInputSchema>;
+type PrTriggerInputShape = typeof prTriggerInputSchema['_def']['shape'];
 const prTriggerInputShape: PrTriggerInputShape = prTriggerInputSchema.shape;
 
 const prBlockingIssuesInputSchema = z.object({
   pr_number: z.number().int().positive(),
 });
-type PrBlockingIssuesInputShape = ShapeOf<typeof prBlockingIssuesInputSchema>;
+type PrBlockingIssuesInputShape = typeof prBlockingIssuesInputSchema['_def']['shape'];
 const prBlockingIssuesInputShape: PrBlockingIssuesInputShape = prBlockingIssuesInputSchema.shape;
 
 type PrTriggerParams = z.infer<typeof prTriggerInputSchema>;

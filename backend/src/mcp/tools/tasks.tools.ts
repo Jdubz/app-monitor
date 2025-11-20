@@ -16,8 +16,6 @@ const TASK_LIST_STATUS_VALUES: TaskStatus[] = [
   'cancelled',
   'timeout',
 ];
-type ShapeOf<T extends z.ZodObject<any>> = T extends z.ZodObject<infer Shape, any, any, any> ? Shape : never;
-
 const taskCreateInputSchema = z.object({
   title: z.string().min(3),
   type: z.enum(['implementation', 'analysis', 'documentation', 'review']).optional(),
@@ -26,13 +24,13 @@ const taskCreateInputSchema = z.object({
   assigned_agent: z.enum(['claude', 'codex', 'gemini']).optional(),
   tags: z.array(z.string().min(1)).optional(),
 });
-type TaskCreateInputShape = ShapeOf<typeof taskCreateInputSchema>;
+type TaskCreateInputShape = typeof taskCreateInputSchema['_def']['shape'];
 const taskCreateInputShape: TaskCreateInputShape = taskCreateInputSchema.shape;
 
 const taskGetInputSchema = z.object({
   task_id: z.string().min(1),
 });
-type TaskGetInputShape = ShapeOf<typeof taskGetInputSchema>;
+type TaskGetInputShape = typeof taskGetInputSchema['_def']['shape'];
 const taskGetInputShape: TaskGetInputShape = taskGetInputSchema.shape;
 
 const taskListInputSchema = z.object({
@@ -40,14 +38,14 @@ const taskListInputSchema = z.object({
   assigned_agent: z.string().min(1).optional(),
   limit: z.number().int().positive().max(500).optional(),
 });
-type TaskListInputShape = ShapeOf<typeof taskListInputSchema>;
+type TaskListInputShape = typeof taskListInputSchema['_def']['shape'];
 const taskListInputShape: TaskListInputShape = taskListInputSchema.shape;
 
 const taskUnblockInputSchema = z.object({
   task_id: z.string().min(1),
   resumed_by: z.string().optional(),
 });
-type TaskUnblockInputShape = ShapeOf<typeof taskUnblockInputSchema>;
+type TaskUnblockInputShape = typeof taskUnblockInputSchema['_def']['shape'];
 const taskUnblockInputShape: TaskUnblockInputShape = taskUnblockInputSchema.shape;
 
 const taskOutcomeInputSchema = z.object({
@@ -60,7 +58,7 @@ const taskOutcomeInputSchema = z.object({
   failure_code: z.enum(['compilation_error', 'test_failure', 'dependency_error', 'timeout', 'validation_error', 'unknown']).optional(),
   error_details: z.string().optional(),
 });
-type TaskOutcomeInputShape = ShapeOf<typeof taskOutcomeInputSchema>;
+type TaskOutcomeInputShape = typeof taskOutcomeInputSchema['_def']['shape'];
 const taskOutcomeInputShape: TaskOutcomeInputShape = taskOutcomeInputSchema.shape;
 
 type TaskCreateParams = z.infer<typeof taskCreateInputSchema>;

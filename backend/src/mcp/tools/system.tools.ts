@@ -5,10 +5,8 @@ import { withAuth } from "../middleware/auth.js";
 import { createJsonResponse, withErrorHandling } from "../utils/response.js";
 import type { McpServices } from "../server.js";
 
-type ShapeOf<T extends z.ZodObject<any>> = T extends z.ZodObject<infer Shape, any, any, any> ? Shape : never;
-
 const systemHealthInputSchema = z.object({});
-type SystemHealthInputShape = ShapeOf<typeof systemHealthInputSchema>;
+type SystemHealthInputShape = typeof systemHealthInputSchema['_def']['shape'];
 const systemHealthInputShape: SystemHealthInputShape = systemHealthInputSchema.shape;
 type SystemHealthParams = z.infer<typeof systemHealthInputSchema>;
 

@@ -6,32 +6,30 @@ import { createJsonResponse, createErrorResponse, createSuccessResponse, withErr
 import { McpServices } from "../server.js";
 import type { DevBotsStatus, WorkerStatus } from "../../services/statusAggregation.service.js";
 
-type ShapeOf<T extends z.ZodObject<any>> = T extends z.ZodObject<infer Shape, any, any, any> ? Shape : never;
-
 const botListActiveInputSchema = z.object({
   include_idle: z.boolean().optional(),
   limit: z.number().int().positive().max(100).optional(),
 });
-type BotListActiveInputShape = ShapeOf<typeof botListActiveInputSchema>;
+type BotListActiveInputShape = typeof botListActiveInputSchema['_def']['shape'];
 const botListActiveInputShape: BotListActiveInputShape = botListActiveInputSchema.shape;
 
 const botGetStatusInputSchema = z.object({
   bot_id: z.string(),
 });
-type BotGetStatusInputShape = ShapeOf<typeof botGetStatusInputSchema>;
+type BotGetStatusInputShape = typeof botGetStatusInputSchema['_def']['shape'];
 const botGetStatusInputShape: BotGetStatusInputShape = botGetStatusInputSchema.shape;
 
 const botRecoverInputSchema = z.object({
   bot_id: z.string(),
   reason: z.string(),
 });
-type BotRecoverInputShape = ShapeOf<typeof botRecoverInputSchema>;
+type BotRecoverInputShape = typeof botRecoverInputSchema['_def']['shape'];
 const botRecoverInputShape: BotRecoverInputShape = botRecoverInputSchema.shape;
 
 const botHeartbeatInputSchema = z.object({
   alert_threshold_seconds: z.number().optional(),
 });
-type BotHeartbeatInputShape = ShapeOf<typeof botHeartbeatInputSchema>;
+type BotHeartbeatInputShape = typeof botHeartbeatInputSchema['_def']['shape'];
 const botHeartbeatInputShape: BotHeartbeatInputShape = botHeartbeatInputSchema.shape;
 
 type BotListActiveParams = z.infer<typeof botListActiveInputSchema>;
