@@ -291,8 +291,10 @@ main() {
         exit 1
     fi
 
-    # Check for critical dependencies
+    # Define critical dependencies list (used for validation at multiple stages)
     CRITICAL_DEPS=("express" "socket.io" "better-sqlite3" "dockerode" "@modelcontextprotocol/sdk")
+
+    # Check for critical dependencies
     for dep in "${CRITICAL_DEPS[@]}"; do
         if [ ! -d "node_modules/${dep}" ]; then
             log_error "Critical dependency missing: ${dep}"
@@ -318,10 +320,10 @@ main() {
     fi
 
     # Final verification - check filesystem directly to avoid workspace resolution issues
+    # Reuses CRITICAL_DEPS array defined earlier for consistency
     log_info "Verifying production build..."
-    CRITICAL_DEPS_VERIFY=("express" "socket.io" "better-sqlite3" "@modelcontextprotocol/sdk")
     MISSING_DEPS=()
-    for dep in "${CRITICAL_DEPS_VERIFY[@]}"; do
+    for dep in "${CRITICAL_DEPS[@]}"; do
         if [ ! -d "node_modules/${dep}" ]; then
             MISSING_DEPS+=("$dep")
         fi
