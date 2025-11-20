@@ -50,22 +50,7 @@ describe('Socket.IO event broadcasts (in-process)', () => {
     expect(receivedCreated).toMatchObject({ containerId, name: 'worker' });
   });
 
-  it('delivers task updates and assignments', () => {
-    const taskId = generateTestId('task');
-    let updatePayload: any;
-    let assignmentPayload: any;
-
-    client.clientOn('task:updated', (payload) => {
-      updatePayload = payload;
-    });
-    client.clientOn('task:assigned', (payload) => {
-      assignmentPayload = payload;
-    });
-
-    io.emit('task:updated', { taskId, status: 'in-progress' });
-    io.emit('task:assigned', { taskId, workerId: 'worker-1' });
-
-    expect(updatePayload).toMatchObject({ taskId, status: 'in-progress' });
-    expect(assignmentPayload).toMatchObject({ taskId, workerId: 'worker-1' });
-  });
+  // NOTE: Dev-bots task events (task:updated, task:assigned, etc.) migrated to SSE
+  // See: backend/tests/integration/sse-routes.test.ts for comprehensive SSE event tests
+  // Socket.IO retained ONLY for bidirectional communication (terminal, logs, containers)
 });

@@ -77,6 +77,7 @@ export type LogCategory =
   | 'safety' // Safety mechanisms for git operations
   | 'scripts'
   | 'socket'
+  | 'sse' // Server-Sent Events for real-time updates
   | 'system'
   | 'task_context' // Task context tracking for CRUD operations
   | 'test'

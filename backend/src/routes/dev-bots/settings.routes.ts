@@ -78,30 +78,14 @@ export function createSettingsRoutes(_devBotsManager: DevBotsManager): Router {
       return;
     }
 
-    try {
-      // Settings are read-only from config/environment
-      // Return current settings with error message
-      const errorResponse: ApiError = {
-        success: false,
-        error: 'not_implemented',
-        message: 'Settings updates are not yet implemented. Settings are currently read from environment variables (MAX_DEV_BOTS). To change maxWorkers, update the environment variable and restart the service.',
-      };
-      res.status(501).json(errorResponse);
-    } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'update_settings_failed',
-        message: 'Failed to process settings update request',
-        error,
-        details: { payload: req.body }
-      });
-      const errorResponse: ApiError = {
-        success: false,
-        error: 'update_failed',
-        message: error instanceof Error ? error.message : 'Failed to update settings',
-      };
-      res.status(500).json(errorResponse);
-    }
+    // Settings are read-only from config/environment
+    // Return 501 Not Implemented
+    const errorResponse: ApiError = {
+      success: false,
+      error: 'not_implemented',
+      message: 'Settings updates are not yet implemented. Settings are currently read from environment variables (MAX_DEV_BOTS). To change maxWorkers, update the environment variable and restart the service.',
+    };
+    res.status(501).json(errorResponse);
   });
 
   return router;
