@@ -1,8 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
+import { z, type ZodRawShape, type ZodTypeAny } from "zod";
 import Database from "better-sqlite3";
 import { withAuth } from "../middleware/auth.js";
 import { createJsonResponse, withErrorHandling } from "../utils/response.js";
 import type { McpServices } from "../server.js";
+
+const systemHealthInputSchema: ZodRawShape = {};
+type SystemHealthParams = z.objectOutputType<typeof systemHealthInputSchema, ZodTypeAny>;
 
 export function registerSystemTools(
   server: McpServer,
@@ -14,9 +18,9 @@ export function registerSystemTools(
     {
         title: "System Health",
         description: "Provides a comprehensive overview of the system's health.",
-        inputSchema: {},
+        inputSchema: systemHealthInputSchema,
     },
-    withAuth("system_health", withErrorHandling(async (_params: Record<string, never>) => {
+    withAuth("system_health", withErrorHandling(async (_params: SystemHealthParams) => {
         const health: Record<string, unknown> = {
             status: "healthy",
             database: "connected",

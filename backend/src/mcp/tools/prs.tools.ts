@@ -1,19 +1,22 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
-import { z } from 'zod';
+import { z, type ZodRawShape, type ZodTypeAny } from 'zod';
 import Database from 'better-sqlite3';
 import { withAuth } from '../middleware/auth.js';
 import { createJsonResponse, createErrorResponse, createSuccessResponse, withErrorHandling } from '../utils/response.js';
 import type { McpServices } from '../server.js';
 import { getPRConditionStateService } from '../../services/prConditionState.service.js';
 
-type PrTriggerParams = {
-  pr_number: number;
-  force?: boolean;
+const prTriggerInputSchema: ZodRawShape = {
+  pr_number: z.number().int().positive(),
+  force: z.boolean().optional(),
 };
 
-type PrBlockingIssuesParams = {
-  pr_number: number;
+const prBlockingIssuesInputSchema: ZodRawShape = {
+  pr_number: z.number().int().positive(),
 };
+
+type PrTriggerParams = z.objectOutputType<typeof prTriggerInputSchema, ZodTypeAny>;
+type PrBlockingIssuesParams = z.objectOutputType<typeof prBlockingIssuesInputSchema, ZodTypeAny>;
 
 const STATUS_MAP: Record<string, string> = {
   met: 'pass',
@@ -48,10 +51,7 @@ export function registerPrsTools(
     {
       title: 'Trigger PR Evaluation',
       description: 'Manually triggers a PR gate evaluation.',
-      inputSchema: {
-        pr_number: z.number().int().positive(),
-        force: z.boolean().optional(),
-      },
+      inputSchema: prTriggerInputSchema,
     },
     withAuth('pr_trigger_evaluation', withErrorHandling(async (params: PrTriggerParams) => {
       const eventType = params.force ? 'manual_restart' : 'pull_request_opened';
@@ -65,9 +65,7 @@ export function registerPrsTools(
     {
       title: 'Get Blocking Issues for PR',
       description: 'Retrieves the latest gate evaluation and blocking issues.',
-      inputSchema: {
-        pr_number: z.number().int().positive(),
-      },
+      inputSchema: prBlockingIssuesInputSchema,
     },
     withAuth('pr_get_blocking_issues', withErrorHandling(async (params: PrBlockingIssuesParams) => {
       const state = await prConditionState.getState(params.pr_number);
