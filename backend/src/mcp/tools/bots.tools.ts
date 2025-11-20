@@ -6,23 +6,33 @@ import { createJsonResponse, createErrorResponse, createSuccessResponse, withErr
 import { McpServices } from "../server.js";
 import type { DevBotsStatus, WorkerStatus } from "../../services/statusAggregation.service.js";
 
+type ShapeOf<T extends z.ZodObject<any>> = T extends z.ZodObject<infer Shape, any, any, any> ? Shape : never;
+
 const botListActiveInputSchema = z.object({
   include_idle: z.boolean().optional(),
   limit: z.number().int().positive().max(100).optional(),
 });
+type BotListActiveInputShape = ShapeOf<typeof botListActiveInputSchema>;
+const botListActiveInputShape: BotListActiveInputShape = botListActiveInputSchema.shape;
 
 const botGetStatusInputSchema = z.object({
   bot_id: z.string(),
 });
+type BotGetStatusInputShape = ShapeOf<typeof botGetStatusInputSchema>;
+const botGetStatusInputShape: BotGetStatusInputShape = botGetStatusInputSchema.shape;
 
 const botRecoverInputSchema = z.object({
   bot_id: z.string(),
   reason: z.string(),
 });
+type BotRecoverInputShape = ShapeOf<typeof botRecoverInputSchema>;
+const botRecoverInputShape: BotRecoverInputShape = botRecoverInputSchema.shape;
 
 const botHeartbeatInputSchema = z.object({
   alert_threshold_seconds: z.number().optional(),
 });
+type BotHeartbeatInputShape = ShapeOf<typeof botHeartbeatInputSchema>;
+const botHeartbeatInputShape: BotHeartbeatInputShape = botHeartbeatInputSchema.shape;
 
 type BotListActiveParams = z.infer<typeof botListActiveInputSchema>;
 type BotGetStatusParams = z.infer<typeof botGetStatusInputSchema>;
@@ -48,7 +58,7 @@ export function registerBotsTools(
     {
         title: "List Active Bots",
         description: "Lists all active dev-bots.",
-        inputSchema: botListActiveInputSchema.shape,
+        inputSchema: botListActiveInputShape,
     },
     withAuth("bot_list_active", withErrorHandling(async (params: BotListActiveParams) => {
         const status = await getSystemStatus();
@@ -70,7 +80,7 @@ export function registerBotsTools(
     {
         title: "Get Bot Status",
         description: "Retrieves the detailed status of a dev-bot.",
-        inputSchema: botGetStatusInputSchema.shape,
+        inputSchema: botGetStatusInputShape,
     },
     withAuth("bot_get_status", withErrorHandling(async (params: BotGetStatusParams) => {
          const status = await getSystemStatus();
@@ -87,7 +97,7 @@ export function registerBotsTools(
     {
         title: "Recover Bot",
         description: "(ADMIN ONLY) Triggers emergency recovery orchestration. Note: Currently triggers system-wide recovery rather than targeting a specific bot.",
-        inputSchema: botRecoverInputSchema.shape,
+        inputSchema: botRecoverInputShape,
     },
     withAuth("bot_recover", withErrorHandling(async (params: BotRecoverParams) => {
         if (!devBotsManager.triggerEmergencyRecovery) {
@@ -103,7 +113,7 @@ export function registerBotsTools(
     {
         title: "Bot Heartbeat Status",
         description: "Checks the heartbeat status of all dev-bots.",
-        inputSchema: botHeartbeatInputSchema.shape,
+        inputSchema: botHeartbeatInputShape,
     },
     withAuth("bot_heartbeat_status", withErrorHandling(async (params: BotHeartbeatParams) => {
         const status = await getSystemStatus();

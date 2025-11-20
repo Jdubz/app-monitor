@@ -6,14 +6,20 @@ import { createJsonResponse, createErrorResponse, createSuccessResponse, withErr
 import type { McpServices } from '../server.js';
 import { getPRConditionStateService } from '../../services/prConditionState.service.js';
 
+type ShapeOf<T extends z.ZodObject<any>> = T extends z.ZodObject<infer Shape, any, any, any> ? Shape : never;
+
 const prTriggerInputSchema = z.object({
   pr_number: z.number().int().positive(),
   force: z.boolean().optional(),
 });
+type PrTriggerInputShape = ShapeOf<typeof prTriggerInputSchema>;
+const prTriggerInputShape: PrTriggerInputShape = prTriggerInputSchema.shape;
 
 const prBlockingIssuesInputSchema = z.object({
   pr_number: z.number().int().positive(),
 });
+type PrBlockingIssuesInputShape = ShapeOf<typeof prBlockingIssuesInputSchema>;
+const prBlockingIssuesInputShape: PrBlockingIssuesInputShape = prBlockingIssuesInputSchema.shape;
 
 type PrTriggerParams = z.infer<typeof prTriggerInputSchema>;
 type PrBlockingIssuesParams = z.infer<typeof prBlockingIssuesInputSchema>;
@@ -51,7 +57,7 @@ export function registerPrsTools(
     {
       title: 'Trigger PR Evaluation',
       description: 'Manually triggers a PR gate evaluation.',
-      inputSchema: prTriggerInputSchema.shape,
+      inputSchema: prTriggerInputShape,
     },
     withAuth('pr_trigger_evaluation', withErrorHandling(async (params: PrTriggerParams) => {
       const eventType = params.force ? 'manual_restart' : 'pull_request_opened';
@@ -65,7 +71,7 @@ export function registerPrsTools(
     {
       title: 'Get Blocking Issues for PR',
       description: 'Retrieves the latest gate evaluation and blocking issues.',
-      inputSchema: prBlockingIssuesInputSchema.shape,
+      inputSchema: prBlockingIssuesInputShape,
     },
     withAuth('pr_get_blocking_issues', withErrorHandling(async (params: PrBlockingIssuesParams) => {
       const state = await prConditionState.getState(params.pr_number);

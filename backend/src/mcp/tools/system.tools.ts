@@ -5,7 +5,11 @@ import { withAuth } from "../middleware/auth.js";
 import { createJsonResponse, withErrorHandling } from "../utils/response.js";
 import type { McpServices } from "../server.js";
 
+type ShapeOf<T extends z.ZodObject<any>> = T extends z.ZodObject<infer Shape, any, any, any> ? Shape : never;
+
 const systemHealthInputSchema = z.object({});
+type SystemHealthInputShape = ShapeOf<typeof systemHealthInputSchema>;
+const systemHealthInputShape: SystemHealthInputShape = systemHealthInputSchema.shape;
 type SystemHealthParams = z.infer<typeof systemHealthInputSchema>;
 
 export function registerSystemTools(
@@ -18,7 +22,7 @@ export function registerSystemTools(
     {
         title: "System Health",
         description: "Provides a comprehensive overview of the system's health.",
-        inputSchema: systemHealthInputSchema.shape,
+        inputSchema: systemHealthInputShape,
     },
     withAuth("system_health", withErrorHandling(async (_params: SystemHealthParams) => {
         const health: Record<string, unknown> = {

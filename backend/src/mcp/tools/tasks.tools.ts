@@ -16,6 +16,8 @@ const TASK_LIST_STATUS_VALUES: TaskStatus[] = [
   'cancelled',
   'timeout',
 ];
+type ShapeOf<T extends z.ZodObject<any>> = T extends z.ZodObject<infer Shape, any, any, any> ? Shape : never;
+
 const taskCreateInputSchema = z.object({
   title: z.string().min(3),
   type: z.enum(['implementation', 'analysis', 'documentation', 'review']).optional(),
@@ -24,21 +26,29 @@ const taskCreateInputSchema = z.object({
   assigned_agent: z.enum(['claude', 'codex', 'gemini']).optional(),
   tags: z.array(z.string().min(1)).optional(),
 });
+type TaskCreateInputShape = ShapeOf<typeof taskCreateInputSchema>;
+const taskCreateInputShape: TaskCreateInputShape = taskCreateInputSchema.shape;
 
 const taskGetInputSchema = z.object({
   task_id: z.string().min(1),
 });
+type TaskGetInputShape = ShapeOf<typeof taskGetInputSchema>;
+const taskGetInputShape: TaskGetInputShape = taskGetInputSchema.shape;
 
 const taskListInputSchema = z.object({
   status: z.enum(TASK_LIST_STATUS_VALUES as [TaskStatus, ...TaskStatus[]]).optional(),
   assigned_agent: z.string().min(1).optional(),
   limit: z.number().int().positive().max(500).optional(),
 });
+type TaskListInputShape = ShapeOf<typeof taskListInputSchema>;
+const taskListInputShape: TaskListInputShape = taskListInputSchema.shape;
 
 const taskUnblockInputSchema = z.object({
   task_id: z.string().min(1),
   resumed_by: z.string().optional(),
 });
+type TaskUnblockInputShape = ShapeOf<typeof taskUnblockInputSchema>;
+const taskUnblockInputShape: TaskUnblockInputShape = taskUnblockInputSchema.shape;
 
 const taskOutcomeInputSchema = z.object({
   task_id: z.string().min(1),
@@ -50,6 +60,8 @@ const taskOutcomeInputSchema = z.object({
   failure_code: z.enum(['compilation_error', 'test_failure', 'dependency_error', 'timeout', 'validation_error', 'unknown']).optional(),
   error_details: z.string().optional(),
 });
+type TaskOutcomeInputShape = ShapeOf<typeof taskOutcomeInputSchema>;
+const taskOutcomeInputShape: TaskOutcomeInputShape = taskOutcomeInputSchema.shape;
 
 type TaskCreateParams = z.infer<typeof taskCreateInputSchema>;
 type TaskGetParams = z.infer<typeof taskGetInputSchema>;
@@ -106,7 +118,7 @@ export function registerTasksTools(
     {
       title: 'Create Task',
       description: 'Creates a standalone task using the existing submission pipeline.',
-      inputSchema: taskCreateInputSchema.shape,
+      inputSchema: taskCreateInputShape,
     },
     withAuth('task_create', withErrorHandling(async (params: TaskCreateParams) => {
       const noteFromTags = params.tags?.length ? `Tags: ${params.tags.join(', ')}` : undefined;
@@ -129,7 +141,7 @@ export function registerTasksTools(
     {
       title: 'Get Task',
       description: 'Retrieves the details of a task by ID.',
-      inputSchema: taskGetInputSchema.shape,
+      inputSchema: taskGetInputShape,
     },
     withAuth('task_get', withErrorHandling(async (params: TaskGetParams) => {
       const task = taskQueue.getTask(params.task_id);
@@ -146,7 +158,7 @@ export function registerTasksTools(
     {
       title: 'List Tasks',
       description: 'Lists tasks with optional filtering.',
-      inputSchema: taskListInputSchema.shape,
+      inputSchema: taskListInputShape,
     },
     withAuth('task_list', withErrorHandling(async (params: TaskListParams) => {
       const lists = await devBotsManager.getTasks();
@@ -181,7 +193,7 @@ export function registerTasksTools(
     {
       title: 'Resume Blocked Task',
       description: 'Resumes a blocked task using the manual resume flow.',
-      inputSchema: taskUnblockInputSchema.shape,
+      inputSchema: taskUnblockInputShape,
     },
     withAuth('task_unblock', withErrorHandling(async (params: TaskUnblockParams, context: AuthContext) => {
       const resumedBy = params.resumed_by || process.env.APP_MONITOR_MCP_USER_ID || context.role;
@@ -195,7 +207,7 @@ export function registerTasksTools(
     {
       title: 'Report Task Outcome',
       description: '(DEV-BOTS ONLY) Stores outcome details for the assigned task.',
-      inputSchema: taskOutcomeInputSchema.shape,
+      inputSchema: taskOutcomeInputShape,
     },
     withAuth('task_report_outcome', withErrorHandling(async (params: TaskReportOutcomeParams, context: AuthContext) => {
       const task = taskQueue.getTask(params.task_id);
