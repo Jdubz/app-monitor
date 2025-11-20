@@ -246,10 +246,7 @@ export const mockGenerators = {
   },
 
   devBotsSettings: (overrides?: Partial<DevBotsSettings>): DevBotsSettings => ({
-    modelStrategy: 'alternate',
     maxWorkers: 5,
-    dryRun: false,
-    autoCleanup: true,
     updatedAt: new Date().toISOString(),
     ...overrides,
   }),

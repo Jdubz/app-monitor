@@ -31,10 +31,7 @@ export function createSettingsRoutes(_devBotsManager: DevBotsManager): Router {
       // For now, return default settings
       // TODO: Integrate with actual settings storage when implemented
       const settings: DevBotsSettings = {
-        modelStrategy: 'alternate',
         maxWorkers: 5,
-        dryRun: false,
-        autoCleanup: true,
         updatedAt: new Date().toISOString(),
       };
 
@@ -83,20 +80,14 @@ export function createSettingsRoutes(_devBotsManager: DevBotsManager): Router {
       // Get current settings (for now, using defaults)
       // TODO: Integrate with actual settings storage when implemented
       const currentSettings: DevBotsSettings = {
-        modelStrategy: 'alternate',
         maxWorkers: 5,
-        dryRun: false,
-        autoCleanup: true,
         updatedAt: new Date().toISOString(),
       };
 
       // Build updated settings with only validated fields
       const updatedSettings: DevBotsSettings = {
         ...currentSettings,
-        ...(payload.modelStrategy !== undefined && { modelStrategy: payload.modelStrategy }),
         ...(payload.maxWorkers !== undefined && { maxWorkers: payload.maxWorkers }),
-        ...(payload.dryRun !== undefined && { dryRun: payload.dryRun }),
-        ...(payload.autoCleanup !== undefined && { autoCleanup: payload.autoCleanup }),
         updatedAt: new Date().toISOString(),
       };
 

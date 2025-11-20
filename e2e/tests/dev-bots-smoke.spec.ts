@@ -65,10 +65,7 @@ const mockLogsDescriptor = {
 };
 
 const mockSettings = {
-  modelStrategy: 'alternate' as const,
   maxWorkers: 2,
-  dryRun: true,
-  autoCleanup: false,
   updatedAt: '2025-11-01T11:00:00.000Z',
 };
 
@@ -101,62 +98,38 @@ const mockStatus = {
   },
 };
 
-test.describe('Dev Bots Command Center', () => {
+test.describe('Dev Bots Infrastructure Tab', () => {
   test.beforeEach(async ({ page }) => {
     await mockDevBotsApi(page);
     await page.goto('/');
     await authenticate(page);
     await page.getByRole('tab', { name: /Dev-Bots/i }).click();
-    await page.waitForTimeout(500); // Give time for tab content to load
+    await page.waitForTimeout(1000); // Give time for tab content to load
   });
 
-  test('smoke view shows queue and worker consoles', async ({ page }) => {
-    // Just verify the Dev-Bots tab loads without errors
+  test('loads dev-bots infrastructure tab without errors', async ({ page }) => {
+    // Verify the Dev-Bots tab is active
     await expect(page.getByRole('tab', { name: /Dev-Bots/i })).toHaveAttribute('aria-selected', 'true');
-    
+
     // Check for the active tabpanel
     await expect(page.getByRole('tabpanel', { name: /Dev-Bots/i })).toBeVisible();
-  });
 
-  test('renders chains header and list or empty state', async ({ page }) => {
-    await page.waitForTimeout(750);
+    // Wait for API calls and rendering
+    await page.waitForTimeout(2000);
 
-    const loadingVisible = await page
-      .getByText(/Loading dev-bots status/i)
-      .isVisible()
-      .catch(() => false);
-    const headerVisible = await page
-      .locator('text=Dev-Bots Chains')
-      .first()
-      .isVisible()
-      .catch(() => false);
-    const filtersVisible = await page
-      .getByRole('tab', { name: /All/i })
-      .isVisible()
-      .catch(() => false);
-    const listItemVisible = await page
-      .getByTestId('list-detail-item')
-      .first()
-      .isVisible()
-      .catch(() => false);
-    const emptyStateVisible = await page
-      .getByText(/No chains found/i)
-      .isVisible()
-      .catch(() => false);
-
-    expect(
-      loadingVisible || (headerVisible && filtersVisible) || listItemVisible || emptyStateVisible,
-    ).toBe(true);
+    // Verify infrastructure title is visible (confirms tab loaded)
+    await expect(page.getByText('Dev-Bots Infrastructure')).toBeVisible();
   });
 
   test.skip('captures layout screenshot', async ({ page }) => {
+    await page.waitForTimeout(2000); // Wait for content to load
     await disableAnimations(page);
     const screenshot = await page.screenshot({
       animations: 'disabled',
       mask: [],
       fullPage: false,
     });
-    expect(screenshot).toMatchSnapshot('dev-bots-layout.png');
+    expect(screenshot).toMatchSnapshot('dev-bots-infrastructure.png');
   });
 });
 
