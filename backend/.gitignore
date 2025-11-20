@@ -1,1 +1,4 @@
 data/logs/
+
+# Admin bot runtime config (generated at runtime)
+data/codex-admin-bot-runtime.toml

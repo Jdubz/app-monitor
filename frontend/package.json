@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@app-monitor/api-contracts": "file:../shared/api-contracts",
+    "@assistant-ui/react": "^0.11.41",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-label": "^2.1.8",
@@ -39,8 +40,6 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-virtual": "^3.13.12",
     "@types/react-router-dom": "^5.3.3",
-    "@xterm/addon-fit": "^0.10.0",
-    "@xterm/xterm": "^5.5.0",
     "axios": "^1.6.5",
     "html2canvas": "^1.4.1",
     "lucide-react": "^0.453.0",
@@ -51,6 +50,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
+    "@testing-library/dom": "^9.3.4",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^14.3.1",
     "@testing-library/user-event": "^14.6.1",

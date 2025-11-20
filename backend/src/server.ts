@@ -14,10 +14,7 @@ import { setWebhookHandler } from './routes/github-webhooks.routes.js';
 import { logger } from './utils/logger.js';
 import { startMcpServer } from './mcp/server.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
-
-// Conditionally import TerminalService - skip in test environments to avoid node-pty crashes
-type TerminalServiceType = typeof import('./services/TerminalService.js').TerminalService;
-let TerminalServiceClass: TerminalServiceType | undefined;
+import { AdminBotService } from './services/AdminBotService.js';
 
 // CORS allowed headers for both HTTP and WebSocket
 const ALLOWED_CORS_HEADERS = ['Content-Type', 'X-API-Key', 'Authorization', 'X-Trace-Id'];
@@ -30,7 +27,7 @@ import type {
 // Export services for API access
 export let devBotsManager: DevBotsManager | undefined;
 export let connectionManager: ConnectionManager;
-export let terminalService: InstanceType<TerminalServiceType> | undefined;
+export let adminBotService: AdminBotService;
 
 export interface CreateAppOverrides {
   devBotsManager?: DevBotsManager | null;
@@ -123,6 +120,14 @@ export async function createApp(options: CreateAppOptions = {}) {
   // Set global instance for service access
   setConnectionManagerInstance(connectionManager);
 
+  // Initialize AdminBotService
+  adminBotService = new AdminBotService();
+  logger.info({
+    category: 'system',
+    action: 'admin_bot_service_initialized',
+    message: 'AdminBotService initialized'
+  });
+
   // Initialize Socket.IO Terminal Handler (unified architecture)
   // This will be used instead of the native WebSocket implementation (InteractiveSessionStreaming)
   // Note: Docker instance will be available after DevBotsManager initialization
@@ -159,39 +164,8 @@ export async function createApp(options: CreateAppOptions = {}) {
     }
   }
 
-  if (devBotsManager) {
-    // NOTE: DevBotsManager events are now handled by SSE routes (sse.routes.ts)
-    // Socket.IO is retained ONLY for interactive terminal (bidirectional communication)
-    // All task/system events migrated to Server-Sent Events for better performance
-
-    // Initialize TerminalService with tmux for persistent sessions
-    // Skip in test environments to avoid node-pty crashes
-    const isTestEnv = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
-    if (!isTestEnv) {
-      if (!TerminalServiceClass) {
-        const module = await import('./services/TerminalService.js');
-        TerminalServiceClass = module.TerminalService;
-      }
-
-      terminalService = new TerminalServiceClass({
-        io,
-        idleTimeoutMs: 30 * 60 * 1000, // 30 minutes
-        shellCommand: '/bin/bash',
-      });
-
-      logger.info({
-        category: 'system',
-        action: 'terminal_service_initialized',
-        message: 'TerminalService initialized with tmux support'
-      });
-    } else {
-      logger.info({
-        category: 'system',
-        action: 'terminal_service_skipped',
-        message: 'TerminalService skipped in test environment'
-      });
-    }
-  }
+  // NOTE: DevBotsManager events are now handled by SSE routes (sse.routes.ts)
+  // All task/system events use Server-Sent Events for better performance
 
   // Initialize GitHub Webhook Handler
   if (devBotsManager) {
@@ -337,7 +311,7 @@ export async function createApp(options: CreateAppOptions = {}) {
   const apiRouter = createApiRouter({
     devBotsManager: devBotsManager ?? undefined,
     connectionManager,
-    terminalService: terminalService ?? undefined,
+    adminBotService,
   });
 
   app.use('/api', apiRouter);
