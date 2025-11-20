@@ -1,8 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
-import type { AnyZodObject, z, ZodRawShape } from 'zod';
+import { z } from 'zod';
+import type { ZodObject, ZodRawShape } from 'zod';
 
-type ToolConfig<Schema extends AnyZodObject> = {
+type AnyToolObject = ZodObject<ZodRawShape>;
+
+type ToolConfig<Schema extends AnyToolObject> = {
   title?: string;
   description?: string;
   inputSchema: Schema;
@@ -12,12 +15,12 @@ type RawRegisterConfig = Parameters<McpServer['registerTool']>[1];
 type RawRegisterHandler = Parameters<McpServer['registerTool']>[2];
 type RawRegisterExtra = Parameters<RawRegisterHandler>[1];
 
-type ToolHandler<Schema extends AnyZodObject> = (
+type ToolHandler<Schema extends AnyToolObject> = (
   params: z.infer<Schema>,
   extra?: RawRegisterExtra,
 ) => Promise<CallToolResult> | CallToolResult;
 
-export function registerZodTool<Schema extends AnyZodObject>(
+export function registerZodTool<Schema extends AnyToolObject>(
   server: McpServer,
   name: string,
   config: ToolConfig<Schema>,
@@ -27,7 +30,7 @@ export function registerZodTool<Schema extends AnyZodObject>(
 
   const rawConfig: RawRegisterConfig = {
     ...rest,
-    inputSchema: inputSchema.shape as ZodRawShape,
+    inputSchema: inputSchema as unknown as RawRegisterConfig['inputSchema'],
   };
 
   const rawHandler: RawRegisterHandler = async (
