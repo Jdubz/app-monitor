@@ -123,9 +123,9 @@ export function createApiRouter(deps: {
     router.use('/prs', requireApiKey, createPRsRouter(deps.devBotsManager));
   }
 
-  // Admin Bot Chat endpoints
+  // Admin Bot Chat endpoints (auth handled per-route)
   if (deps.adminBotService) {
-    router.use('/admin-bot/chat', requireApiKey, createAdminBotChatRoutes(deps.adminBotService));
+    router.use('/admin-bot/chat', createAdminBotChatRoutes(deps.adminBotService));
   }
 
   // Logs and issues endpoints - no auth required (frontend logs and issue reports)

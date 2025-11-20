@@ -25,9 +25,18 @@ vi.mock('../../../utils/logger', () => ({
   },
 }));
 
+// Mock config for auth
+vi.mock('../../../config', () => ({
+  config: {
+    requireAuth: true,
+    apiKey: 'test-api-key-123',
+  },
+}));
+
 describe('Admin Bot Chat Routes', () => {
   let app: Express;
   let mockAdminBotService: AdminBotService;
+  const VALID_API_KEY = 'test-api-key-123';
 
   beforeEach(() => {
     // Create mock service as EventEmitter
@@ -62,11 +71,33 @@ describe('Admin Bot Chat Routes', () => {
   });
 
   describe('POST /start', () => {
-    it('should start a new session successfully', async () => {
+    it('should require authentication', async () => {
+      const response = await request(app)
+        .post('/api/admin-bot/chat/start')
+        .expect(401);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toBe('UNAUTHORIZED');
+      expect(mockAdminBotService.startSession).not.toHaveBeenCalled();
+    });
+
+    it('should reject invalid API key', async () => {
+      const response = await request(app)
+        .post('/api/admin-bot/chat/start')
+        .set('X-API-Key', 'invalid-key')
+        .expect(401);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toBe('UNAUTHORIZED');
+      expect(mockAdminBotService.startSession).not.toHaveBeenCalled();
+    });
+
+    it('should start a new session successfully with valid API key', async () => {
       (mockAdminBotService.startSession as Mock).mockResolvedValue('test-session-123');
 
       const response = await request(app)
         .post('/api/admin-bot/chat/start')
+        .set('X-API-Key', VALID_API_KEY)
         .expect(200);
 
       expect(response.body.success).toBe(true);
@@ -81,6 +112,7 @@ describe('Admin Bot Chat Routes', () => {
 
       const response = await request(app)
         .post('/api/admin-bot/chat/start')
+        .set('X-API-Key', VALID_API_KEY)
         .expect(500);
 
       expect(response.body.success).toBe(false);
@@ -94,6 +126,7 @@ describe('Admin Bot Chat Routes', () => {
 
       const response = await request(app)
         .post('/api/admin-bot/chat/start')
+        .set('X-API-Key', VALID_API_KEY)
         .expect(500);
 
       expect(response.body.success).toBe(false);
@@ -104,11 +137,23 @@ describe('Admin Bot Chat Routes', () => {
   });
 
   describe('POST /message', () => {
-    it('should send message successfully', async () => {
+    it('should require authentication', async () => {
+      const response = await request(app)
+        .post('/api/admin-bot/chat/message')
+        .send({ message: 'test message' })
+        .expect(401);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toBe('UNAUTHORIZED');
+      expect(mockAdminBotService.sendMessage).not.toHaveBeenCalled();
+    });
+
+    it('should send message successfully with valid API key', async () => {
       (mockAdminBotService.sendMessage as Mock).mockResolvedValue(undefined);
 
       const response = await request(app)
         .post('/api/admin-bot/chat/message')
+        .set('X-API-Key', VALID_API_KEY)
         .send({ message: 'test message' })
         .expect(200);
 
@@ -120,6 +165,7 @@ describe('Admin Bot Chat Routes', () => {
     it('should validate message is required', async () => {
       const response = await request(app)
         .post('/api/admin-bot/chat/message')
+        .set('X-API-Key', VALID_API_KEY)
         .send({})
         .expect(400);
 
@@ -131,6 +177,7 @@ describe('Admin Bot Chat Routes', () => {
     it('should validate message is a string', async () => {
       const response = await request(app)
         .post('/api/admin-bot/chat/message')
+        .set('X-API-Key', VALID_API_KEY)
         .send({ message: 123 })
         .expect(400);
 
@@ -142,6 +189,7 @@ describe('Admin Bot Chat Routes', () => {
     it('should handle empty string message', async () => {
       const response = await request(app)
         .post('/api/admin-bot/chat/message')
+        .set('X-API-Key', VALID_API_KEY)
         .send({ message: '' })
         .expect(400);
 
@@ -156,6 +204,7 @@ describe('Admin Bot Chat Routes', () => {
 
       const response = await request(app)
         .post('/api/admin-bot/chat/message')
+        .set('X-API-Key', VALID_API_KEY)
         .send({ message: 'test' })
         .expect(500);
 
@@ -170,6 +219,7 @@ describe('Admin Bot Chat Routes', () => {
 
       const response = await request(app)
         .post('/api/admin-bot/chat/message')
+        .set('X-API-Key', VALID_API_KEY)
         .send({ message: multilineMessage })
         .expect(200);
 
@@ -179,11 +229,22 @@ describe('Admin Bot Chat Routes', () => {
   });
 
   describe('POST /stop', () => {
-    it('should stop session successfully', async () => {
+    it('should require authentication', async () => {
+      const response = await request(app)
+        .post('/api/admin-bot/chat/stop')
+        .expect(401);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toBe('UNAUTHORIZED');
+      expect(mockAdminBotService.stopSession).not.toHaveBeenCalled();
+    });
+
+    it('should stop session successfully with valid API key', async () => {
       (mockAdminBotService.stopSession as Mock).mockResolvedValue(undefined);
 
       const response = await request(app)
         .post('/api/admin-bot/chat/stop')
+        .set('X-API-Key', VALID_API_KEY)
         .expect(200);
 
       expect(response.body.success).toBe(true);
@@ -198,6 +259,7 @@ describe('Admin Bot Chat Routes', () => {
 
       const response = await request(app)
         .post('/api/admin-bot/chat/stop')
+        .set('X-API-Key', VALID_API_KEY)
         .expect(500);
 
       expect(response.body.success).toBe(false);
@@ -209,6 +271,7 @@ describe('Admin Bot Chat Routes', () => {
 
       const response = await request(app)
         .post('/api/admin-bot/chat/stop')
+        .set('X-API-Key', VALID_API_KEY)
         .expect(200);
 
       expect(response.body.success).toBe(true);
@@ -216,7 +279,16 @@ describe('Admin Bot Chat Routes', () => {
   });
 
   describe('GET /status', () => {
-    it('should return status with active session', async () => {
+    it('should require authentication', async () => {
+      const response = await request(app)
+        .get('/api/admin-bot/chat/status')
+        .expect(401);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toBe('UNAUTHORIZED');
+    });
+
+    it('should return status with active session when authenticated', async () => {
       const mockSession = {
         id: 'test-session-123',
         status: 'running' as const,
@@ -231,6 +303,7 @@ describe('Admin Bot Chat Routes', () => {
 
       const response = await request(app)
         .get('/api/admin-bot/chat/status')
+        .set('X-API-Key', VALID_API_KEY)
         .expect(200);
 
       expect(response.body.success).toBe(true);
@@ -247,6 +320,7 @@ describe('Admin Bot Chat Routes', () => {
 
       const response = await request(app)
         .get('/api/admin-bot/chat/status')
+        .set('X-API-Key', VALID_API_KEY)
         .expect(200);
 
       expect(response.body.success).toBe(true);
@@ -274,6 +348,7 @@ describe('Admin Bot Chat Routes', () => {
 
       const response = await request(app)
         .get('/api/admin-bot/chat/status')
+        .set('X-API-Key', VALID_API_KEY)
         .expect(200);
 
       // Should only have messageCount, not full messages
@@ -283,9 +358,59 @@ describe('Admin Bot Chat Routes', () => {
   });
 
   describe('GET /stream (SSE)', () => {
-    it('should set correct SSE headers', (done) => {
+    it('should require authentication', (done) => {
       request(app)
         .get('/api/admin-bot/chat/stream')
+        .expect(401)
+        .end((err, res) => {
+          if (err) return done(err);
+          expect(res.body.success).toBe(false);
+          expect(res.body.error).toBe('UNAUTHORIZED');
+          done();
+        });
+    });
+
+    it('should accept authentication via header', (done) => {
+      request(app)
+        .get('/api/admin-bot/chat/stream')
+        .set('X-API-Key', VALID_API_KEY)
+        .expect('Content-Type', /text\/event-stream/)
+        .expect('Cache-Control', 'no-cache')
+        .expect('Connection', 'keep-alive')
+        .end((err) => {
+          if (err) return done(err);
+          done();
+        });
+    });
+
+    it('should accept authentication via query parameter', (done) => {
+      request(app)
+        .get(`/api/admin-bot/chat/stream?apiKey=${encodeURIComponent(VALID_API_KEY)}`)
+        .expect('Content-Type', /text\/event-stream/)
+        .expect('Cache-Control', 'no-cache')
+        .expect('Connection', 'keep-alive')
+        .end((err) => {
+          if (err) return done(err);
+          done();
+        });
+    });
+
+    it('should reject invalid API key in query parameter', (done) => {
+      request(app)
+        .get('/api/admin-bot/chat/stream?apiKey=invalid-key')
+        .expect(401)
+        .end((err, res) => {
+          if (err) return done(err);
+          expect(res.body.success).toBe(false);
+          expect(res.body.error).toBe('UNAUTHORIZED');
+          done();
+        });
+    });
+
+    it('should set correct SSE headers when authenticated', (done) => {
+      request(app)
+        .get('/api/admin-bot/chat/stream')
+        .set('X-API-Key', VALID_API_KEY)
         .expect('Content-Type', /text\/event-stream/)
         .expect('Cache-Control', 'no-cache')
         .expect('Connection', 'keep-alive')
@@ -296,7 +421,9 @@ describe('Admin Bot Chat Routes', () => {
     });
 
     it('should send connected event on connection', (done) => {
-      const req = request(app).get('/api/admin-bot/chat/stream');
+      const req = request(app)
+        .get('/api/admin-bot/chat/stream')
+        .set('X-API-Key', VALID_API_KEY);
 
       let receivedData = '';
 
@@ -320,7 +447,9 @@ describe('Admin Bot Chat Routes', () => {
     });
 
     it('should register event handlers on AdminBotService', (done) => {
-      const req = request(app).get('/api/admin-bot/chat/stream');
+      const req = request(app)
+        .get('/api/admin-bot/chat/stream')
+        .set('X-API-Key', VALID_API_KEY);
 
       // Give time for handlers to be registered
       const timeoutId = setTimeout(() => {
@@ -345,7 +474,9 @@ describe('Admin Bot Chat Routes', () => {
     });
 
     it('should clean up handlers on client disconnect', (done) => {
-      const req = request(app).get('/api/admin-bot/chat/stream');
+      const req = request(app)
+        .get('/api/admin-bot/chat/stream')
+        .set('X-API-Key', VALID_API_KEY);
       let cleanupTimeoutId: NodeJS.Timeout;
 
       // Give time for handlers to be registered
@@ -376,6 +507,7 @@ describe('Admin Bot Chat Routes', () => {
     it('should handle malformed JSON in message request', async () => {
       const response = await request(app)
         .post('/api/admin-bot/chat/message')
+        .set('X-API-Key', VALID_API_KEY)
         .set('Content-Type', 'application/json')
         .send('{"message": invalid json}');
 
@@ -390,6 +522,7 @@ describe('Admin Bot Chat Routes', () => {
 
       const response = await request(app)
         .post('/api/admin-bot/chat/message')
+        .set('X-API-Key', VALID_API_KEY)
         .send({ message: 'test' })
         .expect(500);
 
@@ -406,8 +539,8 @@ describe('Admin Bot Chat Routes', () => {
         .mockRejectedValueOnce(new Error('Session already running'));
 
       const [response1, response2] = await Promise.all([
-        request(app).post('/api/admin-bot/chat/start'),
-        request(app).post('/api/admin-bot/chat/start'),
+        request(app).post('/api/admin-bot/chat/start').set('X-API-Key', VALID_API_KEY),
+        request(app).post('/api/admin-bot/chat/start').set('X-API-Key', VALID_API_KEY),
       ]);
 
       // One should succeed, one should fail
@@ -424,7 +557,10 @@ describe('Admin Bot Chat Routes', () => {
       const messages = ['msg1', 'msg2', 'msg3'];
       const responses = await Promise.all(
         messages.map((msg) =>
-          request(app).post('/api/admin-bot/chat/message').send({ message: msg })
+          request(app)
+            .post('/api/admin-bot/chat/message')
+            .set('X-API-Key', VALID_API_KEY)
+            .send({ message: msg })
         )
       );
 

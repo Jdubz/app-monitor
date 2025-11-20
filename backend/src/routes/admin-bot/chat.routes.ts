@@ -16,6 +16,7 @@ import { Router, Request, Response } from 'express';
 import type { AdminBotService } from '../../services/AdminBotService.js';
 import { sendSuccess, sendError } from '../../utils/apiResponse.js';
 import { logger } from '../../utils/logger.js';
+import { requireApiKey, requireApiKeySSE } from '../../middleware/auth.js';
 
 export function createAdminBotChatRoutes(adminBotService: AdminBotService): Router {
   const router = Router();
@@ -26,7 +27,7 @@ export function createAdminBotChatRoutes(adminBotService: AdminBotService): Rout
    *
    * Response: { sessionId: string }
    */
-  router.post('/start', async (req: Request, res: Response) => {
+  router.post('/start', requireApiKey, async (req: Request, res: Response) => {
     try {
       logger.info({
         category: 'admin_bot_chat',
@@ -67,7 +68,7 @@ export function createAdminBotChatRoutes(adminBotService: AdminBotService): Rout
    * Body: { message: string }
    * Response: { received: boolean }
    */
-  router.post('/message', async (req: Request, res: Response) => {
+  router.post('/message', requireApiKey, async (req: Request, res: Response) => {
     try {
       const { message } = req.body;
 
@@ -124,8 +125,9 @@ export function createAdminBotChatRoutes(adminBotService: AdminBotService): Rout
    *
    * Streams output from Codex CLI in real-time.
    * Events: output, error, exit
+   * Note: Uses requireApiKeySSE to support query param auth (EventSource limitation)
    */
-  router.get('/stream', (req: Request, res: Response) => {
+  router.get('/stream', requireApiKeySSE, (req: Request, res: Response) => {
     // Set SSE headers
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -180,7 +182,7 @@ export function createAdminBotChatRoutes(adminBotService: AdminBotService): Rout
    *
    * Response: { stopped: boolean }
    */
-  router.post('/stop', async (req: Request, res: Response) => {
+  router.post('/stop', requireApiKey, async (req: Request, res: Response) => {
     try {
       logger.info({
         category: 'admin_bot_chat',
@@ -220,7 +222,7 @@ export function createAdminBotChatRoutes(adminBotService: AdminBotService): Rout
    *
    * Response: { session: AdminBotSession | null, isRunning: boolean }
    */
-  router.get('/status', (req: Request, res: Response) => {
+  router.get('/status', requireApiKey, (req: Request, res: Response) => {
     const session = adminBotService.getSession();
 
     sendSuccess(res, {
