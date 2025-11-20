@@ -171,7 +171,6 @@ export class TaskRepository {
       task_category: taskData.task_category,
       file_patterns: taskData.file_patterns,
       estimated_complexity: taskData.estimated_complexity,
-      preferred_agent: taskData.preferred_agent,
       chain_status: taskData.chain_status || 'pending',
       chain_id: chainId,
       chain_depth: taskData.chain_depth || 0,
@@ -189,7 +188,7 @@ export class TaskRepository {
           id, type, title, description, documentation, notes, status, priority,
           created_at, assigned_agent, prompt, can_retry, retry_count, max_retries,
           timeout_ms, fingerprint, estimated_hours, complexity,
-          task_category, file_patterns, estimated_complexity, preferred_agent,
+          task_category, file_patterns, estimated_complexity,
           chain_status, chain_id, chain_depth,
           phase_index, phase_name, phase_status, phase_attempts, phase_payload,
           plan_id
@@ -201,7 +200,7 @@ export class TaskRepository {
         task.notes, task.status, task.priority, task.created_at, task.assigned_agent,
         task.prompt, task.can_retry ? 1 : 0, task.retry_count, task.max_retries,
         task.timeout_ms, task.fingerprint, task.estimated_hours, task.complexity,
-        task.task_category, task.file_patterns, task.estimated_complexity, task.preferred_agent,
+        task.task_category, task.file_patterns, task.estimated_complexity,
         task.chain_status, task.chain_id, task.chain_depth,
         task.phase_index, task.phase_name, task.phase_status, task.phase_attempts, task.phase_payload,
         task.plan_id

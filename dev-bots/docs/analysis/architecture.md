@@ -376,7 +376,6 @@ async assignNextTask(): Promise<void> {
     try {
       Logger.info(`Syncing workspaces before assigning task ${nextTask.id}...`);
       const syncResult = await this.workspaceSyncManager.syncAllWorkspaces({
-        dryRun: false,
         verbose: false,
         conflictStrategy: 'auto-merge'
       });

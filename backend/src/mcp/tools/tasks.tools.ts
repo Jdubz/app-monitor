@@ -22,7 +22,6 @@ const taskCreateInputSchema = z.object({
   type: z.enum(['implementation', 'analysis', 'documentation', 'review']).optional(),
   prompt: z.string().min(10),
   success_criteria: z.array(z.string().min(3)).optional(),
-  assigned_agent: z.enum(['claude', 'codex', 'gemini']).optional(),
   tags: z.array(z.string().min(1)).optional(),
 });
 
@@ -119,7 +118,6 @@ export function registerTasksTools(
         acceptanceCriteria: params.success_criteria ?? [],
         documentation: noteFromTags,
         project: 'app-monitor',
-        assignedAgent: params.assigned_agent ?? 'claude-sonnet',
       });
 
       return createJsonResponse({ task: result.task, validation: result.validation });

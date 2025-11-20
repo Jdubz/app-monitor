@@ -47,7 +47,6 @@ describe('TaskRepository', () => {
         task_category TEXT,
         file_patterns TEXT,
         estimated_complexity TEXT,
-        preferred_agent TEXT,
         chain_id TEXT,
         chain_depth INTEGER DEFAULT 0,
         chain_status TEXT,

@@ -15,14 +15,24 @@ import { TaskClassifier, type TaskCategory, type TaskComplexity } from './taskCl
 import { CopilotThrottleManager } from './copilotThrottle.service.js';
 import type { AgentEligibilityService } from './agentEligibility.service.js';
 import type { Task } from './taskQueue.sqlite.js';
+import { AgentPersonalityManager } from './agentPersonalities.js';
+
+const TASK_TYPE_TO_PERSONALITY: Record<string, string> = {
+  implementation: 'backend-specialist',
+  fix: 'backend-specialist',
+  review: 'review-specialist',
+  'pr-follow-up': 'review-specialist',
+  analysis: 'documentation-specialist',
+  documentation: 'documentation-specialist',
+};
 
 export type AgentType = 'claude' | 'codex' | 'copilot' | 'gemini';
 
 export interface AgentSelectionCriteria {
   taskCategory?: TaskCategory;
+  taskType?: string;
   filePatterns?: string[];
   complexity?: TaskComplexity;
-  preferredAgent?: AgentType; // Manual override
   previousAttempts?: AgentAttempt[];
   taskTitle?: string;
   taskDescription?: string;
@@ -34,11 +44,15 @@ export interface AgentAttempt {
   timestamp: number;
 }
 
-export interface AgentSelection {
+interface AgentSelectionCore {
   agent: AgentType;
   reasoning: string;
   confidence: number; // 0-1 score
   fallbackAgent?: AgentType;
+}
+
+export interface AgentSelection extends AgentSelectionCore {
+  personalityId: string;
 }
 
 /**
@@ -49,11 +63,13 @@ export class AgentSelector {
   private readonly classifier: TaskClassifier;
   private copilotThrottle?: CopilotThrottleManager;
   private eligibilityService?: AgentEligibilityService;
+  private readonly personalityManager: AgentPersonalityManager;
 
   constructor(copilotThrottle?: CopilotThrottleManager, eligibilityService?: AgentEligibilityService) {
     this.classifier = new TaskClassifier();
     this.copilotThrottle = copilotThrottle;
     this.eligibilityService = eligibilityService;
+    this.personalityManager = new AgentPersonalityManager();
 
     logger.info({
       category: 'automation',
@@ -71,47 +87,43 @@ export class AgentSelector {
    * Select the best agent for a task based on intelligent criteria
    */
   async selectAgent(criteria: AgentSelectionCriteria, task?: Task): Promise<AgentSelection> {
-    if (criteria.preferredAgent) {
-      return this.createSelection(
-        criteria.preferredAgent,
-        'Manual override: preferred agent specified',
-        1.0
-      );
-    }
-
     const { selection, category, filePatterns, complexity } = this.buildSelection(criteria);
+    let finalSelection: AgentSelection = {
+      ...selection,
+      personalityId: this.determinePersonality(criteria, category),
+    };
 
     if (
-      selection.agent === 'claude' &&
+      finalSelection.agent === 'claude' &&
       this.canGeminiHandle(criteria) &&
       this.eligibilityService &&
       task &&
       (await this.eligibilityService.isEligible(task, 'gemini'))
     ) {
       const rerouted = this.createSelection('gemini', 'Eligible implementation rerouted to Gemini', 0.82, 'claude');
-      this.logSelection(rerouted, category, filePatterns, complexity);
-      return rerouted;
+      finalSelection = {
+        ...rerouted,
+        personalityId: this.determinePersonality(criteria, category),
+      };
+      this.logSelection(finalSelection, category, filePatterns, complexity);
+      return finalSelection;
     }
 
-    this.logSelection(selection, category, filePatterns, complexity);
-    return selection;
+    this.logSelection(finalSelection, category, filePatterns, complexity);
+    return finalSelection;
   }
 
   /**
    * Synchronous selection for initialization flows (no eligibility checks).
    */
   selectAgentSync(criteria: AgentSelectionCriteria): AgentSelection {
-    if (criteria.preferredAgent) {
-      return this.createSelection(
-        criteria.preferredAgent,
-        'Manual override: preferred agent specified',
-        1.0
-      );
-    }
-
     const { selection, category, filePatterns, complexity } = this.buildSelection(criteria);
-    this.logSelection(selection, category, filePatterns, complexity);
-    return selection;
+    const finalSelection: AgentSelection = {
+      ...selection,
+      personalityId: this.determinePersonality(criteria, category),
+    };
+    this.logSelection(finalSelection, category, filePatterns, complexity);
+    return finalSelection;
   }
 
   /**
@@ -119,7 +131,7 @@ export class AgentSelector {
    */
   private buildSelection(
     criteria: AgentSelectionCriteria
-  ): { selection: AgentSelection; category?: TaskCategory; filePatterns?: string[]; complexity?: TaskComplexity } {
+  ): { selection: AgentSelectionCore; category?: TaskCategory; filePatterns?: string[]; complexity?: TaskComplexity } {
     let category = criteria.taskCategory;
     let filePatterns = criteria.filePatterns;
     let complexity = criteria.complexity;
@@ -143,7 +155,7 @@ export class AgentSelector {
     category?: TaskCategory,
     filePatterns?: string[],
     complexity?: TaskComplexity
-  ): AgentSelection {
+  ): AgentSelectionCore {
     if (criteria.previousAttempts && criteria.previousAttempts.length > 0) {
       const lastAttempt = criteria.previousAttempts[criteria.previousAttempts.length - 1];
       if (lastAttempt.result === 'failure') {
@@ -164,7 +176,7 @@ export class AgentSelector {
     category?: TaskCategory,
     filePatterns?: string[],
     _complexity?: TaskComplexity
-  ): AgentSelection {
+  ): AgentSelectionCore {
     const patterns = filePatterns || [];
     const taskCat = category; // Preserve for later checks
 
@@ -360,6 +372,30 @@ export class AgentSelector {
     return false;
   }
 
+  private determinePersonality(
+    criteria: AgentSelectionCriteria,
+    category?: TaskCategory
+  ): string {
+    const candidates = [
+      criteria.taskType,
+      category,
+      criteria.taskCategory,
+    ].filter((value): value is string => !!value);
+
+    for (const candidate of candidates) {
+      const mapped = TASK_TYPE_TO_PERSONALITY[candidate];
+      if (mapped) {
+        return mapped;
+      }
+      const best = this.personalityManager.findBestAgent(candidate);
+      if (best) {
+        return best;
+      }
+    }
+
+    return 'backend-specialist';
+  }
+
   private logSelection(
     selection: AgentSelection,
     category?: TaskCategory,
@@ -372,6 +408,7 @@ export class AgentSelector {
       message: selection.reasoning,
       details: {
         agent: selection.agent,
+        personality: selection.personalityId,
         category,
         filePatterns,
         complexity,
@@ -388,7 +425,7 @@ export class AgentSelector {
     reasoning: string,
     confidence: number,
     fallbackAgent?: AgentType
-  ): AgentSelection {
+  ): AgentSelectionCore {
     return {
       agent,
       reasoning,

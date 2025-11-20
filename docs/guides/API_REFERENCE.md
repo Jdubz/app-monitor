@@ -484,7 +484,7 @@ Unless noted, routes live under `/api` and require the API key described above.
 | GET | `/sessions/:id` | Inspect single session |
 | DELETE | `/sessions/:id` | Terminate session |
 
-> Task log endpoints stream content that originated from files under `dev-bots/artifacts/`. You can also fetch those artifacts directly if you have filesystem access.
+> Logs are written directly to `/opt/app-monitor/shared/logs/` in production (and `backend/data/logs/` in development). Read them from the filesystem or artifacts; there is no HTTP log download endpoint.
 
 ### Request/Response Examples
 
@@ -579,7 +579,7 @@ X-API-Key: your-api-key
   "title": "Add authentication to dashboard",
   "status": "pending",
   "createdAt": "2025-11-16T06:00:00Z",
-  "assignedAgent": "backend-specialist",
+  "assignedAgent": "auto-select",
   "project": "job-finder-BE",
   "priority": 5,
   "estimatedEffort": {
@@ -589,6 +589,8 @@ X-API-Key: your-api-key
   }
 }
 ```
+
+> Once the task is dequeued for execution, the agent selector updates `assignedAgent` with the actual personality/provider it chose. Until then you'll see the placeholder value `auto-select`.
 
 #### System Status Response
 ```json

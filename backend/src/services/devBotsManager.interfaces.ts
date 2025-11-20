@@ -108,9 +108,4 @@ export interface DevBotsManagerConfig {
   prCheckTimeoutMs?: number;
   prMonitorPollIntervalMs?: number;
 
-  // Recovery configuration
-  recovery?: {
-    enabled?: boolean;
-    dryRun?: boolean;
-  };
 }

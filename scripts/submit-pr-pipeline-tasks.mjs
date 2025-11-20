@@ -35,12 +35,10 @@ async function submitTask(task) {
     title: task.title,
     taskType: task.taskType,
     intent: `${task.investigation || ''} ${task.constraints || ''}`.trim(),
-    // Optional fields if they align with the submission contract or are handled by the API
-    assignedAgent: task.assignedAgent,
     priority: task.priority
   };
 
-  if (!minimalPayload.intent) {
+  if (!taskPayload.intent) {
     console.error('❌ Error: Task intent is missing. Please provide at least one of "investigation" or "constraints" in your task definition.');
     console.error('   The intent field describes what the task should accomplish.');
     throw new Error('Task intent missing.');
@@ -50,7 +48,6 @@ async function submitTask(task) {
   console.log(`   Type: ${taskPayload.taskType}`);
   console.log(`   Intent: ${taskPayload.intent.substring(0, 70)}...`); // Log truncated intent
   console.log(`   Priority: ${taskPayload.priority}`);
-  console.log(`   Agent: ${taskPayload.assignedAgent}`);
   
   try {
     const response = await fetch(url, {

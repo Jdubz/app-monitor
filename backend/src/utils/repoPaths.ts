@@ -48,3 +48,25 @@ export function resolveArtifactsDir(startDir: string = process.cwd()): string {
   const repoRoot = findRepoRoot(startDir);
   return path.join(repoRoot, 'dev-bots', 'artifacts');
 }
+
+const PROD_SHARED_ROOT = '/opt/app-monitor/shared';
+const PROD_LOGS_DIR = path.join(PROD_SHARED_ROOT, 'logs');
+
+/**
+ * Resolve the canonical logs directory.
+ * - Production: /opt/app-monitor/shared/logs (shared between blue/green releases)
+ * - Development: <repo-root>/backend/data/logs
+ * - Override: LOGS_DIR environment variable
+ */
+export function resolveLogsDir(startDir: string = process.cwd()): string {
+  if (process.env.LOGS_DIR) {
+    return process.env.LOGS_DIR;
+  }
+
+  if (process.env.NODE_ENV === 'production') {
+    return PROD_LOGS_DIR;
+  }
+
+  const repoRoot = findRepoRoot(startDir);
+  return path.join(repoRoot, 'backend', 'data', 'logs');
+}

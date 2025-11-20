@@ -45,9 +45,9 @@ function buildSelectionCriteria(task: Task): {
 
   const criteria: AgentSelectionCriteria = {
     taskCategory: task.task_category,
+    taskType: task.type,
     filePatterns,
     complexity: task.estimated_complexity,
-    preferredAgent: task.preferred_agent as AgentAttempt['agent'] | undefined,
     previousAttempts,
     taskTitle: task.title,
     taskDescription: task.description,
@@ -56,11 +56,16 @@ function buildSelectionCriteria(task: Task): {
   return { criteria, previousAttempts };
 }
 
+export interface AgentCliSelectionResult {
+  cliType: 'claude' | 'codex' | 'gemini';
+  personalityId: string;
+}
+
 export async function selectAgentCliTypeForTask(
   agentSelector: AgentSelector,
   task: Task,
   options: SelectionOptions = {},
-): Promise<'claude' | 'codex' | 'gemini'> {
+): Promise<AgentCliSelectionResult> {
   const { criteria } = buildSelectionCriteria(task);
   const selection = await agentSelector.selectAgent(criteria, task);
 
@@ -91,5 +96,8 @@ export async function selectAgentCliTypeForTask(
     },
   });
 
-  return chosenAgent;
+  return {
+    cliType: chosenAgent,
+    personalityId: selection.personalityId,
+  };
 }

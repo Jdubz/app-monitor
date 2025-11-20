@@ -514,11 +514,6 @@ export class ContextBundleGenerator {
       errors.push('force must be a boolean');
     }
 
-    // Validate dryRun flag (if provided)
-    if (options.dryRun !== undefined && typeof options.dryRun !== 'boolean') {
-      errors.push('dryRun must be a boolean');
-    }
-
     return errors;
   }
 

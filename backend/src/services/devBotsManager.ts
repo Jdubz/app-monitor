@@ -297,7 +297,6 @@ export class DevBotsManager extends EventEmitter {
     files?: string[];
     dependencies?: string[];
     project?: string;
-    assignedAgent?: string;
     notes?: string;
     priority?: number;
     metadata?: {
