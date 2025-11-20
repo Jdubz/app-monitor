@@ -5,26 +5,9 @@
  * Includes session metadata on first batch only.
  */
 
-import type { LogEntry } from './types';
+import type { FrontendLogBatchRequest, FrontendSessionMetadata } from '@app-monitor/api-contracts';
 import { logger } from './logger';
 import { getApiBaseUrl } from '../apiBaseUrl';
-
-interface SessionMetadata {
-  sessionId: string;
-  userAgent: string;
-  viewport: {
-    width: number;
-    height: number;
-  };
-  timestamp: string;
-}
-
-interface LogBatch {
-  type: 'session_start' | 'log_batch';
-  sessionId: string;
-  meta?: SessionMetadata;
-  logs?: LogEntry[];
-}
 
 class LogTransport {
   private static instance: LogTransport;
@@ -44,7 +27,7 @@ class LogTransport {
     return LogTransport.instance;
   }
 
-  private getSessionMetadata(): SessionMetadata {
+  private getSessionMetadata(): FrontendSessionMetadata {
     return {
       sessionId: logger.getSessionId(),
       userAgent: navigator.userAgent,
@@ -56,7 +39,7 @@ class LogTransport {
     };
   }
 
-  private async sendBatch(batch: LogBatch): Promise<void> {
+  private async sendBatch(batch: FrontendLogBatchRequest): Promise<void> {
     try {
       const response = await fetch(`${this.backendUrl}/api/logs/frontend`, {
         method: 'POST',
@@ -115,7 +98,7 @@ class LogTransport {
       const logs = logger.getBuffer();
       if (logs.length > 0) {
         // Use sendBeacon for reliable delivery during unload
-        const batch: LogBatch = {
+        const batch: FrontendLogBatchRequest = {
           type: 'log_batch',
           sessionId: logger.getSessionId(),
           logs,

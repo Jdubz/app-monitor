@@ -9,36 +9,11 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import type Database from 'better-sqlite3';
+import type {
+  FrontendLogEntry,
+  FrontendSessionMetadata
+} from '@app-monitor/api-contracts';
 import { MS_PER_DAY } from '../constants/timeouts.js';
-
-export interface LogEntry {
-  id: string;
-  timestamp: string;
-  level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
-  message: string;
-  scope: string;
-  traceId?: string;
-  sessionId: string;
-  route: string;
-  userId?: string;
-  data?: Record<string, unknown>;
-  error?: {
-    name: string;
-    message: string;
-    stack?: string;
-    cause?: unknown;
-  };
-}
-
-export interface SessionMetadata {
-  sessionId: string;
-  userAgent: string;
-  viewport: {
-    width: number;
-    height: number;
-  };
-  timestamp: string;
-}
 
 export class LogWriter {
   private logsDirectory: string;
@@ -64,7 +39,7 @@ export class LogWriter {
     return path.join(this.logsDirectory, filename);
   }
 
-  writeSessionStart(meta: SessionMetadata): void {
+  writeSessionStart(meta: FrontendSessionMetadata): void {
     const entry = {
       type: 'session_start',
       ...meta,
@@ -92,7 +67,7 @@ export class LogWriter {
     this.appendToJSONL(entry);
   }
 
-  writeLogs(logs: LogEntry[]): void {
+  writeLogs(logs: FrontendLogEntry[]): void {
     // Write to SQLite (source of truth for queries)
     const stmt = this.db.prepare(`
       INSERT INTO frontend_logs (
@@ -101,7 +76,7 @@ export class LogWriter {
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
 
-    const transaction = this.db.transaction((logEntries: LogEntry[]) => {
+    const transaction = this.db.transaction((logEntries: FrontendLogEntry[]) => {
       for (const log of logEntries) {
         stmt.run(
           log.id,

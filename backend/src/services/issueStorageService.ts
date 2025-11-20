@@ -9,18 +9,9 @@
 
 import * as crypto from 'crypto';
 import type Database from 'better-sqlite3';
+import type { IssueReportRequest } from '@app-monitor/api-contracts';
 
-export interface IssueReport {
-  timestamp: string;
-  traceId?: string;
-  sessionId: string;
-  route: string;
-  userAgent: string;
-  description?: string;
-  screenshot?: string | null;
-  screenshotError?: string;
-  meta?: Record<string, unknown>;
-}
+export type IssueReport = IssueReportRequest;
 
 export interface StoredIssue extends IssueReport {
   id: string;

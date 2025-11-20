@@ -99,6 +99,65 @@ export interface TokenCanUsePayload {
 }
 
 // ============================================================================
+// Frontend Log Ingestion Contracts
+// ============================================================================
+
+export type FrontendLogLevel =
+  | 'ERROR'
+  | 'WARN'
+  | 'INFO'
+  | 'DEBUG'
+  | 'trace'
+  | 'debug'
+  | 'info'
+  | 'warn'
+  | 'error'
+  | 'fatal';
+
+export interface FrontendLogErrorPayload {
+  name: string;
+  message: string;
+  stack?: string;
+  cause?: unknown;
+}
+
+export interface FrontendLogEntry {
+  id: string;
+  timestamp: string;
+  level: FrontendLogLevel;
+  message: string;
+  scope?: string;
+  traceId?: string;
+  sessionId?: string;
+  route?: string;
+  userId?: string;
+  data?: Record<string, unknown>;
+  error?: FrontendLogErrorPayload;
+  metadata?: Record<string, unknown>;
+}
+
+export interface FrontendSessionMetadata {
+  sessionId: string;
+  userAgent: string;
+  viewport: {
+    width: number;
+    height: number;
+  };
+  timestamp: string;
+}
+
+export type FrontendLogBatchType = 'session_start' | 'log_batch';
+
+export interface FrontendLogBatchRequest {
+  type: FrontendLogBatchType;
+  sessionId: string;
+  meta?: FrontendSessionMetadata;
+  logs?: FrontendLogEntry[];
+}
+
+export type FrontendLogIngestResponse = ApiSuccess<{ message: string }>;
+
+// ============================================================================
 // Context-Aware Task Submission (Standard API)
 // ============================================================================
 
