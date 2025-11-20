@@ -118,6 +118,37 @@ test.describe('Dev Bots Command Center', () => {
     await expect(page.getByRole('tabpanel', { name: /Dev-Bots/i })).toBeVisible();
   });
 
+  test('renders chains header and list or empty state', async ({ page }) => {
+    await page.waitForTimeout(750);
+
+    const loadingVisible = await page
+      .getByText(/Loading dev-bots status/i)
+      .isVisible()
+      .catch(() => false);
+    const headerVisible = await page
+      .locator('text=Dev-Bots Chains')
+      .first()
+      .isVisible()
+      .catch(() => false);
+    const filtersVisible = await page
+      .getByRole('tab', { name: /All/i })
+      .isVisible()
+      .catch(() => false);
+    const listItemVisible = await page
+      .getByTestId('list-detail-item')
+      .first()
+      .isVisible()
+      .catch(() => false);
+    const emptyStateVisible = await page
+      .getByText(/No chains found/i)
+      .isVisible()
+      .catch(() => false);
+
+    expect(
+      loadingVisible || (headerVisible && filtersVisible) || listItemVisible || emptyStateVisible,
+    ).toBe(true);
+  });
+
   test.skip('captures layout screenshot', async ({ page }) => {
     await disableAnimations(page);
     const screenshot = await page.screenshot({

@@ -34,7 +34,7 @@ type DialogState =
   | { type: 'error'; message: string };
 
 export function DevBotsTabContent() {
-  const { queueRows, isLoading, refreshStatus } = useDevBotsStore();
+  const { status, queueRows, isLoading, refreshStatus } = useDevBotsStore();
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState<ChainFilter>('all');
   const [interventionLoading, setInterventionLoading] = useState<string | null>(null);
@@ -389,18 +389,28 @@ export function DevBotsTabContent() {
 
   return (
     <>
-      <ListDetailLayout<DevBotsTask, ChainFilter>
-        filterTabs={filterTabs}
-        activeFilter={activeFilter}
-        onFilterChange={setActiveFilter}
-        items={filteredChains}
-        selectedItem={selectedChain}
-        onSelectItem={selectChain}
-        renderListItem={renderListItem}
-        renderDetail={renderDetail}
-        getItemKey={(chain) => chain.id}
-        emptyMessage="No chains found for this filter"
-      />
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+        <div className="mb-4 shrink-0">
+          <h2 className="text-lg font-semibold">Dev-Bots Chains</h2>
+          <p className="text-sm text-muted-foreground">
+            Monitor automation chains (Workers: {status?.workerCount ?? 0}/{status?.maxWorkers ?? 0}, Queue: {status?.queueSize ?? chains.length} tasks, Active: {status?.activeTasks ?? 0})
+          </p>
+        </div>
+        <div className="flex-1 min-h-0">
+          <ListDetailLayout<DevBotsTask, ChainFilter>
+            filterTabs={filterTabs}
+            activeFilter={activeFilter}
+            onFilterChange={setActiveFilter}
+            items={filteredChains}
+            selectedItem={selectedChain}
+            onSelectItem={selectChain}
+            renderListItem={renderListItem}
+            renderDetail={renderDetail}
+            getItemKey={(chain) => chain.id}
+            emptyMessage="No chains found for this filter"
+          />
+        </div>
+      </div>
 
       {/* Retry Confirmation Dialog */}
       <Dialog open={dialogState.type === 'retry'} onOpenChange={() => setDialogState({ type: 'none' })}>
