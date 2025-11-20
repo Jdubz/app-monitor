@@ -143,7 +143,7 @@ export function useSSE(onEvent: (event: MessageEvent) => void) {
   const eventSourceRef = useRef<EventSource | null>(null);
 
   useEffect(() => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
     const eventSource = new EventSource(`${apiUrl}/api/sse/events`);
 
     eventSource.onmessage = onEvent;

@@ -43,7 +43,7 @@ export function DevBotsTabContent() {
 
   // System metrics
   const workerCount = status?.workerCount ?? 0;
-  const maxWorkers = status?.maxWorkers ?? settings?.maxWorkers ?? 0;
+  const maxWorkers = settings?.maxWorkers ?? status?.maxWorkers ?? 0;
   const activeTasks = status?.activeTasks ?? 0;
 
 
@@ -241,7 +241,7 @@ export function DevBotsTabContent() {
             <div className="grid gap-2">
               <Label>Maximum Workers</Label>
               <div className="flex items-center gap-3 rounded-md border border-input bg-muted px-3 py-2">
-                <span className="text-2xl font-bold">{settings?.maxWorkers ?? maxWorkers}</span>
+                <span className="text-2xl font-bold">{maxWorkers}</span>
                 <span className="text-sm text-muted-foreground">concurrent workers</span>
               </div>
               <p className="text-xs text-muted-foreground">

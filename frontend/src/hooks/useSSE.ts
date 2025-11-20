@@ -3,22 +3,13 @@
  *
  * Manages Server-Sent Events (SSE) connection for real-time updates.
  * Automatically handles reconnection via EventSource API.
- */
-
-import { useEffect, useRef } from 'react';
-
-export interface SSEEvent {
-  type: string;
-  [key: string]: unknown;
-}
-
-/**
- * Connect to SSE endpoint and handle incoming events
  *
  * @param onTaskEvent - Callback for task-related events
  * @param onSystemEvent - Callback for system events
  * @returns Ref to EventSource instance
  */
+
+import { useEffect, useRef } from 'react';
 export function useSSE(
   onTaskEvent: (data: unknown) => void,
   onSystemEvent?: (data: unknown) => void
@@ -34,7 +25,7 @@ export function useSSE(
   }, [onTaskEvent, onSystemEvent]);
 
   useEffect(() => {
-    const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:3001';
+    const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
     const apiKey = import.meta.env.VITE_API_KEY || '';
 
     // EventSource doesn't support custom headers, so pass API key as query param

@@ -69,6 +69,10 @@ let mockEventSourceInstance: MockEventSource | null = null;
 
 describe('useSSE', () => {
   beforeEach(() => {
+    // Clear environment variables to test defaults
+    delete import.meta.env.VITE_API_BASE_URL;
+    delete import.meta.env.VITE_API_KEY;
+
     // Mock EventSource globally with static constants
     global.EventSource = vi.fn((url: string) => {
       mockEventSourceInstance = new MockEventSource(url);
@@ -330,9 +334,9 @@ describe('useSSE', () => {
 
     renderHook(() => useSSE(onTaskEvent));
 
-    // Check that URL uses VITE_API_URL or default
+    // Check that URL uses VITE_API_BASE_URL or default
     expect(global.EventSource).toHaveBeenCalledWith(
-      expect.stringMatching(/^http:\/\/localhost:3001\/api\/sse\/events/)
+      expect.stringMatching(/^http:\/\/localhost:5000\/api\/sse\/events/)
     );
   });
 

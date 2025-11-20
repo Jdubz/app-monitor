@@ -3,6 +3,26 @@
  *
  * Provides real-time event streaming for dev-bots task updates.
  * Replaces WebSocket for unidirectional server-to-client updates.
+ *
+ * ⚠️ SINGLETON ROUTER - Create only once per application instance
+ * Event listeners are registered on devBotsManager and persist for the
+ * lifetime of the router. Do not recreate this router during hot reloads
+ * or it will cause memory leaks and duplicate event broadcasts.
+ *
+ * 🔒 SECURITY NOTE - API Key in Query Parameters
+ * This endpoint accepts API keys via query parameters (e.g., ?apiKey=...)
+ * to support EventSource API limitations (no custom headers support).
+ *
+ * Security implications:
+ * - Query parameters may be logged in server/proxy access logs
+ * - API keys may appear in browser history
+ * - Query strings are visible in URLs
+ *
+ * Mitigation:
+ * - Always deploy over HTTPS in production
+ * - Configure web servers/proxies to avoid logging query parameters
+ * - Consider using short-lived tokens if high security is required
+ * - Educate users about browser history risks
  */
 
 import { Router, Request, Response } from 'express';
