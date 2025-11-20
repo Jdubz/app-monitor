@@ -1,44 +1,11 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
-import { z } from 'zod';
+import { z, type ZodRawShape, type ZodTypeAny } from 'zod';
 import Database from 'better-sqlite3';
 import { withAuth, type AuthContext } from '../middleware/auth.js';
 import { createJsonResponse, createErrorResponse, createSuccessResponse, withErrorHandling } from '../utils/response.js';
 import { logger } from '../../utils/logger.js';
 import type { McpServices } from '../server.js';
 import type { Task, TaskStatus } from '../../services/taskQueue.sqlite.js';
-
-type TaskCreateParams = {
-  title: string;
-  type?: 'implementation' | 'analysis' | 'documentation' | 'review';
-  prompt: string;
-  success_criteria?: string[];
-  assigned_agent?: 'claude' | 'codex' | 'gemini';
-  tags?: string[];
-};
-
-type TaskGetParams = { task_id: string };
-
-type TaskListParams = {
-  status?: TaskStatus;
-  assigned_agent?: string;
-  limit?: number;
-};
-
-type TaskUnblockParams = {
-  task_id: string;
-  resumed_by?: string;
-};
-
-type TaskReportOutcomeParams = {
-  task_id: string;
-  outcome: 'success' | 'failure';
-  pr_url?: string;
-  summary: string;
-  files_changed?: string[];
-  failure_reason?: string;
-  failure_code?: 'compilation_error' | 'test_failure' | 'dependency_error' | 'timeout' | 'validation_error' | 'unknown';
-  error_details?: string;
-};
 
 const TASK_LIST_STATUS_VALUES: TaskStatus[] = [
   'pending',
@@ -49,12 +16,46 @@ const TASK_LIST_STATUS_VALUES: TaskStatus[] = [
   'cancelled',
   'timeout',
 ];
+const taskCreateInputSchema: ZodRawShape = {
+  title: z.string().min(3),
+  type: z.enum(['implementation', 'analysis', 'documentation', 'review']).optional(),
+  prompt: z.string().min(10),
+  success_criteria: z.array(z.string().min(3)).optional(),
+  assigned_agent: z.enum(['claude', 'codex', 'gemini']).optional(),
+  tags: z.array(z.string().min(1)).optional(),
+};
 
-const taskListSchema = {
+const taskGetInputSchema: ZodRawShape = {
+  task_id: z.string().min(1),
+};
+
+const taskListInputSchema: ZodRawShape = {
   status: z.enum(TASK_LIST_STATUS_VALUES as [TaskStatus, ...TaskStatus[]]).optional(),
   assigned_agent: z.string().min(1).optional(),
   limit: z.number().int().positive().max(500).optional(),
 };
+
+const taskUnblockInputSchema: ZodRawShape = {
+  task_id: z.string().min(1),
+  resumed_by: z.string().optional(),
+};
+
+const taskOutcomeInputSchema: ZodRawShape = {
+  task_id: z.string().min(1),
+  outcome: z.enum(['success', 'failure']),
+  pr_url: z.string().optional(),
+  summary: z.string().min(3),
+  files_changed: z.array(z.string().min(1)).optional(),
+  failure_reason: z.string().optional(),
+  failure_code: z.enum(['compilation_error', 'test_failure', 'dependency_error', 'timeout', 'validation_error', 'unknown']).optional(),
+  error_details: z.string().optional(),
+};
+
+type TaskCreateParams = z.objectOutputType<typeof taskCreateInputSchema, ZodTypeAny>;
+type TaskGetParams = z.objectOutputType<typeof taskGetInputSchema, ZodTypeAny>;
+type TaskListParams = z.objectOutputType<typeof taskListInputSchema, ZodTypeAny>;
+type TaskUnblockParams = z.objectOutputType<typeof taskUnblockInputSchema, ZodTypeAny>;
+type TaskReportOutcomeParams = z.objectOutputType<typeof taskOutcomeInputSchema, ZodTypeAny>;
 
 function parseTaskMetadata(task: Task): Record<string, unknown> {
   const raw = task.metadata;
@@ -105,14 +106,7 @@ export function registerTasksTools(
     {
       title: 'Create Task',
       description: 'Creates a standalone task using the existing submission pipeline.',
-      inputSchema: {
-        title: z.string().min(3),
-        type: z.enum(['implementation', 'analysis', 'documentation', 'review']).optional(),
-        prompt: z.string().min(10),
-        success_criteria: z.array(z.string().min(3)).optional(),
-        assigned_agent: z.enum(['claude', 'codex', 'gemini']).optional(),
-        tags: z.array(z.string().min(1)).optional(),
-      },
+      inputSchema: taskCreateInputSchema,
     },
     withAuth('task_create', withErrorHandling(async (params: TaskCreateParams) => {
       const noteFromTags = params.tags?.length ? `Tags: ${params.tags.join(', ')}` : undefined;
@@ -135,9 +129,7 @@ export function registerTasksTools(
     {
       title: 'Get Task',
       description: 'Retrieves the details of a task by ID.',
-      inputSchema: {
-        task_id: z.string().min(1),
-      },
+      inputSchema: taskGetInputSchema,
     },
     withAuth('task_get', withErrorHandling(async (params: TaskGetParams) => {
       const task = taskQueue.getTask(params.task_id);
@@ -154,7 +146,7 @@ export function registerTasksTools(
     {
       title: 'List Tasks',
       description: 'Lists tasks with optional filtering.',
-      inputSchema: taskListSchema,
+      inputSchema: taskListInputSchema,
     },
     withAuth('task_list', withErrorHandling(async (params: TaskListParams) => {
       const lists = await devBotsManager.getTasks();
@@ -189,10 +181,7 @@ export function registerTasksTools(
     {
       title: 'Resume Blocked Task',
       description: 'Resumes a blocked task using the manual resume flow.',
-      inputSchema: {
-        task_id: z.string().min(1),
-        resumed_by: z.string().optional(),
-      },
+      inputSchema: taskUnblockInputSchema,
     },
     withAuth('task_unblock', withErrorHandling(async (params: TaskUnblockParams, context: AuthContext) => {
       const resumedBy = params.resumed_by || process.env.APP_MONITOR_MCP_USER_ID || context.role;
@@ -206,16 +195,7 @@ export function registerTasksTools(
     {
       title: 'Report Task Outcome',
       description: '(DEV-BOTS ONLY) Stores outcome details for the assigned task.',
-      inputSchema: {
-        task_id: z.string().min(1),
-        outcome: z.enum(['success', 'failure']),
-        pr_url: z.string().optional(),
-        summary: z.string().min(3),
-        files_changed: z.array(z.string().min(1)).optional(),
-        failure_reason: z.string().optional(),
-        failure_code: z.enum(['compilation_error', 'test_failure', 'dependency_error', 'timeout', 'validation_error', 'unknown']).optional(),
-        error_details: z.string().optional(),
-      },
+      inputSchema: taskOutcomeInputSchema,
     },
     withAuth('task_report_outcome', withErrorHandling(async (params: TaskReportOutcomeParams, context: AuthContext) => {
       const task = taskQueue.getTask(params.task_id);

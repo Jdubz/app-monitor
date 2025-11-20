@@ -1,26 +1,33 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
-import { z } from "zod";
+import { z, type ZodRawShape, type ZodTypeAny } from "zod";
 import Database from "better-sqlite3";
 import { withAuth } from "../middleware/auth.js";
 import { createJsonResponse, createErrorResponse, createSuccessResponse, withErrorHandling } from "../utils/response.js";
 import { McpServices } from "../server.js";
 import type { DevBotsStatus, WorkerStatus } from "../../services/statusAggregation.service.js";
 
-type BotListActiveParams = {
-  include_idle?: boolean;
-  limit?: number;
+const botListActiveInputSchema: ZodRawShape = {
+  include_idle: z.boolean().optional(),
+  limit: z.number().int().positive().max(100).optional(),
 };
 
-type BotGetStatusParams = { bot_id: string };
-
-type BotRecoverParams = {
-  bot_id: string;
-  reason: string;
+const botGetStatusInputSchema: ZodRawShape = {
+  bot_id: z.string(),
 };
 
-type BotHeartbeatParams = {
-  alert_threshold_seconds?: number;
+const botRecoverInputSchema: ZodRawShape = {
+  bot_id: z.string(),
+  reason: z.string(),
 };
+
+const botHeartbeatInputSchema: ZodRawShape = {
+  alert_threshold_seconds: z.number().optional(),
+};
+
+type BotListActiveParams = z.objectOutputType<typeof botListActiveInputSchema, ZodTypeAny>;
+type BotGetStatusParams = z.objectOutputType<typeof botGetStatusInputSchema, ZodTypeAny>;
+type BotRecoverParams = z.objectOutputType<typeof botRecoverInputSchema, ZodTypeAny>;
+type BotHeartbeatParams = z.objectOutputType<typeof botHeartbeatInputSchema, ZodTypeAny>;
 
 export function registerBotsTools(
   server: McpServer,
@@ -41,10 +48,7 @@ export function registerBotsTools(
     {
         title: "List Active Bots",
         description: "Lists all active dev-bots.",
-        inputSchema: {
-            include_idle: z.boolean().optional(),
-            limit: z.number().int().positive().max(100).optional(),
-        },
+        inputSchema: botListActiveInputSchema,
     },
     withAuth("bot_list_active", withErrorHandling(async (params: BotListActiveParams) => {
         const status = await getSystemStatus();
@@ -66,9 +70,7 @@ export function registerBotsTools(
     {
         title: "Get Bot Status",
         description: "Retrieves the detailed status of a dev-bot.",
-        inputSchema: {
-            bot_id: z.string(),
-        },
+        inputSchema: botGetStatusInputSchema,
     },
     withAuth("bot_get_status", withErrorHandling(async (params: BotGetStatusParams) => {
          const status = await getSystemStatus();
@@ -85,10 +87,7 @@ export function registerBotsTools(
     {
         title: "Recover Bot",
         description: "(ADMIN ONLY) Triggers emergency recovery orchestration. Note: Currently triggers system-wide recovery rather than targeting a specific bot.",
-        inputSchema: {
-            bot_id: z.string(),
-            reason: z.string(),
-        },
+        inputSchema: botRecoverInputSchema,
     },
     withAuth("bot_recover", withErrorHandling(async (params: BotRecoverParams) => {
         if (!devBotsManager.triggerEmergencyRecovery) {
@@ -104,9 +103,7 @@ export function registerBotsTools(
     {
         title: "Bot Heartbeat Status",
         description: "Checks the heartbeat status of all dev-bots.",
-        inputSchema: {
-            alert_threshold_seconds: z.number().optional(),
-        },
+        inputSchema: botHeartbeatInputSchema,
     },
     withAuth("bot_heartbeat_status", withErrorHandling(async (params: BotHeartbeatParams) => {
         const status = await getSystemStatus();
