@@ -41,10 +41,10 @@ export function registerBotsTools(
     {
         title: "List Active Bots",
         description: "Lists all active dev-bots.",
-        inputSchema: z.object({
+        inputSchema: {
             include_idle: z.boolean().optional(),
             limit: z.number().int().positive().max(100).optional(),
-        }),
+        },
     },
     withAuth("bot_list_active", withErrorHandling(async (params: BotListActiveParams) => {
         const status = await getSystemStatus();
@@ -66,9 +66,9 @@ export function registerBotsTools(
     {
         title: "Get Bot Status",
         description: "Retrieves the detailed status of a dev-bot.",
-        inputSchema: z.object({
+        inputSchema: {
             bot_id: z.string(),
-        }),
+        },
     },
     withAuth("bot_get_status", withErrorHandling(async (params: BotGetStatusParams) => {
          const status = await getSystemStatus();
@@ -85,10 +85,10 @@ export function registerBotsTools(
     {
         title: "Recover Bot",
         description: "(ADMIN ONLY) Triggers emergency recovery orchestration. Note: Currently triggers system-wide recovery rather than targeting a specific bot.",
-        inputSchema: z.object({
+        inputSchema: {
             bot_id: z.string(),
             reason: z.string(),
-        }),
+        },
     },
     withAuth("bot_recover", withErrorHandling(async (params: BotRecoverParams) => {
         if (!devBotsManager.triggerEmergencyRecovery) {
@@ -104,9 +104,9 @@ export function registerBotsTools(
     {
         title: "Bot Heartbeat Status",
         description: "Checks the heartbeat status of all dev-bots.",
-        inputSchema: z.object({
+        inputSchema: {
             alert_threshold_seconds: z.number().optional(),
-        }),
+        },
     },
     withAuth("bot_heartbeat_status", withErrorHandling(async (params: BotHeartbeatParams) => {
         const status = await getSystemStatus();
