@@ -1,10 +1,9 @@
 import { useState, useEffect } from 'react';
-import { Clock, Calendar, AlertTriangle, CheckCircle2, XCircle, Loader2, ChevronDown } from 'lucide-react';
+import { Clock, Calendar, AlertTriangle, CheckCircle2, XCircle, ChevronDown, Loader2 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
-import { usePhaseUpdates } from '@/hooks/usePhaseUpdates';
 import { getDevBotsTaskStageRuns } from '@/services/api';
 
 interface StageRun {
@@ -101,7 +100,6 @@ export function TaskPhaseHistory({ taskId }: TaskPhaseHistoryProps) {
   const [stageRuns, setStageRuns] = useState<StageRun[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const phaseState = usePhaseUpdates(taskId);
 
   const fetchStageRuns = async () => {
     try {
@@ -127,16 +125,6 @@ export function TaskPhaseHistory({ taskId }: TaskPhaseHistoryProps) {
   useEffect(() => {
     fetchStageRuns();
   }, [taskId]);
-
-  // Re-fetch when phase completes
-  useEffect(() => {
-    if (phaseState?.status === 'complete') {
-      // Wait a moment for database to update
-      setTimeout(() => {
-        fetchStageRuns();
-      }, 500);
-    }
-  }, [phaseState]);
 
   if (isLoading) {
     return (
