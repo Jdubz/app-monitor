@@ -583,7 +583,6 @@ The new chat interface will **reuse existing infrastructure**:
 - Any InteractiveSessionManager references in test mocks
 
 **Documentation:**
-- `docs/technicalDesigns/interactive-terminal-simplification.md`
 - `docs/technicalDesigns/terminal-correct-architecture.md`
 
 ### Integration Points
