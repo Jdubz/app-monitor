@@ -16,6 +16,25 @@ const { getMaxThreads } = require('./vitest.shared.config.js')
 const LOCK_FILE = path.join(__dirname, '.test-lock')
 const MAX_MEMORY_MB = 2048 // 2GB max memory
 const MAX_EXECUTION_TIME = 10 * 60 * 1000 // 10 minutes
+const CLI_ARGS = process.argv.slice(2)
+
+function resolveVitestConfig() {
+  let config = process.env.VITEST_CONFIG || 'vitest.config.ts'
+
+  for (let i = 0; i < CLI_ARGS.length; i++) {
+    const arg = CLI_ARGS[i]
+    if (arg === '--config' && CLI_ARGS[i + 1]) {
+      config = CLI_ARGS[i + 1]
+      break
+    }
+    if (arg.startsWith('--config=')) {
+      config = arg.split('=')[1]
+      break
+    }
+  }
+
+  return config
+}
 
 class SafeTestRunner {
   constructor() {
@@ -118,6 +137,11 @@ class SafeTestRunner {
         '--no-coverage',
         '--reporter=verbose'
       ]
+
+      const vitestConfig = resolveVitestConfig()
+      if (vitestConfig) {
+        vitestArgs.push('--config', vitestConfig)
+      }
 
       const testProcess = spawn('npx', vitestArgs, {
         stdio: 'inherit',
