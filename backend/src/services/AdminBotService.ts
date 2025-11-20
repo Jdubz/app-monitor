@@ -45,6 +45,8 @@ export interface AdminBotServiceEvents {
   exit: (code: number | null) => void;
 }
 
+// Type-safe EventEmitter - interface/class merging pattern
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export declare interface AdminBotService {
   on<U extends keyof AdminBotServiceEvents>(
     event: U,
@@ -56,6 +58,7 @@ export declare interface AdminBotService {
   ): boolean;
 }
 
+// eslint-disable-next-line @typescript-eslint/no-unsafe-declaration-merging
 export class AdminBotService extends EventEmitter {
   private session: AdminBotSession | null = null;
   private repoRoot: string;
