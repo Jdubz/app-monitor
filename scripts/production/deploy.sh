@@ -334,6 +334,12 @@ main() {
     [ -f "${RELEASE_DIR}/package.json.deploy-prune.bak" ] && \
         mv "${RELEASE_DIR}/package.json.deploy-prune.bak" "${RELEASE_DIR}/package.json"
 
+    # Workaround: npm prune occasionally removes @modelcontextprotocol/sdk even though it's a prod dep.
+    if [ ! -d "node_modules/@modelcontextprotocol/sdk" ]; then
+        log_warn "@modelcontextprotocol/sdk missing after prune - reinstalling production copy"
+        NPM_CONFIG_WORKSPACES=false npm install @modelcontextprotocol/sdk --omit=dev --no-save
+    fi
+
     # Final verification
     log_info "Verifying production build..."
     node -e "
