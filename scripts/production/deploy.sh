@@ -319,15 +319,22 @@ main() {
 
     # Remove devDependencies
     log_info "Pruning dev dependencies..."
+    if [ -f "${RELEASE_DIR}/package.json" ]; then
+        mv "${RELEASE_DIR}/package.json" "${RELEASE_DIR}/package.json.deploy-prune.bak"
+    fi
     if ! NPM_CONFIG_WORKSPACES=false npm prune --production; then
         log_error "Backend npm prune failed"
+        [ -f "${RELEASE_DIR}/package.json.deploy-prune.bak" ] && \
+            mv "${RELEASE_DIR}/package.json.deploy-prune.bak" "${RELEASE_DIR}/package.json"
         exit 1
     fi
+    [ -f "${RELEASE_DIR}/package.json.deploy-prune.bak" ] && \
+        mv "${RELEASE_DIR}/package.json.deploy-prune.bak" "${RELEASE_DIR}/package.json"
 
     # Final verification
     log_info "Verifying production build..."
     node -e "
-        const critical = ['express', 'socket.io', 'better-sqlite3'];
+        const critical = ['express', 'socket.io', 'better-sqlite3', '@modelcontextprotocol/sdk'];
         const missing = critical.filter(pkg => {
             try { require.resolve(pkg); return false; }
             catch { return true; }
