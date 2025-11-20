@@ -148,6 +148,7 @@ class SafeTestRunner {
         shell: process.platform === 'win32',
         env: {
           ...process.env,
+          NODE_ENV: 'test',
           NODE_OPTIONS: '--max-old-space-size=2048',
           VITEST_MAX_THREADS: maxThreads,
           VITEST_MIN_THREADS: '1',
