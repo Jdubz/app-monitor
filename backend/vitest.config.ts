@@ -8,6 +8,26 @@ import { getThreadPoolConfig, TEST_TIMEOUTS } from './vitest.shared.config.js';
  */
 
 const skipHeavyBots = process.env.SKIP_HEAVY_DEV_BOT_TESTS === '1';
+const useForkPool = process.env.VITEST_FORCE_FORKS === '1' || process.env.CI === 'true';
+const defaultThreadCap = Number(process.env.VITEST_MAX_THREADS ?? 8) || 8;
+const forkPoolCap = Math.max(
+  1,
+  Number(process.env.VITEST_MAX_FORKS ?? process.env.VITEST_MAX_THREADS ?? 4) || 4
+);
+
+const poolConfig = useForkPool
+  ? {
+      pool: 'forks',
+      poolOptions: {
+        forks: {
+          maxForks: forkPoolCap,
+          minForks: 1,
+        },
+      },
+      fileParallelism: true,
+      maxConcurrency: forkPoolCap,
+    }
+  : getThreadPoolConfig(defaultThreadCap);
 
 const heavyBotPatterns = [
   'src/routes/dev-bots.routes.test.ts',
@@ -36,7 +56,7 @@ const heavyBotPatterns = [
 export default defineConfig({
   test: {
     // Shared parallelism configuration
-    ...getThreadPoolConfig(8),
+    ...poolConfig,
 
     // Integration test timeouts
     ...TEST_TIMEOUTS.integration,

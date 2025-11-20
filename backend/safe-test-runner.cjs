@@ -125,9 +125,9 @@ class SafeTestRunner {
         env: {
           ...process.env,
           NODE_OPTIONS: '--max-old-space-size=2048',
-          VITEST_POOL: 'threads',
           VITEST_MAX_THREADS: maxThreads,
           VITEST_MIN_THREADS: '1',
+          VITEST_MAX_FORKS: process.env.VITEST_MAX_FORKS || maxThreads,
           SKIP_HEAVY_DEV_BOT_TESTS: process.env.SKIP_HEAVY_DEV_BOT_TESTS || '1'
         }
       })
