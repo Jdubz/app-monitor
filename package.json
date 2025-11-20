@@ -8,7 +8,8 @@
     "shared/api-contracts",
     "backend",
     "frontend",
-    "dev-bots"
+    "dev-bots",
+    "tools/openapi-builder"
   ],
   "scripts": {
     "install:all": "npm install && npm install --workspaces",
