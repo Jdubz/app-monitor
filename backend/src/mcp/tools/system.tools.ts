@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-// @ts-nocheck
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import Database from "better-sqlite3";
@@ -18,7 +16,7 @@ export function registerSystemTools(
         description: "Provides a comprehensive overview of the system's health.",
         inputSchema: z.object({}),
     },
-    withAuth("system_health", async () => {
+    withAuth("system_health", async (_params: Record<string, never>, _context) => {
         const health: Record<string, unknown> = {
             status: "healthy",
             database: "connected",
@@ -50,11 +48,7 @@ export function registerSystemTools(
 
         const orchestrator = services.devBotsManager.getPRWorkflowOrchestrator?.();
         if (orchestrator) {
-            if (typeof orchestrator.getSummary === "function") {
-                health.pr = orchestrator.getSummary();
-            } else {
-                health.pr = { available: true };
-            }
+            health.pr = { available: true };
         }
 
         return { content: [{ type: "text", text: JSON.stringify(health, null, 2) }] };

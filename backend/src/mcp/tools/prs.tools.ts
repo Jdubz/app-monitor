@@ -1,51 +1,126 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-// @ts-nocheck
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
-import { z } from "zod";
-import Database from "better-sqlite3";
-import { withAuth } from "../middleware/auth.js";
-import { McpServices } from "../server.js";
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
+import { z } from 'zod';
+import Database from 'better-sqlite3';
+import { withAuth } from '../middleware/auth.js';
+import type { McpServices } from '../server.js';
+import { getPRConditionStateService } from '../../services/prConditionState.service.js';
+
+type PrTriggerParams = {
+  pr_number: number;
+  force?: boolean;
+};
+
+type PrBlockingIssuesParams = {
+  pr_number: number;
+};
+
+const STATUS_MAP: Record<string, string> = {
+  met: 'pass',
+  unmet: 'fail',
+  not_ready: 'pending',
+};
+
+const BLOCKING_GATES = new Set([
+  'branch_updated',
+  'no_conflicts',
+  'ci_checks_passing',
+  'required_approvals',
+  'task_verification',
+  'final_validation_passed',
+  'no_wip_commits',
+  'comments_resolved',
+  'no_merge_conflicts',
+  'no_change_requests',
+  'copilot_review_completed',
+]);
 
 export function registerPrsTools(
   server: McpServer,
-  db: Database.Database,
-  services: McpServices
+  _db: Database.Database,
+  services: McpServices,
 ) {
-  const prOrchestrator = services.devBotsManager.getPRWorkflowOrchestrator();
+  const taskQueue = services.devBotsManager.getTaskQueue();
+  const prConditionState = getPRConditionStateService(taskQueue);
 
   server.registerTool(
-    "pr_trigger_evaluation",
+    'pr_trigger_evaluation',
     {
-        title: "Trigger PR Evaluation",
-        description: "Manually triggers a PR gate evaluation.",
-        inputSchema: z.object({
-            pr_number: z.number(),
-            force: z.boolean().optional(),
-        }),
+      title: 'Trigger PR Evaluation',
+      description: 'Manually triggers a PR gate evaluation.',
+      inputSchema: z.object({
+        pr_number: z.number().int().positive(),
+        force: z.boolean().optional(),
+      }),
     },
-    withAuth("pr_trigger_evaluation", async (params) => {
-        await prOrchestrator.evaluatePR(params.pr_number, { force: params.force });
-        return { content: [{ type: "text", text: `Evaluation triggered for PR #${params.pr_number}` }] };
-    })
+    withAuth('pr_trigger_evaluation', async (params: PrTriggerParams) => {
+      const eventType = params.force ? 'manual_restart' : 'pull_request_opened';
+      await prConditionState.evaluateConditions(params.pr_number, eventType);
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Gate evaluation triggered for PR #${params.pr_number}`,
+          },
+        ],
+      };
+    }),
   );
 
   server.registerTool(
-    "pr_get_blocking_issues",
+    'pr_get_blocking_issues',
     {
-        title: "Get Blocking Issues for PR",
-        description: "Retrieves the detailed reasons why a PR is blocked.",
-        inputSchema: z.object({
-            pr_number: z.number(),
-        }),
+      title: 'Get Blocking Issues for PR',
+      description: 'Retrieves the latest gate evaluation and blocking issues.',
+      inputSchema: z.object({
+        pr_number: z.number().int().positive(),
+      }),
     },
-    withAuth("pr_get_blocking_issues", async (params) => {
-        const status = await prOrchestrator.getPRStatus(params.pr_number);
-        if (!status) {
-             return { isError: true, content: [{ type: "text", text: `PR #${params.pr_number} not found` }] };
-        }
+    withAuth('pr_get_blocking_issues', async (params: PrBlockingIssuesParams) => {
+      const state = await prConditionState.getState(params.pr_number);
+      if (!state) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `PR #${params.pr_number} not found` }],
+        };
+      }
 
-        const blocking = status.checks.filter((c: any) => c.status === 'failed' || c.status === 'blocking');
-        return { content: [{ type: "text", text: JSON.stringify(blocking, null, 2) }] };
-    })
+      const gateEntries = state.conditions ? Object.entries(state.conditions) : [];
+      const gates = gateEntries.map(([name, condition]) => {
+        const cond = condition as {
+          status?: string;
+          blocking_issues?: Array<{ type: string; severity?: string }>;
+          last_checked?: number;
+        };
+        const blockingIssues = cond.blocking_issues ?? [];
+        return {
+          name,
+          status: STATUS_MAP[cond.status ?? 'not_ready'] ?? cond.status ?? 'unknown',
+          blocking: name !== 'copilot_review' && BLOCKING_GATES.has(name),
+          blockingIssues,
+          lastChecked: cond.last_checked ?? null,
+        };
+      });
+
+      const blocking = gates.filter((gate) => gate.blocking && gate.blockingIssues.length > 0);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify(
+              {
+                pr: params.pr_number,
+                merge_eligible: state.merge_eligible ?? false,
+                last_evaluated: state.last_evaluated ?? null,
+                blocking,
+                gates,
+              },
+              null,
+              2,
+            ),
+          },
+        ],
+      };
+    }),
   );
 }

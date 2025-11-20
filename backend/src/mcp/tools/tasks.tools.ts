@@ -1,165 +1,252 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-// @ts-nocheck
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
-import { z } from "zod";
-import Database from "better-sqlite3";
-import { withAuth } from "../middleware/auth.js";
-import { McpServices } from "../server.js";
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
+import { z } from 'zod';
+import Database from 'better-sqlite3';
+import { withAuth } from '../middleware/auth.js';
+import type { McpServices } from '../server.js';
+import type { Task, TaskStatus } from '../../services/taskQueue.sqlite.js';
+
+type TaskCreateParams = {
+  title: string;
+  type?: 'implementation' | 'analysis' | 'documentation' | 'review';
+  prompt: string;
+  success_criteria?: string[];
+  assigned_agent?: 'claude' | 'codex' | 'gemini';
+  tags?: string[];
+};
+
+type TaskGetParams = { task_id: string };
+
+type TaskListParams = {
+  status?: TaskStatus;
+  assigned_agent?: string;
+  limit?: number;
+};
+
+type TaskUnblockParams = {
+  task_id: string;
+  resumed_by?: string;
+};
+
+type TaskReportOutcomeParams = {
+  task_id: string;
+  outcome: 'success' | 'failure';
+  pr_url?: string;
+  summary: string;
+  files_changed?: string[];
+  failure_reason?: string;
+  failure_code?: 'compilation_error' | 'test_failure' | 'dependency_error' | 'timeout' | 'validation_error' | 'unknown';
+  error_details?: string;
+};
+
+const TASK_LIST_STATUS_VALUES: TaskStatus[] = [
+  'pending',
+  'running',
+  'blocked',
+  'completed',
+  'failed',
+  'cancelled',
+  'timeout',
+];
+
+const taskListSchema = z.object({
+  status: z.enum(TASK_LIST_STATUS_VALUES as [TaskStatus, ...TaskStatus[]]).optional(),
+  assigned_agent: z.string().min(1).optional(),
+  limit: z.number().int().positive().max(500).optional(),
+});
+
+function parseTaskMetadata(task: Task): Record<string, unknown> {
+  const raw = task.metadata;
+  if (!raw) {
+    return {};
+  }
+
+  if (typeof raw === 'string') {
+    try {
+      return JSON.parse(raw) as Record<string, unknown>;
+    } catch (error) {
+      return { corrupted_metadata: raw, parse_error: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  return raw as Record<string, unknown>;
+}
+
+function selectTasksByStatus(allTasks: Task[], status?: TaskStatus): Task[] {
+  if (!status) {
+    return allTasks;
+  }
+  return allTasks.filter((task) => task.status === status);
+}
 
 export function registerTasksTools(
   server: McpServer,
-  db: Database.Database,
-  services: McpServices
+  _db: Database.Database,
+  services: McpServices,
 ) {
-  const taskQueue = services.devBotsManager.getTaskQueue();
+  const { devBotsManager } = services;
+  const taskQueue = devBotsManager.getTaskQueue();
 
   server.registerTool(
-    "task_create",
+    'task_create',
     {
-        title: "Create Task",
-        description: "Creates a standalone task.",
-        inputSchema: z.object({
-            title: z.string(),
-            type: z.enum(["implementation", "analysis", "documentation", "review"]).optional(),
-            prompt: z.string(),
-            success_criteria: z.array(z.string()).optional(),
-            assigned_agent: z.enum(["claude", "codex", "gemini"]).optional(),
-            tags: z.array(z.string()).optional(),
-        }),
+      title: 'Create Task',
+      description: 'Creates a standalone task using the existing submission pipeline.',
+      inputSchema: z.object({
+        title: z.string().min(3),
+        type: z.enum(['implementation', 'analysis', 'documentation', 'review']).optional(),
+        prompt: z.string().min(10),
+        success_criteria: z.array(z.string().min(3)).optional(),
+        assigned_agent: z.enum(['claude', 'codex', 'gemini']).optional(),
+        tags: z.array(z.string().min(1)).optional(),
+      }),
     },
-    withAuth("task_create", async (params) => {
-        const task = await taskQueue.createTask({
-            title: params.title,
-            type: params.type || 'implementation',
-            prompt: params.prompt,
-            success_criteria: params.success_criteria,
-            assigned_agent: params.assigned_agent,
-            tags: params.tags,
-            source: "mcp"
-        });
-        return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
-    })
+    withAuth('task_create', async (params: TaskCreateParams, _context) => {
+      const noteFromTags = params.tags?.length ? `Tags: ${params.tags.join(', ')}` : undefined;
+      const result = await devBotsManager.addTask({
+        type: params.type ?? 'implementation',
+        title: params.title,
+        description: params.prompt,
+        acceptanceCriteria: params.success_criteria ?? [],
+        documentation: noteFromTags,
+        project: 'app-monitor',
+        assignedAgent: params.assigned_agent ?? 'claude-sonnet',
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ task: result.task, validation: result.validation }, null, 2),
+          },
+        ],
+      };
+    }),
   );
 
   server.registerTool(
-    "task_get",
+    'task_get',
     {
-        title: "Get Task",
-        description: "Retrieves the details of a task.",
-        inputSchema: z.object({
-            task_id: z.string(),
-        }),
+      title: 'Get Task',
+      description: 'Retrieves the details of a task by ID.',
+      inputSchema: z.object({
+        task_id: z.string().min(1),
+      }),
     },
-    withAuth("task_get", async (params) => {
-        const task = await taskQueue.getTask(params.task_id);
-        if (!task) {
-            return { isError: true, content: [{ type: "text", text: `Task not found: ${params.task_id}` }] };
-        }
-        return { content: [{ type: "text", text: JSON.stringify(task, null, 2) }] };
-    })
+    withAuth('task_get', async (params: TaskGetParams, _context) => {
+      const task = taskQueue.getTask(params.task_id);
+      if (!task) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `Task not found: ${params.task_id}` }],
+        };
+      }
+
+      return { content: [{ type: 'text', text: JSON.stringify(task, null, 2) }] };
+    }),
   );
 
   server.registerTool(
-    "task_list",
+    'task_list',
     {
-        title: "List Tasks",
-        description: "Lists tasks with filtering options.",
-        inputSchema: z.object({
-            status: z.enum(["pending", "in_progress", "completed", "failed", "cancelled"]).optional(),
-            plan_id: z.string().optional(),
-            batch_id: z.string().optional(),
-            assigned_agent: z.string().optional(),
-            limit: z.number().optional(),
-        }),
+      title: 'List Tasks',
+      description: 'Lists tasks with optional filtering.',
+      inputSchema: taskListSchema,
     },
-    withAuth("task_list", async (params) => {
-        const tasks = await taskQueue.listTasks({
-            status: params.status,
-            plan_id: params.plan_id,
-            batch_id: params.batch_id,
-            assigned_agent: params.assigned_agent,
-            limit: params.limit || 50
-        });
-        return { content: [{ type: "text", text: JSON.stringify(tasks, null, 2) }] };
-    })
+    withAuth('task_list', async (params: TaskListParams, _context) => {
+      const lists = await devBotsManager.getTasks();
+      const combined: Task[] = [
+        ...lists.pending,
+        ...lists.active,
+        ...lists.blocked,
+        ...lists.completed,
+        ...lists.failed,
+      ];
+
+      let filtered = selectTasksByStatus(combined, params.status);
+
+      if (params.status && (params.status === 'cancelled' || params.status === 'timeout')) {
+        filtered = taskQueue.getTasksByStatus(params.status);
+      }
+
+      if (params.assigned_agent) {
+        const agentLower = params.assigned_agent.toLowerCase();
+        filtered = filtered.filter((task) => (task.assigned_agent ?? '').toLowerCase() === agentLower);
+      }
+
+      const limit = Math.min(params.limit ?? 50, 200);
+      const limited = filtered.slice(0, limit);
+
+      return { content: [{ type: 'text', text: JSON.stringify(limited, null, 2) }] };
+    }),
   );
 
   server.registerTool(
-    "task_unblock",
+    'task_unblock',
     {
-        title: "Unblock Task",
-        description: "Manually unblocks a blocked task.",
-        inputSchema: z.object({
-            task_id: z.string(),
-            resolution_notes: z.string(),
-            retry_immediately: z.boolean().optional(),
-        }),
+      title: 'Resume Blocked Task',
+      description: 'Resumes a blocked task using the manual resume flow.',
+      inputSchema: z.object({
+        task_id: z.string().min(1),
+        resumed_by: z.string().optional(),
+      }),
     },
-    withAuth("task_unblock", async (params) => {
-        // Assuming taskQueue has an unblock method, otherwise might need to update state directly
-        // Checking TaskQueue interface (inferred)
-        // It might be updateTaskStatus or similar.
-        // For now, I'll use a placeholder implementation that logs the intent if method missing
-        try {
-            // This might fail if method doesn't exist, catching it
-             await taskQueue.unblockTask(params.task_id, params.resolution_notes);
-             if (params.retry_immediately) {
-                 // Retry logic
-             }
-             return { content: [{ type: "text", text: `Task ${params.task_id} unblocked` }] };
-        } catch (e: any) {
-             return { isError: true, content: [{ type: "text", text: `Failed to unblock task: ${e.message}` }] };
-        }
-    })
+    withAuth('task_unblock', async (params: TaskUnblockParams, context) => {
+      try {
+        const resumedBy = params.resumed_by || process.env.APP_MONITOR_MCP_USER_ID || context.role;
+        taskQueue.resumeTask(params.task_id, resumedBy);
+        return { content: [{ type: 'text', text: `Task ${params.task_id} resumed by ${resumedBy}` }] };
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        return { isError: true, content: [{ type: 'text', text: `Failed to resume task: ${message}` }] };
+      }
+    }),
   );
 
   server.registerTool(
-    "task_cancel",
+    'task_report_outcome',
     {
-        title: "Cancel Task",
-        description: "Cancels a task.",
-        inputSchema: z.object({
-            task_id: z.string(),
-            reason: z.string(),
-        }),
+      title: 'Report Task Outcome',
+      description: '(DEV-BOTS ONLY) Stores outcome details for the assigned task.',
+      inputSchema: z.object({
+        task_id: z.string().min(1),
+        outcome: z.enum(['success', 'failure']),
+        pr_url: z.string().optional(),
+        summary: z.string().min(3),
+        files_changed: z.array(z.string().min(1)).optional(),
+        failure_reason: z.string().optional(),
+        failure_code: z.enum(['compilation_error', 'test_failure', 'dependency_error', 'timeout', 'validation_error', 'unknown']).optional(),
+        error_details: z.string().optional(),
+      }),
     },
-    withAuth("task_cancel", async (params) => {
-        await taskQueue.cancelTask(params.task_id, params.reason);
-        return { content: [{ type: "text", text: `Task ${params.task_id} cancelled` }] };
-    })
-  );
+    withAuth('task_report_outcome', async (params: TaskReportOutcomeParams, context) => {
+      const task = taskQueue.getTask(params.task_id);
+      if (!task) {
+        return { isError: true, content: [{ type: 'text', text: `Task not found: ${params.task_id}` }] };
+      }
 
-  server.registerTool(
-    "task_report_outcome",
-    {
-        title: "Report Task Outcome",
-        description: "(DEV-BOTS ONLY) Allows a dev-bot to report the outcome of a task.",
-        inputSchema: z.object({
-            task_id: z.string(),
-            outcome: z.enum(["success", "failure"]),
-            pr_url: z.string().optional(),
-            summary: z.string(),
-            files_changed: z.array(z.string()).optional(),
-            failure_reason: z.string().optional(),
-            failure_code: z.enum(["compilation_error", "test_failure", "dependency_error", "timeout", "validation_error", "unknown"]).optional(),
-            error_details: z.string().optional(),
-        }),
-    },
-    withAuth("task_report_outcome", async (params) => {
-        if (params.outcome === "success") {
-            await taskQueue.completeTask(params.task_id, {
-                pr_url: params.pr_url,
-                summary: params.summary,
-                files_changed: params.files_changed
-            });
-        } else {
-            await taskQueue.failTask(params.task_id, {
-                reason: params.failure_reason || "Unknown failure",
-                code: params.failure_code || "unknown",
-                details: params.error_details
-            });
-        }
-        return { content: [{ type: "text", text: "Outcome reported" }] };
-    })
+      const metadata = {
+        ...parseTaskMetadata(task),
+        bot_reported_success: params.outcome === 'success',
+        bot_reported_summary: params.summary,
+        bot_reported_at: Date.now(),
+        bot_reported_pr_url: params.pr_url ?? null,
+        bot_reported_files_changed: params.files_changed ?? null,
+        bot_reported_failure_reason: params.failure_reason ?? null,
+        bot_reported_failure_code: params.failure_code ?? null,
+        bot_reported_error_details: params.error_details ?? null,
+        bot_reported_by: context.role,
+      };
+
+      taskQueue.updateTaskMetadata(params.task_id, metadata);
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `Outcome recorded for ${params.task_id} (${params.outcome.toUpperCase()})`,
+          },
+        ],
+      };
+    }),
   );
 }

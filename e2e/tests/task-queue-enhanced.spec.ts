@@ -11,7 +11,8 @@ import { bypassPasswordGate } from '../helpers/auth';
 async function navigateToTaskQueue(page: Page) {
   await bypassPasswordGate(page);
   await page.goto('/monitor/queue');
-  await page.waitForLoadState('networkidle');
+  await page.waitForLoadState('domcontentloaded');
+  await page.waitForTimeout(500);
 }
 
 test.describe('Task Queue - Navigation and Layout', () => {
@@ -31,7 +32,8 @@ test.describe('Task Queue - Navigation and Layout', () => {
 
   test('should display task queue header and controls', async ({ page }) => {
     // Wait for content to load using network idle
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(500);
 
     // Wait for main content area to load
     await expect(page.locator('#root')).toBeVisible();
@@ -46,9 +48,10 @@ test.describe('Task Queue - Navigation and Layout', () => {
 
   test('should show task count badges for different states', async ({ page }) => {
     // Wait for content using network idle instead of hardcoded timeout
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(500);
 
-    // Look for state badges (pending, active, completed, failed)
+    // Look for state badges (pending, active, blocked, completed, failed)
     const badges = page.locator('[class*="badge"]');
     const count = await badges.count();
 
@@ -56,11 +59,59 @@ test.describe('Task Queue - Navigation and Layout', () => {
   });
 
   test('should display dual-pane layout (list + details)', async ({ page }) => {
+    const needsAuth = await page.getByPlaceholder('Password').isVisible().catch(() => false);
+    if (needsAuth) {
+      await bypassPasswordGate(page);
+      await page.goto('/monitor/queue');
+    }
+
+    await page.waitForLoadState('domcontentloaded');
+    await page.waitForTimeout(500);
+
+    const loadingVisible = await page
+      .getByText(/Loading task queue/i)
+      .isVisible()
+      .catch(() => false);
+    const headerVisible = await page
+      .locator('text=Task Queue')
+      .first()
+      .isVisible()
+      .catch(() => false);
+    const listRegionVisible = await page
+      .getByTestId('list-scroll-region')
+      .isVisible()
+      .catch(() => false);
+    const detailRegionVisible = await page
+      .getByTestId('detail-scroll-region')
+      .isVisible()
+      .catch(() => false);
+    const listItemVisible = await page
+      .getByTestId('list-detail-item')
+      .first()
+      .isVisible()
+      .catch(() => false);
+    const emptyStateVisible = await page
+      .getByText(/No .*tasks/i)
+      .isVisible()
+      .catch(() => false);
+
+    expect(
+      loadingVisible ||
+        ((headerVisible || listRegionVisible) && detailRegionVisible && (listItemVisible || emptyStateVisible)),
+    ).toBe(true);
+  });
+
+  test('should keep long task lists inside an internal scroll region', async ({ page }) => {
     await page.waitForTimeout(2000);
 
-    // Verify layout structure exists
-    const pageContent = await page.content();
-    expect(pageContent).toContain('root');
+    const listRegion = page.getByTestId('list-scroll-region');
+    const visible = await listRegion.isVisible().catch(() => false);
+    if (!visible) {
+      test.skip('Task queue empty - no list to validate');
+    }
+
+    const hasOverflow = await listRegion.evaluate((el) => el.className.includes('overflow-y-auto'));
+    expect(hasOverflow).toBeTruthy();
   });
 
   test('should keep long task lists inside an internal scroll region', async ({ page }) => {
@@ -149,7 +200,7 @@ test.describe('Task Queue - Task Filtering', () => {
     await navigateToTaskQueue(page);
   });
 
-  test('should filter tasks by status (pending, active, completed, failed)', async ({ page }) => {
+  test('should filter tasks by status (pending, active, blocked, completed, failed)', async ({ page }) => {
     await page.waitForTimeout(2000);
 
     // Look for status filter buttons
@@ -536,7 +587,7 @@ test.describe('Task Queue - Error States', () => {
         success: true,
         data: {
           items: [],
-          counts: { pending: 0, active: 0, completed: 0, failed: 0 }
+          counts: { pending: 0, active: 0, blocked: 0, completed: 0, failed: 0 }
         }
       })
     }));
@@ -560,7 +611,7 @@ test.describe('Task Queue - Error States', () => {
         success: true,
         data: {
           items: [{ id: 'broken', invalid: 'data' }],
-          counts: { pending: 0, active: 0, completed: 0, failed: 0 }
+          counts: { pending: 0, active: 0, blocked: 0, completed: 0, failed: 0 }
         }
       })
     }));
@@ -603,7 +654,7 @@ test.describe('Task Queue - Performance', () => {
         success: true,
         data: {
           items: manyTasks,
-          counts: { pending: 100, active: 0, completed: 0, failed: 0 }
+          counts: { pending: 100, active: 0, blocked: 0, completed: 0, failed: 0 }
         }
       })
     }));

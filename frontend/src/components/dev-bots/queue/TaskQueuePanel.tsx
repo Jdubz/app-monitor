@@ -1,5 +1,5 @@
 import { useMemo } from 'react';
-import { AlertCircle, Clock3, RefreshCw } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Clock3, RefreshCw } from 'lucide-react';
 import type { DevBotsTask } from '@/types/dev-bots';
 
 import { useDevBotsStore } from '@/contexts/devBotsStore';
@@ -11,12 +11,14 @@ import { cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/utils/dateFormatters';
 import { PhaseProgressBar, PhaseBadge } from './PhaseProgress';
 
-type QueueBucket = 'pending' | 'active' | 'completed' | 'failed';
+type QueueBucket = 'pending' | 'active' | 'blocked' | 'completed' | 'failed';
 
 const getStatusBadgeVariant = (status: DevBotsTask['status']) => {
   switch (status) {
     case 'active':
       return { variant: 'outline' as const, className: 'border-amber-500 text-amber-500' };
+    case 'blocked':
+      return { variant: 'outline' as const, className: 'border-amber-600 text-amber-600' };
     case 'completed':
       return { variant: 'outline' as const, className: 'border-emerald-500 text-emerald-500' };
     case 'failed':
@@ -29,8 +31,9 @@ const getStatusBadgeVariant = (status: DevBotsTask['status']) => {
 const bucketCopy: Record<QueueBucket, { label: string; helper: string }> = {
   pending: { label: 'Pending', helper: 'Awaiting assignment' },
   active: { label: 'Active', helper: 'Workers currently executing' },
+  blocked: { label: 'Blocked', helper: 'Awaiting manual intervention' },
   completed: { label: 'Completed', helper: 'Recently finished tasks' },
-  failed: { label: 'Failed', helper: 'Needs intervention' },
+  failed: { label: 'Failed', helper: 'Permanently failed tasks' },
 };
 
 export function TaskQueuePanel() {
@@ -50,17 +53,10 @@ export function TaskQueuePanel() {
 
   const filters = useMemo(
     () =>
-      (['pending', 'active', 'completed', 'failed'] as QueueBucket[]).map((bucket) => ({
+      (['pending', 'active', 'blocked', 'completed', 'failed'] as QueueBucket[]).map((bucket) => ({
         bucket,
         label: bucketCopy[bucket].label,
-        count:
-          bucket === 'failed'
-            ? counts?.failed ?? 0
-            : bucket === 'active'
-              ? counts?.active ?? 0
-              : bucket === 'completed'
-                ? counts?.completed ?? 0
-                : counts?.pending ?? 0,
+        count: counts?.[bucket] ?? 0,
       })),
     [counts],
   );
@@ -83,22 +79,28 @@ export function TaskQueuePanel() {
       </CardHeader>
       <CardContent className="flex flex-1 flex-col gap-4 pt-0">
         <div className="flex flex-wrap items-center gap-2">
-          {filters.map((filter) => (
-            <button
-              key={filter.bucket}
-              type="button"
-              onClick={() => setQueueFilter(filter.bucket)}
-              className={cn(
-                'rounded-full border px-3 py-1 text-xs transition-colors',
-                queueFilter === filter.bucket
-                  ? 'border-primary bg-primary text-primary-foreground'
-                  : 'border-border/60 bg-muted/40 text-muted-foreground hover:border-border hover:bg-muted',
-              )}
-            >
-              {filter.label}
-              <span className="ml-2 font-mono text-[11px]">{filter.count}</span>
-            </button>
-          ))}
+          {filters.map((filter) => {
+            const isBlocked = filter.bucket === 'blocked';
+            const isActive = queueFilter === filter.bucket;
+
+            return (
+              <button
+                key={filter.bucket}
+                type="button"
+                onClick={() => setQueueFilter(filter.bucket)}
+                className={cn(
+                  'rounded-full border px-3 py-1 text-xs transition-colors',
+                  isBlocked && isActive && 'border-amber-500 bg-amber-500 text-white',
+                  isBlocked && !isActive && 'border-amber-500/60 bg-amber-50 text-amber-700 hover:bg-amber-100 dark:bg-amber-950/20 dark:text-amber-400 dark:hover:bg-amber-950/30',
+                  !isBlocked && isActive && 'border-primary bg-primary text-primary-foreground',
+                  !isBlocked && !isActive && 'border-border/60 bg-muted/40 text-muted-foreground hover:border-border hover:bg-muted',
+                )}
+              >
+                {filter.label}
+                <span className="ml-2 font-mono text-[11px]">{filter.count}</span>
+              </button>
+            );
+          })}
           <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
             <Clock3 className="h-3.5 w-3.5" />
             <span>Updated {lastUpdated}</span>
@@ -159,6 +161,14 @@ export function TaskQueuePanel() {
                       </Badge>
                     )}
                   </div>
+
+                  {/* Blocked Task Warning */}
+                  {task.status === 'blocked' && (
+                    <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                      <AlertTriangle className="h-4 w-4" />
+                      <span className="text-xs font-medium">Requires Manual Intervention</span>
+                    </div>
+                  )}
 
                   {/* Phase Progress - Enhanced */}
                   {task.phaseIndex && task.phaseName && (

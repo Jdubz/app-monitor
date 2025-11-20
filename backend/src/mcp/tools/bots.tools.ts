@@ -1,11 +1,25 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
-// @ts-nocheck
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import Database from "better-sqlite3";
 import { withAuth } from "../middleware/auth.js";
 import { McpServices } from "../server.js";
 import type { DevBotsStatus, WorkerStatus } from "../../services/statusAggregation.service.js";
+
+type BotListActiveParams = {
+  include_idle?: boolean;
+};
+
+type BotGetStatusParams = { bot_id: string };
+
+type BotRecoverParams = {
+  bot_id: string;
+  reason: string;
+  recovery_strategy?: "auto" | "diagnose" | "requeue" | "abandon";
+};
+
+type BotHeartbeatParams = {
+  alert_threshold_seconds?: number;
+};
 
 export function registerBotsTools(
   server: McpServer,
@@ -30,7 +44,7 @@ export function registerBotsTools(
             include_idle: z.boolean().optional(),
         }),
     },
-    withAuth("bot_list_active", async (params) => {
+    withAuth("bot_list_active", async (params: BotListActiveParams, _context) => {
         const status = await getSystemStatus();
         const workers = Object.values(status.workers || {}) as WorkerStatus[];
         const filtered = params.include_idle
@@ -49,7 +63,7 @@ export function registerBotsTools(
             bot_id: z.string(),
         }),
     },
-    withAuth("bot_get_status", async (params) => {
+    withAuth("bot_get_status", async (params: BotGetStatusParams, _context) => {
          const status = await getSystemStatus();
          const bot = status.workers?.[params.bot_id];
          if (!bot) {
@@ -70,7 +84,7 @@ export function registerBotsTools(
             recovery_strategy: z.enum(["auto", "diagnose", "requeue", "abandon"]).optional(),
         }),
     },
-    withAuth("bot_recover", async (params) => {
+    withAuth("bot_recover", async (params: BotRecoverParams, _context) => {
         if (!devBotsManager.triggerEmergencyRecovery) {
             return { isError: true, content: [{ type: "text", text: "Recovery orchestration is not available" }] };
         }
@@ -88,14 +102,16 @@ export function registerBotsTools(
             alert_threshold_seconds: z.number().optional(),
         }),
     },
-    withAuth("bot_heartbeat_status", async () => {
+    withAuth("bot_heartbeat_status", async (params: BotHeartbeatParams, _context) => {
         const status = await getSystemStatus();
         const now = Date.now();
+        const thresholdMs = (params.alert_threshold_seconds ?? 30) * 1000;
         const heartbeat = (Object.values(status.workers || {}) as WorkerStatus[]).map((worker) => ({
             id: worker.id,
             status: worker.status,
             current_task: worker.currentTask,
             milliseconds_since_last_seen: worker.lastSeen ? now - worker.lastSeen : null,
+            needs_attention: worker.lastSeen ? now - worker.lastSeen > thresholdMs : null,
         }));
         return { content: [{ type: "text", text: JSON.stringify(heartbeat, null, 2) }] };
     })

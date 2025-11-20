@@ -259,6 +259,7 @@ const verificationMocks = vi.hoisted(() => {
   const tasksByStatus: Record<string, typeof verificationTask[]> = {
     pending: [verificationTask],
     running: [],
+    blocked: [],
     completed: [],
     failed: [],
   };

@@ -1,14 +1,8 @@
 import { ReactNode, memo } from 'react';
 import { DualPaneLayout } from './DualPaneLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
-
-interface SummaryCard {
-  label: string;
-  value: string | number;
-  className?: string;
-}
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface FilterTab<TFilter extends string> {
   value: TFilter;
@@ -16,11 +10,13 @@ interface FilterTab<TFilter extends string> {
   count?: number;
 }
 
+interface SummaryCard {
+  label: string;
+  value: ReactNode;
+  className?: string;
+}
+
 interface ListDetailLayoutProps<TItem, TFilter extends string> {
-  /**
-   * Summary metric cards to display at the top
-   */
-  summaryCards: SummaryCard[];
   /**
    * Filter tabs for the list
    */
@@ -65,6 +61,10 @@ interface ListDetailLayoutProps<TItem, TFilter extends string> {
    * Optional empty state message
    */
   emptyMessage?: string;
+  /**
+   * Optional summary cards displayed above the filters
+   */
+  summaryCards?: SummaryCard[];
 }
 
 /**
@@ -124,7 +124,6 @@ const MemoizedListItem = memo(
  * @template TFilter - Union type of filter values
  */
 export function ListDetailLayout<TItem, TFilter extends string>({
-  summaryCards,
   filterTabs,
   activeFilter,
   onFilterChange,
@@ -136,10 +135,10 @@ export function ListDetailLayout<TItem, TFilter extends string>({
   getItemKey,
   className,
   emptyMessage = 'No items to display',
+  summaryCards = [],
 }: ListDetailLayoutProps<TItem, TFilter>) {
   const leftPane = (
     <div className="flex h-full min-h-0 flex-col gap-4 p-4">
-      {/* Summary Cards */}
       {summaryCards.length > 0 && (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {summaryCards.map((card) => (
@@ -150,9 +149,7 @@ export function ListDetailLayout<TItem, TFilter extends string>({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className={cn('text-xl font-semibold', card.className)}>
-                  {card.value}
-                </div>
+                <div className={cn('text-xl font-semibold', card.className)}>{card.value}</div>
               </CardContent>
             </Card>
           ))}
@@ -163,7 +160,7 @@ export function ListDetailLayout<TItem, TFilter extends string>({
       <Tabs
         value={activeFilter}
         onValueChange={onFilterChange as (value: string) => void}
-        className="flex min-h-0 flex-col"
+        className="flex min-h-0 flex-col gap-4"
       >
         <TabsList className="w-full min-w-0 overflow-x-auto sm:snap-x">
           {filterTabs.map((tab) => (
@@ -177,7 +174,7 @@ export function ListDetailLayout<TItem, TFilter extends string>({
         </TabsList>
 
         {/* List Content */}
-        <TabsContent value={activeFilter} className="mt-4 flex-1 overflow-hidden">
+        <TabsContent value={activeFilter} className="flex-1 overflow-hidden">
           {items.length === 0 ? (
             <div className="flex flex-1 items-center justify-center rounded-md border border-dashed border-muted-foreground/30 p-8 text-center">
               <p className="text-sm text-muted-foreground">{emptyMessage}</p>

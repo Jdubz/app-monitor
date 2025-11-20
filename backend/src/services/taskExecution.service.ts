@@ -635,6 +635,30 @@ export class TaskExecutionService {
           result.exitCode || 0
         );
 
+        // Persist phase execution context (git branch + artifacts) for resume capability
+        this.taskQueue.updatePhasePayload(nextTask.id, {
+          gitBranch: phaseValidation.gitBranch,
+          lastExecutionAt: Date.now(),
+          artifacts: {
+            validationPassed: phaseValidation.passed,
+            validationErrors: phaseValidation.errors,
+            phaseIndex: nextTask.phase_index,
+            phaseName: nextTask.phase_name
+          }
+        });
+
+        logger.debug({
+          category: 'phase',
+          action: 'phase_payload_updated',
+          message: `Updated phase_payload for task ${nextTask.id}`,
+          details: {
+            taskId: nextTask.id,
+            phaseIndex: nextTask.phase_index,
+            gitBranch: phaseValidation.gitBranch,
+            validationPassed: phaseValidation.passed
+          }
+        });
+
         // Check if validation passed
         if (phaseValidation.passed) {
           // Phase validated successfully - complete task
@@ -684,10 +708,31 @@ export class TaskExecutionService {
               }
               this.taskQueue.requeueTaskForPhaseRetry(nextTask.id);
             } else if (recovery.category === 'chain_blocked') {
-              // Block entire chain - requires human intervention
+              // Block task immediately - requires human intervention
+              this.taskQueue.updateTask(nextTask.id, {
+                status: 'blocked',
+                phase_status: 'blocked',
+                chain_status: 'blocked',
+                blocked_reason: recovery.diagnosis || 'Recovery failed - manual intervention required',
+                blocked_at: Date.now(),
+                blocked_by: 'recovery_agent'
+              });
+
+              // Also block the entire chain if task is part of one
               if (nextTask.chain_id) {
                 this.taskQueue.blockChain(nextTask.chain_id, recovery.diagnosis || 'Unrecoverable failure', 'recovery_agent');
               }
+
+              logger.warn({
+                category: 'phase',
+                action: 'task_blocked_by_recovery',
+                message: `Task ${nextTask.id} blocked by recovery agent`,
+                details: {
+                  taskId: nextTask.id,
+                  chainId: nextTask.chain_id,
+                  diagnosis: recovery.diagnosis
+                }
+              });
             } else if (recovery.category === 'system_blocked') {
               // Global pause - emit event for system-wide handling
               logger.error({
