@@ -7,13 +7,17 @@ set -e
 echo "🧪 Testing production build locally..."
 echo ""
 
+# Determine repository root dynamically
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
 TEST_DIR="/tmp/prod-build-test-$(date +%s)"
 mkdir -p "$TEST_DIR"
 cd "$TEST_DIR"
 
 echo "📋 Copying source files..."
-cp -r /home/jdubz/Development/app-monitor/backend .
-cp -r /home/jdubz/Development/app-monitor/shared .
+cp -r "$REPO_ROOT/backend" .
+cp -r "$REPO_ROOT/shared" .
 
 cd backend
 
