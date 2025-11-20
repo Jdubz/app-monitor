@@ -2317,28 +2317,34 @@ export class TaskQueueService {
    * @returns Array of stage run records
    */
   getStageRuns(taskId: string): Array<{
-    id: string;
+    id: number;
     task_id: string;
-    stage_index: number;
-    stage_name: string;
+    phase_index: number;
+    phase_name: string;
+    attempt: number;
     status: string;
+    artifacts_blob?: string;
     created_at: number;
     completed_at?: number;
-    error_message?: string;
+    recovery_diagnosis?: string;
+    exit_code?: number;
   }> {
     return this.db.prepare(`
       SELECT * FROM task_stage_runs
       WHERE task_id = ?
       ORDER BY created_at DESC
     `).all(taskId) as Array<{
-      id: string;
+      id: number;
       task_id: string;
-      stage_index: number;
-      stage_name: string;
+      phase_index: number;
+      phase_name: string;
+      attempt: number;
       status: string;
+      artifacts_blob?: string;
       created_at: number;
       completed_at?: number;
-      error_message?: string;
+      recovery_diagnosis?: string;
+      exit_code?: number;
     }>;
   }
 
