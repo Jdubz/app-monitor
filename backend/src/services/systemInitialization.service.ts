@@ -22,7 +22,6 @@ export interface InitializationComponents {
  */
 export class SystemInitializationService {
   private dockerValidationResult?: DockerValidationResult;
-  private taskQueueWorker?: { start: () => Promise<void>; stop: () => Promise<void> };
   private metricsEmitter?: MetricsEmitter;
 
   constructor(
@@ -144,35 +143,30 @@ export class SystemInitializationService {
     });
 
     // Start background task queue worker
-    await this.startTaskQueueWorker();
+    await this.initializeTaskQueueWorker();
 
     // Start metrics emitter
     this.startMetricsEmitter();
 
     // Interactive session idle watchdog removed - migrated to tmux-based TerminalService
 
-    // Always start the dev-bots system after initialization
-    this.components.systemLifecycleService.startSystem();
+    // Always finalize lifecycle initialization after services are ready
+    this.components.systemLifecycleService.initialize();
   }
 
   /**
-   * Start background task queue worker
+   * Initialize background task queue worker
    */
-  private async startTaskQueueWorker(): Promise<void> {
+  private async initializeTaskQueueWorker(): Promise<void> {
     try {
       // Dynamically import to avoid circular dependency
       const { TaskQueueWorker } = await import('./taskQueueWorker.js');
 
-      this.taskQueueWorker = new TaskQueueWorker(this.components.taskExecutionService, {
+      // Worker starts automatically upon construction
+      void new TaskQueueWorker(this.components.taskExecutionService, {
         pollIntervalMs: 5000, // Poll every 5 seconds
-        enabled: true,
         maxConsecutiveFailures: 10
       });
-
-      await this.taskQueueWorker.start();
-
-      // Update SystemLifecycleService with taskQueueWorker reference
-      this.components.systemLifecycleService.updateComponents({ taskQueueWorker: this.taskQueueWorker });
 
       logger.info({
         category: 'process',
@@ -200,9 +194,6 @@ export class SystemInitializationService {
         60000
       );
       this.metricsEmitter.start();
-
-      // Update SystemLifecycleService with metricsEmitter reference
-      this.components.systemLifecycleService.updateComponents({ metricsEmitter: this.metricsEmitter });
 
       logger.info({
         category: 'process',
@@ -240,13 +231,6 @@ export class SystemInitializationService {
    */
   getDockerValidationResult(): DockerValidationResult | undefined {
     return this.dockerValidationResult;
-  }
-
-  /**
-   * Get task queue worker instance
-   */
-  getTaskQueueWorker(): { start: () => Promise<void>; stop: () => Promise<void> } | undefined {
-    return this.taskQueueWorker;
   }
 
   /**

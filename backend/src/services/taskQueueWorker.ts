@@ -10,17 +10,15 @@ import type { TaskExecutionService } from './taskExecution.service.js';
 
 export interface TaskQueueWorkerConfig {
   pollIntervalMs: number;
-  enabled: boolean;
   maxConsecutiveFailures: number;
   maxPollIntervalMs?: number; // Maximum poll interval for exponential backoff
 }
 
 export class TaskQueueWorker {
-  private running = false;
+  private running = true;
   private pollIntervalMs: number;
   private basePollIntervalMs: number; // Store original interval
   private maxPollIntervalMs: number; // Maximum interval for backoff
-  private enabled: boolean;
   private maxConsecutiveFailures: number;
   private consecutiveFailures = 0;
   private taskExecutionService: TaskExecutionService;
@@ -35,34 +33,7 @@ export class TaskQueueWorker {
     this.basePollIntervalMs = config.pollIntervalMs ?? 5000; // 5 seconds default
     this.pollIntervalMs = this.basePollIntervalMs;
     this.maxPollIntervalMs = config.maxPollIntervalMs ?? 60000; // 60 seconds max backoff
-    this.enabled = config.enabled ?? true;
     this.maxConsecutiveFailures = config.maxConsecutiveFailures ?? 10;
-  }
-
-  /**
-   * Start the background worker loop
-   */
-  async start(): Promise<void> {
-    if (!this.enabled) {
-      logger.info({
-        category: 'process',
-        action: 'worker_disabled',
-        message: 'Task queue worker is disabled'
-      });
-      return;
-    }
-
-    if (this.running) {
-      logger.warn({
-        category: 'process',
-        action: 'worker_already_running',
-        message: 'Task queue worker is already running'
-      });
-      return;
-    }
-
-    this.running = true;
-    this.consecutiveFailures = 0;
 
     logger.info({
       category: 'process',
@@ -74,40 +45,13 @@ export class TaskQueueWorker {
       }
     });
 
-    // Start the worker loop
     this.scheduleNextPoll();
   }
 
   /**
-   * Stop the background worker loop
+   * The worker loop starts immediately upon construction and never stops.
+   * scheduleNextPoll controls cadence and health-based backoff.
    */
-  async stop(): Promise<void> {
-    if (!this.running) {
-      logger.warn({
-        category: 'process',
-        action: 'worker_not_running',
-        message: 'Task queue worker is not running'
-      });
-      return;
-    }
-
-    this.running = false;
-
-    // Clear any pending timeout
-    if (this.pollTimeout) {
-      clearTimeout(this.pollTimeout);
-      this.pollTimeout = null;
-    }
-
-    logger.info({
-      category: 'process',
-      action: 'worker_stopped',
-      message: 'Task queue worker stopped',
-      details: {
-        consecutiveFailures: this.consecutiveFailures
-      }
-    });
-  }
 
   /**
    * Schedule the next poll cycle
@@ -237,14 +181,12 @@ export class TaskQueueWorker {
    */
   getStatus(): {
     running: boolean;
-    enabled: boolean;
     consecutiveFailures: number;
     pollIntervalMs: number;
     healthStatus: 'healthy' | 'degraded';
   } {
     return {
       running: this.running,
-      enabled: this.enabled,
       consecutiveFailures: this.consecutiveFailures,
       pollIntervalMs: this.pollIntervalMs,
       healthStatus: this.isHealthDegraded ? 'degraded' : 'healthy'

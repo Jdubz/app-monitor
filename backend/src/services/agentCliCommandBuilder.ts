@@ -61,6 +61,8 @@ export interface CliHelpInspection {
 }
 
 export class AgentCliCommandBuilder {
+  private readonly cliHelpCache = new Map<AgentCliType, CliHelpInspection>();
+
   buildCommand(options: BuildCliCommandOptions): string {
     const profile = CLI_PROFILES[options.cliType];
 
@@ -85,7 +87,12 @@ export class AgentCliCommandBuilder {
     return commandParts.join(' ');
   }
 
-  inspectCliHelp(cliType: AgentCliType): CliHelpInspection {
+  inspectCliHelp(cliType: AgentCliType, options: { useCache?: boolean } = {}): CliHelpInspection {
+    const useCache = options.useCache ?? true;
+    if (useCache && this.cliHelpCache.has(cliType)) {
+      return this.cliHelpCache.get(cliType)!;
+    }
+
     const profile = CLI_PROFILES[cliType];
     if (!profile) {
       return { status: 'execution_failed', error: new Error(`Unknown CLI type ${cliType}`) };
@@ -97,19 +104,32 @@ export class AgentCliCommandBuilder {
     if (result.error) {
       const errno = result.error as NodeJS.ErrnoException;
       if (errno.code === 'ENOENT') {
-        return { status: 'missing_binary', error: result.error };
+        const inspection = { status: 'missing_binary', error: result.error } as CliHelpInspection;
+        if (useCache) {
+          this.cliHelpCache.set(cliType, inspection);
+        }
+        return inspection;
       }
-      return { status: 'execution_failed', error: result.error };
+      const inspection = { status: 'execution_failed', error: result.error } as CliHelpInspection;
+      if (useCache) {
+        this.cliHelpCache.set(cliType, inspection);
+      }
+      return inspection;
     }
 
     const helpText = `${result.stdout}${result.stderr}`;
     const missingFlags = profile.requiredFlags.filter(flag => !helpText.includes(flag));
 
-    if (missingFlags.length > 0) {
-      return { status: 'missing_flags', missingFlags, helpText };
+    const inspection: CliHelpInspection =
+      missingFlags.length > 0
+        ? { status: 'missing_flags', missingFlags, helpText }
+        : { status: 'ok', helpText };
+
+    if (useCache) {
+      this.cliHelpCache.set(cliType, inspection);
     }
 
-    return { status: 'ok', helpText };
+    return inspection;
   }
 
   private buildPromptArgument(prompt: PromptSource): string {

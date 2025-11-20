@@ -313,7 +313,7 @@ export function createMockSystemLifecycleService(): SystemLifecycleService {
   return {
     isSystemHealthy: vi.fn().mockReturnValue(false),
     setSystemHealth: vi.fn(),
-    updateComponents: vi.fn()
+    initialize: vi.fn()
   } as unknown as SystemLifecycleService;
 }
 
@@ -332,7 +332,6 @@ export function createMockSystemInitializationService(): SystemInitializationSer
       warnings: [],
       info: {}
     }),
-    getTaskQueueWorker: vi.fn().mockReturnValue(undefined),
     getMetricsEmitter: vi.fn().mockReturnValue(undefined)
   } as unknown as SystemInitializationService;
 }

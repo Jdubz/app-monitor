@@ -7,8 +7,6 @@ export interface SystemLifecycleComponents {
   ephemeralWorkerService: EphemeralWorkerService;
   workerHealthMonitor: WorkerHealthMonitor;
   // interactiveSessionService removed - migrated to tmux-based TerminalService
-  taskQueueWorker?: { stop: () => Promise<void> };
-  metricsEmitter?: { stop: () => void };
 }
 
 /**
@@ -25,10 +23,10 @@ export class SystemLifecycleService {
   ) {}
 
   /**
-   * Start the Dev-Bots system
-   * Initializes health monitoring, clears workers, and assigns pending tasks
+   * Initialize the Dev-Bots system.
+   * Called once after dependencies are ready to ensure automation never stops.
    */
-  public startSystem(): void {
+  public initialize(): void {
     if (this.isHealthy) {
       logger.info({
         category: 'process',
@@ -58,89 +56,6 @@ export class SystemLifecycleService {
   }
 
   /**
-   * Stop the Dev-Bots system
-   * Gracefully stops all services and cleans up active workers
-   */
-  public async stopSystem(): Promise<void> {
-    if (!this.isHealthy) {
-      logger.info({
-        category: 'process',
-        action: 'claude_workers_system_is_already_stopped',
-        message: 'Dev-Bots system is already stopped'
-      });
-      return;
-    }
-
-    this.isHealthy = false;
-
-    // Stop health monitoring
-    this.components.workerHealthMonitor.stop();
-
-    // Interactive session idle watchdog removed - migrated to tmux-based TerminalService
-
-    // Stop background task queue worker
-    if (this.components.taskQueueWorker) {
-      try {
-        await this.components.taskQueueWorker.stop();
-        logger.info({
-          category: 'process',
-          action: 'task_queue_worker_stopped',
-          message: 'Background task queue worker stopped'
-        });
-      } catch (error) {
-        logger.error({
-          category: 'process',
-          action: 'task_queue_worker_stop_failed',
-          message: 'Failed to stop background task queue worker',
-          error
-        });
-      }
-    }
-
-    // Stop metrics emitter
-    if (this.components.metricsEmitter) {
-      try {
-        this.components.metricsEmitter.stop();
-        logger.info({
-          category: 'process',
-          action: 'metrics_emitter_stopped',
-          message: 'Metrics emitter stopped'
-        });
-      } catch (error) {
-        logger.error({
-          category: 'process',
-          action: 'metrics_emitter_stop_failed',
-          message: 'Failed to stop metrics emitter',
-          error
-        });
-      }
-    }
-
-    // Stop all active ephemeral workers
-    for (const worker of this.components.ephemeralWorkerService.getAllWorkers().values()) {
-      if (worker.status !== 'destroyed') {
-        // Mark task as failed and destroy container
-        worker.task.status = 'failed';
-        worker.task.error = 'System stopped';
-        worker.task.completed_at = Date.now();
-        worker.task.can_retry = true;
-
-        // Destroy container
-        await this.components.ephemeralWorkerService.destroyWorker(worker.id);
-      }
-    }
-
-    this.components.ephemeralWorkerService.clearAllWorkers();
-
-    this.emitEvent('systemStatusChange', 'stopped');
-    logger.info({
-      category: 'process',
-      action: 'claude_workers_system_stopped_all_ephemeral_worker',
-      message: 'Dev-Bots system stopped - all ephemeral workers terminated'
-    });
-  }
-
-  /**
    * Check if the system is healthy
    */
   public isSystemHealthy(): boolean {
@@ -155,10 +70,4 @@ export class SystemLifecycleService {
     this.isHealthy = healthy;
   }
 
-  /**
-   * Update components (for dynamic updates like taskQueueWorker)
-   */
-  public updateComponents(updates: Partial<SystemLifecycleComponents>): void {
-    Object.assign(this.components, updates);
-  }
 }
