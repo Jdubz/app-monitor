@@ -7,7 +7,7 @@
 ### 🎯 Start Here
 - [Master Design Intent](architecture/master-design-intent.md) - THE source of truth for architecture
 - [Prioritized Roadmap](plans/PRIORITIZED_FEATURE_ROADMAP.md) - What to work on next
-- [Stabilization Plan](plans/APP_MONITOR_STABILIZATION_PLAN.md) - Current phase priorities
+- Stabilization plan completed 2025-11-14; see Prioritized Roadmap for ongoing work
 
 ### 📖 Common Tasks
 - **Setup:** [Environment Setup](setup/ENVIRONMENT_SETUP.md) | [Production Deployment](guides/PRODUCTION_DEPLOYMENT.md)
@@ -24,8 +24,8 @@ Core architecture and design decisions.
 ### `/plans` - Active Roadmaps
 Current and upcoming work plans.
 - **PRIORITIZED_FEATURE_ROADMAP.md** - Feature priorities and timeline
-- **APP_MONITOR_STABILIZATION_PLAN.md** - Pre-POC stabilization work
 - **CONTEXT_MANAGEMENT_COMPLETION_PLAN.md** - Context system roadmap
+- Stabilization plan completed 2025-11-14 (document removed)
 
 ### `/technicalDesigns` - Unimplemented Features
 Designs for features not yet implemented.

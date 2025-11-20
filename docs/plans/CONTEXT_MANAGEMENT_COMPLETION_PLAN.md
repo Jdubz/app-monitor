@@ -477,17 +477,7 @@ Docker CP pattern provides better isolation, security, and reproducibility at mi
 
 ## Rollback Procedures
 
-### If Critical Bug Found (Before Week 3 Cleanup)
-1. Disable task submission API endpoint (feature flag)
-2. Keep using enhanced form
-3. Fix bug in staging
-4. Re-enable after validation
-
-### After Week 3 Cleanup (No Legacy Code)
-**There is no rollback path after deletion.**
-- Fix forward only
-- Deploy hotfix immediately
-- All changes must be tested thoroughly before cleanup
+Rollback is **not supported**. Legacy paths are deleted as soon as replacements land, so every defect must be fixed forward immediately and deployed via the standard pipeline. No feature flags, toggles, or staggered rollovers are permitted.
 
 ---
 
@@ -495,7 +485,7 @@ Docker CP pattern provides better isolation, security, and reproducibility at mi
 
 - **Master Design:** `docs/technicalDesigns/dev-bot-context-management.md`
 - **Roadmap:** `docs/plans/PRIORITIZED_FEATURE_ROADMAP.md`
-- **Stabilization:** `docs/plans/APP_MONITOR_STABILIZATION_PLAN.md`
+- **Stabilization:** Completed 2025-11-14 (plan deleted per documentation policy)
 - **Git History:** Commits ec3d476 through 817ff15 (8 days of work)
 
 ---

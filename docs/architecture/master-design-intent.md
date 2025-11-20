@@ -39,6 +39,16 @@
 - **WHY**: Blue-green deployments constantly roll over servers - in-memory data is lost
 - **EXCEPTION**: Single-request transient data (function-scoped variables only)
 
+### Hard Cut Deployments
+- **✅ DO**: Remove deprecated code the moment its replacement ships, fix forward only
+- **❌ NEVER**: Feature flags, dry-run switches, delayed rollovers, or staggered migrations
+- **WHY**: App Monitor is an internal tool with no external users; clarity and maintainability outrank backwards compatibility
+
+### Caching Disabled
+- **✅ DO**: Serve responses directly from the database/service layer each request
+- **❌ NEVER**: Introduce HTTP caches, memoization layers, or stale-read optimizations
+- **WHY**: Server-side caching is disabled to keep behavior deterministic across blue/green nodes
+
 ### Chain Concurrency Control
 - **✅ DO**: Limit concurrent *chains* (default: 3), block new implementations until chains complete
 - **❌ NEVER**: Unlimited concurrent tasks, orphaned follow-ups
@@ -180,21 +190,4 @@ If any answer is NO → reconsider the design.
 
 ## Documentation Guidelines
 
-**See:** `docs/guides/DOCUMENTATION_SYSTEM.md` for comprehensive documentation philosophy and rules.
-
-### Quick Rules
-
-- **Delete-first mentality** - Documentation is technical debt
-- **No summaries/status docs** - If it doesn't add development velocity, delete it
-- **Hard limits** - <60 total docs, <5 in analysis/, master-design-intent <200 lines
-- **Lifecycle** - Plans/analysis are temporary, DELETE when complete (never archive)
-
-### Allowed Document Types
-
-1. **Architecture** (`/architecture/`) - Design decisions and constraints (permanent)
-2. **Guides** (`/guides/`) - Operational how-tos (permanent, updated)
-3. **Plans** (`/plans/`) - Outstanding work (DELETE when complete)
-4. **Technical Designs** (`/technicalDesigns/`) - Feature specs (temporary → permanent)
-5. **Analysis** (`/analysis/`) - Action-oriented investigations (max 30 days, max 5 files)
-
-**Prohibited:** Implementation summaries, status reports, meeting notes, archives, drafts, historical narratives
+See `docs/guides/DOCUMENTATION_SYSTEM.md` for the authoritative rules (delete-first mentality, hard limits, lifecycle policies).

@@ -412,52 +412,6 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
   });
 
   /**
-   * POST /tasks/preview-detection
-   * Preview auto-detection without creating task
-   * Useful for UX to show what will be detected before submission
-   */
-  router.post('/tasks/preview-detection', async (req: Request, res: Response) => {
-    try {
-      const payload: TaskSubmissionPayload = req.body;
-      
-      // Validate at least task type is provided
-      if (!payload.taskType) {
-        return sendError(
-          res,
-          'Missing taskType',
-          400,
-          { message: 'taskType is required for preview' }
-        );
-      }
-      
-      const detected = await taskAutoDetectionService.detectFields(payload);
-      
-      logger.debug({
-        category: 'api',
-        action: 'preview_detection',
-        message: `Preview detection for ${payload.taskType} task`,
-        details: {
-          taskType: payload.taskType,
-          filesDetected: detected.detectedFiles.length,
-          riskLevel: detected.inferredRiskLevel,
-          profilesSelected: detected.selectedProfiles.length
-        }
-      });
-      
-      sendSuccess(res, detected);
-    } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'preview_detection_failed',
-        message: `Failed to preview detection: ${error}`,
-        error
-      });
-      sendError(res, 'Failed to preview detection', 500, { message: error instanceof Error ? error.message : String(error)
-       });
-    }
-  });
-
-  /**
    * POST /tasks/:taskId/timeout
    * Manually timeout a task after verification
    */

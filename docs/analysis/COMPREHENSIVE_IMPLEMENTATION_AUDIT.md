@@ -2,13 +2,18 @@
 
 **Purpose:** Implementation verification and gap analysis for 7-phase system pre-production deployment
 
-**Delete After:** 2025-12-17 (30 days from creation - analysis becomes stale after fixes applied)
-
 **Date:** 2025-11-17  
 **Branch:** feature/task-processing-stage-implementation  
 **Audit Scope:** Complete review of task-processing-stage-implementation
 
-## Executive Summary
+## Investigation
+- Static analysis of `taskQueue.sqlite.ts`, `phaseOrchestrator.service.ts`, `ephemeralWorker.service.ts`, and related validators.
+- Ran the phase orchestration unit tests + manual walkthroughs to confirm event ordering and logging.
+- Audited remaining backend tests for legacy concepts (`original_task_id`, `queue_stage`) to ensure deletion plans exist.
+
+## Findings
+
+### Executive Summary
 
 ✅ **Overall Assessment:** Implementation is **95% complete** with high quality  
 ⚠️ **Critical Issues:** 3 items requiring immediate attention  
@@ -17,7 +22,7 @@
 
 ---
 
-## 1. Critical Issues (MUST FIX)
+### 1. Critical Issues (MUST FIX)
 
 ### 1.1 ❌ Missing updateStageRun Method in PhaseOrchestrator
 
@@ -120,7 +125,7 @@ if (!columnNames.has('phase_payload')) {
 
 ---
 
-## 2. Incomplete Connections (SHOULD FIX)
+### 2. Incomplete Connections (SHOULD FIX)
 
 ### 2.1 ⚠️ Phase Execution Not Fully Integrated in TaskExecution Service
 
@@ -748,33 +753,12 @@ If fetching metrics for multiple phases, might query task_stage_runs repeatedly.
 
 ---
 
-## 13. Action Plan
+## Action Items
+- [ ] **Platform Tooling · P0:** Add `updateStageRunWithRecovery` + missing `phase_status`/`phase_payload` columns, then wire `ephemeralWorker` to persist recovery output.
+- [ ] **Testing Infra · P0:** Delete `stagedQueue.test.ts`, add phase-based queue tests, and ensure `TaskCompletionService` is removed if unused.
+- [ ] **Runtime · P0:** Implement phase validation failure requeue logic inside `taskExecution.service.ts`.
+- [ ] **Context + Docs · P1:** Finish Phase 5 internal loop (script-first tests), update frontend phase UI, and ship the phase development guide.
+- [ ] **Ops · P1:** Add metrics/alerting endpoints plus telemetry for the log signals listed in Appendix B; drop `queue_stage` + `original_task_id` from schema via table recreation.
 
-### Immediate (Next 2 Hours)
-1. Add `updateStageRunWithRecovery` method
-2. Fix missing DB columns (`phase_status`, `phase_payload`)
-3. Delete `stagedQueue.test.ts`
-4. Implement phase validation failure requeue logic
-
-### Short Term (Next 4 Hours)
-5. Create phase-based queue tests
-6. Verify TaskCompletionService usage and delete if obsolete
-7. Create metrics API routes
-8. Make Task phase fields required
-
-### Medium Term (Next Sprint)
-9. Implement Phase 5 internal loop properly
-10. Update frontend phase UI
-11. Create phase development guide
-12. Remove all dead code and deprecated fields
-
-### Long Term (Future Sprints)
-13. Implement alert rules
-14. Optimize metrics queries
-15. Complete documentation updates
-16. Remove queue_stage and original_task_id columns from schema
-
----
-
-**Audit Completed By:** GitHub Copilot CLI  
-**Review Recommended By:** Senior Dev (manual verification of critical fixes)
+## Delete After
+2025-12-17 (30 days after audit completion)
