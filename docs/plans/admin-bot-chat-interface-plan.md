@@ -24,6 +24,7 @@
 **Key Technologies:**
 - Backend: AdminBotService (spawns Codex CLI), SSE for streaming
 - Frontend: assistant-ui (400k+ downloads/month), EventSource for SSE
+- MCP Integration: Pre-configured connection to App Monitor MCP server
 - No database, no Socket.IO events (SSE only), Codex CLI only
 
 ---
@@ -110,15 +111,43 @@ This implementation MUST be **MINIMAL**. Focus ONLY on core requirements:
 
 ## Research Findings
 
-### Admin Bot Role (from MCP Server docs)
+### Admin Bot Role & MCP Server Integration
 
-The admin bot is referenced as an **"Admin Bot (Interactive)"** agent in the MCP server architecture diagram (line 42-44 of app-monitor-mcp-server.md). Key points:
+The admin bot is referenced as an **"Admin Bot (Interactive)"** agent in the MCP server architecture (app-monitor-mcp-server.md). Key points:
 
-1. **Purpose:** AI agent for system management, planning, and troubleshooting
-2. **Access:** Connects to MCP server via JSON-RPC over stdio
+#### Purpose & Capabilities
+1. **Role:** AI agent for system management, planning, and troubleshooting
+2. **Access:** Connects to App Monitor MCP server via JSON-RPC over stdio
 3. **Permissions:** Admin-level access (can execute admin-only MCP tools)
-4. **Integration:** Will use MCP tools for plan management, task operations, bot control, PR evaluation, and diagnostics
-5. **Scope Note:** Plan management tools are DEFERRED in MCP MVP (Nov 20, 2025 update)
+4. **Available Tools (24 total):**
+   - Plan Management: 11 tools (create, update, validate, save, list, etc.)
+   - Task Operations: 6 tools (create, list, get, unblock, cancel, report)
+   - Dev-Bot Control: 4 tools (list, status, recover, heartbeat check)
+   - PR Evaluation: 2 tools (trigger evaluation, get blocking issues)
+   - System Diagnostics: 1 tool (comprehensive system_health)
+
+#### Current MCP Server Status
+- **Implementation:** ✅ **ALREADY IMPLEMENTED** in `backend/src/mcp/server.ts`
+- **Tools:** Core tools implemented (tasks, bots, PRs, system health)
+- **Transport:** stdio (JSON-RPC over stdin/stdout)
+- **Auth:** Role-based via `APP_MONITOR_MCP_USER_ROLE` environment variable
+- **Plan Tools:** DEFERRED until planning system is stable (Nov 20, 2025 scope update)
+
+#### Integration Architecture
+
+```
+Codex CLI (Admin Bot)
+  ↓ reads config.toml
+  ↓ spawns MCP server subprocess
+  ↓
+App Monitor MCP Server (stdio)
+  ↓ uses
+Backend Services (DevBotsManager, Database)
+  ↓ executes
+System Operations (tasks, bots, PRs, diagnostics)
+```
+
+The admin bot Codex session will be **pre-configured** to automatically connect to the MCP server.
 
 ### Existing AI Chat Libraries
 
@@ -578,24 +607,114 @@ router.use('/', createAdminBotChatRoutes(adminBotService));
 
 ### Phase 1: Core Backend (Week 1)
 
-**Goal:** Get Codex CLI running and streaming responses
+**Goal:** Get Codex CLI running with MCP server pre-configured and streaming responses
+
+#### 1.1: MCP Configuration Setup
+
+**Create Codex config file for admin bot sessions:**
+
+**File:** `backend/config/codex-admin-bot.toml` (NEW)
+
+```toml
+# Codex configuration for Admin Bot sessions
+# This config is used when spawning Codex CLI for admin bot chat
+
+[mcp_servers.app-monitor]
+type = "stdio"
+command = "node"
+args = ["--loader", "tsx", "/opt/app-monitor/current/backend/src/mcp/start.ts"]
+startup_timeout_ms = 10000
+env = {
+  APP_MONITOR_MCP_USER_ROLE = "admin",
+  DATABASE_PATH = "/opt/app-monitor/shared/backend/data/app-monitor.db",
+  NODE_ENV = "production"
+}
+
+[features]
+# Enable any Codex features needed for admin bot
+# rmcp_client = false  # Not needed - using stdio only
+```
+
+**File:** `backend/src/mcp/start.ts` (NEW - MCP server entry point)
+
+```typescript
+#!/usr/bin/env node
+/**
+ * MCP Server Start Script
+ *
+ * Entry point for MCP server when launched by Codex CLI.
+ * This script initializes the database and services, then starts the MCP server.
+ */
+
+import { startMcpServer } from './server.js';
+import { getDatabase } from '../services/database.js';
+import { DevBotsManager } from '../services/devBotsManager.js';
+// Import other required services
+
+async function main() {
+  try {
+    const db = getDatabase();
+    const devBotsManager = new DevBotsManager(/* ... */);
+
+    await startMcpServer({
+      db,
+      services: { devBotsManager }
+    });
+
+    // Keep process alive
+    process.on('SIGTERM', () => process.exit(0));
+    process.on('SIGINT', () => process.exit(0));
+  } catch (error) {
+    console.error('Failed to start MCP server:', error);
+    process.exit(1);
+  }
+}
+
+main();
+```
+
+#### 1.2: AdminBotService Implementation
 
 **Tasks:**
 1. Create `AdminBotService` class
 2. Implement session management (start/stop)
-3. Set up stdio communication with Codex CLI
-4. Implement SSE endpoint for streaming
-5. Create API routes for chat operations
-6. Add basic error handling and logging
+3. Configure Codex CLI to use admin bot config file
+4. Set up stdio communication with Codex CLI
+5. Verify MCP server connection on startup
+6. Implement SSE endpoint for streaming
+7. Create API routes for chat operations
+8. Add basic error handling and logging
+
+**Codex CLI Spawn Configuration:**
+
+```typescript
+// In AdminBotService.startSession()
+const process = spawn('codex', ['chat'], {
+  cwd: this.repoRoot,
+  env: {
+    ...process.env,
+    // Point Codex to admin bot config
+    CODEX_CONFIG_PATH: path.join(this.repoRoot, 'backend/config/codex-admin-bot.toml'),
+    // Ensure MCP server can find backend
+    APP_MONITOR_ROOT: this.repoRoot,
+    // Admin role for MCP server
+    APP_MONITOR_MCP_USER_ROLE: 'admin'
+  }
+});
+```
 
 **Success Criteria:**
 - Can start/stop Codex CLI session
+- Codex CLI automatically connects to MCP server on startup
 - Can send messages via stdin
 - Can receive output via stdout
 - SSE stream delivers output to client
+- MCP tools are available in Codex session
 - Proper cleanup on session end
 
 **Files:**
+- `backend/config/codex-admin-bot.toml` (new)
+- `backend/src/mcp/start.ts` (new - MCP entry point)
 - `backend/src/services/AdminBotService.ts` (new)
 - `backend/src/routes/admin-bot/chat.routes.ts` (new)
 - Update `backend/src/server.ts` to register routes
@@ -640,16 +759,21 @@ router.use('/', createAdminBotChatRoutes(adminBotService));
 - Error handling for CLI spawn failures
 - Session cleanup on process exit
 - Multiple concurrent sessions (should error)
+- **MCP server configuration validation**
+- **MCP server connection verification**
 
 **Example Tests:**
 ```typescript
 describe('AdminBotService', () => {
   test('should start session and spawn codex CLI process');
+  test('should configure Codex CLI with admin bot config file');
+  test('should verify MCP server is available on startup');
   test('should emit output events when CLI writes to stdout');
   test('should handle CLI process exit');
   test('should throw error when starting session while one is running');
   test('should send messages to CLI stdin');
   test('should cleanup session on stop');
+  test('should handle MCP server connection failures gracefully');
 });
 ```
 
@@ -720,9 +844,33 @@ describe('Admin Bot Chat Interface', () => {
   test('should show session status indicator');
   test('should send user message');
   test('should receive and display assistant response');
+  test('should verify MCP tools are available (use system_health)');
+  test('should handle MCP tool responses correctly');
   test('should handle session errors gracefully');
   test('should cleanup session on tab close');
   test('should handle page refresh');
+});
+```
+
+**MCP Verification Test:**
+```typescript
+test('admin bot can access MCP tools', async ({ page }) => {
+  await navigateToAdminBotChat(page);
+
+  // Wait for chat to be ready
+  await page.locator('.assistant-ui').waitFor();
+
+  // Send a message to test MCP tool
+  await page.fill('textarea', 'Use the system_health tool to check system status');
+  await page.press('textarea', 'Enter');
+
+  // Wait for response
+  await page.waitForTimeout(3000);
+
+  // Should see MCP tool response in chat
+  const messages = page.locator('.message');
+  const lastMessage = messages.last();
+  await expect(lastMessage).toContainText(/system.*health|status/i);
 });
 ```
 
@@ -881,13 +1029,66 @@ The tmux-based terminal approach (Attempt 2) had fundamental UX issues:
 
 ---
 
+## MCP Integration Summary
+
+### What the Admin Bot Can Do
+
+With pre-configured MCP server access, the admin bot can:
+
+1. **Task Management:**
+   - Create standalone tasks
+   - List and filter tasks by status/plan/batch
+   - Get detailed task information
+   - Unblock stuck tasks
+   - Cancel tasks with reason
+
+2. **Dev-Bot Monitoring:**
+   - List all active dev-bots
+   - Get detailed bot status and resource usage
+   - Check heartbeat health
+   - Recover hung bots (admin-only)
+
+3. **PR Operations:**
+   - Trigger PR merge gate evaluations
+   - Get detailed blocking issues
+   - View gate status
+
+4. **System Diagnostics:**
+   - Get comprehensive system health (database, queue, bots, plans, PRs, resources, alerts)
+
+5. **Plan Management (when available):**
+   - Create and validate plans
+   - Add and update batches
+   - Save plans to database
+   - Track execution progress
+
+### Configuration Flow
+
+1. **User starts chat** → Frontend creates session
+2. **Backend spawns Codex CLI** with `CODEX_CONFIG_PATH=backend/config/codex-admin-bot.toml`
+3. **Codex reads config** → Discovers `mcp_servers.app-monitor`
+4. **Codex spawns MCP server** → Runs `backend/src/mcp/start.ts` via stdio
+5. **MCP server connects** → Initializes database, services, registers tools
+6. **Admin bot ready** → Can use all 24 MCP tools immediately
+
+### Why This Architecture Works
+
+- **Zero manual setup:** Config is pre-baked, users just start chatting
+- **Isolated per session:** Each chat session gets own MCP server instance
+- **Admin permissions:** Automatically configured with admin role
+- **Shared services:** MCP server uses same database/services as main backend
+- **Clean lifecycle:** MCP server exits when Codex session ends
+
+---
+
 ## Next Steps
 
 1. **Review this plan** with team
 2. **Validate assumptions** about Codex CLI stdio interface
-3. **Approve library choice** (assistant-ui vs alternatives)
-4. **Begin Phase 0 implementation** (cleanup legacy code)
-5. **Begin Phase 1 implementation** (backend)
+3. **Test MCP server standalone** to ensure start.ts works
+4. **Approve library choice** (assistant-ui vs alternatives)
+5. **Begin Phase 0 implementation** (cleanup legacy code)
+6. **Begin Phase 1 implementation** (backend + MCP config)
 
 ---
 

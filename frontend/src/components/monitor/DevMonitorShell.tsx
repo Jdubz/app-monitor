@@ -8,7 +8,7 @@ import { DevBotsTabContent } from './tabs/DevBotsTabContent';
 import { PrTrackingTabContent } from './tabs/PrTrackingTabContent';
 import { TaskQueueTabContent } from './tabs/TaskQueueTabContent';
 import { PlansTabContent } from './tabs/PlansTabContent';
-import { InteractiveTerminalTabContent } from './tabs/InteractiveTerminalTabContent';
+import { AdminBotChat } from '../admin-bot/AdminBotChat';
 
 interface DevMonitorShellProps {
   socket: Socket | null;
@@ -119,7 +119,7 @@ export function DevMonitorShell({ socket }: DevMonitorShellProps) {
             </TabsContent>
 
             <TabsContent value="interactive" className="flex-1 overflow-hidden">
-              <InteractiveTerminalTabContent socket={socket} />
+              <AdminBotChat />
             </TabsContent>
           </Tabs>
         </div>

@@ -37,6 +37,7 @@ if (!fs.existsSync(LOGS_DIR)) {
 type LogLevel = 'debug' | 'info' | 'warning' | 'error';
 type LogSeverity = 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR';
 export type LogCategory =
+  | 'admin_bot_chat' // Admin bot chat sessions with Codex CLI
   | 'alerts' // Alert management system
   | 'api'
   | 'artifact' // Task artifact tracking
@@ -52,7 +53,7 @@ export type LogCategory =
   | 'delegation' // Copilot delegation
   | 'docker'
   | 'escalation' // Manual intervention and escalation to humans
-  | 'interactive_terminal' // Interactive terminal sessions
+  | 'interactive_terminal' // Interactive terminal sessions (deprecated - replaced by admin_bot_chat)
   | 'issue-triage' // Autonomous issue triage and resolution
   | 'lint_error'
   | 'log_format'

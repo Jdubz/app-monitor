@@ -11,7 +11,6 @@
 import { Router } from 'express';
 import { DevBotsManager } from '../services/devBotsManager.js';
 import type { ConnectionManager } from '../services/connectionManager.js';
-import type { TerminalService } from '../services/TerminalService.js';
 import type { HealthCheckApiResponse } from '@app-monitor/api-contracts';
 import { requireApiKey, requireApiKeySSE } from '../middleware/auth.js';
 import { logger } from '../utils/logger.js';
@@ -20,7 +19,7 @@ import { createSocketRoutes } from './socket-task.routes.js';
 import { createDockerRouter } from './docker.routes.js';
 import { createDevBotsRouter } from './dev-bots/index.js';
 import { createSSERoutes } from './sse.routes.js';
-import { createTerminalRoutes } from './terminal.routes.js';
+import { createAdminBotChatRoutes } from './admin-bot/chat.routes.js';
 import tokenTrackingRoutes from './token-tracking.routes.js';
 import qualityGatesRoutes from './quality-gates.routes.js';
 import verificationRoutes from './verification.routes.js';
@@ -30,6 +29,7 @@ import issuesRoutes, { initializeIssuesRoutes } from './issues.routes.js';
 import metricsRoutes from './metrics.routes.js';
 import observabilityRoutes from './observability.routes.js';
 import { createPRsRouter } from './prs.routes.js';
+import type { AdminBotService } from '../services/AdminBotService.js';
 
 /**
  * Create the main API router with all sub-routes
@@ -44,7 +44,7 @@ import { createPRsRouter } from './prs.routes.js';
 export function createApiRouter(deps: {
   devBotsManager?: DevBotsManager;
   connectionManager?: ConnectionManager;
-  terminalService?: TerminalService;
+  adminBotService?: AdminBotService;
 }) {
   const router = Router();
 
@@ -123,8 +123,9 @@ export function createApiRouter(deps: {
     router.use('/prs', requireApiKey, createPRsRouter(deps.devBotsManager));
   }
 
-  if (deps.terminalService) {
-    router.use('/terminal', requireApiKey, createTerminalRoutes(deps.terminalService));
+  // Admin Bot Chat endpoints
+  if (deps.adminBotService) {
+    router.use('/admin-bot/chat', requireApiKey, createAdminBotChatRoutes(deps.adminBotService));
   }
 
   // Logs and issues endpoints - no auth required (frontend logs and issue reports)
