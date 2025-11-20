@@ -18,7 +18,7 @@ export function registerSystemTools(
     {
         title: "System Health",
         description: "Provides a comprehensive overview of the system's health.",
-        inputSchema: systemHealthInputSchema,
+        inputSchema: systemHealthInputSchema.shape,
     },
     withAuth("system_health", withErrorHandling(async (_params: SystemHealthParams) => {
         const health: Record<string, unknown> = {

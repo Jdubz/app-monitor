@@ -51,7 +51,7 @@ export function registerPrsTools(
     {
       title: 'Trigger PR Evaluation',
       description: 'Manually triggers a PR gate evaluation.',
-      inputSchema: prTriggerInputSchema,
+      inputSchema: prTriggerInputSchema.shape,
     },
     withAuth('pr_trigger_evaluation', withErrorHandling(async (params: PrTriggerParams) => {
       const eventType = params.force ? 'manual_restart' : 'pull_request_opened';
@@ -65,7 +65,7 @@ export function registerPrsTools(
     {
       title: 'Get Blocking Issues for PR',
       description: 'Retrieves the latest gate evaluation and blocking issues.',
-      inputSchema: prBlockingIssuesInputSchema,
+      inputSchema: prBlockingIssuesInputSchema.shape,
     },
     withAuth('pr_get_blocking_issues', withErrorHandling(async (params: PrBlockingIssuesParams) => {
       const state = await prConditionState.getState(params.pr_number);
