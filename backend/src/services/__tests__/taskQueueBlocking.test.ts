@@ -24,6 +24,16 @@ describe('TaskQueueService - Blocking & Resume', () => {
     }
   });
 
+  it('auto-selects a preferred agent when none is provided', () => {
+    const createdTask = taskQueue.createTask({
+      type: 'documentation',
+      title: 'Update README',
+      description: 'Refresh docs'
+    });
+
+    expect(createdTask.preferred_agent).toBe('codex');
+  });
+
   describe('resumeTask', () => {
     it('should successfully resume a blocked task', () => {
       // Create a task and manually block it

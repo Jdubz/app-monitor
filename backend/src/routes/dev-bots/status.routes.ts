@@ -78,44 +78,6 @@ export function createStatusRoutes(devBotsManager: DevBotsManager): Router {
     });
   });
 
-  /**
-   * POST /start
-   * Start Dev-Bots system (deprecated - system auto-starts)
-   */
-  router.post('/start', (_req: Request, res: Response) => {
-    try {
-      devBotsManager.startSystem();
-      sendSuccess(res, { message: 'Dev-Bots started' });
-    } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'error_starting_claude_workers_error',
-        message: `Error starting Dev-Bots: ${error}`,
-        error
-      });
-      sendError(res, 'Failed to start Dev-Bots', 500, { message: error instanceof Error ? error.message : String(error) });
-    }
-  });
-
-  /**
-   * POST /stop
-   * Stop Dev-Bots system (deprecated - use with caution)
-   */
-  router.post('/stop', (_req: Request, res: Response) => {
-    try {
-      devBotsManager.stopSystem();
-      sendSuccess(res, { message: 'Dev-Bots stopped' });
-    } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'error_stopping_claude_workers_error',
-        message: `Error stopping Dev-Bots: ${error}`,
-        error
-      });
-      sendError(res, 'Failed to stop Dev-Bots', 500, { message: error instanceof Error ? error.message : String(error) });
-    }
-  });
-
   // ============================================================================
   // Metrics & Performance
   // ============================================================================

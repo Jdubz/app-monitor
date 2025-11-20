@@ -43,7 +43,7 @@ export function createDevBotsRouter(devBotsManager: DevBotsManager): Router {
   // ============================================================================
 
   // Status & Infrastructure endpoints
-  // Includes: /status, /health, /start, /stop, /metrics, /agent-comparison,
+  // Includes: /status, /health, /metrics, /agent-comparison,
   //           /projects, /export, /import, /onboarding/complete,
   //           /workspace-sync/*, /docker/*, /cleanup-status, /trigger-cleanup,
   //           /scope-violations, /emergency-recovery, /containers/:id/health

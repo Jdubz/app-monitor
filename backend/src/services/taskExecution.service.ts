@@ -26,7 +26,8 @@ import type { EphemeralWorkerService, EphemeralWorker, TaskExecutionResult } fro
 // TaskPersistence removed - using SQLite directly
 import type { FailurePattern } from './taskFailureGuards.js';
 import { resolveArtifactsDir } from '../utils/repoPaths.js';
-import { AgentSelector, AgentAttempt, AgentSelectionCriteria } from './agentSelector.js';
+import { AgentSelector } from './agentSelector.js';
+import { selectAgentCliTypeForTask } from './agentCliSelection.js';
 import { TaskClassifier } from './taskClassifier.js';
 import { TaskArtifactService } from './taskArtifact.service.js';
 import { SessionSummaryService } from './sessionSummary.service.js';
@@ -335,83 +336,7 @@ export class TaskExecutionService {
    * Determines whether to use claude, codex, or gemini based on task characteristics
    */
   private async selectAgentCliType(task: Task): Promise<'claude' | 'codex' | 'gemini'> {
-    // Parse file patterns if available
-    let filePatterns: string[] | undefined;
-    try {
-      filePatterns = task.file_patterns ? JSON.parse(task.file_patterns) : undefined;
-    } catch (error) {
-      logger.warn({
-        category: 'automation',
-        action: 'json_parse_error',
-        message: 'Failed to parse file_patterns, using undefined',
-        details: {
-          taskId: task.id,
-          filePatterns: task.file_patterns,
-          error: error instanceof Error ? error.message : String(error)
-        }
-      });
-      filePatterns = undefined;
-    }
-
-    // Build previous attempts from retry count and agent type
-    const previousAttempts: AgentAttempt[] = [];
-    if (task.retry_count > 0 && task.agent_type) {
-      previousAttempts.push({
-        agent: task.agent_type as 'claude' | 'codex' | 'gemini',
-        result: 'failure',
-        timestamp: Date.now()
-      });
-    }
-
-    // Build selection criteria
-    const criteria: AgentSelectionCriteria = {
-      taskCategory: task.task_category,
-      filePatterns,
-      complexity: task.estimated_complexity,
-      preferredAgent: task.preferred_agent as 'claude' | 'codex' | 'copilot' | 'gemini' | undefined,
-      previousAttempts,
-      taskTitle: task.title,
-      taskDescription: task.description
-    };
-
-    // Use AgentSelector for intelligent selection
-    const selection = await this.agentSelector.selectAgent(criteria, task);
-
-    // Handle copilot fallback (not yet supported in Docker execution)
-    let chosenAgent: 'claude' | 'codex' | 'gemini';
-    if (selection.agent === 'copilot') {
-      logger.warn({
-        category: 'automation',
-        action: 'copilot_fallback',
-        message: 'Copilot selected but not yet supported, using fallback',
-        details: {
-          taskId: task.id,
-          fallback: selection.fallbackAgent || 'claude'
-        }
-      });
-      chosenAgent = (selection.fallbackAgent || 'claude') as 'claude' | 'codex' | 'gemini';
-    } else {
-      chosenAgent = selection.agent as 'claude' | 'codex' | 'gemini';
-    }
-
-    // Log the intelligent selection
-    logger.info({
-      category: 'automation',
-      action: 'intelligent_agent_cli_selected',
-      message: `Selected ${chosenAgent} CLI for task: ${selection.reasoning}`,
-      details: {
-        taskId: task.id,
-        agentCli: chosenAgent,
-        reasoning: selection.reasoning,
-        confidence: selection.confidence,
-        category: task.task_category,
-        filePatterns,
-        complexity: task.estimated_complexity,
-        retryCount: task.retry_count
-      }
-    });
-
-    return chosenAgent;
+    return await selectAgentCliTypeForTask(this.agentSelector, task, { context: 'assignment' });
   }
 
   // ==========================================================================

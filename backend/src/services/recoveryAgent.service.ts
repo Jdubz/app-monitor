@@ -28,6 +28,10 @@
 import { logger } from '../utils/logger.js';
 import type { Task } from './taskQueue.sqlite.js';
 import type { ValidationResult } from './phaseValidation/types.js';
+import { AgentSelector } from './agentSelector.js';
+import { AgentEligibilityServiceImpl } from './agentEligibility.service.js';
+import { AgentCliCommandBuilder, type AgentCliType } from './agentCliCommandBuilder.js';
+import { selectAgentCliTypeForTask } from './agentCliSelection.js';
 
 export type RecoveryCategory = 'retry' | 'context_update' | 'chain_blocked' | 'system_blocked';
 
@@ -56,8 +60,23 @@ export interface RecoveryResult {
   suggestedAction?: SuggestedAction;
 }
 
+interface RecoveryAgentDependencies {
+  agentSelector?: AgentSelector;
+  cliCommandBuilder?: AgentCliCommandBuilder;
+}
+
 export class RecoveryAgentService {
   private readonly maxRecoveryAttempts = 4;
+  private readonly agentSelector: AgentSelector;
+  private readonly cliCommandBuilder: AgentCliCommandBuilder;
+
+  constructor(dependencies: RecoveryAgentDependencies = {}) {
+    this.agentSelector =
+      dependencies.agentSelector ??
+      new AgentSelector(undefined, new AgentEligibilityServiceImpl());
+    this.cliCommandBuilder =
+      dependencies.cliCommandBuilder ?? new AgentCliCommandBuilder();
+  }
 
   /**
    * Execute recovery agent to diagnose and fix validation failure.
@@ -228,6 +247,19 @@ export class RecoveryAgentService {
       details: { taskId: task.id, containerId, errors: validationResult.errors },
     });
 
+    const cliType: AgentCliType = await selectAgentCliTypeForTask(
+      this.agentSelector,
+      task,
+      { context: 'recovery' }
+    );
+
+    logger.info({
+      category: 'recovery',
+      action: 'recovery_cli_selected',
+      message: `Selected ${cliType} CLI for recovery`,
+      details: { taskId: task.id }
+    });
+
     // Build recovery prompt with validation failure context
     const recoveryPrompt = this.buildRecoveryPrompt(task, validationResult);
 
@@ -237,27 +269,31 @@ export class RecoveryAgentService {
       const docker = new Docker();
       const container = docker.getContainer(containerId);
 
-      // Create script that writes prompt to temp file and executes agent
-      // Using claude CLI as recovery agent (can be configured per task/agent)
-      // Use base64 encoding to avoid heredoc injection vulnerabilities
+      const promptFilePath = '/dev/shm/recovery-prompt.txt';
       const promptBase64 = Buffer.from(recoveryPrompt).toString('base64');
-      // Escape single quotes for safe shell interpolation
       const promptBase64Escaped = promptBase64.replace(/'/g, "'\\''");
+
+      const cliCommand = this.cliCommandBuilder.buildCommand({
+        cliType,
+        prompt: { kind: 'file', path: promptFilePath },
+        workingDirectory: '/workspace'
+      });
+
+      const artifactsDir = '/workspace/.artifacts';
       const recoveryScript = `
         # Write recovery prompt to secure in-memory temp file
         # Use base64 to prevent command injection via heredoc
-        echo '${promptBase64Escaped}' | base64 -d > /dev/shm/recovery-prompt.txt
+        echo '${promptBase64Escaped}' | base64 -d > ${promptFilePath}
 
-        # Execute recovery agent (claude CLI) with prompt
-        # Output structured JSON response to artifacts
-        mkdir -p /workspace/.artifacts
-        claude --no-stream < /dev/shm/recovery-prompt.txt > /workspace/.artifacts/recovery.json 2>&1
+        # Execute recovery agent with structured output
+        mkdir -p ${artifactsDir}
+        ${cliCommand} > ${artifactsDir}/recovery.json 2>&1
 
         # Cleanup recovery prompt file
-        rm -f /dev/shm/recovery-prompt.txt
+        rm -f ${promptFilePath}
 
         # Print the response for capture
-        cat /workspace/.artifacts/recovery.json
+        cat ${artifactsDir}/recovery.json
       `;
 
       // Execute recovery script in container
