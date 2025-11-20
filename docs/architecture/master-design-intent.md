@@ -39,6 +39,16 @@
 - **WHY**: Blue-green deployments constantly roll over servers - in-memory data is lost
 - **EXCEPTION**: Single-request transient data (function-scoped variables only)
 
+### Hard Cut Deployments
+- **✅ DO**: Remove deprecated code the moment its replacement ships, fix forward only
+- **❌ NEVER**: Feature flags, dry-run switches, delayed rollovers, or staggered migrations
+- **WHY**: App Monitor is an internal tool with no external users; clarity and maintainability outrank backwards compatibility
+
+### Caching Disabled
+- **✅ DO**: Serve responses directly from the database/service layer each request
+- **❌ NEVER**: Introduce HTTP caches, memoization layers, or stale-read optimizations
+- **WHY**: Server-side caching is disabled to keep behavior deterministic across blue/green nodes
+
 ### Chain Concurrency Control
 - **✅ DO**: Limit concurrent *chains* (default: 3), block new implementations until chains complete
 - **❌ NEVER**: Unlimited concurrent tasks, orphaned follow-ups

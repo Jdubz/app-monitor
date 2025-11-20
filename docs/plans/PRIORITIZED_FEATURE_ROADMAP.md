@@ -37,7 +37,7 @@ This document consolidates all active plans into a prioritized feature roadmap o
 These items **must complete** before enabling continuous task queue or POC features.
 
 ### P0.1: Frontend Health (FE-1, FE-2)
-**Plan:** APP_MONITOR_STABILIZATION_PLAN.md
+**Plan:** PRIORITIZED_FEATURE_ROADMAP.md (this document)
 **Owner:** Frontend Team
 **Duration:** 2-3 days
 **Status:** In Progress
@@ -106,7 +106,7 @@ doNotCreate:
 ---
 
 ### P0.2: Backend Test Passing (BE-1, BE-2)
-**Plan:** APP_MONITOR_STABILIZATION_PLAN.md
+**Plan:** PRIORITIZED_FEATURE_ROADMAP.md (this document)
 **Owner:** Backend Team
 **Duration:** 3-4 days
 **Status:** In Progress
@@ -141,7 +141,7 @@ Ensure all 543 backend tests pass consistently and implement failure recovery sy
 ---
 
 ### P0.3: Work-Target Registry (WT-1 through WT-4)
-**Plan:** APP_MONITOR_STABILIZATION_PLAN.md
+**Plan:** PRIORITIZED_FEATURE_ROADMAP.md (this document)
 **Owner:** Platform Tooling
 **Duration:** 4-5 days
 **Status:** Planning
@@ -192,9 +192,8 @@ Migrate work-target metadata from JSON config files to SQLite with backwards com
 **What Was Delivered (2025-11-14):**
 - ✅ **Task Submission API:** 3-field submission (title, taskType, intent)
 - ✅ **Auto-Detection Service:** Automatically infers files, risk level, context profiles
-- ✅ **New Endpoints:** 
+- ✅ **New Endpoint:** 
   - POST `/api/dev-bots/tasks` - Create task with concise payload
-  - POST `/api/dev-bots/tasks/preview-detection` - Preview auto-detection
 - ✅ **Backend Complete:** Full integration with existing task creation
 - ⏳ **Frontend Pending:** UI form component not yet created
 
@@ -205,9 +204,8 @@ Migrate work-target metadata from JSON config files to SQLite with backwards com
 - Task submission time reduced from ~10 min to <2 min (estimated)
 
 **Migration Path:**
-- Old POST `/api/dev-bots/tasks` endpoint marked deprecated
-- Both endpoints functional (backward compatible)
-- Frontend will use new task submission API when form component created
+- Legacy multi-field submission removed in favor of the 3-field endpoint
+- Frontend will use the new API when the form component ships
 - Full migration target: 2 weeks
 
 **Dependencies:** None (feature replaced by superior approach)
@@ -220,7 +218,7 @@ Migrate work-target metadata from JSON config files to SQLite with backwards com
 ---
 
 ### P0.5: Task Context Foundations (TC-1 through TC-4)
-**Plan:** APP_MONITOR_STABILIZATION_PLAN.md
+**Plan:** PRIORITIZED_FEATURE_ROADMAP.md (this document)
 **Owner:** Platform Tooling
 **Duration:** 3-4 days
 **Status:** Planning
@@ -295,9 +293,8 @@ Separate work-target development path from production deployment with artifact h
 **HIGHEST IMPACT FEATURE** - Transforms task submission from 15+ manual fields to just 3 (title, type, intent) with auto-generated prompts from context bundles.
 
 **✅ Complete Implementation (2025-11-14):**
-- ✅ **Task Submission API Endpoints (PRODUCTION READY):**
+- ✅ **Task Submission API Endpoint (PRODUCTION READY):**
   - POST `/api/dev-bots/tasks` - Create task with 3 fields
-  - POST `/api/dev-bots/tasks/preview-detection` - Preview auto-detection
 - ✅ **Auto-Detection Service (FULLY OPERATIONAL):**
   - File detection from git status (staged + modified + created)
   - Risk level inference from file path patterns  
@@ -316,11 +313,10 @@ Separate work-target development path from production deployment with artifact h
 - ✅ Container delivery via docker cp working
 - ✅ Prompt auto-generation functional
 - ✅ Cache hit rate >90%
-- ✅ Legacy endpoint marked deprecated (backward compatible)
+- ✅ Legacy template-based endpoint removed
 
 **Remaining Work (Non-Blocking):**
 - Frontend task submission form component (can use API directly until UI created)
-- Auto-detection preview in UI (API provides this already)
 - V3 template code cleanup (deprecated but not yet removed)
 - Full end-to-end integration testing
 
@@ -608,7 +604,7 @@ P2 (Autonomy Features)                         │
 ## Related Documents
 
 - **Master Roadmap:** APP_MONITOR_CAPABILITY_ROADMAP.md
-- **Stabilization:** APP_MONITOR_STABILIZATION_PLAN.md
+- **Stabilization:** Completed 2025-11-14 (plan deleted per documentation policy)
 - **Prompt Engineering:** BOT_PROMPT_ENGINEERING_V3.md
 - **Production Support:** APP_MONITOR_PRODUCTION_SUPPORT_PLAN.md
 - **Work-Target Paths:** DEV_BOT_WORK_TARGET_PRODUCTION_PLAN.md
