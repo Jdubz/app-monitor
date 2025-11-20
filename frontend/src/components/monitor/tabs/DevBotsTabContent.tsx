@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react';
-import { Activity, Bot, Settings2, Server, Clock, Zap } from 'lucide-react';
+import { Activity, Bot, Settings2, Server, Zap } from 'lucide-react';
 import { useDevBotsStore } from '@/contexts/devBotsStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Dialog,
@@ -35,69 +34,22 @@ export function DevBotsTabContent() {
     workers,
     settings,
     settingsLoading,
-    settingsUpdating,
     settingsUpdateError,
-    updateSettings,
     isLoading,
     refreshStatus,
   } = useDevBotsStore();
 
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
-  const [editMaxWorkers, setEditMaxWorkers] = useState<number | null>(null);
 
   // System metrics
-  const systemStatus = status?.systemStatus ?? 'unknown';
   const workerCount = status?.workerCount ?? 0;
   const maxWorkers = status?.maxWorkers ?? settings?.maxWorkers ?? 0;
   const activeTasks = status?.activeTasks ?? 0;
-  const uptime = status?.uptime ?? 0;
 
-  // Format uptime
-  const formatUptime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    }
-    return `${minutes}m`;
-  };
-
-  // Get system status color
-  const getSystemStatusColor = (status: string) => {
-    switch (status) {
-      case 'running':
-        return 'bg-green-500';
-      case 'stopped':
-        return 'bg-gray-500';
-      case 'error':
-        return 'bg-red-500';
-      default:
-        return 'bg-yellow-500';
-    }
-  };
 
   // Open settings dialog
   const handleOpenSettings = () => {
-    setEditMaxWorkers(settings?.maxWorkers ?? 5);
     setShowSettingsDialog(true);
-  };
-
-  // Save settings
-  const handleSaveSettings = async () => {
-    if (editMaxWorkers === null || editMaxWorkers < 1 || editMaxWorkers > 20) {
-      return;
-    }
-
-    try {
-      await updateSettings({
-        maxWorkers: editMaxWorkers,
-      });
-      setShowSettingsDialog(false);
-    } catch (error) {
-      // Error is already handled by devBotsStore (sets settingsUpdateError)
-      // Just log for debugging
-      console.error('Failed to update settings:', error);
-    }
   };
 
   // Convert workers object to array
@@ -172,16 +124,7 @@ export function DevBotsTabContent() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {/* System Status */}
-                <div className="space-y-2">
-                  <div className="text-sm text-muted-foreground">System Status</div>
-                  <div className="flex items-center gap-2">
-                    <div className={cn('w-3 h-3 rounded-full', getSystemStatusColor(systemStatus))} />
-                    <span className="font-semibold capitalize">{systemStatus}</span>
-                  </div>
-                </div>
-
+              <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
                 {/* Active Workers */}
                 <div className="space-y-2">
                   <div className="text-sm text-muted-foreground">Active Workers</div>
@@ -201,33 +144,9 @@ export function DevBotsTabContent() {
                     <span className="font-semibold">{activeTasks}</span>
                   </div>
                 </div>
-
-                {/* Uptime */}
-                <div className="space-y-2">
-                  <div className="text-sm text-muted-foreground">Uptime</div>
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-semibold">{formatUptime(uptime)}</span>
-                  </div>
-                </div>
               </div>
             </CardContent>
           </Card>
-
-          {/* Quick Settings Display */}
-          {settings && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base">Configuration</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-sm">
-                  <span className="text-muted-foreground">Max Workers: </span>
-                  <span className="font-semibold">{settings.maxWorkers}</span>
-                </div>
-              </CardContent>
-            </Card>
-          )}
 
           {/* Worker Status List */}
           <Card>
@@ -308,45 +227,38 @@ export function DevBotsTabContent() {
         </div>
       </div>
 
-      {/* Settings Dialog */}
+      {/* Settings Dialog - Read-Only */}
       <Dialog open={showSettingsDialog} onOpenChange={setShowSettingsDialog}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>Dev-Bots Settings</DialogTitle>
             <DialogDescription>
-              Configure system-wide settings for the dev-bots infrastructure.
+              Current system configuration. Settings are read from environment variables.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-            {/* Max Workers */}
+            {/* Max Workers - Read Only */}
             <div className="grid gap-2">
-              <Label htmlFor="maxWorkers">Maximum Workers</Label>
-              <Input
-                id="maxWorkers"
-                type="number"
-                min={1}
-                max={20}
-                value={editMaxWorkers ?? 5}
-                onChange={(e) => setEditMaxWorkers(parseInt(e.target.value, 10))}
-              />
+              <Label>Maximum Workers</Label>
+              <div className="flex items-center gap-3 rounded-md border border-input bg-muted px-3 py-2">
+                <span className="text-2xl font-bold">{settings?.maxWorkers ?? maxWorkers}</span>
+                <span className="text-sm text-muted-foreground">concurrent workers</span>
+              </div>
               <p className="text-xs text-muted-foreground">
-                Maximum number of concurrent dev-bot workers (1-20)
+                This value is configured via the <code className="text-xs bg-muted px-1 py-0.5 rounded">MAX_DEV_BOTS</code> environment variable.
+                To change this setting, update the environment variable and restart the service.
               </p>
             </div>
+
             {settingsUpdateError && (
-              <p className="text-sm text-destructive">{settingsUpdateError}</p>
+              <div className="rounded-md bg-amber-50 border border-amber-200 p-3">
+                <p className="text-sm text-amber-900">{settingsUpdateError}</p>
+              </div>
             )}
           </div>
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => setShowSettingsDialog(false)}
-              disabled={settingsUpdating}
-            >
-              Cancel
-            </Button>
-            <Button onClick={handleSaveSettings} disabled={settingsUpdating}>
-              {settingsUpdating ? 'Saving...' : 'Save Changes'}
+            <Button onClick={() => setShowSettingsDialog(false)}>
+              Close
             </Button>
           </DialogFooter>
         </DialogContent>
