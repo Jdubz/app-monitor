@@ -909,11 +909,20 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         resumedBy.trim().length === 0
       ) {
         return sendError(res, 'Invalid request', 400, {
-          message: 'resumedBy is required and must be a non-empty string'
+          message: 'resumedBy is required and must be a non-empty string (whitespace-only values are not allowed)'
         });
       }
 
       const normalizedResumedBy = resumedBy.trim();
+
+      // Check if task exists before resuming
+      const task = devBotsManager.getTaskQueue().getTask(taskId);
+      if (!task) {
+        return sendError(res, 'Task not found', 404, {
+          message: `Task ${taskId} does not exist`,
+          details: { taskId }
+        });
+      }
 
       // Resume the task
       devBotsManager.getTaskQueue().resumeTask(taskId, normalizedResumedBy);

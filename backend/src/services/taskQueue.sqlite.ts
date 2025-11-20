@@ -1280,6 +1280,22 @@ export class TaskQueueService {
         fields.push('phase_payload = ?');
         values.push(updates.phase_payload);
       }
+      if (updates.chain_status !== undefined) {
+        fields.push('chain_status = ?');
+        values.push(updates.chain_status);
+      }
+      if (updates.blocked_reason !== undefined) {
+        fields.push('blocked_reason = ?');
+        values.push(updates.blocked_reason);
+      }
+      if (updates.blocked_at !== undefined) {
+        fields.push('blocked_at = ?');
+        values.push(updates.blocked_at);
+      }
+      if (updates.blocked_by !== undefined) {
+        fields.push('blocked_by = ?');
+        values.push(updates.blocked_by);
+      }
 
       if (fields.length === 0) {
         return task; // No updates needed

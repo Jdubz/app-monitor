@@ -56,16 +56,7 @@ export function TaskQueuePanel() {
       (['pending', 'active', 'blocked', 'completed', 'failed'] as QueueBucket[]).map((bucket) => ({
         bucket,
         label: bucketCopy[bucket].label,
-        count:
-          bucket === 'failed'
-            ? counts?.failed ?? 0
-            : bucket === 'blocked'
-              ? counts?.blocked ?? 0
-              : bucket === 'active'
-                ? counts?.active ?? 0
-                : bucket === 'completed'
-                  ? counts?.completed ?? 0
-                  : counts?.pending ?? 0,
+        count: counts?.[bucket] ?? 0,
       })),
     [counts],
   );

@@ -1067,7 +1067,11 @@ export class EphemeralWorkerService {
         category: 'phase',
         action: 'git_branch_extraction_failed',
         message: `Failed to extract git branch: ${error instanceof Error ? error.message : String(error)}`,
-        details: { containerId, error }
+        details: {
+          containerId,
+          error: error instanceof Error ? error.message : String(error),
+          stack: error instanceof Error ? error.stack : undefined
+        }
       });
       return undefined;
     }
