@@ -138,7 +138,6 @@ export async function createApp(options: CreateAppOptions = {}) {
     const devBotsDeps = overrides.devBotsDependencies ?? await createDevBotsManagerDependencies();
     devBotsManager = new DevBotsManager(devBotsDeps);
 
-    // Start the MCP server in non-test environments
     const isTestEnv = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
     if (!isTestEnv) {
         startMcpServer({
@@ -146,6 +145,7 @@ export async function createApp(options: CreateAppOptions = {}) {
             services: {
                 devBotsManager,
             },
+            enablePlanTools: process.env.APP_MONITOR_MCP_ENABLE_PLAN_TOOLS === 'true',
         }).catch(error => {
             logger.error({
                 category: 'system',
