@@ -167,33 +167,17 @@ export function DevBotsStoreProvider({ children }: DevBotsStoreProviderProps) {
     void fetchSettings();
   }, [refreshStatus, fetchSettings]);
 
-  // Handle SSE events
-  const handleSSEEvent = useCallback((event: MessageEvent) => {
-    try {
-      const data = JSON.parse(event.data);
-
-      // Skip initial connection message
-      if (data.type === 'connected') {
-        return;
-      }
-
-      // Handle task events - refresh status on any task change
-      if (data.type?.startsWith('task:')) {
-        void refreshStatus();
-      }
-
-      // Handle system events - refresh status on system changes
-      if (data.type?.startsWith('system:')) {
-        void refreshStatus();
-      }
-
-      // Note: docker:error and docker:warning events are logged but don't trigger refresh
-    } catch (error) {
-      console.error('[DevBotsStore] Failed to parse SSE event:', error);
-    }
+  // Handle SSE task events (refreshes status on any task change)
+  const handleTaskEvent = useCallback((_data: unknown) => {
+    void refreshStatus();
   }, [refreshStatus]);
 
-  useSSE(handleSSEEvent);
+  // Handle SSE system events (refreshes status on system changes)
+  const handleSystemEvent = useCallback((_data: unknown) => {
+    void refreshStatus();
+  }, [refreshStatus]);
+
+  useSSE(handleTaskEvent, handleSystemEvent);
 
   const fetchTaskDetail = useCallback(
     async (taskId: string | null) => {

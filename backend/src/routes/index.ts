@@ -13,7 +13,7 @@ import { DevBotsManager } from '../services/devBotsManager.js';
 import type { ConnectionManager } from '../services/connectionManager.js';
 import type { TerminalService } from '../services/TerminalService.js';
 import type { HealthCheckApiResponse } from '@app-monitor/api-contracts';
-import { requireApiKey } from '../middleware/auth.js';
+import { requireApiKey, requireApiKeySSE } from '../middleware/auth.js';
 import { logger } from '../utils/logger.js';
 
 import { createSocketRoutes } from './socket-task.routes.js';
@@ -110,7 +110,7 @@ export function createApiRouter(deps: {
 
   if (deps.devBotsManager) {
     router.use('/dev-bots', requireApiKey, createDevBotsRouter(deps.devBotsManager));
-    router.use('/sse', requireApiKey, createSSERoutes(deps.devBotsManager));
+    router.use('/sse', requireApiKeySSE, createSSERoutes(deps.devBotsManager));
   }
 
   router.use('/token-tracking', requireApiKey, tokenTrackingRoutes);

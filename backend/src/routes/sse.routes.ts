@@ -11,7 +11,53 @@ import { logger } from '../utils/logger.js';
 
 export function createSSERoutes(devBotsManager: DevBotsManager): Router {
   const router = Router();
-  const clients: Response[] = [];
+  const clients = new Set<Response>();
+
+  /**
+   * Broadcast event to all connected SSE clients
+   */
+  function broadcast(event: string, data: unknown) {
+    const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
+
+    // Create snapshot to avoid iteration issues during concurrent broadcasts
+    const clientsSnapshot = Array.from(clients);
+
+    for (const client of clientsSnapshot) {
+      try {
+        client.write(message);
+      } catch (error) {
+        logger.warn({
+          category: 'sse',
+          action: 'broadcast_failed',
+          message: 'Failed to send SSE message to client',
+          error,
+        });
+        // Remove failed client
+        clients.delete(client);
+      }
+    }
+  }
+
+  // Wire up DevBotsManager events to SSE broadcasts
+  const taskAddedHandler = (task: unknown) => broadcast('task:added', task);
+  const taskAssignedHandler = (task: unknown) => broadcast('task:assigned', task);
+  const taskStartedHandler = (task: unknown) => broadcast('task:started', task);
+  const taskCompletedHandler = (task: unknown) => broadcast('task:completed', task);
+  const taskFailedHandler = (task: unknown) => broadcast('task:failed', task);
+  const systemStatusHandler = (status: unknown) => broadcast('system:status', status);
+  const healthChangeHandler = (isHealthy: unknown) => broadcast('system:health', { isHealthy });
+  const dockerErrorHandler = (error: unknown) => broadcast('docker:error', error);
+  const dockerWarningHandler = (warning: unknown) => broadcast('docker:warning', warning);
+
+  devBotsManager.on('taskAdded', taskAddedHandler);
+  devBotsManager.on('taskAssigned', taskAssignedHandler);
+  devBotsManager.on('taskStarted', taskStartedHandler);
+  devBotsManager.on('taskCompleted', taskCompletedHandler);
+  devBotsManager.on('taskFailed', taskFailedHandler);
+  devBotsManager.on('systemStatusChange', systemStatusHandler);
+  devBotsManager.on('coordinatorHealthChange', healthChangeHandler);
+  devBotsManager.on('dockerError', dockerErrorHandler);
+  devBotsManager.on('dockerWarning', dockerWarningHandler);
 
   /**
    * SSE endpoint: /api/sse/events
@@ -31,94 +77,22 @@ export function createSSERoutes(devBotsManager: DevBotsManager): Router {
       category: 'sse',
       action: 'client_connected',
       message: 'SSE client connected',
-      details: { clientCount: clients.length + 1 },
+      details: { clientCount: clients.size + 1 },
     });
 
-    // Add client to list
-    clients.push(res);
+    // Add client to set
+    clients.add(res);
 
     // Remove client on disconnect
     req.on('close', () => {
-      const index = clients.indexOf(res);
-      if (index !== -1) {
-        clients.splice(index, 1);
-        logger.info({
-          category: 'sse',
-          action: 'client_disconnected',
-          message: 'SSE client disconnected',
-          details: { clientCount: clients.length },
-        });
-      }
+      clients.delete(res);
+      logger.info({
+        category: 'sse',
+        action: 'client_disconnected',
+        message: 'SSE client disconnected',
+        details: { clientCount: clients.size },
+      });
     });
-  });
-
-  /**
-   * Broadcast event to all connected SSE clients
-   */
-  function broadcast(event: string, data: unknown) {
-    const message = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-
-    // Remove failed clients
-    const failedClients: Response[] = [];
-
-    clients.forEach(client => {
-      try {
-        client.write(message);
-      } catch (error) {
-        logger.warn({
-          category: 'sse',
-          action: 'broadcast_failed',
-          message: 'Failed to send SSE message to client',
-          error,
-        });
-        failedClients.push(client);
-      }
-    });
-
-    // Clean up failed clients
-    failedClients.forEach(failedClient => {
-      const index = clients.indexOf(failedClient);
-      if (index !== -1) {
-        clients.splice(index, 1);
-      }
-    });
-  }
-
-  // Wire up DevBotsManager events to SSE broadcasts
-  devBotsManager.on('taskAdded', (task) => {
-    broadcast('task:added', task);
-  });
-
-  devBotsManager.on('taskAssigned', (task) => {
-    broadcast('task:assigned', task);
-  });
-
-  devBotsManager.on('taskStarted', (task) => {
-    broadcast('task:started', task);
-  });
-
-  devBotsManager.on('taskCompleted', (task) => {
-    broadcast('task:completed', task);
-  });
-
-  devBotsManager.on('taskFailed', (task) => {
-    broadcast('task:failed', task);
-  });
-
-  devBotsManager.on('systemStatusChange', (status) => {
-    broadcast('system:status', status);
-  });
-
-  devBotsManager.on('coordinatorHealthChange', (isHealthy) => {
-    broadcast('system:health', { isHealthy });
-  });
-
-  devBotsManager.on('dockerError', (error) => {
-    broadcast('docker:error', error);
-  });
-
-  devBotsManager.on('dockerWarning', (warning) => {
-    broadcast('docker:warning', warning);
   });
 
   return router;
