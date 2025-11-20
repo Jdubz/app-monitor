@@ -260,9 +260,12 @@ main() {
         mv "${RELEASE_DIR}/package.json" "${RELEASE_DIR}/package.json.bak"
     fi
 
-    # Install dependencies with validation (includes devDependencies needed for build)
+    # Install dependencies with validation
+    # Build-time dependencies (TypeScript, @types/*) are in 'dependencies' to support
+    # production builds. Using --omit=dev is safe because all build tools are now
+    # production dependencies.
     log_info "Installing backend dependencies..."
-    if ! npm ci --workspaces=false 2>&1 | tee /tmp/npm-ci-backend.log; then
+    if ! npm ci --omit=dev --workspaces=false 2>&1 | tee /tmp/npm-ci-backend.log; then
         log_error "Backend npm ci failed"
         log_error "Last 10 lines of npm output:"
         tail -10 /tmp/npm-ci-backend.log
@@ -319,10 +322,10 @@ main() {
         exit 1
     fi
 
-    # Note: We keep devDependencies installed to avoid npm prune issues
-    # The backend runs compiled JS from dist/, so devDependencies don't affect runtime
-    # This simplifies deployment and avoids historical issues with npm prune removing
-    # production dependencies incorrectly (e.g., @modelcontextprotocol/sdk)
+    # Note: Build dependencies (TypeScript, @types/*) are in 'dependencies' not 'devDependencies'
+    # This allows using npm ci --omit=dev while still having all build tools available.
+    # The alternative (install all deps, build, then prune) has historically caused issues
+    # with npm prune incorrectly removing production dependencies (see commits: 14681dc, 391a294)
 
     # Final verification - check filesystem directly to avoid workspace resolution issues
     # Reuses CRITICAL_DEPS array defined earlier for consistency
