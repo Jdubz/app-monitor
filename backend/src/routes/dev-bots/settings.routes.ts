@@ -10,6 +10,7 @@ import { Router, Request, Response } from 'express';
 import type { DevBotsManager } from '../../services/devBotsManager.js';
 import { logger } from '../../utils/logger.js';
 import { validateSettingsUpdatePayload } from '../../utils/settingsValidation.js';
+import { config } from '../../config.js';
 import type {
   DevBotsSettings,
   DevBotsSettingsResponse,
@@ -24,14 +25,13 @@ export function createSettingsRoutes(_devBotsManager: DevBotsManager): Router {
 
   /**
    * GET /settings
-   * Get current Dev-Bots settings
+   * Get current Dev-Bots settings from config
    */
   router.get('/settings', (_req: Request, res: Response) => {
     try {
-      // For now, return default settings
-      // TODO: Integrate with actual settings storage when implemented
+      // Read from config (which reads from MAX_DEV_BOTS env var, default 3)
       const settings: DevBotsSettings = {
-        maxWorkers: 5,
+        maxWorkers: config.devBots.maxWorkers,
         updatedAt: new Date().toISOString(),
       };
 
@@ -56,6 +56,10 @@ export function createSettingsRoutes(_devBotsManager: DevBotsManager): Router {
   /**
    * PUT /settings
    * Update Dev-Bots settings
+   *
+   * NOTE: Settings are currently read-only from environment variables.
+   * This endpoint validates the request but does not persist changes.
+   * To change maxWorkers, update the MAX_DEV_BOTS environment variable and restart the service.
    */
   router.put('/settings', (req: Request, res: Response) => {
     // Validate input
@@ -75,36 +79,19 @@ export function createSettingsRoutes(_devBotsManager: DevBotsManager): Router {
     }
 
     try {
-      const payload = req.body as Partial<DevBotsSettings>;
-      
-      // Get current settings (for now, using defaults)
-      // TODO: Integrate with actual settings storage when implemented
-      const currentSettings: DevBotsSettings = {
-        maxWorkers: 5,
-        updatedAt: new Date().toISOString(),
+      // Settings are read-only from config/environment
+      // Return current settings with error message
+      const errorResponse: ApiError = {
+        success: false,
+        error: 'not_implemented',
+        message: 'Settings updates are not yet implemented. Settings are currently read from environment variables (MAX_DEV_BOTS). To change maxWorkers, update the environment variable and restart the service.',
       };
-
-      // Build updated settings with only validated fields
-      const updatedSettings: DevBotsSettings = {
-        ...currentSettings,
-        ...(payload.maxWorkers !== undefined && { maxWorkers: payload.maxWorkers }),
-        updatedAt: new Date().toISOString(),
-      };
-
-      logger.info({
-        category: 'api',
-        action: 'update_settings',
-        message: 'Dev-Bots settings updated',
-        details: { settings: updatedSettings }
-      });
-
-      const response: DevBotsSettingsResponse = { success: true, data: updatedSettings };
-      res.json(response);
+      res.status(501).json(errorResponse);
     } catch (error) {
       logger.error({
         category: 'api',
         action: 'update_settings_failed',
-        message: 'Failed to update Dev-Bots settings',
+        message: 'Failed to process settings update request',
         error,
         details: { payload: req.body }
       });
