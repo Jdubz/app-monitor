@@ -261,8 +261,9 @@ main() {
     fi
 
     # Install dependencies with validation (includes devDependencies needed for build)
+    # Explicitly set NODE_ENV to ensure devDependencies are installed
     log_info "Installing backend dependencies..."
-    if ! npm ci --workspaces=false 2>&1 | tee /tmp/npm-ci-backend.log; then
+    if ! NODE_ENV=development npm ci --workspaces=false 2>&1 | tee /tmp/npm-ci-backend.log; then
         log_error "Backend npm ci failed"
         log_error "Last 10 lines of npm output:"
         tail -10 /tmp/npm-ci-backend.log
