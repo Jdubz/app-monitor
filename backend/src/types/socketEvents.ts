@@ -94,26 +94,9 @@ export interface ServerToClientEvents {
   'script:failed': (execution: Record<string, unknown>) => void;
   'script:killed': (execution: Record<string, unknown>) => void;
 
-  // Dev-Bots events
-  'claude:taskAdded': (task: Record<string, unknown>) => void;
-  'claude:taskAssigned': (task: Record<string, unknown>) => void;
-  'claude:taskStarted': (task: Record<string, unknown>) => void;
-  'claude:taskCompleted': (task: Record<string, unknown>) => void;
-  'claude:taskFailed': (task: Record<string, unknown>) => void;
-  'claude:systemStatusChange': (status: Record<string, unknown>) => void;
-  'claude:coordinatorHealthChange': (isHealthy: boolean) => void;
-  'claude:dockerError': (error: Error | { message: string; code?: string }) => void;
-  'claude:dockerWarning': (warning: { message: string; details?: unknown }) => void;
-  'claude:workerError': (error: Error | { message: string; code?: string }) => void;
-
-  // Task events
-  'task:created': (task: Record<string, unknown>) => void;
-  'task:updated': (task: Record<string, unknown>) => void;
-  'task:deleted': (data: { taskId: string }) => void;
-  'task:assigned': (task: Record<string, unknown>) => void;
-  'task:started': (task: Record<string, unknown>) => void;
-  'task:completed': (task: Record<string, unknown>) => void;
-  'task:failed': (task: Record<string, unknown>) => void;
+  // NOTE: Dev-Bots task/system events migrated to SSE (Server-Sent Events)
+  // See: backend/src/routes/sse.routes.ts for event definitions
+  // Socket.IO retained only for bidirectional communication (terminal, logs)
 
   // Interactive terminal events
   'terminal:joined': (data: { sessionId: string }) => void;
