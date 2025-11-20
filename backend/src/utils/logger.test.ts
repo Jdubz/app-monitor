@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { logger } from './logger'
 import * as fs from 'fs'
 import * as path from 'path'
+import { resolveLogsDir } from './repoPaths'
 
 describe('Logger', () => {
-  const testLogFile = path.join(__dirname, '../../data/logs/dev-monitor-backend.log')
+  const testLogFile = path.join(resolveLogsDir(__dirname), 'dev-monitor-backend.log')
 
   beforeEach(() => {
     // Clear any existing log file

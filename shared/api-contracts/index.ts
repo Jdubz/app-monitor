@@ -130,7 +130,6 @@ export interface TaskSubmissionPayload {
   chainId?: string;
   
   // Advanced (rarely used)
-  assignedAgent?: string;
   priority?: number;
 }
 

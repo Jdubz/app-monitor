@@ -2,7 +2,7 @@ import * as crypto from 'crypto';
 import { logger } from '../utils/logger.js';
 import { determineRiskLevel } from '../utils/riskAssessment.js';
 import { mapTaskType } from '../utils/taskTypeMapper.js';
-import { TaskQueueService, Task } from './taskQueue.sqlite.js';
+import { TaskQueueService, Task, AUTO_ASSIGNED_AGENT } from './taskQueue.sqlite.js';
 import { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js';
 import { EnhancedTaskData } from './taskMetadataFields.js';
 import { ContextBundleGenerator } from './context/index.js';
@@ -35,7 +35,6 @@ export interface SimpleTaskData {
   files?: string[];
   dependencies?: string[];
   project?: string;
-  assignedAgent?: string;
   notes?: string;
   priority?: number;
   metadata?: {
@@ -172,7 +171,7 @@ export class TaskCreationService {
     logger.info({
       category: 'process',
       action: 'task_added',
-      message: `Task added: ${task.id} - ${normalizedData.title} (Agent: ${normalizedData.assignedAgent || 'auto-assign'})`,
+      message: `Task added: ${task.id} - ${normalizedData.title} (agent will be auto-selected)`,
       details: {
         hasContext: !!contextBundle,
         contextProfiles: contextBundle?.metadata.profiles
@@ -193,7 +192,6 @@ export class TaskCreationService {
       documentation: ('documentation' in taskData && taskData.documentation) || '',
       notes: ('notes' in taskData && taskData.notes) || '',
       project: ('project' in taskData && taskData.project) || 'dev-monitor',
-      assignedAgent: ('assignedAgent' in taskData && taskData.assignedAgent) || 'backend-specialist',
       files: ('files' in taskData && taskData.files) || [],
       dependencies: ('dependencies' in taskData && taskData.dependencies) || [],
       acceptanceCriteria: this.normalizeAcceptanceCriteria(taskData),
@@ -368,7 +366,7 @@ export class TaskCreationService {
       description: normalizedData.description,
       documentation: normalizedData.documentation,
       notes: normalizedData.notes,
-      assigned_agent: normalizedData.assignedAgent,
+      assigned_agent: AUTO_ASSIGNED_AGENT,
       priority: ('priority' in originalData && originalData.priority !== undefined)
         ? originalData.priority
         : 5,

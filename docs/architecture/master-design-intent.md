@@ -3,7 +3,7 @@
 **Purpose:** Quick onboarding for new developers - the design philosophy and high-level restrictions that guide all decision-making.
 
 
-**Last Updated:** 2025-11-14
+**Last Updated:** 2025-11-20
 
 ---
 ## Core Philosophy
@@ -48,6 +48,11 @@
 - **✅ DO**: Serve responses directly from the database/service layer each request
 - **❌ NEVER**: Introduce HTTP caches, memoization layers, or stale-read optimizations
 - **WHY**: Server-side caching is disabled to keep behavior deterministic across blue/green nodes
+
+### Log Access
+- **✅ DO**: Write every production log file to `/opt/app-monitor/shared/logs/` and read artifacts directly from disk
+- **❌ NEVER**: Add HTTP log streaming endpoints or write logs inside release directories (they disappear on deploy)
+- **WHY**: Blue/green releases swap entire application directories; the shared logs mount is the only durable surface
 
 ### Chain Concurrency Control
 - **✅ DO**: Limit concurrent *chains* (default: 3), block new implementations until chains complete

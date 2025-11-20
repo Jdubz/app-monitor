@@ -30,9 +30,11 @@ Content-Type: application/json
 }
 ```
 
+> ⚠️ Agent/personality inputs are intentionally unsupported. The agent selector chooses the correct provider right before execution based on task metadata.
+
 ## Optional Overrides
 
-Use these ONLY if auto-detection fails or you want explicit control:
+Use these ONLY if auto-detection fails or you want explicit control (agent selection is always automatic—there is no manual agent/personality input):
 
 ```json
 {
@@ -45,8 +47,7 @@ Use these ONLY if auto-detection fails or you want explicit control:
   "riskLevel": "medium",  // minimal | low | medium | high
   "contextProfiles": ["implementation-patterns", "fix-debugging"],
   "desiredOutputs": ["patch", "verification-log", "unit-tests"],
-  "priority": 5,
-  "assignedAgent": "claude-sonnet"
+  "priority": 5
 }
 ```
 
@@ -158,6 +159,7 @@ Once you submit a task, the system:
 4. **Assembles Prompt** with investigation steps, constraints, checklists
 5. **Launches Container** with context files available
 6. **Tracks Execution** with metadata for debugging
+7. **Assigns Agent** via the centralized selector when the task is dequeued so the chosen personality/provider is persisted automatically
 
 ## Context Files Available to Bots
 

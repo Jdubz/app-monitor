@@ -114,6 +114,11 @@ export class WorkerLifecycleService {
     return row ?? null;
   }
 
+  updateWorkerAgentForTask(taskId: string, agentId: string): void {
+    const stmt = this.db.prepare('UPDATE workers SET agent_id = ? WHERE current_task_id = ?');
+    stmt.run(agentId, taskId);
+  }
+
   /**
    * Get all active workers
    */

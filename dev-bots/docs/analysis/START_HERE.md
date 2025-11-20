@@ -108,7 +108,7 @@ ALWAYS:
 - acceptanceCriteria: what qualifies as complete
 - status: pending|assigned|active|completed|failed
 - createdAt: ISO timestamp
-- assignedAgent: agent personality ID
+- assignedAgent: auto-populated agent personality (defaults to 'auto-select' until runtime assignment)
 ```
 
 ### Recommended Task Fields

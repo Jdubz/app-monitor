@@ -35,12 +35,7 @@ export const config = {
 
   // Automatic Failure Recovery - ALWAYS ENABLED IN PRODUCTION
   recovery: {
-    // Recovery is always enabled by default - can be disabled for debugging
-    enabled: process.env.ENABLE_AUTO_RECOVERY !== 'false',  // Default true, can be disabled
-
-    // Dry run mode disabled by default - can be enabled for testing
-    dryRun: process.env.RECOVERY_DRY_RUN === 'true',  // Default false, can be enabled for testing
-
+    // Recovery is always on; feature flags/dry-run modes are forbidden per master design intent
     // Maximum concurrent repair bots (cleanup + followup) to prevent resource exhaustion
     maxConcurrentRepairBots: parseInt(process.env.MAX_CONCURRENT_REPAIR_BOTS || '1', 10),
 

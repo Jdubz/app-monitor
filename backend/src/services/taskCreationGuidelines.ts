@@ -50,8 +50,7 @@ const BASE_REQUIRED_FIELDS = ensureTaskMetadataFieldKeys([
   'description',
   'acceptanceCriteria',
   'validationSteps',
-  'successMetrics',
-  'assignedAgent'
+  'successMetrics'
 ] as const);
 
 const BASE_OPTIONAL_FIELDS = ensureTaskMetadataFieldKeys([
@@ -100,7 +99,6 @@ const GUIDELINE_FIELD_DEFINITIONS: Readonly<Record<TaskType, GuidelineFieldSet>>
     optional: ensureTaskMetadataFieldKeys([
       ...BASE_OPTIONAL_FIELDS,
       'successMetrics',
-      'assignedAgent',
       'testingRequirements',
       'rollbackPlan'
     ] as const)
@@ -114,8 +112,7 @@ const GUIDELINE_FIELD_DEFINITIONS: Readonly<Record<TaskType, GuidelineFieldSet>>
     optional: ensureTaskMetadataFieldKeys([
       ...BASE_OPTIONAL_FIELDS,
       'validationSteps',
-      'testingRequirements',
-      'assignedAgent'
+      'testingRequirements'
     ] as const)
   },
   [TASK_TYPES.ANALYSIS]: {
@@ -128,7 +125,6 @@ const GUIDELINE_FIELD_DEFINITIONS: Readonly<Record<TaskType, GuidelineFieldSet>>
       ...BASE_OPTIONAL_FIELDS,
       'acceptanceCriteria',
       'validationSteps',
-      'assignedAgent',
       'architectureReferences'
     ] as const)
   }
@@ -562,20 +558,6 @@ export class TaskCreationGuidelinesManager {
         severity: 'error'
       },
 
-      // Agent assignment validation
-      {
-        field: 'assignedAgent',
-        rule: 'required',
-        message: 'Assigned agent is required',
-        severity: 'error'
-      },
-      {
-        field: 'assignedAgent',
-        rule: 'validAgent',
-        message: 'Assigned agent must be a valid agent personality',
-        severity: 'error'
-      },
-
       // Effort estimation validation
       {
         field: 'estimatedEffort',
@@ -768,8 +750,6 @@ export class TaskCreationGuidelinesManager {
         return typeof value === 'string' && value.includes(',') ? rule.severity : null;
       case 'validProject':
         return typeof value === 'string' && !this.validProjects.includes(value) ? rule.severity : null;
-      case 'validAgent':
-        return typeof value === 'string' && !this.validAgents.includes(value) ? rule.severity : null;
       default:
         return null;
     }

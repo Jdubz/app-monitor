@@ -29,14 +29,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as readline from 'readline';
 import { fileURLToPath } from 'url';
+import { resolveLogsDir } from './repoPaths.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Centralized log directory - same location for dev and production
-// Development: <repo-root>/backend/data/logs
-// Production: /opt/app-monitor/shared/backend/data/logs
-const LOGS_DIR = process.env.LOGS_DIR || path.resolve(__dirname, '../../data/logs');
+const LOGS_DIR = resolveLogsDir(__dirname);
 
 type LogSeverity = 'DEBUG' | 'INFO' | 'WARNING' | 'ERROR';
 

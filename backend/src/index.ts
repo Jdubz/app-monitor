@@ -6,16 +6,22 @@ import { getDatabase } from './services/database.js';
 import { ensureSingleInstance } from './utils/singleInstance.js';
 
 // Global error handlers to catch crashes
+const exitOnFatalError = process.env.NODE_ENV !== 'test';
+
 process.on('uncaughtException', (error) => {
   console.error('❌ Uncaught Exception:', error);
   console.error('Stack:', error.stack);
-  process.exit(1);
+  if (exitOnFatalError) {
+    process.exit(1);
+  }
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('❌ Unhandled Promise Rejection at:', promise);
   console.error('Reason:', reason);
-  process.exit(1);
+  if (exitOnFatalError) {
+    process.exit(1);
+  }
 });
 
 // Ensure only one instance runs on this port (prevents duplicate process issues)

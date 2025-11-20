@@ -19,7 +19,7 @@ import { ScopeControlService } from './scopeControl.service.js';
 import { EphemeralWorkerService } from './ephemeralWorker.service.js';
 import { AgentCliCommandBuilder, type AgentCliType } from './agentCliCommandBuilder.js';
 import { RecoveryAgentService } from './recoveryAgent.service.js';
-import { resolveArtifactsDir } from '../utils/repoPaths.js';
+import { resolveArtifactsDir, resolveLogsDir } from '../utils/repoPaths.js';
 import { TaskExecutionService } from './taskExecution.service.js';
 import { PRWorkflowOrchestrator } from './prWorkflowOrchestrator.service.js';
 import { TaskCompletionService } from './taskCompletion.service.js';
@@ -52,12 +52,12 @@ export async function createDevBotsManagerDependencies(
   const docker = dockerManager.getDocker();
 
   const agentEligibilityService = new AgentEligibilityServiceImpl();
-  const agentSelector = new AgentSelector(undefined, agentEligibilityService);
+  const agentSelector = new AgentSelector(agentEligibilityService);
 
   // Initialize SQLite task queue - use same database as DevBotsDatabase
   const { config: appConfig } = await import('../config.js');
   const taskQueueDbPath = config.taskQueueDbPath ?? appConfig.databasePath;
-  const taskQueue = new TaskQueueService(taskQueueDbPath, agentSelector);
+  const taskQueue = new TaskQueueService(taskQueueDbPath);
 
   // Register with factory for singleton access
   const { setTaskQueueService } = await import('./taskQueue.factory.js');
@@ -138,7 +138,7 @@ export async function createDevBotsManagerDependencies(
     {
       maxConcurrentWorkers: 2,
       dockerImage: 'dev-bot:latest',
-      logsDirectory: './data/logs',
+      logsDirectory: resolveLogsDir(),
       envPassthroughKeys: [
         'ANTHROPIC_API_KEY',
         'CLAUDE_API_KEY',
@@ -181,10 +181,6 @@ export async function createDevBotsManagerDependencies(
       stuckCheckInterval: 60000,
       absoluteMaxDuration: MS_PER_HOUR,
       artifactsDir: resolveArtifactsDir(),
-      recovery: {
-        enabled: config.recovery?.enabled ?? true,
-        dryRun: config.recovery?.dryRun ?? false
-      }
     }
   );
 

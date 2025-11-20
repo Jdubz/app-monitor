@@ -92,7 +92,6 @@ Content-Type: application/json
     "Must use Firebase Auth",
     "Must support JWT tokens"
   ],
-  "assignedAgent": "backend-specialist",
   "files": ["src/auth.ts"],
   "dependencies": ["firebase-admin"],
   "project": "job-finder-BE",
@@ -108,7 +107,6 @@ Content-Type: application/json
   "title": "Add authentication to dashboard",
   "status": "pending",
   "createdAt": "2025-01-27T10:00:00Z",
-  "assignedAgent": "backend-specialist",
   "project": "job-finder-BE",
   "priority": 5,
   "estimatedEffort": {
