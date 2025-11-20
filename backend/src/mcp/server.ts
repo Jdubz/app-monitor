@@ -5,6 +5,7 @@ import { registerTasksTools } from './tools/tasks.tools.js';
 import { registerBotsTools } from './tools/bots.tools.js';
 import { registerPrsTools } from './tools/prs.tools.js';
 import { registerSystemTools } from './tools/system.tools.js';
+import { validateMcpEnvironment } from './middleware/auth.js';
 import type { DevBotsManager } from '../services/devBotsManager.js';
 
 export interface McpServices {
@@ -46,12 +47,6 @@ export class AppMonitorMcpServer {
 
     console.error('App Monitor MCP Server started');
     console.error(`Database: ${this.db.name}`);
-    console.error(`Tools registered: ${this.getToolCount()}`);
-  }
-
-  private getToolCount(): number {
-    const registry = (this.server as unknown as { tools?: Record<string, unknown> }).tools;
-    return registry ? Object.keys(registry).length : 0;
   }
 }
 
@@ -59,6 +54,9 @@ export async function startMcpServer(options: {
   db: Database.Database;
   services: McpServices;
 }) {
+  // Validate environment variables before starting server
+  validateMcpEnvironment();
+
   const server = new AppMonitorMcpServer({
     db: options.db,
     services: options.services,

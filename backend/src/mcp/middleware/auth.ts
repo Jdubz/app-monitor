@@ -12,6 +12,31 @@ export interface AuthContext {
   env: McpEnv;
 }
 
+/**
+ * Validates MCP environment variables at startup
+ * @throws Error if required environment variables are missing or invalid
+ */
+export function validateMcpEnvironment(): void {
+  const role = process.env.APP_MONITOR_MCP_USER_ROLE;
+  if (!role || (role !== "admin" && role !== "dev-bot")) {
+    throw new Error(
+      "APP_MONITOR_MCP_USER_ROLE must be set to 'admin' or 'dev-bot'. " +
+      `Current value: ${role || '(not set)'}`
+    );
+  }
+
+  // Validate dev-bots cannot run in production
+  const env = resolveEnv();
+  if (role === "dev-bot" && env === "production") {
+    throw new Error(
+      "Dev-bots cannot access production MCP. " +
+      "Set APP_MONITOR_ENV or NODE_ENV to 'development' or 'test'."
+    );
+  }
+
+  console.error(`MCP Auth: role=${role}, env=${env}`);
+}
+
 function resolveRole(): McpRole {
   const role = process.env.APP_MONITOR_MCP_USER_ROLE as McpRole | undefined;
   if (!role || (role !== "admin" && role !== "dev-bot")) {
@@ -61,9 +86,9 @@ export function checkToolPermission(toolName: string, context: AuthContext): voi
 
 export function withAuth<T, R = unknown>(
   toolName: string,
-  handler: (params: T, context: AuthContext, extra?: unknown) => R,
+  handler: (params: T, context: AuthContext, extra?: unknown) => R | Promise<R>,
 ) {
-  return (params: T, extra?: unknown): R => {
+  return (params: T, extra?: unknown): R | Promise<R> => {
     const context = getAuthContext();
     checkToolPermission(toolName, context);
     return handler(params, context, extra);

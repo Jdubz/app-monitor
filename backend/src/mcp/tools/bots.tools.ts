@@ -2,11 +2,13 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import Database from "better-sqlite3";
 import { withAuth } from "../middleware/auth.js";
+import { createJsonResponse, createErrorResponse, createSuccessResponse, withErrorHandling } from "../utils/response.js";
 import { McpServices } from "../server.js";
 import type { DevBotsStatus, WorkerStatus } from "../../services/statusAggregation.service.js";
 
 type BotListActiveParams = {
   include_idle?: boolean;
+  limit?: number;
 };
 
 type BotGetStatusParams = { bot_id: string };
@@ -14,7 +16,6 @@ type BotGetStatusParams = { bot_id: string };
 type BotRecoverParams = {
   bot_id: string;
   reason: string;
-  recovery_strategy?: "auto" | "diagnose" | "requeue" | "abandon";
 };
 
 type BotHeartbeatParams = {
@@ -42,16 +43,22 @@ export function registerBotsTools(
         description: "Lists all active dev-bots.",
         inputSchema: z.object({
             include_idle: z.boolean().optional(),
+            limit: z.number().int().positive().max(100).optional(),
         }),
     },
-    withAuth("bot_list_active", async (params: BotListActiveParams, _context) => {
+    withAuth("bot_list_active", withErrorHandling(async (params: BotListActiveParams) => {
         const status = await getSystemStatus();
         const workers = Object.values(status.workers || {}) as WorkerStatus[];
         const filtered = params.include_idle
             ? workers
             : workers.filter((worker) => worker.status !== "idle");
-        return { content: [{ type: "text", text: JSON.stringify(filtered, null, 2) }] };
-    })
+
+        // Add pagination
+        const limit = Math.min(params.limit ?? 50, 100);
+        const limited = filtered.slice(0, limit);
+
+        return createJsonResponse(limited);
+    }))
   );
 
   server.registerTool(
@@ -63,34 +70,33 @@ export function registerBotsTools(
             bot_id: z.string(),
         }),
     },
-    withAuth("bot_get_status", async (params: BotGetStatusParams, _context) => {
+    withAuth("bot_get_status", withErrorHandling(async (params: BotGetStatusParams) => {
          const status = await getSystemStatus();
          const bot = status.workers?.[params.bot_id];
          if (!bot) {
-             return { isError: true, content: [{ type: "text", text: `Bot not found: ${params.bot_id}` }] };
+             return createErrorResponse(`Bot not found: ${params.bot_id}`);
          }
-         return { content: [{ type: "text", text: JSON.stringify(bot, null, 2) }] };
-    })
+         return createJsonResponse(bot);
+    }))
   );
 
   server.registerTool(
     "bot_recover",
     {
         title: "Recover Bot",
-        description: "(ADMIN ONLY) Recovers a hung dev-bot.",
+        description: "(ADMIN ONLY) Triggers emergency recovery orchestration. Note: Currently triggers system-wide recovery rather than targeting a specific bot.",
         inputSchema: z.object({
             bot_id: z.string(),
             reason: z.string(),
-            recovery_strategy: z.enum(["auto", "diagnose", "requeue", "abandon"]).optional(),
         }),
     },
-    withAuth("bot_recover", async (params: BotRecoverParams, _context) => {
+    withAuth("bot_recover", withErrorHandling(async (params: BotRecoverParams) => {
         if (!devBotsManager.triggerEmergencyRecovery) {
-            return { isError: true, content: [{ type: "text", text: "Recovery orchestration is not available" }] };
+            return createErrorResponse("Recovery orchestration is not available");
         }
         await devBotsManager.triggerEmergencyRecovery();
-        return { content: [{ type: "text", text: `Recovery orchestration triggered (requested bot: ${params.bot_id})` }] };
-    })
+        return createSuccessResponse(`Recovery orchestration triggered (reason: ${params.reason}, mentioned bot: ${params.bot_id})`);
+    }))
   );
 
   server.registerTool(
@@ -102,7 +108,7 @@ export function registerBotsTools(
             alert_threshold_seconds: z.number().optional(),
         }),
     },
-    withAuth("bot_heartbeat_status", async (params: BotHeartbeatParams, _context) => {
+    withAuth("bot_heartbeat_status", withErrorHandling(async (params: BotHeartbeatParams) => {
         const status = await getSystemStatus();
         const now = Date.now();
         const thresholdMs = (params.alert_threshold_seconds ?? 30) * 1000;
@@ -113,7 +119,7 @@ export function registerBotsTools(
             milliseconds_since_last_seen: worker.lastSeen ? now - worker.lastSeen : null,
             needs_attention: worker.lastSeen ? now - worker.lastSeen > thresholdMs : null,
         }));
-        return { content: [{ type: "text", text: JSON.stringify(heartbeat, null, 2) }] };
-    })
+        return createJsonResponse(heartbeat);
+    }))
   );
 }

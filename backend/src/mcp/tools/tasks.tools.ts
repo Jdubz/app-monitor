@@ -1,7 +1,9 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
 import { z } from 'zod';
 import Database from 'better-sqlite3';
-import { withAuth } from '../middleware/auth.js';
+import { withAuth, type AuthContext } from '../middleware/auth.js';
+import { createJsonResponse, createErrorResponse, createSuccessResponse, withErrorHandling } from '../utils/response.js';
+import { logger } from '../../utils/logger.js';
 import type { McpServices } from '../server.js';
 import type { Task, TaskStatus } from '../../services/taskQueue.sqlite.js';
 
@@ -64,7 +66,18 @@ function parseTaskMetadata(task: Task): Record<string, unknown> {
     try {
       return JSON.parse(raw) as Record<string, unknown>;
     } catch (error) {
-      return { corrupted_metadata: raw, parse_error: error instanceof Error ? error.message : String(error) };
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      logger.warn({
+        category: 'mcp',
+        action: 'metadata_parse_error',
+        message: `Failed to parse metadata for task ${task.id}`,
+        details: {
+          taskId: task.id,
+          error: errorMessage,
+          metadata: raw.substring(0, 100), // Log first 100 chars
+        },
+      });
+      return { corrupted_metadata: raw, parse_error: errorMessage };
     }
   }
 
@@ -100,7 +113,7 @@ export function registerTasksTools(
         tags: z.array(z.string().min(1)).optional(),
       }),
     },
-    withAuth('task_create', async (params: TaskCreateParams, _context) => {
+    withAuth('task_create', withErrorHandling(async (params: TaskCreateParams) => {
       const noteFromTags = params.tags?.length ? `Tags: ${params.tags.join(', ')}` : undefined;
       const result = await devBotsManager.addTask({
         type: params.type ?? 'implementation',
@@ -112,15 +125,8 @@ export function registerTasksTools(
         assignedAgent: params.assigned_agent ?? 'claude-sonnet',
       });
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify({ task: result.task, validation: result.validation }, null, 2),
-          },
-        ],
-      };
-    }),
+      return createJsonResponse({ task: result.task, validation: result.validation });
+    })),
   );
 
   server.registerTool(
@@ -132,17 +138,14 @@ export function registerTasksTools(
         task_id: z.string().min(1),
       }),
     },
-    withAuth('task_get', async (params: TaskGetParams, _context) => {
+    withAuth('task_get', withErrorHandling(async (params: TaskGetParams) => {
       const task = taskQueue.getTask(params.task_id);
       if (!task) {
-        return {
-          isError: true,
-          content: [{ type: 'text', text: `Task not found: ${params.task_id}` }],
-        };
+        return createErrorResponse(`Task not found: ${params.task_id}`);
       }
 
-      return { content: [{ type: 'text', text: JSON.stringify(task, null, 2) }] };
-    }),
+      return createJsonResponse(task);
+    })),
   );
 
   server.registerTool(
@@ -152,7 +155,7 @@ export function registerTasksTools(
       description: 'Lists tasks with optional filtering.',
       inputSchema: taskListSchema,
     },
-    withAuth('task_list', async (params: TaskListParams, _context) => {
+    withAuth('task_list', withErrorHandling(async (params: TaskListParams) => {
       const lists = await devBotsManager.getTasks();
       const combined: Task[] = [
         ...lists.pending,
@@ -176,8 +179,8 @@ export function registerTasksTools(
       const limit = Math.min(params.limit ?? 50, 200);
       const limited = filtered.slice(0, limit);
 
-      return { content: [{ type: 'text', text: JSON.stringify(limited, null, 2) }] };
-    }),
+      return createJsonResponse(limited);
+    })),
   );
 
   server.registerTool(
@@ -190,16 +193,11 @@ export function registerTasksTools(
         resumed_by: z.string().optional(),
       }),
     },
-    withAuth('task_unblock', async (params: TaskUnblockParams, context) => {
-      try {
-        const resumedBy = params.resumed_by || process.env.APP_MONITOR_MCP_USER_ID || context.role;
-        taskQueue.resumeTask(params.task_id, resumedBy);
-        return { content: [{ type: 'text', text: `Task ${params.task_id} resumed by ${resumedBy}` }] };
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        return { isError: true, content: [{ type: 'text', text: `Failed to resume task: ${message}` }] };
-      }
-    }),
+    withAuth('task_unblock', withErrorHandling(async (params: TaskUnblockParams, context: AuthContext) => {
+      const resumedBy = params.resumed_by || process.env.APP_MONITOR_MCP_USER_ID || context.role;
+      taskQueue.resumeTask(params.task_id, resumedBy);
+      return createSuccessResponse(`Task ${params.task_id} resumed by ${resumedBy}`);
+    })),
   );
 
   server.registerTool(
@@ -218,10 +216,10 @@ export function registerTasksTools(
         error_details: z.string().optional(),
       }),
     },
-    withAuth('task_report_outcome', async (params: TaskReportOutcomeParams, context) => {
+    withAuth('task_report_outcome', withErrorHandling(async (params: TaskReportOutcomeParams, context: AuthContext) => {
       const task = taskQueue.getTask(params.task_id);
       if (!task) {
-        return { isError: true, content: [{ type: 'text', text: `Task not found: ${params.task_id}` }] };
+        return createErrorResponse(`Task not found: ${params.task_id}`);
       }
 
       const metadata = {
@@ -239,14 +237,7 @@ export function registerTasksTools(
 
       taskQueue.updateTaskMetadata(params.task_id, metadata);
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Outcome recorded for ${params.task_id} (${params.outcome.toUpperCase()})`,
-          },
-        ],
-      };
-    }),
+      return createSuccessResponse(`Outcome recorded for ${params.task_id} (${params.outcome.toUpperCase()})`);
+    })),
   );
 }

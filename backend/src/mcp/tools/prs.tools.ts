@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
 import { z } from 'zod';
 import Database from 'better-sqlite3';
 import { withAuth } from '../middleware/auth.js';
+import { createJsonResponse, createErrorResponse, createSuccessResponse, withErrorHandling } from '../utils/response.js';
 import type { McpServices } from '../server.js';
 import { getPRConditionStateService } from '../../services/prConditionState.service.js';
 
@@ -52,18 +53,11 @@ export function registerPrsTools(
         force: z.boolean().optional(),
       }),
     },
-    withAuth('pr_trigger_evaluation', async (params: PrTriggerParams) => {
+    withAuth('pr_trigger_evaluation', withErrorHandling(async (params: PrTriggerParams) => {
       const eventType = params.force ? 'manual_restart' : 'pull_request_opened';
       await prConditionState.evaluateConditions(params.pr_number, eventType);
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Gate evaluation triggered for PR #${params.pr_number}`,
-          },
-        ],
-      };
-    }),
+      return createSuccessResponse(`Gate evaluation triggered for PR #${params.pr_number}`);
+    })),
   );
 
   server.registerTool(
@@ -75,13 +69,10 @@ export function registerPrsTools(
         pr_number: z.number().int().positive(),
       }),
     },
-    withAuth('pr_get_blocking_issues', async (params: PrBlockingIssuesParams) => {
+    withAuth('pr_get_blocking_issues', withErrorHandling(async (params: PrBlockingIssuesParams) => {
       const state = await prConditionState.getState(params.pr_number);
       if (!state) {
-        return {
-          isError: true,
-          content: [{ type: 'text', text: `PR #${params.pr_number} not found` }],
-        };
+        return createErrorResponse(`PR #${params.pr_number} not found`);
       }
 
       const gateEntries = state.conditions ? Object.entries(state.conditions) : [];
@@ -103,24 +94,13 @@ export function registerPrsTools(
 
       const blocking = gates.filter((gate) => gate.blocking && gate.blockingIssues.length > 0);
 
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(
-              {
-                pr: params.pr_number,
-                merge_eligible: state.merge_eligible ?? false,
-                last_evaluated: state.last_evaluated ?? null,
-                blocking,
-                gates,
-              },
-              null,
-              2,
-            ),
-          },
-        ],
-      };
-    }),
+      return createJsonResponse({
+        pr: params.pr_number,
+        merge_eligible: state.merge_eligible ?? false,
+        last_evaluated: state.last_evaluated ?? null,
+        blocking,
+        gates,
+      });
+    })),
   );
 }

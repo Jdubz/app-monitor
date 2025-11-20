@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { z } from "zod";
 import Database from "better-sqlite3";
 import { withAuth } from "../middleware/auth.js";
+import { createJsonResponse, withErrorHandling } from "../utils/response.js";
 import type { McpServices } from "../server.js";
 
 export function registerSystemTools(
@@ -16,7 +17,7 @@ export function registerSystemTools(
         description: "Provides a comprehensive overview of the system's health.",
         inputSchema: z.object({}),
     },
-    withAuth("system_health", async (_params: Record<string, never>, _context) => {
+    withAuth("system_health", withErrorHandling(async (_params: Record<string, never>) => {
         const health: Record<string, unknown> = {
             status: "healthy",
             database: "connected",
@@ -51,7 +52,7 @@ export function registerSystemTools(
             health.pr = { available: true };
         }
 
-        return { content: [{ type: "text", text: JSON.stringify(health, null, 2) }] };
-    })
+        return createJsonResponse(health);
+    }))
   );
 }
