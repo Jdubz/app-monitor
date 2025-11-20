@@ -67,6 +67,7 @@ function parseTaskMetadata(task: Task): Record<string, unknown> {
       return JSON.parse(raw) as Record<string, unknown>;
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
+      const rawStr = String(raw);
       logger.warn({
         category: 'mcp',
         action: 'metadata_parse_error',
@@ -74,7 +75,7 @@ function parseTaskMetadata(task: Task): Record<string, unknown> {
         details: {
           taskId: task.id,
           error: errorMessage,
-          metadata: raw.substring(0, 100), // Log first 100 chars
+          metadata: rawStr.substring(0, 100), // Log first 100 chars
         },
       });
       return { corrupted_metadata: raw, parse_error: errorMessage };

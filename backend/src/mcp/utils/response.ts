@@ -49,12 +49,12 @@ export function createErrorFromException(error: unknown): McpResponse {
 /**
  * Wraps a tool handler with try-catch and standardized error handling
  */
-export function withErrorHandling<T>(
-  handler: (params: T, ...args: unknown[]) => Promise<McpResponse>
-): (params: T, ...args: unknown[]) => Promise<McpResponse> {
-  return async (params: T, ...args: unknown[]): Promise<McpResponse> => {
+export function withErrorHandling<T, C = unknown>(
+  handler: (params: T, context: C) => Promise<McpResponse>
+): (params: T, context: C) => Promise<McpResponse> {
+  return async (params: T, context: C): Promise<McpResponse> => {
     try {
-      return await handler(params, ...args);
+      return await handler(params, context);
     } catch (error) {
       return createErrorFromException(error);
     }

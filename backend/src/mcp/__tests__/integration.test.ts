@@ -186,7 +186,7 @@ describe('MCP Server Integration', () => {
       const failingHandler = vi.fn().mockRejectedValue(new Error('Handler failed'));
       const wrapped = withErrorHandling(failingHandler);
 
-      const result = await wrapped({ test: 'param' });
+      const result = await wrapped({ test: 'param' }, {});
 
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toBe('Handler failed');
@@ -198,7 +198,7 @@ describe('MCP Server Integration', () => {
       const successHandler = vi.fn().mockResolvedValue(createSuccessResponse('Success'));
       const wrapped = withErrorHandling(successHandler);
 
-      const result = await wrapped({ test: 'param' });
+      const result = await wrapped({ test: 'param' }, {});
 
       expect(result.isError).toBeUndefined();
       expect(result.content[0].text).toBe('Success');
