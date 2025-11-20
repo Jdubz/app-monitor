@@ -234,15 +234,7 @@ The system automatically assigns tasks to agents based on:
    - Historical performance
 
 ### Manual Assignment
-Tasks can be manually assigned to specific agents:
-
-```json
-{
-  "assignedAgent": "backend-specialist",
-  "priority": "high",
-  "notes": "Requires backend expertise"
-}
-```
+Manual assignment is disabled. The agent selector automatically chooses the appropriate personality and provider just before execution based on task metadata.
 
 ## 📊 Agent Performance Metrics
 

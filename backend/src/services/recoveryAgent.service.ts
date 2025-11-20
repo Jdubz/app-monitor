@@ -73,7 +73,7 @@ export class RecoveryAgentService {
   constructor(dependencies: RecoveryAgentDependencies = {}) {
     this.agentSelector =
       dependencies.agentSelector ??
-      new AgentSelector(undefined, new AgentEligibilityServiceImpl());
+      new AgentSelector(new AgentEligibilityServiceImpl());
     this.cliCommandBuilder =
       dependencies.cliCommandBuilder ?? new AgentCliCommandBuilder();
   }
@@ -247,11 +247,12 @@ export class RecoveryAgentService {
       details: { taskId: task.id, containerId, errors: validationResult.errors },
     });
 
-    const cliType: AgentCliType = await selectAgentCliTypeForTask(
+    const selection = await selectAgentCliTypeForTask(
       this.agentSelector,
       task,
       { context: 'recovery' }
     );
+    const cliType: AgentCliType = selection.cliType;
 
     logger.info({
       category: 'recovery',

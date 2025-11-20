@@ -20,28 +20,9 @@ describe('AgentSelector', () => {
       expect(syncSelection.reasoning).toContain('Documentation task');
     });
 
-    it('should respect manual overrides', () => {
-      const selection = selector.selectAgentSync({ preferredAgent: 'gemini' });
-      expect(selection.agent).toBe('gemini');
-    });
   });
 
   describe('selectAgent', () => {
-    describe('Manual Override', () => {
-      it('should respect manual agent preference', async () => {
-        const criteria: AgentSelectionCriteria = {
-          preferredAgent: 'codex',
-          taskCategory: 'implementation' // Would normally select Claude
-        };
-
-        const result = await selector.selectAgent(criteria);
-
-        expect(result.agent).toBe('codex');
-        expect(result.reasoning).toContain('Manual override');
-        expect(result.confidence).toBe(1.0);
-      });
-    });
-
     describe('Documentation Tasks', () => {
       it('should select Codex for documentation tasks', async () => {
         const criteria: AgentSelectionCriteria = {
@@ -294,18 +275,6 @@ describe('AgentSelector', () => {
       expect(explanation).toContain('Confidence:');
     });
 
-    it('should explain manual override', async () => {
-      const criteria: AgentSelectionCriteria = {
-        preferredAgent: 'codex',
-        taskCategory: 'implementation'
-      };
-
-      const explanation = await selector.explainSelection(criteria);
-
-      expect(explanation).toContain('Selected: codex');
-      expect(explanation).toContain('Manual override');
-      expect(explanation).toContain('100%');
-    });
   });
 
   describe('Static Methods', () => {

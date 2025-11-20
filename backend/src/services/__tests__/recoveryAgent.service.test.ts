@@ -17,7 +17,10 @@ import type { AgentCliCommandBuilder } from '../agentCliCommandBuilder.js';
 import type { AgentSelector } from '../agentSelector.js';
 
 vi.mock('../agentCliSelection.js', () => ({
-  selectAgentCliTypeForTask: vi.fn().mockResolvedValue('claude')
+  selectAgentCliTypeForTask: vi.fn().mockResolvedValue({
+    cliType: 'claude',
+    personalityId: 'backend-specialist',
+  })
 }));
 
 vi.mock('../utils/logger.js', () => ({
@@ -56,7 +59,10 @@ describe('RecoveryAgentService', () => {
         'printf \'{"category":"retry","diagnosis":"ok","recovery_action":"retry","success":true}\''
       )
     } as unknown as AgentCliCommandBuilder;
-    selectAgentCliTypeForTaskMock.mockResolvedValue('claude');
+    selectAgentCliTypeForTaskMock.mockResolvedValue({
+      cliType: 'claude',
+      personalityId: 'backend-specialist',
+    });
     service = new RecoveryAgentService({
       agentSelector: mockAgentSelector,
       cliCommandBuilder: cliBuilderMock
@@ -213,7 +219,10 @@ describe('RecoveryAgentService', () => {
     });
 
     it('delegates CLI selection to AgentSelector for recovery context', async () => {
-      selectAgentCliTypeForTaskMock.mockResolvedValueOnce('gemini');
+      selectAgentCliTypeForTaskMock.mockResolvedValueOnce({
+        cliType: 'gemini',
+        personalityId: 'backend-specialist',
+      });
       const task = createMockTask();
       const validationResult: ValidationResult = {
         passed: false,

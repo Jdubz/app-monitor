@@ -70,7 +70,6 @@
       "complexity": "simple",
       "confidence": "high"
     },
-    "assignedAgent": "frontend-specialist",
     "priority": 6,
     "metadata": {
       "promptEngineeringVersion": "v3",

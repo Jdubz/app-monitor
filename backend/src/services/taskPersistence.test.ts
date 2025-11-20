@@ -573,7 +573,6 @@ describe('TaskPersistence', () => {
         status: 'pending',
         createdAt: Date.now(),
         updatedAt: Date.now(),
-        assignedAgent: 'test-agent',
         notes: 'Test notes',
         files: ['file1.js', 'file2.ts'],
         dependencies: ['dep1', 'dep2'],

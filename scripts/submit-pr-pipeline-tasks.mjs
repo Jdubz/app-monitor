@@ -31,12 +31,10 @@ async function submitTask(task) {
   }
 
   // Construct task submission payload
-  const taskPayload = {
+  const minimalPayload = {
     title: task.title,
     taskType: task.taskType,
     intent: `${task.investigation || ''} ${task.constraints || ''}`.trim(),
-    // Optional fields if they align with the submission contract or are handled by the API
-    assignedAgent: task.assignedAgent,
     priority: task.priority
   };
 
@@ -46,11 +44,10 @@ async function submitTask(task) {
     throw new Error('Task intent missing.');
   }
 
-  console.log(`\n📤 Submitting task: ${taskPayload.title}`);
-  console.log(`   Type: ${taskPayload.taskType}`);
-  console.log(`   Intent: ${taskPayload.intent.substring(0, 70)}...`); // Log truncated intent
-  console.log(`   Priority: ${taskPayload.priority}`);
-  console.log(`   Agent: ${taskPayload.assignedAgent}`);
+  console.log(`\n📤 Submitting task: ${minimalPayload.title}`);
+  console.log(`   Type: ${minimalPayload.taskType}`);
+  console.log(`   Intent: ${minimalPayload.intent.substring(0, 70)}...`); // Log truncated intent
+  console.log(`   Priority: ${minimalPayload.priority}`);
   
   try {
     const response = await fetch(url, {
@@ -59,7 +56,7 @@ async function submitTask(task) {
         'Content-Type': 'application/json',
         'X-API-Key': API_KEY, // Use the retrieved API key
       },
-      body: JSON.stringify(taskPayload)
+      body: JSON.stringify(minimalPayload)
     });
     
     if (!response.ok) {
@@ -71,14 +68,14 @@ async function submitTask(task) {
     
     if (result.success) {
       console.log(`   ✅ Created task ID: ${result.data.task.id}`); // Access task.id from result.data.task
-      return { success: true, taskId: result.data.task.id, task: taskPayload };
+      return { success: true, taskId: result.data.task.id, task: minimalPayload };
     } else {
       console.log(`   ❌ Failed: ${result.error}`);
-      return { success: false, error: result.error, task: taskPayload };
+      return { success: false, error: result.error, task: minimalPayload };
     }
   } catch (error) {
     console.log(`   ❌ Error: ${error.message}`);
-    return { success: false, error: error.message, task: taskPayload };
+    return { success: false, error: error.message, task: minimalPayload };
   }
 }
 

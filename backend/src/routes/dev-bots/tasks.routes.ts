@@ -338,7 +338,6 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
         files: detected.detectedFiles,
         dependencies: [],
         project: 'app-monitor',  // Default project
-        assignedAgent: payload.assignedAgent || 'claude-sonnet',
         priority: payload.priority || 1,
         metadata: {
           riskLevel: detected.inferredRiskLevel,
