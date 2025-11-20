@@ -25,9 +25,10 @@ import {
   getDevBotsQueue,
   getDevBotsTaskDetail,
   getDevBotsTaskLogs,
+  resumeDevBotsTask,
 } from '@/services/api';
 
-type QueueFilter = 'pending' | 'active' | 'completed' | 'failed';
+type QueueFilter = 'pending' | 'active' | 'blocked' | 'completed' | 'failed';
 type QueueRow = DevBotsQueueSummary['items'][number];
 
 type TaskLogsDescriptor = DevBotsTaskLogsResponse;
@@ -60,6 +61,9 @@ interface DevBotsStoreValue {
   refreshSettings: () => Promise<void>;
   updateSettings: (payload: Partial<DevBotsSettings>) => Promise<void>;
   refreshStatus: () => Promise<void>;
+  resumeTask: (taskId: string, resumedBy: string) => Promise<void>;
+  isResuming: boolean;
+  resumeError?: string;
 }
 
 const DevBotsStoreContext = createContext<DevBotsStoreValue | undefined>(undefined);
@@ -79,6 +83,8 @@ export function DevBotsStoreProvider({ children, socket }: DevBotsStoreProviderP
   const [settingsError, setSettingsError] = useState<string>();
   const [settingsUpdating, setSettingsUpdating] = useState(false);
   const [settingsUpdateError, setSettingsUpdateError] = useState<string>();
+  const [isResuming, setIsResuming] = useState(false);
+  const [resumeError, setResumeError] = useState<string>();
 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string>();
@@ -285,6 +291,33 @@ export function DevBotsStoreProvider({ children, socket }: DevBotsStoreProviderP
     [settings],
   );
 
+  const resumeTask = useCallback(
+    async (taskId: string, resumedBy: string) => {
+      setIsResuming(true);
+      setResumeError(undefined);
+      try {
+        await resumeDevBotsTask(taskId, resumedBy);
+        if (!isMountedRef.current) return;
+
+        // Refresh task detail and queue after successful resume
+        await Promise.all([
+          fetchTaskDetail(taskId),
+          refreshStatus(),
+        ]);
+      } catch (err) {
+        if (!isMountedRef.current) return;
+        const errorMessage = err instanceof Error ? err.message : 'Failed to resume task.';
+        setResumeError(errorMessage);
+        throw err;
+      } finally {
+        if (isMountedRef.current) {
+          setIsResuming(false);
+        }
+      }
+    },
+    [refreshStatus],
+  );
+
   const value = useMemo<DevBotsStoreValue>(
     () => ({
       status,
@@ -314,6 +347,9 @@ export function DevBotsStoreProvider({ children, socket }: DevBotsStoreProviderP
       refreshSettings: fetchSettings,
       updateSettings,
       refreshStatus,
+      resumeTask,
+      isResuming,
+      resumeError,
     }),
     [
       status,
@@ -340,6 +376,9 @@ export function DevBotsStoreProvider({ children, socket }: DevBotsStoreProviderP
       fetchSettings,
       updateSettings,
       refreshStatus,
+      resumeTask,
+      isResuming,
+      resumeError,
     ],
   );
 

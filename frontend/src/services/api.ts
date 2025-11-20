@@ -26,6 +26,7 @@ import type {
   DevBotsRetryTaskResponse,
   DevBotsSkipTaskResponse,
   DevBotsCancelTaskResponse,
+  DevBotsResumeTaskResponse,
   DevBotsQuarantineChainResponse,
   DevBotsInterventionResponse,
 } from '@/types/contracts';
@@ -293,6 +294,15 @@ export const cancelDevBotsTask = async (taskId: string): Promise<DevBotsInterven
     `/dev-bots/tasks/${taskId}/cancel`,
   );
   return ensureApiSuccess(response, `canceling task ${taskId}`);
+};
+
+export const resumeDevBotsTask = async (taskId: string, resumedBy: string): Promise<DevBotsInterventionResponse> => {
+  const client = await getApiClient();
+  const response = await client.post<DevBotsResumeTaskResponse>(
+    `/dev-bots/tasks/${taskId}/resume`,
+    { resumedBy },
+  );
+  return ensureApiSuccess(response, `resuming task ${taskId}`);
 };
 
 export const quarantineDevBotsChain = async (chainId: string, reason: string): Promise<DevBotsInterventionResponse> => {

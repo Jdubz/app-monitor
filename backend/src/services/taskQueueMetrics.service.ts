@@ -191,6 +191,7 @@ export class TaskQueueMetricsService {
       failed: 0,
       cancelled: 0,
       timeout: 0,
+      blocked: 0,
       total: 0
     };
 

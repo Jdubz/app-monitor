@@ -156,13 +156,14 @@ export class RecoveryAgentService {
         details: { taskId: task.id, containerId, error },
       });
 
+      // Recovery agent failed to execute - block task immediately
       return {
         success: false,
         category: 'chain_blocked',
         shouldRetry: false,
         contextUpdated: false,
         isSystemBlocked: false,
-        diagnosis: `Recovery agent execution failed: ${error instanceof Error ? error.message : String(error)}`,
+        diagnosis: `Recovery agent execution failed: ${error instanceof Error ? error.message : String(error)}. Manual intervention required.`,
       };
     }
   }

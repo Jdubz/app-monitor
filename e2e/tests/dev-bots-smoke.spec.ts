@@ -31,7 +31,7 @@ const mockQueueSummary = {
     { bucket: 'active' as const, task: mockTask },
     { bucket: 'completed' as const, task: mockCompletedTask },
   ],
-  counts: { pending: 1, active: 1, completed: 1, failed: 0 },
+  counts: { pending: 1, active: 1, blocked: 0, completed: 1, failed: 0 },
   lastUpdated: '2025-11-01T11:05:00.000Z',
 };
 
