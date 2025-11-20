@@ -7,6 +7,11 @@
     "rootDir": "./src",
     "moduleResolution": "node",
     "baseUrl": ".",
+    // WORKAROUND (2025-11-20): Deploy builds run `tsc --build` outside of npm workspaces,
+    // so TypeScript fails to resolve @modelcontextprotocol/sdk subpath imports because the
+    // package does not publish typed entry-points via `exports`. Map directly to the dist/esm
+    // declarations both for local installs (./node_modules) and hoisted installs (../node_modules).
+    // Remove once the MCP SDK ships proper type exports or we switch to bundler/nodenext resolution.
     "paths": {
       "@app-monitor/api-contracts": ["../shared/api-contracts/dist/index.d.ts"],
       "@modelcontextprotocol/sdk": [
