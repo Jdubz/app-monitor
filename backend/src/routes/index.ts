@@ -19,6 +19,7 @@ import { logger } from '../utils/logger.js';
 import { createSocketRoutes } from './socket-task.routes.js';
 import { createDockerRouter } from './docker.routes.js';
 import { createDevBotsRouter } from './dev-bots/index.js';
+import { createSSERoutes } from './sse.routes.js';
 import { createTerminalRoutes } from './terminal.routes.js';
 import tokenTrackingRoutes from './token-tracking.routes.js';
 import qualityGatesRoutes from './quality-gates.routes.js';
@@ -109,6 +110,7 @@ export function createApiRouter(deps: {
 
   if (deps.devBotsManager) {
     router.use('/dev-bots', requireApiKey, createDevBotsRouter(deps.devBotsManager));
+    router.use('/sse', requireApiKey, createSSERoutes(deps.devBotsManager));
   }
 
   router.use('/token-tracking', requireApiKey, tokenTrackingRoutes);
