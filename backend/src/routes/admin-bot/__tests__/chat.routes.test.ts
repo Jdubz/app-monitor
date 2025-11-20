@@ -30,15 +30,26 @@ describe('Admin Bot Chat Routes', () => {
   let mockAdminBotService: AdminBotService;
 
   beforeEach(() => {
-    // Create mock service
-    mockAdminBotService = new EventEmitter() as any;
+    // Create mock service as EventEmitter
+    const emitter = new EventEmitter();
+    mockAdminBotService = emitter as any;
+
+    // Add service methods
     mockAdminBotService.startSession = vi.fn();
     mockAdminBotService.stopSession = vi.fn();
     mockAdminBotService.sendMessage = vi.fn();
     mockAdminBotService.getSession = vi.fn();
     mockAdminBotService.isSessionRunning = vi.fn();
-    mockAdminBotService.on = vi.fn().mockReturnThis();
-    mockAdminBotService.off = vi.fn().mockReturnThis();
+
+    // Spy on EventEmitter methods while keeping them functional
+    const originalOn = emitter.on.bind(emitter);
+    const originalOff = emitter.off.bind(emitter);
+    mockAdminBotService.on = vi.fn((event, listener) => {
+      return originalOn(event, listener);
+    });
+    mockAdminBotService.off = vi.fn((event, listener) => {
+      return originalOff(event, listener);
+    });
 
     // Create Express app with routes
     app = express();
@@ -312,15 +323,21 @@ describe('Admin Bot Chat Routes', () => {
       const req = request(app).get('/api/admin-bot/chat/stream');
 
       // Give time for handlers to be registered
-      setTimeout(() => {
-        expect(mockAdminBotService.on).toHaveBeenCalledWith('output', expect.any(Function));
-        expect(mockAdminBotService.on).toHaveBeenCalledWith('error', expect.any(Function));
-        expect(mockAdminBotService.on).toHaveBeenCalledWith('exit', expect.any(Function));
-        req.abort();
-        done();
-      }, 50);
+      const timeoutId = setTimeout(() => {
+        try {
+          expect(mockAdminBotService.on).toHaveBeenCalledWith('output', expect.any(Function));
+          expect(mockAdminBotService.on).toHaveBeenCalledWith('error', expect.any(Function));
+          expect(mockAdminBotService.on).toHaveBeenCalledWith('exit', expect.any(Function));
+          req.abort();
+          done();
+        } catch (error) {
+          req.abort();
+          done(error);
+        }
+      }, 100);
 
       req.on('error', (err: any) => {
+        clearTimeout(timeoutId);
         if (err.code !== 'ECONNRESET') {
           done(err);
         }
@@ -329,19 +346,25 @@ describe('Admin Bot Chat Routes', () => {
 
     it('should clean up handlers on client disconnect', (done) => {
       const req = request(app).get('/api/admin-bot/chat/stream');
+      let cleanupTimeoutId: NodeJS.Timeout;
 
       // Give time for handlers to be registered
       setTimeout(() => {
         req.abort();
 
         // Give time for cleanup
-        setTimeout(() => {
-          expect(mockAdminBotService.off).toHaveBeenCalled();
-          done();
-        }, 50);
-      }, 50);
+        cleanupTimeoutId = setTimeout(() => {
+          try {
+            expect(mockAdminBotService.off).toHaveBeenCalled();
+            done();
+          } catch (error) {
+            done(error);
+          }
+        }, 100);
+      }, 100);
 
       req.on('error', (err: any) => {
+        if (cleanupTimeoutId) clearTimeout(cleanupTimeoutId);
         if (err.code !== 'ECONNRESET') {
           done(err);
         }
