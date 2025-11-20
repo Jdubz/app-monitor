@@ -8,7 +8,8 @@
     "shared/api-contracts",
     "backend",
     "frontend",
-    "dev-bots"
+    "dev-bots",
+    "tools/openapi-builder"
   ],
   "scripts": {
     "install:all": "npm install && npm install --workspaces",
@@ -31,6 +32,7 @@
     "validate:build": "npm run build -ws --if-present",
     "validate:all": "npm run validate:locks && npm run validate:build && npm test",
     "context:validate": "node scripts/validate-context-recipes.js",
+    "generate:openapi": "cd tools/openapi-builder && npm start",
     "precommit": "npm run validate:locks",
     "prepare": "husky || true"
   },

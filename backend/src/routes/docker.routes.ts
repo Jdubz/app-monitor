@@ -16,6 +16,7 @@ import {
 } from '@app-monitor/api-contracts';
 import { getDockerContainerInfo, stopDockerContainer } from '../utils/portManager.js';
 import { logger } from '../utils/logger.js';
+import { defineRoute } from './routeRegistry.js';
 
 // Service configuration for docker compose
 const DOCKER_CONFIG = {
@@ -52,207 +53,248 @@ export function createDockerRouter(): Router {
    * GET /docker/container-info
    * Get Docker container information
    */
-  router.get('/container-info', async (_req: Request, res: Response) => {
-    try {
-      const containerInfo = await getDockerContainerInfo(DOCKER_CONFIG.containerName);
-      const dockerInfo: DockerInfoResponse['data'] = {
-        ...containerInfo,
-        name: DOCKER_CONFIG.containerName,
-        status: containerInfo.running ? 'running' : 'stopped'
-      } as DockerInfoResponse['data'];
-      respondSuccess<DockerInfoResponse['data']>(res, dockerInfo);
-    } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'error_getting_container_info_error',
-        message: `Error getting container info: ${error}`,
-        error
-      });
-      respondError(
-        res,
-        500,
-        'FAILED_TO_GET_CONTAINER_INFO',
-        error instanceof Error ? error.message : String(error)
-      );
+  const containerInfoRoute = defineRoute({
+    method: 'get',
+    path: '/container-info',
+    summary: 'Get Container Info',
+    description: 'Get information about the Docker container.',
+    response: {
+      body: {} as DockerInfoResponse
+    },
+    handler: async (_req: Request, res: Response) => {
+      try {
+        const containerInfo = await getDockerContainerInfo(DOCKER_CONFIG.containerName);
+        const dockerInfo: DockerInfoResponse['data'] = {
+          ...containerInfo,
+          name: DOCKER_CONFIG.containerName,
+          status: containerInfo.running ? 'running' : 'stopped'
+        } as DockerInfoResponse['data'];
+        respondSuccess<DockerInfoResponse['data']>(res, dockerInfo);
+      } catch (error) {
+        logger.error({
+          category: 'api',
+          action: 'error_getting_container_info_error',
+          message: `Error getting container info: ${error}`,
+          error
+        });
+        respondError(
+          res,
+          500,
+          'FAILED_TO_GET_CONTAINER_INFO',
+          error instanceof Error ? error.message : String(error)
+        );
+      }
     }
   });
+  router[containerInfoRoute.method](containerInfoRoute.path, containerInfoRoute.handler);
+
 
   /**
    * POST /docker/start
    * Start Docker container using docker compose
    */
-  router.post('/start', async (_req: Request, res: Response) => {
-    try {
-      logger.info({
-        category: 'api',
-        action: 'docker_start',
-        message: 'Starting Docker container...'
-      });
-      
-      // Start the container using docker compose
-      const childProcess = spawn(
-        'docker',
-        ['compose', '-f', DOCKER_CONFIG.composeFile, 'up', '-d'],
-        {
-          cwd: DOCKER_CONFIG.cwd,
-          env: DOCKER_CONFIG.env,
-          stdio: ['pipe', 'pipe', 'pipe'],
-        }
-      );
+  const startRoute = defineRoute({
+    method: 'post',
+    path: '/start',
+    summary: 'Start Container',
+    description: 'Start the Docker container using docker compose.',
+    response: {
+      body: {} as DockerActionResponse
+    },
+    handler: async (_req: Request, res: Response) => {
+      try {
+        logger.info({
+          category: 'api',
+          action: 'docker_start',
+          message: 'Starting Docker container...'
+        });
 
-      childProcess.on('close', (code) => {
-        if (code === 0) {
-          logger.info({
-            category: 'api',
-            action: 'docker_started',
-            message: 'Docker container started successfully'
-          });
-        } else {
+        // Start the container using docker compose
+        const childProcess = spawn(
+          'docker',
+          ['compose', '-f', DOCKER_CONFIG.composeFile, 'up', '-d'],
+          {
+            cwd: DOCKER_CONFIG.cwd,
+            env: DOCKER_CONFIG.env,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          }
+        );
+
+        childProcess.on('close', (code) => {
+          if (code === 0) {
+            logger.info({
+              category: 'api',
+              action: 'docker_started',
+              message: 'Docker container started successfully'
+            });
+          } else {
+            logger.error({
+              category: 'api',
+              action: 'docker_container_start_failed',
+              message: `Docker container start failed with code ${code}`,
+              details: { code }
+            });
+          }
+        });
+
+        childProcess.on('error', (error) => {
           logger.error({
             category: 'api',
-            action: 'docker_container_start_failed',
-            message: `Docker container start failed with code ${code}`,
-            details: { code }
+            action: 'failed_to_start_docker_container_error',
+            message: `Failed to start Docker container: ${error}`,
+            error
           });
-        }
-      });
+        });
 
-      childProcess.on('error', (error) => {
+        respondSuccess<DockerActionResponse['data']>(res, { message: 'Starting Docker container...' });
+      } catch (error) {
         logger.error({
           category: 'api',
-          action: 'failed_to_start_docker_container_error',
-          message: `Failed to start Docker container: ${error}`,
+          action: 'error_starting_container_error',
+          message: `Error starting container: ${error}`,
           error
         });
-      });
-
-      respondSuccess<DockerActionResponse['data']>(res, { message: 'Starting Docker container...' });
-    } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'error_starting_container_error',
-        message: `Error starting container: ${error}`,
-        error
-      });
-      respondError(
-        res,
-        500,
-        'FAILED_TO_START_CONTAINER',
-        error instanceof Error ? error.message : String(error)
-      );
+        respondError(
+          res,
+          500,
+          'FAILED_TO_START_CONTAINER',
+          error instanceof Error ? error.message : String(error)
+        );
+      }
     }
   });
+  router[startRoute.method](startRoute.path, startRoute.handler);
 
   /**
    * POST /docker/stop
    * Stop Docker container
    */
-  router.post('/stop', async (_req: Request, res: Response) => {
-    try {
-      logger.info({
-        category: 'api',
-        action: 'docker_stop',
-        message: 'Stopping Docker container...'
-      });
-      
-      const success = await stopDockerContainer(DOCKER_CONFIG.containerName);
-      
-      if (success) {
-        respondSuccess<DockerActionResponse['data']>(res, { message: 'Docker container stopped' });
-      } else {
-        respondError(res, 500, 'FAILED_TO_STOP_CONTAINER', 'Failed to stop container');
+  const stopRoute = defineRoute({
+    method: 'post',
+    path: '/stop',
+    summary: 'Stop Container',
+    description: 'Stop the Docker container.',
+    response: {
+      body: {} as DockerActionResponse
+    },
+    handler: async (_req: Request, res: Response) => {
+      try {
+        logger.info({
+          category: 'api',
+          action: 'docker_stop',
+          message: 'Stopping Docker container...'
+        });
+
+        const success = await stopDockerContainer(DOCKER_CONFIG.containerName);
+
+        if (success) {
+          respondSuccess<DockerActionResponse['data']>(res, { message: 'Docker container stopped' });
+        } else {
+          respondError(res, 500, 'FAILED_TO_STOP_CONTAINER', 'Failed to stop container');
+        }
+      } catch (error) {
+        logger.error({
+          category: 'api',
+          action: 'error_stopping_container_error',
+          message: `Error stopping container: ${error}`,
+          error
+        });
+        respondError(
+          res,
+          500,
+          'FAILED_TO_STOP_CONTAINER',
+          error instanceof Error ? error.message : String(error)
+        );
       }
-    } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'error_stopping_container_error',
-        message: `Error stopping container: ${error}`,
-        error
-      });
-      respondError(
-        res,
-        500,
-        'FAILED_TO_STOP_CONTAINER',
-        error instanceof Error ? error.message : String(error)
-      );
     }
   });
+  router[stopRoute.method](stopRoute.path, stopRoute.handler);
 
   /**
    * POST /docker/restart
    * Restart Docker container (stop then start)
    */
-  router.post('/restart', async (_req: Request, res: Response) => {
-    try {
-      logger.info({
-        category: 'api',
-        action: 'docker_restart',
-        message: 'Restarting Docker container...'
-      });
-      
-      // First stop the container
-      const stopSuccess = await stopDockerContainer(DOCKER_CONFIG.containerName);
-      if (!stopSuccess) {
-        respondError(res, 500, 'FAILED_TO_STOP_CONTAINER', 'Failed to stop container');
-        return;
-      }
+  const restartRoute = defineRoute({
+    method: 'post',
+    path: '/restart',
+    summary: 'Restart Container',
+    description: 'Restart the Docker container.',
+    response: {
+      body: {} as DockerActionResponse
+    },
+    handler: async (_req: Request, res: Response) => {
+      try {
+        logger.info({
+          category: 'api',
+          action: 'docker_restart',
+          message: 'Restarting Docker container...'
+        });
 
-      // Wait a moment for the container to fully stop
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Then start it again
-      const childProcess = spawn(
-        'docker',
-        ['compose', '-f', DOCKER_CONFIG.composeFile, 'up', '-d'],
-        {
-          cwd: DOCKER_CONFIG.cwd,
-          env: DOCKER_CONFIG.env,
-          stdio: ['pipe', 'pipe', 'pipe'],
+        // First stop the container
+        const stopSuccess = await stopDockerContainer(DOCKER_CONFIG.containerName);
+        if (!stopSuccess) {
+          respondError(res, 500, 'FAILED_TO_STOP_CONTAINER', 'Failed to stop container');
+          return;
         }
-      );
 
-      childProcess.on('close', (code) => {
-        if (code === 0) {
-          logger.info({
-            category: 'api',
-            action: 'docker_restarted',
-            message: 'Docker container restarted successfully'
-          });
-        } else {
+        // Wait a moment for the container to fully stop
+        await new Promise(resolve => setTimeout(resolve, 2000));
+
+        // Then start it again
+        const childProcess = spawn(
+          'docker',
+          ['compose', '-f', DOCKER_CONFIG.composeFile, 'up', '-d'],
+          {
+            cwd: DOCKER_CONFIG.cwd,
+            env: DOCKER_CONFIG.env,
+            stdio: ['pipe', 'pipe', 'pipe'],
+          }
+        );
+
+        childProcess.on('close', (code) => {
+          if (code === 0) {
+            logger.info({
+              category: 'api',
+              action: 'docker_restarted',
+              message: 'Docker container restarted successfully'
+            });
+          } else {
+            logger.error({
+              category: 'api',
+              action: 'docker_container_restart_failed',
+              message: `Docker container restart failed with code ${code}`,
+              details: { code }
+            });
+          }
+        });
+
+        childProcess.on('error', (error) => {
           logger.error({
             category: 'api',
-            action: 'docker_container_restart_failed',
-            message: `Docker container restart failed with code ${code}`,
-            details: { code }
+            action: 'failed_to_restart_docker_container_error',
+            message: `Failed to restart Docker container: ${error}`,
+            error
           });
-        }
-      });
+        });
 
-      childProcess.on('error', (error) => {
+        respondSuccess<DockerActionResponse['data']>(res, { message: 'Restarting Docker container...' });
+      } catch (error) {
         logger.error({
           category: 'api',
-          action: 'failed_to_restart_docker_container_error',
-          message: `Failed to restart Docker container: ${error}`,
+          action: 'error_restarting_container_error',
+          message: `Error restarting container: ${error}`,
           error
         });
-      });
-
-      respondSuccess<DockerActionResponse['data']>(res, { message: 'Restarting Docker container...' });
-    } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'error_restarting_container_error',
-        message: `Error restarting container: ${error}`,
-        error
-      });
-      respondError(
-        res,
-        500,
-        'FAILED_TO_RESTART_CONTAINER',
-        error instanceof Error ? error.message : String(error)
-      );
+        respondError(
+          res,
+          500,
+          'FAILED_TO_RESTART_CONTAINER',
+          error instanceof Error ? error.message : String(error)
+        );
+      }
     }
   });
+  router[restartRoute.method](restartRoute.path, restartRoute.handler);
 
   return router;
 }
