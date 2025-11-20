@@ -5,7 +5,7 @@ import { withAuth } from "../middleware/auth.js";
 import { createJsonResponse, withErrorHandling } from "../utils/response.js";
 import type { McpServices } from "../server.js";
 
-const systemHealthInputSchema: ZodRawShape = {};
+const systemHealthInputSchema = {} satisfies ZodRawShape;
 type SystemHealthParams = z.objectOutputType<typeof systemHealthInputSchema, ZodTypeAny>;
 
 export function registerSystemTools(
