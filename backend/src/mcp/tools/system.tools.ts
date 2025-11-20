@@ -4,10 +4,9 @@ import Database from "better-sqlite3";
 import { withAuth } from "../middleware/auth.js";
 import { createJsonResponse, withErrorHandling } from "../utils/response.js";
 import type { McpServices } from "../server.js";
+import { registerZodTool } from "../utils/registerTool.js";
 
 const systemHealthInputSchema = z.object({});
-type SystemHealthInputShape = typeof systemHealthInputSchema['_def']['shape'];
-const systemHealthInputShape: SystemHealthInputShape = systemHealthInputSchema.shape;
 type SystemHealthParams = z.infer<typeof systemHealthInputSchema>;
 
 export function registerSystemTools(
@@ -15,12 +14,13 @@ export function registerSystemTools(
   db: Database.Database,
   services: McpServices,
 ) {
-  server.registerTool(
+  registerZodTool(
+    server,
     "system_health",
     {
         title: "System Health",
         description: "Provides a comprehensive overview of the system's health.",
-        inputSchema: systemHealthInputShape,
+        inputSchema: systemHealthInputSchema,
     },
     withAuth("system_health", withErrorHandling(async (_params: SystemHealthParams) => {
         const health: Record<string, unknown> = {

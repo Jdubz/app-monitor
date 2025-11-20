@@ -5,19 +5,15 @@ import { withAuth } from '../middleware/auth.js';
 import { createJsonResponse, createErrorResponse, createSuccessResponse, withErrorHandling } from '../utils/response.js';
 import type { McpServices } from '../server.js';
 import { getPRConditionStateService } from '../../services/prConditionState.service.js';
+import { registerZodTool } from '../utils/registerTool.js';
 
 const prTriggerInputSchema = z.object({
   pr_number: z.number().int().positive(),
   force: z.boolean().optional(),
 });
-type PrTriggerInputShape = typeof prTriggerInputSchema['_def']['shape'];
-const prTriggerInputShape: PrTriggerInputShape = prTriggerInputSchema.shape;
-
 const prBlockingIssuesInputSchema = z.object({
   pr_number: z.number().int().positive(),
 });
-type PrBlockingIssuesInputShape = typeof prBlockingIssuesInputSchema['_def']['shape'];
-const prBlockingIssuesInputShape: PrBlockingIssuesInputShape = prBlockingIssuesInputSchema.shape;
 
 type PrTriggerParams = z.infer<typeof prTriggerInputSchema>;
 type PrBlockingIssuesParams = z.infer<typeof prBlockingIssuesInputSchema>;
@@ -50,12 +46,13 @@ export function registerPrsTools(
   const taskQueue = services.devBotsManager.getTaskQueue();
   const prConditionState = getPRConditionStateService(taskQueue);
 
-  server.registerTool(
+  registerZodTool(
+    server,
     'pr_trigger_evaluation',
     {
       title: 'Trigger PR Evaluation',
       description: 'Manually triggers a PR gate evaluation.',
-      inputSchema: prTriggerInputShape,
+      inputSchema: prTriggerInputSchema,
     },
     withAuth('pr_trigger_evaluation', withErrorHandling(async (params: PrTriggerParams) => {
       const eventType = params.force ? 'manual_restart' : 'pull_request_opened';
@@ -64,12 +61,13 @@ export function registerPrsTools(
     })),
   );
 
-  server.registerTool(
+  registerZodTool(
+    server,
     'pr_get_blocking_issues',
     {
       title: 'Get Blocking Issues for PR',
       description: 'Retrieves the latest gate evaluation and blocking issues.',
-      inputSchema: prBlockingIssuesInputShape,
+      inputSchema: prBlockingIssuesInputSchema,
     },
     withAuth('pr_get_blocking_issues', withErrorHandling(async (params: PrBlockingIssuesParams) => {
       const state = await prConditionState.getState(params.pr_number);

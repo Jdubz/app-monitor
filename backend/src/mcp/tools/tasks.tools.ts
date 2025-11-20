@@ -6,6 +6,7 @@ import { createJsonResponse, createErrorResponse, createSuccessResponse, withErr
 import { logger } from '../../utils/logger.js';
 import type { McpServices } from '../server.js';
 import type { Task, TaskStatus } from '../../services/taskQueue.sqlite.js';
+import { registerZodTool } from '../utils/registerTool.js';
 
 const TASK_LIST_STATUS_VALUES: TaskStatus[] = [
   'pending',
@@ -24,29 +25,21 @@ const taskCreateInputSchema = z.object({
   assigned_agent: z.enum(['claude', 'codex', 'gemini']).optional(),
   tags: z.array(z.string().min(1)).optional(),
 });
-type TaskCreateInputShape = typeof taskCreateInputSchema['_def']['shape'];
-const taskCreateInputShape: TaskCreateInputShape = taskCreateInputSchema.shape;
 
 const taskGetInputSchema = z.object({
   task_id: z.string().min(1),
 });
-type TaskGetInputShape = typeof taskGetInputSchema['_def']['shape'];
-const taskGetInputShape: TaskGetInputShape = taskGetInputSchema.shape;
 
 const taskListInputSchema = z.object({
   status: z.enum(TASK_LIST_STATUS_VALUES as [TaskStatus, ...TaskStatus[]]).optional(),
   assigned_agent: z.string().min(1).optional(),
   limit: z.number().int().positive().max(500).optional(),
 });
-type TaskListInputShape = typeof taskListInputSchema['_def']['shape'];
-const taskListInputShape: TaskListInputShape = taskListInputSchema.shape;
 
 const taskUnblockInputSchema = z.object({
   task_id: z.string().min(1),
   resumed_by: z.string().optional(),
 });
-type TaskUnblockInputShape = typeof taskUnblockInputSchema['_def']['shape'];
-const taskUnblockInputShape: TaskUnblockInputShape = taskUnblockInputSchema.shape;
 
 const taskOutcomeInputSchema = z.object({
   task_id: z.string().min(1),
@@ -58,8 +51,6 @@ const taskOutcomeInputSchema = z.object({
   failure_code: z.enum(['compilation_error', 'test_failure', 'dependency_error', 'timeout', 'validation_error', 'unknown']).optional(),
   error_details: z.string().optional(),
 });
-type TaskOutcomeInputShape = typeof taskOutcomeInputSchema['_def']['shape'];
-const taskOutcomeInputShape: TaskOutcomeInputShape = taskOutcomeInputSchema.shape;
 
 type TaskCreateParams = z.infer<typeof taskCreateInputSchema>;
 type TaskGetParams = z.infer<typeof taskGetInputSchema>;
@@ -111,12 +102,13 @@ export function registerTasksTools(
   const { devBotsManager } = services;
   const taskQueue = devBotsManager.getTaskQueue();
 
-  server.registerTool(
+  registerZodTool(
+    server,
     'task_create',
     {
       title: 'Create Task',
       description: 'Creates a standalone task using the existing submission pipeline.',
-      inputSchema: taskCreateInputShape,
+      inputSchema: taskCreateInputSchema,
     },
     withAuth('task_create', withErrorHandling(async (params: TaskCreateParams) => {
       const noteFromTags = params.tags?.length ? `Tags: ${params.tags.join(', ')}` : undefined;
@@ -134,12 +126,13 @@ export function registerTasksTools(
     })),
   );
 
-  server.registerTool(
+  registerZodTool(
+    server,
     'task_get',
     {
       title: 'Get Task',
       description: 'Retrieves the details of a task by ID.',
-      inputSchema: taskGetInputShape,
+      inputSchema: taskGetInputSchema,
     },
     withAuth('task_get', withErrorHandling(async (params: TaskGetParams) => {
       const task = taskQueue.getTask(params.task_id);
@@ -151,12 +144,13 @@ export function registerTasksTools(
     })),
   );
 
-  server.registerTool(
+  registerZodTool(
+    server,
     'task_list',
     {
       title: 'List Tasks',
       description: 'Lists tasks with optional filtering.',
-      inputSchema: taskListInputShape,
+      inputSchema: taskListInputSchema,
     },
     withAuth('task_list', withErrorHandling(async (params: TaskListParams) => {
       const lists = await devBotsManager.getTasks();
@@ -186,12 +180,13 @@ export function registerTasksTools(
     })),
   );
 
-  server.registerTool(
+  registerZodTool(
+    server,
     'task_unblock',
     {
       title: 'Resume Blocked Task',
       description: 'Resumes a blocked task using the manual resume flow.',
-      inputSchema: taskUnblockInputShape,
+      inputSchema: taskUnblockInputSchema,
     },
     withAuth('task_unblock', withErrorHandling(async (params: TaskUnblockParams, context: AuthContext) => {
       const resumedBy = params.resumed_by || process.env.APP_MONITOR_MCP_USER_ID || context.role;
@@ -200,12 +195,13 @@ export function registerTasksTools(
     })),
   );
 
-  server.registerTool(
+  registerZodTool(
+    server,
     'task_report_outcome',
     {
       title: 'Report Task Outcome',
       description: '(DEV-BOTS ONLY) Stores outcome details for the assigned task.',
-      inputSchema: taskOutcomeInputShape,
+      inputSchema: taskOutcomeInputSchema,
     },
     withAuth('task_report_outcome', withErrorHandling(async (params: TaskReportOutcomeParams, context: AuthContext) => {
       const task = taskQueue.getTask(params.task_id);
