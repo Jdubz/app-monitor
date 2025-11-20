@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
 } from 'react';
-import type { Socket } from 'socket.io-client';
 import type {
   DevBotsQueueSummary,
   DevBotsSettings,
@@ -27,6 +26,7 @@ import {
   getDevBotsTaskLogs,
   resumeDevBotsTask,
 } from '@/services/api';
+import { useSSE } from '@/hooks/useSSE';
 
 type QueueFilter = 'pending' | 'active' | 'blocked' | 'completed' | 'failed';
 type QueueRow = DevBotsQueueSummary['items'][number];
@@ -70,12 +70,11 @@ const DevBotsStoreContext = createContext<DevBotsStoreValue | undefined>(undefin
 
 interface DevBotsStoreProviderProps {
   children: React.ReactNode;
-  socket?: Socket | null;
 }
 
 const INITIAL_TASK_LOGS: TaskLogsDescriptor | null = null;
 
-export function DevBotsStoreProvider({ children, socket }: DevBotsStoreProviderProps) {
+export function DevBotsStoreProvider({ children }: DevBotsStoreProviderProps) {
   const [status, setStatus] = useState<DevBotsStatus | null>(null);
   const [queueSummary, setQueueSummary] = useState<DevBotsQueueSummary | null>(null);
   const [settings, setSettings] = useState<DevBotsSettings | null>(null);
@@ -168,26 +167,17 @@ export function DevBotsStoreProvider({ children, socket }: DevBotsStoreProviderP
     void fetchSettings();
   }, [refreshStatus, fetchSettings]);
 
-  useEffect(() => {
-    if (!socket) return;
-    const handleTaskUpdates = () => {
-      void refreshStatus();
-    };
-    socket.on('task:created', handleTaskUpdates);
-    socket.on('task:updated', handleTaskUpdates);
-    socket.on('task:completed', handleTaskUpdates);
-    socket.on('task:failed', handleTaskUpdates);
-    socket.on('task:started', handleTaskUpdates);
-    socket.on('task:assigned', handleTaskUpdates);
-    return () => {
-      socket.off('task:created', handleTaskUpdates);
-      socket.off('task:updated', handleTaskUpdates);
-      socket.off('task:completed', handleTaskUpdates);
-      socket.off('task:failed', handleTaskUpdates);
-      socket.off('task:started', handleTaskUpdates);
-      socket.off('task:assigned', handleTaskUpdates);
-    };
-  }, [socket, refreshStatus]);
+  // Handle SSE task events (refreshes status on any task change)
+  const handleTaskEvent = useCallback((_data: unknown) => {
+    void refreshStatus();
+  }, [refreshStatus]);
+
+  // Handle SSE system events (refreshes status on system changes)
+  const handleSystemEvent = useCallback((_data: unknown) => {
+    void refreshStatus();
+  }, [refreshStatus]);
+
+  useSSE(handleTaskEvent, handleSystemEvent);
 
   const fetchTaskDetail = useCallback(
     async (taskId: string | null) => {

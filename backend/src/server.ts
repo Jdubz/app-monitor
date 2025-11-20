@@ -160,55 +160,9 @@ export async function createApp(options: CreateAppOptions = {}) {
   }
 
   if (devBotsManager) {
-    // Setup Dev-Bots Manager Socket.IO events
-    devBotsManager.on('taskAdded', (task) => {
-      io.emit('claude:taskAdded', task);
-    });
-
-    devBotsManager.on('taskAssigned', (task) => {
-      io.emit('claude:taskAssigned', task);
-    });
-
-    devBotsManager.on('taskStarted', (task) => {
-      io.emit('claude:taskStarted', task);
-    });
-
-    devBotsManager.on('taskCompleted', (task) => {
-      io.emit('claude:taskCompleted', task);
-    });
-
-    devBotsManager.on('taskFailed', (task) => {
-      io.emit('claude:taskFailed', task);
-    });
-
-    devBotsManager.on('systemStatusChange', (status) => {
-      io.emit('claude:systemStatusChange', status);
-    });
-
-    devBotsManager.on('coordinatorHealthChange', (isHealthy) => {
-      io.emit('claude:coordinatorHealthChange', isHealthy);
-    });
-
-    // Docker error and warning events
-    devBotsManager.on('dockerError', (error) => {
-      io.emit('claude:dockerError', error);
-      logger.error({
-        category: 'process',
-        action: 'docker_error_emitted_to_clients',
-        message: 'Docker error emitted to clients',
-        error,
-      });
-    });
-
-    devBotsManager.on('dockerWarning', (warning) => {
-      io.emit('claude:dockerWarning', warning);
-      logger.warn({
-        category: 'process',
-        action: 'docker_warning_emitted_to_clients',
-        message: 'Docker warning emitted to clients',
-        details: { warning },
-      });
-    });
+    // NOTE: DevBotsManager events are now handled by SSE routes (sse.routes.ts)
+    // Socket.IO is retained ONLY for interactive terminal (bidirectional communication)
+    // All task/system events migrated to Server-Sent Events for better performance
 
     // Initialize TerminalService with tmux for persistent sessions
     // Skip in test environments to avoid node-pty crashes
