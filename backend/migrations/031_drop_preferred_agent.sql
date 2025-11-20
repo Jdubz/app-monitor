@@ -63,26 +63,50 @@ CREATE TABLE IF NOT EXISTS tasks_new (
 );
 
 INSERT INTO tasks_new (
+  -- Core fields
   id, type, title, description, documentation, notes, status, priority,
-  created_at, assigned_at, started_at, completed_at, assigned_agent, assigned_worker,
-  agent_type, prompt, output, error, can_retry, retry_count, max_retries, timeout_ms,
+  -- Timestamps
+  created_at, assigned_at, started_at, completed_at,
+  -- Agent fields
+  assigned_agent, assigned_worker, agent_type, prompt, output, error,
+  can_retry, retry_count, max_retries, timeout_ms,
+  -- Task details
   fingerprint, estimated_hours, complexity, exit_code, files, dependencies, project,
-  timeout, metadata, context_json, pr_number, chain_id, chain_depth, chain_status,
+  timeout, metadata, context_json, pr_number,
+  -- Chain fields
+  chain_id, chain_depth, chain_status,
   blocked_reason, blocked_at, blocked_by, resumed_by, resumed_at,
+  -- Phase fields
   phase_index, phase_name, phase_status, phase_attempts, phase_payload,
-  context_bundle_id, context_cache_key, context_profiles, risk_level,
-  task_category, file_patterns, estimated_complexity
+  -- Context fields
+  context_bundle_id, context_cache_key, context_profiles,
+  -- Risk and category
+  risk_level, task_category,
+  -- File patterns and complexity
+  file_patterns, estimated_complexity
 )
 SELECT
+  -- Core fields
   id, type, title, description, documentation, notes, status, priority,
-  created_at, assigned_at, started_at, completed_at, assigned_agent, assigned_worker,
-  agent_type, prompt, output, error, can_retry, retry_count, max_retries, timeout_ms,
+  -- Timestamps
+  created_at, assigned_at, started_at, completed_at,
+  -- Agent fields
+  assigned_agent, assigned_worker, agent_type, prompt, output, error,
+  can_retry, retry_count, max_retries, timeout_ms,
+  -- Task details
   fingerprint, estimated_hours, complexity, exit_code, files, dependencies, project,
-  timeout, metadata, context_json, pr_number, chain_id, chain_depth, chain_status,
+  timeout, metadata, context_json, pr_number,
+  -- Chain fields
+  chain_id, chain_depth, chain_status,
   blocked_reason, blocked_at, blocked_by, resumed_by, resumed_at,
+  -- Phase fields
   phase_index, phase_name, phase_status, phase_attempts, phase_payload,
-  context_bundle_id, context_cache_key, context_profiles, risk_level,
-  task_category, file_patterns, estimated_complexity
+  -- Context fields
+  context_bundle_id, context_cache_key, context_profiles,
+  -- Risk and category
+  risk_level, task_category,
+  -- File patterns and complexity
+  file_patterns, estimated_complexity
 FROM tasks;
 
 DROP TABLE tasks;
