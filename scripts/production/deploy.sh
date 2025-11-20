@@ -319,7 +319,7 @@ main() {
 
     # Remove devDependencies
     log_info "Pruning dev dependencies..."
-    if ! npm prune --production; then
+    if ! NPM_CONFIG_WORKSPACES=false npm prune --production; then
         log_error "Backend npm prune failed"
         exit 1
     fi
