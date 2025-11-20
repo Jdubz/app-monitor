@@ -262,7 +262,7 @@ main() {
 
     # Install dependencies with validation
     log_info "Installing backend dependencies..."
-    if ! npm ci 2>&1 | tee /tmp/npm-ci-backend.log; then
+    if ! npm ci --omit=dev --workspaces=false 2>&1 | tee /tmp/npm-ci-backend.log; then
         log_error "Backend npm ci failed"
         log_error "Last 10 lines of npm output:"
         tail -10 /tmp/npm-ci-backend.log
@@ -315,29 +315,6 @@ main() {
     if [ ! -f "dist/index.js" ]; then
         log_error "Build output missing: dist/index.js not created"
         exit 1
-    fi
-
-    # Remove devDependencies
-    log_info "Pruning dev dependencies..."
-    if [ -f "${RELEASE_DIR}/package.json" ]; then
-        mv "${RELEASE_DIR}/package.json" "${RELEASE_DIR}/package.json.deploy-prune.bak"
-    fi
-    # Clear any workspace-scoped npm env from earlier commands (e.g. npm run -w backend)
-    unset npm_config_workspace NPM_CONFIG_WORKSPACE
-
-    if ! NPM_CONFIG_WORKSPACES=false npm prune --production; then
-        log_error "Backend npm prune failed"
-        [ -f "${RELEASE_DIR}/package.json.deploy-prune.bak" ] && \
-            mv "${RELEASE_DIR}/package.json.deploy-prune.bak" "${RELEASE_DIR}/package.json"
-        exit 1
-    fi
-    [ -f "${RELEASE_DIR}/package.json.deploy-prune.bak" ] && \
-        mv "${RELEASE_DIR}/package.json.deploy-prune.bak" "${RELEASE_DIR}/package.json"
-
-    # Workaround: npm prune occasionally removes @modelcontextprotocol/sdk even though it's a prod dep.
-    if [ ! -d "node_modules/@modelcontextprotocol/sdk" ]; then
-        log_warn "@modelcontextprotocol/sdk missing after prune - reinstalling production copy"
-        NPM_CONFIG_WORKSPACES=false npm install @modelcontextprotocol/sdk --omit=dev --no-save
     fi
 
     # Final verification
