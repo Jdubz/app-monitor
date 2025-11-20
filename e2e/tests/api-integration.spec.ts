@@ -130,7 +130,6 @@ test.describe('Dev-Bots Settings Endpoints', () => {
       headers,
       data: {
         maxWorkers: 2,
-        dryRun: true,
       },
     }).catch(() => null);
 

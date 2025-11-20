@@ -63,10 +63,7 @@ export interface DevBotsTaskDetail {
 }
 
 export interface DevBotsSettings {
-  modelStrategy: 'alternate' | 'claude-only' | 'codex-only' | 'random';
   maxWorkers: number;
-  dryRun: boolean;
-  autoCleanup: boolean;
   updatedAt: string;
 }
 

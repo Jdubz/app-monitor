@@ -1,538 +1,353 @@
 import { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { RotateCcw, SkipForward, XCircle, ShieldAlert, Terminal } from 'lucide-react';
+import { Activity, Bot, Settings2, Server, Clock, Zap } from 'lucide-react';
 import { useDevBotsStore } from '@/contexts/devBotsStore';
-import { ListDetailLayout } from '@/components/layout/ListDetailLayout';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
-import type { DevBotsTask } from '@/types/dev-bots';
-import { getTaskStatusIcon, getTaskStatusColor } from '@/utils/statusHelpers';
-import { useListSelection } from '@/hooks/common';
-import { api } from '@/services/api';
-
-type ChainFilter = 'all' | 'blocked' | 'quarantined';
+import type { DevBotsWorkerStatus } from '@/types/dev-bots';
 
 /**
- * DevBotsTabContent - Dev-Bots monitoring tab using ListDetailLayout
+ * DevBotsTabContent - Dev-Bots Infrastructure & Container Health Tab
  *
- * Displays automation chains (tasks) with:
- * - Summary metrics (queue size, workers, active tasks)
- * - Filterable list (all, blocked, quarantined)
- * - Detail view with intervention controls
+ * This tab focuses EXCLUSIVELY on dev-bot infrastructure:
+ * - How many bots are running
+ * - What task each bot is currently working on
+ * - Container health and agent status
+ * - System configuration (max workers)
+ *
+ * This is NOT about task queue management - that's the Task Queue tab.
+ * This is about the infrastructure and agents themselves.
  */
-type DialogState =
-  | { type: 'none' }
-  | { type: 'retry'; taskId: string }
-  | { type: 'skip'; taskId: string; reason: string }
-  | { type: 'cancel'; taskId: string }
-  | { type: 'quarantine'; chainId: string; reason: string }
-  | { type: 'success'; message: string }
-  | { type: 'error'; message: string };
-
 export function DevBotsTabContent() {
-  const { status, queueRows, isLoading, refreshStatus } = useDevBotsStore();
-  const navigate = useNavigate();
-  const [activeFilter, setActiveFilter] = useState<ChainFilter>('all');
-  const [interventionLoading, setInterventionLoading] = useState<string | null>(null);
-  const [interventionError, setInterventionError] = useState<string | null>(null);
-  const [dialogState, setDialogState] = useState<DialogState>({ type: 'none' });
+  const {
+    status,
+    workers,
+    settings,
+    settingsLoading,
+    settingsUpdating,
+    settingsUpdateError,
+    updateSettings,
+    isLoading,
+    refreshStatus,
+  } = useDevBotsStore();
 
-  // For now, treat each task as a "chain" - in the future, group by chainId
-  const chains = useMemo(() => {
-    const result = queueRows.map((row) => row.task);
-    return result;
-  }, [queueRows]);
+  const [showSettingsDialog, setShowSettingsDialog] = useState(false);
+  const [editMaxWorkers, setEditMaxWorkers] = useState<number | null>(null);
 
-  // Use list selection hook for consistent auto-selection behavior
-  const { selectedItem: selectedChain, selectItem: selectChain } = useListSelection(
-    chains,
-    (chain) => chain.id,
-    { autoSelectFirst: true }
-  );
+  // System metrics
+  const systemStatus = status?.systemStatus ?? 'unknown';
+  const workerCount = status?.workerCount ?? 0;
+  const maxWorkers = status?.maxWorkers ?? settings?.maxWorkers ?? 0;
+  const activeTasks = status?.activeTasks ?? 0;
+  const uptime = status?.uptime ?? 0;
 
-  const filteredChains = useMemo(() => {
-    let result: DevBotsTask[];
-    switch (activeFilter) {
-      case 'blocked':
-        // Stub: tasks with status 'failed' as "blocked"
-        result = chains.filter((chain) => chain.status === 'failed');
-        break;
-      case 'quarantined':
-        // Stub: no quarantine logic yet
-        result = [];
-        break;
-      case 'all':
+  // Format uptime
+  const formatUptime = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`;
+    }
+    return `${minutes}m`;
+  };
+
+  // Get system status color
+  const getSystemStatusColor = (status: string) => {
+    switch (status) {
+      case 'running':
+        return 'bg-green-500';
+      case 'stopped':
+        return 'bg-gray-500';
+      case 'error':
+        return 'bg-red-500';
       default:
-        result = chains;
-    }
-    return result;
-  }, [chains, activeFilter]);
-
-  // Summary cards
-  const summaryCards = useMemo(() => {
-    const queueSize = status?.queueSize ?? 0;
-    const activeWorkers = status?.workerCount ?? 0;
-    const maxWorkers = status?.maxWorkers ?? 0;
-    const activeTasks = status?.activeTasks ?? 0;
-
-    return [
-      { label: 'Queue Size', value: queueSize },
-      { label: 'Workers', value: `${activeWorkers}/${maxWorkers}` },
-      { label: 'Active Tasks', value: activeTasks },
-    ];
-  }, [status]);
-
-  // Filter tabs
-  const filterTabs = useMemo(() => {
-    const blockedCount = chains.filter((c) => c.status === 'failed').length;
-    return [
-      { value: 'all' as const, label: 'All', count: chains.length },
-      { value: 'blocked' as const, label: 'Blocked', count: blockedCount },
-      { value: 'quarantined' as const, label: 'Quarantined', count: 0 },
-    ];
-  }, [chains]);
-
-  // Intervention action handlers
-  const handleRetryTask = async (taskId: string) => {
-    setDialogState({ type: 'retry', taskId });
-  };
-
-  const confirmRetryTask = async (taskId: string) => {
-    setDialogState({ type: 'none' });
-    setInterventionLoading('retry');
-    setInterventionError(null);
-
-    try {
-      const result = await api.retryDevBotsTask(taskId);
-      setDialogState({ type: 'success', message: result.message });
-      refreshStatus();
-    } catch (error) {
-      const errorMessage = api.handleApiError(error);
-      setInterventionError(errorMessage);
-      setDialogState({ type: 'error', message: errorMessage });
-    } finally {
-      setInterventionLoading(null);
+        return 'bg-yellow-500';
     }
   };
 
-  const handleSkipTask = async (taskId: string) => {
-    setDialogState({ type: 'skip', taskId, reason: '' });
+  // Open settings dialog
+  const handleOpenSettings = () => {
+    setEditMaxWorkers(settings?.maxWorkers ?? 5);
+    setShowSettingsDialog(true);
   };
 
-  const confirmSkipTask = async (taskId: string, reason: string) => {
-    setDialogState({ type: 'none' });
-    setInterventionLoading('skip');
-    setInterventionError(null);
-
-    try {
-      const result = await api.skipDevBotsTask(taskId, reason || undefined);
-      setDialogState({ type: 'success', message: result.message });
-      refreshStatus();
-    } catch (error) {
-      const errorMessage = api.handleApiError(error);
-      setInterventionError(errorMessage);
-      setDialogState({ type: 'error', message: errorMessage });
-    } finally {
-      setInterventionLoading(null);
-    }
-  };
-
-  const handleCancelTask = async (taskId: string) => {
-    setDialogState({ type: 'cancel', taskId });
-  };
-
-  const confirmCancelTask = async (taskId: string) => {
-    setDialogState({ type: 'none' });
-    setInterventionLoading('cancel');
-    setInterventionError(null);
-
-    try {
-      const result = await api.cancelDevBotsTask(taskId);
-      setDialogState({ type: 'success', message: result.message });
-      refreshStatus();
-    } catch (error) {
-      const errorMessage = api.handleApiError(error);
-      setInterventionError(errorMessage);
-      setDialogState({ type: 'error', message: errorMessage });
-    } finally {
-      setInterventionLoading(null);
-    }
-  };
-
-  const handleQuarantineChain = async (chainId: string) => {
-    setDialogState({ type: 'quarantine', chainId, reason: '' });
-  };
-
-  const confirmQuarantineChain = async (chainId: string, reason: string) => {
-    if (!reason.trim()) {
-      setDialogState({ type: 'error', message: 'Reason is required to quarantine a chain.' });
+  // Save settings
+  const handleSaveSettings = async () => {
+    if (editMaxWorkers === null || editMaxWorkers < 1 || editMaxWorkers > 20) {
       return;
     }
 
-    setDialogState({ type: 'none' });
-    setInterventionLoading('quarantine');
-    setInterventionError(null);
-
     try {
-      const result = await api.quarantineDevBotsChain(chainId, reason);
-      setDialogState({ type: 'success', message: result.message });
-      refreshStatus();
-    } catch (error) {
-      const errorMessage = api.handleApiError(error);
-      setInterventionError(errorMessage);
-      setDialogState({ type: 'error', message: errorMessage });
-    } finally {
-      setInterventionLoading(null);
-    }
-  };
-
-  const handleOpenSession = async (task: DevBotsTask) => {
-    try {
-      // Start an interactive session with context from this task
-      const sessionState = await api.startDevBotsInteractiveSession({
-        modelProvider: 'anthropic',
-        modelName: 'claude-sonnet-4-5',
-        metadata: {
-          taskContext: `Task: ${task.type}\nDescription: ${task.description || 'N/A'}\nStatus: ${task.status}\nID: ${task.id}`,
-        },
+      await updateSettings({
+        maxWorkers: editMaxWorkers,
       });
-
-      // Navigate to interactive tab with the new session
-      navigate('/monitor/interactive');
-      const sessionId = sessionState.session?.id || 'unknown';
-      alert(`Interactive session started: ${sessionId}`);
+      setShowSettingsDialog(false);
     } catch (error) {
-      const errorMessage = api.handleApiError(error);
-      alert(`Error starting session: ${errorMessage}`);
+      // Error is already handled by devBotsStore (sets settingsUpdateError)
+      // Just log for debugging
+      console.error('Failed to update settings:', error);
     }
   };
 
-  // Render list item
-  const renderListItem = (chain: DevBotsTask, _isSelected: boolean) => {
-    const statusIcon = getTaskStatusIcon(chain.status);
-    const statusColor = getTaskStatusColor(chain.status);
+  // Convert workers object to array
+  const workersList = useMemo<Array<{ id: string; data: DevBotsWorkerStatus }>>(() => {
+    return Object.entries(workers).map(([id, data]) => ({ id, data }));
+  }, [workers]);
 
-    return (
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex-1 space-y-1">
-          <div className="flex items-center gap-2">
-            {statusIcon}
-            <span className="text-sm font-medium">{chain.type}</span>
-            <Badge variant="outline" className={cn('text-xs capitalize', statusColor)}>
-              {chain.status}
-            </Badge>
-          </div>
-          <p className="text-xs text-muted-foreground line-clamp-2">
-            {chain.description || 'No description'}
-          </p>
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <span>Created: {new Date(chain.createdAt).toLocaleString()}</span>
-            {chain.assignedWorker && (
-              <>
-                <span>•</span>
-                <span>Worker: {chain.assignedWorker}</span>
-              </>
-            )}
-          </div>
-        </div>
-      </div>
-    );
+  // Get worker status badge color
+  const getWorkerStatusColor = (status: string) => {
+    switch (status) {
+      case 'busy':
+        return 'bg-blue-500 text-white';
+      case 'idle':
+        return 'bg-green-500 text-white';
+      case 'stopped':
+        return 'bg-gray-500 text-white';
+      default:
+        return 'bg-yellow-500 text-white';
+    }
   };
 
-  // Render detail pane
-  const renderDetail = (chain: DevBotsTask | null) => {
-    if (!chain) {
-      return (
-        <Card>
-          <CardHeader>
-            <CardTitle>No Chain Selected</CardTitle>
-            <CardDescription>Select a chain from the list to view details</CardDescription>
-          </CardHeader>
-        </Card>
-      );
+  // Format last seen
+  const formatLastSeen = (timestamp: number) => {
+    const now = Date.now();
+    const diff = now - timestamp;
+    const seconds = Math.floor(diff / 1000);
+    if (seconds < 60) {
+      return `${seconds}s ago`;
     }
-
-    return (
-      <div className="space-y-4">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <span>Chain Details</span>
-              <Badge variant="outline" className="capitalize">
-                {chain.status}
-              </Badge>
-            </CardTitle>
-            <CardDescription>Task ID: {chain.id}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div>
-              <h4 className="text-sm font-semibold mb-2">Type</h4>
-              <p className="text-sm text-muted-foreground">{chain.type}</p>
-            </div>
-            <div>
-              <h4 className="text-sm font-semibold mb-2">Description</h4>
-              <p className="text-sm text-muted-foreground">
-                {chain.description || 'No description provided'}
-              </p>
-            </div>
-            <div>
-              <h4 className="text-sm font-semibold mb-2">Timeline</h4>
-              <div className="space-y-1 text-sm text-muted-foreground">
-                <p>Created: {new Date(chain.createdAt).toLocaleString()}</p>
-                {chain.assignedAt && (
-                  <p>Assigned: {new Date(chain.assignedAt).toLocaleString()}</p>
-                )}
-                {chain.completedAt && (
-                  <p>Completed: {new Date(chain.completedAt).toLocaleString()}</p>
-                )}
-              </div>
-            </div>
-            {chain.assignedWorker && (
-              <div>
-                <h4 className="text-sm font-semibold mb-2">Worker</h4>
-                <Badge variant="outline">{chain.assignedWorker}</Badge>
-              </div>
-            )}
-            {chain.assignedAgent && (
-              <div>
-                <h4 className="text-sm font-semibold mb-2">Agent</h4>
-                <Badge variant="outline">{chain.assignedAgent}</Badge>
-              </div>
-            )}
-            {chain.error && (
-              <div>
-                <h4 className="text-sm font-semibold mb-2 text-red-600">Error</h4>
-                <div className="rounded-md bg-red-50 border border-red-200 p-3">
-                  <p className="text-sm text-red-900">{chain.error}</p>
-                </div>
-              </div>
-            )}
-            {chain.output && (
-              <div>
-                <h4 className="text-sm font-semibold mb-2">Output</h4>
-                <div className="rounded-md bg-muted p-3 font-mono text-xs">
-                  <pre className="whitespace-pre-wrap">{chain.output}</pre>
-                </div>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Intervention Controls */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Intervention Controls</CardTitle>
-            <CardDescription>
-              Manual actions to resolve blocked or quarantined chains
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-2">
-            {interventionError && (
-              <div className="rounded-md bg-red-50 border border-red-200 p-2 text-sm text-red-900">
-                {interventionError}
-              </div>
-            )}
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full justify-start"
-              disabled={chain.status === 'completed' || interventionLoading !== null}
-              onClick={() => handleRetryTask(chain.id)}
-            >
-              <RotateCcw className="mr-2 h-4 w-4" />
-              {interventionLoading === 'retry' ? 'Retrying...' : 'Retry Task'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full justify-start"
-              disabled={chain.status === 'completed' || interventionLoading !== null}
-              onClick={() => handleSkipTask(chain.id)}
-            >
-              <SkipForward className="mr-2 h-4 w-4" />
-              {interventionLoading === 'skip' ? 'Skipping...' : 'Skip and Continue'}
-            </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              className="w-full justify-start"
-              disabled={chain.status === 'completed' || interventionLoading !== null}
-              onClick={() => handleCancelTask(chain.id)}
-            >
-              <XCircle className="mr-2 h-4 w-4" />
-              {interventionLoading === 'cancel' ? 'Canceling...' : 'Cancel Task'}
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full justify-start border-orange-500 text-orange-600 hover:bg-orange-50"
-              disabled={interventionLoading !== null}
-              onClick={() => handleQuarantineChain(chain.id)}
-            >
-              <ShieldAlert className="mr-2 h-4 w-4" />
-              {interventionLoading === 'quarantine' ? 'Quarantining...' : 'Quarantine Chain'}
-            </Button>
-            <div className="pt-2 border-t">
-              <Button
-                variant="default"
-                size="sm"
-                className="w-full justify-start"
-                onClick={() => handleOpenSession(chain)}
-              >
-                <Terminal className="mr-2 h-4 w-4" />
-                Open Interactive Session
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    );
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) {
+      return `${minutes}m ago`;
+    }
+    const hours = Math.floor(minutes / 60);
+    return `${hours}h ago`;
   };
 
   if (isLoading) {
     return (
       <div className="flex h-full items-center justify-center">
-        <p className="text-muted-foreground">Loading dev-bots status...</p>
+        <p className="text-muted-foreground">Loading dev-bots infrastructure...</p>
       </div>
     );
   }
 
   return (
     <>
-      <ListDetailLayout<DevBotsTask, ChainFilter>
-        summaryCards={summaryCards}
-        filterTabs={filterTabs}
-        activeFilter={activeFilter}
-        onFilterChange={setActiveFilter}
-        items={filteredChains}
-        selectedItem={selectedChain}
-        onSelectItem={selectChain}
-        renderListItem={renderListItem}
-        renderDetail={renderDetail}
-        getItemKey={(chain) => chain.id}
-        emptyMessage="No chains found for this filter"
-      />
+      <div className="h-full overflow-auto">
+        <div className="container mx-auto p-6 space-y-6">
+          {/* System Overview Header */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Server className="h-5 w-5" />
+                    Dev-Bots Infrastructure
+                  </CardTitle>
+                  <CardDescription>
+                    Container health, agent status, and system configuration
+                  </CardDescription>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleOpenSettings}
+                  disabled={settingsLoading}
+                >
+                  <Settings2 className="h-4 w-4 mr-2" />
+                  Settings
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {/* System Status */}
+                <div className="space-y-2">
+                  <div className="text-sm text-muted-foreground">System Status</div>
+                  <div className="flex items-center gap-2">
+                    <div className={cn('w-3 h-3 rounded-full', getSystemStatusColor(systemStatus))} />
+                    <span className="font-semibold capitalize">{systemStatus}</span>
+                  </div>
+                </div>
 
-      {/* Retry Confirmation Dialog */}
-      <Dialog open={dialogState.type === 'retry'} onOpenChange={() => setDialogState({ type: 'none' })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Retry Task</DialogTitle>
-            <DialogDescription>Are you sure you want to retry this task?</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogState({ type: 'none' })}>Cancel</Button>
-            <Button onClick={() => dialogState.type === 'retry' && confirmRetryTask(dialogState.taskId)}>
-              Retry
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                {/* Active Workers */}
+                <div className="space-y-2">
+                  <div className="text-sm text-muted-foreground">Active Workers</div>
+                  <div className="flex items-center gap-2">
+                    <Bot className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-semibold">
+                      {workerCount} / {maxWorkers}
+                    </span>
+                  </div>
+                </div>
 
-      {/* Skip Task Dialog */}
-      <Dialog open={dialogState.type === 'skip'} onOpenChange={() => setDialogState({ type: 'none' })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Skip Task</DialogTitle>
-            <DialogDescription>Optionally provide a reason for skipping this task.</DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid gap-2">
-              <Label htmlFor="skip-reason">Reason (optional)</Label>
-              <Input
-                id="skip-reason"
-                value={dialogState.type === 'skip' ? dialogState.reason : ''}
-                onChange={(e) => dialogState.type === 'skip' && setDialogState({ ...dialogState, reason: e.target.value })}
-                placeholder="Enter reason..."
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogState({ type: 'none' })}>Cancel</Button>
-            <Button onClick={() => dialogState.type === 'skip' && confirmSkipTask(dialogState.taskId, dialogState.reason)}>
-              Skip Task
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                {/* Active Tasks */}
+                <div className="space-y-2">
+                  <div className="text-sm text-muted-foreground">Active Tasks</div>
+                  <div className="flex items-center gap-2">
+                    <Activity className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-semibold">{activeTasks}</span>
+                  </div>
+                </div>
 
-      {/* Cancel Task Dialog */}
-      <Dialog open={dialogState.type === 'cancel'} onOpenChange={() => setDialogState({ type: 'none' })}>
-        <DialogContent>
+                {/* Uptime */}
+                <div className="space-y-2">
+                  <div className="text-sm text-muted-foreground">Uptime</div>
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-semibold">{formatUptime(uptime)}</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Quick Settings Display */}
+          {settings && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Configuration</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Max Workers: </span>
+                  <span className="font-semibold">{settings.maxWorkers}</span>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Worker Status List */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Worker Status</CardTitle>
+                  <CardDescription>
+                    {workersList.length === 0
+                      ? 'No workers currently active'
+                      : `${workersList.length} worker${workersList.length === 1 ? '' : 's'} active`}
+                  </CardDescription>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => refreshStatus()}>
+                  <Zap className="h-4 w-4 mr-2" />
+                  Refresh
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {workersList.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Bot className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                  <p>No workers are currently running.</p>
+                  <p className="text-sm mt-2">Workers will appear here when tasks are assigned.</p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {workersList.map(({ id, data }) => (
+                    <Card key={id} className="border-l-4 border-l-blue-500">
+                      <CardContent className="pt-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <div className="flex items-center gap-2 mb-2">
+                              <Bot className="h-4 w-4 text-muted-foreground" />
+                              <span className="font-semibold">{id}</span>
+                              <Badge className={cn('ml-auto', getWorkerStatusColor(data.status))}>
+                                {data.status}
+                              </Badge>
+                            </div>
+                            {data.currentTask && (
+                              <div className="text-sm text-muted-foreground">
+                                <span className="font-medium">Current Task: </span>
+                                <code className="text-xs bg-muted px-1 py-0.5 rounded">
+                                  {data.currentTask}
+                                </code>
+                              </div>
+                            )}
+                          </div>
+                          <div className="space-y-1 text-sm">
+                            {data.personality && (
+                              <div>
+                                <span className="text-muted-foreground">Personality: </span>
+                                <span className="font-medium">{data.personality.name}</span>
+                              </div>
+                            )}
+                            <div>
+                              <span className="text-muted-foreground">Last Seen: </span>
+                              <span className="font-medium">{formatLastSeen(data.lastSeen)}</span>
+                            </div>
+                            {data.onboardingComplete !== undefined && (
+                              <div>
+                                <span className="text-muted-foreground">Onboarding: </span>
+                                <Badge variant={data.onboardingComplete ? 'default' : 'secondary'}>
+                                  {data.onboardingComplete ? 'Complete' : 'Pending'}
+                                </Badge>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Settings Dialog */}
+      <Dialog open={showSettingsDialog} onOpenChange={setShowSettingsDialog}>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Cancel Task</DialogTitle>
-            <DialogDescription className="text-destructive">
-              Are you sure you want to CANCEL this task? This action cannot be undone.
+            <DialogTitle>Dev-Bots Settings</DialogTitle>
+            <DialogDescription>
+              Configure system-wide settings for the dev-bots infrastructure.
             </DialogDescription>
           </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogState({ type: 'none' })}>Go Back</Button>
-            <Button variant="destructive" onClick={() => dialogState.type === 'cancel' && confirmCancelTask(dialogState.taskId)}>
-              Cancel Task
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Quarantine Chain Dialog */}
-      <Dialog open={dialogState.type === 'quarantine'} onOpenChange={() => setDialogState({ type: 'none' })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Quarantine Chain</DialogTitle>
-            <DialogDescription>Provide a reason for quarantining this chain (required).</DialogDescription>
-          </DialogHeader>
           <div className="grid gap-4 py-4">
+            {/* Max Workers */}
             <div className="grid gap-2">
-              <Label htmlFor="quarantine-reason">Reason *</Label>
+              <Label htmlFor="maxWorkers">Maximum Workers</Label>
               <Input
-                id="quarantine-reason"
-                value={dialogState.type === 'quarantine' ? dialogState.reason : ''}
-                onChange={(e) => dialogState.type === 'quarantine' && setDialogState({ ...dialogState, reason: e.target.value })}
-                placeholder="Enter reason..."
-                required
+                id="maxWorkers"
+                type="number"
+                min={1}
+                max={20}
+                value={editMaxWorkers ?? 5}
+                onChange={(e) => setEditMaxWorkers(parseInt(e.target.value, 10))}
               />
+              <p className="text-xs text-muted-foreground">
+                Maximum number of concurrent dev-bot workers (1-20)
+              </p>
             </div>
+            {settingsUpdateError && (
+              <p className="text-sm text-destructive">{settingsUpdateError}</p>
+            )}
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDialogState({ type: 'none' })}>Cancel</Button>
             <Button
-              variant="destructive"
-              onClick={() => dialogState.type === 'quarantine' && confirmQuarantineChain(dialogState.chainId, dialogState.reason)}
-              disabled={dialogState.type === 'quarantine' && !dialogState.reason.trim()}
+              variant="outline"
+              onClick={() => setShowSettingsDialog(false)}
+              disabled={settingsUpdating}
             >
-              Quarantine
+              Cancel
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Success Dialog */}
-      <Dialog open={dialogState.type === 'success'} onOpenChange={() => setDialogState({ type: 'none' })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Success</DialogTitle>
-            <DialogDescription>{dialogState.type === 'success' && dialogState.message}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button onClick={() => setDialogState({ type: 'none' })}>OK</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Error Dialog */}
-      <Dialog open={dialogState.type === 'error'} onOpenChange={() => setDialogState({ type: 'none' })}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="text-destructive">Error</DialogTitle>
-            <DialogDescription>{dialogState.type === 'error' && dialogState.message}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button onClick={() => setDialogState({ type: 'none' })}>OK</Button>
+            <Button onClick={handleSaveSettings} disabled={settingsUpdating}>
+              {settingsUpdating ? 'Saving...' : 'Save Changes'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

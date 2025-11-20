@@ -4,7 +4,6 @@
  * Validates Dev-Bots settings input data for API endpoints
  */
 
-const VALID_MODEL_STRATEGIES = ['alternate', 'claude-only', 'codex-only', 'random'] as const;
 const MIN_MAX_WORKERS = 1;
 const MAX_MAX_WORKERS = 20;
 
@@ -34,32 +33,15 @@ export function validateSettingsUpdatePayload(input: unknown): ValidationResult 
 
   const data = input as Record<string, unknown>;
 
-  // Validate that at least one field is provided
-  const validFields = ['modelStrategy', 'maxWorkers', 'dryRun', 'autoCleanup'];
+  // Validate that maxWorkers is provided
+  const validFields = ['maxWorkers'];
   const providedFields = Object.keys(data).filter(key => validFields.includes(key));
-  
+
   if (providedFields.length === 0) {
     errors.push({
       field: 'body',
-      message: 'At least one setting field must be provided',
+      message: 'maxWorkers field must be provided',
     });
-  }
-
-  // Validate modelStrategy if provided
-  if (data.modelStrategy !== undefined) {
-    if (typeof data.modelStrategy !== 'string') {
-      errors.push({
-        field: 'modelStrategy',
-        message: 'Model strategy must be a string',
-        value: data.modelStrategy,
-      });
-    } else if (!VALID_MODEL_STRATEGIES.includes(data.modelStrategy as typeof VALID_MODEL_STRATEGIES[number])) {
-      errors.push({
-        field: 'modelStrategy',
-        message: `Model strategy must be one of: ${VALID_MODEL_STRATEGIES.join(', ')}`,
-        value: data.modelStrategy,
-      });
-    }
   }
 
   // Validate maxWorkers if provided
@@ -81,28 +63,6 @@ export function validateSettingsUpdatePayload(input: unknown): ValidationResult 
         field: 'maxWorkers',
         message: `Max workers must be between ${MIN_MAX_WORKERS} and ${MAX_MAX_WORKERS}`,
         value: data.maxWorkers,
-      });
-    }
-  }
-
-  // Validate dryRun if provided
-  if (data.dryRun !== undefined) {
-    if (typeof data.dryRun !== 'boolean') {
-      errors.push({
-        field: 'dryRun',
-        message: 'Dry run must be a boolean',
-        value: data.dryRun,
-      });
-    }
-  }
-
-  // Validate autoCleanup if provided
-  if (data.autoCleanup !== undefined) {
-    if (typeof data.autoCleanup !== 'boolean') {
-      errors.push({
-        field: 'autoCleanup',
-        message: 'Auto cleanup must be a boolean',
-        value: data.autoCleanup,
       });
     }
   }
