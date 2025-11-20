@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Activity, Bot, Settings2, Server, Clock, Zap } from 'lucide-react';
+import { Activity, Bot, Settings2, Server, Zap } from 'lucide-react';
 import { useDevBotsStore } from '@/contexts/devBotsStore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -42,35 +42,10 @@ export function DevBotsTabContent() {
   const [showSettingsDialog, setShowSettingsDialog] = useState(false);
 
   // System metrics
-  const systemStatus = status?.systemStatus ?? 'unknown';
   const workerCount = status?.workerCount ?? 0;
   const maxWorkers = status?.maxWorkers ?? settings?.maxWorkers ?? 0;
   const activeTasks = status?.activeTasks ?? 0;
-  const uptime = status?.uptime ?? 0;
 
-  // Format uptime
-  const formatUptime = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600);
-    const minutes = Math.floor((seconds % 3600) / 60);
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`;
-    }
-    return `${minutes}m`;
-  };
-
-  // Get system status color
-  const getSystemStatusColor = (status: string) => {
-    switch (status) {
-      case 'running':
-        return 'bg-green-500';
-      case 'stopped':
-        return 'bg-gray-500';
-      case 'error':
-        return 'bg-red-500';
-      default:
-        return 'bg-yellow-500';
-    }
-  };
 
   // Open settings dialog
   const handleOpenSettings = () => {
@@ -149,16 +124,7 @@ export function DevBotsTabContent() {
               </div>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                {/* System Status */}
-                <div className="space-y-2">
-                  <div className="text-sm text-muted-foreground">System Status</div>
-                  <div className="flex items-center gap-2">
-                    <div className={cn('w-3 h-3 rounded-full', getSystemStatusColor(systemStatus))} />
-                    <span className="font-semibold capitalize">{systemStatus}</span>
-                  </div>
-                </div>
-
+              <div className="grid grid-cols-2 md:grid-cols-2 gap-4">
                 {/* Active Workers */}
                 <div className="space-y-2">
                   <div className="text-sm text-muted-foreground">Active Workers</div>
@@ -176,15 +142,6 @@ export function DevBotsTabContent() {
                   <div className="flex items-center gap-2">
                     <Activity className="h-4 w-4 text-muted-foreground" />
                     <span className="font-semibold">{activeTasks}</span>
-                  </div>
-                </div>
-
-                {/* Uptime */}
-                <div className="space-y-2">
-                  <div className="text-sm text-muted-foreground">Uptime</div>
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-4 w-4 text-muted-foreground" />
-                    <span className="font-semibold">{formatUptime(uptime)}</span>
                   </div>
                 </div>
               </div>
