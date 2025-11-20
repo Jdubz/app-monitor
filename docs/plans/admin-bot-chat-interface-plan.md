@@ -4,11 +4,11 @@
 **Status:** ✅ COMPLETED - This is a historical planning document
 **Purpose:** Replace tmux-based terminal with a clean AI conversation interface for admin bot interactions
 
-> **NOTE:** This implementation has been completed. For current implementation details, see:
-> - `docs/admin-bot-implementation-summary.md` - Final implementation details
-> - `docs/admin-bot-testing-summary.md` - Testing coverage
-> - `docs/admin-bot-critical-fixes.md` - Week 1 critical fixes
-> - `docs/audits/admin-bot-implementation-audit.md` - Security audit
+> **NOTE:** This implementation has been completed. For current implementation details, see the code:
+> - Backend: `backend/src/services/AdminBotService.ts` - Core service implementation
+> - Backend: `backend/src/routes/admin-bot/chat.routes.ts` - API routes
+> - Frontend: `frontend/src/components/admin-bot/AdminBotChat.tsx` - Chat UI component
+> - Frontend: `frontend/src/hooks/useAdminBotSSE.ts` - SSE connection hook
 
 ## Code Review Comments Addressed
 
@@ -30,7 +30,7 @@ During PR #289 review, AI code reviewers (Gemini Code Assist, Copilot) identifie
 **Concern:** Reviewer claimed `npm ci --omit=dev --workspaces=false` is incorrect.
 **Reality Check:** This command is CORRECT and matches production deployment exactly (`scripts/production/deploy.sh:268`). TypeScript and @types/* are intentionally in dependencies (not devDependencies) to support this pattern. No changes needed.
 
-**See:** `docs/admin-bot-critical-fixes.md` for implementation details of all fixes.
+**Implementation:** See code references above for actual implementation details.
 
 ---
 

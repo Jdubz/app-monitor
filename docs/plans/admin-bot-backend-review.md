@@ -5,11 +5,9 @@
 **Status:** ✅ HISTORICAL - Critical issues have been fixed
 
 > **NOTE:** This was the initial review. Most critical issues have been addressed:
-> - ✅ Issues #1, #2, #3, #7 FIXED (see `docs/admin-bot-critical-fixes.md`)
-> - ✅ Week 1 critical fixes completed
+> - ✅ Issues #1, #2, #3, #7 FIXED (see implementation in `backend/src/services/AdminBotService.ts` and `backend/src/routes/admin-bot/chat.routes.ts`)
+> - ✅ Week 1 critical fixes completed (message validation, sanitization, backpressure handling)
 > - ℹ️ Issues #4, #5 intentionally not fixed (single-user system, acceptable trade-offs)
->
-> For current status, see `docs/audits/admin-bot-implementation-audit.md`
 
 ---
 
