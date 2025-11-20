@@ -19,7 +19,6 @@ This document provides comprehensive examples of different types of tasks that c
     "User can log out and tokens are invalidated",
     "Authentication state persists across page refreshes"
   ],
-  "assignedAgent": "backend-specialist",
   "files": [
     "src/auth/auth.service.ts",
     "src/auth/auth.controller.ts",
@@ -54,7 +53,6 @@ This document provides comprehensive examples of different types of tasks that c
     "All existing tests pass",
     "Performance is not significantly degraded"
   ],
-  "assignedAgent": "backend-specialist",
   "files": [
     "src/services/data-processor.ts",
     "src/utils/file-handler.ts"
@@ -88,7 +86,6 @@ This document provides comprehensive examples of different types of tasks that c
     "Component is responsive and works on mobile",
     "Component has comprehensive TypeScript types"
   ],
-  "assignedAgent": "frontend-specialist",
   "files": [
     "src/components/DataTable/DataTable.tsx",
     "src/components/DataTable/DataTable.module.css",
@@ -128,7 +125,6 @@ This document provides comprehensive examples of different types of tasks that c
     "Password hashing uses strong algorithms",
     "JWT tokens are properly secured"
   ],
-  "assignedAgent": "review-specialist",
   "files": [
     "src/auth/",
     "src/middleware/",
@@ -159,7 +155,6 @@ This document provides comprehensive examples of different types of tasks that c
     "All edge cases are tested",
     "Tests are maintainable and well-documented"
   ],
-  "assignedAgent": "testing-specialist",
   "files": [
     "src/api/users/",
     "src/services/user.service.ts",
@@ -199,7 +194,6 @@ This document provides comprehensive examples of different types of tasks that c
     "Production deployment requires manual approval",
     "Pipeline includes security scanning"
   ],
-  "assignedAgent": "devops-specialist",
   "files": [
     ".github/workflows/ci-cd.yml",
     "Dockerfile",
@@ -231,7 +225,6 @@ This document provides comprehensive examples of different types of tasks that c
     "Documentation is interactive and testable",
     "Documentation is hosted and accessible"
   ],
-  "assignedAgent": "documentation-specialist",
   "files": [
     "docs/api/openapi.yaml",
     "src/swagger/",
@@ -264,7 +257,6 @@ This document provides comprehensive examples of different types of tasks that c
     "All existing functionality is preserved",
     "Performance is not degraded"
   ],
-  "assignedAgent": "backend-specialist",
   "files": [
     "src/auth/",
     "src/middleware/",
@@ -299,7 +291,6 @@ This document provides comprehensive examples of different types of tasks that c
     "Memory usage is optimized",
     "All performance tests pass"
   ],
-  "assignedAgent": "backend-specialist",
   "files": [
     "src/services/",
     "src/cache/",
@@ -332,7 +323,6 @@ This document provides comprehensive examples of different types of tasks that c
   "acceptanceCriteria": [
     "[Specific, measurable criteria]"
   ],
-  "assignedAgent": "[appropriate-specialist]",
   "files": ["[relevant files]"],
   "dependencies": ["[required packages]"],
   "project": "[target-project]",
@@ -354,7 +344,6 @@ This document provides comprehensive examples of different types of tasks that c
   "acceptanceCriteria": [
     "[Specific fix requirements]"
   ],
-  "assignedAgent": "[appropriate-specialist]",
   "files": ["[files to modify]"],
   "project": "[target-project]",
   "priority": 8,

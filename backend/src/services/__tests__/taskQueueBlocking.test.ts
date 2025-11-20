@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { TaskQueueService, type PhasePayload } from '../taskQueue.sqlite.js';
+import { TaskQueueService, type PhasePayload, AUTO_ASSIGNED_AGENT } from '../taskQueue.sqlite.js';
 
 describe('TaskQueueService - Blocking & Resume', () => {
   let taskQueue: TaskQueueService;
@@ -24,14 +24,14 @@ describe('TaskQueueService - Blocking & Resume', () => {
     }
   });
 
-  it('auto-selects a preferred agent when none is provided', () => {
+  it('marks tasks for automatic agent selection when none is provided', () => {
     const createdTask = taskQueue.createTask({
       type: 'documentation',
       title: 'Update README',
       description: 'Refresh docs'
     });
 
-    expect(createdTask.preferred_agent).toBe('codex');
+    expect(createdTask.assigned_agent).toBe(AUTO_ASSIGNED_AGENT);
   });
 
   describe('resumeTask', () => {

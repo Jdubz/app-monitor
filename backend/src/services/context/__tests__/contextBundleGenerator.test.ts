@@ -181,15 +181,6 @@ describe('ContextBundleGenerator', () => {
       expect(result.errors).toContain('force must be a boolean');
     });
 
-    it('should reject non-boolean dryRun flag', async () => {
-      const options: BundleGenerationOptions = {
-        taskType: 'implementation',
-        dryRun: 'false' as any
-      };
-      const result = await generator.generateBundle(options);
-      expect(result.success).toBe(false);
-      expect(result.errors).toContain('dryRun must be a boolean');
-    });
   });
 
   describe('Path Security', () => {

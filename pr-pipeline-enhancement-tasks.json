@@ -4,7 +4,6 @@
     "taskType": "feature",
     "project": "dev-monitor",
     "priority": "high",
-    "assignedAgent": "backend-specialist",
     "metadata": {
       "promptEngineeringVersion": "3.0"
     },

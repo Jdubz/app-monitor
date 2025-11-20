@@ -17,7 +17,7 @@ import { promisify } from 'util';
 import { exec } from 'child_process';
 import { logger } from '../utils/logger.js';
 import type { Task } from './taskQueue.sqlite.js';
-import type { TaskQueueService } from './taskQueue.sqlite.js';
+import { TaskQueueService, AUTO_ASSIGNED_AGENT } from './taskQueue.sqlite.js';
 import { MS_PER_HOUR } from '../constants/timeouts.js';
 import type { AgentPersonalityManager } from './agentPersonalities.js';
 import type { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplates.js';
@@ -25,7 +25,7 @@ import type { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplat
 import type { EphemeralWorkerService, EphemeralWorker, TaskExecutionResult } from './ephemeralWorker.service.js';
 // TaskPersistence removed - using SQLite directly
 import type { FailurePattern } from './taskFailureGuards.js';
-import { resolveArtifactsDir } from '../utils/repoPaths.js';
+import { resolveArtifactsDir, resolveLogsDir } from '../utils/repoPaths.js';
 import { AgentSelector } from './agentSelector.js';
 import { selectAgentCliTypeForTask } from './agentCliSelection.js';
 import { TaskClassifier } from './taskClassifier.js';
@@ -43,10 +43,6 @@ export interface TaskExecutionServiceConfig {
   stuckCheckInterval: number;  // ms
   absoluteMaxDuration: number; // ms
   artifactsDir: string;
-  recovery: {
-    enabled: boolean;
-    dryRun: boolean;
-  };
 }
 
 type FailurePatternSummary = {
@@ -95,10 +91,6 @@ export class TaskExecutionService {
       stuckCheckInterval: config.stuckCheckInterval ?? 60000,
       absoluteMaxDuration: config.absoluteMaxDuration ?? MS_PER_HOUR,
       artifactsDir: config.artifactsDir ?? resolveArtifactsDir(),
-      recovery: {
-        enabled: config.recovery?.enabled ?? true,
-        dryRun: config.recovery?.dryRun ?? false
-      }
     };
 
     // Initialize intelligent agent selection (Phase 0.2)
@@ -324,7 +316,7 @@ export class TaskExecutionService {
   }
 
   private getHostLogsDir(): string {
-    return path.resolve('./data/logs');
+    return resolveLogsDir();
   }
 
   private getQueueMetrics() {
@@ -335,8 +327,16 @@ export class TaskExecutionService {
    * Intelligent agent CLI type selection using AgentSelector
    * Determines whether to use claude, codex, or gemini based on task characteristics
    */
-  private async selectAgentCliType(task: Task): Promise<'claude' | 'codex' | 'gemini'> {
-    return await selectAgentCliTypeForTask(this.agentSelector, task, { context: 'assignment' });
+  private async ensureAgentAssignment(task: Task): Promise<{ personalityId: string; cliType: 'claude' | 'codex' | 'gemini' }> {
+    if (task.assigned_agent && task.assigned_agent !== AUTO_ASSIGNED_AGENT && task.agent_type) {
+      return { personalityId: task.assigned_agent, cliType: task.agent_type };
+    }
+
+    const selection = await selectAgentCliTypeForTask(this.agentSelector, task, { context: 'assignment' });
+    this.taskQueue.updateAgentForTask(task.id, selection.personalityId, selection.cliType);
+    task.assigned_agent = selection.personalityId;
+    task.agent_type = selection.cliType;
+    return selection;
   }
 
   // ==========================================================================
@@ -447,20 +447,21 @@ export class TaskExecutionService {
     }
 
     // Get agent personality
-    const requestedAgent = this.agentManager.getPersonality(nextTask.assigned_agent);
+    const agentAssignment = await this.ensureAgentAssignment(nextTask);
+    const requestedAgent = this.agentManager.getPersonality(agentAssignment.personalityId);
     if (!requestedAgent) {
       logger.error({
         category: 'process',
         action: 'agent_not_found',
-        message: `No agent found for ${nextTask.assigned_agent}`
+        message: `No agent found for ${agentAssignment.personalityId}`
       });
 
       // Fail task and trigger recovery
       await this.failTaskWithRecovery(
         nextTask,
-        `Agent not found: ${nextTask.assigned_agent}. Please check agent name is correct.`,
+        `Agent not found: ${agentAssignment.personalityId}. Please check agent name is correct.`,
         {
-          stderr: `Agent not found: ${nextTask.assigned_agent}`,
+          stderr: `Agent not found: ${agentAssignment.personalityId}`,
           exitCode: 1
         }
       );
@@ -498,7 +499,7 @@ export class TaskExecutionService {
     nextTask.prompt = this.templateManager.generatePrompt(taskContext);
 
     // Perform intelligent agent CLI type selection (claude/codex/gemini)
-    const agentCliType = await this.selectAgentCliType(nextTask);
+    const agentCliType = agentAssignment.cliType;
 
     // Track worker for cleanup
     let worker: EphemeralWorker | undefined;

@@ -10,13 +10,13 @@
 import Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
 import { logger } from '../utils/logger.js';
+import { AUTO_ASSIGNED_AGENT } from '../services/taskQueue.sqlite.js';
 import type { Task, TaskStatus, TaskExecution } from '../services/taskQueue.sqlite.js';
 
 export interface TaskFilters {
   status?: TaskStatus;
   assignedAgent?: string;
   chainId?: string;
-  planId?: string;
   prNumber?: number;
   phaseIndex?: number;
 }
@@ -96,11 +96,6 @@ export class TaskRepository {
       params.push(filters.chainId);
     }
     
-    if (filters?.planId) {
-      query += ' AND plan_id = ?';
-      params.push(filters.planId);
-    }
-    
     if (filters?.prNumber) {
       query += ' AND pr_number = ?';
       params.push(filters.prNumber);
@@ -129,10 +124,6 @@ export class TaskRepository {
   /**
    * Find tasks by plan ID
    */
-  findByPlanId(planId: string): Task[] {
-    return this.findAll({ planId });
-  }
-
   /**
    * Find tasks by status
    */
@@ -159,7 +150,7 @@ export class TaskRepository {
       status: taskData.status || 'pending',
       priority: taskData.priority || 5,
       created_at: now,
-      assigned_agent: taskData.assigned_agent || 'backend-specialist',
+      assigned_agent: taskData.assigned_agent || AUTO_ASSIGNED_AGENT,
       prompt: taskData.prompt,
       can_retry: taskData.can_retry !== undefined ? taskData.can_retry : true,
       retry_count: 0,
@@ -171,7 +162,6 @@ export class TaskRepository {
       task_category: taskData.task_category,
       file_patterns: taskData.file_patterns,
       estimated_complexity: taskData.estimated_complexity,
-      preferred_agent: taskData.preferred_agent,
       chain_status: taskData.chain_status || 'pending',
       chain_id: chainId,
       chain_depth: taskData.chain_depth || 0,
@@ -184,27 +174,74 @@ export class TaskRepository {
     };
 
     return this.transaction(() => {
+      const columns = [
+        'id',
+        'type',
+        'title',
+        'description',
+        'documentation',
+        'notes',
+        'status',
+        'priority',
+        'created_at',
+        'assigned_agent',
+        'prompt',
+        'can_retry',
+        'retry_count',
+        'max_retries',
+        'timeout_ms',
+        'fingerprint',
+        'estimated_hours',
+        'complexity',
+        'task_category',
+        'file_patterns',
+        'estimated_complexity',
+        'chain_status',
+        'chain_id',
+        'chain_depth',
+        'phase_index',
+        'phase_name',
+        'phase_status',
+        'phase_attempts',
+        'phase_payload'
+      ];
+
+      const placeholders = columns.map(() => '?').join(', ');
       const stmt = this.db.prepare(`
-        INSERT INTO tasks (
-          id, type, title, description, documentation, notes, status, priority,
-          created_at, assigned_agent, prompt, can_retry, retry_count, max_retries,
-          timeout_ms, fingerprint, estimated_hours, complexity,
-          task_category, file_patterns, estimated_complexity, preferred_agent,
-          chain_status, chain_id, chain_depth,
-          phase_index, phase_name, phase_status, phase_attempts, phase_payload,
-          plan_id
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO tasks (${columns.join(', ')})
+        VALUES (${placeholders})
       `);
 
       stmt.run(
-        task.id, task.type, task.title, task.description, task.documentation,
-        task.notes, task.status, task.priority, task.created_at, task.assigned_agent,
-        task.prompt, task.can_retry ? 1 : 0, task.retry_count, task.max_retries,
-        task.timeout_ms, task.fingerprint, task.estimated_hours, task.complexity,
-        task.task_category, task.file_patterns, task.estimated_complexity, task.preferred_agent,
-        task.chain_status, task.chain_id, task.chain_depth,
-        task.phase_index, task.phase_name, task.phase_status, task.phase_attempts, task.phase_payload,
-        task.plan_id
+        task.id,
+        task.type,
+        task.title,
+        task.description,
+        task.documentation,
+        task.notes,
+        task.status,
+        task.priority,
+        task.created_at,
+        task.assigned_agent,
+        task.prompt,
+        task.can_retry ? 1 : 0,
+        task.retry_count,
+        task.max_retries,
+        task.timeout_ms,
+        task.fingerprint,
+        task.estimated_hours,
+        task.complexity,
+        task.task_category,
+        task.file_patterns,
+        task.estimated_complexity,
+        task.chain_status,
+        task.chain_id,
+        task.chain_depth,
+        task.phase_index,
+        task.phase_name,
+        task.phase_status,
+        task.phase_attempts,
+        task.phase_payload
       );
 
       // Insert related data

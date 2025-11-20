@@ -171,7 +171,7 @@ export const WORK_TARGET_DOCS: Record<string, WorkTargetConfig> = {
     gotchas: [
       'Docker containers are --rm (ephemeral) - save logs to artifacts/',
       'SQLite uses WAL mode - concurrent reads are safe, writes are serialized',
-      'Task validation is now relaxed - only title, description, acceptanceCriteria, assignedAgent required',
+      'Task submission is now minimal - only task type, title, and intent are provided; agent assignment happens later automatically',
       'Agent rotation uses "alternate" strategy by default (switch between Claude/Codex)',
       'Container workspace is mounted at /workspace with rw permissions',
       'MCP servers are pre-configured - use them instead of shell commands when possible',

@@ -8,7 +8,6 @@ export interface E2ETaskData {
   title: string;
   taskType: 'implementation' | 'analysis' | 'documentation' | 'review';
   intent: string;
-  assignedAgent?: string;
   priority?: number;
 }
 
@@ -24,7 +23,6 @@ export function createValidE2ETask(partial: Partial<E2ETaskData> = {}): E2ETaskD
     title: partial.title || 'E2E Test Task - Phased Execution',
     taskType: partial.taskType || 'implementation',
     intent: partial.intent || 'Test phased task execution with proper validation',
-    assignedAgent: partial.assignedAgent || 'dev-bot-1',
     priority: partial.priority || 1
   };
 }

@@ -6,6 +6,7 @@
  */
 
 import type { EphemeralWorkerServiceConfig } from '../services/ephemeralWorker.service.js';
+import { resolveLogsDir } from '../utils/repoPaths.js';
 
 /**
  * Default configuration for EphemeralWorkerService
@@ -13,7 +14,7 @@ import type { EphemeralWorkerServiceConfig } from '../services/ephemeralWorker.s
 export const DEFAULT_EPHEMERAL_WORKER_CONFIG: EphemeralWorkerServiceConfig = {
   maxConcurrentWorkers: 2,
   dockerImage: 'dev-bot:latest',
-  logsDirectory: './data/logs',
+  logsDirectory: resolveLogsDir(),
   envPassthroughKeys: [
     'ANTHROPIC_API_KEY',
     'CLAUDE_API_KEY',

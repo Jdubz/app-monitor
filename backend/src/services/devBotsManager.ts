@@ -195,7 +195,7 @@ export class DevBotsManager extends EventEmitter {
 
     // Initialize services
     const eligibilityService = new AgentEligibilityServiceImpl();
-    const agentSelector = new AgentSelector(undefined, eligibilityService);
+    const agentSelector = new AgentSelector(eligibilityService);
 
     this.taskExecutionService = new TaskExecutionService(
       this.taskQueue,
@@ -297,7 +297,6 @@ export class DevBotsManager extends EventEmitter {
     files?: string[];
     dependencies?: string[];
     project?: string;
-    assignedAgent?: string;
     notes?: string;
     priority?: number;
     metadata?: {

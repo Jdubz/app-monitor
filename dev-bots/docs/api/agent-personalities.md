@@ -238,7 +238,6 @@ Tasks can be manually assigned to specific agents:
 
 ```json
 {
-  "assignedAgent": "backend-specialist",
   "priority": "high",
   "notes": "Requires backend expertise"
 }

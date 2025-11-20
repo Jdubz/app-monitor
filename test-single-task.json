@@ -7,6 +7,5 @@
     "Task is assigned to an agent",
     "Task execution completes without errors"
   ],
-  "assignedAgent": "backend-specialist",
   "priority": 5
 }

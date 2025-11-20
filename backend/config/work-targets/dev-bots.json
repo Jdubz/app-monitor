@@ -4,17 +4,5 @@
   "displayName": "Dev Bots",
   "projectRootEnv": "DEV_BOTS_ROOT",
   "defaultRoot": "../../..",
-  "logSources": [
-    {
-      "id": "dev-bots",
-      "name": "Dev Bots",
-      "enabled": false,
-      "path": "dev-bots/logs/dev-bots.log",
-      "format": "structured",
-      "color": "#805AD5",
-      "parser": "winston",
-      "displayOrder": 6,
-      "note": "Enable after Phase B (dev-bots integration)"
-    }
-  ]
+  "logSources": []
 }

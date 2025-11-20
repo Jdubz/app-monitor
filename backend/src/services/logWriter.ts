@@ -10,6 +10,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type Database from 'better-sqlite3';
 import { MS_PER_DAY } from '../constants/timeouts.js';
+import { resolveLogsDir } from '../utils/repoPaths.js';
 
 export interface LogEntry {
   id: string;
@@ -46,7 +47,7 @@ export class LogWriter {
 
   constructor(db: Database.Database, logsDirectory?: string) {
     this.db = db;
-    this.logsDirectory = logsDirectory || path.join(process.cwd(), 'logs', 'frontend');
+    this.logsDirectory = logsDirectory || path.join(resolveLogsDir(), 'frontend');
     this.ensureLogDirectory();
   }
 

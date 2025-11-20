@@ -1,10 +1,16 @@
 import { defineConfig } from 'vitest/config';
+import { fileURLToPath } from 'url';
+import path from 'path';
 
 /**
  * Unit Tests Only Configuration - dev-monitor-backend
  * 
  * Excludes integration tests to allow faster, more reliable pushes.
  */
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const repoRoot = path.resolve(__dirname, '..');
 
 export default defineConfig({
   test: {
@@ -26,6 +32,10 @@ export default defineConfig({
     
     // Environment setup
     environment: 'node',
+    env: {
+      NODE_ENV: 'test',
+      REPO_ROOT: process.env.REPO_ROOT || repoRoot,
+    },
     
     // Coverage configuration
     coverage: {
