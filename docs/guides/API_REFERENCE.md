@@ -76,14 +76,22 @@ fetch('https://app-monitor.joshwentworth.com/api/dev-bots/tasks', {
 ### Public vs Protected Endpoints
 
 **Public (No Auth):**
-- `GET /api/health` - Health check
-- `POST /api/github/webhooks/*` - GitHub webhooks (signature verified)
+- `GET /api/health` – Backend health probe
+- `POST /api/github/webhooks/*` – GitHub webhooks (HMAC verified)
+- `POST /api/logs/frontend` – Frontend log ingestion
+- `POST /api/issues` – Issue reporter (rate limited)
 
 **Protected (API Key Required):**
-- All `/api/dev-bots/*` endpoints
-- All `/api/services/*` endpoints
-- All `/api/docker/*` endpoints
-- All `/api/logs/*` endpoints
+- `/api/dev-bots/*`
+- `/api/docker/*`
+- `/api/token-tracking/*`
+- `/api/quality-gates/*`
+- `/api/verification/*`
+- `/api/metrics/*`
+- `/api/observability/*`
+- `/api/prs/*`
+- `/api/socket/*`
+- `/api/terminal/*`
 
 ### Security Notes
 
@@ -285,71 +293,198 @@ return ErrorResponses.rateLimitExceeded(
 
 ## Endpoints
 
-**Base URL:** `http://localhost:5000/api/dev-bots`
+Unless noted, routes live under `/api` and require the API key described above.
 
-### Task Management
+### Public Endpoints
 
-#### Core Task Operations
-```http
-GET    /api/dev-bots/status           # System status
-GET    /api/dev-bots/tasks              # List all tasks
-POST   /api/dev-bots/tasks              # Create task (minimal 3-field payload)
-GET    /api/dev-bots/tasks/:id/detail   # Get specific task with history
-POST   /api/dev-bots/tasks/:id/timeout  # Manually timeout task
-```
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/health` | Basic backend health probe |
+| POST | `/api/github/webhooks/*` | GitHub webhook receiver (HMAC verified) |
+| POST | `/api/logs/frontend` | Ingest browser logs for troubleshooting |
+| POST | `/api/issues` | File an issue/incident report (rate limited) |
 
-#### Task Status Management
-```http
-POST   /api/dev-bots/tasks/:id/assign    # Assign to worker
-POST   /api/dev-bots/tasks/:id/start     # Start execution
-POST   /api/dev-bots/tasks/:id/complete  # Mark completed
-POST   /api/dev-bots/tasks/:id/fail      # Mark failed
-POST   /api/dev-bots/tasks/:id/retry     # Retry failed task
-```
+### Dev-Bots API (`/api/dev-bots`)
 
-#### Task Context & Automation Runs
-```http
-GET    /api/dev-bots/tasks/:id/context      # Latest automation run
-GET    /api/dev-bots/tasks/:id/runs         # All automation runs
-GET    /api/dev-bots/tasks/:id/runs/:runId  # Specific run details
-```
+#### Status & Infrastructure
+| Method | Path | Description |
+|---|---|---|
+| GET | `/status` | High-level system status (workers, queue depth) |
+| GET | `/health` | Dev-bots specific health probe |
+| GET | `/metrics` | Aggregated execution metrics snapshot |
+| GET | `/agent-comparison` | Success/duration comparison across agents |
+| GET | `/projects` | Registered work targets/projects |
+| GET | `/docker/status` | Docker daemon validation details |
+| POST | `/docker/revalidate` | Re-run Docker validation checks |
+| POST | `/docker/cleanup` | Trigger container/volume cleanup |
+| GET | `/containers/:containerId/health` | Inspect a specific container |
+| GET | `/cleanup-status` | Latest cleanup job results |
+| POST | `/trigger-cleanup` | Queue a cleanup job (manual) |
+| GET | `/scope-violations` | Recent scope violations |
+| POST | `/emergency-recovery` | Kick off emergency recovery workflow |
 
-### Agent Management
+#### Task Lifecycle & Queue
+| Method | Path | Description |
+|---|---|---|
+| GET | `/tasks` | List tasks (newest first) |
+| GET | `/tasks/completed` | List recently completed tasks |
+| GET | `/tasks/:taskId/detail` | Task detail + history |
+| POST | `/tasks` | Submit new task (three-field payload + overrides) |
+| POST | `/tasks/:taskId/timeout` | Force-timeout a stuck task after verification |
+| GET | `/queue` | Queue snapshot by bucket (pending/active/etc.) |
+| GET | `/queue/stats` | Aggregate queue statistics |
+| POST | `/validate` | Validate a submission payload without creating a task |
+| POST | `/assign` | Manually trigger task assignment (rare; debugging) |
+| POST | `/tasks/:taskId/resume` | Resume a blocked task |
+| POST | `/tasks/:taskId/simulate-phase-progression` | Run the phase simulator for debugging |
+| GET | `/tasks/:taskId/phases` | Per-phase progress + attempts |
+| GET | `/phases/metrics` | Cached phase metrics |
+| GET | `/phases/:phaseIndex/metrics` | Metrics for a specific phase |
+| POST | `/phases/metrics/refresh` | Recompute cached phase metrics |
+| GET | `/chains/blocked` | List blocked task chains |
+| POST | `/chains/:chainId/unblock` | Manually unblock a chain |
+| POST | `/:taskId/report-completion` | Worker hook for reporting completion/failure |
+| POST | `/pr/track` | Manually enqueue PR tracking for a task |
 
-```http
-GET    /api/dev-bots/agents           # List agent personalities
-GET    /api/dev-bots/agents/:id       # Get agent details
-POST   /api/dev-bots/agents/:id/assign # Assign agent to task
-GET    /api/dev-bots/agent-comparison # Performance comparison
-```
+#### Logs, Context & Runs
+| Method | Path | Description |
+|---|---|---|
+| GET | `/tasks/:taskId/logs` | Download aggregated stdout/stderr for a task (reads artifacts) |
+| GET | `/tasks/:taskId/logs/:stream` | Stream a single log (`stdout` or `stderr`) |
+| GET | `/tasks/:id/context` | Latest automation run context (prompt, metadata) |
+| GET | `/tasks/:id/stage-runs` | Phase/stage execution history |
+| GET | `/tasks/:id/runs` | Automation runs for a task |
+| GET | `/tasks/:id/runs/:runId` | Detailed automation run record |
 
-### Templates & Guidelines
+#### Agents & Templates
+| Method | Path | Description |
+|---|---|---|
+| GET | `/agents` | List configured agent personalities |
+| GET | `/agents/valid` | Filtered list of agents currently allowed to run |
+| GET | `/templates` | Task templates indexed by category |
+| GET | `/guidelines` | Aggregated task creation guidelines |
+| GET | `/guidelines/:taskType` | Guidelines for a specific task type |
+| GET | `/examples/:taskType` | Sample task payloads for a given type |
+| GET | `/checklist/:taskType` | Pre-flight checklist for the task type |
 
-```http
-GET    /api/dev-bots/templates        # Get task templates
-GET    /api/dev-bots/guidelines       # Task creation guidelines
-GET    /api/dev-bots/examples/:type   # Task examples by type
-```
+#### Interactive Sessions
+| Method | Path | Description |
+|---|---|---|
+| GET | `/interactive/session` | Inspect current interactive session (if any) |
+| POST | `/interactive/session` | Create/start an interactive session |
+| DELETE | `/interactive/session` | Stop the active interactive session |
+| POST | `/interactive/heartbeat` | Heartbeat endpoint for session watchdog |
 
-### Health & Monitoring
+#### Plans & Settings
+| Method | Path | Description |
+|---|---|---|
+| POST | `/plans` | Create a new multi-phase plan file |
+| GET | `/plans` | List plans (filters supported via query params) |
+| GET | `/plans/:planId` | Load a specific plan |
+| PATCH | `/plans/:planId` | Update plan metadata/content |
+| POST | `/plans/:planId/cancel` | Cancel an in-flight plan |
+| DELETE | `/plans/:planId` | Delete plan (per Documentation System rules) |
+| GET | `/plans/:planId/tasks` | Tasks linked to a plan |
+| POST | `/plans/:planId/update-status` | Force status recalculation |
+| GET | `/settings` | Read dev-bot runtime settings (worker limits, etc.) |
+| PUT | `/settings` | Update dev-bot runtime settings |
 
-```http
-GET    /api/dev-bots/health           # Health check
-GET    /api/dev-bots/metrics          # System metrics
-GET    /api/dev-bots/logs             # System logs
-GET    /api/dev-bots/performance      # Performance metrics
-GET    /api/dev-bots/scope-violations # Scope violation report
-POST   /api/dev-bots/emergency-recovery # Emergency healing
-```
+#### Manual PR Sync
+| Method | Path | Description |
+|---|---|---|
+| POST | `/pr-sync` | Manually trigger PR metadata sync (normally automatic) |
 
-### Data Management
+### Platform & Operations APIs
 
-```http
-POST   /api/dev-bots/export           # Export tasks
-POST   /api/dev-bots/import           # Import tasks
-GET    /api/dev-bots/backup           # Create backup
-POST   /api/dev-bots/restore          # Restore from backup
-```
+#### Docker (`/api/docker`)
+| Method | Path | Description |
+|---|---|---|
+| GET | `/container-info` | Inspect managed containers |
+| POST | `/start` | Start Dev-Bot containers |
+| POST | `/stop` | Stop containers |
+| POST | `/restart` | Restart containers |
+
+#### Logs (`/api/logs`)
+| Method | Path | Description |
+|---|---|---|
+| POST | `/frontend` | Upload browser logs (public) |
+
+#### Issues (`/api/issues`)
+| Method | Path | Description |
+|---|---|---|
+| POST | `/` | Submit an issue/incident (public + rate limited) |
+
+#### Metrics (`/api/metrics`)
+| Method | Path | Description |
+|---|---|---|
+| GET | `/phases` | Aggregated phase metrics |
+| GET | `/phases/:phaseIndex` | Metrics for a given phase |
+| GET | `/loops` | Loop/retry metrics |
+| GET | `/recovery` | Recovery bot metrics |
+| GET | `/distribution` | Task distribution metrics |
+| POST | `/cache/invalidate` | Clear cached metric snapshots |
+
+#### Observability (`/api/observability`)
+| Method | Path | Description |
+|---|---|---|
+| GET | `/tasks/:taskId/trace` | Task trace summary |
+| GET | `/logs` | Structured observability logs |
+| GET | `/anomalies` | Detected anomalies |
+| GET | `/diagnostics` | Recent diagnostic runs |
+| GET | `/diagnostics/:queryId` | Diagnostic details |
+
+#### Pull Request Workflow (`/api/prs`)
+| Method | Path | Description |
+|---|---|---|
+| POST | `/:prNumber/evaluate-gates` | Evaluate merge gates for a PR |
+| GET | `/:prNumber/gates` | Retrieve gate statuses |
+| POST | `/mock/register` | Register mock PR data (testing) |
+| POST | `/:prNumber/complete-validation` | Mark validation complete |
+
+#### Quality Gates (`/api/quality-gates`)
+| Method | Path | Description |
+|---|---|---|
+| GET | `/config` | Entire gate configuration |
+| GET | `/config/:gate` | Single gate config |
+| PUT | `/config/:gate` | Update gate config |
+| POST | `/validate` | Validate current gate setup |
+| POST | `/config/reset` | Reset to defaults |
+| GET | `/status` | Current gate evaluation summary |
+
+#### Token Tracking (`/api/token-tracking`)
+| Method | Path | Description |
+|---|---|---|
+| GET | `/summary` | Aggregate spend across providers |
+| GET | `/summary/:provider` | Provider-specific summary |
+| GET | `/budget/:provider` | Budget for provider |
+| PUT | `/budget` | Update budgets |
+| GET | `/can-use/:provider` | Whether provider budget allows usage |
+| GET | `/remaining/:provider` | Remaining tokens/dollars |
+| POST | `/reset` | Reset usage tracking |
+
+#### Verification (`/api/verification`)
+| Method | Path | Description |
+|---|---|---|
+| GET | `/task/:taskId` | Verification record for task |
+| POST | `/verify/:taskId` | Submit verification result |
+| GET | `/stats` | Verification rollup |
+| GET | `/recommendations/:taskId` | Recommend follow-up actions |
+
+#### Socket Monitoring (`/api/socket`)
+| Method | Path | Description |
+|---|---|---|
+| GET | `/stats` | Socket.IO server stats |
+| GET | `/connections` | Active connections |
+| GET | `/connections/:socketId` | Inspect a connection |
+
+#### Terminal Sessions (`/api/terminal`)
+| Method | Path | Description |
+|---|---|---|
+| GET | `/sessions` | List tmux/terminal sessions |
+| GET | `/sessions/:id` | Inspect single session |
+| DELETE | `/sessions/:id` | Terminate session |
+
+> Task log endpoints stream content that originated from files under `dev-bots/artifacts/`. You can also fetch those artifacts directly if you have filesystem access.
 
 ### Request/Response Examples
 
