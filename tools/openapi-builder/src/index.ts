@@ -82,6 +82,16 @@ async function generateOpenApi() {
       version: '1.0.0',
       description: 'Generated OpenAPI documentation for App Monitor',
     },
+    servers: [
+      {
+        url: 'http://localhost:3001/api',
+        description: 'Development server'
+      },
+      {
+        url: 'https://api.app-monitor.com/api',
+        description: 'Production server'
+      }
+    ],
     paths: {} as Record<string, any>,
     components: {
       schemas: schemaDefinitions,
@@ -143,17 +153,53 @@ async function generateOpenApi() {
       };
     }
 
-    // Add Parameters (Path, Query) - Not fully implemented in this POC but placeholder
-    // We would inspect pathParamsSchema and queryParamsSchema here
+    // Add Parameters (Path, Query)
+    const parameters: any[] = [];
+
+    // Extract path parameters from the path string
+    const pathParamMatches = route.path.matchAll(/:([a-zA-Z0-9_]+)/g);
+    for (const match of pathParamMatches) {
+      const paramName = match[1];
+      parameters.push({
+        name: paramName,
+        in: 'path',
+        required: true,
+        schema: route.pathParamsSchema?.[paramName] || { type: 'string' },
+      });
+    }
+
+    // Add query parameters if schema exists
+    if (route.queryParamsSchema) {
+      const querySchema = route.queryParamsSchema;
+      if (querySchema.properties) {
+        for (const [paramName, paramSchema] of Object.entries(querySchema.properties)) {
+          parameters.push({
+            name: paramName,
+            in: 'query',
+            required: querySchema.required?.includes(paramName) || false,
+            schema: paramSchema,
+          });
+        }
+      }
+    }
+
+    if (parameters.length > 0) {
+      operation.parameters = parameters;
+    }
 
     openApiDoc.paths[openApiPath][route.method] = operation;
   }
 
-  // 6. Write Output
+  // 6. Fix all $ref references in schema definitions to use components/schemas
+  const fixedDoc = JSON.parse(
+    JSON.stringify(openApiDoc).replace(/#\/definitions\//g, '#/components/schemas/')
+  );
+
+  // 7. Write Output
   if (!existsSync(OUTPUT_DIR)) {
     mkdirSync(OUTPUT_DIR, { recursive: true });
   }
-  writeFileSync(OUTPUT_FILE, JSON.stringify(openApiDoc, null, 2));
+  writeFileSync(OUTPUT_FILE, JSON.stringify(fixedDoc, null, 2));
   console.log(`OpenAPI spec generated at ${OUTPUT_FILE}`);
 }
 
@@ -181,6 +227,7 @@ function extractRouteInfo(
   const pathNode = getProp('path');
   const summaryNode = getProp('summary');
   const descriptionNode = getProp('description');
+  const tagsNode = getProp('tags');
   const responseNode = getProp('response'); // Object literal
   const requestNode = getProp('request'); // Object literal
 
@@ -193,6 +240,16 @@ function extractRouteInfo(
   const path = cleanString(pathNode.getText());
   const summary = cleanString(summaryNode.getText());
   const description = descriptionNode ? cleanString(descriptionNode.getText()) : undefined;
+
+  // Extract tags array
+  let tags: string[] | undefined;
+  if (tagsNode && tagsNode.getKind() === SyntaxKind.ArrayLiteralExpression) {
+    tags = tagsNode.getText()
+      .replace(/^\[|\]$/g, '')
+      .split(',')
+      .map(t => cleanString(t.trim()))
+      .filter(Boolean);
+  }
 
   let responseSchema = null;
   let requestSchema = null;
@@ -219,7 +276,16 @@ function extractRouteInfo(
                    Object.assign(definitions, schema.definitions);
                    delete schema.definitions;
                 }
-                responseSchema = schema;
+                // Remove $schema property as it's not valid in OpenAPI
+                if (schema.$schema) {
+                  delete schema.$schema;
+                }
+                // Convert JSON Schema $ref to OpenAPI format
+                const schemaJson = JSON.stringify(schema);
+                const fixedSchema = JSON.parse(
+                  schemaJson.replace(/#\/definitions\//g, '#/components/schemas/')
+                );
+                responseSchema = fixedSchema;
             } catch (e) {
                 console.warn(`Could not generate schema for response type ${typeName}:`, e);
             }
@@ -229,13 +295,45 @@ function extractRouteInfo(
   }
 
   // Extract Request Type (similar logic)
-    // ... (To be implemented fully)
+  if (requestNode && ObjectLiteralExpression.isObjectLiteralExpression(requestNode)) {
+    const bodyProp = requestNode.getProperty('body');
+    if (bodyProp && bodyProp.isKind(SyntaxKind.PropertyAssignment)) {
+      const bodyInitializer = bodyProp.getInitializer();
+      const asExpression = bodyInitializer?.asKind(SyntaxKind.AsExpression);
+      if (asExpression) {
+        const typeNode = asExpression.getTypeNode();
+        if (typeNode) {
+          const typeName = typeNode.getText();
+          try {
+            const schema = generator.createSchema(typeName);
+            if (schema.definitions) {
+              Object.assign(definitions, schema.definitions);
+              delete schema.definitions;
+            }
+            // Remove $schema property as it's not valid in OpenAPI
+            if (schema.$schema) {
+              delete schema.$schema;
+            }
+            // Convert JSON Schema $ref to OpenAPI format
+            const schemaJson = JSON.stringify(schema);
+            const fixedSchema = JSON.parse(
+              schemaJson.replace(/#\/definitions\//g, '#/components/schemas/')
+            );
+            requestSchema = fixedSchema;
+          } catch (e) {
+            console.warn(`Could not generate schema for request type ${typeName}:`, e);
+          }
+        }
+      }
+    }
+  }
 
   return {
     method,
     path,
     summary,
     description,
+    tags,
     responseBodySchema: responseSchema,
     requestBodySchema: requestSchema
   };
