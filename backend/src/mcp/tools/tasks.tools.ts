@@ -50,11 +50,11 @@ const TASK_LIST_STATUS_VALUES: TaskStatus[] = [
   'timeout',
 ];
 
-const taskListSchema = z.object({
+const taskListSchema = {
   status: z.enum(TASK_LIST_STATUS_VALUES as [TaskStatus, ...TaskStatus[]]).optional(),
   assigned_agent: z.string().min(1).optional(),
   limit: z.number().int().positive().max(500).optional(),
-});
+};
 
 function parseTaskMetadata(task: Task): Record<string, unknown> {
   const raw = task.metadata;
@@ -105,14 +105,14 @@ export function registerTasksTools(
     {
       title: 'Create Task',
       description: 'Creates a standalone task using the existing submission pipeline.',
-      inputSchema: z.object({
+      inputSchema: {
         title: z.string().min(3),
         type: z.enum(['implementation', 'analysis', 'documentation', 'review']).optional(),
         prompt: z.string().min(10),
         success_criteria: z.array(z.string().min(3)).optional(),
         assigned_agent: z.enum(['claude', 'codex', 'gemini']).optional(),
         tags: z.array(z.string().min(1)).optional(),
-      }),
+      },
     },
     withAuth('task_create', withErrorHandling(async (params: TaskCreateParams) => {
       const noteFromTags = params.tags?.length ? `Tags: ${params.tags.join(', ')}` : undefined;
@@ -135,9 +135,9 @@ export function registerTasksTools(
     {
       title: 'Get Task',
       description: 'Retrieves the details of a task by ID.',
-      inputSchema: z.object({
+      inputSchema: {
         task_id: z.string().min(1),
-      }),
+      },
     },
     withAuth('task_get', withErrorHandling(async (params: TaskGetParams) => {
       const task = taskQueue.getTask(params.task_id);
@@ -189,10 +189,10 @@ export function registerTasksTools(
     {
       title: 'Resume Blocked Task',
       description: 'Resumes a blocked task using the manual resume flow.',
-      inputSchema: z.object({
+      inputSchema: {
         task_id: z.string().min(1),
         resumed_by: z.string().optional(),
-      }),
+      },
     },
     withAuth('task_unblock', withErrorHandling(async (params: TaskUnblockParams, context: AuthContext) => {
       const resumedBy = params.resumed_by || process.env.APP_MONITOR_MCP_USER_ID || context.role;
@@ -206,7 +206,7 @@ export function registerTasksTools(
     {
       title: 'Report Task Outcome',
       description: '(DEV-BOTS ONLY) Stores outcome details for the assigned task.',
-      inputSchema: z.object({
+      inputSchema: {
         task_id: z.string().min(1),
         outcome: z.enum(['success', 'failure']),
         pr_url: z.string().optional(),
@@ -215,7 +215,7 @@ export function registerTasksTools(
         failure_reason: z.string().optional(),
         failure_code: z.enum(['compilation_error', 'test_failure', 'dependency_error', 'timeout', 'validation_error', 'unknown']).optional(),
         error_details: z.string().optional(),
-      }),
+      },
     },
     withAuth('task_report_outcome', withErrorHandling(async (params: TaskReportOutcomeParams, context: AuthContext) => {
       const task = taskQueue.getTask(params.task_id);
