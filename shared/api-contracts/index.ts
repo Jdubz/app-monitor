@@ -193,7 +193,7 @@ export interface QualityGateResetPayload {
 // Dev-Bots Contracts
 // -----------------------------------------------------------------------------
 
-export type DevBotsTaskStatus = 'pending' | 'assigned' | 'active' | 'completed' | 'failed';
+export type DevBotsTaskStatus = 'pending' | 'assigned' | 'active' | 'completed' | 'failed' | 'blocked';
 
 export interface DevBotsTaskScope {
   type: string;
@@ -247,6 +247,13 @@ export interface DevBotsTask {
   phaseName?: string;
   phaseStatus?: PhaseStatus;
   phaseAttempts?: number;
+  // Blocking metadata (added by system when task blocks)
+  blockedReason?: string;
+  blockedAt?: number;
+  blockedBy?: string;
+  // Resume audit trail (added when manually resumed)
+  resumedBy?: string;
+  resumedAt?: number;
 }
 
 export interface DevBotsTaskCollections {
@@ -279,7 +286,7 @@ export interface DevBotsStatus {
   tasks: DevBotsTaskCollections;
 }
 
-export type DevBotsQueueBucket = 'pending' | 'active' | 'completed' | 'failed';
+export type DevBotsQueueBucket = 'pending' | 'active' | 'blocked' | 'completed' | 'failed';
 
 export interface DevBotsQueueItem {
   bucket: DevBotsQueueBucket;
@@ -291,6 +298,7 @@ export interface DevBotsQueueSummary {
   counts: {
     pending: number;
     active: number;
+    blocked: number;
     completed: number;
     failed: number;
   };
@@ -710,6 +718,7 @@ export interface DevBotsReportCompletionResponse {
 export type DevBotsRetryTaskResponse = ApiSuccess<DevBotsTaskInterventionResponse>;
 export type DevBotsSkipTaskResponse = ApiSuccess<DevBotsTaskInterventionResponse>;
 export type DevBotsCancelTaskResponse = ApiSuccess<DevBotsTaskInterventionResponse>;
+export type DevBotsResumeTaskResponse = ApiSuccess<DevBotsTaskInterventionResponse>;
 export type DevBotsQuarantineChainResponse = ApiSuccess<DevBotsChainInterventionResponse>;
 
 // -----------------------------------------------------------------------------

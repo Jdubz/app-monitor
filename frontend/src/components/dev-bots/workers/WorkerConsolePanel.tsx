@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { TaskLogViewer } from './TaskLogViewer';
+import { ResumeTaskButton } from '../queue/ResumeTaskButton';
 
 export function WorkerConsolePanel() {
   const {
@@ -208,6 +209,67 @@ export function WorkerConsolePanel() {
                       </ul>
                     </div>
                   ) : null}
+
+                  {/* Blocking Metadata */}
+                  {selectedTask.status === 'blocked' && (
+                    <div className="mt-3 rounded-lg border border-amber-500/50 bg-amber-50/50 p-3 dark:bg-amber-950/20">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-100">
+                          Task Blocked
+                        </h3>
+                      </div>
+
+                      <div className="space-y-1.5 text-xs">
+                        {selectedTask.blockedReason && (
+                          <div>
+                            <span className="font-medium">Reason:</span>{' '}
+                            <span className="text-muted-foreground">{selectedTask.blockedReason}</span>
+                          </div>
+                        )}
+
+                        {selectedTask.blockedAt && (
+                          <div>
+                            <span className="font-medium">Blocked:</span>{' '}
+                            <span className="text-muted-foreground">
+                              {new Date(selectedTask.blockedAt).toLocaleString()}
+                            </span>
+                          </div>
+                        )}
+
+                        {selectedTask.blockedBy && (
+                          <div>
+                            <span className="font-medium">Blocked By:</span>{' '}
+                            <span className="text-muted-foreground font-mono text-[10px]">
+                              {selectedTask.blockedBy}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="mt-3">
+                        <ResumeTaskButton
+                          taskId={selectedTask.id}
+                          onResumeSuccess={() => {
+                            refreshTaskDetail();
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Resume Audit Trail */}
+                  {selectedTask.resumedBy && selectedTask.resumedAt && (
+                    <div className="mt-2 rounded-lg border border-emerald-500/50 bg-emerald-50/50 p-2.5 dark:bg-emerald-950/20">
+                      <div className="flex items-center gap-2 text-xs">
+                        <Info className="h-3.5 w-3.5 text-emerald-600" />
+                        <span className="font-medium">Resumed by {selectedTask.resumedBy}</span>
+                        <span className="text-muted-foreground">
+                          {new Date(selectedTask.resumedAt).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </>
               ) : (
                 <div className="flex items-center gap-2 rounded-md border border-border/60 bg-background/40 px-3 py-2 text-xs text-muted-foreground">

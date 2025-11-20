@@ -26,6 +26,5 @@ export function mapTaskType(type: string): TaskType {
     'pr-follow-up': TASK_TYPES.PR_FOLLOW_UP,
     'analysis': TASK_TYPES.ANALYSIS
   };
-
   return typeMap[type.toLowerCase()] || TASK_TYPES.IMPLEMENTATION;
 }

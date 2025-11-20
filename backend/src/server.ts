@@ -140,20 +140,22 @@ export async function createApp(options: CreateAppOptions = {}) {
 
     const isTestEnv = process.env.NODE_ENV === 'test' || process.env.VITEST === 'true';
     if (!isTestEnv) {
-        startMcpServer({
-            db: devBotsDeps.taskQueue.getDb(),
-            services: {
-                devBotsManager,
-            },
-            enablePlanTools: process.env.APP_MONITOR_MCP_ENABLE_PLAN_TOOLS === 'true',
-        }).catch(error => {
-            logger.error({
-                category: 'system',
-                action: 'mcp_startup_error',
-                message: 'Failed to start MCP server',
-                error,
-            });
+      try {
+        await startMcpServer({
+          db: devBotsDeps.taskQueue.getDb(),
+          services: {
+            devBotsManager,
+          },
         });
+      } catch (error) {
+        logger.error({
+          category: 'system',
+          action: 'mcp_startup_error',
+          message: 'Failed to start MCP server',
+          error,
+        });
+        process.exit(1);
+      }
     }
   }
 

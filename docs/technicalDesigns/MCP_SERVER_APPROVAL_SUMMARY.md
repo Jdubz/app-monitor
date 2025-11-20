@@ -17,6 +17,7 @@
 ## Tools by Category
 
 ### ✅ Plan Management (11 tools)
+> **Implementation status (Nov 20, 2025):** plan tools are deferred until the existing planning system stabilizes. They remain documented here for future phases but are not part of the MCP MVP.
 1. `plan_create` - Create new plan
 2. `plan_get_status` - Get execution status (modified from plan_read)
 3. `plan_update_metadata` - Update title/description/priority (status auto-generated)

@@ -1,25 +1,15 @@
 const ADMIN_ONLY_TOOLS = new Set([
-  "task_create",
-  "task_get",
-  "task_list",
-  "task_unblock",
-  "task_cancel",
-  "bot_list_active",
-  "bot_get_status",
   "bot_recover",
-  "bot_heartbeat_status",
-  "pr_trigger_evaluation",
-  "pr_get_blocking_issues",
-  "system_health",
 ]);
 
 const DEV_BOT_ONLY_TOOLS = new Set(["task_report_outcome"]);
 
 type McpRole = "admin" | "dev-bot";
+type McpEnv = "production" | "development" | "test";
 
 export interface AuthContext {
   role: McpRole;
-  env: "production" | "development" | "test";
+  env: McpEnv;
 }
 
 function resolveRole(): McpRole {
@@ -30,11 +20,21 @@ function resolveRole(): McpRole {
   return role;
 }
 
+function resolveEnv(): McpEnv {
+  const rawEnv = (process.env.APP_MONITOR_ENV || process.env.NODE_ENV || 'development').toLowerCase();
+  if (rawEnv === 'production') {
+    return 'production';
+  }
+  if (rawEnv === 'test') {
+    return 'test';
+  }
+  return 'development';
+}
+
 export function getAuthContext(): AuthContext {
-  const env = (process.env.NODE_ENV as "production" | "development" | "test") || "development";
   return {
     role: resolveRole(),
-    env,
+    env: resolveEnv(),
   };
 }
 
@@ -55,14 +55,17 @@ export function checkToolPermission(toolName: string, context: AuthContext): voi
   }
 
   if (context.role === "dev-bot") {
-    throw new Error(`Dev-bots are not permitted to call ${toolName}`);
+    return;
   }
 }
 
-export function withAuth<T>(toolName: string, handler: (params: T) => Promise<unknown>) {
-  return async (params: T): Promise<unknown> => {
+export function withAuth<T, R = unknown>(
+  toolName: string,
+  handler: (params: T, context: AuthContext, extra?: unknown) => R,
+) {
+  return (params: T, extra?: unknown): R => {
     const context = getAuthContext();
     checkToolPermission(toolName, context);
-    return handler(params);
+    return handler(params, context, extra);
   };
 }

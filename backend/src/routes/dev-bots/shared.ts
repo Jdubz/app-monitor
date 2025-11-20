@@ -184,7 +184,7 @@ export const mapTasksToContract = (tasks: Task[]): DevBotsTask[] =>
  * Build queue summary for API response
  */
 export const buildQueueSummary = (
-  tasks: { pending: Task[]; active: Task[]; completed: Task[]; failed: Task[] },
+  tasks: { pending: Task[]; active: Task[]; blocked: Task[]; completed: Task[]; failed: Task[] },
   metrics: ReturnType<DevBotsManager['getQueueMetrics']>
 ): DevBotsQueueSummary => ({
   items: [
@@ -194,6 +194,10 @@ export const buildQueueSummary = (
     })),
     ...tasks.active.map((task): DevBotsQueueItem => ({
       bucket: 'active',
+      task: mapTaskToContract(task)
+    })),
+    ...tasks.blocked.map((task): DevBotsQueueItem => ({
+      bucket: 'blocked',
       task: mapTaskToContract(task)
     })),
     ...tasks.completed.map((task): DevBotsQueueItem => ({
@@ -208,6 +212,7 @@ export const buildQueueSummary = (
   counts: {
     pending: metrics.pending,
     active: metrics.running,
+    blocked: metrics.blocked,
     completed: metrics.completed,
     failed: metrics.failed,
   },

@@ -329,7 +329,8 @@ export class PhaseOrchestratorService {
       // Block the task's chain
       this.db.prepare(`
         UPDATE tasks
-        SET phase_status = 'blocked',
+        SET status = 'blocked',
+            phase_status = 'blocked',
             blocked_reason = ?,
             blocked_at = ?,
             chain_status = 'blocked'

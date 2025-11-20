@@ -18,7 +18,6 @@ type QueueFilter = 'pending' | 'active' | 'completed' | 'failed';
  * TaskQueueTabContent - Task queue monitoring using dev-bots store
  *
  * Displays task queue with:
- * - Summary metrics (pending, active, completed, failed)
  * - Filterable list by status
  * - Detail view with task metadata
  */
@@ -45,35 +44,41 @@ export function TaskQueueTabContent() {
     return tasks.filter((task) => task.status === activeFilter);
   }, [tasks, activeFilter]);
 
-  // Summary cards
-  const summaryCards = useMemo(() => {
-    const pendingCount = tasks.filter((t) => t.status === 'pending').length;
-    const activeCount = tasks.filter((t) => t.status === 'active').length;
-    const completedCount = tasks.filter((t) => t.status === 'completed').length;
-    const failedCount = tasks.filter((t) => t.status === 'failed').length;
-
-    return [
-      { label: 'Pending', value: pendingCount, className: 'text-blue-600' },
-      { label: 'Active', value: activeCount, className: 'text-green-600' },
-      { label: 'Completed', value: completedCount, className: 'text-gray-600' },
-      { label: 'Failed', value: failedCount, className: failedCount > 0 ? 'text-red-600' : '' },
-    ];
+  const queueStats = useMemo<Record<QueueFilter, number>>(() => {
+    return tasks.reduce(
+      (acc, task) => {
+        const key = task.status as QueueFilter;
+        acc[key] = (acc[key] ?? 0) + 1;
+        return acc;
+      },
+      { pending: 0, active: 0, completed: 0, failed: 0 }
+    );
   }, [tasks]);
 
   // Filter tabs
-  const filterTabs = useMemo(() => {
-    const pendingCount = tasks.filter((t) => t.status === 'pending').length;
-    const activeCount = tasks.filter((t) => t.status === 'active').length;
-    const completedCount = tasks.filter((t) => t.status === 'completed').length;
-    const failedCount = tasks.filter((t) => t.status === 'failed').length;
+  const filterTabs = useMemo(
+    () => [
+      { value: 'pending' as const, label: 'Pending', count: queueStats.pending },
+      { value: 'active' as const, label: 'Active', count: queueStats.active },
+      { value: 'completed' as const, label: 'Completed', count: queueStats.completed },
+      { value: 'failed' as const, label: 'Failed', count: queueStats.failed },
+    ],
+    [queueStats]
+  );
 
-    return [
-      { value: 'pending' as const, label: 'Pending', count: pendingCount },
-      { value: 'active' as const, label: 'Active', count: activeCount },
-      { value: 'completed' as const, label: 'Completed', count: completedCount },
-      { value: 'failed' as const, label: 'Failed', count: failedCount },
-    ];
-  }, [tasks]);
+  const summaryCards = useMemo(
+    () => [
+      { label: 'Total Tasks', value: tasks.length, className: 'text-primary' },
+      { label: 'Active Tasks', value: queueStats.active, className: 'text-blue-500' },
+      { label: 'Pending Tasks', value: queueStats.pending, className: 'text-amber-500' },
+      {
+        label: 'Workers Online',
+        value: `${status?.workerCount ?? 0}/${status?.maxWorkers ?? 0}`,
+        className: 'text-emerald-500',
+      },
+    ],
+    [queueStats.active, queueStats.pending, status?.workerCount, status?.maxWorkers, tasks.length]
+  );
 
   // Render list item
   const renderListItem = (task: DevBotsTask, _isSelected: boolean) => {

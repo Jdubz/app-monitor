@@ -119,6 +119,7 @@ const devBotsStatus: DevBotsStatus = {
   tasks: {
     pending: [baseTask],
     active: [],
+    blocked: [],
     completed: [],
     failed: [],
   },

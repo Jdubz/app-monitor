@@ -21,7 +21,6 @@ type ChainFilter = 'all' | 'blocked' | 'quarantined';
  * DevBotsTabContent - Dev-Bots monitoring tab using ListDetailLayout
  *
  * Displays automation chains (tasks) with:
- * - Summary metrics (queue size, workers, active tasks)
  * - Filterable list (all, blocked, quarantined)
  * - Detail view with intervention controls
  */
@@ -72,20 +71,6 @@ export function DevBotsTabContent() {
     }
     return result;
   }, [chains, activeFilter]);
-
-  // Summary cards
-  const summaryCards = useMemo(() => {
-    const queueSize = status?.queueSize ?? 0;
-    const activeWorkers = status?.workerCount ?? 0;
-    const maxWorkers = status?.maxWorkers ?? 0;
-    const activeTasks = status?.activeTasks ?? 0;
-
-    return [
-      { label: 'Queue Size', value: queueSize },
-      { label: 'Workers', value: `${activeWorkers}/${maxWorkers}` },
-      { label: 'Active Tasks', value: activeTasks },
-    ];
-  }, [status]);
 
   // Filter tabs
   const filterTabs = useMemo(() => {
@@ -404,19 +389,28 @@ export function DevBotsTabContent() {
 
   return (
     <>
-      <ListDetailLayout<DevBotsTask, ChainFilter>
-        summaryCards={summaryCards}
-        filterTabs={filterTabs}
-        activeFilter={activeFilter}
-        onFilterChange={setActiveFilter}
-        items={filteredChains}
-        selectedItem={selectedChain}
-        onSelectItem={selectChain}
-        renderListItem={renderListItem}
-        renderDetail={renderDetail}
-        getItemKey={(chain) => chain.id}
-        emptyMessage="No chains found for this filter"
-      />
+      <div className="flex h-full min-h-0 flex-col overflow-hidden">
+        <div className="mb-4 shrink-0">
+          <h2 className="text-lg font-semibold">Dev-Bots Chains</h2>
+          <p className="text-sm text-muted-foreground">
+            Monitor automation chains (Workers: {status?.workerCount ?? 0}/{status?.maxWorkers ?? 0}, Queue: {status?.queueSize ?? chains.length} tasks, Active: {status?.activeTasks ?? 0})
+          </p>
+        </div>
+        <div className="flex-1 min-h-0">
+          <ListDetailLayout<DevBotsTask, ChainFilter>
+            filterTabs={filterTabs}
+            activeFilter={activeFilter}
+            onFilterChange={setActiveFilter}
+            items={filteredChains}
+            selectedItem={selectedChain}
+            onSelectItem={selectChain}
+            renderListItem={renderListItem}
+            renderDetail={renderDetail}
+            getItemKey={(chain) => chain.id}
+            emptyMessage="No chains found for this filter"
+          />
+        </div>
+      </div>
 
       {/* Retry Confirmation Dialog */}
       <Dialog open={dialogState.type === 'retry'} onOpenChange={() => setDialogState({ type: 'none' })}>

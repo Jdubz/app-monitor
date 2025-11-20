@@ -6,6 +6,18 @@
 
 ---
 
+### Scope Update — November 20, 2025
+
+The initial approval covered 24 tools, but the first MCP release intentionally ships a smaller, testable surface area:
+
+- Plan management tools are **deferred** until the existing planning system is reliable.
+- Task APIs expose creation, inspection, manual resume, and dev-bot outcome reporting only. Cancellation, reprioritisation, and log access remain backend-only.
+- System diagnostics are limited to the `system_health` tool. Additional metrics/log/restart tools stay out-of-scope so bots continue reading logs directly.
+- The MCP server always starts with the backend (no feature flag) and only runs over stdio on the local host so it is never exposed via Cloudflare/nginx.
+- Role-based access relies on `APP_MONITOR_MCP_USER_ROLE` (`admin` vs `dev-bot`) with dev-bots blocked in production environments.
+
+The remainder of this spec keeps the original design details for future phases, but any sections describing deferred tools should be treated as references, not current scope.
+
 ## Quick Reference
 
 **What:** MCP server embedded in backend providing structured agent access
