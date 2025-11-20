@@ -1,22 +1,22 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
-import { z, type ZodRawShape, type ZodTypeAny } from 'zod';
+import { z } from 'zod';
 import Database from 'better-sqlite3';
 import { withAuth } from '../middleware/auth.js';
 import { createJsonResponse, createErrorResponse, createSuccessResponse, withErrorHandling } from '../utils/response.js';
 import type { McpServices } from '../server.js';
 import { getPRConditionStateService } from '../../services/prConditionState.service.js';
 
-const prTriggerInputSchema = {
+const prTriggerInputSchema = z.object({
   pr_number: z.number().int().positive(),
   force: z.boolean().optional(),
-} satisfies ZodRawShape;
+});
 
-const prBlockingIssuesInputSchema = {
+const prBlockingIssuesInputSchema = z.object({
   pr_number: z.number().int().positive(),
-} satisfies ZodRawShape;
+});
 
-type PrTriggerParams = z.objectOutputType<typeof prTriggerInputSchema, ZodTypeAny>;
-type PrBlockingIssuesParams = z.objectOutputType<typeof prBlockingIssuesInputSchema, ZodTypeAny>;
+type PrTriggerParams = z.infer<typeof prTriggerInputSchema>;
+type PrBlockingIssuesParams = z.infer<typeof prBlockingIssuesInputSchema>;
 
 const STATUS_MAP: Record<string, string> = {
   met: 'pass',
