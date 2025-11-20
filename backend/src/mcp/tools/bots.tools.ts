@@ -1,33 +1,33 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
-import { z, type ZodRawShape, type ZodTypeAny } from "zod";
+import { z } from "zod";
 import Database from "better-sqlite3";
 import { withAuth } from "../middleware/auth.js";
 import { createJsonResponse, createErrorResponse, createSuccessResponse, withErrorHandling } from "../utils/response.js";
 import { McpServices } from "../server.js";
 import type { DevBotsStatus, WorkerStatus } from "../../services/statusAggregation.service.js";
 
-const botListActiveInputSchema = {
+const botListActiveInputSchema = z.object({
   include_idle: z.boolean().optional(),
   limit: z.number().int().positive().max(100).optional(),
-} satisfies ZodRawShape;
+});
 
-const botGetStatusInputSchema = {
+const botGetStatusInputSchema = z.object({
   bot_id: z.string(),
-} satisfies ZodRawShape;
+});
 
-const botRecoverInputSchema = {
+const botRecoverInputSchema = z.object({
   bot_id: z.string(),
   reason: z.string(),
-} satisfies ZodRawShape;
+});
 
-const botHeartbeatInputSchema = {
+const botHeartbeatInputSchema = z.object({
   alert_threshold_seconds: z.number().optional(),
-} satisfies ZodRawShape;
+});
 
-type BotListActiveParams = z.objectOutputType<typeof botListActiveInputSchema, ZodTypeAny>;
-type BotGetStatusParams = z.objectOutputType<typeof botGetStatusInputSchema, ZodTypeAny>;
-type BotRecoverParams = z.objectOutputType<typeof botRecoverInputSchema, ZodTypeAny>;
-type BotHeartbeatParams = z.objectOutputType<typeof botHeartbeatInputSchema, ZodTypeAny>;
+type BotListActiveParams = z.infer<typeof botListActiveInputSchema>;
+type BotGetStatusParams = z.infer<typeof botGetStatusInputSchema>;
+type BotRecoverParams = z.infer<typeof botRecoverInputSchema>;
+type BotHeartbeatParams = z.infer<typeof botHeartbeatInputSchema>;
 
 export function registerBotsTools(
   server: McpServer,

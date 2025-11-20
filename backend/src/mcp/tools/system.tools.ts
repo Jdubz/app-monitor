@@ -1,12 +1,12 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
-import { z, type ZodRawShape, type ZodTypeAny } from "zod";
+import { z } from "zod";
 import Database from "better-sqlite3";
 import { withAuth } from "../middleware/auth.js";
 import { createJsonResponse, withErrorHandling } from "../utils/response.js";
 import type { McpServices } from "../server.js";
 
-const systemHealthInputSchema = {} satisfies ZodRawShape;
-type SystemHealthParams = z.objectOutputType<typeof systemHealthInputSchema, ZodTypeAny>;
+const systemHealthInputSchema = z.object({});
+type SystemHealthParams = z.infer<typeof systemHealthInputSchema>;
 
 export function registerSystemTools(
   server: McpServer,

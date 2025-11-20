@@ -1,5 +1,5 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
-import { z, type ZodRawShape, type ZodTypeAny } from 'zod';
+import { z } from 'zod';
 import Database from 'better-sqlite3';
 import { withAuth, type AuthContext } from '../middleware/auth.js';
 import { createJsonResponse, createErrorResponse, createSuccessResponse, withErrorHandling } from '../utils/response.js';
@@ -16,31 +16,31 @@ const TASK_LIST_STATUS_VALUES: TaskStatus[] = [
   'cancelled',
   'timeout',
 ];
-const taskCreateInputSchema = {
+const taskCreateInputSchema = z.object({
   title: z.string().min(3),
   type: z.enum(['implementation', 'analysis', 'documentation', 'review']).optional(),
   prompt: z.string().min(10),
   success_criteria: z.array(z.string().min(3)).optional(),
   assigned_agent: z.enum(['claude', 'codex', 'gemini']).optional(),
   tags: z.array(z.string().min(1)).optional(),
-} satisfies ZodRawShape;
+});
 
-const taskGetInputSchema = {
+const taskGetInputSchema = z.object({
   task_id: z.string().min(1),
-} satisfies ZodRawShape;
+});
 
-const taskListInputSchema = {
+const taskListInputSchema = z.object({
   status: z.enum(TASK_LIST_STATUS_VALUES as [TaskStatus, ...TaskStatus[]]).optional(),
   assigned_agent: z.string().min(1).optional(),
   limit: z.number().int().positive().max(500).optional(),
-} satisfies ZodRawShape;
+});
 
-const taskUnblockInputSchema = {
+const taskUnblockInputSchema = z.object({
   task_id: z.string().min(1),
   resumed_by: z.string().optional(),
-} satisfies ZodRawShape;
+});
 
-const taskOutcomeInputSchema = {
+const taskOutcomeInputSchema = z.object({
   task_id: z.string().min(1),
   outcome: z.enum(['success', 'failure']),
   pr_url: z.string().optional(),
@@ -49,13 +49,13 @@ const taskOutcomeInputSchema = {
   failure_reason: z.string().optional(),
   failure_code: z.enum(['compilation_error', 'test_failure', 'dependency_error', 'timeout', 'validation_error', 'unknown']).optional(),
   error_details: z.string().optional(),
-} satisfies ZodRawShape;
+});
 
-type TaskCreateParams = z.objectOutputType<typeof taskCreateInputSchema, ZodTypeAny>;
-type TaskGetParams = z.objectOutputType<typeof taskGetInputSchema, ZodTypeAny>;
-type TaskListParams = z.objectOutputType<typeof taskListInputSchema, ZodTypeAny>;
-type TaskUnblockParams = z.objectOutputType<typeof taskUnblockInputSchema, ZodTypeAny>;
-type TaskReportOutcomeParams = z.objectOutputType<typeof taskOutcomeInputSchema, ZodTypeAny>;
+type TaskCreateParams = z.infer<typeof taskCreateInputSchema>;
+type TaskGetParams = z.infer<typeof taskGetInputSchema>;
+type TaskListParams = z.infer<typeof taskListInputSchema>;
+type TaskUnblockParams = z.infer<typeof taskUnblockInputSchema>;
+type TaskReportOutcomeParams = z.infer<typeof taskOutcomeInputSchema>;
 
 function parseTaskMetadata(task: Task): Record<string, unknown> {
   const raw = task.metadata;
