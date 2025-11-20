@@ -18,7 +18,6 @@ type QueueFilter = 'pending' | 'active' | 'completed' | 'failed';
  * TaskQueueTabContent - Task queue monitoring using dev-bots store
  *
  * Displays task queue with:
- * - Summary metrics (pending, active, completed, failed)
  * - Filterable list by status
  * - Detail view with task metadata
  */
@@ -44,21 +43,6 @@ export function TaskQueueTabContent() {
   const filteredTasks = useMemo(() => {
     return tasks.filter((task) => task.status === activeFilter);
   }, [tasks, activeFilter]);
-
-  // Summary cards
-  const summaryCards = useMemo(() => {
-    const pendingCount = tasks.filter((t) => t.status === 'pending').length;
-    const activeCount = tasks.filter((t) => t.status === 'active').length;
-    const completedCount = tasks.filter((t) => t.status === 'completed').length;
-    const failedCount = tasks.filter((t) => t.status === 'failed').length;
-
-    return [
-      { label: 'Pending', value: pendingCount, className: 'text-blue-600' },
-      { label: 'Active', value: activeCount, className: 'text-green-600' },
-      { label: 'Completed', value: completedCount, className: 'text-gray-600' },
-      { label: 'Failed', value: failedCount, className: failedCount > 0 ? 'text-red-600' : '' },
-    ];
-  }, [tasks]);
 
   // Filter tabs
   const filterTabs = useMemo(() => {
@@ -290,7 +274,6 @@ export function TaskQueueTabContent() {
       </div>
       <div className="flex-1 min-h-0">
         <ListDetailLayout<DevBotsTask, QueueFilter>
-          summaryCards={summaryCards}
           filterTabs={filterTabs}
           activeFilter={activeFilter}
           onFilterChange={setActiveFilter}

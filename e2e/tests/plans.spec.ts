@@ -48,14 +48,21 @@ test.describe('Plans - Plan List Display', () => {
   test('should display plan list or empty state', async ({ page }) => {
     await page.waitForTimeout(3000);
 
-    // Verify Plans tab is showing content - look for headings that appear in the page snapshot
-    const hasProgress = await page.getByRole('heading', { name: /Progress/i }).isVisible().catch(() => false);
-    const hasTags = await page.getByRole('heading', { name: /Tags/i }).isVisible().catch(() => false);
-    const hasPlanDetails = await page.getByRole('heading', { name: /Plan Details/i }).isVisible().catch(() => false);
-    const hasEmptyState = await page.getByText(/no plans found/i).isVisible().catch(() => false);
+    const headerVisible = await page
+      .getByRole('heading', { name: /Plans System/i })
+      .isVisible()
+      .catch(() => false);
+    const listItemVisible = await page
+      .getByTestId('list-detail-item')
+      .first()
+      .isVisible()
+      .catch(() => false);
+    const emptyStateVisible = await page
+      .getByText(/no plans found/i)
+      .isVisible()
+      .catch(() => false);
 
-    // Test passes if any plans content is visible
-    expect(hasProgress || hasTags || hasPlanDetails || hasEmptyState).toBe(true);
+    expect(headerVisible && (listItemVisible || emptyStateVisible)).toBe(true);
   });
 
   test('should display plan status indicators', async ({ page }) => {
