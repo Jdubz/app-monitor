@@ -25,7 +25,7 @@ vi.mock('../../../utils/logger', () => ({
   },
 }));
 
-// Mock config for auth
+// Mock config for auth (use inline value since vi.mock is hoisted)
 vi.mock('../../../config', () => ({
   config: {
     requireAuth: true,
@@ -33,10 +33,12 @@ vi.mock('../../../config', () => ({
   },
 }));
 
+// Test API key constant (must match the value in the mock above)
+const VALID_API_KEY = 'test-api-key-123';
+
 describe('Admin Bot Chat Routes', () => {
   let app: Express;
   let mockAdminBotService: AdminBotService;
-  const VALID_API_KEY = 'test-api-key-123';
 
   beforeEach(() => {
     // Create mock service as EventEmitter
@@ -148,6 +150,18 @@ describe('Admin Bot Chat Routes', () => {
       expect(mockAdminBotService.sendMessage).not.toHaveBeenCalled();
     });
 
+    it('should reject invalid API key', async () => {
+      const response = await request(app)
+        .post('/api/admin-bot/chat/message')
+        .set('X-API-Key', 'invalid-key')
+        .send({ message: 'test message' })
+        .expect(401);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toBe('UNAUTHORIZED');
+      expect(mockAdminBotService.sendMessage).not.toHaveBeenCalled();
+    });
+
     it('should send message successfully with valid API key', async () => {
       (mockAdminBotService.sendMessage as Mock).mockResolvedValue(undefined);
 
@@ -239,6 +253,17 @@ describe('Admin Bot Chat Routes', () => {
       expect(mockAdminBotService.stopSession).not.toHaveBeenCalled();
     });
 
+    it('should reject invalid API key', async () => {
+      const response = await request(app)
+        .post('/api/admin-bot/chat/stop')
+        .set('X-API-Key', 'invalid-key')
+        .expect(401);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toBe('UNAUTHORIZED');
+      expect(mockAdminBotService.stopSession).not.toHaveBeenCalled();
+    });
+
     it('should stop session successfully with valid API key', async () => {
       (mockAdminBotService.stopSession as Mock).mockResolvedValue(undefined);
 
@@ -282,6 +307,16 @@ describe('Admin Bot Chat Routes', () => {
     it('should require authentication', async () => {
       const response = await request(app)
         .get('/api/admin-bot/chat/status')
+        .expect(401);
+
+      expect(response.body.success).toBe(false);
+      expect(response.body.error).toBe('UNAUTHORIZED');
+    });
+
+    it('should reject invalid API key', async () => {
+      const response = await request(app)
+        .get('/api/admin-bot/chat/status')
+        .set('X-API-Key', 'invalid-key')
         .expect(401);
 
       expect(response.body.success).toBe(false);
@@ -379,6 +414,19 @@ describe('Admin Bot Chat Routes', () => {
         .expect('Connection', 'keep-alive')
         .end((err) => {
           if (err) return done(err);
+          done();
+        });
+    });
+
+    it('should reject invalid API key in header', (done) => {
+      request(app)
+        .get('/api/admin-bot/chat/stream')
+        .set('X-API-Key', 'invalid-key')
+        .expect(401)
+        .end((err, res) => {
+          if (err) return done(err);
+          expect(res.body.success).toBe(false);
+          expect(res.body.error).toBe('UNAUTHORIZED');
           done();
         });
     });
