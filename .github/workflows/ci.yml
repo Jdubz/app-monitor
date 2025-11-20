@@ -187,6 +187,30 @@ jobs:
         env:
           SKIP_HEAVY_DEV_BOT_TESTS: '1'
 
+  # Backend deploy build - mimic deploy agent's isolated install to catch MCP/build issues
+  backend-deploy-build:
+    name: Backend Deploy Build (Workspace Install)
+    runs-on: ubuntu-latest
+    needs: install
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install repo dependencies (for tooling)
+        run: npm ci
+
+      - name: Reproduce deploy-agent install layout
+        run: |
+          rm -rf node_modules
+          npm ci --workspace backend --install-strategy=shallow
+
+      - name: Build backend (deploy parity)
+        run: npm run build -w backend
+
   # Backend integration tests - separate job for all integration tests
   backend-test-integration:
     name: Backend Integration Tests

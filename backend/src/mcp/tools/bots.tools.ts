@@ -5,6 +5,7 @@ import { withAuth } from "../middleware/auth.js";
 import { createJsonResponse, createErrorResponse, createSuccessResponse, withErrorHandling } from "../utils/response.js";
 import { McpServices } from "../server.js";
 import type { DevBotsStatus, WorkerStatus } from "../../services/statusAggregation.service.js";
+import { registerZodTool } from "../utils/registerTool.js";
 
 const botListActiveInputSchema = z.object({
   include_idle: z.boolean().optional(),
@@ -43,12 +44,13 @@ export function registerBotsTools(
     return await devBotsManager.getSystemStatus();
   };
 
-  server.registerTool(
+  registerZodTool(
+    server,
     "bot_list_active",
     {
         title: "List Active Bots",
         description: "Lists all active dev-bots.",
-        inputSchema: botListActiveInputSchema.shape,
+        inputSchema: botListActiveInputSchema,
     },
     withAuth("bot_list_active", withErrorHandling(async (params: BotListActiveParams) => {
         const status = await getSystemStatus();
@@ -65,12 +67,13 @@ export function registerBotsTools(
     }))
   );
 
-  server.registerTool(
+  registerZodTool(
+    server,
     "bot_get_status",
     {
         title: "Get Bot Status",
         description: "Retrieves the detailed status of a dev-bot.",
-        inputSchema: botGetStatusInputSchema.shape,
+        inputSchema: botGetStatusInputSchema,
     },
     withAuth("bot_get_status", withErrorHandling(async (params: BotGetStatusParams) => {
          const status = await getSystemStatus();
@@ -82,12 +85,13 @@ export function registerBotsTools(
     }))
   );
 
-  server.registerTool(
+  registerZodTool(
+    server,
     "bot_recover",
     {
         title: "Recover Bot",
         description: "(ADMIN ONLY) Triggers emergency recovery orchestration. Note: Currently triggers system-wide recovery rather than targeting a specific bot.",
-        inputSchema: botRecoverInputSchema.shape,
+        inputSchema: botRecoverInputSchema,
     },
     withAuth("bot_recover", withErrorHandling(async (params: BotRecoverParams) => {
         if (!devBotsManager.triggerEmergencyRecovery) {
@@ -98,12 +102,13 @@ export function registerBotsTools(
     }))
   );
 
-  server.registerTool(
+  registerZodTool(
+    server,
     "bot_heartbeat_status",
     {
         title: "Bot Heartbeat Status",
         description: "Checks the heartbeat status of all dev-bots.",
-        inputSchema: botHeartbeatInputSchema.shape,
+        inputSchema: botHeartbeatInputSchema,
     },
     withAuth("bot_heartbeat_status", withErrorHandling(async (params: BotHeartbeatParams) => {
         const status = await getSystemStatus();

@@ -5,12 +5,12 @@ import { withAuth } from '../middleware/auth.js';
 import { createJsonResponse, createErrorResponse, createSuccessResponse, withErrorHandling } from '../utils/response.js';
 import type { McpServices } from '../server.js';
 import { getPRConditionStateService } from '../../services/prConditionState.service.js';
+import { registerZodTool } from '../utils/registerTool.js';
 
 const prTriggerInputSchema = z.object({
   pr_number: z.number().int().positive(),
   force: z.boolean().optional(),
 });
-
 const prBlockingIssuesInputSchema = z.object({
   pr_number: z.number().int().positive(),
 });
@@ -46,12 +46,13 @@ export function registerPrsTools(
   const taskQueue = services.devBotsManager.getTaskQueue();
   const prConditionState = getPRConditionStateService(taskQueue);
 
-  server.registerTool(
+  registerZodTool(
+    server,
     'pr_trigger_evaluation',
     {
       title: 'Trigger PR Evaluation',
       description: 'Manually triggers a PR gate evaluation.',
-      inputSchema: prTriggerInputSchema.shape,
+      inputSchema: prTriggerInputSchema,
     },
     withAuth('pr_trigger_evaluation', withErrorHandling(async (params: PrTriggerParams) => {
       const eventType = params.force ? 'manual_restart' : 'pull_request_opened';
@@ -60,12 +61,13 @@ export function registerPrsTools(
     })),
   );
 
-  server.registerTool(
+  registerZodTool(
+    server,
     'pr_get_blocking_issues',
     {
       title: 'Get Blocking Issues for PR',
       description: 'Retrieves the latest gate evaluation and blocking issues.',
-      inputSchema: prBlockingIssuesInputSchema.shape,
+      inputSchema: prBlockingIssuesInputSchema,
     },
     withAuth('pr_get_blocking_issues', withErrorHandling(async (params: PrBlockingIssuesParams) => {
       const state = await prConditionState.getState(params.pr_number);

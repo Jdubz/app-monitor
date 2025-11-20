@@ -1,14 +1,12 @@
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+
 /**
  * MCP Response Utilities
  *
  * Standardized response helpers for MCP tool handlers
  */
 
-export interface McpResponse {
-  [x: string]: unknown;
-  content: Array<{ type: 'text'; text: string }>;
-  isError?: boolean;
-}
+export type McpResponse = CallToolResult;
 
 /**
  * Creates a successful text response

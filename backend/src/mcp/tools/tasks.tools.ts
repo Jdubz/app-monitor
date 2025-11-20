@@ -6,6 +6,7 @@ import { createJsonResponse, createErrorResponse, createSuccessResponse, withErr
 import { logger } from '../../utils/logger.js';
 import type { McpServices } from '../server.js';
 import type { Task, TaskStatus } from '../../services/taskQueue.sqlite.js';
+import { registerZodTool } from '../utils/registerTool.js';
 
 const TASK_LIST_STATUS_VALUES: TaskStatus[] = [
   'pending',
@@ -101,12 +102,13 @@ export function registerTasksTools(
   const { devBotsManager } = services;
   const taskQueue = devBotsManager.getTaskQueue();
 
-  server.registerTool(
+  registerZodTool(
+    server,
     'task_create',
     {
       title: 'Create Task',
       description: 'Creates a standalone task using the existing submission pipeline.',
-      inputSchema: taskCreateInputSchema.shape,
+      inputSchema: taskCreateInputSchema,
     },
     withAuth('task_create', withErrorHandling(async (params: TaskCreateParams) => {
       const noteFromTags = params.tags?.length ? `Tags: ${params.tags.join(', ')}` : undefined;
@@ -124,12 +126,13 @@ export function registerTasksTools(
     })),
   );
 
-  server.registerTool(
+  registerZodTool(
+    server,
     'task_get',
     {
       title: 'Get Task',
       description: 'Retrieves the details of a task by ID.',
-      inputSchema: taskGetInputSchema.shape,
+      inputSchema: taskGetInputSchema,
     },
     withAuth('task_get', withErrorHandling(async (params: TaskGetParams) => {
       const task = taskQueue.getTask(params.task_id);
@@ -141,12 +144,13 @@ export function registerTasksTools(
     })),
   );
 
-  server.registerTool(
+  registerZodTool(
+    server,
     'task_list',
     {
       title: 'List Tasks',
       description: 'Lists tasks with optional filtering.',
-      inputSchema: taskListInputSchema.shape,
+      inputSchema: taskListInputSchema,
     },
     withAuth('task_list', withErrorHandling(async (params: TaskListParams) => {
       const lists = await devBotsManager.getTasks();
@@ -176,12 +180,13 @@ export function registerTasksTools(
     })),
   );
 
-  server.registerTool(
+  registerZodTool(
+    server,
     'task_unblock',
     {
       title: 'Resume Blocked Task',
       description: 'Resumes a blocked task using the manual resume flow.',
-      inputSchema: taskUnblockInputSchema.shape,
+      inputSchema: taskUnblockInputSchema,
     },
     withAuth('task_unblock', withErrorHandling(async (params: TaskUnblockParams, context: AuthContext) => {
       const resumedBy = params.resumed_by || process.env.APP_MONITOR_MCP_USER_ID || context.role;
@@ -190,12 +195,13 @@ export function registerTasksTools(
     })),
   );
 
-  server.registerTool(
+  registerZodTool(
+    server,
     'task_report_outcome',
     {
       title: 'Report Task Outcome',
       description: '(DEV-BOTS ONLY) Stores outcome details for the assigned task.',
-      inputSchema: taskOutcomeInputSchema.shape,
+      inputSchema: taskOutcomeInputSchema,
     },
     withAuth('task_report_outcome', withErrorHandling(async (params: TaskReportOutcomeParams, context: AuthContext) => {
       const task = taskQueue.getTask(params.task_id);
