@@ -73,7 +73,7 @@ export class RecoveryAgentService {
   constructor(dependencies: RecoveryAgentDependencies = {}) {
     this.agentSelector =
       dependencies.agentSelector ??
-      new AgentSelector(undefined, new AgentEligibilityServiceImpl());
+      new AgentSelector(new AgentEligibilityServiceImpl());
     this.cliCommandBuilder =
       dependencies.cliCommandBuilder ?? new AgentCliCommandBuilder();
   }

@@ -52,7 +52,7 @@ export async function createDevBotsManagerDependencies(
   const docker = dockerManager.getDocker();
 
   const agentEligibilityService = new AgentEligibilityServiceImpl();
-  const agentSelector = new AgentSelector(undefined, agentEligibilityService);
+  const agentSelector = new AgentSelector(agentEligibilityService);
 
   // Initialize SQLite task queue - use same database as DevBotsDatabase
   const { config: appConfig } = await import('../config.js');

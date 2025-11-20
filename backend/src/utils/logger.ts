@@ -46,7 +46,6 @@ export type LogCategory =
   | 'cloud'
   | 'codex-log-parser' // Codex log parsing
   | 'context' // Context bundle generation and caching
-  | 'copilot-throttle' // Copilot throttle management
   | 'database'
   | 'delegation' // Copilot delegation
   | 'docker'

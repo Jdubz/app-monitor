@@ -12,7 +12,6 @@
 
 import { logger } from '../utils/logger.js';
 import { TaskClassifier, type TaskCategory, type TaskComplexity } from './taskClassifier.js';
-import { CopilotThrottleManager } from './copilotThrottle.service.js';
 import type { AgentEligibilityService } from './agentEligibility.service.js';
 import type { Task } from './taskQueue.sqlite.js';
 import { AgentPersonalityManager } from './agentPersonalities.js';
@@ -61,13 +60,11 @@ export interface AgentSelection extends AgentSelectionCore {
  */
 export class AgentSelector {
   private readonly classifier: TaskClassifier;
-  private copilotThrottle?: CopilotThrottleManager;
   private eligibilityService?: AgentEligibilityService;
   private readonly personalityManager: AgentPersonalityManager;
 
-  constructor(copilotThrottle?: CopilotThrottleManager, eligibilityService?: AgentEligibilityService) {
+  constructor(eligibilityService?: AgentEligibilityService) {
     this.classifier = new TaskClassifier();
-    this.copilotThrottle = copilotThrottle;
     this.eligibilityService = eligibilityService;
     this.personalityManager = new AgentPersonalityManager();
 
@@ -77,8 +74,7 @@ export class AgentSelector {
       message: 'Intelligent agent selector initialized (Phase 0.2)',
       details: {
         strategy: 'intelligent_classification',
-        agents: ['claude', 'codex', 'copilot', 'gemini'],
-        copilotThrottleEnabled: !!copilotThrottle
+        agents: ['claude', 'codex', 'copilot', 'gemini']
       }
     });
   }

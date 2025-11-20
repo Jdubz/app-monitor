@@ -1631,16 +1631,6 @@ export class TaskQueueService {
   }
 
   /**
-   * Get currently active Copilot tasks (synchronous)
-   * Used by Copilot throttle manager to enforce concurrency limits
-   * Note: Returns synchronously as SQLite operations are synchronous
-   */
-  getActiveCopilotTasks(): Task[] {
-    // Copilot provider support was removed; there are no active Copilot tasks to report.
-    return [];
-  }
-
-  /**
    * Find tasks with suspicious error patterns that may have lost PR info
    * Used by PR recovery service for detecting crash-related failures
    */
