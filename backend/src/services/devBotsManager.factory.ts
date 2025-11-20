@@ -17,7 +17,7 @@ import { MS_PER_HOUR } from '../constants/timeouts.js';
 // WorkspaceOrchestrator removed - using container isolation
 import { ScopeControlService } from './scopeControl.service.js';
 import { EphemeralWorkerService } from './ephemeralWorker.service.js';
-import { AgentCliCommandBuilder } from './agentCliCommandBuilder.js';
+import { AgentCliCommandBuilder, type AgentCliType } from './agentCliCommandBuilder.js';
 import { RecoveryAgentService } from './recoveryAgent.service.js';
 import { resolveArtifactsDir } from '../utils/repoPaths.js';
 import { TaskExecutionService } from './taskExecution.service.js';
@@ -35,6 +35,7 @@ import { InfoQueryService } from './infoQuery.service.js';
 import { AgentSelector } from './agentSelector.js';
 import { AgentEligibilityServiceImpl } from './agentEligibility.service.js';
 import type { DevBotsManagerDependencies, DevBotsManagerConfig } from './devBotsManager.interfaces.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * Create all dependencies for DevBotsManager
@@ -95,6 +96,36 @@ export async function createDevBotsManagerDependencies(
 
   // Initialize intelligent agent tooling shared across services
   const cliCommandBuilder = new AgentCliCommandBuilder();
+
+  (['claude', 'codex', 'gemini'] as AgentCliType[]).forEach(cliType => {
+    const inspection = cliCommandBuilder.inspectCliHelp(cliType);
+    if (inspection.status === 'missing_binary') {
+      logger.warn({
+        category: 'automation',
+        action: 'agent_cli_missing',
+        message: `${cliType} CLI binary not detected in host environment`,
+        details: { cliType }
+      });
+    } else if (inspection.status === 'missing_flags') {
+      logger.warn({
+        category: 'automation',
+        action: 'agent_cli_flags_missing',
+        message: `${cliType} CLI help output did not include required flags`,
+        details: {
+          cliType,
+          missingFlags: inspection.missingFlags
+        }
+      });
+    } else if (inspection.status === 'execution_failed') {
+      logger.error({
+        category: 'automation',
+        action: 'agent_cli_help_failed',
+        message: `Failed to inspect ${cliType} CLI help`,
+        error: inspection.error
+      });
+    }
+  });
+
   const recoveryAgentService = new RecoveryAgentService({
     agentSelector,
     cliCommandBuilder,

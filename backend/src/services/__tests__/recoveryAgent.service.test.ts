@@ -211,5 +211,37 @@ describe('RecoveryAgentService', () => {
       expect(result.category).toBe('retry');
       expect(result.shouldRetry).toBe(true);
     });
+
+    it('delegates CLI selection to AgentSelector for recovery context', async () => {
+      selectAgentCliTypeForTaskMock.mockResolvedValueOnce('gemini');
+      const task = createMockTask();
+      const validationResult: ValidationResult = {
+        passed: false,
+        errors: ['Manual inspection required'],
+      };
+
+      await service.executeRecovery(task, 'container-xyz', validationResult, 1);
+
+      expect(selectAgentCliTypeForTaskMock).toHaveBeenCalledWith(mockAgentSelector, task, {
+        context: 'recovery',
+      });
+      expect(cliBuilderMock.buildCommand).toHaveBeenCalledWith(
+        expect.objectContaining({ cliType: 'gemini' })
+      );
+    });
+
+    it('parses final JSON block when CLI emits streaming events', () => {
+      const streamingOutput = [
+        '{"type":"thread.started"}',
+        '{"type":"turn.started"}',
+        '{"category":"retry","diagnosis":"Network blip","recovery_action":"retry","success":true}'
+      ].join('\n');
+
+      // @ts-expect-error accessing private method for deterministic parsing test
+      const parsed = service.parseRecoveryResponse(streamingOutput);
+
+      expect(parsed.category).toBe('retry');
+      expect(parsed.diagnosis).toBe('Network blip');
+    });
   });
 });

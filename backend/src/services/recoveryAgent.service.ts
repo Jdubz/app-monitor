@@ -406,9 +406,9 @@ Analyze the errors above and provide your diagnosis as JSON only.`;
     try {
       // Try to extract JSON from output
       // Agent may wrap it in markdown code blocks or include extra text
-      const jsonMatch = output.match(/\{[\s\S]*\}/);
+      const jsonMatches = output.match(/\{[\s\S]*?\}/g);
       
-      if (!jsonMatch) {
+      if (!jsonMatches || jsonMatches.length === 0) {
         // No JSON found - treat as generic diagnosis
         return {
           category: 'retry',
@@ -418,7 +418,8 @@ Analyze the errors above and provide your diagnosis as JSON only.`;
         };
       }
 
-      const parsed = JSON.parse(jsonMatch[0]);
+      const rawJson = jsonMatches[jsonMatches.length - 1];
+      const parsed = JSON.parse(rawJson);
 
       // Validate required fields
       if (!parsed.category || !parsed.diagnosis) {

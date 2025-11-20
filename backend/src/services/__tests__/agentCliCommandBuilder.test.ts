@@ -1,9 +1,20 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+
+vi.mock('node:child_process', () => ({
+  spawnSync: vi.fn(() => ({ stdout: '', stderr: '', error: undefined }))
+}));
+
+import { spawnSync } from 'node:child_process';
 import { AgentCliCommandBuilder } from '../agentCliCommandBuilder.js';
 
-const builder = new AgentCliCommandBuilder();
+let builder: AgentCliCommandBuilder;
 
 describe('AgentCliCommandBuilder', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    builder = new AgentCliCommandBuilder();
+  });
+
   it('builds claude command with literal prompt', () => {
     const cmd = builder.buildCommand({
       cliType: 'claude',
@@ -13,20 +24,20 @@ describe('AgentCliCommandBuilder', () => {
 
     expect(cmd).toContain('claude --print');
     expect(cmd).toContain("'Hello World'");
+    expect(cmd).toContain('--dangerously-skip-permissions');
     expect(cmd).toContain('--output-format json');
   });
 
-  it('builds codex command with file prompt', () => {
+  it('builds codex command with file prompt and default cd flag', () => {
     const cmd = builder.buildCommand({
       cliType: 'codex',
-      prompt: { kind: 'file', path: '/dev/shm/recovery.txt' },
-      workingDirectory: '/workspace'
+      prompt: { kind: 'file', path: '/dev/shm/recovery space.txt' }
     });
 
     expect(cmd).toContain('codex exec');
     expect(cmd).toContain('--cd /workspace');
     expect(cmd).toContain('--dangerously-bypass-approvals-and-sandbox');
-    expect(cmd).toContain('$(cat \'/dev/shm/recovery.txt\')');
+    expect(cmd).toContain("$(cat '/dev/shm/recovery space.txt')");
   });
 
   it('builds gemini command with literal prompt', () => {
@@ -38,23 +49,51 @@ describe('AgentCliCommandBuilder', () => {
     expect(cmd).toContain('gemini');
     expect(cmd).toContain('--approval-mode yolo');
     expect(cmd).toContain('--sandbox false');
+    expect(cmd).toContain('--yolo');
     expect(cmd).toContain("'Summarize status'");
   });
 
-  it('verifies CLI flag availability when binaries exist', () => {
-    const targets: Array<'claude' | 'codex' | 'gemini'> = ['claude', 'codex', 'gemini'];
+  it('caches CLI help inspections when enabled', () => {
+    const spawnSyncMock = vi.mocked(spawnSync);
+    spawnSyncMock.mockReturnValueOnce({
+      stdout: '--print --dangerously-skip-permissions --output-format',
+      stderr: '',
+      error: undefined
+    } as ReturnType<typeof spawnSync>);
 
-    for (const cliType of targets) {
-      const result = builder.inspectCliHelp(cliType);
+    builder.inspectCliHelp('claude');
+    builder.inspectCliHelp('claude');
 
-      if (result.status === 'missing_binary') {
-        // Environment does not have this CLI installed; skip verification.
-        expect(result.status).toBe('missing_binary');
-      } else if (result.status === 'missing_flags') {
-        expect(result.missingFlags).toEqual([]);
-      } else {
-        expect(result.status).toBe('ok');
-      }
-    }
+    expect(spawnSyncMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('detects missing binaries', () => {
+    const spawnSyncMock = vi.mocked(spawnSync);
+    const error = Object.assign(new Error('not found'), { code: 'ENOENT' });
+    spawnSyncMock.mockReturnValueOnce({
+      stdout: '',
+      stderr: '',
+      error
+    } as ReturnType<typeof spawnSync>);
+
+    const result = builder.inspectCliHelp('codex', { useCache: false });
+
+    expect(spawnSyncMock).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe('missing_binary');
+  });
+
+  it('reports missing required flags', () => {
+    const spawnSyncMock = vi.mocked(spawnSync);
+    spawnSyncMock.mockReturnValueOnce({
+      stdout: '--print',
+      stderr: '',
+      error: undefined
+    } as ReturnType<typeof spawnSync>);
+
+    const result = builder.inspectCliHelp('gemini', { useCache: false });
+
+    expect(spawnSyncMock).toHaveBeenCalledTimes(1);
+    expect(result.status).toBe('missing_flags');
+    expect(result.missingFlags).toContain('--sandbox');
   });
 });
