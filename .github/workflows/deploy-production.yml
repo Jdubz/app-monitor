@@ -111,10 +111,8 @@ jobs:
           npm run build -w backend
           echo "✅ Backend build successful"
 
-      - name: Test backend
-        run: |
-          echo "🧪 Running backend tests..."
-          npm run test:backend
+      # NOTE: Tests are NOT run here - all tests must pass in CI before merge to main
+      # This workflow only handles packaging and deployment after merge
 
       # Frontend is built on the server during deployment (not here)
       # The server build uses VITE_PASSWORD from /opt/app-monitor/shared/config/.env.production

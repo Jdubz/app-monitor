@@ -66,10 +66,15 @@ export default defineConfig({
 
     // Integration test timeouts
     ...TEST_TIMEOUTS.integration,
-    
+
     // Environment setup
     environment: 'node',
-    
+
+    // Cache configuration - disable in CI to prevent deserialization errors
+    cache: process.env.CI ? false : {
+      dir: 'node_modules/.vitest',
+    },
+
     // Set NODE_ENV to test to disable auth
     // Set DATABASE_PATH to :memory: to ensure all tests use in-memory database
     env: {

@@ -125,6 +125,12 @@ jobs:
       - name: Build api-contracts
         run: npm run build -w @app-monitor/api-contracts
 
+      - name: Clear vitest cache
+        run: |
+          rm -rf backend/node_modules/.vitest
+          rm -rf backend/node_modules/.vite
+        continue-on-error: true
+
       - name: Test backend
         run: npm run test -w backend
         env:
@@ -174,6 +180,12 @@ jobs:
       - name: Build api-contracts
         run: npm run build -w @app-monitor/api-contracts
 
+      - name: Clear vitest cache
+        run: |
+          rm -rf backend/node_modules/.vitest
+          rm -rf backend/node_modules/.vite
+        continue-on-error: true
+
       - name: Run all backend integration tests
         working-directory: backend
         run: npx vitest run --config vitest.config.ts tests/integration src/services/websocket.integration.test.ts --reporter verbose
@@ -214,6 +226,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Clear vitest cache
+        run: |
+          rm -rf frontend/node_modules/.vitest
+          rm -rf frontend/node_modules/.vite
+        continue-on-error: true
+
       - name: Test frontend (unit)
         run: npm run test -w frontend
 
@@ -232,6 +250,12 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Clear vitest cache
+        run: |
+          rm -rf frontend/node_modules/.vitest
+          rm -rf frontend/node_modules/.vite
+        continue-on-error: true
 
       - name: Test frontend (integration)
         run: npm run test:integration -w frontend
