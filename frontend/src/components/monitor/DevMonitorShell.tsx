@@ -72,7 +72,7 @@ function GlobalStatusStrip() {
  * - /monitor/plans: Plans system overview
  * - /monitor/interactive: Interactive terminal sessions
  */
-export function DevMonitorShell({ socket }: DevMonitorShellProps) {
+export function DevMonitorShell({ socket: _socket }: DevMonitorShellProps) {
   const location = useLocation();
   const navigate = useNavigate();
 

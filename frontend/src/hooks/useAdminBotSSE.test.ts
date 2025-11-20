@@ -67,7 +67,6 @@ class MockEventSource {
 }
 
 describe('useAdminBotSSE', () => {
-  let mockEventSource: MockEventSource;
   let mockEventSourceInstances: MockEventSource[] = [];
 
   beforeEach(() => {
@@ -88,7 +87,7 @@ describe('useAdminBotSSE', () => {
   });
 
   it('should connect to SSE endpoint on mount', () => {
-    const { result } = renderHook(() =>
+    renderHook(() =>
       useAdminBotSSE({
         onOutput: vi.fn(),
         onError: vi.fn(),

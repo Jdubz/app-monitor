@@ -28,8 +28,6 @@ export interface AdminBotSSEOptions {
  * @returns Object with connection status and manual close function
  */
 export function useAdminBotSSE(options: AdminBotSSEOptions) {
-  const { onOutput, onError, onExit, onConnected } = options;
-
   const eventSourceRef = useRef<EventSource | null>(null);
   const callbacksRef = useRef(options);
 

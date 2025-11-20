@@ -29,20 +29,10 @@ interface Message {
   timestamp: Date;
 }
 
-interface SessionStatus {
-  session: {
-    id: string;
-    status: 'idle' | 'running' | 'error';
-    startedAt: string;
-    messageCount: number;
-  } | null;
-  isRunning: boolean;
-}
-
 export function AdminBotChat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputValue, setInputValue] = useState('');
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [, setSessionId] = useState<string | null>(null);
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

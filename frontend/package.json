@@ -40,8 +40,6 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@tanstack/react-virtual": "^3.13.12",
     "@types/react-router-dom": "^5.3.3",
-    "@xterm/addon-fit": "^0.10.0",
-    "@xterm/xterm": "^5.5.0",
     "axios": "^1.6.5",
     "html2canvas": "^1.4.1",
     "lucide-react": "^0.453.0",
