@@ -15,6 +15,7 @@ import type { TerminalService } from '../services/TerminalService.js';
 import type { HealthCheckApiResponse } from '@app-monitor/api-contracts';
 import { requireApiKey } from '../middleware/auth.js';
 import { logger } from '../utils/logger.js';
+import { defineRoute } from './routeRegistry.js';
 
 import { createSocketRoutes } from './socket-task.routes.js';
 import { createDockerRouter } from './docker.routes.js';
@@ -29,6 +30,7 @@ import issuesRoutes, { initializeIssuesRoutes } from './issues.routes.js';
 import metricsRoutes from './metrics.routes.js';
 import observabilityRoutes from './observability.routes.js';
 import { createPRsRouter } from './prs.routes.js';
+import { createOpenApiRouter } from './openapi.routes.js';
 
 /**
  * Create the main API router with all sub-routes
@@ -56,49 +58,63 @@ export function createApiRouter(deps: {
   }
 
   // Health check - no auth required
-  router.get('/health', async (_req, res) => {
-    logger.debug({
-      category: 'api',
-      action: 'health_check',
-      message: 'Health endpoint called',
-      details: {
-        uptime: process.uptime(),
-        timestamp: new Date().toISOString()
-      }
-    });
-
-    // Check if server is shutting down
-    // Note: This will be false in test environment where index module isn't loaded
-    let shuttingDown = false;
-    try {
-      const indexModule = await import('../index.js');
-      shuttingDown = indexModule.isShuttingDown || false;
-    } catch {
-      // In test environment, index.js may not be available
-      shuttingDown = false;
-    }
-    
-    if (shuttingDown) {
-      // Return 503 during graceful shutdown so nginx stops routing here
-      return res.status(503).json({
-        success: false,
-        error: {
-          message: 'Server is shutting down gracefully',
-          code: 'SERVER_DRAINING'
+  const healthRoute = defineRoute({
+    method: 'get',
+    path: '/health',
+    summary: 'Health Check',
+    description: 'Returns the current health status of the API service.',
+    response: {
+      body: {} as HealthCheckApiResponse
+    },
+    handler: async (_req, res) => {
+      logger.debug({
+        category: 'api',
+        action: 'health_check',
+        message: 'Health endpoint called',
+        details: {
+          uptime: process.uptime(),
+          timestamp: new Date().toISOString()
         }
       });
+
+      // Check if server is shutting down
+      // Note: This will be false in test environment where index module isn't loaded
+      let shuttingDown = false;
+      try {
+        const indexModule = await import('../index.js');
+        shuttingDown = indexModule.isShuttingDown || false;
+      } catch {
+        // In test environment, index.js may not be available
+        shuttingDown = false;
+      }
+
+      if (shuttingDown) {
+        // Return 503 during graceful shutdown so nginx stops routing here
+        return res.status(503).json({
+          success: false,
+          error: {
+            message: 'Server is shutting down gracefully',
+            code: 'SERVER_DRAINING'
+          }
+        });
+      }
+
+      const payload: HealthCheckApiResponse = {
+        success: true,
+        data: {
+          status: 'ok',
+          uptime: process.uptime(),
+          timestamp: new Date().toISOString(),
+        },
+      };
+      res.json(payload);
     }
-    
-    const payload: HealthCheckApiResponse = {
-      success: true,
-      data: {
-        status: 'ok',
-        uptime: process.uptime(),
-        timestamp: new Date().toISOString(),
-      },
-    };
-    res.json(payload);
   });
+
+  router[healthRoute.method](healthRoute.path, healthRoute.handler);
+
+  // OpenAPI Documentation
+  router.use('/docs', createOpenApiRouter());
 
   // Apply API key authentication to all routes except health and webhooks
   if (deps.connectionManager) {
