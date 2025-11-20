@@ -1,4 +1,6 @@
 import { defineConfig } from 'vitest/config';
+import { fileURLToPath } from 'url';
+import path from 'path';
 import { getThreadPoolConfig, TEST_TIMEOUTS } from './vitest.shared.config.js';
 
 /**
@@ -6,6 +8,10 @@ import { getThreadPoolConfig, TEST_TIMEOUTS } from './vitest.shared.config.js';
  *
  * Prevents test explosions through strict file inclusion and process limits.
  */
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const repoRoot = path.resolve(__dirname, '..');
 
 const skipHeavyBots = process.env.SKIP_HEAVY_DEV_BOT_TESTS === '1';
 const useForkPool = process.env.VITEST_FORCE_FORKS === '1' || process.env.CI === 'true';
@@ -69,6 +75,7 @@ export default defineConfig({
     env: {
       NODE_ENV: 'test',
       DATABASE_PATH: ':memory:',
+      REPO_ROOT: process.env.REPO_ROOT || repoRoot,
     },
     
     // Coverage configuration

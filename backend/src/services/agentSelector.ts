@@ -368,6 +368,13 @@ export class AgentSelector {
     return false;
   }
 
+  /**
+   * Resolve personality selection order:
+   * 1. Exact TASK_TYPE_TO_PERSONALITY mapping (explicit override)
+   * 2. Personality manager lookup using candidate signals
+   *    (taskType, normalized category, API-provided taskCategory)
+   * 3. Fallback to backend-specialist to guarantee a concrete value.
+   */
   private determinePersonality(
     criteria: AgentSelectionCriteria,
     category?: TaskCategory

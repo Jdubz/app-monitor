@@ -343,7 +343,7 @@ Unless noted, routes live under `/api` and require the API key described above.
 | POST | `/phases/metrics/refresh` | Recompute cached phase metrics |
 | GET | `/chains/blocked` | List blocked task chains |
 | POST | `/chains/:chainId/unblock` | Manually unblock a chain |
-| POST | `/:taskId/report-completion` | Worker hook for reporting completion/failure |
+| POST | `/tasks/:taskId/report-completion` | Worker hook for reporting completion/failure |
 | POST | `/pr/track` | Manually enqueue PR tracking for a task |
 
 #### Logs, Context & Runs
@@ -351,10 +351,10 @@ Unless noted, routes live under `/api` and require the API key described above.
 |---|---|---|
 | GET | `/tasks/:taskId/logs` | Download aggregated stdout/stderr for a task (reads artifacts) |
 | GET | `/tasks/:taskId/logs/:stream` | Stream a single log (`stdout` or `stderr`) |
-| GET | `/tasks/:id/context` | Latest automation run context (prompt, metadata) |
-| GET | `/tasks/:id/stage-runs` | Phase/stage execution history |
-| GET | `/tasks/:id/runs` | Automation runs for a task |
-| GET | `/tasks/:id/runs/:runId` | Detailed automation run record |
+| GET | `/tasks/:taskId/context` | Latest automation run context (prompt, metadata) |
+| GET | `/tasks/:taskId/stage-runs` | Phase/stage execution history |
+| GET | `/tasks/:taskId/runs` | Automation runs for a task |
+| GET | `/tasks/:taskId/runs/:runId` | Detailed automation run record |
 
 #### Agents & Templates
 | Method | Path | Description |

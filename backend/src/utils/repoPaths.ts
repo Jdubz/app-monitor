@@ -107,18 +107,6 @@ export function resolveLogsDir(startDir: string = process.cwd()): string {
     return PROD_LOGS_DIR;
   }
 
-  try {
-    const repoRoot = findRepoRoot(startDir);
-    return path.join(repoRoot, 'backend', 'data', 'logs');
-  } catch (error) {
-    const cwd = process.cwd();
-    const base =
-      path.basename(cwd) === 'backend' ? path.join(cwd, 'data') : path.join(cwd, 'backend', 'data');
-    console.warn(
-      `[repoPaths] WARNING: Falling back to ${base}/logs because repo root detection failed: ${
-        (error as Error).message
-      }`
-    );
-    return path.join(base, 'logs');
-  }
+  const repoRoot = findRepoRoot(startDir);
+  return path.join(repoRoot, 'backend', 'data', 'logs');
 }
