@@ -291,8 +291,10 @@ main() {
         exit 1
     fi
 
-    # Check for critical dependencies
+    # Define critical dependencies list (used for validation at multiple stages)
     CRITICAL_DEPS=("express" "socket.io" "better-sqlite3" "dockerode" "@modelcontextprotocol/sdk")
+
+    # Check for critical dependencies
     for dep in "${CRITICAL_DEPS[@]}"; do
         if [ ! -d "node_modules/${dep}" ]; then
             log_error "Critical dependency missing: ${dep}"
@@ -317,22 +319,21 @@ main() {
         exit 1
     fi
 
-    # Final verification
+    # Final verification - check filesystem directly to avoid workspace resolution issues
+    # Reuses CRITICAL_DEPS array defined earlier for consistency
     log_info "Verifying production build..."
-    node -e "
-        const critical = ['express', 'socket.io', 'better-sqlite3', '@modelcontextprotocol/sdk'];
-        const missing = critical.filter(pkg => {
-            try { require.resolve(pkg); return false; }
-            catch { return true; }
-        });
-        if (missing.length) {
-            console.error('Missing after prune:', missing);
-            process.exit(1);
-        }
-    " || {
+    MISSING_DEPS=()
+    for dep in "${CRITICAL_DEPS[@]}"; do
+        if [ ! -d "node_modules/${dep}" ]; then
+            MISSING_DEPS+=("$dep")
+        fi
+    done
+
+    if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
         log_error "Production dependencies verification failed"
+        log_error "Missing dependencies: ${MISSING_DEPS[*]}"
         exit 1
-    }
+    fi
 
     log_info "Backend build complete and verified"
 
