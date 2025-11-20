@@ -227,7 +227,7 @@ describe('AdminBotService', () => {
       mockProcess.stdin.write = vi.fn().mockReturnValue(false);
 
       await expect(service.sendMessage('test')).rejects.toThrow(
-        'Failed to send message'
+        'Timeout waiting for stdin drain'
       );
     });
   });
