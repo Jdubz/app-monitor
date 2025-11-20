@@ -29,10 +29,6 @@ vi.mock('@/contexts/devBotsStore', () => ({
   }),
 }));
 
-vi.mock('@/hooks/usePhaseUpdates', () => ({
-  usePhaseUpdates: () => null,
-}));
-
 describe('TaskQueueTabContent long list integration', () => {
   it('keeps task list scrollable instead of expanding layout', async () => {
     render(<TaskQueueTabContent />);
