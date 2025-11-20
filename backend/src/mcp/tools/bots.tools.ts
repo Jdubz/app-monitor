@@ -6,23 +6,23 @@ import { createJsonResponse, createErrorResponse, createSuccessResponse, withErr
 import { McpServices } from "../server.js";
 import type { DevBotsStatus, WorkerStatus } from "../../services/statusAggregation.service.js";
 
-const botListActiveInputSchema: ZodRawShape = {
+const botListActiveInputSchema = {
   include_idle: z.boolean().optional(),
   limit: z.number().int().positive().max(100).optional(),
-};
+} satisfies ZodRawShape;
 
-const botGetStatusInputSchema: ZodRawShape = {
+const botGetStatusInputSchema = {
   bot_id: z.string(),
-};
+} satisfies ZodRawShape;
 
-const botRecoverInputSchema: ZodRawShape = {
+const botRecoverInputSchema = {
   bot_id: z.string(),
   reason: z.string(),
-};
+} satisfies ZodRawShape;
 
-const botHeartbeatInputSchema: ZodRawShape = {
+const botHeartbeatInputSchema = {
   alert_threshold_seconds: z.number().optional(),
-};
+} satisfies ZodRawShape;
 
 type BotListActiveParams = z.objectOutputType<typeof botListActiveInputSchema, ZodTypeAny>;
 type BotGetStatusParams = z.objectOutputType<typeof botGetStatusInputSchema, ZodTypeAny>;

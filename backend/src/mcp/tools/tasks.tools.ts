@@ -16,31 +16,31 @@ const TASK_LIST_STATUS_VALUES: TaskStatus[] = [
   'cancelled',
   'timeout',
 ];
-const taskCreateInputSchema: ZodRawShape = {
+const taskCreateInputSchema = {
   title: z.string().min(3),
   type: z.enum(['implementation', 'analysis', 'documentation', 'review']).optional(),
   prompt: z.string().min(10),
   success_criteria: z.array(z.string().min(3)).optional(),
   assigned_agent: z.enum(['claude', 'codex', 'gemini']).optional(),
   tags: z.array(z.string().min(1)).optional(),
-};
+} satisfies ZodRawShape;
 
-const taskGetInputSchema: ZodRawShape = {
+const taskGetInputSchema = {
   task_id: z.string().min(1),
-};
+} satisfies ZodRawShape;
 
-const taskListInputSchema: ZodRawShape = {
+const taskListInputSchema = {
   status: z.enum(TASK_LIST_STATUS_VALUES as [TaskStatus, ...TaskStatus[]]).optional(),
   assigned_agent: z.string().min(1).optional(),
   limit: z.number().int().positive().max(500).optional(),
-};
+} satisfies ZodRawShape;
 
-const taskUnblockInputSchema: ZodRawShape = {
+const taskUnblockInputSchema = {
   task_id: z.string().min(1),
   resumed_by: z.string().optional(),
-};
+} satisfies ZodRawShape;
 
-const taskOutcomeInputSchema: ZodRawShape = {
+const taskOutcomeInputSchema = {
   task_id: z.string().min(1),
   outcome: z.enum(['success', 'failure']),
   pr_url: z.string().optional(),
@@ -49,7 +49,7 @@ const taskOutcomeInputSchema: ZodRawShape = {
   failure_reason: z.string().optional(),
   failure_code: z.enum(['compilation_error', 'test_failure', 'dependency_error', 'timeout', 'validation_error', 'unknown']).optional(),
   error_details: z.string().optional(),
-};
+} satisfies ZodRawShape;
 
 type TaskCreateParams = z.objectOutputType<typeof taskCreateInputSchema, ZodTypeAny>;
 type TaskGetParams = z.objectOutputType<typeof taskGetInputSchema, ZodTypeAny>;

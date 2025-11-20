@@ -6,14 +6,14 @@ import { createJsonResponse, createErrorResponse, createSuccessResponse, withErr
 import type { McpServices } from '../server.js';
 import { getPRConditionStateService } from '../../services/prConditionState.service.js';
 
-const prTriggerInputSchema: ZodRawShape = {
+const prTriggerInputSchema = {
   pr_number: z.number().int().positive(),
   force: z.boolean().optional(),
-};
+} satisfies ZodRawShape;
 
-const prBlockingIssuesInputSchema: ZodRawShape = {
+const prBlockingIssuesInputSchema = {
   pr_number: z.number().int().positive(),
-};
+} satisfies ZodRawShape;
 
 type PrTriggerParams = z.objectOutputType<typeof prTriggerInputSchema, ZodTypeAny>;
 type PrBlockingIssuesParams = z.objectOutputType<typeof prBlockingIssuesInputSchema, ZodTypeAny>;
