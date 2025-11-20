@@ -66,19 +66,6 @@ export function TaskQueueTabContent() {
     [queueStats]
   );
 
-  const summaryCards = useMemo(
-    () => [
-      { label: 'Total Tasks', value: tasks.length, className: 'text-primary' },
-      { label: 'Active Tasks', value: queueStats.active, className: 'text-blue-500' },
-      { label: 'Pending Tasks', value: queueStats.pending, className: 'text-amber-500' },
-      {
-        label: 'Workers Online',
-        value: `${status?.workerCount ?? 0}/${status?.maxWorkers ?? 0}`,
-        className: 'text-emerald-500',
-      },
-    ],
-    [queueStats.active, queueStats.pending, status?.workerCount, status?.maxWorkers, tasks.length]
-  );
 
   // Render list item
   const renderListItem = (task: DevBotsTask, _isSelected: boolean) => {
@@ -295,7 +282,6 @@ export function TaskQueueTabContent() {
       </div>
       <div className="flex-1 min-h-0">
         <ListDetailLayout<DevBotsTask, QueueFilter>
-          summaryCards={summaryCards}
           filterTabs={filterTabs}
           activeFilter={activeFilter}
           onFilterChange={setActiveFilter}
