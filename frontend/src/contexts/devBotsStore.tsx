@@ -268,10 +268,7 @@ export function DevBotsStoreProvider({ children, socket }: DevBotsStoreProviderP
       setSettingsUpdateError(undefined);
       try {
         const request = {
-          modelStrategy: payload.modelStrategy ?? settings.modelStrategy,
           maxWorkers: payload.maxWorkers ?? settings.maxWorkers,
-          dryRun: payload.dryRun ?? settings.dryRun,
-          autoCleanup: payload.autoCleanup ?? settings.autoCleanup,
         };
         const updated = await api.put<DevBotsSettings>('/dev-bots/settings', request);
         if (!isMountedRef.current) return;
