@@ -31,7 +31,7 @@ describe('repoPaths', () => {
         return pathStr === '/home/user/projects/app-monitor/.git';
       });
 
-      const result = findRepoRoot(startDir);
+      const result = findRepoRoot(startDir, { allowProcessCwdFallback: false });
 
       expect(result).toBe('/home/user/projects/app-monitor');
     });
@@ -72,7 +72,7 @@ describe('repoPaths', () => {
 
     it('should use REPO_ROOT environment variable as fallback when backend not found', () => {
       const mockExistsSync = vi.mocked(fs.existsSync);
-      const consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
       const startDir = '/some/random/path/without/structure';
 
       mockExistsSync.mockReturnValue(false);
@@ -81,25 +81,26 @@ describe('repoPaths', () => {
       const result = findRepoRoot(startDir);
 
       expect(result).toBe('/custom/repo/root');
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('WARNING: Could not determine repo root')
+      expect(warnSpy).toHaveBeenCalledWith(
+        expect.stringContaining('REPO_ROOT override')
       );
-
-      consoleWarnSpy.mockRestore();
+      warnSpy.mockRestore();
     });
 
     it('should throw error when no .git, no backend, and no REPO_ROOT env var', () => {
       const mockExistsSync = vi.mocked(fs.existsSync);
       const startDir = '/some/random/path/without/structure';
+      const cwdSpy = vi.spyOn(process, 'cwd').mockReturnValue('/var/tmp/no-repo-here');
 
       mockExistsSync.mockReturnValue(false);
 
-      expect(() => findRepoRoot(startDir)).toThrow(
+      expect(() => findRepoRoot(startDir, { allowProcessCwdFallback: false })).toThrow(
         /Unable to determine repository root/
       );
-      expect(() => findRepoRoot(startDir)).toThrow(
-        /Set the REPO_ROOT environment variable/
+      expect(() => findRepoRoot(startDir, { allowProcessCwdFallback: false })).toThrow(
+        /Set REPO_ROOT to override/
       );
+      cwdSpy.mockRestore();
     });
 
     it('should prefer .git over backend directory when both exist', () => {
