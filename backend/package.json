@@ -1,7 +1,7 @@
 {
   "name": "app-monitor-backend",
   "version": "1.0.0",
-  "description": "Express backend for app monitor",
+  "description": "Express backend for app monitor. NOTE: TypeScript and @types/* are in dependencies (not devDependencies) to support production builds with npm ci --omit=dev.",
   "main": "dist/index.js",
   "type": "module",
   "scripts": {
