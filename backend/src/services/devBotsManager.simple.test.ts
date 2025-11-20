@@ -214,7 +214,7 @@ describe('DevBotsManager Public Interface', () => {
 
     it('should handle missing required fields', async () => {
       // Given: Task with minimal data
-      const minimalTaskData = {
+      const submissionTaskData = {
         type: 'feature',
         title: 'Test Title',
         description: 'Test documentation',
@@ -222,7 +222,7 @@ describe('DevBotsManager Public Interface', () => {
       };
 
       // When: Task is added
-      const result = await devBotsManager.addTask(minimalTaskData);
+      const result = await devBotsManager.addTask(submissionTaskData);
 
       // Then: Task data is returned
       expect(result).toBeDefined();

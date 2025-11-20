@@ -228,7 +228,7 @@ export class MockProcessManager extends EventEmitter {
     };
   }
 
-  // Minimal API required by routes
+  // Task submission API required by routes
   getTaskQueue() {
     return {
       getDatabase: () => ({} as never),
@@ -525,7 +525,7 @@ export class MockDevBotsManager extends EventEmitter {
     documentation?: string;
     acceptanceCriteria?: string[] | string;
     files?: string[];
-  }) {
+  }, _options?: { submission?: boolean }) {
     const acceptanceCriteria = Array.isArray(taskData.acceptanceCriteria)
       ? taskData.acceptanceCriteria
       : typeof taskData.acceptanceCriteria === 'string'

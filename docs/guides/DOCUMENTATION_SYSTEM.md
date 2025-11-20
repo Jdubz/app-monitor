@@ -75,7 +75,7 @@
 
 **Examples:**
 - `PRODUCTION_DEPLOYMENT.md` - How to deploy
-- `MINIMAL_TASK_SUBMISSION_GUIDE.md` - How to submit tasks
+- `TASK_SUBMISSION_GUIDE.md` - How to submit tasks
 - `FRONTEND_DEVELOPMENT.md` - Frontend development workflow
 
 **Prohibited:**
