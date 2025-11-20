@@ -48,7 +48,7 @@ export function registerBotsTools(
     {
         title: "List Active Bots",
         description: "Lists all active dev-bots.",
-        inputSchema: botListActiveInputSchema,
+        inputSchema: botListActiveInputSchema.shape,
     },
     withAuth("bot_list_active", withErrorHandling(async (params: BotListActiveParams) => {
         const status = await getSystemStatus();
@@ -70,7 +70,7 @@ export function registerBotsTools(
     {
         title: "Get Bot Status",
         description: "Retrieves the detailed status of a dev-bot.",
-        inputSchema: botGetStatusInputSchema,
+        inputSchema: botGetStatusInputSchema.shape,
     },
     withAuth("bot_get_status", withErrorHandling(async (params: BotGetStatusParams) => {
          const status = await getSystemStatus();
@@ -87,7 +87,7 @@ export function registerBotsTools(
     {
         title: "Recover Bot",
         description: "(ADMIN ONLY) Triggers emergency recovery orchestration. Note: Currently triggers system-wide recovery rather than targeting a specific bot.",
-        inputSchema: botRecoverInputSchema,
+        inputSchema: botRecoverInputSchema.shape,
     },
     withAuth("bot_recover", withErrorHandling(async (params: BotRecoverParams) => {
         if (!devBotsManager.triggerEmergencyRecovery) {
@@ -103,7 +103,7 @@ export function registerBotsTools(
     {
         title: "Bot Heartbeat Status",
         description: "Checks the heartbeat status of all dev-bots.",
-        inputSchema: botHeartbeatInputSchema,
+        inputSchema: botHeartbeatInputSchema.shape,
     },
     withAuth("bot_heartbeat_status", withErrorHandling(async (params: BotHeartbeatParams) => {
         const status = await getSystemStatus();
