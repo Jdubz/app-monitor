@@ -1,7 +1,7 @@
 # App Monitor MCP Server - Agent Interaction Interface
 
-**Date:** 2025-11-17  
-**Status:** Design Approved - Ready for Implementation  
+**Date:** 2025-11-17
+**Status:** Design Approved - Ready for Implementation
 **Purpose:** Unified Model Context Protocol (MCP) server for seamless agent interactions with App Monitor system
 
 ---
@@ -21,6 +21,16 @@ This design specifies a **MCP (Model Context Protocol) server embedded in the ba
 
 **Architecture:** MCP server runs as part of backend application, shares database and services, deploys via blue-green process with temporary reconnection during rollover.
 
+## November 20, 2025 Scope Correction (MCP MVP)
+
+- **Plan management tools deferred.** The existing planning system is still being stabilized, so no MCP plan/batch tools ship in this milestone. Agents edit plan files directly when needed.
+- **Only existing production features have MCP tools.** Shipping surface area: task queue CRUD/inspection, dev-bot health, PR evaluation triggers, and `system_health`. Task cancellation, reprioritisation, batch import, and log retrieval remain out-of-scope.
+- **Diagnostics stay minimal.** `system_health` reports database connectivity, queue metrics, and dev-bot status; deeper diagnostics/metrics/log APIs will be added only after the core system is proven in production.
+- **No Cloudflare/nginx exposure.** The MCP server only runs over stdio inside the backend process so it is never reachable through the public tunnel.
+- **Explicit roles required.** `APP_MONITOR_MCP_USER_ROLE` must be `admin` or `dev-bot`. Dev-bots are blocked outright when `APP_MONITOR_ENV/NODE_ENV` is `production`, and they do not need API keys.
+- **Feature flags removed.** Outside of automated tests the MCP server always starts with the backend, keeping agents in sync with every deploy.
+
+This section supersedes any earlier references to plan tooling, task priority controls, or log/diagnostic APIs in the remainder of this document.
 ---
 
 ## Architecture Overview
@@ -65,10 +75,11 @@ This design specifies a **MCP (Model Context Protocol) server embedded in the ba
 ## Tool Categories
 
 ### 1. Plan Management Tools (11 tools)
+> **Implementation status (Nov 20, 2025):** deferred for MCP MVP – agents rely on existing plan files until the planning system is stable.
 
 **Purpose:** Complete lifecycle management of multi-phase development plans
 
-**CRITICAL WORKFLOW NOTE:** 
+**CRITICAL WORKFLOW NOTE:**
 - Admin bot creates plans, adds batches, saves to database
 - **HUMAN** reviews plans and approves batch imports (one at a time)
 - System executes tasks automatically after batch import (FIFO queue)
@@ -498,63 +509,20 @@ This design specifies a **MCP (Model Context Protocol) server embedded in the ba
 
 ### 5. System Diagnostics Tools (5 tools)
 
-**Purpose:** System health monitoring, debugging, maintenance
+**Purpose:** Minimal system health overview for operators
 
 ```typescript
 // Tool: system_health
-// Get overall system health
+// Get overall system health (DB + queue + dev-bots)
 {
-  name: "system_health",
-  description: "Get system health status (database, queue, bots, resources)",
+  name: 'system_health',
+  description: 'Get system health status (database connectivity, queue depth, dev-bot stats)',
   inputSchema: z.object({})
 }
-// Returns: { status, database_size, queue_depth, active_bots, memory_usage, ... }
-
-// Tool: system_get_metrics
-// Get system metrics
-{
-  name: "system_get_metrics",
-  description: "Get system performance metrics (task throughput, bot utilization)",
-  inputSchema: z.object({
-    period: z.enum(["hour", "day", "week"]).optional()
-  })
-}
-// Returns: { tasks_completed, avg_task_duration, bot_utilization, error_rate, ... }
-
-// Tool: system_check_ports
-// Check port availability
-{
-  name: "system_check_ports",
-  description: "Check if required ports are available (5000, 5001, 5002, 5174)",
-  inputSchema: z.object({})
-}
-// Returns: { ports: [{ port, available, pid }] }
-
-// Tool: system_get_logs
-// Get system-level logs
-{
-  name: "system_get_logs",
-  description: "Get backend system logs (errors, warnings, info)",
-  inputSchema: z.object({
-    level: z.enum(["error", "warn", "info", "debug"]).optional(),
-    category: z.string().optional(),
-    tail_lines: z.number().optional()
-  })
-}
-// Returns: { logs: LogEntry[] }
-
-// Tool: system_restart_component
-// Restart system component
-{
-  name: "system_restart_component",
-  description: "Restart system component (queue worker, file watcher, etc.)",
-  inputSchema: z.object({
-    component: z.enum(["queue_worker", "file_watcher", "pr_monitor", "all"]),
-    graceful: z.boolean().optional() // Wait for in-flight tasks
-  })
-}
-// Returns: { success, component, restart_time }
+// Returns: { status, database, queue, devBots, timestamp }
 ```
+
+> ⚠️ Enhanced diagnostics (`system_get_metrics`, `system_check_ports`, `system_get_logs`, `system_restart_component`) were intentionally removed from this MVP. Agents read logs directly from disk, and deeper diagnostics will be added only after the base MCP server proves stable in production.
 
 ---
 
@@ -567,7 +535,6 @@ backend/src/
 ├── mcp/
 │   ├── server.ts              # Main MCP server entry point
 │   ├── tools/
-│   │   ├── plans.tools.ts     # Plan management tools
 │   │   ├── tasks.tools.ts     # Task operation tools
 │   │   ├── bots.tools.ts      # Dev-bot control tools
 │   │   ├── prs.tools.ts       # PR evaluation tools
@@ -588,7 +555,6 @@ backend/src/
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio";
 import Database from "better-sqlite3";
-import { registerPlanTools } from "./tools/plans.tools.js";
 import { registerTaskTools } from "./tools/tasks.tools.js";
 import { registerBotTools } from "./tools/bots.tools.js";
 import { registerPRTools } from "./tools/prs.tools.js";
@@ -617,7 +583,6 @@ export class AppMonitorMcpServer {
 
   private registerAllTools() {
     // Register all tool categories
-    registerPlanTools(this.server, this.db, this.apiBaseUrl);
     registerTaskTools(this.server, this.db, this.apiBaseUrl);
     registerBotTools(this.server, this.db, this.apiBaseUrl);
     registerPRTools(this.server, this.db, this.apiBaseUrl);
@@ -627,7 +592,7 @@ export class AppMonitorMcpServer {
   async start() {
     const transport = new StdioServerTransport();
     await this.server.connect(transport);
-    
+
     console.error("App Monitor MCP Server started"); // stderr for logging
     console.error(`Database: ${this.db.name}`);
     console.error(`API: ${this.apiBaseUrl}`);
@@ -646,7 +611,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
     databasePath: process.env.DATABASE_PATH || "./data/app-monitor.db",
     apiBaseUrl: process.env.API_BASE_URL || "http://localhost:5000"
   });
-  
+
   server.start().catch((error) => {
     console.error("Failed to start MCP server:", error);
     process.exit(1);
@@ -657,118 +622,52 @@ if (import.meta.url === `file://${process.argv[1]}`) {
 ### Example Tool Implementation
 
 ```typescript
-// backend/src/mcp/tools/plans.tools.ts
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp";
-import { z } from "zod";
-import Database from "better-sqlite3";
-import { PlanFileService } from "../../services/planFileService.js";
-import { PlanValidationService } from "../../services/planValidationService.js";
+// backend/src/mcp/tools/tasks.tools.ts
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp';
+import { z } from 'zod';
+import Database from 'better-sqlite3';
+import { withAuth } from '../middleware/auth.js';
+import type { McpServices } from '../server.js';
 
-export function registerPlanTools(
+export function registerTasksTools(
   server: McpServer,
-  db: Database.Database,
-  apiBaseUrl: string
+  _db: Database.Database,
+  services: McpServices,
 ) {
-  const planFileService = new PlanFileService();
-  const validationService = new PlanValidationService(db, planFileService);
+  const taskQueue = services.devBotsManager.getTaskQueue();
 
-  // Tool: plan_create
-  server.tool(
-    "plan_create",
-    z.object({
-      name: z.string(),
-      type: z.enum(["feature", "refactor", "fix", "investigation"]).optional(),
-      priority: z.enum(["p0", "p1", "p2", "p3"]).optional()
+  server.registerTool(
+    'task_list',
+    {
+      title: 'List Tasks',
+      description: 'Lists pending/running/blocked tasks with optional filters.',
+      inputSchema: z.object({
+        status: z.enum(['pending', 'running', 'blocked', 'completed', 'failed']).optional(),
+        assigned_agent: z.string().optional(),
+        limit: z.number().optional(),
+      }),
+    },
+    withAuth('task_list', async (params, context) => {
+      const groups = await services.devBotsManager.getTasks();
+      const combined = [
+        ...groups.pending,
+        ...groups.active,
+        ...groups.blocked,
+        ...groups.completed,
+        ...groups.failed,
+      ];
+
+      const filtered = params.status
+        ? combined.filter((task) => task.status === params.status)
+        : combined;
+
+      const limited = filtered.slice(0, params.limit ?? 50);
+      return { content: [{ type: 'text', text: JSON.stringify(limited, null, 2) }] };
     }),
-    async ({ name, type, priority }) => {
-      try {
-        const response = await fetch(`${apiBaseUrl}/api/plans/create`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, type, priority })
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-          return {
-            content: [{ type: "text", text: `Error: ${result.error}` }],
-            isError: true
-          };
-        }
-
-        return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              success: true,
-              plan_id: result.plan_id,
-              file_path: result.file_path,
-              version: result.version,
-              next_steps: [
-                "Use plan_update_markdown to add research findings",
-                "Use plan_add_batch to create task batches",
-                "Use plan_validate to check for errors",
-                "Use plan_save to persist changes"
-              ]
-            }, null, 2)
-          }]
-        };
-      } catch (error) {
-        return {
-          content: [{ 
-            type: "text", 
-            text: `Error creating plan: ${error.message}` 
-          }],
-          isError: true
-        };
-      }
-    }
   );
-
-  // Tool: plan_validate
-  server.tool(
-    "plan_validate",
-    z.object({
-      plan_id: z.string()
-    }),
-    async ({ plan_id }) => {
-      try {
-        const planFile = await planFileService.readPlanFile(plan_id);
-        const fileContent = JSON.stringify(planFile); // Simplified
-        const validation = await validationService.validatePlan(plan_id, fileContent);
-
-        return {
-          content: [{
-            type: "text",
-            text: JSON.stringify({
-              valid: validation.valid,
-              errors: validation.errors,
-              warnings: validation.warnings,
-              batches: validation.batches,
-              summary: {
-                total_errors: validation.errors.length,
-                total_warnings: validation.warnings.length,
-                batches_ready: Object.values(validation.batches)
-                  .filter(b => b.state === 'ready').length,
-                batches_incomplete: Object.values(validation.batches)
-                  .filter(b => b.state === 'incomplete').length
-              }
-            }, null, 2)
-          }]
-        };
-      } catch (error) {
-        return {
-          content: [{ type: "text", text: `Validation error: ${error.message}` }],
-          isError: true
-        };
-      }
-    }
-  );
-
-  // ... more plan tools
 }
 ```
+
 
 ---
 
@@ -787,14 +686,14 @@ const authMiddleware = {
   checkApiKey: (apiKey: string) => {
     return apiKey === process.env.APP_MONITOR_API_KEY;
   },
-  
+
   checkToolPermission: (tool: string, context: any) => {
     // Admin-only tools
     const adminTools = ["pr_force_merge", "system_restart_component", "bot_terminate"];
     if (adminTools.includes(tool) && !context.isAdmin) {
       throw new Error(`Tool ${tool} requires admin permissions`);
     }
-    
+
     // Dev-bot-only tools
     const botOnlyTools = ["task_report_success"];
     if (botOnlyTools.includes(tool) && !context.isBot) {
@@ -872,11 +771,11 @@ All plan editing tools enforce immutability rules:
 private buildEnv(session: InteractiveSessionRecord): Record<string, string> {
   return {
     // ... existing vars ...
-    
+
     // MCP Server connection
     MCP_SERVER_COMMAND: "npm run mcp:start",
     MCP_SERVER_CWD: this.repoRoot,
-    
+
     // Or use direct stdio connection
     APP_MONITOR_MCP_AVAILABLE: "true"
   };
@@ -947,7 +846,7 @@ Response: { tasks: [{ id: "task-123", title: "Deploy Redis", status: "blocked", 
 Agent: "Why is task-123 blocked?"
 
 MCP Call: task_get({ task_id: "task-123", include_logs: true })
-Response: { 
+Response: {
   task: { ... },
   blocking_reason: "Docker container failed to start",
   logs: [...]

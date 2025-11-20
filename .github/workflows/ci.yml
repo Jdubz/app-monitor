@@ -46,6 +46,7 @@ jobs:
           node-version: '20'
 
       - name: Restore node_modules
+        id: cache-restore
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -54,6 +55,10 @@ jobs:
             frontend/node_modules
             shared/api-contracts/node_modules
           key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install dependencies (fallback)
+        if: steps.cache-restore.outputs.cache-hit != 'true'
+        run: npm ci
 
       - name: Validate workspace lock files
         run: |
@@ -89,6 +94,7 @@ jobs:
           node-version: '20'
 
       - name: Restore node_modules
+        id: cache-restore
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -97,6 +103,10 @@ jobs:
             frontend/node_modules
             shared/api-contracts/node_modules
           key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install dependencies (fallback)
+        if: steps.cache-restore.outputs.cache-hit != 'true'
+        run: npm ci
 
       - name: Validate infrastructure configuration
         run: |
@@ -124,6 +134,7 @@ jobs:
           node-version: '20'
 
       - name: Restore node_modules
+        id: cache-restore
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -132,6 +143,10 @@ jobs:
             frontend/node_modules
             shared/api-contracts/node_modules
           key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install dependencies (fallback)
+        if: steps.cache-restore.outputs.cache-hit != 'true'
+        run: npm ci
 
       - name: Lint backend
         run: npm run lint -w backend
@@ -150,6 +165,7 @@ jobs:
           node-version: '20'
 
       - name: Restore node_modules
+        id: cache-restore
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -158,6 +174,10 @@ jobs:
             frontend/node_modules
             shared/api-contracts/node_modules
           key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install dependencies (fallback)
+        if: steps.cache-restore.outputs.cache-hit != 'true'
+        run: npm ci
 
       - name: Build api-contracts
         run: npm run build -w @app-monitor/api-contracts
@@ -182,6 +202,7 @@ jobs:
           node-version: '20'
 
       - name: Restore node_modules
+        id: cache-restore
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -190,6 +211,10 @@ jobs:
             frontend/node_modules
             shared/api-contracts/node_modules
           key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install dependencies (fallback)
+        if: steps.cache-restore.outputs.cache-hit != 'true'
+        run: npm ci
 
       - name: Build api-contracts
         run: npm run build -w @app-monitor/api-contracts
@@ -213,6 +238,7 @@ jobs:
           node-version: '20'
 
       - name: Restore node_modules
+        id: cache-restore
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -221,6 +247,10 @@ jobs:
             frontend/node_modules
             shared/api-contracts/node_modules
           key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install dependencies (fallback)
+        if: steps.cache-restore.outputs.cache-hit != 'true'
+        run: npm ci
 
       - name: Lint frontend
         run: npm run lint -w frontend
@@ -239,6 +269,7 @@ jobs:
           node-version: '20'
 
       - name: Restore node_modules
+        id: cache-restore
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -247,6 +278,10 @@ jobs:
             frontend/node_modules
             shared/api-contracts/node_modules
           key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install dependencies (fallback)
+        if: steps.cache-restore.outputs.cache-hit != 'true'
+        run: npm ci
 
       - name: Test frontend (unit)
         run: npm run test -w frontend
@@ -265,6 +300,7 @@ jobs:
           node-version: '20'
 
       - name: Restore node_modules
+        id: cache-restore
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -273,6 +309,10 @@ jobs:
             frontend/node_modules
             shared/api-contracts/node_modules
           key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install dependencies (fallback)
+        if: steps.cache-restore.outputs.cache-hit != 'true'
+        run: npm ci
 
       - name: Test frontend (integration)
         run: npm run test:integration -w frontend
@@ -290,6 +330,7 @@ jobs:
           node-version: '20'
 
       - name: Restore node_modules
+        id: cache-restore
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -298,6 +339,10 @@ jobs:
             frontend/node_modules
             shared/api-contracts/node_modules
           key: ${{ runner.os }}-node-modules-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Install dependencies (fallback)
+        if: steps.cache-restore.outputs.cache-hit != 'true'
+        run: npm ci
 
       - name: Build backend
         run: npm run build -w backend

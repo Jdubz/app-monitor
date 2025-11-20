@@ -57,6 +57,7 @@ export type LogCategory =
   | 'lint_error'
   | 'log_format'
   | 'logs'
+  | 'mcp' // Model Context Protocol server operations
   | 'merge_conflict'
   | 'metrics'
   | 'mirror_debug'

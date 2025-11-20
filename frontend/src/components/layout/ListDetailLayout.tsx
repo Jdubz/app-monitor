@@ -2,11 +2,18 @@ import { ReactNode, memo } from 'react';
 import { DualPaneLayout } from './DualPaneLayout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface FilterTab<TFilter extends string> {
   value: TFilter;
   label: string;
   count?: number;
+}
+
+interface SummaryCard {
+  label: string;
+  value: ReactNode;
+  className?: string;
 }
 
 interface ListDetailLayoutProps<TItem, TFilter extends string> {
@@ -54,6 +61,10 @@ interface ListDetailLayoutProps<TItem, TFilter extends string> {
    * Optional empty state message
    */
   emptyMessage?: string;
+  /**
+   * Optional summary cards displayed above the filters
+   */
+  summaryCards?: SummaryCard[];
 }
 
 /**
@@ -124,9 +135,27 @@ export function ListDetailLayout<TItem, TFilter extends string>({
   getItemKey,
   className,
   emptyMessage = 'No items to display',
+  summaryCards = [],
 }: ListDetailLayoutProps<TItem, TFilter>) {
   const leftPane = (
-    <div className="flex h-full min-h-0 flex-col p-4">
+    <div className="flex h-full min-h-0 flex-col gap-4 p-4">
+      {summaryCards.length > 0 && (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {summaryCards.map((card) => (
+            <Card key={card.label} className="border-border/60 bg-card/80">
+              <CardHeader className="pb-2">
+                <CardTitle className="text-xs font-medium text-muted-foreground">
+                  {card.label}
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className={cn('text-xl font-semibold', card.className)}>{card.value}</div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
       {/* Filter Tabs */}
       <Tabs
         value={activeFilter}

@@ -1,16 +1,28 @@
 # App Monitor MCP Server - Implementation Specification
 
-**Date:** 2025-11-17  
-**Status:** ✅ APPROVED - Ready for Implementation  
+**Date:** 2025-11-17
+**Status:** ✅ APPROVED - Ready for Implementation
 **Total Tools:** 24 (Plan: 11, Task: 6, Bot: 4, PR: 2, System: 1)
 
 ---
 
+### Scope Update — November 20, 2025
+
+The initial approval covered 24 tools, but the first MCP release intentionally ships a smaller, testable surface area:
+
+- Plan management tools are **deferred** until the existing planning system is reliable.
+- Task APIs expose creation, inspection, manual resume, and dev-bot outcome reporting only. Cancellation, reprioritisation, and log access remain backend-only.
+- System diagnostics are limited to the `system_health` tool. Additional metrics/log/restart tools stay out-of-scope so bots continue reading logs directly.
+- The MCP server always starts with the backend (no feature flag) and only runs over stdio on the local host so it is never exposed via Cloudflare/nginx.
+- Role-based access relies on `APP_MONITOR_MCP_USER_ROLE` (`admin` vs `dev-bot`) with dev-bots blocked in production environments.
+
+The remainder of this spec keeps the original design details for future phases, but any sections describing deferred tools should be treated as references, not current scope.
+
 ## Quick Reference
 
-**What:** MCP server embedded in backend providing structured agent access  
-**Who:** Admin bot (full access), Dev-bots (limited access), Humans (via Claude Desktop)  
-**Where:** `backend/src/mcp/` - runs as part of backend process  
+**What:** MCP server embedded in backend providing structured agent access
+**Who:** Admin bot (full access), Dev-bots (limited access), Humans (via Claude Desktop)
+**Where:** `backend/src/mcp/` - runs as part of backend process
 **Deploy:** Auto-deploys with backend via blue-green (temporary reconnection)
 
 ---
@@ -27,7 +39,7 @@ async function main() {
   // Start HTTP API
   const app = await startExpressApp();
   app.listen(PORT);
-  
+
   // Start MCP server (stdio)
   await startMcpServer({
     db: getDatabase(),
@@ -81,7 +93,7 @@ const checkToolPermission = (tool: string, context: AuthContext) => {
   if (context.isDevBot && context.env === "production") {
     throw new Error("Dev-bots cannot access production MCP");
   }
-  
+
   if (context.isAdminBot) {
     const disallowed = ["task_report_outcome"];
     if (disallowed.includes(tool)) {
@@ -414,15 +426,15 @@ Dev-bot reports task outcome
 {
   task_id: string,
   outcome: "success" | "failure",
-  
+
   // Success fields
   pr_url?: string,
   summary: string,
   files_changed?: string[],
-  
+
   // Failure fields
   failure_reason?: string,
-  failure_code?: "compilation_error" | "test_failure" | "dependency_error" | 
+  failure_code?: "compilation_error" | "test_failure" | "dependency_error" |
                  "timeout" | "validation_error" | "unknown",
   error_details?: string
 }
@@ -592,7 +604,7 @@ Comprehensive system overview
   status: "healthy" | "degraded" | "critical",
   timestamp: number,
   uptime_seconds: number,
-  
+
   // Database
   database: {
     size_mb: number,
@@ -600,7 +612,7 @@ Comprehensive system overview
     last_backup: number,
     query_performance_ms: { avg, p95, p99 }
   },
-  
+
   // Task queue
   queue: {
     total_tasks: number,
@@ -609,7 +621,7 @@ Comprehensive system overview
     blocked: number,
     failed_last_hour: number
   },
-  
+
   // In-flight tasks
   active_tasks: [{
     task_id: string,
@@ -620,7 +632,7 @@ Comprehensive system overview
     plan_id?: string,
     batch_id?: string
   }],
-  
+
   // PR tracking
   pull_requests: {
     total_open: number,
@@ -633,7 +645,7 @@ Comprehensive system overview
       // All 8 gates with pass/fail counts
     }
   },
-  
+
   // Dev-bots
   bots: {
     total_active: number,
@@ -643,7 +655,7 @@ Comprehensive system overview
     oldest_heartbeat_seconds: number,
     active_bots: [{ bot_id, status, assigned_task_id, uptime_seconds }]
   },
-  
+
   // Plans
   plans: {
     total_active: number,
@@ -660,7 +672,7 @@ Comprehensive system overview
       percent_complete: number
     }]
   },
-  
+
   // Resources
   resources: {
     memory_usage_percent: number,
@@ -670,7 +682,7 @@ Comprehensive system overview
     cpu_usage_percent: number,
     active_containers: number
   },
-  
+
   // Deployment info
   deployment: {
     current_version: string,
@@ -688,7 +700,7 @@ Comprehensive system overview
       last_built: number
     }
   },
-  
+
   // Alerts
   alerts: [{
     severity: "warning" | "critical",
@@ -697,7 +709,7 @@ Comprehensive system overview
     timestamp: number,
     count: number
   }],
-  
+
   // Performance
   performance: {
     avg_task_duration_minutes: number,

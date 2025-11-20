@@ -27,4 +27,3 @@ describe('PrTrackingTabContent long list integration', () => {
     expect(screen.getAllByTestId('list-detail-item')).toHaveLength(prs.length);
   });
 });
-

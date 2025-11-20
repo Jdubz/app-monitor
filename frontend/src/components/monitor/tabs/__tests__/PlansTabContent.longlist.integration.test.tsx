@@ -28,4 +28,3 @@ describe('PlansTabContent long list integration', () => {
     expect(screen.getAllByTestId('list-detail-item')).toHaveLength(plans.length);
   });
 });
-
