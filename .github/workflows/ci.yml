@@ -135,7 +135,6 @@ jobs:
 
       - name: Restore node_modules
         id: cache-restore
-        id: cache-restore
         uses: actions/cache/restore@v4
         with:
           path: |
@@ -166,7 +165,6 @@ jobs:
           node-version: '20'
 
       - name: Restore node_modules
-        id: cache-restore
         id: cache-restore
         uses: actions/cache/restore@v4
         with:
@@ -204,7 +202,6 @@ jobs:
           node-version: '20'
 
       - name: Restore node_modules
-        id: cache-restore
         id: cache-restore
         uses: actions/cache/restore@v4
         with:
