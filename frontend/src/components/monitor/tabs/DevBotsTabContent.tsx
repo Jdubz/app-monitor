@@ -291,7 +291,7 @@ export function DevBotsTabContent() {
                             {data.onboardingComplete !== undefined && (
                               <div>
                                 <span className="text-muted-foreground">Onboarding: </span>
-                                <Badge variant={data.onboardingComplete ? 'default' : 'secondary'}>
+                                <Badge variant={data.onboardingComplete ? 'success' : 'warning'}>
                                   {data.onboardingComplete ? 'Complete' : 'Pending'}
                                 </Badge>
                               </div>
