@@ -317,22 +317,21 @@ main() {
         exit 1
     fi
 
-    # Final verification
+    # Final verification - check filesystem directly to avoid workspace resolution issues
     log_info "Verifying production build..."
-    node -e "
-        const critical = ['express', 'socket.io', 'better-sqlite3', '@modelcontextprotocol/sdk'];
-        const missing = critical.filter(pkg => {
-            try { require.resolve(pkg); return false; }
-            catch { return true; }
-        });
-        if (missing.length) {
-            console.error('Missing after prune:', missing);
-            process.exit(1);
-        }
-    " || {
+    CRITICAL_DEPS_VERIFY=("express" "socket.io" "better-sqlite3" "@modelcontextprotocol/sdk")
+    MISSING_DEPS=()
+    for dep in "${CRITICAL_DEPS_VERIFY[@]}"; do
+        if [ ! -d "node_modules/${dep}" ]; then
+            MISSING_DEPS+=("$dep")
+        fi
+    done
+
+    if [ ${#MISSING_DEPS[@]} -gt 0 ]; then
         log_error "Production dependencies verification failed"
+        log_error "Missing dependencies: ${MISSING_DEPS[*]}"
         exit 1
-    }
+    fi
 
     log_info "Backend build complete and verified"
 
