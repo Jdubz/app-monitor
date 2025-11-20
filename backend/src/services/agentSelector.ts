@@ -71,7 +71,6 @@ export class AgentSelector {
    * Select the best agent for a task based on intelligent criteria
    */
   async selectAgent(criteria: AgentSelectionCriteria, task?: Task): Promise<AgentSelection> {
-    // Manual override takes precedence
     if (criteria.preferredAgent) {
       return this.createSelection(
         criteria.preferredAgent,
@@ -80,26 +79,74 @@ export class AgentSelector {
       );
     }
 
-    // Classify task if not already classified
+    const { selection, category, filePatterns, complexity } = this.buildSelection(criteria);
+
+    if (
+      selection.agent === 'claude' &&
+      this.canGeminiHandle(criteria) &&
+      this.eligibilityService &&
+      task &&
+      (await this.eligibilityService.isEligible(task, 'gemini'))
+    ) {
+      const rerouted = this.createSelection('gemini', 'Eligible implementation rerouted to Gemini', 0.82, 'claude');
+      this.logSelection(rerouted, category, filePatterns, complexity);
+      return rerouted;
+    }
+
+    this.logSelection(selection, category, filePatterns, complexity);
+    return selection;
+  }
+
+  /**
+   * Synchronous selection for initialization flows (no eligibility checks).
+   */
+  selectAgentSync(criteria: AgentSelectionCriteria): AgentSelection {
+    if (criteria.preferredAgent) {
+      return this.createSelection(
+        criteria.preferredAgent,
+        'Manual override: preferred agent specified',
+        1.0
+      );
+    }
+
+    const { selection, category, filePatterns, complexity } = this.buildSelection(criteria);
+    this.logSelection(selection, category, filePatterns, complexity);
+    return selection;
+  }
+
+  /**
+   * Apply selection rules based on task characteristics
+   */
+  private buildSelection(
+    criteria: AgentSelectionCriteria
+  ): { selection: AgentSelection; category?: TaskCategory; filePatterns?: string[]; complexity?: TaskComplexity } {
     let category = criteria.taskCategory;
-    let filePatterns = criteria.filePatterns || [];
+    let filePatterns = criteria.filePatterns;
     let complexity = criteria.complexity;
 
-    if (!category && (criteria.taskTitle || criteria.taskDescription)) {
+    if (!category || !filePatterns || !complexity) {
       const classification = this.classifier.classifyTask({
         title: criteria.taskTitle || '',
         description: criteria.taskDescription
       });
-      category = classification.category;
-      filePatterns = classification.filePatterns;
-      complexity = classification.complexity;
+      category = category || classification.category;
+      filePatterns = filePatterns || classification.filePatterns;
+      complexity = complexity || classification.complexity;
     }
 
-    // Check if previous attempts should influence selection
+    const selection = this.applyAttemptsAndRules(criteria, category, filePatterns, complexity);
+    return { selection, category, filePatterns, complexity };
+  }
+
+  private applyAttemptsAndRules(
+    criteria: AgentSelectionCriteria,
+    category?: TaskCategory,
+    filePatterns?: string[],
+    complexity?: TaskComplexity
+  ): AgentSelection {
     if (criteria.previousAttempts && criteria.previousAttempts.length > 0) {
       const lastAttempt = criteria.previousAttempts[criteria.previousAttempts.length - 1];
       if (lastAttempt.result === 'failure') {
-        // Try different agent after failure
         const alternateAgent = this.getAlternateAgent(lastAttempt.agent, category, filePatterns);
         return this.createSelection(
           alternateAgent,
@@ -110,35 +157,9 @@ export class AgentSelector {
       }
     }
 
-    // Apply intelligent selection rules
-    const selection = this.applySelectionRules(category, filePatterns, complexity);
-
-    if (selection.agent === 'claude' && this.canGeminiHandle(criteria)) {
-      // The task object is required for eligibility checks
-      if (this.eligibilityService && task && (await this.eligibilityService.isEligible(task, 'gemini'))) {
-        return this.createSelection('gemini', 'Eligible implementation rerouted to Gemini', 0.82, 'claude');
-      }
-    }
-
-    logger.info({
-      category: 'automation',
-      action: 'agent_selected',
-      message: selection.reasoning,
-      details: {
-        agent: selection.agent,
-        category,
-        filePatterns,
-        complexity,
-        confidence: selection.confidence
-      }
-    });
-
-    return selection;
+    return this.applySelectionRules(category, filePatterns, complexity);
   }
 
-  /**
-   * Apply selection rules based on task characteristics
-   */
   private applySelectionRules(
     category?: TaskCategory,
     filePatterns?: string[],
@@ -337,6 +358,26 @@ export class AgentSelector {
     }
 
     return false;
+  }
+
+  private logSelection(
+    selection: AgentSelection,
+    category?: TaskCategory,
+    filePatterns?: string[],
+    complexity?: TaskComplexity
+  ): void {
+    logger.info({
+      category: 'automation',
+      action: 'agent_selected',
+      message: selection.reasoning,
+      details: {
+        agent: selection.agent,
+        category,
+        filePatterns,
+        complexity,
+        confidence: selection.confidence
+      }
+    });
   }
 
   /**

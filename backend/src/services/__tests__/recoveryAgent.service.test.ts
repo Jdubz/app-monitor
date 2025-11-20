@@ -12,6 +12,13 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { RecoveryAgentService } from '../recoveryAgent.service.js';
 import type { ValidationResult } from '../phaseValidation/index.js';
 import type { Task } from '../taskQueue.sqlite.js';
+import { selectAgentCliTypeForTask } from '../agentCliSelection.js';
+import type { AgentCliCommandBuilder } from '../agentCliCommandBuilder.js';
+import type { AgentSelector } from '../agentSelector.js';
+
+vi.mock('../agentCliSelection.js', () => ({
+  selectAgentCliTypeForTask: vi.fn().mockResolvedValue('claude')
+}));
 
 vi.mock('../utils/logger.js', () => ({
   logger: {
@@ -38,10 +45,22 @@ vi.mock('dockerode', () => ({
 
 describe('RecoveryAgentService', () => {
   let service: RecoveryAgentService;
+  let cliBuilderMock: AgentCliCommandBuilder;
+  const mockAgentSelector = {} as AgentSelector;
+  const selectAgentCliTypeForTaskMock = vi.mocked(selectAgentCliTypeForTask);
 
   beforeEach(() => {
     vi.clearAllMocks();
-    service = new RecoveryAgentService();
+    cliBuilderMock = {
+      buildCommand: vi.fn().mockReturnValue(
+        'printf \'{"category":"retry","diagnosis":"ok","recovery_action":"retry","success":true}\''
+      )
+    } as unknown as AgentCliCommandBuilder;
+    selectAgentCliTypeForTaskMock.mockResolvedValue('claude');
+    service = new RecoveryAgentService({
+      agentSelector: mockAgentSelector,
+      cliCommandBuilder: cliBuilderMock
+    });
   });
 
   const createMockTask = (overrides?: Partial<Task>): Task => ({

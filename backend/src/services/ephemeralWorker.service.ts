@@ -38,6 +38,8 @@ import { DEFAULT_EPHEMERAL_WORKER_CONFIG } from '../config/defaults.js';
 import { ContainerLifecycleService } from './ContainerLifecycleService.js';
 import { WorkerLogService } from './WorkerLogService.js';
 import { ContextDeliveryService } from './ContextDeliveryService.js';
+import { AgentCliCommandBuilder, type AgentCliType } from './agentCliCommandBuilder.js';
+import { shellQuote } from '../utils/shellQuote.js';
 
 export interface WorkspaceContext {
   id: string;
@@ -53,7 +55,7 @@ export interface EphemeralWorker {
   id: string;
   containerId: string;
   agent: AgentPersonality;
-  agentCliType: 'claude' | 'codex' | 'gemini'; // Which CLI tool is used
+  agentCliType: AgentCliType; // Which CLI tool is used
   task: Task;
   status: 'starting' | 'running' | 'completing' | 'completed' | 'failed' | 'destroyed';
   createdAt: string;
@@ -102,6 +104,7 @@ export class EphemeralWorkerService {
   private readonly artifactExtractor: ArtifactExtractorService;
   private readonly phaseOrchestrator: PhaseOrchestratorService;
   private readonly recoveryAgent: RecoveryAgentService;
+  private readonly cliCommandBuilder: AgentCliCommandBuilder;
   private readonly containerLifecycle: ContainerLifecycleService; // Container management (extracted)
   private readonly workerLog: WorkerLogService; // Log management (extracted)
   private readonly contextDelivery: ContextDeliveryService; // Context delivery (extracted)
@@ -113,7 +116,11 @@ export class EphemeralWorkerService {
     dockerManager: DockerManager,
     config: Partial<EphemeralWorkerServiceConfig> = {},
     db: Database.Database,  // Required - ensures consistent database connection
-    contextGenerator?: ContextBundleGenerator  // Optional for DI/testing
+    contextGenerator?: ContextBundleGenerator,  // Optional for DI/testing
+    dependencies: {
+      recoveryAgentService?: RecoveryAgentService;
+      cliCommandBuilder?: AgentCliCommandBuilder;
+    } = {}
   ) {
     this.docker = docker;
     this.githubPR = getGitHubPRService();
@@ -122,7 +129,10 @@ export class EphemeralWorkerService {
     this.validatorRegistry = new ValidatorRegistry();
     this.artifactExtractor = new ArtifactExtractorService();
     this.phaseOrchestrator = new PhaseOrchestratorService(db);  // Use injected database instance
-    this.recoveryAgent = new RecoveryAgentService();
+    this.cliCommandBuilder = dependencies.cliCommandBuilder ?? new AgentCliCommandBuilder();
+    this.recoveryAgent = dependencies.recoveryAgentService ?? new RecoveryAgentService({
+      cliCommandBuilder: this.cliCommandBuilder
+    });
     this.containerLifecycle = new ContainerLifecycleService(docker); // Initialize container lifecycle service
 
     // Dev-bots consolidated log file for real-time monitoring
@@ -183,7 +193,7 @@ export class EphemeralWorkerService {
    * Infer CLI type from agent personality ID (fallback logic)
    * Checks agent.id for common patterns to determine which CLI to use
    */
-  private inferCliTypeFromAgent(agent: AgentPersonality): 'claude' | 'codex' | 'gemini' {
+  private inferCliTypeFromAgent(agent: AgentPersonality): AgentCliType {
     const agentId = agent.id.toLowerCase();
 
     if (agentId.includes('gemini') || agentId.startsWith('gemini')) {
@@ -214,7 +224,7 @@ export class EphemeralWorkerService {
   async createWorker(
     task: Task,
     agent: AgentPersonality,
-    agentCliType?: 'claude' | 'codex' | 'gemini'
+    agentCliType?: AgentCliType
   ): Promise<EphemeralWorker> {
     const activeWorkers = this.getActiveWorkers();
 
@@ -1090,28 +1100,23 @@ export class EphemeralWorkerService {
   private generateTaskExecutionCommandWithLogging(
     task: Task,
     agent: AgentPersonality,
-    cliType: 'claude' | 'codex' | 'gemini',
+    cliType: AgentCliType,
     logFile: string
   ): string {
-    // Escape the prompt for shell execution (single quotes to preserve special chars)
-    const escapedPrompt = (task.prompt || task.description || task.title)
-      .replace(/'/g, "'\\''");  // Escape single quotes for shell
+    const promptValue =
+      task.prompt ||
+      task.description ||
+      task.title ||
+      '[Dev-Bots] No prompt provided';
 
-    let agentCommand: string;
-    if (cliType === 'gemini') {
-      // Gemini does not support working directory flag (no --cd or --workingDirectory)
-      agentCommand = `gemini --print --dangerously-skip-permissions --output-format json '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
-    } else if (cliType === 'codex') {
-      // Codex uses 'exec' subcommand for non-interactive mode (not --print)
-      // Uses --cd for working directory (not --workingDirectory)
-      // Uses --dangerously-bypass-approvals-and-sandbox (codex exec does NOT support --ask-for-approval)
-      // Note: codex exec does NOT support --output-format flag as of v5.1 - outputs text by default
-      // See cliFlags.ts line 113 and Codex CLI documentation for details
-      agentCommand = `codex exec --cd /workspace --dangerously-bypass-approvals-and-sandbox '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
-    } else {
-      // Claude does not support working directory flag (no --cd or --workingDirectory)
-      agentCommand = `claude --print --dangerously-skip-permissions --output-format json '${escapedPrompt}' 2>&1 | tee -a ` + logFile;
-    }
+    const baseCommand = this.cliCommandBuilder.buildCommand({
+      cliType,
+      prompt: { kind: 'literal', value: promptValue },
+      workingDirectory: '/workspace'
+    });
+
+    const quotedLogFile = shellQuote(logFile);
+    const agentCommand = `${baseCommand} 2>&1 | tee -a ${quotedLogFile}`;
 
     // Create a wrapper command that logs to the worker-specific file
     // Following imagineer's pattern: copy credentials then run agent CLI
@@ -1120,34 +1125,34 @@ export class EphemeralWorkerService {
     if (cliType === 'gemini') {
       credentialSetup = [
         'cp /tmp/host-creds.json /home/worker/.gemini/.credentials.json',
-        'echo "Gemini credentials: $(test -f ~/.gemini/.credentials.json && echo found || echo missing)" >> ' + logFile
+        'echo "Gemini credentials: $(test -f ~/.gemini/.credentials.json && echo found || echo missing)" >> ' + quotedLogFile
       ];
     } else if (cliType === 'codex') {
       credentialSetup = [
         'cp /tmp/host-creds.json /home/worker/.codex/.credentials.json',
-        'echo "Codex credentials: $(test -f ~/.codex/.credentials.json && echo found || echo missing)" >> ' + logFile
+        'echo "Codex credentials: $(test -f ~/.codex/.credentials.json && echo found || echo missing)" >> ' + quotedLogFile
       ];
     } else {
       credentialSetup = [
         'cp /tmp/host-creds.json /home/worker/.claude/.credentials.json',
-        'echo "Claude credentials: $(test -f ~/.claude/.credentials.json && echo found || echo missing)" >> ' + logFile
+        'echo "Claude credentials: $(test -f ~/.claude/.credentials.json && echo found || echo missing)" >> ' + quotedLogFile
       ];
     }
 
     const wrapperCommand = [
-      'echo "=== Worker Task Execution Started ===" >> ' + logFile,
-      'echo "Timestamp: $(date)" >> ' + logFile,
-      'echo "Worker: ' + agent.name + '" >> ' + logFile,
-      'echo "Task: ' + task.title + '" >> ' + logFile,
-      'echo "=====================================" >> ' + logFile,
+      'echo "=== Worker Task Execution Started ===" >> ' + quotedLogFile,
+      'echo "Timestamp: $(date)" >> ' + quotedLogFile,
+      'echo "Worker: ' + agent.name + '" >> ' + quotedLogFile,
+      'echo "Task: ' + task.title + '" >> ' + quotedLogFile,
+      'echo "=====================================" >> ' + quotedLogFile,
       // Copy credentials from temp mount to appropriate agent directory
       ...credentialSetup,
       // Run agent CLI with JSON output (imagineer pattern)
       agentCommand,
       'AGENT_EXIT=$?',
-      'echo "=== Worker Task Execution Completed ===" >> ' + logFile,
-      'echo "Exit Code: $AGENT_EXIT" >> ' + logFile,
-      'echo "=======================================" >> ' + logFile,
+      'echo "=== Worker Task Execution Completed ===" >> ' + quotedLogFile,
+      'echo "Exit Code: $AGENT_EXIT" >> ' + quotedLogFile,
+      'echo "=======================================" >> ' + quotedLogFile,
       'exit $AGENT_EXIT'
     ].join(' && ');
 

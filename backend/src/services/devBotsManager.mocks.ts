@@ -311,8 +311,6 @@ export function createMockRetryCoordinationService(): RetryCoordinationService {
  */
 export function createMockSystemLifecycleService(): SystemLifecycleService {
   return {
-    startSystem: vi.fn(),
-    stopSystem: vi.fn().mockResolvedValue(undefined),
     isSystemHealthy: vi.fn().mockReturnValue(false),
     setSystemHealth: vi.fn(),
     updateComponents: vi.fn()
