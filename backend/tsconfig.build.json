@@ -13,6 +13,7 @@
     "src/**/*.spec.tsx",
     "src/**/__tests__/**",
     "src/**/*.mock.ts",
+    "src/**/*.mocks.ts",
     "src/**/*.test-utils.ts"
   ],
   "references": [
