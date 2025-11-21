@@ -26,13 +26,11 @@ const poolConfig = useForkPool
       pool: 'forks',
       poolOptions: {
         forks: {
-          maxForks: forkPoolCap,
-          minForks: 1,
-          isolate: true,
+          singleFork: true,
         },
       },
-      fileParallelism: true,
-      maxConcurrency: forkPoolCap,
+      fileParallelism: false,
+      maxConcurrency: 1,
     }
   : getThreadPoolConfig(defaultThreadCap);
 
