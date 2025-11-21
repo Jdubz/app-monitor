@@ -153,12 +153,13 @@ class SafeTestRunner {
         env: {
           ...process.env,
           NODE_ENV: 'test',
-          NODE_OPTIONS: '--max-old-space-size=2048 --no-compilation-cache',
+          NODE_OPTIONS: '--max-old-space-size=2048 --no-warnings',
           VITEST_POOL: 'threads',
           VITEST_MAX_THREADS: '1',
           VITEST_MIN_THREADS: '1',
           VITEST_MAX_FORKS: '1',
           VITEST_FORCE_FORKS: resolvedForkSetting,
+          VITEST_ISOLATE: '1',
           SKIP_HEAVY_DEV_BOT_TESTS: process.env.SKIP_HEAVY_DEV_BOT_TESTS || '1'
         }
       })
