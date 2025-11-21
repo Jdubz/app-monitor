@@ -54,6 +54,42 @@ export class DevBotCredentialsManager {
       });
     }
 
+    // Codex credentials
+    const codexCreds = this.findCodexCredentials();
+    if (codexCreds) {
+      volumes.push(codexCreds);
+      logger.info({
+        category: 'process',
+        action: 'codex_credentials_found',
+        message: `Found Codex credentials at: ${codexCreds.hostPath}`,
+      });
+    } else {
+      warnings.push('Codex credentials not found (.codex/auth.json)');
+      logger.warn({
+        category: 'process',
+        action: 'codex_credentials_missing',
+        message: 'Codex credentials file not found',
+      });
+    }
+
+    // Gemini credentials / settings (copy entire folder to preserve MCP servers & config)
+    const geminiDir = this.findGeminiDirectory();
+    if (geminiDir) {
+      volumes.push(geminiDir);
+      logger.info({
+        category: 'process',
+        action: 'gemini_credentials_found',
+        message: `Found Gemini directory at: ${geminiDir.hostPath}`,
+      });
+    } else {
+      warnings.push('Gemini credentials not found (~/.gemini)');
+      logger.warn({
+        category: 'process',
+        action: 'gemini_credentials_missing',
+        message: 'Gemini credentials directory not found',
+      });
+    }
+
     // Git credentials
     const gitCreds = this.findGitCredentials();
     if (gitCreds) {
@@ -89,6 +125,40 @@ export class DevBotCredentialsManager {
     }
 
     return { volumes, warnings };
+  }
+
+  /**
+   * Find Codex CLI credentials
+   */
+  private findCodexCredentials(): VolumeMount | null {
+    const codexAuth = path.join(this.homeDir, '.codex', 'auth.json');
+
+    if (fs.existsSync(codexAuth)) {
+      return {
+        hostPath: codexAuth,
+        containerPath: '/home/worker/.codex/auth.json',
+        mode: 'ro',
+      };
+    }
+
+    return null;
+  }
+
+  /**
+   * Find Gemini CLI credentials/config (entire ~/.gemini folder)
+   */
+  private findGeminiDirectory(): VolumeMount | null {
+    const geminiDir = path.join(this.homeDir, '.gemini');
+
+    if (fs.existsSync(geminiDir)) {
+      return {
+        hostPath: geminiDir,
+        containerPath: '/home/worker/.gemini',
+        mode: 'ro',
+      };
+    }
+
+    return null;
   }
 
   /**
@@ -198,6 +268,10 @@ export class DevBotCredentialsManager {
 
       // OpenAI/Codex
       'OPENAI_API_KEY',
+
+      // Gemini / Google AI
+      'GEMINI_API_KEY',
+      'GOOGLE_API_KEY',
 
       // GitHub
       'GITHUB_TOKEN',

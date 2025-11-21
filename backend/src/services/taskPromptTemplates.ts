@@ -935,14 +935,14 @@ Before marking this task as complete, verify ALL of the following:
 
 ### If Task Completed Successfully:
 \`\`\`bash
-curl -X POST http://host.docker.internal:5000/api/dev-bots/tasks/{{task.id}}/report-completion \\
+curl -X POST https://app-monitor.joshwentworth.com/api/dev-bots/tasks/{{task.id}}/report-completion \\
   -H "Content-Type: application/json" \\
   -d '{"success": true, "summary": "Brief 1-sentence description of what was accomplished"}'
 \`\`\`
 
 ### If Task Failed:
 \`\`\`bash
-curl -X POST http://host.docker.internal:5000/api/dev-bots/tasks/{{task.id}}/report-completion \\
+curl -X POST https://app-monitor.joshwentworth.com/api/dev-bots/tasks/{{task.id}}/report-completion \\
   -H "Content-Type: application/json" \\
   -d '{"success": false, "summary": "Brief 1-sentence description of what went wrong"}'
 \`\`\`

@@ -1289,6 +1289,13 @@ Store validation results in task verification data with score and issues.
       details: { prNumber }
     });
 
+    const autoMergeEnabled = process.env.ENABLE_AUTO_MERGE === 'true';
+
+    if (!autoMergeEnabled) {
+      await this.createManualMergeTaskIfNeeded(prNumber, 'Auto-merge disabled by policy');
+      return;
+    }
+
     // Trigger automatic merge
     try {
       const tasks = await this.taskQueue.findByPRNumber(prNumber);
@@ -1320,33 +1327,47 @@ Store validation results in task verification data with score and issues.
         details: { prNumber }
       });
         
-      // Create manual intervention task when auto-merge fails
-      try {
-        await this.taskQueue.createTask({
-          type: 'manual-intervention',
-          task_category: 'review',
-          title: `Manual merge needed for PR #${prNumber}`,
-          description: `Automatic merge failed for PR #${prNumber}. All conditions are met but merge operation failed.\n\nError: ${error instanceof Error ? error.message : String(error)}\n\nPlease manually review and merge the PR.`,
-          acceptance_criteria: [`PR #${prNumber} successfully merged`],
-          assigned_agent: 'human',
-          priority: 10,
-          followup_for_pr: prNumber
-        });
-          
-        logger.info({
-          category: 'pr-workflow',
-          action: 'manual_merge_task_created',
-          message: `Created manual intervention task for failed auto-merge of PR #${prNumber}`
-        });
-      } catch (taskError) {
-        logger.error({
-          category: 'pr-workflow',
-          action: 'manual_merge_task_failed',
-          message: `Failed to create manual intervention task for PR #${prNumber}`,
-          error: taskError
-        });
-      }
+      await this.createManualMergeTaskIfNeeded(
+        prNumber,
+        error instanceof Error ? error.message : String(error)
+      );
     }
+  }
+
+  private async createManualMergeTaskIfNeeded(prNumber: number, reason: string): Promise<void> {
+    const existing = (await this.taskQueue.findByPRNumber(prNumber)).find(
+      t => t.type === 'manual-intervention' && t.title.includes(`PR #${prNumber}`) && ['pending', 'running'].includes(t.status)
+    );
+
+    if (existing) {
+      logger.info({
+        category: 'pr-workflow',
+        action: 'manual_merge_task_exists',
+        message: `Manual merge task already exists for PR #${prNumber}`,
+        details: { prNumber, taskId: existing.id }
+      });
+      return;
+    }
+
+    const task = this.taskQueue.createTask({
+      type: 'manual-intervention',
+      task_category: 'review',
+      title: `Manual merge needed for PR #${prNumber}`,
+      description: `Automatic merge is disabled or failed for PR #${prNumber}. All conditions are met but a human must merge.\n\nReason: ${reason}`,
+      acceptance_criteria: [`PR #${prNumber} successfully merged`],
+      assigned_agent: 'human',
+      priority: 10,
+      followup_for_pr: prNumber,
+      max_retries: 3,
+      can_retry: true
+    });
+
+    logger.info({
+      category: 'pr-workflow',
+      action: 'manual_merge_task_created',
+      message: `Created manual intervention task for PR #${prNumber}`,
+      details: { prNumber, taskId: task.id }
+    });
   }
 
   private areAllConditionsMet(state: PRConditionState): boolean {

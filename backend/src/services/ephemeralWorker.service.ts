@@ -1532,7 +1532,8 @@ export class EphemeralWorkerService {
     const containerCredPaths = {
       claude: path.posix.join(EphemeralWorkerService.CONTAINER_HOME, '.claude', '.credentials.json'),
       codex: path.posix.join(EphemeralWorkerService.CONTAINER_HOME, '.codex', 'auth.json'),
-      gemini: path.posix.join(EphemeralWorkerService.CONTAINER_HOME, '.gemini', '.credentials.json')
+      // Gemini CLI expects oauth_creds.json inside ~/.gemini
+      gemini: path.posix.join(EphemeralWorkerService.CONTAINER_HOME, '.gemini', 'oauth_creds.json')
     };
 
     let credentialSetup: string[];
