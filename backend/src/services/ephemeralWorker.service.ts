@@ -438,22 +438,32 @@ export class EphemeralWorkerService {
 
       await this.ensureContainerLogDirectory(container.id);
       await this.syncCodexCredentials(container.id);
+      await this.syncGeminiCredentials(container.id);
       if (logPaths.length > 0) {
         await this.copyWorkTargetLogSnapshots(container.id, logPaths, workTarget);
       }
 
-      if (fs.existsSync(claudeCredentials)) {
+      // Select credentials source based on CLI type
+      const credentialSource =
+        cliType === 'codex'
+          ? path.join(os.homedir(), '.codex', 'auth.json')
+          : cliType === 'gemini'
+            ? path.join(os.homedir(), '.gemini', 'oauth_creds.json')
+            : claudeCredentials; // default to Claude
+
+      if (fs.existsSync(credentialSource)) {
         await this.copyHostFileToContainer(
           container.id,
-          claudeCredentials,
+          credentialSource,
           '/tmp/host-creds.json',
-          'Claude credentials'
+          `${cliType} credentials`
         );
       } else {
         logger.warn({
           category: 'process',
-          action: 'claude_credentials_not_found',
-          message: 'Claude credentials file not found, container may not authenticate'
+          action: 'task_credentials_not_found',
+          message: `${cliType} credentials file not found, container may not authenticate`,
+          details: { cliType, credentialSource }
         });
       }
 
@@ -727,6 +737,51 @@ export class EphemeralWorkerService {
           details: {
             containerId,
             destination: `${EphemeralWorkerService.CONTAINER_HOME}/.codex`
+          }
+        });
+        resolve();
+      });
+    });
+  }
+
+  private async syncGeminiCredentials(containerId: string): Promise<void> {
+    const geminiDir = path.join(os.homedir(), '.gemini');
+    if (!fs.existsSync(geminiDir)) {
+      logger.warn({
+        category: 'automation',
+        action: 'gemini_credentials_missing',
+        message: 'Gemini credentials directory not found; Gemini CLI will not authenticate',
+        details: { path: geminiDir }
+      });
+      return;
+    }
+
+    const parentDir = path.dirname(geminiDir);
+    const baseName = path.basename(geminiDir);
+    const container = this.docker.getContainer(containerId);
+
+    await new Promise<void>((resolve, reject) => {
+      const pack = tar.pack(parentDir, { entries: [baseName] });
+      container.putArchive(pack, { path: EphemeralWorkerService.CONTAINER_HOME }, (err?: Error) => {
+        if (err) {
+          logger.error({
+            category: 'automation',
+            action: 'gemini_credentials_copy_failed',
+            message: 'Failed to copy Gemini credentials into container',
+            error: err,
+            details: { containerId }
+          });
+          reject(err);
+          return;
+        }
+
+        logger.info({
+          category: 'automation',
+          action: 'gemini_credentials_copied',
+          message: 'Copied Gemini credentials into container',
+          details: {
+            containerId,
+            destination: `${EphemeralWorkerService.CONTAINER_HOME}/.gemini`
           }
         });
         resolve();
