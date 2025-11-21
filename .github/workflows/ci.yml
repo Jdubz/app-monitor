@@ -143,8 +143,10 @@ jobs:
         run: npm run test -w backend
         env:
           SKIP_HEAVY_DEV_BOT_TESTS: '1'
-          VITEST_POOL: 'forks'
-          VITEST_MAX_THREADS: '2'
+          VITEST_POOL: 'threads'
+          VITEST_MAX_THREADS: '1'
+          VITEST_MIN_THREADS: '1'
+          NODE_OPTIONS: '--no-warnings'
 
   # Backend deploy build - mimic deploy agent's isolated install to catch MCP/build issues
   backend-deploy-build:
@@ -208,8 +210,10 @@ jobs:
         working-directory: backend
         run: npx vitest run --config vitest.config.ts tests/integration src/services/websocket.integration.test.ts --reporter verbose
         env:
-          VITEST_POOL: 'forks'
-          VITEST_MAX_THREADS: '2'
+          VITEST_POOL: 'threads'
+          VITEST_MAX_THREADS: '1'
+          VITEST_MIN_THREADS: '1'
+          NODE_OPTIONS: '--no-warnings'
         # Note: No SKIP_HEAVY_DEV_BOT_TESTS so all integration tests run
 
   # Frontend linting - parallel with backend
