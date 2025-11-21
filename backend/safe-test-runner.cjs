@@ -144,10 +144,12 @@ class SafeTestRunner {
       }
 
       const resolvedForkSetting = process.env.VITEST_FORCE_FORKS ??
-        (process.env.SAFE_TEST_RUNNER_FORCE_FORKS ?? '1');
+        (process.env.SAFE_TEST_RUNNER_FORCE_FORKS ?? '0');
 
       if (resolvedForkSetting === '1') {
         console.log('⚙️  Forcing Vitest to use forked workers to avoid Node serialization cache corruption.');
+      } else if (process.env.CI === 'true') {
+        console.log('⚙️  Using thread pool in CI to avoid serialization errors.');
       }
 
       const testProcess = spawn('npx', vitestArgs, {
