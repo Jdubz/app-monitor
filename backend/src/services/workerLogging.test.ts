@@ -14,17 +14,16 @@ describe('Worker Logging Helpers', () => {
   it('produces deterministic log file paths for workers', () => {
     const workerId = 'bot-frontend-specialist-456';
     const sanitized = sanitizeWorkerId(workerId);
-    const logFilePath = `/app/logs/${sanitized}.log`;
+    const logFilePath = `/tmp/devbot-worker-logs/${sanitized}.log`;
 
-    expect(logFilePath).toBe('/app/logs/bot-frontend-specialist-456.log');
+    expect(logFilePath).toBe('/tmp/devbot-worker-logs/bot-frontend-specialist-456.log');
   });
 
   it('supports worker IDs with uppercase characters', () => {
     const workerId = 'BOT-DBA-1';
     const sanitized = sanitizeWorkerId(workerId);
-    const logFilePath = `/app/logs/${sanitized}.log`;
+    const logFilePath = `/tmp/devbot-worker-logs/${sanitized}.log`;
 
-    expect(logFilePath).toBe('/app/logs/BOT-DBA-1.log');
+    expect(logFilePath).toBe('/tmp/devbot-worker-logs/BOT-DBA-1.log');
   });
 });
-
