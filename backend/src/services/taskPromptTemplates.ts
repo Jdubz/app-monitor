@@ -194,6 +194,29 @@ export class TaskPromptTemplateManager {
   }
 - Keep \`architecture_notes\` concise (<= 500 chars). Do this before implementation.
 
+## 🧭 Phase Artifact Requirements (All Phases)
+- ALWAYS write JSON artifacts to \`/workspace/.artifacts/phase.json\` for the current phase.
+- Overwrite the file each phase with the structure below:
+  - **Phase 1 (planning)**: the JSON above.
+  - **Phase 2 (implementation)**:
+    \`\`\`json
+    {"pr_number": 0, "pr_url": "", "branch_name": "", "commits": 1, "files_changed": []}
+    \`\`\`
+  - **Phase 3 (review)**:
+    \`\`\`json
+    {"issues": [{"fingerprint": "sha256:...", "severity": "major", "file": "path", "line": 1, "description": "", "blocking": true}], "total_issues": 1, "blocking_issues": 1, "review_passed": false}
+    \`\`\`
+  - **Phase 4 (fixes)**:
+    \`\`\`json
+    {"fixes_applied": [{"fingerprint": "sha256:...", "resolution": "", "files_modified": [""], "commits": ["hash"]}], "unresolved_fingerprints": [], "all_issues_addressed": true}
+    \`\`\`
+  - **Phase 5 (tests)**:
+    \`\`\`json
+    {"all_tests_passing": true, "coverage_delta": 0, "test_summary": {"unit": {"total": 0, "passed": 0, "failed": 0}, "integration": {"total": 0, "passed": 0, "failed": 0}, "e2e": {"total": 0, "passed": 0, "failed": 0}}, "lint_passing": true, "type_check_passing": true, "build_passing": true, "failures": []}
+    \`\`\`
+  - **Phase 6/7**: include any cleanup/shepherding metadata you produce; keep JSON well-formed.
+- If you also emit Markdown, still write the JSON file—validators read \`phase.json\`.
+
 ## 🚨 Common Failure Modes to AVOID (Learn from Past Mistakes)
 
 ### ❌ FAILURE MODE 1: Inventing Features Not Requested
