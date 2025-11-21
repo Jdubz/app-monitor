@@ -73,6 +73,8 @@ export default defineConfig({
       NODE_ENV: 'test',
       DATABASE_PATH: ':memory:',
       REPO_ROOT: process.env.REPO_ROOT || repoRoot,
+      REQUIRE_AUTH: 'true',
+      API_KEY: 'test-api-key-123',
     },
     
     // Coverage configuration
