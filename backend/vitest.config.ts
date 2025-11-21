@@ -28,6 +28,7 @@ const poolConfig = useForkPool
         forks: {
           maxForks: forkPoolCap,
           minForks: 1,
+          isolate: true,
         },
       },
       fileParallelism: true,
