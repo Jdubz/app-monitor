@@ -9,7 +9,6 @@
       "getActiveAlerts returns only non-dismissed alerts",
       "Add unit tests for all methods"
     ],
-    "assignedAgent": "backend-specialist",
     "files": [
       "backend/src/services/alertManager.ts"
     ],
@@ -31,7 +30,6 @@
       "Alert includes task duration and ID",
       "Add unit test with mock task data"
     ],
-    "assignedAgent": "backend-specialist",
     "files": [
       "backend/src/services/alertManager.ts"
     ],
@@ -53,7 +51,6 @@
       "Route integrated into dev-bots router",
       "Returns 200 with empty array if no alerts"
     ],
-    "assignedAgent": "backend-specialist",
     "files": [
       "backend/src/routes/dev-bots/alerts.routes.ts"
     ],
@@ -75,7 +72,6 @@
       "Returns 200 with dismissed alert on success",
       "Alert no longer in active alerts after dismiss"
     ],
-    "assignedAgent": "backend-specialist",
     "files": [
       "backend/src/routes/dev-bots/alerts.routes.ts"
     ],
@@ -98,7 +94,6 @@
       "Shows 'No alerts' when empty",
       "Auto-refreshes every 30 seconds"
     ],
-    "assignedAgent": "frontend-specialist",
     "files": [
       "frontend/src/components/common/AlertsPanel.tsx"
     ],
@@ -120,7 +115,6 @@
       "Count updates every 30 seconds",
       "Badge hidden when count is 0"
     ],
-    "assignedAgent": "frontend-specialist",
     "files": [
       "frontend/src/components/monitor/tabs/DevBotsTabContent.tsx"
     ],
@@ -143,7 +137,6 @@
       "Paused state persists to database",
       "Add unit tests for pause/resume"
     ],
-    "assignedAgent": "backend-specialist",
     "files": [
       "backend/src/services/taskQueue.sqlite.ts"
     ],
@@ -165,7 +158,6 @@
       "Response format: {isPaused, pendingCount, processingCount}",
       "Returns 200 always"
     ],
-    "assignedAgent": "backend-specialist",
     "files": [
       "backend/src/routes/dev-bots/queue.routes.ts"
     ],
@@ -187,7 +179,6 @@
       "Subsequent tasks don't process after pause",
       "Idempotent (calling twice is safe)"
     ],
-    "assignedAgent": "backend-specialist",
     "files": [
       "backend/src/routes/dev-bots/queue.routes.ts"
     ],
@@ -209,7 +200,6 @@
       "Queue processes tasks after resume",
       "Idempotent (calling twice is safe)"
     ],
-    "assignedAgent": "backend-specialist",
     "files": [
       "backend/src/routes/dev-bots/queue.routes.ts"
     ],
@@ -232,7 +222,6 @@
       "Buttons disabled during API call",
       "Status refreshes after action"
     ],
-    "assignedAgent": "frontend-specialist",
     "files": [
       "frontend/src/components/dev-bots/queue/QueueControls.tsx"
     ],
@@ -255,7 +244,6 @@
       "Modal overlay dims background",
       "Focus trapped in modal when open"
     ],
-    "assignedAgent": "frontend-specialist",
     "files": [
       "frontend/src/components/dev-bots/queue/ChainDetailsModal.tsx"
     ],
@@ -278,7 +266,6 @@
       "Shows 'No tasks' if chain has no tasks",
       "Status badges color-coded (success=green, failed=red, etc)"
     ],
-    "assignedAgent": "frontend-specialist",
     "files": [
       "frontend/src/components/dev-bots/queue/ChainDetailsModal.tsx"
     ],
@@ -301,7 +288,6 @@
       "Sessions ordered by created_at descending",
       "Returns empty array if no sessions"
     ],
-    "assignedAgent": "backend-specialist",
     "files": [
       "backend/src/routes/dev-bots/interactive.routes.ts"
     ],
@@ -324,7 +310,6 @@
       "Shows 'No recent sessions' when empty",
       "List keyboard navigable with arrow keys"
     ],
-    "assignedAgent": "frontend-specialist",
     "files": [
       "frontend/src/components/dev-bots/interactive/SessionHistoryList.tsx"
     ],

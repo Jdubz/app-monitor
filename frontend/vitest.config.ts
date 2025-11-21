@@ -28,14 +28,19 @@ export default defineConfig({
         minForks: 1,
       },
     },
-    
+
     // CRITICAL: No file parallelism
     fileParallelism: false,
-    
+
     // CRITICAL: No test parallelism
     testTimeout: 30000,
     hookTimeout: 30000,
-    
+
+    // Cache configuration - disable in CI to prevent deserialization errors
+    cache: process.env.CI ? false : {
+      dir: 'node_modules/.vitest',
+    },
+
     // Environment setup
     environment: 'jsdom',
     globals: true,

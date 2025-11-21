@@ -8,6 +8,7 @@
 import { vi } from 'vitest';
 import type Docker from 'dockerode';
 import type { TaskQueueService, Task } from './taskQueue.sqlite.js';
+import { AUTO_ASSIGNED_AGENT } from './taskQueue.sqlite.js';
 import type { AgentPersonalityManager, AgentPersonality } from './agentPersonalities.js';
 import type { TaskPromptTemplateManager } from './taskPromptTemplates.js';
 import type { TaskCreationGuidelinesManager } from './taskCreationGuidelines.js';
@@ -234,7 +235,7 @@ export function createMockTaskCreationService(): TaskCreationService {
           description: taskData.description || 'Test Description',
           status: 'pending',
           created_at: Date.now(),
-          assignedAgent: taskData.assignedAgent || taskData.assigned_agent || 'general'
+          assigned_agent: taskData.assigned_agent || AUTO_ASSIGNED_AGENT
         },
         validation: {
           isValid: true,

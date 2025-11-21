@@ -21,7 +21,7 @@
   acceptanceCriteria: string,    // What qualifies as complete
   status: 'pending'|'assigned'|'active'|'completed'|'failed',
   createdAt: string,             // ISO timestamp
-  assignedAgent: string          // Agent personality ID
+  assignedAgent: string          // Auto-populated; defaults to 'auto-select' until runtime assignment
 }
 ```
 
@@ -238,8 +238,7 @@ const validation = guidelinesManager.validateTaskData({
     'JWT token generation working',
     'Security tests passing'
   ],  // 3 items - OK
-  project: 'job-finder-BE',  // Valid project - OK
-  assignedAgent: 'backend-specialist'  // Valid agent - OK
+  project: 'job-finder-BE'  // Valid project - OK
 }, 'implementation');
 
 // Returns:

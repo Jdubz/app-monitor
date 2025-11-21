@@ -14,6 +14,7 @@ import type {
   FrontendSessionMetadata
 } from '@app-monitor/api-contracts';
 import { MS_PER_DAY } from '../constants/timeouts.js';
+import { resolveLogsDir } from '../utils/repoPaths.js';
 
 export class LogWriter {
   private logsDirectory: string;
@@ -21,7 +22,7 @@ export class LogWriter {
 
   constructor(db: Database.Database, logsDirectory?: string) {
     this.db = db;
-    this.logsDirectory = logsDirectory || path.join(process.cwd(), 'logs', 'frontend');
+    this.logsDirectory = logsDirectory || path.join(resolveLogsDir(), 'frontend');
     this.ensureLogDirectory();
   }
 

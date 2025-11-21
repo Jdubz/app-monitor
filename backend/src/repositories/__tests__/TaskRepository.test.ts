@@ -17,7 +17,7 @@ describe('TaskRepository', () => {
     // Create in-memory database for testing
     db = new Database(':memory:');
     
-    // Create minimal schema for testing
+    // Create schema mirroring TaskQueueService for unit tests
     db.exec(`
       CREATE TABLE tasks (
         id TEXT PRIMARY KEY,
@@ -29,39 +29,50 @@ describe('TaskRepository', () => {
         status TEXT NOT NULL,
         priority INTEGER NOT NULL,
         created_at INTEGER NOT NULL,
-        assigned_agent TEXT NOT NULL,
-        assigned_worker TEXT,
         assigned_at INTEGER,
         started_at INTEGER,
         completed_at INTEGER,
+        assigned_agent TEXT NOT NULL,
+        assigned_worker TEXT,
+        agent_type TEXT,
         prompt TEXT,
         output TEXT,
         error TEXT,
         can_retry INTEGER DEFAULT 1,
         retry_count INTEGER DEFAULT 0,
         max_retries INTEGER DEFAULT 3,
-        timeout_ms INTEGER,
+        timeout_ms INTEGER DEFAULT NULL,
         fingerprint TEXT,
         estimated_hours REAL,
         complexity TEXT,
-        task_category TEXT,
-        file_patterns TEXT,
-        estimated_complexity TEXT,
-        preferred_agent TEXT,
+        exit_code INTEGER,
+        files TEXT,
+        dependencies TEXT,
+        project TEXT,
+        timeout INTEGER,
+        metadata TEXT,
+        context_json TEXT,
+        pr_number INTEGER,
         chain_id TEXT,
-        chain_depth INTEGER DEFAULT 0,
+        chain_depth INTEGER,
         chain_status TEXT,
+        blocked_reason TEXT,
+        blocked_at INTEGER,
+        blocked_by TEXT,
+        resumed_by TEXT,
+        resumed_at INTEGER,
         phase_index INTEGER DEFAULT 1,
-        phase_name TEXT DEFAULT 'Planning',
-        phase_status TEXT DEFAULT 'ready',
+        phase_name TEXT,
+        phase_status TEXT,
         phase_attempts INTEGER DEFAULT 1,
         phase_payload TEXT,
-        agent_type TEXT,
-        pr_number INTEGER,
-        verification_passed INTEGER,
-        verification_results TEXT,
-        verification_timestamp INTEGER,
-        plan_id TEXT
+        context_bundle_id TEXT,
+        context_cache_key TEXT,
+        context_profiles TEXT,
+        risk_level TEXT,
+        task_category TEXT,
+        file_patterns TEXT,
+        estimated_complexity TEXT
       );
 
       CREATE TABLE task_files (
@@ -247,16 +258,6 @@ describe('TaskRepository', () => {
       expect(tasks[0].id).toBe(task.id);
     });
 
-    it('should filter by plan ID', () => {
-      const task = repository.create({
-        title: 'Plan Task',
-        plan_id: 'plan-456'
-      });
-
-      const tasks = repository.findAll({ planId: 'plan-456' });
-      expect(tasks).toHaveLength(1);
-      expect(tasks[0].id).toBe(task.id);
-    });
   });
 
   describe('update', () => {

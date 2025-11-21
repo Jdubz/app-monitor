@@ -44,7 +44,6 @@ describe('DevBotsManager Public Interface', () => {
         type: 'feature',
         title: 'Test Task',
         description: 'A test task for development',
-        assignedAgent: 'test-agent',
         acceptanceCriteria: ['Test acceptance criteria']
       };
 
@@ -64,7 +63,6 @@ describe('DevBotsManager Public Interface', () => {
         type: 'feature',
         title: 'Enhanced Test Task',
         description: 'A test task with enhanced fields',
-        assignedAgent: 'test-agent',
         acceptanceCriteria: ['Criterion 1', 'Criterion 2']
       };
 
@@ -84,7 +82,6 @@ describe('DevBotsManager Public Interface', () => {
         title: 'Task 1',
         description: 'Task 1 documentation',
         acceptanceCriteria: ['Task 1 acceptance criteria'],
-        assignedAgent: 'test-agent'
       });
 
       await devBotsManager.addTask({
@@ -92,7 +89,6 @@ describe('DevBotsManager Public Interface', () => {
         title: 'Task 2',
         description: 'Task 2 documentation',
         acceptanceCriteria: ['Task 2 acceptance criteria'],
-        assignedAgent: 'test-agent'
       });
 
       // When: Tasks are retrieved
@@ -142,7 +138,6 @@ describe('DevBotsManager Public Interface', () => {
       await devBotsManager.addTask({
         type: 'feature',
         title: 'Test Task',
-        assignedAgent: 'test-agent'
       });
 
       // When: Next task assignment is triggered
@@ -277,7 +272,6 @@ describe('DevBotsManager Public Interface', () => {
       await devBotsManager.addTask({
         type: 'feature',
         title: 'Task 1',
-        assignedAgent: 'test-agent'
       });
 
       // When: System status is checked

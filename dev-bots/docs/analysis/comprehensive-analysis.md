@@ -139,7 +139,7 @@ CORE REQUIRED FIELDS:
 - acceptanceCriteria: string (what qualifies as complete)
 - status: 'pending' | 'assigned' | 'active' | 'completed' | 'failed'
 - createdAt: string (ISO timestamp)
-- assignedAgent: string (agent personality ID)
+- assignedAgent: string (auto-populated; defaults to 'auto-select' until the selector assigns a real personality)
 ```
 
 ### 2.2 Optional Fields (Strongly Recommended)
@@ -691,7 +691,6 @@ const validation = guidelinesManager.validateTaskData({
   description: 'Implement OAuth2',  // Too short - will error
   acceptanceCriteria: ['Criterion 1'],  // Only 1 - will error
   project: 'job-finder-BE',
-  assignedAgent: 'backend-specialist',
   // ... more fields
 }, 'implementation');
 

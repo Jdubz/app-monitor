@@ -52,7 +52,6 @@ import { randomUUID } from 'node:crypto';
 import { logger } from '../utils/logger.js';
 import { config } from '../config.js';
 import { TaskClassifier } from './taskClassifier.js';
-import { AgentSelector, type AgentSelectionCriteria } from './agentSelector.js';
 import { ChainTrackerService, type ChainStats, type BlockedChain } from './chainTracker.service.js';
 import {
   TaskQueueMetricsService,
@@ -78,6 +77,8 @@ export { summarizeAgentComparisonMetrics };
 
 // Task status enum
 export type TaskStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | 'timeout' | 'blocked';
+
+export const AUTO_ASSIGNED_AGENT = 'auto-select';
 
 // Worker status enum
 export type WorkerStatus = 'starting' | 'running' | 'stopping' | 'stopped';
@@ -174,7 +175,6 @@ export interface Task {
   task_category?: 'implementation' | 'analysis' | 'documentation' | 'review' | 'planning';
   file_patterns?: string; // JSON array of file extensions (e.g., ["ts", "md"])
   estimated_complexity?: 'simple' | 'medium' | 'complex';
-  preferred_agent?: 'claude' | 'codex' | 'copilot'; // Manual override for agent selection
   // Enhanced task fields for comprehensive task planning
   plan_id?: string; // Links task to a plan in the plans table
   long_term_goals?: string[];
@@ -276,7 +276,6 @@ export class TaskQueueService {
   private db: Database.Database;
   private dbPath: string;
   private readonly taskClassifier: TaskClassifier; // Auto-classification (Phase 0.3)
-  private readonly agentSelector: AgentSelector;
   private readonly chainTracker: ChainTrackerService; // Chain lifecycle management (Phase 2)
   private readonly maxConcurrentChains: number; // Chain concurrency limit
   private readonly metricsService: TaskQueueMetricsService; // Metrics and analytics
@@ -291,10 +290,9 @@ export class TaskQueueService {
    * 
    * @param dbPath Path to SQLite database file
    */
-  constructor(dbPath: string, agentSelector?: AgentSelector) {
+  constructor(dbPath: string) {
     this.dbPath = dbPath;
     this.taskClassifier = new TaskClassifier();
-    this.agentSelector = agentSelector ?? new AgentSelector();
     this.ensureDirectory();
     this.db = new Database(dbPath);
     this.initialize();
@@ -496,8 +494,7 @@ export class TaskQueueService {
         -- Migration 4 columns (intelligent agent selection / task classification)
         task_category TEXT CHECK(task_category IN ('implementation', 'analysis', 'documentation', 'review', 'planning')),
         file_patterns TEXT,
-        estimated_complexity TEXT CHECK(estimated_complexity IN ('simple', 'medium', 'complex')),
-        preferred_agent TEXT CHECK(preferred_agent IN ('claude', 'codex', 'copilot'))
+        estimated_complexity TEXT CHECK(estimated_complexity IN ('simple', 'medium', 'complex'))
       );
 
       -- Indexes for performance
@@ -694,14 +691,6 @@ export class TaskQueueService {
     // Chain ID determination - all new tasks start their own chain
     const chainId = taskData.chain_id || taskData.id || generatedId;
     
-    const preferredAgent = taskData.preferred_agent || this.selectPreferredAgentSync({
-      taskCategory,
-      filePatterns: this.parseFilePatternArray(filePatterns),
-      complexity: estimatedComplexity,
-      taskTitle: taskData.title,
-      taskDescription: taskData.description
-    });
-
     const task: Task = {
       id: taskData.id || generatedId,
       type: taskData.type || 'implementation',
@@ -712,7 +701,7 @@ export class TaskQueueService {
       status: taskData.status || 'pending',
       priority: taskData.priority || 5,
       created_at: now,
-      assigned_agent: taskData.assigned_agent || 'backend-specialist',
+      assigned_agent: taskData.assigned_agent || AUTO_ASSIGNED_AGENT,
       prompt: taskData.prompt,
       can_retry: taskData.can_retry !== undefined ? taskData.can_retry : true,
       retry_count: 0,
@@ -725,7 +714,6 @@ export class TaskQueueService {
       task_category: taskCategory,
       file_patterns: filePatterns,
       estimated_complexity: estimatedComplexity,
-      preferred_agent: preferredAgent,
       // Chain tracking
       chain_status: taskData.chain_status || 'pending',
       chain_id: chainId,
@@ -745,10 +733,15 @@ export class TaskQueueService {
           id, type, title, description, documentation, notes, status, priority,
           created_at, assigned_agent, prompt, can_retry, retry_count, max_retries,
           timeout_ms, fingerprint, estimated_hours, complexity,
-          task_category, file_patterns, estimated_complexity, preferred_agent,
+          task_category, file_patterns, estimated_complexity,
           chain_status, chain_id, chain_depth,
           phase_index, phase_name, phase_status, phase_attempts, phase_payload
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ) VALUES (
+          ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?, ?, ?, ?, ?, ?, ?, ?,
+          ?, ?
+        )
       `);
 
       stmt.run(
@@ -756,7 +749,7 @@ export class TaskQueueService {
         task.notes, task.status, task.priority, task.created_at, task.assigned_agent,
         task.prompt, task.can_retry ? 1 : 0, task.retry_count, task.max_retries,
         task.timeout_ms, task.fingerprint, task.estimated_hours, task.complexity,
-        task.task_category, task.file_patterns, task.estimated_complexity, task.preferred_agent,
+        task.task_category, task.file_patterns, task.estimated_complexity,
         task.chain_status, task.chain_id, task.chain_depth,
         task.phase_index, task.phase_name, task.phase_status, task.phase_attempts, task.phase_payload
       );
@@ -820,24 +813,6 @@ export class TaskQueueService {
     }
 
     return task;
-  }
-
-  private selectPreferredAgentSync(criteria: AgentSelectionCriteria): 'claude' | 'codex' | 'copilot' | undefined {
-    try {
-      const selection = this.agentSelector.selectAgentSync(criteria);
-      if (selection.agent === 'gemini') {
-        return selection.fallbackAgent === 'codex' ? 'codex' : 'claude';
-      }
-      return selection.agent;
-    } catch (error) {
-      logger.warn({
-        category: 'process',
-        action: 'preferred_agent_selection_failed',
-        message: 'Falling back to Claude due to agent selection error',
-        error
-      });
-      return 'claude';
-    }
   }
 
   private parseFilePatternArray(filePatterns?: string): string[] | undefined {
@@ -1003,7 +978,7 @@ export class TaskQueueService {
 
     // Assign task atomically
     const now = Date.now();
-    const workerId = `bot-${task.assigned_agent}-${now}`;
+    const workerId = `worker-${now}-${Math.random().toString(36).slice(2, 8)}`;
 
     const updateStmt = this.db.prepare(`
       UPDATE tasks
@@ -1354,6 +1329,16 @@ export class TaskQueueService {
     });
   }
 
+  updateAgentForTask(taskId: string, assignedAgent: string, agentType: 'claude' | 'codex' | 'gemini'): void {
+    const stmt = this.db.prepare(`
+      UPDATE tasks
+      SET assigned_agent = ?, agent_type = ?
+      WHERE id = ?
+    `);
+    stmt.run(assignedAgent, agentType, taskId);
+    this.workerLifecycle.updateWorkerAgentForTask(taskId, assignedAgent);
+  }
+
   /**
    * Update task metadata
    * Provides a clean API for updating task metadata without exposing internal db access
@@ -1643,31 +1628,6 @@ export class TaskQueueService {
       LIMIT 20
     `);
     return stmt.all(cutoffTime) as Task[];
-  }
-
-  /**
-   * Get currently active Copilot tasks (synchronous)
-   * Used by Copilot throttle manager to enforce concurrency limits
-   * Note: Returns synchronously as SQLite operations are synchronous
-   */
-  getActiveCopilotTasks(): Task[] {
-    try {
-      const stmt = this.db.prepare(`
-        SELECT * FROM tasks
-        WHERE status IN ('pending', 'running')
-          AND preferred_agent = 'copilot'
-        ORDER BY created_at ASC
-      `);
-      return stmt.all() as Task[];
-    } catch (error) {
-      logger.error({
-        category: 'copilot-throttle',
-        action: 'get_active_tasks_failed',
-        message: 'Failed to get active Copilot tasks',
-        error
-      });
-      return [];
-    }
   }
 
   /**

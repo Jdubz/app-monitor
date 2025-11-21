@@ -94,7 +94,6 @@ export interface TaskSubmissionPayload {
     desiredOutputs?: string[];
     followUpOf?: string;
     chainId?: string;
-    assignedAgent?: string;
     priority?: number;
 }
 export interface TaskAutoDetectionResult {

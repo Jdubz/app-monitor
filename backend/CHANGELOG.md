@@ -61,7 +61,7 @@ metadata: {
 **Migration Notes:**
 - No database migration required - schema already supports metadata fields
 - Old recovery tables (`recovery_attempts`, `recovery_safety_checks`) remain but unused
-- Configuration unchanged: `ENABLE_AUTO_RECOVERY` and `RECOVERY_DRY_RUN` still control behavior
+- Configuration update: automatic recovery is always enabled and legacy toggle environment variables were removed
 - Recoverable error categories unchanged: cli_incompatibility, missing_resource, syntax_error, import_error, config_error
 
 **Testing:**

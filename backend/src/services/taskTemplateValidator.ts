@@ -46,7 +46,6 @@ export interface TaskTemplateV3 {
   // Optional fields
   documentation?: string;
   notes?: string;
-  assignedAgent?: string;
   priority?: number;
   estimatedEffort?: {
     hours: number;

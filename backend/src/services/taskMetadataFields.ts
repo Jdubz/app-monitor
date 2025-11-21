@@ -39,7 +39,6 @@ export interface EnhancedTaskData {
   relatedTasks: string[];
   assumptions: string[];
   alternatives: string[];
-  assignedAgent: string;
 }
 
 type TaskMetadataFieldDefinitionSeed = {
@@ -82,14 +81,6 @@ const TASK_METADATA_FIELD_DEFINITIONS = [
     description: 'Repository where the work must be delivered.',
     guidelineField: 'project',
     templateVariables: ['repository']
-  },
-  {
-    key: 'assignedAgent',
-    label: 'Assigned Agent',
-    description: 'Agent persona that will execute the work.',
-    queueField: 'assigned_agent',
-    guidelineField: 'assignedAgent',
-    templateVariables: ['agent.name', 'agent.role', 'agent.id', 'agent.expertise']
   },
   {
     key: 'documentation',

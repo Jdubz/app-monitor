@@ -189,7 +189,6 @@ export interface TaskSubmissionPayload {
   chainId?: string;
   
   // Advanced (rarely used)
-  assignedAgent?: string;
   priority?: number;
 }
 
@@ -932,3 +931,52 @@ export interface IssueReportResponse {
 }
 
 export type IssueReportApiResponse = ApiSuccess<IssueReportResponse>;
+
+// ============================================================================
+// Admin Bot Chat
+// ============================================================================
+
+export interface AdminBotSessionInfo {
+  id: string;
+  status: 'idle' | 'active' | 'stopped';
+  startedAt: string;
+  messageCount: number;
+}
+
+export interface AdminBotStartRequest {
+  // No body for start request
+}
+
+export interface AdminBotStartResponse {
+  sessionId: string;
+  message: string;
+}
+
+export interface AdminBotMessageRequest {
+  message: string;
+}
+
+export interface AdminBotMessageResponse {
+  received: boolean;
+  message: string;
+}
+
+export interface AdminBotStopRequest {
+  // No body for stop request
+}
+
+export interface AdminBotStopResponse {
+  stopped: boolean;
+  message: string;
+}
+
+export interface AdminBotStatusResponse {
+  session: AdminBotSessionInfo | null;
+  isRunning: boolean;
+}
+
+// API Response types
+export type AdminBotStartApiResponse = ApiSuccess<AdminBotStartResponse>;
+export type AdminBotMessageApiResponse = ApiSuccess<AdminBotMessageResponse>;
+export type AdminBotStopApiResponse = ApiSuccess<AdminBotStopResponse>;
+export type AdminBotStatusApiResponse = ApiSuccess<AdminBotStatusResponse>;

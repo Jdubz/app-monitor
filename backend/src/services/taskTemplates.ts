@@ -148,8 +148,6 @@ export function createMigrationTaskTemplate(params: MigrationTemplateParams): Ta
       branch: 'staging',
       commitMessage: `feat: add ${columns.join(', ')} to ${tableName} table\n\nExtends existing ${tableName} table with specified columns.\n\n🤖 Generated with Claude Code\n\nCo-Authored-By: Claude <noreply@anthropic.com>`
     },
-
-    assignedAgent: 'backend-specialist',
     priority: 7,
 
     estimatedEffort: {
@@ -252,8 +250,6 @@ export function createExtensionTaskTemplate(params: ExtensionTemplateParams): Ta
       branch: 'staging',
       commitMessage: `feat: add ${newFunctionality} to ${baseFile}\n\nExtends existing functionality without duplication.\n\n🤖 Generated with Claude Code\n\nCo-Authored-By: Claude <noreply@anthropic.com>`
     },
-
-    assignedAgent: 'general-purpose',
     priority: 5,
 
     estimatedEffort: {
@@ -365,8 +361,6 @@ export function createBugfixTaskTemplate(params: BugfixTemplateParams): TaskTemp
       branch: 'staging',
       commitMessage: `fix: ${title.toLowerCase()}\n\nFixes: ${errorMessage}\nRoot cause: ${rootCause}\n\n🤖 Generated with Claude Code\n\nCo-Authored-By: Claude <noreply@anthropic.com>`
     },
-
-    assignedAgent: 'general-purpose',
     priority: 8,
 
     estimatedEffort: {
@@ -480,8 +474,6 @@ export function createRefactorTaskTemplate(params: RefactorTemplateParams): Task
       branch: 'staging',
       commitMessage: `refactor: ${title.toLowerCase()}\n\nReplaces "${pattern}" with "${replacement}" without behavior changes.\n\n🤖 Generated with Claude Code\n\nCo-Authored-By: Claude <noreply@anthropic.com>`
     },
-
-    assignedAgent: 'general-purpose',
     priority: 4,
 
     estimatedEffort: {

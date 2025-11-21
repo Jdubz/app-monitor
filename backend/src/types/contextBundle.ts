@@ -50,7 +50,6 @@ export interface BundleGenerationOptions {
   profiles?: string[];
   targetFiles?: string[];
   force?: boolean;
-  dryRun?: boolean;
 }
 
 /**
