@@ -14,9 +14,8 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
 
 const skipHeavyBots = process.env.SKIP_HEAVY_DEV_BOT_TESTS === '1';
-const useForkPool = process.env.VITEST_FORCE_FORKS === '1';
-const isCI = process.env.CI === 'true';
-const defaultThreadCap = isCI ? 1 : (Number(process.env.VITEST_MAX_THREADS ?? 8) || 8);
+const useForkPool = process.env.VITEST_FORCE_FORKS === '1' || process.env.CI === 'true';
+const defaultThreadCap = Number(process.env.VITEST_MAX_THREADS ?? 8) || 8;
 const forkPoolCap = Math.max(
   1,
   Number(process.env.VITEST_MAX_FORKS ?? process.env.VITEST_MAX_THREADS ?? 4) || 4
@@ -31,20 +30,10 @@ const poolConfig = useForkPool
           minForks: 1,
         },
       },
-      fileParallelism: !isCI,
+      fileParallelism: true,
       maxConcurrency: forkPoolCap,
     }
-  : {
-      pool: 'threads',
-      poolOptions: {
-        threads: {
-          maxThreads: defaultThreadCap,
-          minThreads: 1,
-        },
-      },
-      fileParallelism: !isCI,
-      maxConcurrency: defaultThreadCap,
-    };
+  : getThreadPoolConfig(defaultThreadCap);
 
 const heavyBotPatterns = [
   'src/routes/dev-bots.routes.test.ts',
