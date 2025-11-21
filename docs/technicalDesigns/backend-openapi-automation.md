@@ -146,17 +146,16 @@ The backend currently relies on `shared/api-contracts` for request/response DTOs
 - ✅ Merged with main branch (admin-bot integration)
 
 **In Progress:**
-- 🔄 Route instrumentation: 8 files refactored, ~10 remaining
-- 🔄 Files refactored: index.ts (health), docker.routes.ts, observability.routes.ts, metrics.routes.ts, dev-bots/agents.routes.ts, issues.routes.ts, logs.routes.ts, token-tracking.routes.ts
+- 🔄 Route instrumentation: 9 files refactored, ~11 remaining
+- 🔄 Files refactored: index.ts (health), docker.routes.ts, observability.routes.ts, metrics.routes.ts, dev-bots/agents.routes.ts, issues.routes.ts, logs.routes.ts, token-tracking.routes.ts, admin-bot/chat.routes.ts
 
 **Remaining Route Files:**
-- admin-bot/chat.routes.ts
-- github-webhooks.routes.ts
-- prs.routes.ts
+- github-webhooks.routes.ts (6 endpoints - complex webhook handling)
+- prs.routes.ts (4 endpoints)
 - quality-gates.routes.ts
 - socket-task.routes.ts
-- sse.routes.ts
-- verification.routes.ts
+- sse.routes.ts (SSE - may not fit OpenAPI pattern)
+- verification.routes.ts (4 endpoints - simpler)
 - dev-bots/plans.routes.ts
 - dev-bots/settings.routes.ts
 - dev-bots/status.routes.ts
