@@ -66,7 +66,7 @@ docker logs worker-XXXXX 2>&1 | tail -100
 **Affected Providers:**
 - Claude: `~/.claude/.credentials.json`
 - Gemini: `~/.gemini/credentials.json`
-- Codex: `~/.codex/credentials.json`
+- Codex: `~/.codex/auth.json`
 
 **Fix:**
 ```bash
