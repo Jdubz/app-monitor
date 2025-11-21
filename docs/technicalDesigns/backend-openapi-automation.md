@@ -142,12 +142,14 @@ The backend currently relies on `shared/api-contracts` for request/response DTOs
 - ✅ Request body, path parameters, and query parameter extraction
 - ✅ CI validation job in GitHub Actions
 - ✅ Swagger UI serving at `/api/docs`
-- ✅ 22 operations documented across 20 paths
+- ✅ 33 operations documented across 33 paths
 - ✅ Merged with main branch (admin-bot integration)
+- ✅ Admin Bot API contracts and 4 chat endpoints
+- ✅ Verification API contracts and 4 verification endpoints
 
 **In Progress:**
-- 🔄 Route instrumentation: 9 files refactored, ~11 remaining
-- 🔄 Files refactored: index.ts (health), docker.routes.ts, observability.routes.ts, metrics.routes.ts, dev-bots/agents.routes.ts, issues.routes.ts, logs.routes.ts, token-tracking.routes.ts, admin-bot/chat.routes.ts
+- 🔄 Route instrumentation: 10 files refactored, ~10 remaining
+- 🔄 Files refactored: index.ts (health), docker.routes.ts, observability.routes.ts, metrics.routes.ts, dev-bots/agents.routes.ts, issues.routes.ts, logs.routes.ts, token-tracking.routes.ts, admin-bot/chat.routes.ts, verification.routes.ts
 
 **Remaining Route Files:**
 - github-webhooks.routes.ts (6 endpoints - complex webhook handling)
@@ -155,10 +157,9 @@ The backend currently relies on `shared/api-contracts` for request/response DTOs
 - quality-gates.routes.ts
 - socket-task.routes.ts
 - sse.routes.ts (SSE - may not fit OpenAPI pattern)
-- verification.routes.ts (4 endpoints - simpler)
 - dev-bots/plans.routes.ts
 - dev-bots/settings.routes.ts
-- dev-bots/status.routes.ts
+- dev-bots/status.routes.ts (14 endpoints - complex)
 - dev-bots/tasks.routes.ts
 - dev-bots/templates.routes.ts
 
