@@ -11,6 +11,8 @@ import express, { Express } from 'express';
 import { createAdminBotChatRoutes } from '../chat.routes';
 import { AdminBotService } from '../../../services/AdminBotService';
 import { EventEmitter } from 'events';
+import * as http from 'node:http';
+import type { AddressInfo } from 'node:net';
 
 // Mock AdminBotService
 vi.mock('../../../services/AdminBotService');
@@ -393,160 +395,310 @@ describe('Admin Bot Chat Routes', () => {
   });
 
   describe('GET /stream (SSE)', () => {
-    it('should require authentication', (done) => {
-      request(app)
-        .get('/api/admin-bot/chat/stream')
-        .expect(401)
-        .end((err, res) => {
-          if (err) return done(err);
-          expect(res.body.success).toBe(false);
-          expect(res.body.error).toBe('UNAUTHORIZED');
-          done();
-        });
-    });
+    const isIgnorableAbort = (error?: NodeJS.ErrnoException | null): boolean => {
+      if (!error) return true;
+      return (
+        error.code === 'ECONNRESET' ||
+        error.code === 'ABORTED' ||
+        error.message === 'aborted' ||
+        error.message === 'socket hang up'
+      );
+    };
 
-    it('should accept authentication via header', (done) => {
-      request(app)
-        .get('/api/admin-bot/chat/stream')
-        .set('X-API-Key', VALID_API_KEY)
-        .expect('Content-Type', /text\/event-stream/)
-        .expect('Cache-Control', 'no-cache')
-        .expect('Connection', 'keep-alive')
-        .end((err) => {
-          if (err) return done(err);
-          done();
-        });
-    });
+    const handleRequestError = (
+      error: NodeJS.ErrnoException | null,
+      reject: (reason?: unknown) => void
+    ): void => {
+      if (!error || isIgnorableAbort(error)) {
+        return;
+      }
+      reject(error);
+    };
 
-    it('should reject invalid API key in header', (done) => {
-      request(app)
-        .get('/api/admin-bot/chat/stream')
-        .set('X-API-Key', 'invalid-key')
-        .expect(401)
-        .end((err, res) => {
-          if (err) return done(err);
-          expect(res.body.success).toBe(false);
-          expect(res.body.error).toBe('UNAUTHORIZED');
-          done();
-        });
-    });
-
-    it('should accept authentication via query parameter', (done) => {
-      request(app)
-        .get(`/api/admin-bot/chat/stream?apiKey=${encodeURIComponent(VALID_API_KEY)}`)
-        .expect('Content-Type', /text\/event-stream/)
-        .expect('Cache-Control', 'no-cache')
-        .expect('Connection', 'keep-alive')
-        .end((err) => {
-          if (err) return done(err);
-          done();
-        });
-    });
-
-    it('should reject invalid API key in query parameter', (done) => {
-      request(app)
-        .get('/api/admin-bot/chat/stream?apiKey=invalid-key')
-        .expect(401)
-        .end((err, res) => {
-          if (err) return done(err);
-          expect(res.body.success).toBe(false);
-          expect(res.body.error).toBe('UNAUTHORIZED');
-          done();
-        });
-    });
-
-    it('should set correct SSE headers when authenticated', (done) => {
-      request(app)
-        .get('/api/admin-bot/chat/stream')
-        .set('X-API-Key', VALID_API_KEY)
-        .expect('Content-Type', /text\/event-stream/)
-        .expect('Cache-Control', 'no-cache')
-        .expect('Connection', 'keep-alive')
-        .end((err) => {
-          if (err) return done(err);
-          done();
-        });
-    });
-
-    it('should send connected event on connection', (done) => {
-      const req = request(app)
-        .get('/api/admin-bot/chat/stream')
-        .set('X-API-Key', VALID_API_KEY);
-
-      let receivedData = '';
-
-      req.on('data', (chunk) => {
-        receivedData += chunk.toString();
-
-        if (receivedData.includes('connected')) {
-          expect(receivedData).toContain('data:');
-          expect(receivedData).toContain('"type":"connected"');
-          req.abort();
-          done();
-        }
+    const startTestServer = async (): Promise<http.Server> =>
+      new Promise((resolve) => {
+        const listener = app.listen(0, () => resolve(listener));
       });
 
-      req.on('error', (err: any) => {
-        // Ignore abort errors
-        if (err.code !== 'ECONNRESET') {
-          done(err);
-        }
+    const stopTestServer = async (server: http.Server): Promise<void> =>
+      new Promise((resolve, reject) => {
+        server.close((err) => (err ? reject(err) : resolve()));
+      });
+
+    const buildRequestOptions = (
+      server: http.Server,
+      path: string,
+      headers: http.OutgoingHttpHeaders = {}
+    ): http.RequestOptions => {
+      const address = server.address() as AddressInfo;
+      return {
+        host: '127.0.0.1',
+        port: address.port,
+        path,
+        method: 'GET',
+        headers,
+      };
+    };
+
+    const withTestServer = async (runner: (server: http.Server) => Promise<void>): Promise<void> => {
+      const server = await startTestServer();
+      try {
+        await runner(server);
+      } finally {
+        await stopTestServer(server);
+      }
+    };
+
+    const headerValue = (value?: string | string[]): string =>
+      Array.isArray(value) ? value[0] : value ?? '';
+
+    it('should require authentication', async () => {
+      await new Promise<void>((resolve, reject) => {
+        request(app)
+          .get('/api/admin-bot/chat/stream')
+          .expect(401)
+          .end((err, res) => {
+            if (err) return reject(err);
+            expect(res.body.success).toBe(false);
+            expect(res.body.error).toBe('UNAUTHORIZED');
+            resolve();
+          });
       });
     });
 
-    it('should register event handlers on AdminBotService', (done) => {
-      const req = request(app)
-        .get('/api/admin-bot/chat/stream')
-        .set('X-API-Key', VALID_API_KEY);
+    it('should accept authentication via header', async () => {
+      await withTestServer(async (server) => {
+        await new Promise<void>((resolve, reject) => {
+          const req = http.request(
+            buildRequestOptions(server, '/api/admin-bot/chat/stream', {
+              'X-API-Key': VALID_API_KEY,
+            }),
+            (res) => {
+              try {
+                expect(res.statusCode).toBe(200);
+                expect(headerValue(res.headers['content-type'])).toMatch(/text\/event-stream/);
+                expect(headerValue(res.headers['cache-control'])).toBe('no-cache');
+                expect(headerValue(res.headers.connection)).toBe('keep-alive');
+                resolve();
+              } catch (error) {
+                reject(error);
+              } finally {
+                res.destroy();
+                req.destroy();
+              }
+            }
+          );
 
-      // Give time for handlers to be registered
-      const timeoutId = setTimeout(() => {
-        try {
-          expect(mockAdminBotService.on).toHaveBeenCalledWith('output', expect.any(Function));
-          expect(mockAdminBotService.on).toHaveBeenCalledWith('error', expect.any(Function));
-          expect(mockAdminBotService.on).toHaveBeenCalledWith('exit', expect.any(Function));
-          req.abort();
-          done();
-        } catch (error) {
-          req.abort();
-          done(error);
-        }
-      }, 100);
-
-      req.on('error', (err: any) => {
-        clearTimeout(timeoutId);
-        if (err.code !== 'ECONNRESET') {
-          done(err);
-        }
+          req.on('error', (err) => handleRequestError(err as NodeJS.ErrnoException, reject));
+          req.end();
+        });
       });
     });
 
-    it('should clean up handlers on client disconnect', (done) => {
-      const req = request(app)
-        .get('/api/admin-bot/chat/stream')
-        .set('X-API-Key', VALID_API_KEY);
-      let cleanupTimeoutId: NodeJS.Timeout;
+    it('should reject invalid API key in header', async () => {
+      await new Promise<void>((resolve, reject) => {
+        request(app)
+          .get('/api/admin-bot/chat/stream')
+          .set('X-API-Key', 'invalid-key')
+          .expect(401)
+          .end((err, res) => {
+            if (err) return reject(err);
+            expect(res.body.success).toBe(false);
+            expect(res.body.error).toBe('UNAUTHORIZED');
+            resolve();
+          });
+      });
+    });
 
-      // Give time for handlers to be registered
-      setTimeout(() => {
-        req.abort();
+    it('should accept authentication via query parameter', async () => {
+      await withTestServer(async (server) => {
+        await new Promise<void>((resolve, reject) => {
+          const req = http.request(
+            buildRequestOptions(
+              server,
+              `/api/admin-bot/chat/stream?apiKey=${encodeURIComponent(VALID_API_KEY)}`
+            ),
+            (res) => {
+              try {
+                expect(res.statusCode).toBe(200);
+                expect(headerValue(res.headers['content-type'])).toMatch(/text\/event-stream/);
+                expect(headerValue(res.headers['cache-control'])).toBe('no-cache');
+                expect(headerValue(res.headers.connection)).toBe('keep-alive');
+                resolve();
+              } catch (error) {
+                reject(error);
+              } finally {
+                res.destroy();
+                req.destroy();
+              }
+            }
+          );
 
-        // Give time for cleanup
-        cleanupTimeoutId = setTimeout(() => {
-          try {
-            expect(mockAdminBotService.off).toHaveBeenCalled();
-            done();
-          } catch (error) {
-            done(error);
-          }
-        }, 100);
-      }, 100);
+          req.on('error', (err) => handleRequestError(err as NodeJS.ErrnoException, reject));
+          req.end();
+        });
+      });
+    });
 
-      req.on('error', (err: any) => {
-        if (cleanupTimeoutId) clearTimeout(cleanupTimeoutId);
-        if (err.code !== 'ECONNRESET') {
-          done(err);
-        }
+    it('should reject invalid API key in query parameter', async () => {
+      await new Promise<void>((resolve, reject) => {
+        request(app)
+          .get('/api/admin-bot/chat/stream?apiKey=invalid-key')
+          .expect(401)
+          .end((err, res) => {
+            if (err) return reject(err);
+            expect(res.body.success).toBe(false);
+            expect(res.body.error).toBe('UNAUTHORIZED');
+            resolve();
+          });
+      });
+    });
+
+    it('should set correct SSE headers when authenticated', async () => {
+      await withTestServer(async (server) => {
+        await new Promise<void>((resolve, reject) => {
+          const req = http.request(
+            buildRequestOptions(server, '/api/admin-bot/chat/stream', {
+              'X-API-Key': VALID_API_KEY,
+            }),
+            (res) => {
+              try {
+                expect(res.statusCode).toBe(200);
+                expect(headerValue(res.headers['content-type'])).toMatch(/text\/event-stream/);
+                expect(headerValue(res.headers['cache-control'])).toBe('no-cache');
+                expect(headerValue(res.headers.connection)).toBe('keep-alive');
+                resolve();
+              } catch (error) {
+                reject(error);
+              } finally {
+                res.destroy();
+                req.destroy();
+              }
+            }
+          );
+
+          req.on('error', (err) => handleRequestError(err as NodeJS.ErrnoException, reject));
+          req.end();
+        });
+      });
+    });
+
+    it('should send connected event on connection', async () => {
+      await withTestServer(async (server) => {
+        await new Promise<void>((resolve, reject) => {
+          const req = http.request(
+            buildRequestOptions(server, '/api/admin-bot/chat/stream', {
+              'X-API-Key': VALID_API_KEY,
+            }),
+            (res) => {
+              res.setEncoding('utf8');
+              let receivedData = '';
+              const timeoutId = setTimeout(() => {
+                res.destroy();
+                req.destroy();
+                reject(new Error('Timed out waiting for connected event'));
+              }, 2000);
+
+              res.on('data', (chunk) => {
+                receivedData += chunk;
+                if (receivedData.includes('connected')) {
+                  clearTimeout(timeoutId);
+                  try {
+                    expect(receivedData).toContain('data:');
+                    expect(receivedData).toContain('"type":"connected"');
+                    resolve();
+                  } catch (error) {
+                    reject(error);
+                  } finally {
+                    res.destroy();
+                    req.destroy();
+                  }
+                }
+              });
+
+              res.on('error', (err) => {
+                clearTimeout(timeoutId);
+                handleRequestError(err as NodeJS.ErrnoException, reject);
+              });
+            }
+          );
+
+          req.on('error', (err) => handleRequestError(err as NodeJS.ErrnoException, reject));
+          req.end();
+        });
+      });
+    });
+
+    it('should register event handlers on AdminBotService', async () => {
+      await withTestServer(async (server) => {
+        await new Promise<void>((resolve, reject) => {
+          const req = http.request(
+            buildRequestOptions(server, '/api/admin-bot/chat/stream', {
+              'X-API-Key': VALID_API_KEY,
+            }),
+            (res) => {
+              const timeoutId = setTimeout(() => {
+                try {
+                  expect(mockAdminBotService.on).toHaveBeenCalledWith('output', expect.any(Function));
+                  expect(mockAdminBotService.on).toHaveBeenCalledWith('error', expect.any(Function));
+                  expect(mockAdminBotService.on).toHaveBeenCalledWith('exit', expect.any(Function));
+                  resolve();
+                } catch (error) {
+                  reject(error);
+                } finally {
+                  res.destroy();
+                  req.destroy();
+                }
+              }, 100);
+
+              res.on('error', (err) => {
+                clearTimeout(timeoutId);
+                handleRequestError(err as NodeJS.ErrnoException, reject);
+              });
+            }
+          );
+
+          req.on('error', (err) => handleRequestError(err as NodeJS.ErrnoException, reject));
+          req.end();
+        });
+      });
+    });
+
+    it('should clean up handlers on client disconnect', async () => {
+      await withTestServer(async (server) => {
+        await new Promise<void>((resolve, reject) => {
+          const req = http.request(
+            buildRequestOptions(server, '/api/admin-bot/chat/stream', {
+              'X-API-Key': VALID_API_KEY,
+            }),
+            (res) => {
+              let cleanupTimeoutId: NodeJS.Timeout | undefined;
+              const registrationTimeout = setTimeout(() => {
+                req.destroy();
+                res.destroy();
+                cleanupTimeoutId = setTimeout(() => {
+                  try {
+                    expect(mockAdminBotService.off).toHaveBeenCalled();
+                    resolve();
+                  } catch (error) {
+                    reject(error);
+                  }
+                }, 100);
+              }, 100);
+
+              res.on('error', (err) => {
+                clearTimeout(registrationTimeout);
+                if (cleanupTimeoutId) {
+                  clearTimeout(cleanupTimeoutId);
+                }
+                handleRequestError(err as NodeJS.ErrnoException, reject);
+              });
+            }
+          );
+
+          req.on('error', (err) => handleRequestError(err as NodeJS.ErrnoException, reject));
+          req.end();
+        });
       });
     });
   });

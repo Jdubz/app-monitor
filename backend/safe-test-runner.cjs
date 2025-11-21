@@ -143,6 +143,13 @@ class SafeTestRunner {
         vitestArgs.push('--config', vitestConfig)
       }
 
+      const resolvedForkSetting = process.env.VITEST_FORCE_FORKS ??
+        (process.env.SAFE_TEST_RUNNER_FORCE_FORKS ?? '1');
+
+      if (resolvedForkSetting === '1') {
+        console.log('⚙️  Forcing Vitest to use forked workers to avoid Node serialization cache corruption.');
+      }
+
       const testProcess = spawn('npx', vitestArgs, {
         stdio: 'inherit',
         shell: process.platform === 'win32',
@@ -153,6 +160,7 @@ class SafeTestRunner {
           VITEST_MAX_THREADS: maxThreads,
           VITEST_MIN_THREADS: '1',
           VITEST_MAX_FORKS: process.env.VITEST_MAX_FORKS || maxThreads,
+          VITEST_FORCE_FORKS: resolvedForkSetting,
           SKIP_HEAVY_DEV_BOT_TESTS: process.env.SKIP_HEAVY_DEV_BOT_TESTS || '1'
         }
       })
