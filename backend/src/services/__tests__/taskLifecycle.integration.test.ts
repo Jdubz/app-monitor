@@ -23,7 +23,8 @@ import { ValidatorRegistry } from '../phaseValidation/ValidatorRegistry.js';
 import { ArtifactExtractorService } from '../artifactExtractor.service.js';
 import { RecoveryAgentService } from '../recoveryAgent.service.js';
 import { EphemeralWorkerService } from '../ephemeralWorker.service.js';
-import { ServiceLevelTestHelper } from '../../../tests/helpers/ServiceLevelTestHelper.js';
+// Note: This test uses a local executePhaseWithMock() helper instead of ServiceLevelTestHelper
+// because it doesn't need DevBotsManager and has a simpler setup focused on phase execution
 import type { Task } from '../taskQueue.sqlite.js';
 
 describe('Full Task Lifecycle Integration', () => {
@@ -34,7 +35,6 @@ describe('Full Task Lifecycle Integration', () => {
   let artifactExtractor: ArtifactExtractorService;
   let recoveryAgent: RecoveryAgentService;
   let ephemeralWorkerService: EphemeralWorkerService;
-  let testHelper: ServiceLevelTestHelper;
 
   beforeEach(async () => {
     // Setup in-memory database and services

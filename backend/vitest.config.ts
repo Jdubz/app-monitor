@@ -28,12 +28,17 @@ const poolConfig = useForkPool
         forks: {
           maxForks: forkPoolCap,
           minForks: 1,
+          singleFork: true, // FIX: Prevent better-sqlite3 segfault during parallel cleanup
         },
       },
-      fileParallelism: true,
-      maxConcurrency: forkPoolCap,
+      fileParallelism: false, // FIX: Run test files serially to avoid native cleanup race conditions
+      maxConcurrency: 1, // FIX: One test file at a time
     }
-  : getThreadPoolConfig(defaultThreadCap);
+  : {
+      ...getThreadPoolConfig(defaultThreadCap),
+      fileParallelism: false, // FIX: Also run serially in thread mode
+      maxConcurrency: 1,
+    };
 
 const heavyBotPatterns = [
   'src/routes/dev-bots.routes.test.ts',
