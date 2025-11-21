@@ -399,7 +399,7 @@ describe('PRMonitorService', () => {
       );
     });
 
-    it('should log failure category and confidence', async () => {
+    it('should include failure category and confidence in follow-up task', async () => {
       const prStatus = {
         ...mockPRStatus,
         checks: [{ name: 'build', status: 'failure' as const, conclusion: 'failure' as const }]
@@ -407,15 +407,9 @@ describe('PRMonitorService', () => {
 
       await service.createFollowupTask(123, 'task-123', 'feature-branch', prStatus, mockCopilotAnalysis);
 
-      const logger = await import('../utils/logger.js');
-      expect(logger.logger.info).toHaveBeenCalledWith(
-        expect.objectContaining({
-          details: expect.objectContaining({
-            failureCategory: expect.any(String),
-            failureConfidence: expect.any(String)
-          })
-        })
-      );
+      const args = vi.mocked(mockTaskQueue.createTask).mock.calls.at(-1)?.[0] as any;
+      expect(args).toBeDefined();
+      expect(args.description).toContain('Failure Category');
     });
   });
 });

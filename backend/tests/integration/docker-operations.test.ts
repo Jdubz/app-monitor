@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, afterAll } from 'vitest';
+import { randomUUID } from 'crypto';
 import { DockerManager } from '../../src/services/dockerManager.js';
 
 const dockerManager = new DockerManager();
@@ -48,9 +49,11 @@ describeIfDocker('Docker Operations Integration', () => {
   });
 
   itIfDocker('creates, starts, and removes a container', async () => {
+    const containerName = `dev-monitor-test-container-${randomUUID().slice(0, 8)}`;
+
     const container = await dockerManager.createContainer({
       Image: TEST_IMAGE,
-      name: 'dev-monitor-test-container',
+      name: containerName,
       Cmd: ['sleep', '5'],
       Labels: { 'dev-monitor-test': 'true' },
     });

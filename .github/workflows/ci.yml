@@ -15,11 +15,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '20.18.1'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Rebuild native modules
+        run: npm rebuild --workspace backend
 
 
   # CRITICAL: Validate workspace lock files (prevents deployment failures)
@@ -127,14 +130,30 @@ jobs:
 
       - name: Clear vitest cache
         run: |
+          # Vitest/Vite cache can live in the workspace root when using npm workspaces
+          rm -rf node_modules/.vitest
+          rm -rf node_modules/.vite
           rm -rf backend/node_modules/.vitest
           rm -rf backend/node_modules/.vite
+          rm -rf ~/.vitest
+          rm -rf ~/.cache/vite
+          rm -rf ~/.cache/vitest
+          rm -rf /tmp/vitest-*
+          rm -rf /tmp/vite-*
         continue-on-error: true
 
       - name: Test backend
         run: npm run test -w backend
         env:
           SKIP_HEAVY_DEV_BOT_TESTS: '1'
+          VITEST_POOL: 'threads'
+          VITEST_MAX_THREADS: '1'
+          VITEST_MIN_THREADS: '1'
+          VITEST_MAX_FORKS: '1'
+          VITEST_FORCE_FORKS: '0'
+          VITEST_DISABLE_CACHE: '1'
+          VITEST_ISOLATE: '1'
+          NODE_OPTIONS: '--no-warnings'
 
   # Backend deploy build - mimic deploy agent's isolated install to catch MCP/build issues
   backend-deploy-build:
@@ -147,7 +166,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '20.18.1'
 
       - name: Install repo dependencies (for tooling)
         run: npm ci
@@ -177,18 +196,38 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Rebuild native modules
+        run: npm rebuild --workspace backend
+
       - name: Build api-contracts
         run: npm run build -w @app-monitor/api-contracts
 
       - name: Clear vitest cache
         run: |
+          # Vitest/Vite cache can live in the workspace root when using npm workspaces
+          rm -rf node_modules/.vitest
+          rm -rf node_modules/.vite
           rm -rf backend/node_modules/.vitest
           rm -rf backend/node_modules/.vite
+          rm -rf ~/.vitest
+          rm -rf ~/.cache/vite
+          rm -rf ~/.cache/vitest
+          rm -rf /tmp/vitest-*
+          rm -rf /tmp/vite-*
         continue-on-error: true
 
       - name: Run all backend integration tests
         working-directory: backend
         run: npx vitest run --config vitest.config.ts tests/integration src/services/websocket.integration.test.ts --reporter verbose
+        env:
+          VITEST_POOL: 'threads'
+          VITEST_MAX_THREADS: '1'
+          VITEST_MIN_THREADS: '1'
+          VITEST_MAX_FORKS: '1'
+          VITEST_FORCE_FORKS: '0'
+          VITEST_DISABLE_CACHE: '1'
+          VITEST_ISOLATE: '1'
+          NODE_OPTIONS: '--no-warnings'
         # Note: No SKIP_HEAVY_DEV_BOT_TESTS so all integration tests run
 
   # Frontend linting - parallel with backend

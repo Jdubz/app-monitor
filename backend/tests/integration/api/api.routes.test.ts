@@ -20,6 +20,7 @@ import type {
   QualityGateStatusResponse,
   DevBotsStatus,
 } from '@app-monitor/api-contracts';
+import { config } from '../../../src/config.js';
 import type { MockServerDependencies } from '../../helpers/mockServerDependencies.js';
 
 let createApiTestServer: typeof import('../../helpers/createApiTestServer.js').createApiTestServer;
@@ -422,7 +423,7 @@ describe('API Integration Suite', () => {
     body?: unknown,
   ) => {
     const agent = request(server);
-    const req = agent[method](url);
+    const req = agent[method](url).set('x-api-key', config.apiKey);
     if (body) {
       return req.send(body);
     }

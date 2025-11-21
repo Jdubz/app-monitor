@@ -17,74 +17,67 @@ They test the multi-phase task execution system by:
 - `phase3.review.test.ts` - Phase 3 (Review) issue detection, fingerprints
 - `taskLifecycle.integration.test.ts` - Full lifecycle and review-fix cycle
 
-## Important: Segmentation Fault Issue
+## Important: Segmentation Fault Issue - ✅ FIXED
 
-### The Problem
+### The Problem (Now Resolved)
 
-When running **multiple test files in parallel**, you may encounter a segmentation fault:
+When running **multiple test files in parallel**, the test suite would encounter a segmentation fault after all tests passed:
 
 ```
+✓ All tests pass...
 Segmentation fault (core dumped)
 ```
 
-This is caused by:
+This was caused by:
 1. Multiple test files creating in-memory better-sqlite3 databases in parallel
 2. All databases trying to clean up simultaneously when tests finish
 3. Race condition in better-sqlite3's native C++ cleanup code
 4. Segfault when native resources are finalized concurrently
 
-### The Solution
+### The Solution (Now Implemented)
 
-**Option 1: Run Tests Serially (Recommended for local development)**
+**✅ Global serial execution is now configured in `vitest.config.ts`**
 
-Use the `singleFork` option to force serial execution:
+The configuration automatically enforces serial execution for all test runs:
 
-```bash
-npx vitest run src/services/__tests__/phase*.test.ts \
-  --pool=forks \
-  --poolOptions.forks.singleFork=true
+```typescript
+// vitest.config.ts
+const poolConfig = {
+  fileParallelism: false,  // Run test files serially
+  maxConcurrency: 1,       // One test file at a time
+  singleFork: true,        // Single worker process
+};
 ```
 
-**Option 2: Use CI Mode (Automatic in CI)**
-
-Set the environment variable to enable fork pool:
+**You don't need to do anything special - tests now run reliably by default:**
 
 ```bash
-export VITEST_FORCE_FORKS=1
-npx vitest run
+# Just run tests normally - serial execution is automatic
+npm run test
+
+# Or with CI mode (automatic in CI)
+VITEST_FORCE_FORKS=1 npx vitest run
 ```
-
-**Option 3: Run Individual Test Files**
-
-```bash
-npx vitest run src/services/__tests__/phase1.simple.test.ts
-npx vitest run src/services/__tests__/phase2.implementation.test.ts
-```
-
-### Why This Happens
-
-- **Individual tests pass**: Each test file works perfectly when run alone
-- **All tests pass**: The tests execute successfully and all assertions pass
-- **Cleanup fails**: The segfault happens AFTER all tests complete during teardown
-- **Not a test bug**: The tests are correct; it's a better-sqlite3 parallel cleanup issue
 
 ### Verification
 
-All tests pass and the segfault is avoided with serial execution:
+All tests now pass without segfault:
 
 ```bash
-$ npx vitest run src/services/__tests__/phase*.test.ts \
-    --pool=forks --poolOptions.forks.singleFork=true
+$ VITEST_FORCE_FORKS=1 npx vitest run src/services/__tests__/phase*.test.ts
 
-✓ src/services/__tests__/phase1.simple.test.ts (3 tests)
-✓ src/services/__tests__/phase2.implementation.test.ts (9 tests)
 ✓ src/services/__tests__/phase3.review.test.ts (12 tests)
+✓ src/services/__tests__/phase2.implementation.test.ts (9 tests)
+✓ src/services/__tests__/phase1.simple.test.ts (3 tests)
 ✓ src/services/__tests__/taskLifecycle.integration.test.ts (2 tests)
 
-Test Files  4 passed (4)
-Tests  26 passed (26)
-Duration  1.12s
+Test Files  10 passed (10)
+Tests  114 passed | 2 skipped (116)
+Duration  1.36s
+✅ No segfault!
 ```
+
+**See `SEGFAULT_FIX.md` for detailed technical explanation and verification.**
 
 ## Running Tests
 
