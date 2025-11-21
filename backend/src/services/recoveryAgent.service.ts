@@ -405,35 +405,47 @@ Analyze the errors above and provide your diagnosis as JSON only.`;
    */
   private parseRecoveryResponse(output: string): RecoveryResponse {
     try {
-      // Try to extract JSON from output
-      // Agent may wrap it in markdown code blocks or include extra text
-      const jsonMatches = output.match(/\{[\s\S]*?\}/g);
-      
-      if (!jsonMatches || jsonMatches.length === 0) {
+      // Strip non-printable control characters that break JSON parsing (keep \n/\t/\r)
+      const cleanedOutput = output.replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '');
+
+      // Prefer fenced JSON blocks (```json ... ```)
+      const fenceMatch = cleanedOutput.match(/```json\s*([\s\S]*?)```/i);
+      if (fenceMatch) {
+        const parsedFence = JSON.parse(fenceMatch[1]);
+        if (parsedFence.category && parsedFence.diagnosis) {
+          return this.validateRecoveryResponse(parsedFence);
+        }
+      }
+
+      // Try to extract JSON objects from output (agent may include extra text)
+      const jsonMatches = cleanedOutput.match(/\{[\s\S]*?\}/g) || [];
+
+      // Walk from the end to find the most relevant JSON that contains category/diagnosis
+      for (let i = jsonMatches.length - 1; i >= 0; i--) {
+        try {
+          const candidate = JSON.parse(jsonMatches[i]);
+          if (candidate.category && candidate.diagnosis) {
+            return this.validateRecoveryResponse(candidate);
+          }
+        } catch {
+          // ignore parse error for this candidate
+        }
+      }
+
+      if (jsonMatches.length === 0) {
         // No JSON found - treat as generic diagnosis
         return {
           category: 'retry',
-          diagnosis: output.substring(0, 500),
+          diagnosis: cleanedOutput.substring(0, 500),
           recovery_action: 'No structured response - defaulting to retry',
           success: true,
         };
       }
 
+      // Fall back: parse the last JSON object even if it lacks required fields
       const rawJson = jsonMatches[jsonMatches.length - 1];
       const parsed = JSON.parse(rawJson);
-
-      // Validate required fields
-      if (!parsed.category || !parsed.diagnosis) {
-        throw new Error('Missing required fields: category, diagnosis');
-      }
-
-      // Validate category
-      const validCategories: RecoveryCategory[] = ['retry', 'context_update', 'chain_blocked', 'system_blocked'];
-      if (!validCategories.includes(parsed.category)) {
-        throw new Error(`Invalid category: ${parsed.category}`);
-      }
-
-      return parsed as RecoveryResponse;
+      return this.validateRecoveryResponse(parsed);
 
     } catch (parseError) {
       logger.warn({
@@ -451,6 +463,39 @@ Analyze the errors above and provide your diagnosis as JSON only.`;
         success: false,
       };
     }
+  }
+
+  private validateRecoveryResponse(parsed: unknown): RecoveryResponse {
+    if (typeof parsed !== 'object' || parsed === null) {
+      throw new Error('Invalid recovery response format');
+    }
+    const response = parsed as Record<string, unknown>;
+
+    // Validate required fields
+    if (!response.category || !response.diagnosis) {
+      throw new Error('Missing required fields: category, diagnosis');
+    }
+
+    const validCategories: RecoveryCategory[] = ['retry', 'context_update', 'chain_blocked', 'system_blocked'];
+    const category = response.category as RecoveryCategory;
+    if (!validCategories.includes(category)) {
+      throw new Error(`Invalid category: ${String(response.category)}`);
+    }
+
+    const diagnosis = String(response.diagnosis);
+    const recovery_action =
+      typeof response.recovery_action === 'string'
+        ? response.recovery_action
+        : 'Recovery action not specified';
+
+    const suggested_action =
+      typeof response.suggested_action === 'object' && response.suggested_action !== null
+        ? (response.suggested_action as SuggestedAction)
+        : undefined;
+
+    const success = response.success !== false;
+
+    return { category, diagnosis, recovery_action, suggested_action, success };
   }
 
   /**

@@ -76,19 +76,19 @@ export const WORK_TARGET_DOCS: Record<string, WorkTargetConfig> = {
     logPaths: [
       {
         hostPath: '/opt/app-monitor/shared/backend/logs',
-        containerPath: '/workspace/host-logs/backend',
+        containerPath: '/tmp/host-logs/backend',
         description: 'Backend application logs',
         mode: 'ro'
       },
       {
         hostPath: '/opt/app-monitor/shared/frontend/logs',
-        containerPath: '/workspace/host-logs/frontend',
+        containerPath: '/tmp/host-logs/frontend',
         description: 'Frontend application logs',
         mode: 'ro'
       },
       {
         hostPath: '/var/log/nginx',
-        containerPath: '/workspace/host-logs/nginx',
+        containerPath: '/tmp/host-logs/nginx',
         description: 'Nginx access and error logs',
         mode: 'ro'
       }
