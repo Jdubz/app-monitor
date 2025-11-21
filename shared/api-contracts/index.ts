@@ -99,6 +99,65 @@ export interface TokenCanUsePayload {
 }
 
 // ============================================================================
+// Frontend Log Ingestion Contracts
+// ============================================================================
+
+export type FrontendLogLevel =
+  | 'ERROR'
+  | 'WARN'
+  | 'INFO'
+  | 'DEBUG'
+  | 'trace'
+  | 'debug'
+  | 'info'
+  | 'warn'
+  | 'error'
+  | 'fatal';
+
+export interface FrontendLogErrorPayload {
+  name: string;
+  message: string;
+  stack?: string;
+  cause?: unknown;
+}
+
+export interface FrontendLogEntry {
+  id: string;
+  timestamp: string;
+  level: FrontendLogLevel;
+  message: string;
+  scope?: string;
+  traceId?: string;
+  sessionId?: string;
+  route?: string;
+  userId?: string;
+  data?: Record<string, unknown>;
+  error?: FrontendLogErrorPayload;
+  metadata?: Record<string, unknown>;
+}
+
+export interface FrontendSessionMetadata {
+  sessionId: string;
+  userAgent: string;
+  viewport: {
+    width: number;
+    height: number;
+  };
+  timestamp: string;
+}
+
+export type FrontendLogBatchType = 'session_start' | 'log_batch';
+
+export interface FrontendLogBatchRequest {
+  type: FrontendLogBatchType;
+  sessionId: string;
+  meta?: FrontendSessionMetadata;
+  logs?: FrontendLogEntry[];
+}
+
+export type FrontendLogIngestResponse = ApiSuccess<{ message: string }>;
+
+// ============================================================================
 // Context-Aware Task Submission (Standard API)
 // ============================================================================
 
@@ -872,3 +931,107 @@ export interface IssueReportResponse {
 }
 
 export type IssueReportApiResponse = ApiSuccess<IssueReportResponse>;
+
+// ============================================================================
+// Admin Bot Chat
+// ============================================================================
+
+export interface AdminBotSessionInfo {
+  id: string;
+  status: 'idle' | 'active' | 'stopped';
+  startedAt: string;
+  messageCount: number;
+}
+
+export interface AdminBotStartRequest {
+  // No body for start request
+}
+
+export interface AdminBotStartResponse {
+  sessionId: string;
+  message: string;
+}
+
+export interface AdminBotMessageRequest {
+  message: string;
+}
+
+export interface AdminBotMessageResponse {
+  received: boolean;
+  message: string;
+}
+
+export interface AdminBotStopRequest {
+  // No body for stop request
+}
+
+export interface AdminBotStopResponse {
+  stopped: boolean;
+  message: string;
+}
+
+export interface AdminBotStatusResponse {
+  session: AdminBotSessionInfo | null;
+  isRunning: boolean;
+}
+
+// API Response types
+export type AdminBotStartApiResponse = ApiSuccess<AdminBotStartResponse>;
+export type AdminBotMessageApiResponse = ApiSuccess<AdminBotMessageResponse>;
+export type AdminBotStopApiResponse = ApiSuccess<AdminBotStopResponse>;
+export type AdminBotStatusApiResponse = ApiSuccess<AdminBotStatusResponse>;
+
+// ============================================================================
+// Task Verification
+// ============================================================================
+
+export interface VerificationResult {
+  taskId: string;
+  passed: boolean;
+  score: number;
+  issues: VerificationIssue[];
+  timestamp: string;
+  recommendations?: string[];
+}
+
+export interface VerificationIssue {
+  type: string;
+  severity: 'error' | 'warning' | 'info';
+  message: string;
+  file?: string;
+  line?: number;
+}
+
+export interface VerificationStats {
+  totalVerifications: number;
+  passedCount: number;
+  failedCount: number;
+  averageScore: number;
+  lastVerified?: string;
+}
+
+export interface VerifyTaskRequest {
+  workspacePath?: string;
+}
+
+export interface VerifyTaskResponse {
+  status: 'success' | 'error';
+  data?: VerificationResult;
+  message?: string;
+}
+
+export interface VerificationStatsResponse {
+  status: 'success' | 'error';
+  data?: VerificationStats;
+  message?: string;
+}
+
+export interface VerificationRecommendationsResponse {
+  status: 'success' | 'error';
+  data?: {
+    taskId: string;
+    recommendations: string[];
+    verificationResult: VerificationResult;
+  };
+  message?: string;
+}

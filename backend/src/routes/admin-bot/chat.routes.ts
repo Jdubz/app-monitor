@@ -17,6 +17,16 @@ import type { AdminBotService } from '../../services/AdminBotService.js';
 import { sendSuccess, sendError } from '../../utils/apiResponse.js';
 import { logger } from '../../utils/logger.js';
 import { requireApiKey, requireApiKeySSE } from '../../middleware/auth.js';
+import { defineRoute } from '../routeRegistry.js';
+import type {
+  AdminBotStartRequest,
+  AdminBotStartResponse,
+  AdminBotMessageRequest,
+  AdminBotMessageResponse,
+  AdminBotStopRequest,
+  AdminBotStopResponse,
+  AdminBotStatusResponse,
+} from '@app-monitor/api-contracts';
 
 export function createAdminBotChatRoutes(adminBotService: AdminBotService): Router {
   const router = Router();
@@ -24,100 +34,124 @@ export function createAdminBotChatRoutes(adminBotService: AdminBotService): Rout
   /**
    * POST /start
    * Start a new admin bot chat session
-   *
-   * Response: { sessionId: string }
    */
-  router.post('/start', requireApiKey, async (req: Request, res: Response) => {
-    try {
-      logger.info({
-        category: 'admin_bot_chat',
-        action: 'start_request',
-        message: 'Received request to start admin bot session'
-      });
+  const startSessionRoute = defineRoute<AdminBotStartRequest, AdminBotStartResponse>({
+    method: 'post',
+    path: '/start',
+    summary: 'Start Admin Bot Session',
+    description: 'Start a new admin bot chat session with Codex CLI',
+    tags: ['admin-bot'],
+    response: {
+      body: {} as AdminBotStartResponse,
+      status: 200,
+      description: 'Session started successfully'
+    },
+    handler: async (req: Request, res: Response) => {
+      try {
+        logger.info({
+          category: 'admin_bot_chat',
+          action: 'start_request',
+          message: 'Received request to start admin bot session'
+        });
 
-      const sessionId = await adminBotService.startSession();
+        const sessionId = await adminBotService.startSession();
 
-      sendSuccess(res, {
-        sessionId,
-        message: 'Admin bot session started successfully'
-      });
+        sendSuccess(res, {
+          sessionId,
+          message: 'Admin bot session started successfully'
+        });
 
-    } catch (error) {
-      logger.error({
-        category: 'admin_bot_chat',
-        action: 'start_error',
-        message: 'Failed to start admin bot session',
-        error: error instanceof Error ? error.message : String(error)
-      });
+      } catch (error) {
+        logger.error({
+          category: 'admin_bot_chat',
+          action: 'start_error',
+          message: 'Failed to start admin bot session',
+          error: error instanceof Error ? error.message : String(error)
+        });
 
-      sendError(
-        res,
-        'failed_to_start_session',
-        500,
-        {
-          message: error instanceof Error ? error.message : 'Unknown error'
-        }
-      );
+        sendError(
+          res,
+          'failed_to_start_session',
+          500,
+          {
+            message: error instanceof Error ? error.message : 'Unknown error'
+          }
+        );
+      }
     }
   });
+  router[startSessionRoute.method](startSessionRoute.path, requireApiKey, startSessionRoute.handler);
 
   /**
    * POST /message
    * Send a message to the active admin bot session
-   *
-   * Body: { message: string }
-   * Response: { received: boolean }
    */
-  router.post('/message', requireApiKey, async (req: Request, res: Response) => {
-    try {
-      const { message } = req.body;
+  const sendMessageRoute = defineRoute<AdminBotMessageRequest, AdminBotMessageResponse>({
+    method: 'post',
+    path: '/message',
+    summary: 'Send Message to Admin Bot',
+    description: 'Send a message to the active admin bot session',
+    tags: ['admin-bot'],
+    request: {
+      body: {} as AdminBotMessageRequest
+    },
+    response: {
+      body: {} as AdminBotMessageResponse,
+      status: 200,
+      description: 'Message sent successfully'
+    },
+    handler: async (req: Request, res: Response) => {
+      try {
+        const { message } = req.body;
 
-      if (!message || typeof message !== 'string') {
-        sendError(res, 'invalid_message', 400, {
-          message: 'Message is required and must be a string'
-        });
-        return;
-      }
-
-      // Validate message length (prevent DoS)
-      const MAX_MESSAGE_LENGTH = 10000;
-      if (message.length > MAX_MESSAGE_LENGTH) {
-        sendError(res, 'message_too_large', 400, {
-          message: `Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`
-        });
-        return;
-      }
-
-      // Sanitize message (remove control characters except newline/tab)
-      const sanitized = message
-        .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '') // Remove control chars
-        .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, ''); // Remove ANSI escape sequences
-
-      await adminBotService.sendMessage(sanitized);
-
-      sendSuccess(res, {
-        received: true,
-        message: 'Message sent to admin bot'
-      });
-
-    } catch (error) {
-      logger.error({
-        category: 'admin_bot_chat',
-        action: 'message_error',
-        message: 'Failed to send message',
-        error: error instanceof Error ? error.message : String(error)
-      });
-
-      sendError(
-        res,
-        'failed_to_send_message',
-        500,
-        {
-          message: error instanceof Error ? error.message : 'Unknown error'
+        if (!message || typeof message !== 'string') {
+          sendError(res, 'invalid_message', 400, {
+            message: 'Message is required and must be a string'
+          });
+          return;
         }
-      );
+
+        // Validate message length (prevent DoS)
+        const MAX_MESSAGE_LENGTH = 10000;
+        if (message.length > MAX_MESSAGE_LENGTH) {
+          sendError(res, 'message_too_large', 400, {
+            message: `Message exceeds maximum length of ${MAX_MESSAGE_LENGTH} characters`
+          });
+          return;
+        }
+
+        // Sanitize message (remove control characters except newline/tab)
+        const sanitized = message
+          .replace(/[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g, '') // Remove control chars
+          .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, ''); // Remove ANSI escape sequences
+
+        await adminBotService.sendMessage(sanitized);
+
+        sendSuccess(res, {
+          received: true,
+          message: 'Message sent to admin bot'
+        });
+
+      } catch (error) {
+        logger.error({
+          category: 'admin_bot_chat',
+          action: 'message_error',
+          message: 'Failed to send message',
+          error: error instanceof Error ? error.message : String(error)
+        });
+
+        sendError(
+          res,
+          'failed_to_send_message',
+          500,
+          {
+            message: error instanceof Error ? error.message : 'Unknown error'
+          }
+        );
+      }
     }
   });
+  router[sendMessageRoute.method](sendMessageRoute.path, requireApiKey, sendMessageRoute.handler);
 
   /**
    * GET /stream
@@ -179,62 +213,84 @@ export function createAdminBotChatRoutes(adminBotService: AdminBotService): Rout
   /**
    * POST /stop
    * Stop the current admin bot session
-   *
-   * Response: { stopped: boolean }
    */
-  router.post('/stop', requireApiKey, async (req: Request, res: Response) => {
-    try {
-      logger.info({
-        category: 'admin_bot_chat',
-        action: 'stop_request',
-        message: 'Received request to stop admin bot session'
-      });
+  const stopSessionRoute = defineRoute<AdminBotStopRequest, AdminBotStopResponse>({
+    method: 'post',
+    path: '/stop',
+    summary: 'Stop Admin Bot Session',
+    description: 'Stop the current admin bot chat session',
+    tags: ['admin-bot'],
+    response: {
+      body: {} as AdminBotStopResponse,
+      status: 200,
+      description: 'Session stopped successfully'
+    },
+    handler: async (req: Request, res: Response) => {
+      try {
+        logger.info({
+          category: 'admin_bot_chat',
+          action: 'stop_request',
+          message: 'Received request to stop admin bot session'
+        });
 
-      await adminBotService.stopSession();
+        await adminBotService.stopSession();
 
-      sendSuccess(res, {
-        stopped: true,
-        message: 'Admin bot session stopped'
-      });
+        sendSuccess(res, {
+          stopped: true,
+          message: 'Admin bot session stopped'
+        });
 
-    } catch (error) {
-      logger.error({
-        category: 'admin_bot_chat',
-        action: 'stop_error',
-        message: 'Failed to stop admin bot session',
-        error: error instanceof Error ? error.message : String(error)
-      });
+      } catch (error) {
+        logger.error({
+          category: 'admin_bot_chat',
+          action: 'stop_error',
+          message: 'Failed to stop admin bot session',
+          error: error instanceof Error ? error.message : String(error)
+        });
 
-      sendError(
-        res,
-        'failed_to_stop_session',
-        500,
-        {
-          message: error instanceof Error ? error.message : 'Unknown error'
-        }
-      );
+        sendError(
+          res,
+          'failed_to_stop_session',
+          500,
+          {
+            message: error instanceof Error ? error.message : 'Unknown error'
+          }
+        );
+      }
     }
   });
+  router[stopSessionRoute.method](stopSessionRoute.path, requireApiKey, stopSessionRoute.handler);
 
   /**
    * GET /status
    * Get current session status
-   *
-   * Response: { session: AdminBotSession | null, isRunning: boolean }
    */
-  router.get('/status', requireApiKey, (req: Request, res: Response) => {
-    const session = adminBotService.getSession();
+  const getStatusRoute = defineRoute<never, AdminBotStatusResponse>({
+    method: 'get',
+    path: '/status',
+    summary: 'Get Admin Bot Session Status',
+    description: 'Get the current status of the admin bot session',
+    tags: ['admin-bot'],
+    response: {
+      body: {} as AdminBotStatusResponse,
+      status: 200,
+      description: 'Session status retrieved successfully'
+    },
+    handler: (req: Request, res: Response) => {
+      const session = adminBotService.getSession();
 
-    sendSuccess(res, {
-      session: session ? {
-        id: session.id,
-        status: session.status,
-        startedAt: session.startedAt,
-        messageCount: session.messages.length
-      } : null,
-      isRunning: adminBotService.isSessionRunning()
-    });
+      sendSuccess(res, {
+        session: session ? {
+          id: session.id,
+          status: session.status,
+          startedAt: session.startedAt,
+          messageCount: session.messages.length
+        } : null,
+        isRunning: adminBotService.isSessionRunning()
+      });
+    }
   });
+  router[getStatusRoute.method](getStatusRoute.path, requireApiKey, getStatusRoute.handler);
 
   return router;
 }

@@ -5,9 +5,15 @@
  */
 
 import express, { Request, Response } from 'express';
-import { LogWriter, type LogEntry } from '../services/logWriter.js';
+import { LogWriter } from '../services/logWriter.js';
 import type Database from 'better-sqlite3';
 import { logger } from '../utils/logger.js';
+import { defineRoute } from './routeRegistry.js';
+import type {
+  FrontendLogBatchRequest,
+  FrontendLogEntry,
+  FrontendLogIngestResponse
+} from '@app-monitor/api-contracts';
 
 const router = express.Router();
 
@@ -19,51 +25,34 @@ export function initializeLogsRoutes(db: Database.Database): typeof router {
   return router;
 }
 
-interface LogBatch {
-  type: 'session_start' | 'log_batch';
-  sessionId: string;
-  meta?: {
-    sessionId: string;
-    userAgent: string;
-    viewport: { width: number; height: number };
-    timestamp: string;
-  };
-  logs?: Array<{
-    id: string;
-    timestamp: string;
-    level: string;
-    message: string;
-    scope: string;
-    traceId?: string;
-    sessionId: string;
-    route: string;
-    userId?: string;
-    data?: Record<string, unknown>;
-    error?: {
-      name: string;
-      message: string;
-      stack?: string;
-      cause?: unknown;
-    };
-  }>;
-}
-
 /**
  * POST /api/logs/frontend
  * Receive and persist frontend logs
  */
-router.post('/frontend', (req: Request, res: Response) => {
-  try {
-    // Check if logWriter is initialized
-    if (!logWriter) {
-      res.status(503).json({
-        success: false,
+const ingestFrontendLogsRoute = defineRoute({
+  method: 'post',
+  path: '/frontend',
+  summary: 'Ingest Frontend Logs',
+  description: 'Receive batched frontend logs and session metadata for observability.',
+  tags: ['logs'],
+  request: {
+    body: {} as FrontendLogBatchRequest
+  },
+  response: {
+    body: {} as FrontendLogIngestResponse
+  },
+  handler: (req: Request, res: Response) => {
+    try {
+      // Check if logWriter is initialized
+      if (!logWriter) {
+        res.status(503).json({
+          success: false,
         error: 'Log writer not initialized',
       });
       return;
     }
 
-    const batch = req.body as LogBatch;
+    const batch = req.body as FrontendLogBatchRequest;
 
     // Validate batch with detailed error logging
     if (!batch.type || !batch.sessionId) {
@@ -109,7 +98,7 @@ router.post('/frontend', (req: Request, res: Response) => {
     // Handle log batch
     if (batch.type === 'log_batch' && batch.logs) {
       try {
-        logWriter.writeLogs(batch.logs as LogEntry[]);
+        logWriter.writeLogs(batch.logs as FrontendLogEntry[]);
       } catch (error) {
         // If frontend_logs table doesn't exist, silently continue
         // Migration will be applied on next server restart
@@ -122,10 +111,14 @@ router.post('/frontend', (req: Request, res: Response) => {
       }
     }
 
-    res.json({
+    const responsePayload: FrontendLogIngestResponse = {
       success: true,
-      message: 'Logs received',
-    });
+      data: {
+        message: 'Logs received',
+      },
+    };
+
+    res.json(responsePayload);
   } catch (error) {
     logger.error({
       category: 'api',
@@ -138,6 +131,12 @@ router.post('/frontend', (req: Request, res: Response) => {
       error: 'Failed to process logs',
     });
   }
+  }
 });
+
+router[ingestFrontendLogsRoute.method](
+  ingestFrontendLogsRoute.path,
+  ingestFrontendLogsRoute.handler
+);
 
 export default router;

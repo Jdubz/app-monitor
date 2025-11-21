@@ -8,7 +8,8 @@
     "shared/api-contracts",
     "backend",
     "frontend",
-    "dev-bots"
+    "dev-bots",
+    "tools/openapi-builder"
   ],
   "scripts": {
     "install:all": "npm install && npm install --workspaces",
@@ -31,11 +32,14 @@
     "validate:build": "npm run build -ws --if-present",
     "validate:all": "npm run validate:locks && npm run validate:build && npm test",
     "context:validate": "node scripts/validate-context-recipes.js",
+    "generate:openapi": "cd tools/openapi-builder && npm start",
+    "validate:openapi": "npx @redocly/cli lint shared/api-contracts/dist/openapi.json",
     "precommit": "npm run validate:locks",
     "prepare": "husky || true"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.1",
+    "@redocly/cli": "^2.11.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/dockerode": "^3.3.46",
     "@types/express": "^4.17.25",
