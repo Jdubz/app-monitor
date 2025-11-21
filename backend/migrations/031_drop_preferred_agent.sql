@@ -2,9 +2,7 @@
 --
 -- The agent selector is now the sole authority for choosing providers, so the
 -- preferred_agent column is obsolete. This migration rebuilds the tasks table
--- without that column while preserving all existing data.
-
-BEGIN TRANSACTION;
+-- Note: migration runner wraps migrations in a transaction; avoid nested BEGIN.
 
 CREATE TABLE IF NOT EXISTS tasks_new (
   id TEXT PRIMARY KEY,
