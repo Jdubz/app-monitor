@@ -14,25 +14,24 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
 
 const skipHeavyBots = process.env.SKIP_HEAVY_DEV_BOT_TESTS === '1';
-const useForkPool = process.env.VITEST_FORCE_FORKS === '1' || process.env.CI === 'true';
-const defaultThreadCap = Number(process.env.VITEST_MAX_THREADS ?? 8) || 8;
-const forkPoolCap = Math.max(
-  1,
-  Number(process.env.VITEST_MAX_FORKS ?? process.env.VITEST_MAX_THREADS ?? 4) || 4
-);
 
-const poolConfig = useForkPool
+// In CI, use a minimal single-threaded configuration to avoid any serialization issues
+const poolConfig = process.env.CI === 'true'
   ? {
-      pool: 'forks',
+      pool: 'threads',
       poolOptions: {
-        forks: {
-          singleFork: true,
+        threads: {
+          maxThreads: 1,
+          minThreads: 1,
         },
       },
       fileParallelism: false,
       maxConcurrency: 1,
+      sequence: {
+        hooks: 'list',
+      },
     }
-  : getThreadPoolConfig(defaultThreadCap);
+  : getThreadPoolConfig(Number(process.env.VITEST_MAX_THREADS ?? 8) || 8);
 
 const heavyBotPatterns = [
   'src/routes/dev-bots.routes.test.ts',
