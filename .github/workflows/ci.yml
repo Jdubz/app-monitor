@@ -15,11 +15,14 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '20.18.1'
           cache: 'npm'
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Rebuild native modules
+        run: npm rebuild --workspace backend
 
 
   # CRITICAL: Validate workspace lock files (prevents deployment failures)
@@ -148,6 +151,7 @@ jobs:
           VITEST_MIN_THREADS: '1'
           VITEST_MAX_FORKS: '1'
           VITEST_FORCE_FORKS: '0'
+          VITEST_DISABLE_CACHE: '1'
           VITEST_ISOLATE: '1'
           NODE_OPTIONS: '--no-warnings'
 
@@ -162,7 +166,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '20.18.1'
 
       - name: Install repo dependencies (for tooling)
         run: npm ci
@@ -192,6 +196,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Rebuild native modules
+        run: npm rebuild --workspace backend
+
       - name: Build api-contracts
         run: npm run build -w @app-monitor/api-contracts
 
@@ -218,6 +225,7 @@ jobs:
           VITEST_MIN_THREADS: '1'
           VITEST_MAX_FORKS: '1'
           VITEST_FORCE_FORKS: '0'
+          VITEST_DISABLE_CACHE: '1'
           VITEST_ISOLATE: '1'
           NODE_OPTIONS: '--no-warnings'
         # Note: No SKIP_HEAVY_DEV_BOT_TESTS so all integration tests run

@@ -22,7 +22,7 @@ const poolConfig = {
     threads: {
       maxThreads: 1,
       minThreads: 1,
-      isolate: true,
+      isolate: false,
     },
   },
   fileParallelism: false,
