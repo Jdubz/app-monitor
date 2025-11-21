@@ -133,6 +133,10 @@ jobs:
           rm -rf backend/node_modules/.vitest
           rm -rf backend/node_modules/.vite
           rm -rf ~/.vitest
+          rm -rf ~/.cache/vite
+          rm -rf ~/.cache/vitest
+          rm -rf /tmp/vitest-*
+          rm -rf /tmp/vite-*
         continue-on-error: true
 
       - name: Test backend
@@ -192,6 +196,10 @@ jobs:
           rm -rf backend/node_modules/.vitest
           rm -rf backend/node_modules/.vite
           rm -rf ~/.vitest
+          rm -rf ~/.cache/vite
+          rm -rf ~/.cache/vitest
+          rm -rf /tmp/vitest-*
+          rm -rf /tmp/vite-*
         continue-on-error: true
 
       - name: Run all backend integration tests

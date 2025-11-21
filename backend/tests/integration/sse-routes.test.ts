@@ -26,191 +26,121 @@ describe('SSE Routes', () => {
   });
 
   describe('GET /events', () => {
-    it('establishes SSE connection with correct headers', (done) => {
-      request(app)
-        .get('/api/sse/events')
-        .buffer(true)
-        .parse((res, callback) => {
-          // Check headers immediately and close connection
-          expect(res.headers['content-type']).toBe('text/event-stream');
-          expect(res.headers['cache-control']).toBe('no-cache');
-          expect(res.headers['connection']).toBe('keep-alive');
-          expect(res.headers['x-accel-buffering']).toBe('no');
-          res.destroy();
-          callback(null, '');
-        })
-        .end((err) => {
-          expect(err).toBeNull();
-          done();
-        });
-    });
+    const captureStream = async (
+      trigger: () => void,
+      stopWhen: (data: string) => boolean,
+      delay = 50,
+    ) => {
+      return new Promise<string>((resolve, reject) => {
+        let body = '';
 
-    it('sends initial connection message', (done) => {
-      request(app)
-        .get('/api/sse/events')
-        .buffer(true)
-        .parse((res, callback) => {
-          let data = '';
-          res.on('data', (chunk) => {
-            data += chunk.toString();
-            // Check for connection message
-            if (data.includes('{"type":"connected"}')) {
-              res.destroy();
-              callback(null, data);
-            }
+        request(app)
+          .get('/api/sse/events')
+          .buffer(true)
+          .parse((res, callback) => {
+            res.on('data', (chunk) => {
+              body += chunk.toString();
+              if (stopWhen(body)) {
+                res.destroy();
+                callback(null, body);
+              }
+            });
+          })
+          .end((err) => {
+            if (err) return reject(err);
+            resolve(body);
           });
-        })
-        .end((err, res) => {
-          expect(err).toBeNull();
-          expect(res.text).toContain('data: {"type":"connected"}');
-          done();
-        });
+
+        setTimeout(trigger, delay);
+      });
+    };
+
+    it('establishes SSE connection with correct headers', async () => {
+      const headers = await new Promise<Record<string, string | undefined>>((resolve, reject) => {
+        request(app)
+          .get('/api/sse/events')
+          .buffer(true)
+          .parse((res, callback) => {
+            // Capture headers then tear down the stream immediately
+            resolve(res.headers as Record<string, string | undefined>);
+            res.destroy();
+            callback(null, '');
+          })
+          .end((err) => (err ? reject(err) : undefined));
+      });
+
+      expect(headers['content-type']).toBe('text/event-stream');
+      expect(headers['cache-control']).toBe('no-cache');
+      expect(headers['connection']).toBe('keep-alive');
+      expect(headers['x-accel-buffering']).toBe('no');
     });
 
-    it('broadcasts taskAdded event to connected clients', (done) => {
+    it('sends initial connection message', async () => {
+      const body = await captureStream(
+        () => {
+          // no-op trigger; the initial event is sent immediately
+        },
+        (data) => data.includes('{"type":"connected"}'),
+        0,
+      );
+
+      expect(body).toContain('data: {"type":"connected"}');
+    });
+
+    it('broadcasts taskAdded event to connected clients', async () => {
       const testTask = { id: 'task-123', status: 'pending', type: 'test' };
+      const body = await captureStream(
+        () => devBotsManager.emit('taskAdded', testTask),
+        (data) => data.includes('task:added'),
+      );
 
-      request(app)
-        .get('/api/sse/events')
-        .buffer(true)
-        .parse((res, callback) => {
-          let data = '';
-          res.on('data', (chunk) => {
-            data += chunk.toString();
-            // Wait for task event
-            if (data.includes('task:added')) {
-              res.destroy();
-              callback(null, data);
-            }
-          });
-
-          // Emit event after connection established
-          setTimeout(() => {
-            devBotsManager.emit('taskAdded', testTask);
-          }, 50);
-        })
-        .end((err, res) => {
-          expect(err).toBeNull();
-          expect(res.text).toContain('event: task:added');
-          expect(res.text).toContain(JSON.stringify(testTask));
-          done();
-        });
+      expect(body).toContain('event: task:added');
+      expect(body).toContain(JSON.stringify(testTask));
     });
 
-    it('broadcasts taskCompleted event', (done) => {
+    it('broadcasts taskCompleted event', async () => {
       const testTask = { id: 'task-456', status: 'completed', type: 'test' };
+      const body = await captureStream(
+        () => devBotsManager.emit('taskCompleted', testTask),
+        (data) => data.includes('task:completed'),
+      );
 
-      request(app)
-        .get('/api/sse/events')
-        .buffer(true)
-        .parse((res, callback) => {
-          let data = '';
-          res.on('data', (chunk) => {
-            data += chunk.toString();
-            if (data.includes('task:completed')) {
-              res.destroy();
-              callback(null, data);
-            }
-          });
-
-          setTimeout(() => {
-            devBotsManager.emit('taskCompleted', testTask);
-          }, 50);
-        })
-        .end((err, res) => {
-          expect(err).toBeNull();
-          expect(res.text).toContain('event: task:completed');
-          expect(res.text).toContain('"status":"completed"');
-          done();
-        });
+      expect(body).toContain('event: task:completed');
+      expect(body).toContain('"status":"completed"');
     });
 
-    it('broadcasts system status changes', (done) => {
+    it('broadcasts system status changes', async () => {
       const status = { workerCount: 2, maxWorkers: 4 };
+      const body = await captureStream(
+        () => devBotsManager.emit('systemStatusChange', status),
+        (data) => data.includes('system:status'),
+      );
 
-      request(app)
-        .get('/api/sse/events')
-        .buffer(true)
-        .parse((res, callback) => {
-          let data = '';
-          res.on('data', (chunk) => {
-            data += chunk.toString();
-            if (data.includes('system:status')) {
-              res.destroy();
-              callback(null, data);
-            }
-          });
-
-          setTimeout(() => {
-            devBotsManager.emit('systemStatusChange', status);
-          }, 50);
-        })
-        .end((err, res) => {
-          expect(err).toBeNull();
-          expect(res.text).toContain('event: system:status');
-          expect(res.text).toContain('"workerCount":2');
-          done();
-        });
+      expect(body).toContain('event: system:status');
+      expect(body).toContain('"workerCount":2');
     });
 
-    it('broadcasts to multiple connected clients', (done) => {
+    it('broadcasts to multiple connected clients', async () => {
       const testTask = { id: 'task-789', status: 'active' };
-      let clientsReceived = 0;
+      const listenForTaskStarted = () =>
+        captureStream(() => {}, (data) => data.includes('task:started'));
 
-      const checkComplete = () => {
-        clientsReceived++;
-        if (clientsReceived === 2) {
-          done();
-        }
-      };
+      const [body1, body2] = await Promise.all([
+        listenForTaskStarted(),
+        listenForTaskStarted(),
+        new Promise<void>((resolve) =>
+          setTimeout(() => {
+            devBotsManager.emit('taskStarted', testTask);
+            resolve();
+          }, 20),
+        ),
+      ]).then(([a, b]) => [a, b]);
 
-      // Client 1
-      request(app)
-        .get('/api/sse/events')
-        .buffer(true)
-        .parse((res, callback) => {
-          let data = '';
-          res.on('data', (chunk) => {
-            data += chunk.toString();
-            if (data.includes('task:started')) {
-              res.destroy();
-              callback(null, data);
-            }
-          });
-        })
-        .end((err, res) => {
-          expect(err).toBeNull();
-          expect(res.text).toContain('event: task:started');
-          checkComplete();
-        });
-
-      // Client 2
-      request(app)
-        .get('/api/sse/events')
-        .buffer(true)
-        .parse((res, callback) => {
-          let data = '';
-          res.on('data', (chunk) => {
-            data += chunk.toString();
-            if (data.includes('task:started')) {
-              res.destroy();
-              callback(null, data);
-            }
-          });
-        })
-        .end((err, res) => {
-          expect(err).toBeNull();
-          expect(res.text).toContain('event: task:started');
-          checkComplete();
-        });
-
-      // Emit after both clients connect
-      setTimeout(() => {
-        devBotsManager.emit('taskStarted', testTask);
-      }, 100);
+      expect(body1).toContain('event: task:started');
+      expect(body2).toContain('event: task:started');
     });
 
-    it('handles all task lifecycle events', (done) => {
+    it('handles all task lifecycle events', async () => {
       const events = [
         { name: 'taskAdded', data: { id: 't1', status: 'pending' } },
         { name: 'taskAssigned', data: { id: 't2', agent: 'a1' } },
@@ -218,73 +148,32 @@ describe('SSE Routes', () => {
         { name: 'taskFailed', data: { id: 't4', error: 'test' } },
       ];
 
-      request(app)
-        .get('/api/sse/events')
-        .buffer(true)
-        .parse((res, callback) => {
-          let data = '';
-          let eventCount = 0;
-
-          res.on('data', (chunk) => {
-            data += chunk.toString();
-
-            // Count received events (exclude connection message)
-            const matches = data.match(/event: task:/g);
-            if (matches) {
-              eventCount = matches.length;
-            }
-
-            if (eventCount === events.length) {
-              res.destroy();
-              callback(null, data);
-            }
+      const body = await captureStream(
+        () => {
+          events.forEach((evt, idx) => {
+            setTimeout(() => {
+              devBotsManager.emit(evt.name, evt.data);
+            }, idx * 20);
           });
+        },
+        (data) => (data.match(/event: task:/g) || []).length === events.length,
+      );
 
-          // Emit all events
-          setTimeout(() => {
-            events.forEach((evt, idx) => {
-              setTimeout(() => {
-                devBotsManager.emit(evt.name, evt.data);
-              }, idx * 20);
-            });
-          }, 50);
-        })
-        .end((err, res) => {
-          expect(err).toBeNull();
-          expect(res.text).toContain('event: task:added');
-          expect(res.text).toContain('event: task:assigned');
-          expect(res.text).toContain('event: task:started');
-          expect(res.text).toContain('event: task:failed');
-          done();
-        });
+      expect(body).toContain('event: task:added');
+      expect(body).toContain('event: task:assigned');
+      expect(body).toContain('event: task:started');
+      expect(body).toContain('event: task:failed');
     });
 
-    it('handles docker error events', (done) => {
+    it('handles docker error events', async () => {
       const error = { message: 'Container failed', code: 'E_DOCKER' };
+      const body = await captureStream(
+        () => devBotsManager.emit('dockerError', error),
+        (data) => data.includes('docker:error'),
+      );
 
-      request(app)
-        .get('/api/sse/events')
-        .buffer(true)
-        .parse((res, callback) => {
-          let data = '';
-          res.on('data', (chunk) => {
-            data += chunk.toString();
-            if (data.includes('docker:error')) {
-              res.destroy();
-              callback(null, data);
-            }
-          });
-
-          setTimeout(() => {
-            devBotsManager.emit('dockerError', error);
-          }, 50);
-        })
-        .end((err, res) => {
-          expect(err).toBeNull();
-          expect(res.text).toContain('event: docker:error');
-          expect(res.text).toContain('Container failed');
-          done();
-        });
+      expect(body).toContain('event: docker:error');
+      expect(body).toContain('Container failed');
     });
   });
 });
