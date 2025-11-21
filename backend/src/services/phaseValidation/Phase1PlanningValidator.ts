@@ -35,35 +35,6 @@ export class Phase1PlanningValidator implements PhaseValidator {
 
     // Check if planning artifacts exist
     if (!planning) {
-      // For analysis/validation-style tasks the agent often returns only narrative stdout.
-      // In that case, treat a missing planning block as a pass using synthesized artifacts
-      // so the pipeline can progress and still capture context for later phases.
-      if (task.type === 'analysis' || task.type === 'documentation') {
-        const synthesized = {
-          obsolete: false,
-          task_realigned: false,
-          dependencies: [],
-          architecture_notes: artifacts.stdout?.slice(0, 1000) || task.description || task.title,
-          estimated_complexity: 'low' as const,
-        };
-
-        logger.info({
-          category: 'phase',
-          action: 'planning_synthesized',
-          message: `Synthesized planning artifacts for ${task.type} task`,
-          details: { taskId: task.id }
-        });
-
-        return {
-          passed: true,
-          artifacts: synthesized,
-          details: {
-            synthesized: true,
-            source: 'stdout',
-          }
-        };
-      }
-
       return {
         passed: false,
         errors: ['No planning artifacts found in agent output'],

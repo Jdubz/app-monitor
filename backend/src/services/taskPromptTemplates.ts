@@ -180,6 +180,20 @@ export class TaskPromptTemplateManager {
 **Repository**: {{repository}}
 **Environment**: {{environment}}
 
+## 📝 Phase 1 Planning Output (MANDATORY)
+- Create artifacts dir: \`mkdir -p /workspace/.artifacts\`
+- Write planning JSON to \`/workspace/.artifacts/phase.json\` with EXACT keys:
+  {
+    "obsolete": false,
+    "obsolete_reason": "",
+    "task_realigned": false,
+    "realignment_details": "",
+    "dependencies": [],
+    "architecture_notes": "Short summary of approach and risks",
+    "estimated_complexity": "low"
+  }
+- Keep \`architecture_notes\` concise (<= 500 chars). Do this before implementation.
+
 ## 🚨 Common Failure Modes to AVOID (Learn from Past Mistakes)
 
 ### ❌ FAILURE MODE 1: Inventing Features Not Requested
