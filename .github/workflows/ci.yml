@@ -127,8 +127,12 @@ jobs:
 
       - name: Clear vitest cache
         run: |
+          # Vitest/Vite cache can live in the workspace root when using npm workspaces
+          rm -rf node_modules/.vitest
+          rm -rf node_modules/.vite
           rm -rf backend/node_modules/.vitest
           rm -rf backend/node_modules/.vite
+          rm -rf ~/.vitest
         continue-on-error: true
 
       - name: Test backend
@@ -182,8 +186,12 @@ jobs:
 
       - name: Clear vitest cache
         run: |
+          # Vitest/Vite cache can live in the workspace root when using npm workspaces
+          rm -rf node_modules/.vitest
+          rm -rf node_modules/.vite
           rm -rf backend/node_modules/.vitest
           rm -rf backend/node_modules/.vite
+          rm -rf ~/.vitest
         continue-on-error: true
 
       - name: Run all backend integration tests
