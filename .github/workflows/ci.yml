@@ -146,7 +146,9 @@ jobs:
           VITEST_POOL: 'threads'
           VITEST_MAX_THREADS: '1'
           VITEST_MIN_THREADS: '1'
-          NODE_OPTIONS: '--no-warnings'
+          VITEST_MAX_FORKS: '1'
+          VITEST_FORCE_FORKS: '0'
+          NODE_OPTIONS: '--no-warnings --no-compilation-cache'
 
   # Backend deploy build - mimic deploy agent's isolated install to catch MCP/build issues
   backend-deploy-build:
@@ -213,7 +215,9 @@ jobs:
           VITEST_POOL: 'threads'
           VITEST_MAX_THREADS: '1'
           VITEST_MIN_THREADS: '1'
-          NODE_OPTIONS: '--no-warnings'
+          VITEST_MAX_FORKS: '1'
+          VITEST_FORCE_FORKS: '0'
+          NODE_OPTIONS: '--no-warnings --no-compilation-cache'
         # Note: No SKIP_HEAVY_DEV_BOT_TESTS so all integration tests run
 
   # Frontend linting - parallel with backend
