@@ -393,16 +393,13 @@ describe('Admin Bot Chat Routes', () => {
   });
 
   describe('GET /stream (SSE)', () => {
-    it('should require authentication', (done) => {
-      request(app)
+    it('should require authentication', async () => {
+      const res = await request(app)
         .get('/api/admin-bot/chat/stream')
-        .expect(401)
-        .end((err, res) => {
-          if (err) return done(err);
-          expect(res.body.success).toBe(false);
-          expect(res.body.error).toBe('UNAUTHORIZED');
-          done();
-        });
+        .expect(401);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toBe('UNAUTHORIZED');
     });
 
     it('should accept authentication via header', (done) => {
@@ -418,17 +415,14 @@ describe('Admin Bot Chat Routes', () => {
         });
     });
 
-    it('should reject invalid API key in header', (done) => {
-      request(app)
+    it('should reject invalid API key in header', async () => {
+      const res = await request(app)
         .get('/api/admin-bot/chat/stream')
         .set('X-API-Key', 'invalid-key')
-        .expect(401)
-        .end((err, res) => {
-          if (err) return done(err);
-          expect(res.body.success).toBe(false);
-          expect(res.body.error).toBe('UNAUTHORIZED');
-          done();
-        });
+        .expect(401);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toBe('UNAUTHORIZED');
     });
 
     it('should accept authentication via query parameter', (done) => {
@@ -443,16 +437,13 @@ describe('Admin Bot Chat Routes', () => {
         });
     });
 
-    it('should reject invalid API key in query parameter', (done) => {
-      request(app)
+    it('should reject invalid API key in query parameter', async () => {
+      const res = await request(app)
         .get('/api/admin-bot/chat/stream?apiKey=invalid-key')
-        .expect(401)
-        .end((err, res) => {
-          if (err) return done(err);
-          expect(res.body.success).toBe(false);
-          expect(res.body.error).toBe('UNAUTHORIZED');
-          done();
-        });
+        .expect(401);
+
+      expect(res.body.success).toBe(false);
+      expect(res.body.error).toBe('UNAUTHORIZED');
     });
 
     it('should set correct SSE headers when authenticated', (done) => {
