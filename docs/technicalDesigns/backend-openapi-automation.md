@@ -105,15 +105,20 @@ The backend currently relies on `shared/api-contracts` for request/response DTOs
    - ✅ Create `tools/openapi-builder` scaffold, add deps (`ts-morph`, `ts-json-schema-generator`, `swagger-ui-express`).
    - ✅ Seed `pnpm generate:openapi` script and baseline CI job.
 
-2. **Route Instrumentation (Day 2-4)** 🔄 **IN PROGRESS**
+2. **Route Instrumentation (Day 2-4)** 🔄 **IN PROGRESS (50% Complete)**
    - ✅ Implement `defineRoute` helper + registry.
    - 🔄 Refactor routers incrementally (start with health, docker, dev-bots).
-     - ✅ Health endpoint (index.ts)
-     - ✅ Docker routes (docker.routes.ts)
+     - ✅ Health endpoint (index.ts) - 1 endpoint
+     - ✅ Docker routes (docker.routes.ts) - 3 endpoints
      - ✅ Observability routes (observability.routes.ts) - 5 endpoints
      - ✅ Metrics routes (metrics.routes.ts) - 6 endpoints
      - ✅ Agent routes (dev-bots/agents.routes.ts) - 2 endpoints
-     - ⏳ Remaining: ~13 route files
+     - ✅ Issues routes (issues.routes.ts) - 1 endpoint
+     - ✅ Logs routes (logs.routes.ts) - 1 endpoint
+     - ✅ Token tracking routes (token-tracking.routes.ts) - 6 endpoints
+     - ✅ Admin Bot routes (admin-bot/chat.routes.ts) - 4 endpoints
+     - ✅ Verification routes (verification.routes.ts) - 4 endpoints
+     - ⏳ Remaining: ~10 route files (github-webhooks, prs, quality-gates, socket-task, sse, dev-bots/plans, dev-bots/settings, dev-bots/status, dev-bots/tasks, dev-bots/templates)
    - ⏳ Add lint rule ensuring every route registers metadata.
 
 3. **Schema Generation (Day 4-6)** ✅ **COMPLETE**
@@ -137,15 +142,19 @@ The backend currently relies on `shared/api-contracts` for request/response DTOs
 
 ### Current Progress (Nov 20, 2025)
 
-**Completed:**
+**Completed (Nov 20, 2025):**
 - ✅ OpenAPI builder tool with AST parsing and schema generation
 - ✅ Request body, path parameters, and query parameter extraction
 - ✅ CI validation job in GitHub Actions
 - ✅ Swagger UI serving at `/api/docs`
-- ✅ 33 operations documented across 33 paths
+- ✅ 33 operations documented across 33 paths (10 unique tags)
 - ✅ Merged with main branch (admin-bot integration)
-- ✅ Admin Bot API contracts and 4 chat endpoints
-- ✅ Verification API contracts and 4 verification endpoints
+- ✅ 10 route files refactored (50% of total)
+- ✅ Admin Bot API contracts and 4 chat endpoints (POST /start, POST /message, POST /stop, GET /status)
+- ✅ Verification API contracts and 4 verification endpoints (GET /task/:taskId, POST /verify/:taskId, GET /stats, GET /recommendations/:taskId)
+- ✅ All refactored routes follow consistent `defineRoute` pattern
+- ✅ TypeScript builds successfully with no errors
+- ✅ No test regressions introduced
 
 **In Progress:**
 - 🔄 Route instrumentation: 10 files refactored, ~10 remaining
