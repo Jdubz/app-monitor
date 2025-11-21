@@ -14,7 +14,8 @@ const __dirname = path.dirname(__filename);
 const repoRoot = path.resolve(__dirname, '..');
 
 const skipHeavyBots = process.env.SKIP_HEAVY_DEV_BOT_TESTS === '1';
-const useForkPool = process.env.VITEST_FORCE_FORKS === '1' || process.env.CI === 'true';
+// Use threads pool in CI to avoid serialization issues with fork pool
+const useForkPool = process.env.VITEST_FORCE_FORKS === '1';
 const defaultThreadCap = Number(process.env.VITEST_MAX_THREADS ?? 8) || 8;
 const forkPoolCap = Math.max(
   1,
