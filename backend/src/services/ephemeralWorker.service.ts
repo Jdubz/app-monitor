@@ -19,6 +19,7 @@ import path from 'path';
 import tar from 'tar-fs';
 import type Docker from 'dockerode';
 import Database from 'better-sqlite3';
+import { PassThrough } from 'stream';
 import { logger } from '../utils/logger.js';
 import type { Task } from './taskQueue.sqlite.js';
 import type { AgentPersonality } from './agentPersonalities.js';
@@ -749,11 +750,11 @@ export class EphemeralWorkerService {
       return;
     }
 
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'devbot-cred-'));
+    const tempDir = await fs.promises.mkdtemp(path.join(os.tmpdir(), 'devbot-cred-'));
     const targetName = path.basename(containerFilePath);
     const tempFile = path.join(tempDir, targetName);
     try {
-      fs.copyFileSync(hostPath, tempFile);
+      await fs.promises.copyFile(hostPath, tempFile);
       const containerDir = path.posix.dirname(containerFilePath);
       await this.execInContainer(containerId, `mkdir -p ${shellQuote(containerDir)}`);
       const container = this.docker.getContainer(containerId);
@@ -783,7 +784,7 @@ export class EphemeralWorkerService {
       });
       throw error;
     } finally {
-      fs.rmSync(tempDir, { recursive: true, force: true });
+      await fs.promises.rm(tempDir, { recursive: true, force: true });
     }
   }
 
@@ -919,6 +920,24 @@ export class EphemeralWorkerService {
     });
 
     const stream = await exec.start({ hijack: true, stdin: false });
+
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    const stderrChunks: Buffer[] = [];
+    stderr.on('data', chunk => stderrChunks.push(chunk));
+
+    stdout.resume();
+
+    const modem =
+      (container as unknown as { modem?: { demuxStream?: (stream: NodeJS.ReadableStream, stdout: NodeJS.WritableStream, stderr: NodeJS.WritableStream) => void } }).modem ??
+      (this.docker as unknown as { modem?: { demuxStream?: (stream: NodeJS.ReadableStream, stdout: NodeJS.WritableStream, stderr: NodeJS.WritableStream) => void } }).modem;
+
+    if (modem?.demuxStream) {
+      modem.demuxStream(stream, stdout, stderr);
+    } else {
+      stream.on('data', chunk => stderrChunks.push(chunk as Buffer));
+    }
+
     await new Promise<void>((resolve, reject) => {
       stream.on('end', resolve);
       stream.on('error', reject);
@@ -926,7 +945,8 @@ export class EphemeralWorkerService {
 
     const inspection = await exec.inspect();
     if (inspection.ExitCode !== 0) {
-      throw new Error(`Container command failed (${inspection.ExitCode}): ${command}`);
+      const errorOutput = Buffer.concat(stderrChunks).toString('utf8');
+      throw new Error(`Container command failed (${inspection.ExitCode}): ${command}\n${errorOutput}`);
     }
   }
 
@@ -1455,15 +1475,14 @@ export class EphemeralWorkerService {
     // Following imagineer's pattern: copy credentials then run agent CLI
     // Set up credentials based on CLI type
     const containerCredPaths = {
-      claude: `${EphemeralWorkerService.CONTAINER_HOME}/.claude/.credentials.json`,
-      codex: `${EphemeralWorkerService.CONTAINER_HOME}/.codex/auth.json`,
-      gemini: `${EphemeralWorkerService.CONTAINER_HOME}/.gemini/.credentials.json`
+      claude: path.posix.join(EphemeralWorkerService.CONTAINER_HOME, '.claude', '.credentials.json'),
+      codex: path.posix.join(EphemeralWorkerService.CONTAINER_HOME, '.codex', 'auth.json'),
+      gemini: path.posix.join(EphemeralWorkerService.CONTAINER_HOME, '.gemini', '.credentials.json')
     };
 
     let credentialSetup: string[];
     if (cliType === 'gemini') {
       credentialSetup = [
-        `mkdir -p ${path.join(EphemeralWorkerService.CONTAINER_HOME, '.gemini')}`,
         `cp /tmp/host-creds.json ${containerCredPaths.gemini}`,
         `echo "Gemini credentials: $(test -f ${containerCredPaths.gemini} && echo found || echo missing)" >> ` + quotedLogFile
       ];
@@ -1475,7 +1494,6 @@ export class EphemeralWorkerService {
       ];
     } else {
       credentialSetup = [
-        `mkdir -p ${path.join(EphemeralWorkerService.CONTAINER_HOME, '.claude')}`,
         `cp /tmp/host-creds.json ${containerCredPaths.claude}`,
         `echo "Claude credentials: $(test -f ${containerCredPaths.claude} && echo found || echo missing)" >> ` + quotedLogFile
       ];
