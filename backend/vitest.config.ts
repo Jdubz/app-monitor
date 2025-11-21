@@ -15,18 +15,19 @@ const repoRoot = path.resolve(__dirname, '..');
 
 const skipHeavyBots = process.env.SKIP_HEAVY_DEV_BOT_TESTS === '1';
 
-// In CI, use a minimal single-threaded configuration to avoid any serialization issues
+// In CI, use forks pool to avoid SQLite serialization issues across threads
+// SQLite (better-sqlite3) native addon cannot be safely serialized, so we need
+// complete process isolation for each test file
 const poolConfig = process.env.CI === 'true'
   ? {
-      pool: 'threads',
+      pool: 'forks',
       poolOptions: {
-        threads: {
-          maxThreads: 1,
-          minThreads: 1,
+        forks: {
+          singleFork: true, // Use single fork for complete isolation
         },
       },
       fileParallelism: false,
-      maxConcurrency: 1,
+      isolate: true, // Ensure complete isolation between test files
       sequence: {
         hooks: 'list',
       },
