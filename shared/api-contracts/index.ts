@@ -980,3 +980,58 @@ export type AdminBotStartApiResponse = ApiSuccess<AdminBotStartResponse>;
 export type AdminBotMessageApiResponse = ApiSuccess<AdminBotMessageResponse>;
 export type AdminBotStopApiResponse = ApiSuccess<AdminBotStopResponse>;
 export type AdminBotStatusApiResponse = ApiSuccess<AdminBotStatusResponse>;
+
+// ============================================================================
+// Task Verification
+// ============================================================================
+
+export interface VerificationResult {
+  taskId: string;
+  passed: boolean;
+  score: number;
+  issues: VerificationIssue[];
+  timestamp: string;
+  recommendations?: string[];
+}
+
+export interface VerificationIssue {
+  type: string;
+  severity: 'error' | 'warning' | 'info';
+  message: string;
+  file?: string;
+  line?: number;
+}
+
+export interface VerificationStats {
+  totalVerifications: number;
+  passedCount: number;
+  failedCount: number;
+  averageScore: number;
+  lastVerified?: string;
+}
+
+export interface VerifyTaskRequest {
+  workspacePath?: string;
+}
+
+export interface VerifyTaskResponse {
+  status: 'success' | 'error';
+  data?: VerificationResult;
+  message?: string;
+}
+
+export interface VerificationStatsResponse {
+  status: 'success' | 'error';
+  data?: VerificationStats;
+  message?: string;
+}
+
+export interface VerificationRecommendationsResponse {
+  status: 'success' | 'error';
+  data?: {
+    taskId: string;
+    recommendations: string[];
+    verificationResult: VerificationResult;
+  };
+  message?: string;
+}
