@@ -16,6 +16,7 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import tar from 'tar-fs';
 import type Docker from 'dockerode';
 import Database from 'better-sqlite3';
 import { logger } from '../utils/logger.js';
@@ -110,6 +111,7 @@ export class EphemeralWorkerService {
   private readonly contextDelivery: ContextDeliveryService; // Context delivery (extracted)
   private logStreams = new Map<string, fs.WriteStream>(); // TODO: Remove after full migration to WorkerLogService
   private readonly devBotsLogPath: string;
+  private static readonly CONTAINER_HOME = '/home/node';
 
   constructor(
     docker: Docker,
@@ -313,50 +315,24 @@ export class EphemeralWorkerService {
       const claudeCredentialsOld = path.join(homeDir, '.claude', 'credentials.json');
       const claudeCredentials = fs.existsSync(claudeCredentialsNew) ? claudeCredentialsNew : claudeCredentialsOld;
 
-      if (fs.existsSync(claudeCredentials)) {
-        // Mount to temp location - will be copied to .claude directory by shell command
-        binds.push(`${claudeCredentials}:/tmp/host-creds.json:ro`);
-        logger.info({
-          category: 'process',
-          action: 'claude_credentials_mounted',
-          message: `Mounting Claude credentials from: ${claudeCredentials}`
-        });
-      } else {
-        logger.warn({
-          category: 'process',
-          action: 'claude_credentials_not_found',
-          message: 'Claude credentials file not found, container may not authenticate'
-        });
-      }
-
       const gitCredentials = path.join(homeDir, '.git-credentials');
-      if (fs.existsSync(gitCredentials)) {
-        binds.push(`${gitCredentials}:/home/worker/.git-credentials:ro`);
-      }
 
       const sshDir = path.join(homeDir, '.ssh');
-      if (fs.existsSync(sshDir)) {
-        binds.push(`${sshDir}:/home/worker/.ssh:ro`);
-      }
 
-      // Mount GitHub CLI config for gh pr create
+      // Detect GitHub CLI config for gh pr create
       const ghConfigDir = path.join(homeDir, '.config', 'gh');
       const ghConfigExists = fs.existsSync(ghConfigDir);
       
       if (ghConfigExists) {
-        // Mount as read-write in case gh CLI needs to update state files
-        binds.push(`${ghConfigDir}:/home/node/.config/gh:rw`);
         logger.info({
           category: 'process',
-          action: 'gh_config_mounted',
-          message: `Mounting GitHub CLI config from: ${ghConfigDir}`,
+          action: 'gh_config_detected',
+          message: `Found GitHub CLI config at ${ghConfigDir}`,
           details: {
             homeDir,
             ghConfigDir,
             hostsFile: fs.existsSync(path.join(ghConfigDir, 'hosts.yml')),
             configFile: fs.existsSync(path.join(ghConfigDir, 'config.yml')),
-            mountBind: `${ghConfigDir}:/home/node/.config/gh:rw`,
-            containerHome: '/home/node',  // This is set via HOME env var
             hasGithubToken: !!process.env.GITHUB_TOKEN,
             hasGhToken: !!process.env.GH_TOKEN
           }
@@ -414,7 +390,7 @@ export class EphemeralWorkerService {
         `WORKER_ID=${workerId}`,
         `WORKSPACE_BRANCH=${baseBranch}`,
         `WORKSPACE_ID=${workspaceId}`,
-        `HOME=/home/node`,  // Explicitly set HOME for gh CLI to find config
+        `HOME=${EphemeralWorkerService.CONTAINER_HOME}`,  // Explicitly set HOME for gh CLI to find config
         // Context management environment variables
         ...(task.context_bundle_id ? [`CONTEXT_BUNDLE_ID=${task.context_bundle_id}`] : []),
         ...(task.context_cache_key ? [`CONTEXT_CACHE_KEY=${task.context_cache_key}`] : []),
@@ -451,9 +427,9 @@ export class EphemeralWorkerService {
         autoRemove: true,
         binds: binds,
         tmpfs: {
-          '/home/worker/.claude': WORKER_UID_GID,  // Writable temp for Claude CLI (matches node user)
-          '/home/worker/.gemini': WORKER_UID_GID,  // Writable temp for Gemini CLI (matches node user)
-          '/home/worker/.codex': WORKER_UID_GID    // Writable temp for Codex CLI (matches node user)
+          [`${EphemeralWorkerService.CONTAINER_HOME}/.claude`]: WORKER_UID_GID,
+          [`${EphemeralWorkerService.CONTAINER_HOME}/.gemini`]: WORKER_UID_GID,
+          [`${EphemeralWorkerService.CONTAINER_HOME}/.codex`]: WORKER_UID_GID
         },
         labels: {
           'claude.worker.id': workerId,
@@ -471,6 +447,50 @@ export class EphemeralWorkerService {
         maxAttempts: 30,
         intervalMs: 100
       });
+
+      await this.syncCodexCredentials(container.id);
+
+      if (fs.existsSync(claudeCredentials)) {
+        await this.copyHostFileToContainer(
+          container.id,
+          claudeCredentials,
+          '/tmp/host-creds.json',
+          'Claude credentials'
+        );
+      } else {
+        logger.warn({
+          category: 'process',
+          action: 'claude_credentials_not_found',
+          message: 'Claude credentials file not found, container may not authenticate'
+        });
+      }
+
+      if (fs.existsSync(gitCredentials)) {
+        await this.copyHostFileToContainer(
+          container.id,
+          gitCredentials,
+          `${EphemeralWorkerService.CONTAINER_HOME}/.git-credentials`,
+          'Git credentials'
+        );
+      }
+
+      if (fs.existsSync(sshDir)) {
+        await this.copyHostDirectoryToContainer(
+          container.id,
+          sshDir,
+          `${EphemeralWorkerService.CONTAINER_HOME}/.ssh`,
+          'SSH keys'
+        );
+      }
+
+      if (ghConfigExists) {
+        await this.copyHostDirectoryToContainer(
+          container.id,
+          ghConfigDir,
+          `${EphemeralWorkerService.CONTAINER_HOME}/.config/gh`,
+          'GitHub CLI config'
+        );
+      }
 
       // Clone fresh repository inside container for complete isolation
       await this.cloneFreshRepoInContainer(container.id, baseBranch);
@@ -618,6 +638,179 @@ export class EphemeralWorkerService {
         error: error
       });
       throw error;
+    }
+  }
+
+  /**
+   * Copy Codex CLI credentials into container using docker cp semantics
+   */
+  private async syncCodexCredentials(containerId: string): Promise<void> {
+    const codexDir = path.join(os.homedir(), '.codex');
+    if (!fs.existsSync(codexDir)) {
+      logger.warn({
+        category: 'automation',
+        action: 'codex_credentials_missing',
+        message: 'Codex credentials directory not found; Codex CLI will not authenticate',
+        details: { path: codexDir }
+      });
+      return;
+    }
+
+    const parentDir = path.dirname(codexDir);
+    const baseName = path.basename(codexDir);
+    const container = this.docker.getContainer(containerId);
+
+    await new Promise<void>((resolve, reject) => {
+      const pack = tar.pack(parentDir, { entries: [baseName] });
+      container.putArchive(pack, { path: EphemeralWorkerService.CONTAINER_HOME }, (err?: Error) => {
+        if (err) {
+          logger.error({
+            category: 'automation',
+            action: 'codex_credentials_copy_failed',
+            message: 'Failed to copy Codex credentials into container',
+            error: err,
+            details: { containerId }
+          });
+          reject(err);
+          return;
+        }
+
+        logger.info({
+          category: 'automation',
+          action: 'codex_credentials_copied',
+          message: 'Copied Codex credentials into container',
+          details: {
+            containerId,
+            destination: `${EphemeralWorkerService.CONTAINER_HOME}/.codex`
+          }
+        });
+        resolve();
+      });
+    });
+  }
+
+  private async copyHostFileToContainer(
+    containerId: string,
+    hostPath: string,
+    containerFilePath: string,
+    description: string
+  ): Promise<void> {
+    if (!fs.existsSync(hostPath)) {
+      logger.warn({
+        category: 'automation',
+        action: 'host_file_missing',
+        message: `${description} not found on host`,
+        details: { hostPath }
+      });
+      return;
+    }
+
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'devbot-cred-'));
+    const targetName = path.basename(containerFilePath);
+    const tempFile = path.join(tempDir, targetName);
+    try {
+      fs.copyFileSync(hostPath, tempFile);
+      const containerDir = path.posix.dirname(containerFilePath);
+      await this.execInContainer(containerId, `mkdir -p ${shellQuote(containerDir)}`);
+      const container = this.docker.getContainer(containerId);
+      const pack = tar.pack(tempDir, { entries: [targetName] });
+      await new Promise<void>((resolve, reject) => {
+        container.putArchive(pack, { path: containerDir }, (err?: Error) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve();
+        });
+      });
+      logger.info({
+        category: 'automation',
+        action: 'host_file_copied',
+        message: `${description} copied into container`,
+        details: { hostPath, containerFilePath }
+      });
+    } catch (error) {
+      logger.error({
+        category: 'automation',
+        action: 'host_file_copy_failed',
+        message: `Failed to copy ${description} into container`,
+        error,
+        details: { hostPath, containerFilePath }
+      });
+      throw error;
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+  }
+
+  private async copyHostDirectoryToContainer(
+    containerId: string,
+    hostDir: string,
+    containerDir: string,
+    description: string
+  ): Promise<void> {
+    if (!fs.existsSync(hostDir)) {
+      logger.warn({
+        category: 'automation',
+        action: 'host_directory_missing',
+        message: `${description} directory not found on host`,
+        details: { hostDir }
+      });
+      return;
+    }
+
+    try {
+      await this.execInContainer(
+        containerId,
+        `rm -rf ${shellQuote(containerDir)} && mkdir -p ${shellQuote(containerDir)}`
+      );
+      const container = this.docker.getContainer(containerId);
+      const pack = tar.pack(hostDir);
+      await new Promise<void>((resolve, reject) => {
+        container.putArchive(pack, { path: containerDir }, (err?: Error) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          resolve();
+        });
+      });
+
+      logger.info({
+        category: 'automation',
+        action: 'host_directory_copied',
+        message: `${description} copied into container`,
+        details: { hostDir, containerDir }
+      });
+    } catch (error) {
+      logger.error({
+        category: 'automation',
+        action: 'host_directory_copy_failed',
+        message: `Failed to copy ${description} into container`,
+        error,
+        details: { hostDir, containerDir }
+      });
+      throw error;
+    }
+  }
+
+  private async execInContainer(containerId: string, command: string): Promise<void> {
+    const container = this.docker.getContainer(containerId);
+    const exec = await container.exec({
+      Cmd: ['/bin/bash', '-c', command],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+
+    const stream = await exec.start({ hijack: true, stdin: false });
+    await new Promise<void>((resolve, reject) => {
+      stream.on('end', resolve);
+      stream.on('error', reject);
+    });
+
+    const inspection = await exec.inspect();
+    if (inspection.ExitCode !== 0) {
+      throw new Error(`Container command failed (${inspection.ExitCode}): ${command}`);
     }
   }
 
@@ -1121,21 +1314,30 @@ export class EphemeralWorkerService {
     // Create a wrapper command that logs to the worker-specific file
     // Following imagineer's pattern: copy credentials then run agent CLI
     // Set up credentials based on CLI type
+    const containerCredPaths = {
+      claude: `${EphemeralWorkerService.CONTAINER_HOME}/.claude/.credentials.json`,
+      codex: `${EphemeralWorkerService.CONTAINER_HOME}/.codex/.credentials.json`,
+      gemini: `${EphemeralWorkerService.CONTAINER_HOME}/.gemini/.credentials.json`
+    };
+
     let credentialSetup: string[];
     if (cliType === 'gemini') {
       credentialSetup = [
-        'cp /tmp/host-creds.json /home/worker/.gemini/.credentials.json',
-        'echo "Gemini credentials: $(test -f ~/.gemini/.credentials.json && echo found || echo missing)" >> ' + quotedLogFile
+        `mkdir -p ${path.join(EphemeralWorkerService.CONTAINER_HOME, '.gemini')}`,
+        `cp /tmp/host-creds.json ${containerCredPaths.gemini}`,
+        `echo "Gemini credentials: $(test -f ${containerCredPaths.gemini} && echo found || echo missing)" >> ` + quotedLogFile
       ];
     } else if (cliType === 'codex') {
       credentialSetup = [
-        'cp /tmp/host-creds.json /home/worker/.codex/.credentials.json',
-        'echo "Codex credentials: $(test -f ~/.codex/.credentials.json && echo found || echo missing)" >> ' + quotedLogFile
+        `if [ -d ${path.join(EphemeralWorkerService.CONTAINER_HOME, '.codex')} ]; then ` +
+          `echo "Codex credentials: found" >> ${quotedLogFile}; ` +
+        `else echo "Codex credentials: missing" >> ${quotedLogFile}; fi`
       ];
     } else {
       credentialSetup = [
-        'cp /tmp/host-creds.json /home/worker/.claude/.credentials.json',
-        'echo "Claude credentials: $(test -f ~/.claude/.credentials.json && echo found || echo missing)" >> ' + quotedLogFile
+        `mkdir -p ${path.join(EphemeralWorkerService.CONTAINER_HOME, '.claude')}`,
+        `cp /tmp/host-creds.json ${containerCredPaths.claude}`,
+        `echo "Claude credentials: $(test -f ${containerCredPaths.claude} && echo found || echo missing)" >> ` + quotedLogFile
       ];
     }
 
