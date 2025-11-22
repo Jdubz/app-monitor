@@ -137,7 +137,7 @@ describe('AdminBotService', () => {
 
       expect(spawn).toHaveBeenCalledWith(
         'codex',
-        ['exec', 'test message'],
+        ['exec', '--dangerously-skip-permissions', 'test message'],
         expect.objectContaining({
           env: expect.objectContaining({
             APP_MONITOR_MCP_USER_ROLE: 'admin',
@@ -375,7 +375,7 @@ DATABASE_PATH = "{{DATABASE_PATH}}"
 
       expect(spawn).toHaveBeenCalledWith(
         'codex',
-        ['exec', 'line 1\nline 2\nline 3'],
+        ['exec', '--dangerously-skip-permissions', 'line 1\nline 2\nline 3'],
         expect.any(Object)
       );
     });
@@ -387,7 +387,7 @@ DATABASE_PATH = "{{DATABASE_PATH}}"
 
       expect(spawn).toHaveBeenCalledWith(
         'codex',
-        ['exec', ''],
+        ['exec', '--dangerously-skip-permissions', ''],
         expect.any(Object)
       );
     });
