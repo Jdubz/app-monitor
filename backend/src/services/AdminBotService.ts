@@ -241,10 +241,20 @@ export class AdminBotService extends EventEmitter {
     this.session.messages.push(userMessage);
 
     // Spawn codex exec for this message
+    // Add common NVM paths to PATH to find codex CLI
+    const nvmPaths = [
+      '/home/jdubz/.nvm/versions/node/v20.19.5/bin',
+      '/home/jdubz/.nvm/versions/node/v20.18.1/bin',
+      process.env.HOME ? `${process.env.HOME}/.nvm/versions/node/v20.19.5/bin` : '',
+      process.env.HOME ? `${process.env.HOME}/.nvm/versions/node/v20.18.1/bin` : '',
+    ].filter(Boolean).join(':');
+    const enhancedPath = nvmPaths + ':' + (process.env.PATH || '');
+
     const codexProcess = spawn('codex', ['exec', message], {
       cwd: this.repoRoot,
       env: {
         ...process.env,
+        PATH: enhancedPath,
         CODEX_CONFIG_PATH: this.runtimeConfigPath,
         APP_MONITOR_ROOT: this.repoRoot,
         APP_MONITOR_MCP_USER_ROLE: 'admin',

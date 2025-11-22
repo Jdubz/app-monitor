@@ -334,9 +334,10 @@ describe('useSSE', () => {
 
     renderHook(() => useSSE(onTaskEvent));
 
-    // Check that URL uses VITE_API_BASE_URL or default
+    // Check that URL uses window origin when VITE_API_BASE_URL is not set
+    // In test environment (jsdom), window.location.origin is typically http://localhost:3000
     expect(global.EventSource).toHaveBeenCalledWith(
-      expect.stringMatching(/^http:\/\/localhost:5000\/api\/sse\/events/)
+      expect.stringMatching(/^http:\/\/localhost:\d+\/api\/sse\/events/)
     );
   });
 

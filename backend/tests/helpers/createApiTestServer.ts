@@ -12,7 +12,6 @@ export async function createApiTestServer() {
       devBotsManager: deps.devBotsManager,
       logRotation: deps.logRotation,
       logStreamer: deps.logStreamer,
-      connectionManager: deps.connectionManager,
       logSourceManager: deps.logSourceManager,
       services: deps.services,
     },

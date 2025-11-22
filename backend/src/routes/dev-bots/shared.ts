@@ -36,17 +36,6 @@ export interface TaskLogsResponsePayload {
   stderr: TaskLogFileDescriptor | null;
 }
 
-export const LOG_STREAM_TYPES = ['stdout', 'stderr'] as const;
-export type LogStreamType = (typeof LOG_STREAM_TYPES)[number];
-
-export interface LogStreamOptions {
-  req: Request;
-  res: Response;
-  filePath: string;
-  follow: boolean;
-  stream: LogStreamType;
-}
-
 // ============================================================================
 // Constants
 // ============================================================================
@@ -55,14 +44,6 @@ export const TECHNICAL_TASK_TYPES = new Set(['refactor', 'implementation', 'bug'
 export const MIN_DOCUMENTATION_LENGTH = 50;
 export const MIN_ACCEPTANCE_CRITERION_LENGTH = 30;
 export const DEFAULT_WORK_TARGET = 'dev-bots';
-
-// Log streaming configuration
-const parsedStreamLimit = Number(process.env.MAX_LOG_STREAM_SUBSCRIBERS ?? '5');
-export const MAX_LOG_STREAM_SUBSCRIBERS =
-  Number.isFinite(parsedStreamLimit) && parsedStreamLimit > 0 ? parsedStreamLimit : 5;
-
-// Interactive session configuration - REMOVED
-// These constants are no longer used after migrating to tmux-based terminals
 
 // ============================================================================
 // Request Helper Functions
@@ -261,17 +242,4 @@ export const writeSseEvent = (res: Response, event: string, data: unknown) => {
   const payload = typeof data === 'string' ? data : JSON.stringify(data);
   res.write(`event: ${event}\n`);
   res.write(`data: ${payload}\n\n`);
-};
-
-/**
- * Stream log file with SSE, handling follower limits
- * Log streaming has been removed - use task logs API instead
- */
-export const streamLogFile = async ({ res }: LogStreamOptions) => {
-  // Log streaming removed - return not implemented
-  res.status(501).json({
-    error: 'Not Implemented',
-    message: 'Log streaming has been removed. Use task logs API instead.'
-  });
-  return;
 };

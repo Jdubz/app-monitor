@@ -45,8 +45,11 @@ const ensureProtocolForSchemeRelative = (value: string): string => {
 export const getApiBaseUrl = (): string => {
   const rawValue = import.meta.env?.VITE_API_BASE_URL;
 
+  // In production, default to same origin (empty string means relative URLs)
+  // Only use localhost:5000 for development when explicitly not set
   if (rawValue === undefined || rawValue === null) {
-    return DEFAULT_API_BASE_URL;
+    // Use current origin in browser, fallback to localhost only in SSR/test
+    return getRuntimeOrigin() ?? DEFAULT_API_BASE_URL;
   }
 
   const normalized = normalizeInput(rawValue);

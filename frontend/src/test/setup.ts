@@ -11,19 +11,6 @@ if (!(globalThis as { TextEncoder?: typeof TextEncoder }).TextEncoder) {
 if (!(globalThis as { TextDecoder?: typeof TextDecoder }).TextDecoder) {
   (globalThis as { TextDecoder: typeof TextDecoder }).TextDecoder = TextDecoder as unknown as typeof TextDecoder
 }
-// Mock Socket.IO
-vi.mock('socket.io-client', () => ({
-  io: vi.fn(() => ({
-    on: vi.fn(),
-    off: vi.fn(),
-    emit: vi.fn(),
-    close: vi.fn(),
-    disconnect: vi.fn(),
-    connect: vi.fn(),
-    connected: false,
-  })),
-}));
-
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {
   writable: true,

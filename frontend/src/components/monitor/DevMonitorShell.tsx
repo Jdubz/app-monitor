@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import type { Socket } from 'socket.io-client';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { DevBotsStoreProvider } from '@/contexts/devBotsStore';
@@ -9,10 +8,6 @@ import { PrTrackingTabContent } from './tabs/PrTrackingTabContent';
 import { TaskQueueTabContent } from './tabs/TaskQueueTabContent';
 import { PlansTabContent } from './tabs/PlansTabContent';
 import { AdminBotChat } from '../admin-bot/AdminBotChat';
-
-interface DevMonitorShellProps {
-  socket: Socket | null;
-}
 
 type MonitorTab = 'dev-bots' | 'pr-tracking' | 'task-queue' | 'plans' | 'interactive';
 
@@ -72,7 +67,7 @@ function GlobalStatusStrip() {
  * - /monitor/plans: Plans system overview
  * - /monitor/interactive: Interactive terminal sessions
  */
-export function DevMonitorShell({ socket: _socket }: DevMonitorShellProps) {
+export function DevMonitorShell() {
   const location = useLocation();
   const navigate = useNavigate();
 

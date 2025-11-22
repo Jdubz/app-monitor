@@ -10,6 +10,8 @@
  */
 
 import { useEffect, useRef } from 'react';
+import { getApiBaseUrl } from '../utils/apiBaseUrl';
+
 export function useSSE(
   onTaskEvent: (data: unknown) => void,
   onSystemEvent?: (data: unknown) => void
@@ -25,7 +27,7 @@ export function useSSE(
   }, [onTaskEvent, onSystemEvent]);
 
   useEffect(() => {
-    const apiUrl = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+    const apiUrl = getApiBaseUrl();
     const apiKey = import.meta.env.VITE_API_KEY || '';
 
     // EventSource doesn't support custom headers, so pass API key as query param

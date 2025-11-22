@@ -1,10 +1,9 @@
 /**
  * Task Management Routes
  *
- * Endpoints for task CRUD operations, queue management, logs, and chains:
+ * Endpoints for task CRUD operations, queue management, and chains:
  * - Task lifecycle (create, list, detail, timeout)
  * - Queue operations and statistics
- * - Log streaming (stdout/stderr)
  * - Task validation and assignment
  * - PR tracking integration
  * - Task context and automation runs
@@ -31,12 +30,9 @@ import {
   mapTaskToContract,
   buildQueueSummary,
   buildTaskHistoryEvents,
-  streamLogFile,
   DEFAULT_WORK_TARGET,
-  LOG_STREAM_TYPES,
   type ContractDevBotsTaskDetail,
   type TaskLogsResponsePayload,
-  type LogStreamType,
 } from './shared.js';
 import { validateTaskSubmissionPayload } from '../../services/taskSubmissionValidator.js';
 
@@ -574,54 +570,6 @@ export function createTasksRoutes(devBotsManager: DevBotsManager): Router {
       });
       sendError(res, 'Failed to get task logs', 500, { message: error instanceof Error ? error.message : String(error),
        });
-    }
-  });
-
-  /**
-   * GET /tasks/:taskId/logs/:stream
-   * Stream log contents via SSE
-   */
-  router.get('/tasks/:taskId/logs/:stream', async (req: Request, res: Response) => {
-    try {
-      const { taskId, stream } = req.params;
-      const normalizedStream = stream as LogStreamType;
-      if (!LOG_STREAM_TYPES.includes(normalizedStream)) {
-        res.status(400).json({
-          error: 'Invalid stream',
-          message: `Stream must be one of: ${LOG_STREAM_TYPES.join(', ')}`,
-        });
-        return;
-      }
-
-      const workTarget = (req.query.workTarget as string) || DEFAULT_WORK_TARGET;
-      const descriptor = await workerLogLocator.getDescriptor(workTarget, taskId, normalizedStream);
-      if (!descriptor) {
-        res.status(404).json({
-          error: 'Log not found',
-          message: `No ${normalizedStream} log found for task ${taskId}`,
-        });
-        return;
-      }
-
-      const follow = req.query.follow !== 'false';
-      await streamLogFile({
-        req,
-        res,
-        filePath: descriptor.path,
-        follow,
-        stream: normalizedStream,
-      });
-    } catch (error) {
-      logger.error({
-        category: 'api',
-        action: 'error_streaming_task_logs',
-        message: `Error streaming task logs: ${error}`,
-        error,
-      });
-      if (!res.headersSent) {
-        sendError(res, 'Failed to stream task logs', 500, { message: error instanceof Error ? error.message : String(error),
-         });
-      }
     }
   });
 

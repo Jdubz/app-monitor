@@ -34,7 +34,6 @@ import { ArtifactExtractorService } from './artifactExtractor.service.js';
 import { PhaseOrchestratorService } from './phaseOrchestrator.service.js';
 import { RecoveryAgentService } from './recoveryAgent.service.js';
 import type { ValidationResult } from './phaseValidation/types.js';
-import { getConnectionManager } from './connectionManager.js';
 import { CONTAINER_MEMORY_LIMIT_BYTES, CONTAINER_CPU_QUOTA, WORKER_UID_GID } from '../constants/containers.js';
 import { DEFAULT_EPHEMERAL_WORKER_CONFIG } from '../config/defaults.js';
 import { ContainerLifecycleService } from './ContainerLifecycleService.js';
@@ -1255,17 +1254,6 @@ export class EphemeralWorkerService {
       },
     });
 
-    // Emit phase:started event
-    const connManager = getConnectionManager();
-    if (connManager) {
-      connManager.broadcastToAll('phase:started', {
-        taskId: task.id,
-        phaseIndex: task.phase_index,
-        phaseName: task.phase_name,
-        attempt: task.phase_attempts,
-      });
-    }
-
     try {
       // Step 1: Extract artifacts from container BEFORE validation
       logger.info({
@@ -1301,14 +1289,6 @@ export class EphemeralWorkerService {
         message: `Validating phase ${task.phase_index} for task ${task.id}`,
       });
 
-      // Emit phase:validating event
-      if (connManager) {
-        connManager.broadcastToAll('phase:validating', {
-          taskId: task.id,
-          phaseIndex: task.phase_index,
-        });
-      }
-
       const validator = this.validatorRegistry.getValidator(task.phase_index);
       let validation = await validator.validate(task, artifacts);
 
@@ -1322,17 +1302,6 @@ export class EphemeralWorkerService {
           warnings: validation.warnings,
         },
       });
-
-      // Emit phase:validation_failed or phase:validation_passed event
-      if (connManager) {
-        if (!validation.passed) {
-          connManager.broadcastToAll('phase:validation_failed', {
-            taskId: task.id,
-            phaseIndex: task.phase_index,
-            errors: validation.errors,
-          });
-        }
-      }
 
       // Step 3: Record stage run in database
       const stageRunId = this.phaseOrchestrator.recordStageRun({
@@ -1371,14 +1340,6 @@ export class EphemeralWorkerService {
             errors: validation.errors,
           },
         });
-
-        // Emit phase:recovering event
-        if (connManager) {
-          connManager.broadcastToAll('phase:recovering', {
-            taskId: task.id,
-            phaseIndex: task.phase_index,
-          });
-        }
 
         // Run recovery agent in same container
         const recoveryResult = await this.recoveryAgent.executeRecovery(
@@ -1436,15 +1397,6 @@ export class EphemeralWorkerService {
           },
         });
 
-        // Emit phase:completed event
-        if (connManager) {
-          connManager.broadcastToAll('phase:completed', {
-            taskId: task.id,
-            phaseIndex: transition.fromPhase,
-            nextPhase: transition.toPhase,
-            reason: transition.reason,
-          });
-        }
       }
 
       // Return validation result with git branch for persistence by orchestration layer

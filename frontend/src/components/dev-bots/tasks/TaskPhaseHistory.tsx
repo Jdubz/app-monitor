@@ -12,17 +12,21 @@ interface StageRun {
   phase_index: number;
   phase_name: string;
   attempt: number;
-  status: 'success' | 'failed' | 'recovered' | 'blocked';
-  artifacts_blob?: string;
+  status: 'success' | 'failed' | 'recovered' | 'blocked' | 'pending' | 'running' | 'skipped';
+  artifacts_blob?: string | null;
   created_at: number;
-  completed_at?: number;
-  recovery_diagnosis?: string;
-  exit_code?: number;
+  completed_at?: number | null;
+  recovery_diagnosis?: string | null;
+  exit_code?: number | null;
 }
 
 function isStageRun(obj: unknown): obj is StageRun {
   if (!obj || typeof obj !== 'object') return false;
   const run = obj as Record<string, unknown>;
+
+  // Helper to check if value is null, undefined, or of expected type
+  const isNullableType = (val: unknown, type: string) =>
+    val === null || val === undefined || typeof val === type;
 
   return (
     typeof run.id === 'number' &&
@@ -31,12 +35,13 @@ function isStageRun(obj: unknown): obj is StageRun {
     typeof run.phase_name === 'string' &&
     typeof run.attempt === 'number' &&
     typeof run.status === 'string' &&
-    ['success', 'failed', 'recovered', 'blocked'].includes(run.status as string) &&
+    // Accept all valid database status values
+    ['success', 'failed', 'recovered', 'blocked', 'pending', 'running', 'skipped'].includes(run.status as string) &&
     typeof run.created_at === 'number' &&
-    (run.completed_at === undefined || typeof run.completed_at === 'number') &&
-    (run.artifacts_blob === undefined || typeof run.artifacts_blob === 'string') &&
-    (run.recovery_diagnosis === undefined || typeof run.recovery_diagnosis === 'string') &&
-    (run.exit_code === undefined || typeof run.exit_code === 'number')
+    isNullableType(run.completed_at, 'number') &&
+    isNullableType(run.artifacts_blob, 'string') &&
+    isNullableType(run.recovery_diagnosis, 'string') &&
+    isNullableType(run.exit_code, 'number')
   );
 }
 
@@ -76,6 +81,11 @@ function getStatusIcon(status: StageRun['status']) {
       return <AlertTriangle className="h-4 w-4 text-amber-500" />;
     case 'blocked':
       return <XCircle className="h-4 w-4 text-destructive" />;
+    case 'pending':
+    case 'running':
+      return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />;
+    case 'skipped':
+      return <AlertTriangle className="h-4 w-4 text-muted-foreground" />;
     default:
       return null;
   }
@@ -91,6 +101,11 @@ function getStatusColor(status: StageRun['status']): string {
       return 'border-amber-500 text-amber-500';
     case 'blocked':
       return 'border-destructive text-destructive';
+    case 'pending':
+    case 'running':
+      return 'border-blue-500 text-blue-500';
+    case 'skipped':
+      return 'border-muted-foreground text-muted-foreground';
     default:
       return '';
   }
@@ -201,6 +216,8 @@ export function TaskPhaseHistory({ taskId }: TaskPhaseHistoryProps) {
                   run.status === 'failed' && 'border-l-destructive',
                   run.status === 'recovered' && 'border-l-amber-500',
                   run.status === 'blocked' && 'border-l-destructive',
+                  (run.status === 'pending' || run.status === 'running') && 'border-l-blue-500',
+                  run.status === 'skipped' && 'border-l-muted-foreground',
                 )}
               >
                 {/* Header */}

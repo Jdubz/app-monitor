@@ -471,14 +471,14 @@ test.describe('Task Queue - Real-time Updates', () => {
     await navigateToTaskQueue(page);
   });
 
-  test('should receive real-time task status updates via WebSocket', async ({ page }) => {
+  test('should receive real-time task status updates via SSE', async ({ page }) => {
     await page.waitForTimeout(2000);
 
-    // Monitor for WebSocket activity
-    const wsMessages: string[] = [];
+    // Monitor for SSE activity
+    const sseMessages: string[] = [];
     page.on('console', msg => {
-      if (msg.text().includes('socket') || msg.text().includes('task')) {
-        wsMessages.push(msg.text());
+      if (msg.text().includes('SSE') || msg.text().includes('task')) {
+        sseMessages.push(msg.text());
       }
     });
 
