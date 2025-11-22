@@ -91,16 +91,8 @@ describe('AdminBotService', () => {
 
       expect(sessionId).toBeDefined();
       expect(typeof sessionId).toBe('string');
-      expect(spawn).toHaveBeenCalledWith(
-        'codex',
-        ['chat'],
-        expect.objectContaining({
-          env: expect.objectContaining({
-            APP_MONITOR_MCP_USER_ROLE: 'admin',
-          }),
-          stdio: ['pipe', 'pipe', 'pipe'],
-        })
-      );
+      // startSession no longer spawns a process - it just creates the session
+      expect(spawn).not.toHaveBeenCalled();
       expect(service.isSessionRunning()).toBe(true);
     });
 
@@ -133,55 +125,6 @@ describe('AdminBotService', () => {
         { recursive: true }
       );
     });
-
-    it('should emit output events from stdout', async () => {
-      const outputHandler = vi.fn();
-      service.on('output', outputHandler);
-
-      await service.startSession();
-
-      mockProcess.stdout.emit('data', Buffer.from('test output'));
-
-      expect(outputHandler).toHaveBeenCalledWith('test output');
-    });
-
-    it('should emit error events from stderr', async () => {
-      const errorHandler = vi.fn();
-      service.on('error', errorHandler);
-
-      await service.startSession();
-
-      mockProcess.stderr.emit('data', Buffer.from('test error'));
-
-      expect(errorHandler).toHaveBeenCalledWith('test error');
-    });
-
-    it('should emit exit events when process exits', async () => {
-      const exitHandler = vi.fn();
-      service.on('exit', exitHandler);
-
-      await service.startSession();
-
-      mockProcess.emit('exit', 0);
-
-      expect(exitHandler).toHaveBeenCalledWith(0);
-    });
-
-    it('should handle process spawn errors', async () => {
-      const errorHandler = vi.fn();
-      service.on('error', errorHandler);
-
-      const sessionPromise = service.startSession();
-
-      // Wait a tick then emit error
-      await new Promise(resolve => setTimeout(resolve, 10));
-      mockProcess.emit('error', new Error('ENOENT: command not found'));
-
-      // Wait for handler to be called
-      await new Promise(resolve => setTimeout(resolve, 10));
-
-      expect(errorHandler).toHaveBeenCalledWith('ENOENT: command not found');
-    });
   });
 
   describe('sendMessage', () => {
@@ -189,10 +132,19 @@ describe('AdminBotService', () => {
       await service.startSession();
     });
 
-    it('should send message to Codex stdin successfully', async () => {
+    it('should spawn codex exec for message', async () => {
       await service.sendMessage('test message');
 
-      expect(mockProcess.stdin.write).toHaveBeenCalledWith('test message\n');
+      expect(spawn).toHaveBeenCalledWith(
+        'codex',
+        ['exec', 'test message'],
+        expect.objectContaining({
+          env: expect.objectContaining({
+            APP_MONITOR_MCP_USER_ROLE: 'admin',
+          }),
+          stdio: ['pipe', 'pipe', 'pipe'],
+        })
+      );
     });
 
     it('should add message to session history', async () => {
@@ -223,12 +175,37 @@ describe('AdminBotService', () => {
       );
     });
 
-    it('should throw error if stdin write fails', async () => {
-      mockProcess.stdin.write = vi.fn().mockReturnValue(false);
+    it('should emit output events from stdout', async () => {
+      const outputHandler = vi.fn();
+      service.on('output', outputHandler);
 
-      await expect(service.sendMessage('test')).rejects.toThrow(
-        'Timeout waiting for stdin drain'
-      );
+      await service.sendMessage('test');
+
+      mockProcess.stdout.emit('data', Buffer.from('test output'));
+
+      expect(outputHandler).toHaveBeenCalledWith('test output');
+    });
+
+    it('should emit error events from stderr', async () => {
+      const errorHandler = vi.fn();
+      service.on('error', errorHandler);
+
+      await service.sendMessage('test');
+
+      mockProcess.stderr.emit('data', Buffer.from('test error'));
+
+      expect(errorHandler).toHaveBeenCalledWith('test error');
+    });
+
+    it('should emit exit events when process exits', async () => {
+      const exitHandler = vi.fn();
+      service.on('exit', exitHandler);
+
+      await service.sendMessage('test');
+
+      mockProcess.emit('exit', 0);
+
+      expect(exitHandler).toHaveBeenCalledWith(0);
     });
   });
 
@@ -237,50 +214,21 @@ describe('AdminBotService', () => {
       await service.startSession();
     });
 
-    it('should stop session gracefully with SIGTERM', async () => {
+    it('should stop session and clear reference', async () => {
       await service.stopSession();
 
-      expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
       expect(service.getSession()).toBeNull();
       expect(service.isSessionRunning()).toBe(false);
     });
 
-    it('should force kill after timeout if process does not exit', async () => {
-      vi.useFakeTimers();
-
-      // Make process not exit on SIGTERM
-      mockProcess.kill = vi.fn((signal?: string) => {
-        if (signal === 'SIGKILL') {
-          mockProcess.killed = true;
-          setTimeout(() => mockProcess.emit('exit', 137), 10);
-        }
-        // Don't emit exit for SIGTERM
-      });
-
-      const stopPromise = service.stopSession();
-
-      // Fast-forward time to trigger SIGKILL
-      await vi.advanceTimersByTimeAsync(5000);
-
-      await stopPromise;
-
-      expect(mockProcess.kill).toHaveBeenCalledWith('SIGKILL');
-
-      vi.useRealTimers();
-    });
-
-    it('should remove all event listeners', async () => {
-      const outputHandler = vi.fn();
-      const errorHandler = vi.fn();
-      service.on('output', outputHandler);
-      service.on('error', errorHandler);
+    it('should kill running process if present', async () => {
+      // Send a message to create a process
+      await service.sendMessage('test');
 
       await service.stopSession();
 
-      // Emit events after stop - should not be handled
-      mockProcess.stdout.emit('data', Buffer.from('test'));
-
-      expect(outputHandler).not.toHaveBeenCalled();
+      expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
+      expect(service.getSession()).toBeNull();
     });
 
     it('should handle stop when no session exists', async () => {
@@ -316,6 +264,19 @@ describe('AdminBotService', () => {
     it('should return session with correct message history', async () => {
       await service.startSession();
       await service.sendMessage('message 1');
+
+      // Reset mock between calls so each sendMessage creates fresh mock
+      vi.clearAllMocks();
+      mockProcess = new EventEmitter();
+      mockProcess.pid = 12346;
+      mockProcess.killed = false;
+      mockProcess.stdin = new EventEmitter();
+      mockProcess.stdin.write = vi.fn().mockReturnValue(true);
+      mockProcess.stdout = new EventEmitter();
+      mockProcess.stderr = new EventEmitter();
+      mockProcess.kill = vi.fn();
+      (spawn as Mock).mockReturnValue(mockProcess);
+
       await service.sendMessage('message 2');
 
       const session = service.getSession();
@@ -412,7 +373,11 @@ DATABASE_PATH = "{{DATABASE_PATH}}"
 
       await service.sendMessage('line 1\nline 2\nline 3');
 
-      expect(mockProcess.stdin.write).toHaveBeenCalledWith('line 1\nline 2\nline 3\n');
+      expect(spawn).toHaveBeenCalledWith(
+        'codex',
+        ['exec', 'line 1\nline 2\nline 3'],
+        expect.any(Object)
+      );
     });
 
     it('should handle empty message sending', async () => {
@@ -420,7 +385,11 @@ DATABASE_PATH = "{{DATABASE_PATH}}"
 
       await service.sendMessage('');
 
-      expect(mockProcess.stdin.write).toHaveBeenCalledWith('\n');
+      expect(spawn).toHaveBeenCalledWith(
+        'codex',
+        ['exec', ''],
+        expect.any(Object)
+      );
     });
 
     it('should handle process exit with null code', async () => {
@@ -428,6 +397,7 @@ DATABASE_PATH = "{{DATABASE_PATH}}"
       service.on('exit', exitHandler);
 
       await service.startSession();
+      await service.sendMessage('test');
 
       mockProcess.emit('exit', null);
 
@@ -439,6 +409,7 @@ DATABASE_PATH = "{{DATABASE_PATH}}"
       service.on('output', outputHandler);
 
       await service.startSession();
+      await service.sendMessage('test');
 
       const largeOutput = 'x'.repeat(1000000);
       mockProcess.stdout.emit('data', Buffer.from(largeOutput));
