@@ -6,10 +6,10 @@
  * Codex instance with admin-level MCP tool access.
  *
  * Architecture:
- * - Spawns: `codex` (interactive mode) with custom config pointing to MCP server
- * - Communication: stdio (stdin for messages, stdout for responses)
+ * - Spawns: `codex exec` (non-interactive mode) with custom config pointing to MCP server
+ * - Communication: Each message spawns a new codex exec process
  * - Streaming: Emits output events for SSE routes to consume
- * - Lifecycle: One session at a time, clean shutdown on stop
+ * - Lifecycle: One session at a time, processes spawn per message
  */
 
 import { spawn, type ChildProcess } from 'child_process';
@@ -165,7 +165,7 @@ export class AdminBotService extends EventEmitter {
     logger.info({
       category: 'admin_bot_chat',
       action: 'session_starting',
-      message: 'Starting new Codex CLI session',
+      message: 'Starting new admin bot session',
       details: { sessionId }
     });
 
@@ -173,91 +173,21 @@ export class AdminBotService extends EventEmitter {
       // Generate runtime config with absolute paths
       this.generateRuntimeConfig();
 
-      // Spawn Codex CLI process with admin bot config
-      // Note: Codex runs interactively by default (no subcommand needed)
-      const codexProcess = spawn('codex', [], {
-        cwd: this.repoRoot,
-        env: {
-          ...process.env,
-          // Point Codex to runtime config file (with absolute paths)
-          CODEX_CONFIG_PATH: this.runtimeConfigPath,
-          // Ensure MCP server can find backend
-          APP_MONITOR_ROOT: this.repoRoot,
-          // Admin role for MCP server
-          APP_MONITOR_MCP_USER_ROLE: 'admin',
-          // Database path for MCP server (already in config, but set here too for redundancy)
-          DATABASE_PATH: this.databasePath
-        },
-        stdio: ['pipe', 'pipe', 'pipe']
-      });
-
+      // Create session without spawning a process
+      // Each message will spawn its own codex exec process
       this.session = {
         id: sessionId,
-        process: codexProcess,
+        process: null,
         status: 'running',
         messages: [],
         startedAt: new Date()
       };
 
-      // Set up output streaming
-      codexProcess.stdout?.on('data', (data: Buffer) => {
-        const output = data.toString();
-        logger.debug({
-          category: 'admin_bot_chat',
-          action: 'stdout',
-          message: 'Received stdout from Codex CLI',
-          details: { sessionId, output: output.substring(0, 200) }
-        });
-        this.emit('output', output);
-      });
-
-      codexProcess.stderr?.on('data', (data: Buffer) => {
-        const error = data.toString();
-        logger.warn({
-          category: 'admin_bot_chat',
-          action: 'stderr',
-          message: 'Received stderr from Codex CLI',
-          details: { sessionId, error: error.substring(0, 200) }
-        });
-        this.emit('error', error);
-      });
-
-      codexProcess.on('exit', (code: number | null) => {
-        logger.info({
-          category: 'admin_bot_chat',
-          action: 'process_exit',
-          message: 'Codex CLI process exited',
-          details: { sessionId, exitCode: code }
-        });
-
-        if (this.session) {
-          this.session.status = code === 0 ? 'idle' : 'error';
-        }
-
-        this.emit('exit', code);
-      });
-
-      codexProcess.on('error', (error: Error) => {
-        logger.error({
-          category: 'admin_bot_chat',
-          action: 'process_error',
-          message: 'Codex CLI process error',
-          error: error.message,
-          details: { sessionId }
-        });
-
-        if (this.session) {
-          this.session.status = 'error';
-        }
-
-        this.emit('error', error.message);
-      });
-
       logger.info({
         category: 'admin_bot_chat',
         action: 'session_started',
-        message: 'Codex CLI session started successfully',
-        details: { sessionId, pid: codexProcess.pid }
+        message: 'Admin bot session started successfully',
+        details: { sessionId }
       });
 
       return sessionId;
@@ -266,7 +196,7 @@ export class AdminBotService extends EventEmitter {
       logger.error({
         category: 'admin_bot_chat',
         action: 'session_start_error',
-        message: 'Failed to start Codex CLI session',
+        message: 'Failed to start admin bot session',
         error: error instanceof Error ? error.message : String(error)
       });
       throw error;
@@ -276,14 +206,14 @@ export class AdminBotService extends EventEmitter {
   /**
    * Send a message to the admin bot
    *
-   * Writes message to Codex CLI stdin and records in session history.
-   * Handles backpressure by waiting for drain event if buffer is full.
+   * Spawns a new codex exec process for each message and streams the response.
+   * This approach avoids TTY requirements of interactive mode.
    *
    * @param message - User message to send
-   * @throws Error if no active session or write fails
+   * @throws Error if no active session or execution fails
    */
   async sendMessage(message: string): Promise<void> {
-    if (!this.session?.process?.stdin) {
+    if (!this.session) {
       throw new Error('No active session. Start a session before sending messages.');
     }
 
@@ -294,7 +224,7 @@ export class AdminBotService extends EventEmitter {
     logger.debug({
       category: 'admin_bot_chat',
       action: 'message_sending',
-      message: 'Sending message to Codex CLI',
+      message: 'Spawning codex exec for message',
       details: {
         sessionId: this.session.id,
         messageLength: message.length
@@ -310,49 +240,94 @@ export class AdminBotService extends EventEmitter {
     };
     this.session.messages.push(userMessage);
 
-    // Send to Codex CLI stdin with backpressure handling
-    const stdin = this.session.process.stdin;
-    const canWrite = stdin.write(message + '\n');
+    // Spawn codex exec for this message
+    const codexProcess = spawn('codex', ['exec', message], {
+      cwd: this.repoRoot,
+      env: {
+        ...process.env,
+        CODEX_CONFIG_PATH: this.runtimeConfigPath,
+        APP_MONITOR_ROOT: this.repoRoot,
+        APP_MONITOR_MCP_USER_ROLE: 'admin',
+        DATABASE_PATH: this.databasePath
+      },
+      stdio: ['pipe', 'pipe', 'pipe']
+    });
 
-    if (!canWrite) {
-      // Buffer is full, wait for drain event
+    // Store current process for potential cancellation
+    this.session.process = codexProcess;
+
+    // Stream stdout to SSE
+    codexProcess.stdout?.on('data', (data: Buffer) => {
+      const output = data.toString();
+      logger.debug({
+        category: 'admin_bot_chat',
+        action: 'stdout',
+        message: 'Received stdout from codex exec',
+        details: { sessionId: this.session?.id, output: output.substring(0, 200) }
+      });
+      this.emit('output', output);
+    });
+
+    // Stream stderr as errors
+    codexProcess.stderr?.on('data', (data: Buffer) => {
+      const error = data.toString();
       logger.warn({
         category: 'admin_bot_chat',
-        action: 'stdin_backpressure',
-        message: 'stdin buffer full, waiting for drain',
-        details: { sessionId: this.session.id }
+        action: 'stderr',
+        message: 'Received stderr from codex exec',
+        details: { sessionId: this.session?.id, error: error.substring(0, 200) }
+      });
+      this.emit('error', error);
+    });
+
+    // Handle process completion
+    codexProcess.on('exit', (code: number | null) => {
+      logger.info({
+        category: 'admin_bot_chat',
+        action: 'exec_complete',
+        message: 'codex exec completed',
+        details: { sessionId: this.session?.id, exitCode: code }
       });
 
-      await new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          stdin.off('drain', onDrain);
-          reject(new Error('Timeout waiting for stdin drain'));
-        }, 5000);
+      // Clear current process reference
+      if (this.session?.process === codexProcess) {
+        this.session.process = null;
+      }
 
-        const onDrain = () => {
-          clearTimeout(timeout);
-          resolve();
-        };
+      this.emit('exit', code);
+    });
 
-        stdin.once('drain', onDrain);
+    codexProcess.on('error', (error: Error) => {
+      logger.error({
+        category: 'admin_bot_chat',
+        action: 'exec_error',
+        message: 'codex exec process error',
+        error: error.message,
+        details: { sessionId: this.session?.id }
       });
-    }
+
+      if (this.session) {
+        this.session.status = 'error';
+      }
+
+      this.emit('error', error.message);
+    });
 
     logger.debug({
       category: 'admin_bot_chat',
       action: 'message_sent',
-      message: 'Message sent to Codex CLI successfully',
-      details: { sessionId: this.session.id, messageId: userMessage.id }
+      message: 'codex exec spawned successfully',
+      details: { sessionId: this.session.id, messageId: userMessage.id, pid: codexProcess.pid }
     });
   }
 
   /**
    * Stop the current session
    *
-   * Gracefully terminates the Codex CLI process and cleans up event listeners.
+   * Gracefully terminates any running Codex process and cleans up.
    */
   async stopSession(): Promise<void> {
-    if (!this.session?.process) {
+    if (!this.session) {
       logger.warn({
         category: 'admin_bot_chat',
         action: 'stop_session_no_session',
@@ -367,30 +342,33 @@ export class AdminBotService extends EventEmitter {
     logger.info({
       category: 'admin_bot_chat',
       action: 'session_stopping',
-      message: 'Stopping Codex CLI session',
-      details: { sessionId }
+      message: 'Stopping admin bot session',
+      details: { sessionId, hasProcess: !!process }
     });
 
-    // Remove all event listeners from the process to prevent memory leaks
-    process.stdout?.removeAllListeners();
-    process.stderr?.removeAllListeners();
-    process.removeAllListeners();
+    // Kill any running process
+    if (process) {
+      // Remove all event listeners from the process to prevent memory leaks
+      process.stdout?.removeAllListeners();
+      process.stderr?.removeAllListeners();
+      process.removeAllListeners();
 
-    // Send SIGTERM for graceful shutdown
-    process.kill('SIGTERM');
+      // Send SIGTERM for graceful shutdown
+      process.kill('SIGTERM');
 
-    // Wait a bit, then force kill if still running
-    setTimeout(() => {
-      if (!process.killed) {
-        logger.warn({
-          category: 'admin_bot_chat',
-          action: 'session_force_kill',
-          message: 'Force killing Codex CLI process',
-          details: { sessionId }
-        });
-        process.kill('SIGKILL');
-      }
-    }, 5000);
+      // Wait a bit, then force kill if still running
+      setTimeout(() => {
+        if (!process.killed) {
+          logger.warn({
+            category: 'admin_bot_chat',
+            action: 'session_force_kill',
+            message: 'Force killing Codex process',
+            details: { sessionId }
+          });
+          process.kill('SIGKILL');
+        }
+      }, 5000);
+    }
 
     // Clear session reference
     this.session = null;
