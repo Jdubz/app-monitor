@@ -298,63 +298,6 @@ export class MockLogStreamer {
   ) {}
 }
 
-export class MockConnectionManager {
-  private connections = new Map<string, { socketId: string; connectedAt: number; subscriptions: Set<string>; monitors: Set<string>; lastPing: number; isHealthy: boolean; reconnectCount: number }>();
-
-  register(socket: { id: string }) {
-    this.connections.set(socket.id, {
-      socketId: socket.id,
-      connectedAt: Date.now(),
-      lastPing: Date.now(),
-      isHealthy: true,
-      reconnectCount: 0,
-      subscriptions: new Set(),
-      monitors: new Set(),
-    });
-  }
-
-  addMonitor(socketId: string, containerId: string) {
-    const connection = this.connections.get(socketId);
-    if (connection) {
-      connection.monitors.add(containerId);
-    }
-  }
-
-  removeMonitor(socketId: string, containerId: string) {
-    const connection = this.connections.get(socketId);
-    if (connection) {
-      connection.monitors.delete(containerId);
-    }
-  }
-
-  getConnectionCount() {
-    return this.connections.size;
-  }
-
-  setIO(_io: unknown) {
-    // Mock implementation - no-op for tests
-  }
-
-  broadcastToAll(_event: string | object, ..._args: any[]) {
-    // Mock implementation - no-op for tests
-  }
-
-  getStats() {
-    return {
-      totalConnections: this.connections.size,
-      monitors: Array.from(this.connections.values()).reduce((acc, conn) => acc + conn.monitors.size, 0),
-    };
-  }
-
-  getAllConnections() {
-    return Array.from(this.connections.values());
-  }
-
-  getConnectionInfo(socketId: string) {
-    return this.connections.get(socketId);
-  }
-}
-
 export class MockLogSourceManager {
   private config = [
     {
@@ -758,7 +701,6 @@ export interface MockServerDependencies {
   devBotsManager: MockDevBotsManager;
   logRotation: MockLogRotation;
   logStreamer: MockLogStreamer;
-  connectionManager: MockConnectionManager;
   logSourceManager: MockLogSourceManager;
   services: typeof import('../../src/config.js').services;
 }
@@ -767,14 +709,12 @@ export function buildMockServerDependencies(): MockServerDependencies {
   const processManager = new MockProcessManager();
   const cloudLogging = new MockCloudLogging();
   const logSourceManager = new MockLogSourceManager();
-  const connectionManager = new MockConnectionManager();
   return {
     processManager,
     cloudLogging,
     devBotsManager: new MockDevBotsManager(),
     logRotation: new MockLogRotation(),
     logStreamer: new MockLogStreamer({}, processManager, cloudLogging, logSourceManager),
-    connectionManager,
     logSourceManager,
     services: {
       'dev-monitor-backend': {

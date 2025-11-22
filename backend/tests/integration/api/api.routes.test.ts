@@ -362,7 +362,6 @@ const verificationMocks = vi.hoisted(() => {
 
   return {
     MOCK_TASK_ID,
-    MOCK_SOCKET_ID,
     baseVerificationResult,
     verificationResults,
     mockDatabase,
@@ -375,7 +374,6 @@ type VerificationResultPayload = ReturnType<typeof verificationMocks>['baseVerif
 
 const {
   MOCK_TASK_ID,
-  MOCK_SOCKET_ID,
   baseVerificationResult,
   verificationResults,
   mockDatabase,
@@ -407,7 +405,6 @@ describe('API Integration Suite', () => {
     const context = await createApiTestServer();
     server = context.server;
     deps = context.deps;
-    deps.connectionManager.register({ id: MOCK_SOCKET_ID } as { id: string });
   });
 
   afterAll(async () => {
