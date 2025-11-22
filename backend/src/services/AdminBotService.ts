@@ -221,13 +221,18 @@ export class AdminBotService extends EventEmitter {
       throw new Error(`Session is ${this.session.status}. Cannot send messages.`);
     }
 
+    // Working directory for codex - use ~/Development to access all projects
+    const codexWorkingDir = process.env.ADMIN_BOT_WORKING_DIR
+      || (process.env.HOME ? `${process.env.HOME}/Development` : this.repoRoot);
+
     logger.debug({
       category: 'admin_bot_chat',
       action: 'message_sending',
       message: 'Spawning codex exec for message',
       details: {
         sessionId: this.session.id,
-        messageLength: message.length
+        messageLength: message.length,
+        workingDir: codexWorkingDir
       }
     });
 
@@ -250,8 +255,8 @@ export class AdminBotService extends EventEmitter {
     ].filter(Boolean).join(':');
     const enhancedPath = nvmPaths + ':' + (process.env.PATH || '');
 
-    const codexProcess = spawn('codex', ['exec', message], {
-      cwd: this.repoRoot,
+    const codexProcess = spawn('codex', ['exec', '--dangerously-skip-permissions', message], {
+      cwd: codexWorkingDir,
       env: {
         ...process.env,
         PATH: enhancedPath,
