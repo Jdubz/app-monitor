@@ -504,6 +504,7 @@ export class TaskExecutionService {
     // Track worker for cleanup
     let worker: EphemeralWorker | undefined;
     let result: TaskExecutionResult | undefined;
+    let keepContainer = false;
     const executionStartTime = Date.now();
 
     try {
@@ -516,12 +517,12 @@ export class TaskExecutionService {
 
       if (this.dockerCircuitBreaker) {
         await this.dockerCircuitBreaker.execute(async () => {
-          worker = await this.ephemeralWorkerService.createWorker(nextTask, agent, agentCliType);
+          worker = await this.ephemeralWorkerService.getOrCreateWorker(nextTask, agent, agentCliType);
           result = await this.ephemeralWorkerService.executeTask(worker);
         });
       } else {
         // Fallback if circuit breaker not initialized
-        worker = await this.ephemeralWorkerService.createWorker(nextTask, agent, agentCliType);
+        worker = await this.ephemeralWorkerService.getOrCreateWorker(nextTask, agent, agentCliType);
         result = await this.ephemeralWorkerService.executeTask(worker);
       }
 
@@ -589,6 +590,7 @@ export class TaskExecutionService {
         if (phaseValidation.passed) {
           // Phase validated successfully - complete task
           this.taskQueue.completeTask(nextTask.id, output, agentCliType);
+          keepContainer = false;
 
           // Generate session summary for documentation
           await this.generateSessionSummary(nextTask, result.exitCode || 0, output, stderr, Date.now());
@@ -627,12 +629,14 @@ export class TaskExecutionService {
             if (recovery.category === 'retry') {
               // Simple retry - increment attempts and requeue
               this.taskQueue.requeueTaskForPhaseRetry(nextTask.id);
+              keepContainer = true; // keep context for retry
             } else if (recovery.category === 'context_update') {
               // Update task prompt with additional context
               if (recovery.diagnosis) {
                 this.taskQueue.updateTaskContext(nextTask.id, recovery.diagnosis);
               }
               this.taskQueue.requeueTaskForPhaseRetry(nextTask.id);
+              keepContainer = true; // keep context for retry
             } else if (recovery.category === 'chain_blocked') {
               // Block task immediately - requires human intervention
               this.taskQueue.updateTask(nextTask.id, {
@@ -659,6 +663,13 @@ export class TaskExecutionService {
                   diagnosis: recovery.diagnosis
                 }
               });
+
+              // Preserve container and snapshot workspace for unblock
+              keepContainer = true;
+              if (worker) {
+                worker.status = 'blocked';
+                await this.ephemeralWorkerService.snapshotWorkspaceForBlocked(worker);
+              }
             } else if (recovery.category === 'system_blocked') {
               // Global pause - emit event for system-wide handling
               logger.error({
@@ -687,6 +698,7 @@ export class TaskExecutionService {
             // No recovery attempted - mark task as failed
             const errorDetails = this.formatValidationErrors(phaseValidation.errors);
             this.taskQueue.failTask(nextTask.id, `Phase ${nextTask.phase_index} validation failed: ${errorDetails}`);
+            keepContainer = false;
           }
 
           // Task will be retried via phase system
@@ -727,12 +739,13 @@ export class TaskExecutionService {
           exitCode: 1
         }
       );
+      keepContainer = false;
 
       // Try next task
       if (onTaskAssigned) onTaskAssigned();
     } finally {
       // CRITICAL: Always cleanup worker to prevent container leaks
-      if (worker) {
+      if (worker && !keepContainer) {
         try {
           await this.ephemeralWorkerService.destroyWorker(worker.id);
           logger.debug({
