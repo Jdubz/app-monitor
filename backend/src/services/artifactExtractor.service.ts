@@ -203,9 +203,51 @@ export class ArtifactExtractorService {
           details: { phaseJsonPath, parseError },
         });
       }
+    } else if (phaseIndex === 1 && artifacts.stdout) {
+      // Fallback: attempt to derive planning artifacts from stdout when phase.json is missing
+      const extracted = this.extractPlanningFromStdout(artifacts.stdout);
+      if (extracted) {
+        artifacts.planning = extracted;
+        logger.warn({
+          category: 'phase',
+          action: 'planning_extracted_from_stdout',
+          message: 'phase.json missing; derived planning artifacts from stdout',
+          details: { extractDir, keys: Object.keys(extracted) },
+        });
+      }
     }
 
     return artifacts;
+  }
+
+  /**
+   * Extract planning JSON from stdout when phase.json is missing.
+   * Searches for fenced ```json blocks or the first brace-delimited object
+   * containing required planning keys.
+   */
+  private extractPlanningFromStdout(stdout: string): Record<string, unknown> | null {
+    const candidates: string[] = [];
+
+    const fenced = stdout.match(/```json\s*([\s\S]+?)\s*```/i);
+    if (fenced) candidates.push(fenced[1]);
+
+    const braceMatch = stdout.match(/\{[\s\S]*\}/);
+    if (braceMatch) candidates.push(braceMatch[0]);
+
+    const required = ['obsolete', 'task_realigned', 'architecture_notes', 'estimated_complexity'];
+
+    for (const candidate of candidates) {
+      try {
+        const parsed = JSON.parse(candidate.trim());
+        if (required.every((k) => Object.prototype.hasOwnProperty.call(parsed, k))) {
+          return parsed as Record<string, unknown>;
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    return null;
   }
 
   /**

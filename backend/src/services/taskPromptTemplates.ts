@@ -180,6 +180,120 @@ export class TaskPromptTemplateManager {
 **Repository**: {{repository}}
 **Environment**: {{environment}}
 
+## 📝 Phase 1 Planning Output (MANDATORY)
+- Create artifacts dir: \`mkdir -p /workspace/.artifacts\`
+- Write planning JSON to \`/workspace/.artifacts/phase.json\` with EXACT keys:
+  {
+    "obsolete": false,
+    "obsolete_reason": "",
+    "task_realigned": false,
+    "realignment_details": "",
+    "dependencies": [],
+    "architecture_notes": "Short summary of approach and risks",
+    "estimated_complexity": "low"
+  }
+- Keep \`architecture_notes\` concise (<= 500 chars). Do this before implementation.
+
+## 🧭 Phase Artifact Requirements (All Phases)
+- ALWAYS write JSON artifacts to \`/workspace/.artifacts/phase.json\` for the current phase.
+- Overwrite the file each phase with the structure below:
+  - **Phase 1 (planning)**: the JSON above.
+  - **Phase 2 (implementation)**:
+    \`\`\`json
+    {
+      "pr_number": 0,
+      "pr_url": "",
+      "branch_name": "",
+      "commits": 1,
+      "files_changed": []
+    }
+    \`\`\`
+  - **Phase 3 (review)**:
+    \`\`\`json
+    {
+      "issues": [
+        {
+          "fingerprint": "sha256:...",
+          "severity": "major",
+          "file": "path",
+          "line": 1,
+          "description": "",
+          "blocking": true
+        }
+      ],
+      "total_issues": 1,
+      "blocking_issues": 1,
+      "review_passed": false
+    }
+    \`\`\`
+  - **Phase 4 (fixes)**:
+    \`\`\`json
+    {
+      "fixes_applied": [
+        {
+          "fingerprint": "sha256:...",
+          "resolution": "",
+          "files_modified": [""],
+          "commits": ["hash"]
+        }
+      ],
+      "unresolved_fingerprints": [],
+      "all_issues_addressed": true
+    }
+    \`\`\`
+  - **Phase 5 (tests)**:
+    \`\`\`json
+    {
+      "all_tests_passing": true,
+      "coverage_delta": 0,
+      "test_summary": {
+        "unit": { "total": 0, "passed": 0, "failed": 0 },
+        "integration": { "total": 0, "passed": 0, "failed": 0 },
+        "e2e": { "total": 0, "passed": 0, "failed": 0 }
+      },
+      "lint_passing": true,
+      "type_check_passing": true,
+      "build_passing": true,
+      "failures": []
+    }
+    \`\`\`
+  - **Phase 6 (cleanup)**:
+    \`\`\`json
+    {
+      "cleanup": {
+        "docs_updated": ["docs/api.md", "README.md"],
+        "docs_deleted": ["docs/deprecated.md"],
+        "artifacts_pruned": [".phase-artifacts/phase-1-attempt-1/"],
+        "changelog_entry": "Added new authentication system"
+      }
+    }
+    \`\`\`
+    - Required arrays: \`docs_updated\`, \`docs_deleted\`, \`artifacts_pruned\` (can be empty but must be arrays).
+    - Optional string: \`changelog_entry\`.
+  - **Phase 7 (PR shepherding)**:
+    \`\`\`json
+    {
+      "prShepherding": {
+        "merge_gates": {
+          "base_branch_updated": true,
+          "no_merge_conflicts": true,
+          "review_comments_resolved": true,
+          "change_requests_addressed": true,
+          "ci_checks_passing": true,
+          "copilot_review_complete": true,
+          "task_verification_passed": true,
+          "final_validation_clean": true
+        },
+        "all_gates_passing": true,
+        "auto_merge_triggered": false,
+        "merge_sha": ""
+      }
+    }
+    \`\`\`
+    - \`merge_gates\` booleans must all be present; \`all_gates_passing\` must be boolean.
+    - If merged, set \`merge_sha\` (non-empty string) and optionally \`auto_merge_triggered\`.
+- If you also emit Markdown, still write the JSON file—validators read \`phase.json\`.
+
 ## 🚨 Common Failure Modes to AVOID (Learn from Past Mistakes)
 
 ### ❌ FAILURE MODE 1: Inventing Features Not Requested
