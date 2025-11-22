@@ -181,7 +181,6 @@ vi.mock('child_process', async () => {
 
 const verificationMocks = vi.hoisted(() => {
   const MOCK_TASK_ID = 'task-123';
-  const MOCK_SOCKET_ID = 'socket-test-1';
 
   interface _VerificationResultPayload {
     taskId: string;
@@ -502,45 +501,6 @@ describe('API Integration Suite', () => {
           const body: DockerActionResponse = res.body;
           expect(body.success).toBe(true);
         },
-      },
-    ]);
-  });
-
-  describe('Socket diagnostics', () => {
-    runEndpointTests([
-      {
-        name: 'GET /api/socket/stats',
-        method: 'get',
-        url: '/api/socket/stats',
-        assert: (res) => {
-          expect(res.body.success).toBe(true);
-        },
-      },
-      {
-        name: 'GET /api/socket/connections',
-        method: 'get',
-        url: '/api/socket/connections',
-        assert: (res) => {
-          expect(res.body.success).toBe(true);
-          expect(Array.isArray(res.body.connections)).toBe(true);
-          expect(res.body.connections.some((conn: { socketId: string }) => conn.socketId === MOCK_SOCKET_ID)).toBe(true);
-          expect(res.body.count).toBeGreaterThanOrEqual(1);
-        },
-      },
-      {
-        name: `GET /api/socket/connections/${MOCK_SOCKET_ID}`,
-        method: 'get',
-        url: `/api/socket/connections/${MOCK_SOCKET_ID}`,
-        assert: (res) => {
-          expect(res.body.success).toBe(true);
-          expect(res.body.connection?.socketId).toBe(MOCK_SOCKET_ID);
-        },
-      },
-      {
-        name: 'GET /api/socket/connections/unknown',
-        method: 'get',
-        url: '/api/socket/connections/unknown',
-        expectStatus: 404,
       },
     ]);
   });

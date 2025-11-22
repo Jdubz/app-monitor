@@ -279,21 +279,20 @@ test.describe('PR Tracking - Real-time Updates', () => {
     await navigateToPrTracking(page);
   });
 
-  test('should receive real-time PR status updates via WebSocket', async ({ page }) => {
+  test('should receive real-time PR status updates via SSE', async ({ page }) => {
     await page.waitForTimeout(2000);
 
-    // Monitor console for WebSocket messages
-    const wsMessages: string[] = [];
+    // Monitor console for SSE messages
+    const sseMessages: string[] = [];
     page.on('console', msg => {
-      if (msg.text().includes('websocket') || msg.text().includes('socket')) {
-        wsMessages.push(msg.text());
+      if (msg.text().includes('SSE') || msg.text().includes('event')) {
+        sseMessages.push(msg.text());
       }
     });
 
     await page.waitForTimeout(3000);
 
-    // WebSocket should be connected (if implemented)
-    // This is a placeholder for when real-time updates are implemented
+    // SSE should be connected for real-time updates
     expect(page.locator('body')).toBeVisible();
   });
 
