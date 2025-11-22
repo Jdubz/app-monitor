@@ -257,7 +257,41 @@ export class TaskPromptTemplateManager {
       "failures": []
     }
     \`\`\`
-  - **Phase 6/7**: include any cleanup/shepherding metadata you produce; keep JSON well-formed.
+  - **Phase 6 (cleanup)**:
+    \`\`\`json
+    {
+      "cleanup": {
+        "docs_updated": ["docs/api.md", "README.md"],
+        "docs_deleted": ["docs/deprecated.md"],
+        "artifacts_pruned": [".phase-artifacts/phase-1-attempt-1/"],
+        "changelog_entry": "Added new authentication system"
+      }
+    }
+    \`\`\`
+    - Required arrays: \`docs_updated\`, \`docs_deleted\`, \`artifacts_pruned\` (can be empty but must be arrays).
+    - Optional string: \`changelog_entry\`.
+  - **Phase 7 (PR shepherding)**:
+    \`\`\`json
+    {
+      "prShepherding": {
+        "merge_gates": {
+          "base_branch_updated": true,
+          "no_merge_conflicts": true,
+          "review_comments_resolved": true,
+          "change_requests_addressed": true,
+          "ci_checks_passing": true,
+          "copilot_review_complete": true,
+          "task_verification_passed": true,
+          "final_validation_clean": true
+        },
+        "all_gates_passing": true,
+        "auto_merge_triggered": false,
+        "merge_sha": ""
+      }
+    }
+    \`\`\`
+    - \`merge_gates\` booleans must all be present; \`all_gates_passing\` must be boolean.
+    - If merged, set \`merge_sha\` (non-empty string) and optionally \`auto_merge_triggered\`.
 - If you also emit Markdown, still write the JSON file—validators read \`phase.json\`.
 
 ## 🚨 Common Failure Modes to AVOID (Learn from Past Mistakes)
