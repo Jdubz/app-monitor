@@ -1544,9 +1544,9 @@ export class EphemeralWorkerService {
       ];
     } else if (cliType === 'codex') {
       credentialSetup = [
-        `if [ -f ${containerCredPaths.codex} ]; then ` +
-          `echo "Codex credentials: auth.json found" >> ${quotedLogFile}; ` +
-        `else echo "Codex credentials: missing (expected ${containerCredPaths.codex})" >> ${quotedLogFile}; fi`
+        `mkdir -p $(dirname ${containerCredPaths.codex})`,
+        `cp /tmp/host-creds.json ${containerCredPaths.codex}`,
+        `echo "Codex credentials: $(test -f ${containerCredPaths.codex} && echo found || echo missing) (expected ${containerCredPaths.codex})" >> ${quotedLogFile}`
       ];
     } else {
       credentialSetup = [
