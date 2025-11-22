@@ -140,8 +140,11 @@ export class EphemeralWorkerService {
     });
     this.containerLifecycle = new ContainerLifecycleService(docker); // Initialize container lifecycle service
 
+    // Merge provided config with defaults up front so logs land in the canonical location
+    this.config = { ...DEFAULT_EPHEMERAL_WORKER_CONFIG, ...config };
+
     // Dev-bots consolidated log file for real-time monitoring
-    const devBotsLogDir = path.join(process.cwd(), 'dev-bots', 'logs');
+    const devBotsLogDir = this.config.logsDirectory;
     this.devBotsLogPath = path.join(devBotsLogDir, 'dev-bots.log');
     
     // Initialize log service with consolidated log
@@ -152,9 +155,6 @@ export class EphemeralWorkerService {
 
     // Initialize context delivery service
     this.contextDelivery = new ContextDeliveryService(docker, contextGenerator);
-
-    // Merge provided config with defaults
-    this.config = { ...DEFAULT_EPHEMERAL_WORKER_CONFIG, ...config };
   }
 
   /**
@@ -1054,9 +1054,10 @@ export class EphemeralWorkerService {
   /**
    * Resolve the host-side log file path for a worker
    */
-  private getWorkerHostLogPath(workerId: string): string {
-    const sanitizedId = workerId.replace(/[^a-zA-Z0-9-_]/g, '_');
-    return path.join(this.getHostLogsDir(), `${sanitizedId}.log`);
+  private getWorkerHostLogPath(worker: EphemeralWorker): string {
+    const sanitizedId = worker.id.replace(/[^a-zA-Z0-9-_]/g, '_');
+    const sanitizedTaskId = worker.task.id.replace(/[^a-zA-Z0-9-_]/g, '_');
+    return path.join(this.getHostLogsDir(), `bot-${sanitizedTaskId}-${sanitizedId}.log`);
   }
 
   // ==========================================================================
@@ -1070,7 +1071,7 @@ export class EphemeralWorkerService {
     let logStream: fs.WriteStream | null = null;
     const sanitizedId = worker.id.replace(/[^a-zA-Z0-9-_]/g, '_');
     const logFile = `${EphemeralWorkerService.CONTAINER_LOG_DIR}/${sanitizedId}.log`;
-    const hostLogPath = this.getWorkerHostLogPath(worker.id);
+    const hostLogPath = this.getWorkerHostLogPath(worker);
 
     try {
       worker.status = 'running';
@@ -1579,9 +1580,9 @@ export class EphemeralWorkerService {
       ];
     } else if (cliType === 'codex') {
       credentialSetup = [
-        `if [ -f ${containerCredPaths.codex} ]; then ` +
-          `echo "Codex credentials: auth.json found" >> ${quotedLogFile}; ` +
-        `else echo "Codex credentials: missing (expected ${containerCredPaths.codex})" >> ${quotedLogFile}; fi`
+        `mkdir -p $(dirname ${containerCredPaths.codex})`,
+        `cp /tmp/host-creds.json ${containerCredPaths.codex}`,
+        `echo "Codex credentials: $(test -f ${containerCredPaths.codex} && echo found || echo missing) (expected ${containerCredPaths.codex})" >> ${quotedLogFile}`
       ];
     } else {
       credentialSetup = [

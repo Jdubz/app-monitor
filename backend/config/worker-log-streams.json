@@ -1,15 +1,15 @@
 {
   "dev-bots": {
-    "artifactRoot": "dev-bots/artifacts",
+    "artifactRoot": "shared/logs",
     "streams": {
       "stdout": {
-        "pattern": "{taskId}-stdout-*.log",
-        "label": "Task stdout",
+        "pattern": "bot-*{taskId}*.log",
+        "label": "Worker log (stdout/stderr combined)",
         "encoding": "utf-8"
       },
       "stderr": {
-        "pattern": "{taskId}-stderr-*.log",
-        "label": "Task stderr",
+        "pattern": "bot-*{taskId}*.log",
+        "label": "Worker log (stdout/stderr combined)",
         "encoding": "utf-8"
       }
     }
