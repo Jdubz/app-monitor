@@ -51,11 +51,10 @@ Stabilization (v0.2.0) completed on November 14, 2025 and the dedicated plan was
 
 App Monitor is a **development-only** web dashboard that provides:
 
-- **Real-time log streaming** - Monitor logs from all services in one place
-- **Service management** - Start/stop backend, frontend, and worker services
-- **Port management** - Fixed port assignments with conflict detection
-- **Dev-bots coordination** - Autonomous development tasks via AI agents (optional)
-- **System health monitoring** - Process status, port usage, Docker containers
+- **Real-time task updates** - Monitor dev-bot tasks via Server-Sent Events
+- **Dev-bots coordination** - Autonomous development tasks via AI agents
+- **Admin bot chat** - Interactive AI assistant for system management
+- **System health monitoring** - Process status, Docker containers
 
 **Key Point:** This tool is for local development only and is not deployed to production.
 
@@ -68,19 +67,7 @@ Before installing dependencies, ensure you have the following system requirement
 **Required:**
 - Node.js 18.x or 20.x
 - npm 8.x or higher
-- tmux (for interactive terminal sessions)
-- Build tools for native dependencies:
-  - **Linux**: `build-essential` package
-    ```bash
-    sudo apt-get install build-essential tmux
-    ```
-  - **macOS**: Xcode Command Line Tools
-    ```bash
-    xcode-select --install
-    brew install tmux
-    ```
-
-**Note:** The `node-pty` package requires native compilation and these build tools are necessary for installation. If you encounter errors during `npm install`, ensure these dependencies are installed.
+- Docker (for dev-bot execution)
 
 ### Install Dependencies
 ```bash
@@ -109,7 +96,7 @@ make monitor-stop     # Stop app-monitor
 
 ### Access
 - **Frontend:** http://localhost:5174 (Dashboard UI)
-- **Backend API:** http://localhost:5000 (REST + WebSocket)
+- **Backend API:** http://localhost:5000 (REST + SSE)
 
 ## Structure
 
@@ -128,7 +115,7 @@ make monitor-stop     # Stop app-monitor
 
 ### Shared API Contracts
 
-- `shared/api-contracts/index.ts` contains the only source of truth for every REST/Socket DTO that the backend emits and the frontend consumes.
+- `shared/api-contracts/index.ts` contains the only source of truth for every REST DTO that the backend emits and the frontend consumes.
 - All JSON responses must use the shared `ApiSuccess<T>` and `ApiError` envelopes so clients can rely on `success`/`data`/`error` fields; the backend routes import these helpers and the frontend services unwrap them before returning data.
 - If you add a new endpoint, extend the shared contract file first, update the backend route to return the contract, and then consume it in `frontend/src/services/api.ts` so both sides stay in sync.
 - Dev-Bots management endpoints (`/api/dev-bots/*`) expose types such as `DevBotsStatus`, `DevBotsTask`, and `DevBotsWorkspaceSyncStatus` from the shared contracts package, and the frontend imports those exact types to avoid drift across panels.
@@ -305,14 +292,14 @@ make stop
 
 ## Features
 
-✅ **Real-time log streaming** (config-based, 5+ sources)  
-✅ **Service management** (start/stop/restart)  
-✅ **Port conflict detection** (fail-fast with helpful errors)  
-✅ **Docker integration** (dev-bots support)  
-✅ **WebSocket updates** (live status and logs)  
-✅ **Keyboard shortcuts** (10+ shortcuts)  
-✅ **Responsive design** (mobile, tablet, desktop)  
-✅ **Error boundaries** (graceful error handling)  
+✅ **Real-time task updates** (SSE-based event streaming)
+✅ **Dev-bots orchestration** (autonomous AI task execution)
+✅ **Admin bot chat** (interactive AI assistant)
+✅ **Docker integration** (ephemeral container execution)
+✅ **SSE updates** (live task status and system events)
+✅ **Keyboard shortcuts** (10+ shortcuts)
+✅ **Responsive design** (mobile, tablet, desktop)
+✅ **Error boundaries** (graceful error handling)
 ✅ **400+ tests** (unit, integration, E2E)  
 
 ## License

@@ -14,16 +14,15 @@
 
 **Architecture:**
 - React frontend (`frontend/src/`)
-- Socket.IO for real-time updates (`process:*`, `docker:*`, `task:*`, `pr:*`)
+- SSE (Server-Sent Events) for real-time updates (`task:*`, `system:*`)
 - REST API for control actions
 - Event-driven only (no timers, no polling)
 
 **Key Services:**
-- `ProcessManager` - Process lifecycle with port conflict detection
 - `DockerManager` - Docker orchestration via Dockerode + circuit breaker
 - `TaskQueueManager` - Task queue coordination
-- `LogStreamer` - Real-time log streaming
-- `ConnectionManager` - WebSocket connection management
+- `useSSE` hook - Real-time task event streaming
+- `useAdminBotSSE` hook - Admin bot chat streaming
 
 **Design Principle:** Show only high-signal indicators needed for intervention. Not an analytics platform.
 
@@ -47,7 +46,6 @@
 | `EphemeralWorkerService` | Container lifecycle + context management, heartbeats every 15s |
 | `RecoveryAgent` | Diagnoses phase validation failures, suggests fixes |
 | `ScopeControlService` | Scope creep detection, context isolation, cleanup scheduling |
-| `TerminalService` | Persistent tmux-based terminal sessions via Socket.IO |
 
 **Agent Types:**
 - **Claude**: Primary implementation agent (code, refactoring)
@@ -207,7 +205,7 @@
 
 ### Event Flow
 ```
-Backend Event → Socket.IO Broadcast → Frontend Update → User Action → REST API → Backend Processing → Event
+Backend Event → SSE Broadcast → Frontend Update → User Action → REST API → Backend Processing → Event
 ```
 
 ### Chain Flow
@@ -271,7 +269,7 @@ Implementation → REVIEW → [FIX → REVIEW]×N → COMPLETE → PR Merge → 
 
 ### Internal Communication
 - **HTTP REST** - Control actions (POST /api/tasks, etc.)
-- **WebSocket (Socket.IO)** - Real-time updates
+- **SSE (Server-Sent Events)** - Real-time updates (task events, system status)
 - **SQLite** - Shared state (via TaskQueueService singleton)
 - **Filesystem** - Artifacts (logs, patches, context bundles)
 

@@ -28,7 +28,7 @@ The App Monitor backend is a TypeScript/Node.js application that orchestrates au
 - **GitHub Integration**: Webhook handling, PR monitoring, auto-merge capabilities
 - **PR Self-Healing**: Event-driven condition evaluation and automated fix generation
 - **Chain Tracking**: Multi-level task dependency tracking with depth limiting
-- **Interactive Sessions**: Real-time session management with log streaming
+- **Real-time Updates**: Server-Sent Events (SSE) for task and system status updates
 - **Quality Observations**: Automated code quality tracking and improvement suggestions
 
 ### Tech Stack
@@ -38,7 +38,7 @@ The App Monitor backend is a TypeScript/Node.js application that orchestrates au
 - **Database**: SQLite (better-sqlite3)
 - **Container Runtime**: Docker
 - **API Framework**: Express.js
-- **Real-time**: Socket.io
+- **Real-time**: Server-Sent Events (SSE)
 - **Testing**: Vitest
 - **GitHub API**: gh CLI
 
@@ -120,7 +120,6 @@ backend/
 │   │   ├── githubWebhookHandler.service.ts  # Webhook processing
 │   │   ├── chainTracker.service.ts    # Task chain management
 │   │   ├── ephemeralWorker.service.ts # Docker worker management
-│   │   ├── interactiveSession.service.ts   # Session orchestration
 │   │   └── ...                         # 50+ other services
 │   ├── utils/               # Shared utilities
 │   ├── config.ts            # Configuration management
@@ -455,21 +454,23 @@ GET /dev-bots/metrics       # Get metrics
 POST /webhooks/github       # GitHub webhook receiver
 ```
 
-#### Interactive Sessions
+#### SSE Events (Server-Sent Events)
 
 ```http
-POST   /dev-bots/interactive/start   # Start session
-GET    /dev-bots/interactive/:id     # Get session
-DELETE /dev-bots/interactive/:id     # Stop session
+GET /api/sse/events              # Task and system event stream
+GET /api/admin-bot/chat/stream   # Admin bot chat streaming
 ```
 
-#### WebSocket Events
+**Task Events:**
+- `task:added` - New task created
+- `task:assigned` - Task assigned to worker
+- `task:started` - Task execution started
+- `task:completed` - Task completed
+- `task:failed` - Task failed
 
-```javascript
-// Log streaming
-socket.on('task-logs', (data) => { /* ... */ });
-socket.on('session-output', (data) => { /* ... */ });
-```
+**System Events:**
+- `system:status` - System status update
+- `system:health` - Health check update
 
 ### Full API Reference
 
