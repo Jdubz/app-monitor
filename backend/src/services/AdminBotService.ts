@@ -6,7 +6,7 @@
  * Codex instance with admin-level MCP tool access.
  *
  * Architecture:
- * - Spawns: `codex chat` with custom config pointing to MCP server
+ * - Spawns: `codex` (interactive mode) with custom config pointing to MCP server
  * - Communication: stdio (stdin for messages, stdout for responses)
  * - Streaming: Emits output events for SSE routes to consume
  * - Lifecycle: One session at a time, clean shutdown on stop
@@ -174,7 +174,8 @@ export class AdminBotService extends EventEmitter {
       this.generateRuntimeConfig();
 
       // Spawn Codex CLI process with admin bot config
-      const codexProcess = spawn('codex', ['chat'], {
+      // Note: Codex runs interactively by default (no subcommand needed)
+      const codexProcess = spawn('codex', [], {
         cwd: this.repoRoot,
         env: {
           ...process.env,

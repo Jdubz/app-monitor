@@ -93,7 +93,7 @@ describe('AdminBotService', () => {
       expect(typeof sessionId).toBe('string');
       expect(spawn).toHaveBeenCalledWith(
         'codex',
-        ['chat'],
+        [],
         expect.objectContaining({
           env: expect.objectContaining({
             APP_MONITOR_MCP_USER_ROLE: 'admin',
