@@ -59,7 +59,7 @@ export interface EphemeralWorker {
   agent: AgentPersonality;
   agentCliType: AgentCliType; // Which CLI tool is used
   task: Task;
-  status: 'starting' | 'running' | 'completing' | 'completed' | 'failed' | 'destroyed';
+  status: 'starting' | 'running' | 'completing' | 'completed' | 'failed' | 'blocked' | 'destroyed';
   createdAt: string;
   completedAt?: string;
   destroyedAt?: string;
@@ -97,6 +97,7 @@ export interface EphemeralWorkerServiceConfig {
 
 export class EphemeralWorkerService {
   private ephemeralWorkers = new Map<string, EphemeralWorker>();
+  private workerCacheByTask = new Map<string, EphemeralWorker>();
   private readonly config: EphemeralWorkerServiceConfig;
   private readonly docker: Docker;
   private readonly dockerManager: DockerManager;
@@ -173,6 +174,30 @@ export class EphemeralWorkerService {
   }
 
   /**
+   * Get or create a worker for a task. Reuses the same container across phases.
+   * If the existing worker has a different agent or CLI type, it is recreated.
+   */
+  async getOrCreateWorker(
+    task: Task,
+    agent: AgentPersonality,
+    cliType: AgentCliType
+  ): Promise<EphemeralWorker> {
+    const cached = this.workerCacheByTask.get(task.id);
+    if (cached && cached.status !== 'destroyed') {
+      // If agent/cli changed, recreate to avoid mismatched creds
+      if (cached.agent.id !== agent.id || cached.agentCliType !== cliType) {
+        await this.destroyWorker(cached.id).catch(() => undefined);
+      } else {
+        return cached;
+      }
+    }
+
+    const worker = await this.createWorker(task, agent, cliType);
+    this.workerCacheByTask.set(task.id, worker);
+    return worker;
+  }
+
+  /**
    * Get worker by ID
    */
   getWorker(workerId: string): EphemeralWorker | undefined {
@@ -191,6 +216,7 @@ export class EphemeralWorkerService {
    */
   clearAllWorkers(): void {
     this.ephemeralWorkers.clear();
+    this.workerCacheByTask.clear();
   }
 
   /**
@@ -521,6 +547,7 @@ export class EphemeralWorkerService {
       };
 
       this.ephemeralWorkers.set(workerId, ephemeralWorker);
+      this.workerCacheByTask.set(task.id, ephemeralWorker);
 
       logger.info({
         category: 'process',
@@ -1624,6 +1651,10 @@ export class EphemeralWorkerService {
 
       // Remove from ephemeral workers map
       this.ephemeralWorkers.delete(workerId);
+      // also remove cache entry if it points to this worker
+      if (this.workerCacheByTask.get(worker.task.id)?.id === workerId) {
+        this.workerCacheByTask.delete(worker.task.id);
+      }
 
       logger.info({
         category: 'process',
@@ -1646,6 +1677,61 @@ export class EphemeralWorkerService {
   }
 
   /**
+   * Capture a lightweight workspace snapshot inside the container for blocked tasks.
+   * Stores status/diff/untracked listings under /workspace/.artifacts.
+   */
+  async snapshotWorkspaceForBlocked(worker: EphemeralWorker): Promise<void> {
+    const container = this.docker.getContainer(worker.containerId);
+    const snapshotCmd = [
+      'mkdir -p /workspace/.artifacts',
+      'cd /workspace',
+      '(git status --short > /workspace/.artifacts/blocked-status.txt 2>&1 || true)',
+      '(git diff > /workspace/.artifacts/blocked-diff.patch 2>&1 || true)',
+      '(git ls-files --others --exclude-standard > /workspace/.artifacts/blocked-untracked.txt 2>&1 || true)',
+    ].join(' && ');
+
+    try {
+      const exec = await container.exec({
+        Cmd: ['/bin/bash', '-c', snapshotCmd],
+        AttachStdout: true,
+        AttachStderr: true,
+      });
+      await exec.start({ Detach: false, Tty: false });
+
+      // Copy snapshots to host for safekeeping
+      const hostDir = path.join(this.devBotsLogPath, '..', 'artifacts');
+      if (!fs.existsSync(hostDir)) {
+        fs.mkdirSync(hostDir, { recursive: true });
+      }
+      const files = ['blocked-status.txt', 'blocked-diff.patch', 'blocked-untracked.txt'];
+      for (const file of files) {
+        const containerPath = `/workspace/.artifacts/${file}`;
+        const hostPath = path.join(hostDir, `${worker.task.id}-${file}`);
+        try {
+          await this.copyContainerFileToHost(worker.containerId, containerPath, hostPath, 'blocked snapshot');
+        } catch {
+          // ignore missing files; continue
+        }
+      }
+
+      logger.info({
+        category: 'process',
+        action: 'blocked_snapshot_saved',
+        message: `Saved blocked snapshot for task ${worker.task.id}`,
+        details: { taskId: worker.task.id, containerId: worker.containerId },
+      });
+    } catch (error) {
+      logger.warn({
+        category: 'process',
+        action: 'blocked_snapshot_failed',
+        message: `Failed to save blocked snapshot for task ${worker.task.id}`,
+        error,
+        details: { taskId: worker.task.id, containerId: worker.containerId },
+      });
+    }
+  }
+
+  /**
    * Destroy all workers (typically on system shutdown)
    */
   async destroyAllWorkers(): Promise<void> {
@@ -1665,6 +1751,7 @@ export class EphemeralWorkerService {
     }
 
     this.ephemeralWorkers.clear();
+    this.workerCacheByTask.clear();
   }
 
   /**
