@@ -329,7 +329,8 @@ export class PlansService {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const stmt = this.db.prepare(`
-      SELECT * FROM plans ${whereClause} ORDER BY priority, created_at DESC
+      SELECT * FROM plans ${whereClause}
+      ORDER BY priority, created_at DESC, rowid DESC
     `);
 
     const rows = stmt.all(params) as Array<Record<string, unknown>>;
