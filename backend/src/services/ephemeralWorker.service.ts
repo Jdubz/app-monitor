@@ -186,7 +186,15 @@ export class EphemeralWorkerService {
     if (cached && cached.status !== 'destroyed') {
       // If agent/cli changed, recreate to avoid mismatched creds
       if (cached.agent.id !== agent.id || cached.agentCliType !== cliType) {
-        await this.destroyWorker(cached.id).catch(() => undefined);
+        await this.destroyWorker(cached.id).catch((err) => {
+          logger.warn({
+            category: 'process',
+            action: 'stale_worker_destroy_failed',
+            message: `Failed to destroy stale worker ${cached.id} for task ${task.id}; container may be orphaned`,
+            error: err,
+            details: { taskId: task.id, workerId: cached.id },
+          });
+        });
       } else {
         return cached;
       }
@@ -1682,12 +1690,14 @@ export class EphemeralWorkerService {
    */
   async snapshotWorkspaceForBlocked(worker: EphemeralWorker): Promise<void> {
     const container = this.docker.getContainer(worker.containerId);
+    const snapshotFiles = ['blocked-status.txt', 'blocked-diff.patch', 'blocked-untracked.txt'];
+    const artifactsDir = '/workspace/.artifacts';
     const snapshotCmd = [
-      'mkdir -p /workspace/.artifacts',
+      `mkdir -p ${artifactsDir}`,
       'cd /workspace',
-      '(git status --short > /workspace/.artifacts/blocked-status.txt 2>&1 || true)',
-      '(git diff > /workspace/.artifacts/blocked-diff.patch 2>&1 || true)',
-      '(git ls-files --others --exclude-standard > /workspace/.artifacts/blocked-untracked.txt 2>&1 || true)',
+      `(git status --short > ${artifactsDir}/${snapshotFiles[0]} 2>&1 || true)`,
+      `(git diff > ${artifactsDir}/${snapshotFiles[1]} 2>&1 || true)`,
+      `(git ls-files --others --exclude-standard > ${artifactsDir}/${snapshotFiles[2]} 2>&1 || true)`,
     ].join(' && ');
 
     try {
@@ -1703,14 +1713,19 @@ export class EphemeralWorkerService {
       if (!fs.existsSync(hostDir)) {
         fs.mkdirSync(hostDir, { recursive: true });
       }
-      const files = ['blocked-status.txt', 'blocked-diff.patch', 'blocked-untracked.txt'];
-      for (const file of files) {
-        const containerPath = `/workspace/.artifacts/${file}`;
+      for (const file of snapshotFiles) {
+        const containerPath = `${artifactsDir}/${file}`;
         const hostPath = path.join(hostDir, `${worker.task.id}-${file}`);
         try {
           await this.copyContainerFileToHost(worker.containerId, containerPath, hostPath, 'blocked snapshot');
-        } catch {
-          // ignore missing files; continue
+        } catch (e) {
+          logger.warn({
+            category: 'process',
+            action: 'blocked_snapshot_file_copy_failed',
+            message: `Could not copy snapshot file ${file} for task ${worker.task.id}.`,
+            error: e,
+            details: { taskId: worker.task.id, containerId: worker.containerId, file },
+          });
         }
       }
 
