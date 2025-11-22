@@ -1,14 +1,11 @@
 import express, { Request, Response } from 'express';
 import { createServer } from 'http';
-import { Server as SocketIOServer } from 'socket.io';
 import cors from 'cors';
-import * as crypto from 'crypto';
 import { config } from './config.js';
 import { createApiRouter } from './routes/index.js';
 import { DevBotsManager } from './services/devBotsManager.js';
 import { createDevBotsManagerDependencies } from './services/devBotsManager.factory.js';
 import type { DevBotsManagerDependencies } from './services/devBotsManager.interfaces.js';
-import { ConnectionManager, setConnectionManagerInstance } from './services/connectionManager.js';
 import { GitHubWebhookHandler } from './services/githubWebhookHandler.service.js';
 import { setWebhookHandler } from './routes/github-webhooks.routes.js';
 import { logger } from './utils/logger.js';
@@ -16,23 +13,16 @@ import { startMcpServer } from './mcp/server.js';
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
 import { AdminBotService } from './services/AdminBotService.js';
 
-// CORS allowed headers for both HTTP and WebSocket
+// CORS allowed headers
 const ALLOWED_CORS_HEADERS = ['Content-Type', 'X-API-Key', 'Authorization', 'X-Trace-Id'];
-import type {
-  ClientToServerEvents,
-  ServerToClientEvents,
-  InterServerEvents,
-  SocketData,
-} from './types/socketEvents.js';
+
 // Export services for API access
 export let devBotsManager: DevBotsManager | undefined;
-export let connectionManager: ConnectionManager;
 export let adminBotService: AdminBotService;
 
 export interface CreateAppOverrides {
   devBotsManager?: DevBotsManager | null;
   devBotsDependencies?: DevBotsManagerDependencies;
-  connectionManager?: ConnectionManager;
 }
 
 export interface CreateAppOptions {
@@ -44,82 +34,6 @@ export async function createApp(options: CreateAppOptions = {}) {
   const app = express();
   const httpServer = createServer(app);
 
-  // Setup Socket.IO with type-safe events
-  const io = new SocketIOServer<
-    ClientToServerEvents,
-    ServerToClientEvents,
-    InterServerEvents,
-    SocketData
-  >(httpServer, {
-    cors: {
-      origin: config.corsOrigin,
-      credentials: true,
-      methods: ['GET', 'POST'],
-      allowedHeaders: ALLOWED_CORS_HEADERS,
-    },
-    path: '/socket.io',
-    transports: ['websocket', 'polling'],
-    allowEIO3: true,
-  });
-
-  // Add Socket.IO authentication middleware
-  if (config.requireAuth) {
-    io.use((socket, next) => {
-      const apiKey = socket.handshake.auth?.apiKey as string | undefined;
-
-      if (!apiKey) {
-        logger.warn({
-          category: 'socket',
-          action: 'auth_failed',
-          message: 'Socket.IO connection denied - missing API key',
-          details: {
-            socketId: socket.id,
-            ip: socket.handshake.address,
-          },
-        });
-        return next(new Error('Authentication required'));
-      }
-
-      const expectedKeyBuffer = Buffer.from(config.apiKey);
-      const providedKeyBuffer = Buffer.from(apiKey);
-
-      // Use timing-safe comparison to prevent timing attacks
-      const keysMatch =
-        expectedKeyBuffer.length === providedKeyBuffer.length &&
-        crypto.timingSafeEqual(expectedKeyBuffer, providedKeyBuffer);
-
-      if (!keysMatch) {
-        logger.warn({
-          category: 'socket',
-          action: 'auth_failed',
-          message: 'Socket.IO connection denied - invalid API key',
-          details: {
-            socketId: socket.id,
-            ip: socket.handshake.address,
-          },
-        });
-        return next(new Error('Invalid API key'));
-      }
-
-      logger.info({
-        category: 'socket',
-        action: 'auth_success',
-        message: 'Socket.IO connection authenticated',
-        details: { socketId: socket.id },
-      });
-      next();
-    });
-  }
-
-  // Initialize ConnectionManager
-  connectionManager = overrides.connectionManager ?? new ConnectionManager();
-
-  // Set Socket.IO instance for broadcasting
-  connectionManager.setIO(io);
-
-  // Set global instance for service access
-  setConnectionManagerInstance(connectionManager);
-
   // Initialize AdminBotService
   adminBotService = new AdminBotService();
   logger.info({
@@ -127,12 +41,6 @@ export async function createApp(options: CreateAppOptions = {}) {
     action: 'admin_bot_service_initialized',
     message: 'AdminBotService initialized'
   });
-
-  // Initialize Socket.IO Terminal Handler (unified architecture)
-  // This will be used instead of the native WebSocket implementation (InteractiveSessionStreaming)
-  // Note: Docker instance will be available after DevBotsManager initialization
-  // Terminal handler initialization happens after DevBotsManager is created
-  // (moved to after DevBotsManager initialization below)
 
   if (overrides.devBotsManager === null) {
     devBotsManager = undefined;
@@ -202,105 +110,6 @@ export async function createApp(options: CreateAppOptions = {}) {
     });
   }
 
-  // Set up Socket.IO connections
-  io.on('connection', (socket) => {
-    logger.info({
-      category: 'socket',
-      action: 'client_connected',
-      message: 'Client connected',
-      details: { socketId: socket.id },
-    });
-
-    connectionManager.register(socket);
-
-    // Disconnect is handled internally by connectionManager.register()
-
-    socket.on('docker:startMonitor', async ({ containerId }) => {
-      if (!devBotsManager) {
-        socket.emit('docker:monitorError', {
-          containerId,
-          error: 'Dev-Bots manager unavailable',
-        });
-        return;
-      }
-      try {
-        const dockerManager = devBotsManager.getDockerManager();
-
-        connectionManager.addMonitor(socket.id, containerId);
-
-        const info = await dockerManager.inspectContainer(containerId);
-        if (info) {
-          socket.emit('docker:containerStatus', {
-            containerId,
-            status: info.State,
-            timestamp: new Date().toISOString(),
-          });
-        }
-
-        const intervalId = setInterval(async () => {
-          try {
-            const updatedInfo = await dockerManager.inspectContainer(containerId);
-            if (updatedInfo) {
-              socket.emit('docker:containerStatus', {
-                containerId,
-                status: updatedInfo.State,
-                timestamp: new Date().toISOString(),
-              });
-            }
-          } catch (error) {
-            logger.error({
-              category: 'docker',
-              action: 'monitor_error',
-              message: 'Failed to get container status',
-              error,
-            });
-          }
-        }, 5000);
-
-        socket.data.monitorIntervals = socket.data.monitorIntervals || {};
-        socket.data.monitorIntervals[containerId] = intervalId;
-
-        socket.emit('docker:monitorStarted', { containerId });
-      } catch (error) {
-        logger.error({
-          category: 'docker',
-          action: 'monitor_error',
-          message: 'Failed to start container monitoring',
-          error,
-        });
-        socket.emit('docker:monitorError', {
-          containerId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      }
-    });
-
-    socket.on('docker:stopMonitor', ({ containerId }) => {
-      connectionManager.removeMonitor(socket.id, containerId);
-
-      if (socket.data.monitorIntervals?.[containerId]) {
-        clearInterval(socket.data.monitorIntervals[containerId]);
-        delete socket.data.monitorIntervals[containerId];
-        socket.emit('docker:monitorStopped', { containerId });
-      }
-    });
-
-    socket.on('disconnect', () => {
-      logger.info({
-        category: 'socket',
-        action: 'client_disconnected',
-        message: 'Client disconnected',
-        details: { socketId: socket.id },
-      });
-
-      if (socket.data.monitorIntervals) {
-        Object.values(socket.data.monitorIntervals).forEach((intervalId: NodeJS.Timeout) => {
-          clearInterval(intervalId);
-        });
-      }
-    });
-  });
-
   app.use(cors({
     origin: config.corsOrigin,
     credentials: true,
@@ -310,7 +119,6 @@ export async function createApp(options: CreateAppOptions = {}) {
 
   const apiRouter = createApiRouter({
     devBotsManager: devBotsManager ?? undefined,
-    connectionManager,
     adminBotService,
   });
 

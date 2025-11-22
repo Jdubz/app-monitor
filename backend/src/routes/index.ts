@@ -10,12 +10,10 @@
 
 import { Router } from 'express';
 import { DevBotsManager } from '../services/devBotsManager.js';
-import type { ConnectionManager } from '../services/connectionManager.js';
 import type { HealthCheckApiResponse } from '@app-monitor/api-contracts';
 import { requireApiKey, requireApiKeySSE } from '../middleware/auth.js';
 import { logger } from '../utils/logger.js';
 
-import { createSocketRoutes } from './socket-task.routes.js';
 import { createDockerRouter } from './docker.routes.js';
 import { createDevBotsRouter } from './dev-bots/index.js';
 import { createSSERoutes } from './sse.routes.js';
@@ -43,7 +41,6 @@ import type { AdminBotService } from '../services/AdminBotService.js';
  */
 export function createApiRouter(deps: {
   devBotsManager?: DevBotsManager;
-  connectionManager?: ConnectionManager;
   adminBotService?: AdminBotService;
 }) {
   const router = Router();
@@ -78,7 +75,7 @@ export function createApiRouter(deps: {
       // In test environment, index.js may not be available
       shuttingDown = false;
     }
-    
+
     if (shuttingDown) {
       // Return 503 during graceful shutdown so nginx stops routing here
       return res.status(503).json({
@@ -89,7 +86,7 @@ export function createApiRouter(deps: {
         }
       });
     }
-    
+
     const payload: HealthCheckApiResponse = {
       success: true,
       data: {
@@ -100,11 +97,6 @@ export function createApiRouter(deps: {
     };
     res.json(payload);
   });
-
-  // Apply API key authentication to all routes except health and webhooks
-  if (deps.connectionManager) {
-    router.use('/socket', requireApiKey, createSocketRoutes(deps.connectionManager));
-  }
 
   router.use('/docker', requireApiKey, createDockerRouter());
 
