@@ -255,7 +255,13 @@ export class AdminBotService extends EventEmitter {
     ].filter(Boolean).join(':');
     const enhancedPath = nvmPaths + ':' + (process.env.PATH || '');
 
-    const codexProcess = spawn('codex', ['exec', '--dangerously-skip-permissions', message], {
+    const codexProcess = spawn('codex', [
+      'exec',
+      '--dangerously-bypass-approvals-and-sandbox',
+      '--skip-git-repo-check',
+      '--cd', codexWorkingDir,
+      message
+    ], {
       cwd: codexWorkingDir,
       env: {
         ...process.env,
