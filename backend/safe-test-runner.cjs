@@ -10,7 +10,6 @@
 const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
-const { getMaxThreads } = require('./vitest.shared.config.js')
 
 // Configuration
 const LOCK_FILE = path.join(__dirname, '.test-lock')
@@ -128,9 +127,6 @@ class SafeTestRunner {
     return new Promise((resolve) => {
       console.log('\n🧪 Running tests...')
 
-      // Get thread count from shared config
-      const maxThreads = getMaxThreads()
-
       const vitestArgs = [
         'vitest',
         'run',
@@ -143,9 +139,9 @@ class SafeTestRunner {
         vitestArgs.push('--config', vitestConfig)
       }
 
-      const resolvedForkSetting = '0';
-
-      console.log('⚙️  Forcing Vitest to single-threaded thread pool (no forks) to avoid V8 deserialize crash.');
+      // Pool configuration is handled by vitest.unit.config.ts
+      // Using threads pool with isolate=false to avoid V8 serialization errors
+      // that occur with the forks pool on large test suites
 
       const testProcess = spawn('npx', vitestArgs, {
         stdio: 'inherit',
@@ -154,12 +150,6 @@ class SafeTestRunner {
           ...process.env,
           NODE_ENV: 'test',
           NODE_OPTIONS: '--max-old-space-size=2048 --no-warnings',
-          VITEST_POOL: 'threads',
-          VITEST_MAX_THREADS: '1',
-          VITEST_MIN_THREADS: '1',
-          VITEST_MAX_FORKS: '1',
-          VITEST_FORCE_FORKS: resolvedForkSetting,
-          VITEST_ISOLATE: '1',
           SKIP_HEAVY_DEV_BOT_TESTS: process.env.SKIP_HEAVY_DEV_BOT_TESTS || '1'
         }
       })

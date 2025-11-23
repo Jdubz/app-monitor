@@ -14,6 +14,8 @@ Environment="DATABASE_PATH=/opt/app-monitor/shared/backend/data/app-monitor.db"
 Environment="LOG_LEVEL=info"
 Environment="CORS_ORIGIN=*"
 Environment="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+# NVM bin path for finding codex CLI (AdminBotService uses this)
+Environment="NVM_BIN_PATH=/home/jdubz/.nvm/versions/node/v20.19.5/bin"
 
 # Load API keys and other secrets from shared .env
 EnvironmentFile=-/opt/app-monitor/shared/.env
