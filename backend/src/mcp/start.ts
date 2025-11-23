@@ -77,8 +77,15 @@ async function main() {
 // Use realpath comparison to handle symlinks (e.g., /opt/app-monitor/current -> releases/xxx)
 const thisFile = fileURLToPath(import.meta.url);
 const entryFile = process.argv[1];
-const isDirectExecution = thisFile === entryFile ||
-  realpathSync(thisFile) === realpathSync(entryFile);
+const isDirectExecution = (() => {
+  if (thisFile === entryFile) return true;
+  try {
+    // realpathSync can throw if a path doesn't exist
+    return realpathSync(thisFile) === realpathSync(entryFile);
+  } catch {
+    return false;
+  }
+})();
 
 if (isDirectExecution) {
   main();

@@ -1,14 +1,52 @@
 # Admin Bot Chat Interface Implementation Plan
 
 **Date:** 2025-11-20
+**Last Updated:** 2025-11-22
 **Status:** ✅ COMPLETED - This is a historical planning document
 **Purpose:** Replace tmux-based terminal with a clean AI conversation interface for admin bot interactions
 
 > **NOTE:** This implementation has been completed. For current implementation details, see the code:
 > - Backend: `backend/src/services/AdminBotService.ts` - Core service implementation
 > - Backend: `backend/src/routes/admin-bot/chat.routes.ts` - API routes
+> - Backend: `backend/src/mcp/start.ts` - MCP server entry point with symlink detection
 > - Frontend: `frontend/src/components/admin-bot/AdminBotChat.tsx` - Chat UI component
 > - Frontend: `frontend/src/hooks/useAdminBotSSE.ts` - SSE connection hook
+
+## Current Implementation Summary (November 2025)
+
+### Persistent Sessions via Thread Resumption
+
+The admin bot maintains conversation context across messages using Codex thread IDs:
+
+1. **First message**: Spawns `codex exec --json <message>` and captures `thread_id` from JSON output
+2. **Subsequent messages**: Uses `codex exec resume <thread_id> --json <message>` to continue conversation
+3. **Session state**: Thread ID stored in `AdminBotSession.codexThreadId`
+
+### Codex CLI Flags
+
+**IMPORTANT**: These are Codex CLI flags, not Claude Code flags:
+
+- `--dangerously-bypass-approvals-and-sandbox` - Bypass approval prompts (NOT `--dangerously-skip-permissions`)
+- `--skip-git-repo-check` - Allow running from any directory
+- `--cd <directory>` - Set working directory (defaults to `~/Development`)
+- `--json` - Output structured JSON for parsing
+
+### MCP Server Configuration
+
+See `docs/technicalDesigns/MCP_README.md` for detailed configuration including:
+- Development setup (`~/.codex/config.toml`)
+- Production blue/green deployment via `/opt/app-monitor/current` symlink
+- Symlink detection fix using `realpathSync`
+
+### Architecture: SSE-Only (No Socket.IO)
+
+The chat interface uses Server-Sent Events exclusively:
+- `GET /api/admin-bot/chat/stream` - SSE endpoint for streaming responses
+- `POST /api/admin-bot/chat/start` - Start session
+- `POST /api/admin-bot/chat/message` - Send message
+- `POST /api/admin-bot/chat/stop` - Stop session
+
+---
 
 ## Code Review Comments Addressed
 
@@ -541,30 +579,22 @@ export function AdminBotChat() {
 
 ## Integration with Existing Features
 
-### DO NOT Duplicate These Services
+### Reused Infrastructure
 
-The new chat interface will **reuse existing infrastructure**:
+The chat interface reuses existing infrastructure:
 
-1. **Socket.IO Server** (`backend/src/server.ts`)
-   - Already configured and running
-   - Use existing `io` instance passed to services
-   - DO NOT create a new Socket.IO server
+1. **API Response Utilities** (`backend/src/utils/apiResponse.ts`)
+   - Uses `sendSuccess()` and `sendError()` helpers
 
-2. **API Response Utilities** (`backend/src/utils/apiResponse.ts`)
-   - Use `sendSuccess()` and `sendError()` helpers
-   - DO NOT create custom response formatters
+2. **Logger** (`backend/src/utils/logger.js`)
+   - Uses existing logger with `category: 'admin_bot_chat'`
 
-3. **Logger** (`backend/src/utils/logger.js`)
-   - Use existing logger with `category: 'admin_bot_chat'`
-   - DO NOT create custom logging
+3. **Frontend API Client** (`frontend/src/services/api.ts`)
+   - Uses existing `api` instance for REST calls
 
-4. **Frontend API Client** (`frontend/src/services/api.ts`)
-   - Use existing `api` instance for REST calls
-   - DO NOT create custom fetch wrappers
+### NOT Used: Socket.IO
 
-5. **Frontend Socket Hook** (if exists)
-   - Check for existing Socket.IO hooks before creating new ones
-   - Reuse socket connection from monitor shell
+**The admin bot chat uses SSE only.** Socket.IO was removed from the codebase as part of the SSE migration. All real-time communication uses Server-Sent Events.
 
 ### Files to REMOVE (Complete Deletion)
 
@@ -1089,34 +1119,49 @@ With pre-configured MCP server access, the admin bot can:
    - Save plans to database
    - Track execution progress
 
-### Configuration Flow
+### Current Configuration Flow (Updated November 2025)
 
-1. **User starts chat** → Frontend creates session
-2. **Backend spawns Codex CLI** with `CODEX_CONFIG_PATH=backend/config/codex-admin-bot.toml`
-3. **Codex reads config** → Discovers `mcp_servers.app-monitor`
-4. **Codex spawns MCP server** → Runs `backend/src/mcp/start.ts` via stdio
-5. **MCP server connects** → Initializes database, services, registers tools
-6. **Admin bot ready** → Can use all 24 MCP tools immediately
+1. **User starts chat** → Frontend calls `POST /api/admin-bot/chat/start`
+2. **Backend creates session** → Session ID generated, runtime config created
+3. **User sends first message** → Backend spawns `codex exec --json <message>`
+4. **Codex reads config** → Uses `~/.codex/config.toml` with MCP server entries
+5. **Thread ID captured** → Backend parses JSON output for `thread.started` event
+6. **Subsequent messages** → Backend spawns `codex exec resume <thread_id> --json <message>`
+7. **Admin bot ready** → Can use all 24 MCP tools with persistent conversation context
+
+### Environment Variables
+
+The AdminBotService sets these environment variables when spawning Codex:
+
+```bash
+CODEX_CONFIG_PATH=<runtime-config-path>
+APP_MONITOR_ROOT=<repo-root>
+APP_MONITOR_MCP_USER_ROLE=admin
+DATABASE_PATH=<database-path>
+PATH=<enhanced-path-with-nvm>
+```
 
 ### Why This Architecture Works
 
-- **Zero manual setup:** Config is pre-baked, users just start chatting
-- **Isolated per session:** Each chat session gets own MCP server instance
+- **Persistent sessions:** Thread resumption maintains conversation context
+- **Zero manual setup:** Config is pre-baked in `~/.codex/config.toml`
+- **Isolated per session:** Each chat session tracks its own thread ID
 - **Admin permissions:** Automatically configured with admin role
-- **Shared services:** MCP server uses same database/services as main backend
-- **Clean lifecycle:** MCP server exits when Codex session ends
+- **Blue/green aware:** Production config uses symlink for automatic updates
+- **Symlink handling:** `realpathSync` in start.ts ensures correct execution
 
 ---
 
-## Next Steps
+## Implementation Complete
 
-1. **Review this plan** with team
-2. **Validate assumptions** about Codex CLI stdio interface
-3. **Test MCP server standalone** to ensure start.ts works
-4. **Approve library choice** (assistant-ui vs alternatives)
-5. **Begin Phase 0 implementation** (cleanup legacy code)
-6. **Begin Phase 1 implementation** (backend + MCP config)
+All phases completed as of November 2025:
+- ✅ Phase 0: Legacy code cleanup (terminal, Socket.IO)
+- ✅ Phase 1: Core backend with AdminBotService
+- ✅ Phase 2: Frontend UI with SSE streaming
+- ✅ Phase 3: Testing (unit, integration)
+- ✅ Phase 4: Documentation and polish
 
----
-
-**Status:** Ready for review and approval
+**For current implementation details, see:**
+- `docs/technicalDesigns/MCP_README.md` - MCP and Codex configuration
+- `backend/src/services/AdminBotService.ts` - Core service
+- `backend/src/mcp/start.ts` - MCP entry point

@@ -87,14 +87,11 @@ export function AdminBotChat() {
     }
   }, [messages]);
 
-  // Append streaming output to current assistant message
-  const handleOutput = useCallback((content: string) => {
+  // Helper to append content to streaming assistant message
+  const appendToStreamingMessage = useCallback((content: string) => {
     setIsStreaming(true);
-
-    // Accumulate output
     currentAssistantMessageRef.current += content;
 
-    // Update or create assistant message
     setMessages((prev) => {
       const lastMessage = prev[prev.length - 1];
 
@@ -122,6 +119,11 @@ export function AdminBotChat() {
     });
   }, []);
 
+  // Append streaming output to current assistant message
+  const handleOutput = useCallback((content: string) => {
+    appendToStreamingMessage(content);
+  }, [appendToStreamingMessage]);
+
   // Handle stderr output (codex writes status/thinking to stderr)
   const handleError = useCallback((content: string) => {
     // Codex writes status messages to stderr - these aren't errors
@@ -136,34 +138,8 @@ export function AdminBotChat() {
       console.log('[AdminBotChat] Status:', content);
     }
 
-    // Append to current assistant message as status output
-    setIsStreaming(true);
-    currentAssistantMessageRef.current += content;
-
-    setMessages((prev) => {
-      const lastMessage = prev[prev.length - 1];
-
-      if (lastMessage && lastMessage.role === 'assistant' && lastMessage.id === 'streaming') {
-        return [
-          ...prev.slice(0, -1),
-          {
-            ...lastMessage,
-            content: currentAssistantMessageRef.current,
-          },
-        ];
-      } else {
-        return [
-          ...prev,
-          {
-            id: 'streaming',
-            role: 'assistant' as const,
-            content: currentAssistantMessageRef.current,
-            timestamp: new Date(),
-          },
-        ];
-      }
-    });
-  }, []);
+    appendToStreamingMessage(content);
+  }, [appendToStreamingMessage]);
 
   // Handle command completion (each message spawns a codex exec process)
   const handleExit = useCallback((code: number | null) => {
