@@ -140,21 +140,43 @@ export function createAdminBotChatRoutes(adminBotService: AdminBotService): Rout
       message: 'Client connected to admin bot SSE stream'
     });
 
+    // Track if stream has been closed to prevent double-end
+    let streamClosed = false;
+
+    const cleanup = () => {
+      if (streamClosed) return;
+      streamClosed = true;
+
+      adminBotService.off('output', outputHandler);
+      adminBotService.off('error', errorHandler);
+      adminBotService.off('exit', exitHandler);
+
+      if (!res.writableEnded) {
+        res.end();
+      }
+    };
+
     // Send initial connection event
     res.write(`data: ${JSON.stringify({ type: 'connected', timestamp: Date.now() })}\n\n`);
 
     // Stream output from admin bot
     const outputHandler = (data: string) => {
-      res.write(`data: ${JSON.stringify({ type: 'output', content: data })}\n\n`);
+      if (!streamClosed && !res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ type: 'output', content: data })}\n\n`);
+      }
     };
 
     const errorHandler = (error: string) => {
-      res.write(`data: ${JSON.stringify({ type: 'error', content: error })}\n\n`);
+      if (!streamClosed && !res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ type: 'error', content: error })}\n\n`);
+      }
     };
 
     const exitHandler = (code: number | null) => {
-      res.write(`data: ${JSON.stringify({ type: 'exit', code })}\n\n`);
-      res.end();
+      if (!streamClosed && !res.writableEnded) {
+        res.write(`data: ${JSON.stringify({ type: 'exit', code })}\n\n`);
+      }
+      cleanup();
     };
 
     adminBotService.on('output', outputHandler);
@@ -168,11 +190,7 @@ export function createAdminBotChatRoutes(adminBotService: AdminBotService): Rout
         action: 'stream_disconnected',
         message: 'Client disconnected from admin bot SSE stream'
       });
-
-      adminBotService.off('output', outputHandler);
-      adminBotService.off('error', errorHandler);
-      adminBotService.off('exit', exitHandler);
-      res.end();
+      cleanup();
     });
   });
 
