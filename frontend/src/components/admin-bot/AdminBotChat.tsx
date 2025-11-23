@@ -87,14 +87,11 @@ export function AdminBotChat() {
     }
   }, [messages]);
 
-  // Append streaming output to current assistant message
-  const handleOutput = useCallback((content: string) => {
+  // Helper to append content to streaming assistant message
+  const appendToStreamingMessage = useCallback((content: string) => {
     setIsStreaming(true);
-
-    // Accumulate output
     currentAssistantMessageRef.current += content;
 
-    // Update or create assistant message
     setMessages((prev) => {
       const lastMessage = prev[prev.length - 1];
 
@@ -122,24 +119,31 @@ export function AdminBotChat() {
     });
   }, []);
 
-  // Handle error output
+  // Append streaming output to current assistant message
+  const handleOutput = useCallback((content: string) => {
+    appendToStreamingMessage(content);
+  }, [appendToStreamingMessage]);
+
+  // Handle stderr output (codex writes status/thinking to stderr)
   const handleError = useCallback((content: string) => {
-    console.error('[AdminBotChat] Error:', content);
+    // Codex writes status messages to stderr - these aren't errors
+    // Only log as error if it looks like an actual error
+    const isActualError = content.toLowerCase().includes('error:') ||
+                          content.toLowerCase().includes('failed') ||
+                          content.toLowerCase().includes('exception');
 
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `error-${Date.now()}`,
-        role: 'system' as const,
-        content: `Error: ${content}`,
-        timestamp: new Date(),
-      },
-    ]);
-  }, []);
+    if (isActualError) {
+      console.error('[AdminBotChat] Error:', content);
+    } else {
+      console.log('[AdminBotChat] Status:', content);
+    }
 
-  // Handle session exit
+    appendToStreamingMessage(content);
+  }, [appendToStreamingMessage]);
+
+  // Handle command completion (each message spawns a codex exec process)
   const handleExit = useCallback((code: number | null) => {
-    console.log('[AdminBotChat] Session exited with code:', code);
+    console.log('[AdminBotChat] Command completed with code:', code);
 
     setIsStreaming(false);
     currentAssistantMessageRef.current = '';
@@ -159,18 +163,20 @@ export function AdminBotChat() {
       return prev;
     });
 
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `system-exit-${Date.now()}`,
-        role: 'system' as const,
-        content: `Session ended (exit code: ${code ?? 'unknown'})`,
-        timestamp: new Date(),
-      },
-    ]);
-
-    setIsSessionActive(false);
-    setSessionId(null);
+    // Only show error message if exit code was non-zero
+    if (code !== 0 && code !== null) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `system-exit-${Date.now()}`,
+          role: 'system' as const,
+          content: `Command failed (exit code: ${code})`,
+          timestamp: new Date(),
+        },
+      ]);
+    }
+    // Note: Don't deactivate session on exit - each message is a separate exec
+    // Session stays active until user clicks Stop
   }, []);
 
   // Handle SSE connection
