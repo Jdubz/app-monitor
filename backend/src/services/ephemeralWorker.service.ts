@@ -1604,6 +1604,14 @@ export class EphemeralWorkerService {
       await this.containerLifecycle.stopContainer(worker.containerId, 10);
       await this.containerLifecycle.removeContainer(worker.containerId, true);
 
+      // Cleanup context bundle files for this task to avoid long-lived disk usage across rollovers
+      if (worker.task.context_cache_key || worker.task.context_bundle_id) {
+        await this.contextGenerator.cleanupMaterializedBundle({
+          cacheKey: worker.task.context_cache_key || undefined,
+          bundleId: worker.task.context_bundle_id || undefined
+        });
+      }
+
       worker.status = 'destroyed';
       worker.destroyedAt = new Date().toISOString();
 

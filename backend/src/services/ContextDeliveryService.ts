@@ -89,7 +89,7 @@ export class ContextDeliveryService {
         return;
       }
 
-      const bundlePath = contextResult.bundle.mountPath;
+      const bundlePath = await this.contextGenerator.materializeBundle(contextResult.bundle);
 
       // Verify bundle path exists
       if (!fs.existsSync(bundlePath)) {

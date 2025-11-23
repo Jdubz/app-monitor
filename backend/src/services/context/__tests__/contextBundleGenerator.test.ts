@@ -14,6 +14,7 @@ import { createTestDatabase, TestDatabase } from './helpers/testDatabase.js';
 import { mockRecipe, mockFileContent } from './helpers/testMocks.js';
 import { createTempDir, createTempFile, removeDir, createMockFileSystem } from './helpers/testUtils.js';
 import * as path from 'path';
+import { promises as fs } from 'fs';
 
 describe('ContextBundleGenerator', () => {
   let generator: ContextBundleGenerator;
@@ -1038,7 +1039,7 @@ describe('ContextBundleGenerator', () => {
       expect(result.bundle).toBeDefined();
       expect(result.bundle!.id).toBeDefined();
       expect(result.bundle!.cacheKey).toBeDefined();
-      expect(result.bundle!.mountPath).toContain('/context/');
+      expect(result.bundle!.mountPath).toContain('context-bundles');
       expect(result.bundle!.metadata).toBeDefined();
       expect(result.bundle!.metadata.taskType).toBe('implementation');
       expect(result.bundle!.metadata.profiles).toContain('test-profile');
@@ -1080,6 +1081,46 @@ describe('ContextBundleGenerator', () => {
       expect(profileContent.sizeBytes).toBeGreaterThan(0);
       expect(profileContent.sources).toContain('test.md');
       expect(profileContent.generatedAt).toBeInstanceOf(Date);
+    });
+  });
+
+  describe('materialize + cleanup', () => {
+    it('should write files to disk and clean them up safely', async () => {
+      await createTempFile(mockFileContent.markdown, 'test.md', path.join(tempDir, 'backend'));
+
+      const recipe = mockRecipe({
+        taskTypes: ['implementation'],
+        sources: [{ type: 'markdown' as const, path: 'test.md', optional: false }]
+      });
+
+      const mockLoader = {
+        loadAllRecipes: vi.fn().mockResolvedValue(new Map([['test-profile', recipe]])),
+        loadRecipe: vi.fn()
+      };
+
+      const cache = new ContextCache({ persistToDb: false });
+      generator = new ContextBundleGenerator({
+        loader: mockLoader as any,
+        repoRoot: tempDir,
+        cache,
+        bundleRootDir: path.join(tempDir, 'bundles')
+      });
+
+      const result = await generator.generateBundle({ taskType: 'implementation' });
+      expect(result.success).toBe(true);
+      const bundlePath = result.bundle!.mountPath;
+
+      const profileFile = path.join(bundlePath, 'context', 'test-profile.md');
+      const metadataFile = path.join(bundlePath, 'bundle-metadata.json');
+
+      // Files should exist after materialization
+      await expect(fs.access(profileFile)).resolves.toBeUndefined();
+      await expect(fs.access(metadataFile)).resolves.toBeUndefined();
+
+      // Cleanup should remove directory
+      const cleaned = await generator.cleanupMaterializedBundle({ cacheKey: result.bundle!.cacheKey });
+      expect(cleaned).toBe(true);
+      await expect(fs.access(profileFile)).rejects.toBeDefined();
     });
   });
 
