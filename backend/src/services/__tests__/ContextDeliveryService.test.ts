@@ -44,7 +44,8 @@ const mockDocker = {
 
 // Mock ContextBundleGenerator
 const mockContextGenerator = {
-  generateBundle: vi.fn()
+  generateBundle: vi.fn(),
+  materializeBundle: vi.fn()
 };
 
 describe('ContextDeliveryService', () => {
@@ -66,6 +67,8 @@ describe('ContextDeliveryService', () => {
       mockDocker as any,
       mockContextGenerator as any
     );
+
+    mockContextGenerator.materializeBundle.mockResolvedValue('/tmp/context-bundle-123');
   });
 
   describe('copyContextBundleToContainer', () => {
@@ -139,6 +142,7 @@ describe('ContextDeliveryService', () => {
         targetFiles: ['file1.ts', 'file2.ts'],
         force: false
       });
+      expect(mockContextGenerator.materializeBundle).toHaveBeenCalled();
     });
 
     it('should handle missing bundle gracefully', async () => {
