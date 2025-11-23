@@ -33,6 +33,7 @@ export interface AdminBotMessage {
 
 export interface AdminBotSession {
   id: string;
+  codexThreadId: string | null;  // Codex thread ID for resuming sessions
   process: ChildProcess | null;
   status: 'idle' | 'running' | 'error';
   messages: AdminBotMessage[];
@@ -174,9 +175,10 @@ export class AdminBotService extends EventEmitter {
       this.generateRuntimeConfig();
 
       // Create session without spawning a process
-      // Each message will spawn its own codex exec process
+      // First message creates codex thread, subsequent messages resume it
       this.session = {
         id: sessionId,
+        codexThreadId: null,  // Will be set after first message
         process: null,
         status: 'running',
         messages: [],
@@ -255,13 +257,46 @@ export class AdminBotService extends EventEmitter {
     ].filter(Boolean).join(':');
     const enhancedPath = nvmPaths + ':' + (process.env.PATH || '');
 
-    const codexProcess = spawn('codex', [
-      'exec',
-      '--dangerously-bypass-approvals-and-sandbox',
-      '--skip-git-repo-check',
-      '--cd', codexWorkingDir,
-      message
-    ], {
+    // Build command args based on whether this is first message or resume
+    const isFirstMessage = !this.session.codexThreadId;
+    let codexArgs: string[];
+
+    if (isFirstMessage) {
+      // First message: create new thread
+      codexArgs = [
+        'exec',
+        '--dangerously-bypass-approvals-and-sandbox',
+        '--skip-git-repo-check',
+        '--cd', codexWorkingDir,
+        '--json',  // Get JSON output to parse thread_id
+        message
+      ];
+    } else {
+      // Subsequent messages: resume existing thread
+      codexArgs = [
+        'exec',
+        'resume',
+        this.session.codexThreadId!,
+        '--dangerously-bypass-approvals-and-sandbox',
+        '--skip-git-repo-check',
+        '--cd', codexWorkingDir,
+        '--json',
+        message
+      ];
+    }
+
+    logger.info({
+      category: 'admin_bot_chat',
+      action: 'spawning_codex',
+      message: isFirstMessage ? 'Starting new codex thread' : 'Resuming codex thread',
+      details: {
+        sessionId: this.session.id,
+        codexThreadId: this.session.codexThreadId,
+        isFirstMessage
+      }
+    });
+
+    const codexProcess = spawn('codex', codexArgs, {
       cwd: codexWorkingDir,
       env: {
         ...process.env,
@@ -277,7 +312,7 @@ export class AdminBotService extends EventEmitter {
     // Store current process for potential cancellation
     this.session.process = codexProcess;
 
-    // Stream stdout to SSE
+    // Stream stdout to SSE and parse thread_id from JSON
     codexProcess.stdout?.on('data', (data: Buffer) => {
       const output = data.toString();
       logger.debug({
@@ -286,7 +321,49 @@ export class AdminBotService extends EventEmitter {
         message: 'Received stdout from codex exec',
         details: { sessionId: this.session?.id, output: output.substring(0, 200) }
       });
-      this.emit('output', output);
+
+      // Parse JSON lines to extract thread_id and format output
+      const lines = output.split('\n').filter(line => line.trim());
+      for (const line of lines) {
+        try {
+          const json = JSON.parse(line);
+
+          // Capture thread_id from first message
+          if (json.type === 'thread.started' && json.thread_id && this.session) {
+            this.session.codexThreadId = json.thread_id;
+            logger.info({
+              category: 'admin_bot_chat',
+              action: 'thread_captured',
+              message: 'Captured codex thread ID for session resumption',
+              details: { sessionId: this.session.id, codexThreadId: json.thread_id }
+            });
+          }
+
+          // Format output based on JSON type
+          if (json.type === 'item.completed' && json.item?.type === 'agent_message') {
+            // Main agent response
+            this.emit('output', json.item.text + '\n');
+          } else if (json.type === 'item.completed' && json.item?.type === 'reasoning') {
+            // Reasoning/thinking output
+            this.emit('error', json.item.text + '\n');  // stderr shows as status
+          } else if (json.type === 'item.completed' && json.item?.type === 'mcp_tool_call') {
+            // MCP tool call result
+            const result = json.item.result?.content?.[0]?.text || json.item.error?.message || 'Tool called';
+            this.emit('error', `[MCP: ${json.item.tool}] ${result}\n`);
+          } else if (json.type === 'turn.completed') {
+            // Turn completed - show token usage
+            const usage = json.usage;
+            if (usage) {
+              this.emit('error', `\n[Tokens: ${usage.input_tokens} in, ${usage.output_tokens} out]\n`);
+            }
+          }
+        } catch {
+          // Not JSON or parse error - emit raw output
+          if (line.trim()) {
+            this.emit('output', line + '\n');
+          }
+        }
+      }
     });
 
     // Stream stderr as errors
