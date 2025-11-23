@@ -84,15 +84,34 @@ export class AdminBotService extends EventEmitter {
   }
 
   /**
-   * Get NVM-enhanced PATH for finding codex CLI
+   * Get enhanced PATH for finding codex CLI
+   *
+   * When running as a systemd service, PATH is minimal and doesn't include NVM.
+   * This method adds NVM paths to find codex, which is installed via npm.
+   *
+   * Priority:
+   * 1. NVM_BIN_PATH env var (explicit configuration)
+   * 2. Dynamic NVM paths based on $HOME (portable)
+   * 3. Existing PATH
    */
   private getEnhancedPath(): string {
-    const nvmPaths = [
-      '/home/jdubz/.nvm/versions/node/v20.19.5/bin',
-      '/home/jdubz/.nvm/versions/node/v20.18.1/bin',
-      process.env.HOME ? `${process.env.HOME}/.nvm/versions/node/v20.19.5/bin` : '',
-      process.env.HOME ? `${process.env.HOME}/.nvm/versions/node/v20.18.1/bin` : '',
-    ].filter(Boolean).join(':');
+    const additionalPaths: string[] = [];
+
+    // Check for explicit NVM bin path configuration
+    if (process.env.NVM_BIN_PATH) {
+      additionalPaths.push(process.env.NVM_BIN_PATH);
+    }
+
+    // Add common NVM paths dynamically based on HOME
+    // This handles cases where NVM_BIN_PATH isn't set but NVM is installed
+    if (process.env.HOME) {
+      additionalPaths.push(
+        `${process.env.HOME}/.nvm/versions/node/v20.19.5/bin`,
+        `${process.env.HOME}/.nvm/versions/node/v20.18.1/bin`
+      );
+    }
+
+    const nvmPaths = additionalPaths.filter(Boolean).join(':');
     return nvmPaths + ':' + (process.env.PATH || '');
   }
 
