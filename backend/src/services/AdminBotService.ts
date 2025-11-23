@@ -1,22 +1,20 @@
 /**
  * AdminBotService - Manages Codex CLI sessions for admin bot chat
  *
- * This service spawns and manages Codex CLI processes that are pre-configured
- * to connect to the App Monitor MCP server. Each chat session gets its own
- * Codex instance with admin-level MCP tool access.
+ * This service spawns and manages Codex CLI processes that connect to the
+ * App Monitor MCP server (configured in ~/.codex/config.toml).
  *
  * Architecture:
- * - Spawns: `codex exec` (non-interactive mode) with custom config pointing to MCP server
- * - Communication: Each message spawns a new codex exec process
+ * - Uses `codex exec` for first message (creates thread)
+ * - Uses `codex exec resume` for subsequent messages (continues thread)
+ * - MCP servers: app-monitor-dev (dev) or app-monitor-prod (production)
  * - Streaming: Emits output events for SSE routes to consume
- * - Lifecycle: One session at a time, processes spawn per message
  */
 
 import { spawn, type ChildProcess } from 'child_process';
 import { EventEmitter } from 'events';
 import { randomUUID } from 'crypto';
 import * as path from 'path';
-import * as fs from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { logger } from '../utils/logger.js';
@@ -63,255 +61,70 @@ export declare interface AdminBotService {
 export class AdminBotService extends EventEmitter {
   private session: AdminBotSession | null = null;
   private repoRoot: string;
-  private configTemplatePath: string;
-  private runtimeConfigPath: string;
-  private mcpStartPath: string;
-  private databasePath: string;
+  private codexWorkingDir: string;
 
   constructor() {
     super();
     // Determine repo root based on where we're running from
-    // In production: backend/dist/services/AdminBotService.js -> go up 3 levels
-    // In development: backend/src/services/AdminBotService.ts -> go up 3 levels
-    // Result: /opt/app-monitor or /path/to/app-monitor
     this.repoRoot = path.resolve(__dirname, '../../..');
-    this.configTemplatePath = path.join(this.repoRoot, 'backend/config/codex-admin-bot.toml');
-    this.runtimeConfigPath = path.join(this.repoRoot, 'backend/data/codex-admin-bot-runtime.toml');
 
-    // MCP start script path (use src in dev, dist in production)
-    const isDist = __dirname.includes('/dist/');
-    this.mcpStartPath = isDist
-      ? path.join(this.repoRoot, 'backend/dist/mcp/start.js')
-      : path.join(this.repoRoot, 'backend/src/mcp/start.ts');
-
-    // Database path
-    this.databasePath = process.env.DATABASE_PATH || path.join(this.repoRoot, 'backend/data/app-monitor.db');
+    // Working directory for codex - use ~/Development to access all projects
+    this.codexWorkingDir = process.env.ADMIN_BOT_WORKING_DIR
+      || (process.env.HOME ? `${process.env.HOME}/Development` : this.repoRoot);
 
     logger.info({
       category: 'admin_bot_chat',
       action: 'service_initialized',
       message: 'AdminBotService initialized',
       details: {
-        __dirname,
-        isDist,
         repoRoot: this.repoRoot,
-        configTemplatePath: this.configTemplatePath,
-        runtimeConfigPath: this.runtimeConfigPath,
-        mcpStartPath: this.mcpStartPath,
-        databasePath: this.databasePath
+        codexWorkingDir: this.codexWorkingDir
       }
     });
   }
 
   /**
-   * Generate runtime config with absolute paths
+   * Get NVM-enhanced PATH for finding codex CLI
    */
-  private generateRuntimeConfig(): void {
-    try {
-      // Read template
-      const template = fs.readFileSync(this.configTemplatePath, 'utf-8');
-
-      // Replace placeholders with absolute paths
-      const runtimeConfig = template
-        .replace('{{MCP_START_PATH}}', this.mcpStartPath)
-        .replace('{{DATABASE_PATH}}', this.databasePath);
-
-      // Ensure data directory exists
-      const dataDir = path.dirname(this.runtimeConfigPath);
-      if (!fs.existsSync(dataDir)) {
-        fs.mkdirSync(dataDir, { recursive: true });
-      }
-
-      // Write runtime config
-      fs.writeFileSync(this.runtimeConfigPath, runtimeConfig, 'utf-8');
-
-      logger.debug({
-        category: 'admin_bot_chat',
-        action: 'runtime_config_generated',
-        message: 'Generated runtime Codex config with absolute paths',
-        details: {
-          templatePath: this.configTemplatePath,
-          runtimePath: this.runtimeConfigPath,
-          mcpStartPath: this.mcpStartPath,
-          databasePath: this.databasePath
-        }
-      });
-    } catch (error) {
-      logger.error({
-        category: 'admin_bot_chat',
-        action: 'runtime_config_generation_failed',
-        message: 'Failed to generate runtime Codex config',
-        error: error instanceof Error ? error.message : String(error)
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Start a new admin bot session with Codex CLI
-   *
-   * Spawns Codex CLI with pre-configured MCP server connection.
-   * Only one session can run at a time.
-   *
-   * @returns Session ID
-   * @throws Error if session already running
-   */
-  async startSession(): Promise<string> {
-    if (this.session?.status === 'running') {
-      throw new Error('Session already running. Stop current session before starting a new one.');
-    }
-
-    const sessionId = randomUUID();
-
-    logger.info({
-      category: 'admin_bot_chat',
-      action: 'session_starting',
-      message: 'Starting new admin bot session',
-      details: { sessionId }
-    });
-
-    try {
-      // Generate runtime config with absolute paths
-      this.generateRuntimeConfig();
-
-      // Create session without spawning a process
-      // First message creates codex thread, subsequent messages resume it
-      this.session = {
-        id: sessionId,
-        codexThreadId: null,  // Will be set after first message
-        process: null,
-        status: 'running',
-        messages: [],
-        startedAt: new Date()
-      };
-
-      logger.info({
-        category: 'admin_bot_chat',
-        action: 'session_started',
-        message: 'Admin bot session started successfully',
-        details: { sessionId }
-      });
-
-      return sessionId;
-
-    } catch (error) {
-      logger.error({
-        category: 'admin_bot_chat',
-        action: 'session_start_error',
-        message: 'Failed to start admin bot session',
-        error: error instanceof Error ? error.message : String(error)
-      });
-      throw error;
-    }
-  }
-
-  /**
-   * Send a message to the admin bot
-   *
-   * Spawns a new codex exec process for each message and streams the response.
-   * This approach avoids TTY requirements of interactive mode.
-   *
-   * @param message - User message to send
-   * @throws Error if no active session or execution fails
-   */
-  async sendMessage(message: string): Promise<void> {
-    if (!this.session) {
-      throw new Error('No active session. Start a session before sending messages.');
-    }
-
-    if (this.session.status !== 'running') {
-      throw new Error(`Session is ${this.session.status}. Cannot send messages.`);
-    }
-
-    // Working directory for codex - use ~/Development to access all projects
-    const codexWorkingDir = process.env.ADMIN_BOT_WORKING_DIR
-      || (process.env.HOME ? `${process.env.HOME}/Development` : this.repoRoot);
-
-    logger.debug({
-      category: 'admin_bot_chat',
-      action: 'message_sending',
-      message: 'Spawning codex exec for message',
-      details: {
-        sessionId: this.session.id,
-        messageLength: message.length,
-        workingDir: codexWorkingDir
-      }
-    });
-
-    // Add user message to history
-    const userMessage: AdminBotMessage = {
-      id: randomUUID(),
-      role: 'user',
-      content: message,
-      timestamp: new Date()
-    };
-    this.session.messages.push(userMessage);
-
-    // Spawn codex exec for this message
-    // Add common NVM paths to PATH to find codex CLI
+  private getEnhancedPath(): string {
     const nvmPaths = [
       '/home/jdubz/.nvm/versions/node/v20.19.5/bin',
       '/home/jdubz/.nvm/versions/node/v20.18.1/bin',
       process.env.HOME ? `${process.env.HOME}/.nvm/versions/node/v20.19.5/bin` : '',
       process.env.HOME ? `${process.env.HOME}/.nvm/versions/node/v20.18.1/bin` : '',
     ].filter(Boolean).join(':');
-    const enhancedPath = nvmPaths + ':' + (process.env.PATH || '');
+    return nvmPaths + ':' + (process.env.PATH || '');
+  }
 
-    // Build command args based on whether this is first message or resume
-    const isFirstMessage = !this.session.codexThreadId;
-    let codexArgs: string[];
+  /**
+   * Spawn a codex exec process with the given arguments
+   */
+  private spawnCodexExec(args: string[]): ChildProcess {
+    const enhancedPath = this.getEnhancedPath();
 
-    if (isFirstMessage) {
-      // First message: create new thread
-      codexArgs = [
-        'exec',
-        '--dangerously-bypass-approvals-and-sandbox',
-        '--skip-git-repo-check',
-        '--cd', codexWorkingDir,
-        '--json',  // Get JSON output to parse thread_id
-        message
-      ];
-    } else {
-      // Subsequent messages: resume existing thread
-      codexArgs = [
-        'exec',
-        'resume',
-        this.session.codexThreadId!,
-        '--dangerously-bypass-approvals-and-sandbox',
-        '--skip-git-repo-check',
-        '--cd', codexWorkingDir,
-        '--json',
-        message
-      ];
-    }
-
-    logger.info({
+    logger.debug({
       category: 'admin_bot_chat',
       action: 'spawning_codex',
-      message: isFirstMessage ? 'Starting new codex thread' : 'Resuming codex thread',
-      details: {
-        sessionId: this.session.id,
-        codexThreadId: this.session.codexThreadId,
-        isFirstMessage
-      }
+      message: 'Spawning codex exec',
+      details: { args, workingDir: this.codexWorkingDir }
     });
 
-    const codexProcess = spawn('codex', codexArgs, {
-      cwd: codexWorkingDir,
+    return spawn('codex', args, {
+      cwd: this.codexWorkingDir,
       env: {
         ...process.env,
         PATH: enhancedPath,
-        CODEX_CONFIG_PATH: this.runtimeConfigPath,
-        APP_MONITOR_ROOT: this.repoRoot,
+        // MCP server uses these env vars
         APP_MONITOR_MCP_USER_ROLE: 'admin',
-        DATABASE_PATH: this.databasePath
       },
       stdio: ['pipe', 'pipe', 'pipe']
     });
+  }
 
-    // Store current process for potential cancellation
-    this.session.process = codexProcess;
-
+  /**
+   * Setup event handlers for a codex process
+   */
+  private setupProcessHandlers(codexProcess: ChildProcess): void {
     // Stream stdout to SSE and parse thread_id from JSON
     codexProcess.stdout?.on('data', (data: Buffer) => {
       const output = data.toString();
@@ -410,6 +223,153 @@ export class AdminBotService extends EventEmitter {
 
       this.emit('error', error.message);
     });
+  }
+
+  /**
+   * Start a new admin bot session with Codex CLI
+   *
+   * Immediately launches codex with an initial greeting to establish the thread.
+   * This gives the user visual feedback that the session has started.
+   *
+   * @returns Session ID
+   * @throws Error if session already running
+   */
+  async startSession(): Promise<string> {
+    if (this.session?.status === 'running') {
+      throw new Error('Session already running. Stop current session before starting a new one.');
+    }
+
+    const sessionId = randomUUID();
+
+    logger.info({
+      category: 'admin_bot_chat',
+      action: 'session_starting',
+      message: 'Starting new admin bot session',
+      details: { sessionId }
+    });
+
+    // Create session
+    this.session = {
+      id: sessionId,
+      codexThreadId: null,
+      process: null,
+      status: 'running',
+      messages: [],
+      startedAt: new Date()
+    };
+
+    // Launch codex with an initial greeting message to establish the thread
+    // This gives immediate feedback that the session is active
+    const initialPrompt = 'You are the App Monitor admin bot. Briefly introduce yourself and list the MCP tools available to you. Keep the response concise.';
+
+    const codexArgs = [
+      'exec',
+      '--dangerously-bypass-approvals-and-sandbox',
+      '--skip-git-repo-check',
+      '--cd', this.codexWorkingDir,
+      '--json',
+      initialPrompt
+    ];
+
+    const codexProcess = this.spawnCodexExec(codexArgs);
+    this.session.process = codexProcess;
+    this.setupProcessHandlers(codexProcess);
+
+    logger.info({
+      category: 'admin_bot_chat',
+      action: 'session_started',
+      message: 'Admin bot session started with initial greeting',
+      details: { sessionId, pid: codexProcess.pid }
+    });
+
+    return sessionId;
+  }
+
+  /**
+   * Send a message to the admin bot
+   *
+   * If this is the first user message (after initial greeting), it resumes the thread.
+   * Uses `codex exec resume` with the captured thread ID.
+   *
+   * @param message - User message to send
+   * @throws Error if no active session or execution fails
+   */
+  async sendMessage(message: string): Promise<void> {
+    if (!this.session) {
+      throw new Error('No active session. Start a session before sending messages.');
+    }
+
+    if (this.session.status !== 'running') {
+      throw new Error(`Session is ${this.session.status}. Cannot send messages.`);
+    }
+
+    logger.debug({
+      category: 'admin_bot_chat',
+      action: 'message_sending',
+      message: 'Sending message to codex',
+      details: {
+        sessionId: this.session.id,
+        messageLength: message.length,
+        hasThreadId: !!this.session.codexThreadId
+      }
+    });
+
+    // Add user message to history
+    const userMessage: AdminBotMessage = {
+      id: randomUUID(),
+      role: 'user',
+      content: message,
+      timestamp: new Date()
+    };
+    this.session.messages.push(userMessage);
+
+    // Build command args - always resume since startSession creates the thread
+    let codexArgs: string[];
+
+    if (this.session.codexThreadId) {
+      // Resume existing thread - OPTIONS MUST COME BEFORE POSITIONAL ARGS
+      codexArgs = [
+        'exec',
+        'resume',
+        '--dangerously-bypass-approvals-and-sandbox',
+        '--skip-git-repo-check',
+        '--cd', this.codexWorkingDir,
+        '--json',
+        this.session.codexThreadId,
+        message
+      ];
+    } else {
+      // Fallback: No thread ID yet (shouldn't happen normally)
+      // This could occur if startSession's initial message failed
+      logger.warn({
+        category: 'admin_bot_chat',
+        action: 'no_thread_id',
+        message: 'No thread ID available, starting new thread',
+        details: { sessionId: this.session.id }
+      });
+      codexArgs = [
+        'exec',
+        '--dangerously-bypass-approvals-and-sandbox',
+        '--skip-git-repo-check',
+        '--cd', this.codexWorkingDir,
+        '--json',
+        message
+      ];
+    }
+
+    logger.info({
+      category: 'admin_bot_chat',
+      action: 'spawning_codex',
+      message: this.session.codexThreadId ? 'Resuming codex thread' : 'Starting new codex thread',
+      details: {
+        sessionId: this.session.id,
+        codexThreadId: this.session.codexThreadId
+      }
+    });
+
+    const codexProcess = this.spawnCodexExec(codexArgs);
+    this.session.process = codexProcess;
+    this.setupProcessHandlers(codexProcess);
 
     logger.debug({
       category: 'admin_bot_chat',
@@ -472,7 +432,6 @@ export class AdminBotService extends EventEmitter {
     this.session = null;
 
     // Remove all EventEmitter listeners from this service
-    // This clears SSE route event handlers
     this.removeAllListeners();
 
     logger.info({
@@ -485,8 +444,6 @@ export class AdminBotService extends EventEmitter {
 
   /**
    * Get current session information
-   *
-   * @returns Current session or null if no active session
    */
   getSession(): AdminBotSession | null {
     return this.session;
@@ -494,8 +451,6 @@ export class AdminBotService extends EventEmitter {
 
   /**
    * Check if a session is currently running
-   *
-   * @returns True if session is running
    */
   isSessionRunning(): boolean {
     return this.session?.status === 'running';

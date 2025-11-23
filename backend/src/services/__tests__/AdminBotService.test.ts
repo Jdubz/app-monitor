@@ -9,28 +9,10 @@ import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
 import { EventEmitter } from 'events';
 import { AdminBotService } from '../AdminBotService';
 import { spawn } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
 
 // Mock child_process
 vi.mock('child_process', () => ({
   spawn: vi.fn(),
-}));
-
-// Mock fs
-vi.mock('fs', () => ({
-  default: {
-    readFileSync: vi.fn(),
-    writeFileSync: vi.fn(),
-    existsSync: vi.fn(),
-    mkdirSync: vi.fn(),
-    unlinkSync: vi.fn(),
-  },
-  readFileSync: vi.fn(),
-  writeFileSync: vi.fn(),
-  existsSync: vi.fn(),
-  mkdirSync: vi.fn(),
-  unlinkSync: vi.fn(),
 }));
 
 // Mock logger
@@ -47,27 +29,27 @@ describe('AdminBotService', () => {
   let service: AdminBotService;
   let mockProcess: any;
 
+  function createMockProcess() {
+    const proc = new EventEmitter() as any;
+    proc.pid = 12345;
+    proc.killed = false;
+    proc.stdin = new EventEmitter();
+    proc.stdin.write = vi.fn().mockReturnValue(true);
+    proc.stdout = new EventEmitter();
+    proc.stderr = new EventEmitter();
+    proc.kill = vi.fn((signal?: string) => {
+      proc.killed = true;
+      setTimeout(() => proc.emit('exit', signal === 'SIGTERM' ? 0 : 137), 10);
+    });
+    return proc;
+  }
+
   beforeEach(() => {
     // Reset all mocks
     vi.clearAllMocks();
 
-    // Setup fs mocks
-    (fs.existsSync as Mock).mockReturnValue(true);
-    (fs.readFileSync as Mock).mockReturnValue('template {{MCP_START_PATH}} {{DATABASE_PATH}}');
-
     // Setup mock child process
-    mockProcess = new EventEmitter();
-    mockProcess.pid = 12345;
-    mockProcess.killed = false;
-    mockProcess.stdin = new EventEmitter();
-    mockProcess.stdin.write = vi.fn().mockReturnValue(true);
-    mockProcess.stdout = new EventEmitter();
-    mockProcess.stderr = new EventEmitter();
-    mockProcess.kill = vi.fn((signal?: string) => {
-      mockProcess.killed = true;
-      setTimeout(() => mockProcess.emit('exit', signal === 'SIGTERM' ? 0 : 137), 10);
-    });
-
+    mockProcess = createMockProcess();
     (spawn as Mock).mockReturnValue(mockProcess);
 
     // Create service instance
@@ -81,18 +63,29 @@ describe('AdminBotService', () => {
   describe('constructor', () => {
     it('should initialize with correct paths', () => {
       expect(service).toBeDefined();
-      expect(fs.readFileSync).not.toHaveBeenCalled(); // Config not generated until startSession
     });
   });
 
   describe('startSession', () => {
-    it('should start a new session successfully', async () => {
+    it('should start a new session and spawn codex with initial greeting', async () => {
       const sessionId = await service.startSession();
 
       expect(sessionId).toBeDefined();
       expect(typeof sessionId).toBe('string');
-      // startSession no longer spawns a process - it just creates the session
-      expect(spawn).not.toHaveBeenCalled();
+      // startSession now spawns a codex process with initial greeting
+      expect(spawn).toHaveBeenCalledWith(
+        'codex',
+        expect.arrayContaining([
+          'exec',
+          '--dangerously-bypass-approvals-and-sandbox',
+          '--skip-git-repo-check',
+          '--cd',
+          expect.any(String),
+          '--json',
+          expect.stringContaining('admin bot')
+        ]),
+        expect.any(Object)
+      );
       expect(service.isSessionRunning()).toBe(true);
     });
 
@@ -103,47 +96,38 @@ describe('AdminBotService', () => {
         'Session already running'
       );
     });
-
-    it('should generate runtime config with absolute paths', async () => {
-      await service.startSession();
-
-      expect(fs.readFileSync).toHaveBeenCalled();
-      expect(fs.writeFileSync).toHaveBeenCalledWith(
-        expect.stringContaining('codex-admin-bot-runtime.toml'),
-        expect.not.stringContaining('{{'),
-        'utf-8'
-      );
-    });
-
-    it('should create data directory if it does not exist', async () => {
-      (fs.existsSync as Mock).mockReturnValue(false);
-
-      await service.startSession();
-
-      expect(fs.mkdirSync).toHaveBeenCalledWith(
-        expect.stringContaining('data'),
-        { recursive: true }
-      );
-    });
   });
 
   describe('sendMessage', () => {
     beforeEach(async () => {
       await service.startSession();
+      // Simulate thread ID capture from initial greeting
+      const session = service.getSession();
+      if (session) {
+        session.codexThreadId = 'test-thread-id-123';
+      }
+      // Reset spawn mock to check sendMessage call
+      vi.clearAllMocks();
+      mockProcess = createMockProcess();
+      (spawn as Mock).mockReturnValue(mockProcess);
     });
 
-    it('should spawn codex exec for message', async () => {
+    it('should spawn codex exec resume with thread ID for subsequent messages', async () => {
       await service.sendMessage('test message');
 
       expect(spawn).toHaveBeenCalledWith(
         'codex',
-        ['exec', '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check', '--cd', expect.any(String), '--json', 'test message'],
-        expect.objectContaining({
-          env: expect.objectContaining({
-            APP_MONITOR_MCP_USER_ROLE: 'admin',
-          }),
-          stdio: ['pipe', 'pipe', 'pipe'],
-        })
+        [
+          'exec',
+          'resume',
+          '--dangerously-bypass-approvals-and-sandbox',
+          '--skip-git-repo-check',
+          '--cd', expect.any(String),
+          '--json',
+          'test-thread-id-123',
+          'test message'
+        ],
+        expect.any(Object)
       );
     });
 
@@ -208,6 +192,30 @@ describe('AdminBotService', () => {
 
       expect(exitHandler).toHaveBeenCalledWith(0);
     });
+
+    it('should fallback to new thread if no thread ID available', async () => {
+      // Clear the thread ID
+      const session = service.getSession();
+      if (session) {
+        session.codexThreadId = null;
+      }
+
+      await service.sendMessage('test message');
+
+      // Should spawn regular exec without resume
+      expect(spawn).toHaveBeenCalledWith(
+        'codex',
+        [
+          'exec',
+          '--dangerously-bypass-approvals-and-sandbox',
+          '--skip-git-repo-check',
+          '--cd', expect.any(String),
+          '--json',
+          'test message'
+        ],
+        expect.any(Object)
+      );
+    });
   });
 
   describe('stopSession', () => {
@@ -223,9 +231,7 @@ describe('AdminBotService', () => {
     });
 
     it('should kill running process if present', async () => {
-      // Send a message to create a process
-      await service.sendMessage('test');
-
+      // The process from startSession should be present
       await service.stopSession();
 
       expect(mockProcess.kill).toHaveBeenCalledWith('SIGTERM');
@@ -264,26 +270,31 @@ describe('AdminBotService', () => {
 
     it('should return session with correct message history', async () => {
       await service.startSession();
+
+      // Set thread ID for resume
+      const session = service.getSession();
+      if (session) {
+        session.codexThreadId = 'test-thread-id';
+      }
+
+      // Reset mock for message sends
+      vi.clearAllMocks();
+      mockProcess = createMockProcess();
+      (spawn as Mock).mockReturnValue(mockProcess);
+
       await service.sendMessage('message 1');
 
-      // Reset mock between calls so each sendMessage creates fresh mock
+      // Reset mock between calls
       vi.clearAllMocks();
-      mockProcess = new EventEmitter();
-      mockProcess.pid = 12346;
-      mockProcess.killed = false;
-      mockProcess.stdin = new EventEmitter();
-      mockProcess.stdin.write = vi.fn().mockReturnValue(true);
-      mockProcess.stdout = new EventEmitter();
-      mockProcess.stderr = new EventEmitter();
-      mockProcess.kill = vi.fn();
+      mockProcess = createMockProcess();
       (spawn as Mock).mockReturnValue(mockProcess);
 
       await service.sendMessage('message 2');
 
-      const session = service.getSession();
-      expect(session?.messages).toHaveLength(2);
-      expect(session?.messages[0].content).toBe('message 1');
-      expect(session?.messages[1].content).toBe('message 2');
+      const updatedSession = service.getSession();
+      expect(updatedSession?.messages).toHaveLength(2);
+      expect(updatedSession?.messages[0].content).toBe('message 1');
+      expect(updatedSession?.messages[1].content).toBe('message 2');
     });
   });
 
@@ -317,45 +328,36 @@ describe('AdminBotService', () => {
     });
   });
 
-  describe('runtime config generation', () => {
-    it('should replace placeholders with absolute paths', async () => {
-      const templateContent = `
-[mcp_servers.app-monitor]
-args = ["--loader", "tsx", "{{MCP_START_PATH}}"]
-[mcp_servers.app-monitor.env]
-DATABASE_PATH = "{{DATABASE_PATH}}"
-`;
-
-      (fs.readFileSync as Mock).mockReturnValue(templateContent);
-
+  describe('thread ID capture', () => {
+    it('should capture thread ID from JSON output', async () => {
       await service.startSession();
 
-      const writeCall = (fs.writeFileSync as Mock).mock.calls[0];
-      const writtenContent = writeCall[1];
-
-      // Check that MCP_START_PATH was replaced
-      expect(writtenContent).toMatch(/args = \["--loader", "tsx", ".*\/backend\/(src|dist)\/mcp\/start\.(ts|js)"\]/);
-
-      // Check that DATABASE_PATH was replaced (may be :memory: in tests)
-      expect(writtenContent).toMatch(/DATABASE_PATH = ".*"/);
-      expect(writtenContent).not.toContain('{{MCP_START_PATH}}');
-      expect(writtenContent).not.toContain('{{DATABASE_PATH}}');
-    });
-
-    it('should handle template read errors', async () => {
-      (fs.readFileSync as Mock).mockImplementation(() => {
-        throw new Error('File not found');
+      // Simulate JSON output with thread.started event
+      const threadStartedEvent = JSON.stringify({
+        type: 'thread.started',
+        thread_id: 'captured-thread-123'
       });
 
-      await expect(service.startSession()).rejects.toThrow();
+      mockProcess.stdout.emit('data', Buffer.from(threadStartedEvent + '\n'));
+
+      const session = service.getSession();
+      expect(session?.codexThreadId).toBe('captured-thread-123');
     });
 
-    it('should handle template write errors', async () => {
-      (fs.writeFileSync as Mock).mockImplementation(() => {
-        throw new Error('Permission denied');
+    it('should emit formatted output for agent messages', async () => {
+      await service.startSession();
+
+      const outputHandler = vi.fn();
+      service.on('output', outputHandler);
+
+      const agentMessage = JSON.stringify({
+        type: 'item.completed',
+        item: { type: 'agent_message', text: 'Hello, I am the admin bot' }
       });
 
-      await expect(service.startSession()).rejects.toThrow();
+      mockProcess.stdout.emit('data', Buffer.from(agentMessage + '\n'));
+
+      expect(outputHandler).toHaveBeenCalledWith('Hello, I am the admin bot\n');
     });
   });
 
@@ -371,24 +373,40 @@ DATABASE_PATH = "{{DATABASE_PATH}}"
 
     it('should handle message sending with newlines', async () => {
       await service.startSession();
+      const session = service.getSession();
+      if (session) {
+        session.codexThreadId = 'test-thread';
+      }
+
+      vi.clearAllMocks();
+      mockProcess = createMockProcess();
+      (spawn as Mock).mockReturnValue(mockProcess);
 
       await service.sendMessage('line 1\nline 2\nline 3');
 
       expect(spawn).toHaveBeenCalledWith(
         'codex',
-        ['exec', '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check', '--cd', expect.any(String), '--json', 'line 1\nline 2\nline 3'],
+        expect.arrayContaining(['line 1\nline 2\nline 3']),
         expect.any(Object)
       );
     });
 
     it('should handle empty message sending', async () => {
       await service.startSession();
+      const session = service.getSession();
+      if (session) {
+        session.codexThreadId = 'test-thread';
+      }
+
+      vi.clearAllMocks();
+      mockProcess = createMockProcess();
+      (spawn as Mock).mockReturnValue(mockProcess);
 
       await service.sendMessage('');
 
       expect(spawn).toHaveBeenCalledWith(
         'codex',
-        ['exec', '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check', '--cd', expect.any(String), '--json', ''],
+        expect.arrayContaining(['']),
         expect.any(Object)
       );
     });
@@ -398,7 +416,6 @@ DATABASE_PATH = "{{DATABASE_PATH}}"
       service.on('exit', exitHandler);
 
       await service.startSession();
-      await service.sendMessage('test');
 
       mockProcess.emit('exit', null);
 
@@ -410,7 +427,6 @@ DATABASE_PATH = "{{DATABASE_PATH}}"
       service.on('output', outputHandler);
 
       await service.startSession();
-      await service.sendMessage('test');
 
       // Large non-JSON output is emitted with newline appended
       const largeOutput = 'x'.repeat(1000000);
