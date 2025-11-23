@@ -239,6 +239,32 @@ export class ContextCache {
   }
 
   /**
+   * Delete entries by bundleId (used when cleaning up materialized bundles)
+   */
+  deleteByBundleId(bundleId: string): boolean {
+    let removed = false;
+
+    for (const [key, entry] of Array.from(this.cache.entries())) {
+      if (entry.bundleId === bundleId) {
+        this.cache.delete(key);
+        this.bundleData.delete(key);
+        removed = true;
+
+        // Also delete from database if persisted
+        if (this.persistToDb && this.db) {
+          try {
+            this.db.getConnection().prepare('DELETE FROM context_bundle_cache WHERE bundle_id = ?').run(bundleId);
+          } catch (error) {
+            this.logger.warn('Failed to delete bundle by id from database', { component: 'ContextCache', operation: 'deleteByBundleId', bundleId }, error instanceof Error ? error : undefined);
+          }
+        }
+      }
+    }
+
+    return removed;
+  }
+
+  /**
    * Clear all cache entries
    */
   clear(): void {

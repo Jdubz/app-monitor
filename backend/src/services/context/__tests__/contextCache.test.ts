@@ -325,6 +325,16 @@ describe('ContextCache', () => {
       expect(cache.has('test-key')).toBe(false);
     });
 
+    it('should delete by bundleId', async () => {
+      const bundle = mockBundle({ id: 'bundle-123', cacheKey: 'cache-123' });
+      await cache.set('cache-123', bundle);
+
+      const removed = cache.deleteByBundleId('bundle-123');
+
+      expect(removed).toBe(true);
+      expect(cache.has('cache-123')).toBe(false);
+    });
+
     it('should return true if entry existed', async () => {
       const bundle = mockBundle();
       await cache.set('test-key', bundle);

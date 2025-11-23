@@ -546,6 +546,14 @@ export class ContextBundleGenerator {
 
     try {
       await fs.rm(resolved, { recursive: true, force: true });
+
+      // Evict cache entry so future materializations don't resurrect deleted files
+      if (options.cacheKey) {
+        this.cache.delete(options.cacheKey);
+      } else if (options.bundleId) {
+        this.cache.deleteByBundleId(options.bundleId);
+      }
+
       return true;
     } catch (err) {
       this.logger.warn('Failed to cleanup materialized bundle', {
