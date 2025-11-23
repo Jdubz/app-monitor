@@ -487,15 +487,14 @@ export class ContextBundleGenerator {
 
     // Write metadata for debugging/inspection
     const metadataPath = path.join(bundlePath, 'bundle-metadata.json');
-    await fs.writeFile(
-      metadataPath,
-      JSON.stringify({
-        ...bundle.metadata,
-        profiles: bundle.metadata.profiles,
-        files: Object.keys(bundle.profileContents).map(p => `context/${p}.md`)
-      }, null, 2),
-      'utf-8'
-    );
+      await fs.writeFile(
+        metadataPath,
+        JSON.stringify({
+          ...bundle.metadata,
+          files: Object.keys(bundle.profileContents).map(p => `context/${p}.md`)
+        }, null, 2),
+        'utf-8'
+      );
 
     bundle.mountPath = bundlePath;
     return bundlePath;
@@ -529,14 +528,18 @@ export class ContextBundleGenerator {
     }
 
     const resolved = path.resolve(bundlePath);
-    const rootResolved = path.resolve(root);
+    const candidateRoots = this.bundleRootCandidates.map(r => path.resolve(r));
 
-    // Safety: only delete inside the configured bundle root
-    if (resolved !== rootResolved && !resolved.startsWith(rootResolved + path.sep)) {
-      this.logger.warn('Refusing to delete bundle outside of bundle root', {
+    // Safety: only delete inside one of the configured bundle roots (including fallbacks)
+    const isSafeToDelete = candidateRoots.some(rootPath =>
+      resolved === rootPath || resolved.startsWith(rootPath + path.sep)
+    );
+
+    if (!isSafeToDelete) {
+      this.logger.warn('Refusing to delete bundle outside of any configured bundle root', {
         component: 'ContextBundleGenerator',
         bundlePath: resolved,
-        root: rootResolved
+        candidateRoots
       });
       return false;
     }
