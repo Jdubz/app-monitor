@@ -14,19 +14,22 @@ const repoRoot = path.resolve(__dirname, '..');
 
 export default defineConfig({
   test: {
-    // CRITICAL: Single process execution - NO parallelism
-    pool: 'forks',
+    // Use threads pool - forks causes V8 serialization errors with large test suites
+    // The "Unable to deserialize cloned data" error occurs when forked processes
+    // try to send test results back to the main process
+    pool: 'threads',
     poolOptions: {
-      forks: {
-        maxForks: 1,  // ONLY 1 process at a time
-        minForks: 1,
+      threads: {
+        maxThreads: 1,  // Single thread to avoid race conditions
+        minThreads: 1,
+        isolate: false, // Disable isolation to prevent serialization overhead
       },
     },
-    
-    // CRITICAL: No file parallelism
+
+    // No file parallelism - run tests sequentially
     fileParallelism: false,
-    
-    // CRITICAL: No test parallelism
+
+    // Standard timeouts
     testTimeout: 30000,
     hookTimeout: 30000,
     
