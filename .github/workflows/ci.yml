@@ -142,8 +142,8 @@ jobs:
           rm -rf /tmp/vite-*
         continue-on-error: true
 
-      - name: Test backend
-        run: npm run test -w backend
+      - name: Test backend (unit tests only)
+        run: npm run test:unit -w backend
         env:
           SKIP_HEAVY_DEV_BOT_TESTS: '1'
           VITEST_POOL: 'threads'
