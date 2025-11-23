@@ -137,7 +137,7 @@ describe('AdminBotService', () => {
 
       expect(spawn).toHaveBeenCalledWith(
         'codex',
-        ['exec', '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check', '--cd', expect.any(String), 'test message'],
+        ['exec', '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check', '--cd', expect.any(String), '--json', 'test message'],
         expect.objectContaining({
           env: expect.objectContaining({
             APP_MONITOR_MCP_USER_ROLE: 'admin',
@@ -181,9 +181,10 @@ describe('AdminBotService', () => {
 
       await service.sendMessage('test');
 
+      // Non-JSON output is emitted with newline appended
       mockProcess.stdout.emit('data', Buffer.from('test output'));
 
-      expect(outputHandler).toHaveBeenCalledWith('test output');
+      expect(outputHandler).toHaveBeenCalledWith('test output\n');
     });
 
     it('should emit error events from stderr', async () => {
@@ -375,7 +376,7 @@ DATABASE_PATH = "{{DATABASE_PATH}}"
 
       expect(spawn).toHaveBeenCalledWith(
         'codex',
-        ['exec', '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check', '--cd', expect.any(String), 'line 1\nline 2\nline 3'],
+        ['exec', '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check', '--cd', expect.any(String), '--json', 'line 1\nline 2\nline 3'],
         expect.any(Object)
       );
     });
@@ -387,7 +388,7 @@ DATABASE_PATH = "{{DATABASE_PATH}}"
 
       expect(spawn).toHaveBeenCalledWith(
         'codex',
-        ['exec', '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check', '--cd', expect.any(String), ''],
+        ['exec', '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check', '--cd', expect.any(String), '--json', ''],
         expect.any(Object)
       );
     });
@@ -411,10 +412,11 @@ DATABASE_PATH = "{{DATABASE_PATH}}"
       await service.startSession();
       await service.sendMessage('test');
 
+      // Large non-JSON output is emitted with newline appended
       const largeOutput = 'x'.repeat(1000000);
       mockProcess.stdout.emit('data', Buffer.from(largeOutput));
 
-      expect(outputHandler).toHaveBeenCalledWith(largeOutput);
+      expect(outputHandler).toHaveBeenCalledWith(largeOutput + '\n');
     });
   });
 });

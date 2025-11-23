@@ -9,6 +9,8 @@
  * the admin bot with access to all App Monitor MCP tools.
  */
 
+import { realpathSync } from 'fs';
+import { fileURLToPath } from 'url';
 import { startMcpServer } from './server.js';
 import { createDevBotsManagerDependencies } from '../services/devBotsManager.factory.js';
 import { DevBotsManager } from '../services/devBotsManager.js';
@@ -72,6 +74,19 @@ async function main() {
 }
 
 // Only run if this file is executed directly
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Use realpath comparison to handle symlinks (e.g., /opt/app-monitor/current -> releases/xxx)
+const thisFile = fileURLToPath(import.meta.url);
+const entryFile = process.argv[1];
+const isDirectExecution = (() => {
+  if (thisFile === entryFile) return true;
+  try {
+    // realpathSync can throw if a path doesn't exist
+    return realpathSync(thisFile) === realpathSync(entryFile);
+  } catch {
+    return false;
+  }
+})();
+
+if (isDirectExecution) {
   main();
 }
