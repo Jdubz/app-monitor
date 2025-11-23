@@ -16,6 +16,13 @@ import { config } from '../config.js';
 export const MAX_PHASE_ATTEMPTS = config.phaseSystem?.maxPhaseAttempts ?? 4;
 
 /**
+ * Maximum Review↔Fix loop iterations before escalation.
+ * Independent of per-phase attempts so we can detect 3↔4 churn even when
+ * attempts are reset across the loop.
+ */
+export const MAX_REVIEW_FIX_LOOPS = config.phaseSystem?.maxReviewFixLoops ?? 4;
+
+/**
  * Phase names mapped by phase index.
  * These are the canonical names used throughout the system for logging,
  * metrics, UI display, and documentation.

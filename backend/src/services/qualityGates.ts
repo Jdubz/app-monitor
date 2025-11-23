@@ -541,7 +541,15 @@ export class QualityGateValidator extends EventEmitter {
         stderr += data.toString();
       });
 
+      const timeoutTimer = setTimeout(() => {
+        if (typeof (proc as any).kill === 'function') {
+          (proc as any).kill();
+        }
+        reject(new Error(`Command timed out after ${timeout}ms`));
+      }, timeout);
+
       proc.on('close', (exitCode) => {
+        clearTimeout(timeoutTimer);
         resolve({
           exitCode: exitCode ?? 1,
           stdout,
@@ -550,14 +558,9 @@ export class QualityGateValidator extends EventEmitter {
       });
 
       proc.on('error', (error) => {
+        clearTimeout(timeoutTimer);
         reject(error);
       });
-
-      // Timeout handling
-      setTimeout(() => {
-        proc.kill();
-        reject(new Error(`Command timed out after ${timeout}ms`));
-      }, timeout);
     });
   }
 

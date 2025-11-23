@@ -21,6 +21,7 @@
 
 import { logger } from '../../utils/logger.js';
 import type { Task } from '../taskQueue.sqlite.js';
+import { GitHubPRService } from '../githubPR.service.js';
 import type { 
   PhaseValidator, 
   ValidationResult, 
@@ -73,13 +74,32 @@ export class Phase2ImplementationValidator implements PhaseValidator {
       };
     }
 
-    // TODO: Verify PR exists on GitHub via API
-    // For now, we trust the agent's output
-    // Future: Add GitHub API call to verify:
-    //   - PR exists with given number
-    //   - PR is open
-    //   - Branch exists
-    //   - Commits match
+    // Verify PR exists on GitHub (best-effort; fail if definitely wrong)
+    try {
+      const github = new GitHubPRService();
+      const prStatus = await github.getPRStatus(implementation.pr_number);
+
+      if (!prStatus || prStatus.number !== implementation.pr_number) {
+        errors.push(`PR #${implementation.pr_number} not found in GitHub`);
+      } else {
+        if (prStatus.state !== 'OPEN') {
+          errors.push(`PR #${implementation.pr_number} is not open (state: ${prStatus.state})`);
+        }
+        if (prStatus.head_ref !== implementation.branch_name) {
+          errors.push(`PR head branch mismatch: expected ${implementation.branch_name}, found ${prStatus.head_ref}`);
+        }
+      }
+    } catch (ghError) {
+      errors.push(`GitHub PR verification failed: ${ghError instanceof Error ? ghError.message : String(ghError)}`);
+    }
+
+    if (errors.length > 0) {
+      return {
+        passed: false,
+        errors,
+        details: { implementation },
+      };
+    }
 
     // Verify PR metadata for storage
     const prMetadata = {

@@ -31,7 +31,7 @@ import { getGitHubPRService, type GitHubPRService } from './githubPR.service.js'
 import { ContextBundleGenerator } from './context/index.js';
 import { ValidatorRegistry } from './phaseValidation/ValidatorRegistry.js';
 import { ArtifactExtractorService } from './artifactExtractor.service.js';
-import { PhaseOrchestratorService } from './phaseOrchestrator.service.js';
+import { PhaseOrchestratorService, type PhaseTransition } from './phaseOrchestrator.service.js';
 import { RecoveryAgentService } from './recoveryAgent.service.js';
 import type { ValidationResult } from './phaseValidation/types.js';
 import { CONTAINER_MEMORY_LIMIT_BYTES, CONTAINER_CPU_QUOTA, WORKER_UID_GID } from '../constants/containers.js';
@@ -81,6 +81,10 @@ export interface TaskExecutionResult {
 export interface PhaseCompletionResult extends ValidationResult {
   /** Git branch name extracted from container (if available) */
   gitBranch?: string;
+  /** Next phase as determined by orchestrator (if validation passed) */
+  nextPhase?: number | null;
+  /** Human-readable transition reason */
+  transitionReason?: string;
 }
 
 export interface EphemeralWorkerServiceConfig {
@@ -154,6 +158,9 @@ export class EphemeralWorkerService {
 
     // Initialize context delivery service
     this.contextDelivery = new ContextDeliveryService(docker, contextGenerator);
+
+    // Best-effort cleanup of orphaned dev-bot containers left from crashes/restarts
+    void this.reconcileOrphanedDevBotContainers();
   }
 
   /**
@@ -248,6 +255,77 @@ export class EphemeralWorkerService {
    */
   canCreateWorker(): boolean {
     return this.getActiveWorkers().length < this.config.maxConcurrentWorkers;
+  }
+
+  /**
+   * On startup, find running dev-bot containers that are not tracked and remove them.
+   * This prevents orphaned containers from inflating resource usage or confusing ops.
+   */
+  private async reconcileOrphanedDevBotContainers(): Promise<void> {
+    try {
+      const containers = await this.docker.listContainers({ all: true });
+      const tracked = new Set(
+        Array.from(this.ephemeralWorkers.values()).map((w) => w.containerId)
+      );
+
+      const devBotContainers = containers.filter((c) => {
+        const nameMatch = (c.Names || []).some((n) =>
+          n.includes('dev-bot-bot-') || n.includes('interactive-bot-interactive')
+        );
+        const imageMatch = typeof c.Image === 'string' && c.Image.includes('dev-bot');
+        return nameMatch || imageMatch;
+      });
+
+      // Enforce maxConcurrentWorkers by pruning oldest untracked containers first
+      const runningDevBots = devBotContainers.filter((c) => c.State === 'running');
+      if (runningDevBots.length > this.config.maxConcurrentWorkers) {
+        const excess = runningDevBots
+          .filter((c) => !tracked.has(c.Id))
+          .sort((a, b) => a.Created - b.Created) // oldest first
+          .slice(0, runningDevBots.length - this.config.maxConcurrentWorkers);
+        for (const c of excess) {
+          await this.stopAndRemoveContainer(c.Id, 'exceeds_max_concurrent_workers');
+        }
+      }
+
+      // Remove any untracked dev-bot containers (running or exited)
+      for (const c of devBotContainers) {
+        if (tracked.has(c.Id)) continue;
+        await this.stopAndRemoveContainer(
+          c.Id,
+          c.State === 'running' ? 'orphan_running' : 'orphan_exited'
+        );
+      }
+    } catch (err) {
+      logger.warn({
+        category: 'process',
+        action: 'reconcile_orphans_failed',
+        message: 'Failed to reconcile dev-bot containers',
+        error: err,
+      });
+    }
+  }
+
+  private async stopAndRemoveContainer(containerId: string, reason: string): Promise<void> {
+    const container = this.docker.getContainer(containerId);
+    try {
+      await container.stop({ t: 10 }).catch(() => void 0);
+      await container.remove({ force: true });
+      logger.info({
+        category: 'process',
+        action: 'orphan_container_removed',
+        message: `Removed dev-bot container ${containerId}`,
+        details: { reason },
+      });
+    } catch (err) {
+      logger.warn({
+        category: 'process',
+        action: 'orphan_container_remove_failed',
+        message: `Failed to remove dev-bot container ${containerId}`,
+        error: err,
+        details: { reason },
+      });
+    }
   }
 
   // ==========================================================================
@@ -1382,8 +1460,9 @@ export class EphemeralWorkerService {
       }
 
       // Step 5: Advance phase if validation passed
+      let transition: PhaseTransition | undefined;
       if (validation.passed) {
-        const transition = this.phaseOrchestrator.advancePhase(task, validation);
+        transition = this.phaseOrchestrator.advancePhase(task, validation);
         
         logger.info({
           category: 'phase',
@@ -1399,10 +1478,12 @@ export class EphemeralWorkerService {
 
       }
 
-      // Return validation result with git branch for persistence by orchestration layer
+      // Return validation result with git branch and transition info for persistence by orchestration layer
       return {
         ...validation,
-        gitBranch
+        gitBranch,
+        nextPhase: transition?.toPhase,
+        transitionReason: transition?.reason
       };
 
     } catch (error) {

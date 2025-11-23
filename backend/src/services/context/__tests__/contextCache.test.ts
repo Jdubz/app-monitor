@@ -325,6 +325,20 @@ describe('ContextCache', () => {
       expect(cache.has('test-key')).toBe(false);
     });
 
+    it('should remove entry from database even if not in memory', async () => {
+      const bundle = mockBundle();
+      await cache.set('test-key', bundle);
+
+      // simulate evicted from memory without touching DB
+      cache.clear();
+      expect(testDb.getRowCount()).toBe(1);
+
+      const removed = cache.delete('test-key');
+
+      expect(removed).toBe(true);
+      expect(testDb.getRowCount()).toBe(0);
+    });
+
     it('should delete by bundleId', async () => {
       const bundle = mockBundle({ id: 'bundle-123', cacheKey: 'cache-123' });
       await cache.set('cache-123', bundle);
@@ -333,6 +347,20 @@ describe('ContextCache', () => {
 
       expect(removed).toBe(true);
       expect(cache.has('cache-123')).toBe(false);
+    });
+
+    it('should delete by bundleId from database when not in memory', async () => {
+      const bundle = mockBundle({ id: 'bundle-xyz', cacheKey: 'cache-xyz' });
+      await cache.set('cache-xyz', bundle);
+
+      // Drop from memory only
+      cache.clear();
+      expect(testDb.getRowCount()).toBe(1);
+
+      const removed = cache.deleteByBundleId('bundle-xyz');
+
+      expect(removed).toBe(true);
+      expect(testDb.getRowCount()).toBe(0);
     });
 
     it('should return true if entry existed', async () => {
