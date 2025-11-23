@@ -5,8 +5,9 @@
  * Handles file reading, content extraction, transforms, and caching.
  */
 
-import { promises as fs } from 'fs';
+import { promises as fs, constants as fsConstants } from 'fs';
 import * as path from 'path';
+import os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import { fileURLToPath } from 'url';
 import type {
@@ -20,11 +21,13 @@ import { ContextCache } from './contextCache.js';
 import { ContextRecipeLoader } from './contextRecipeLoader.js';
 import { ContextTransforms } from './contextTransforms.js';
 import { findRepoRoot } from '../../utils/repoPaths.js';
+import { getContextLogger } from './contextLogger.js';
 
 interface GeneratorOptions {
   cache?: ContextCache;
   loader?: ContextRecipeLoader;
   repoRoot?: string;
+  bundleRootDir?: string;
 }
 
 export class ContextBundleGenerator {
@@ -32,6 +35,9 @@ export class ContextBundleGenerator {
   private loader: ContextRecipeLoader;
   private transforms: ContextTransforms;
   private repoRoot: string;
+  private readonly bundleRootCandidates: string[];
+  private resolvedBundleRoot?: string;
+  private readonly logger = getContextLogger();
 
   constructor(options: GeneratorOptions = {}) {
     this.cache = options.cache ?? new ContextCache({ persistToDb: false });
@@ -46,6 +52,16 @@ export class ContextBundleGenerator {
       const __dirname = path.dirname(__filename);
       this.repoRoot = findRepoRoot(__dirname);
     }
+
+    // Preferred bundle roots (first writable wins)
+    this.bundleRootCandidates = [
+      options.bundleRootDir,
+      process.env.CONTEXT_BUNDLE_DIR,
+      '/opt/app-monitor/shared/context-bundles',
+      path.join(os.tmpdir(), 'context-bundles')
+    ]
+      .filter((p): p is string => !!p)
+      .map(p => path.resolve(p));
   }
 
   /**
@@ -69,6 +85,7 @@ export class ContextBundleGenerator {
       if (!options.force) {
         const cachedBundle = await this.cache.get(cacheKey);
         if (cachedBundle) {
+          await this.materializeBundle(cachedBundle);
           return {
             success: true,
             bundle: cachedBundle,
@@ -124,6 +141,9 @@ export class ContextBundleGenerator {
 
       // Create bundle
       const bundle = this.createBundle(cacheKey, options, profileContents);
+
+      // Materialize bundle to disk (and update mountPath)
+      await this.materializeBundle(bundle);
 
       // Cache the bundle (use TTL from first recipe)
       const ttl = recipes[0]?.ttl;
@@ -428,9 +448,156 @@ export class ContextBundleGenerator {
         createdAt: now,
         expiresAt: undefined // Will be set by cache if TTL specified
       },
-      mountPath: `/context/${bundleId}`,
+      mountPath: path.join(this.getDefaultBundleRoot(), bundleId),
       cacheKey
     };
+  }
+
+  /**
+   * Ensure bundle files exist on disk and return absolute bundle path.
+   * Writes each profile to {bundleRoot}/{bundleId}/context/<profile>.md plus a metadata file.
+   */
+  public async materializeBundle(bundle: ContextBundle): Promise<string> {
+    const root = await this.ensureWritableBundleRoot();
+    let bundlePath = path.isAbsolute(bundle.mountPath)
+      ? bundle.mountPath
+      : path.join(root, bundle.id);
+
+    let contextDir = path.join(bundlePath, 'context');
+
+    try {
+      await fs.mkdir(contextDir, { recursive: true });
+    } catch (err) {
+      // If the stored mountPath is not writable (old cache, permission change), fall back to writable root
+      this.logger.warn('Failed to use bundle mountPath; falling back to writable root', {
+        component: 'ContextBundleGenerator',
+        bundlePath,
+        error: err instanceof Error ? err.message : String(err)
+      });
+      bundlePath = path.join(root, bundle.id);
+      contextDir = path.join(bundlePath, 'context');
+      await fs.mkdir(contextDir, { recursive: true });
+    }
+
+    // Write profile files
+    for (const [profile, content] of Object.entries(bundle.profileContents)) {
+      const filePath = path.join(contextDir, `${profile}.md`);
+      await fs.writeFile(filePath, content.content, 'utf-8');
+    }
+
+    // Write metadata for debugging/inspection
+    const metadataPath = path.join(bundlePath, 'bundle-metadata.json');
+      await fs.writeFile(
+        metadataPath,
+        JSON.stringify({
+          ...bundle.metadata,
+          files: Object.keys(bundle.profileContents).map(p => `context/${p}.md`)
+        }, null, 2),
+        'utf-8'
+      );
+
+    bundle.mountPath = bundlePath;
+    return bundlePath;
+  }
+
+  /**
+   * Remove materialized bundle files from disk. Leaves cache entries intact so future
+   * requests can re-materialize quickly.
+   *
+   * @returns true if a directory was removed, false if nothing to do
+   */
+  public async cleanupMaterializedBundle(options: { cacheKey?: string; bundleId?: string }): Promise<boolean> {
+    const root = await this.ensureWritableBundleRoot();
+
+    let bundlePath: string | undefined;
+
+    // Prefer cache lookup to honor updated mountPath
+    if (options.cacheKey) {
+      const cached = await this.cache.get(options.cacheKey);
+      if (cached?.mountPath) {
+        bundlePath = cached.mountPath;
+      }
+    }
+
+    if (!bundlePath && options.bundleId) {
+      bundlePath = path.join(root, options.bundleId);
+    }
+
+    if (!bundlePath) {
+      return false; // Nothing to clean
+    }
+
+    const resolved = path.resolve(bundlePath);
+    const candidateRoots = this.bundleRootCandidates.map(r => path.resolve(r));
+
+    // Safety: only delete inside one of the configured bundle roots (including fallbacks)
+    const isSafeToDelete = candidateRoots.some(rootPath =>
+      resolved === rootPath || resolved.startsWith(rootPath + path.sep)
+    );
+
+    if (!isSafeToDelete) {
+      this.logger.warn('Refusing to delete bundle outside of any configured bundle root', {
+        component: 'ContextBundleGenerator',
+        bundlePath: resolved,
+        candidateRoots
+      });
+      return false;
+    }
+
+    try {
+      await fs.rm(resolved, { recursive: true, force: true });
+      return true;
+    } catch (err) {
+      this.logger.warn('Failed to cleanup materialized bundle', {
+        component: 'ContextBundleGenerator',
+        bundlePath: resolved,
+        error: err instanceof Error ? err.message : String(err)
+      });
+      return false;
+    }
+  }
+
+  /**
+   * Choose a default bundle root without touching the filesystem (used for initial mountPath).
+   */
+  private getDefaultBundleRoot(): string {
+    const preferred = this.bundleRootCandidates.find(Boolean);
+    return preferred ?? path.join(os.tmpdir(), 'context-bundles');
+  }
+
+  /**
+   * Find the first writable bundle root (creates it). Falls back automatically.
+   */
+  private async ensureWritableBundleRoot(): Promise<string> {
+    if (this.resolvedBundleRoot) return this.resolvedBundleRoot;
+
+    for (const candidate of this.bundleRootCandidates) {
+      try {
+        await fs.mkdir(candidate, { recursive: true });
+        await fs.access(candidate, fsConstants.W_OK);
+        this.resolvedBundleRoot = candidate;
+        if (candidate !== this.bundleRootCandidates[0]) {
+          this.logger.info('Using fallback bundle directory', { component: 'ContextBundleGenerator', candidate });
+        }
+        return candidate;
+      } catch (err) {
+        this.logger.warn('Bundle root not writable, trying next', {
+          component: 'ContextBundleGenerator',
+          candidate,
+          error: err instanceof Error ? err.message : String(err)
+        });
+      }
+    }
+
+    // Last resort: temp dir
+    const fallback = path.join(os.tmpdir(), 'context-bundles');
+    await fs.mkdir(fallback, { recursive: true });
+    this.resolvedBundleRoot = fallback;
+    this.logger.warn('All configured bundle roots failed; using temp directory', {
+      component: 'ContextBundleGenerator',
+      fallback
+    });
+    return fallback;
   }
 
   /**

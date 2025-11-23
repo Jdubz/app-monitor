@@ -98,7 +98,7 @@ export function mockBundle(overrides?: Partial<ContextBundle>): ContextBundle {
       createdAt: new Date(),
       expiresAt: undefined
     },
-    mountPath: `/context/${bundleId}`,
+    mountPath: `/opt/app-monitor/shared/context-bundles/${bundleId}`,
     cacheKey: 'test-cache-key',
     ...overrides
   };
@@ -114,7 +114,7 @@ export function mockCacheEntry(overrides?: Partial<BundleCacheEntry>): BundleCac
     cacheKey: 'test-cache-key',
     taskType: 'implementation',
     profiles: ['test-profile'],
-    mountPath: '/context/test-bundle-id',
+    mountPath: '/opt/app-monitor/shared/context-bundles/test-bundle-id',
     sizeBytes: 1024,
     createdAt: now,
     expiresAt: undefined,
