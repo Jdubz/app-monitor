@@ -9,7 +9,8 @@ const __dirname = path.dirname(__filename);
 // Production: /opt/app-monitor/shared/.env
 // Development: <repo-root>/shared/.env
 const sharedEnvPath = path.join(__dirname, '../../shared/.env');
-dotenv.config({ path: sharedEnvPath });
+// quiet: true suppresses dotenv v17's console output that corrupts MCP stdio transport
+dotenv.config({ path: sharedEnvPath, quiet: true });
 
 export const config = {
   port: parseInt(process.env.PORT || '5000', 10),
