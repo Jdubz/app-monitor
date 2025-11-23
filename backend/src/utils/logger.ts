@@ -115,10 +115,14 @@ interface LogOutput extends FormattedLogEntry {
 class Logger {
   private logFile: string;
   private isDev: boolean;
+  private isMcpContext: boolean;
 
   constructor() {
     this.logFile = path.join(LOGS_DIR, 'dev-monitor-backend.log');
     this.isDev = (process.env.NODE_ENV || 'development') === 'development';
+    // MCP server uses stdio transport - stdout must only contain JSON-RPC messages
+    // When running as MCP server, all console output must go to stderr
+    this.isMcpContext = !!process.env.APP_MONITOR_MCP_USER_ROLE;
   }
 
   private getSeverity(level: LogLevel): LogSeverity {
@@ -132,6 +136,10 @@ class Logger {
   }
 
   private getConsoleMethod(level: LogLevel): 'debug' | 'log' | 'warn' | 'error' {
+    // In MCP context, always use stderr to avoid polluting stdout (JSON-RPC channel)
+    if (this.isMcpContext) {
+      return 'error';
+    }
     const map: Record<LogLevel, 'debug' | 'log' | 'warn' | 'error'> = {
       debug: 'debug',
       info: 'log',
