@@ -470,6 +470,7 @@ export class ContextBundleGenerator {
     } catch (err) {
       // If the stored mountPath is not writable (old cache, permission change), fall back to writable root
       this.logger.warn('Failed to use bundle mountPath; falling back to writable root', {
+        component: 'ContextBundleGenerator',
         bundlePath,
         error: err instanceof Error ? err.message : String(err)
       });
@@ -532,7 +533,11 @@ export class ContextBundleGenerator {
 
     // Safety: only delete inside the configured bundle root
     if (resolved !== rootResolved && !resolved.startsWith(rootResolved + path.sep)) {
-      this.logger.warn('Refusing to delete bundle outside of bundle root', { bundlePath: resolved, root: rootResolved });
+      this.logger.warn('Refusing to delete bundle outside of bundle root', {
+        component: 'ContextBundleGenerator',
+        bundlePath: resolved,
+        root: rootResolved
+      });
       return false;
     }
 
@@ -540,7 +545,11 @@ export class ContextBundleGenerator {
       await fs.rm(resolved, { recursive: true, force: true });
       return true;
     } catch (err) {
-      this.logger.warn('Failed to cleanup materialized bundle', { bundlePath: resolved, error: err instanceof Error ? err.message : String(err) });
+      this.logger.warn('Failed to cleanup materialized bundle', {
+        component: 'ContextBundleGenerator',
+        bundlePath: resolved,
+        error: err instanceof Error ? err.message : String(err)
+      });
       return false;
     }
   }
@@ -565,11 +574,15 @@ export class ContextBundleGenerator {
         await fs.access(candidate, fsConstants.W_OK);
         this.resolvedBundleRoot = candidate;
         if (candidate !== this.bundleRootCandidates[0]) {
-          this.logger.info('Using fallback bundle directory', { candidate });
+          this.logger.info('Using fallback bundle directory', { component: 'ContextBundleGenerator', candidate });
         }
         return candidate;
       } catch (err) {
-        this.logger.warn('Bundle root not writable, trying next', { candidate, error: err instanceof Error ? err.message : String(err) });
+        this.logger.warn('Bundle root not writable, trying next', {
+          component: 'ContextBundleGenerator',
+          candidate,
+          error: err instanceof Error ? err.message : String(err)
+        });
       }
     }
 
@@ -577,7 +590,10 @@ export class ContextBundleGenerator {
     const fallback = path.join(os.tmpdir(), 'context-bundles');
     await fs.mkdir(fallback, { recursive: true });
     this.resolvedBundleRoot = fallback;
-    this.logger.warn('All configured bundle roots failed; using temp directory', { fallback });
+    this.logger.warn('All configured bundle roots failed; using temp directory', {
+      component: 'ContextBundleGenerator',
+      fallback
+    });
     return fallback;
   }
 
