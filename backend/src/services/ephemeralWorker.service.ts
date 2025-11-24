@@ -87,6 +87,14 @@ export interface PhaseCompletionResult extends ValidationResult {
   transitionReason?: string;
 }
 
+export interface PrunedWorkerSummary {
+  workerId: string;
+  taskId: string;
+  containerId: string;
+  containerState?: string;
+  reason: 'missing_container' | 'container_exited';
+}
+
 export interface EphemeralWorkerServiceConfig {
   maxConcurrentWorkers: number;
   dockerImage: string;
@@ -261,7 +269,7 @@ export class EphemeralWorkerService {
    * On startup, find running dev-bot containers that are not tracked and remove them.
    * This prevents orphaned containers from inflating resource usage or confusing ops.
    */
-  private async reconcileOrphanedDevBotContainers(): Promise<void> {
+  async reconcileOrphanedDevBotContainers(): Promise<void> {
     try {
       const containers = await this.docker.listContainers({ all: true });
       const tracked = new Set(
@@ -1818,10 +1826,10 @@ export class EphemeralWorkerService {
    *
    * @returns number of workers removed
    */
-  async pruneStaleWorkers(): Promise<number> {
+  async pruneStaleWorkers(): Promise<PrunedWorkerSummary[]> {
     try {
       const containers = await this.docker.listContainers({ all: true });
-      let removed = 0;
+      const pruned: PrunedWorkerSummary[] = [];
 
       for (const [workerId, worker] of this.ephemeralWorkers.entries()) {
         const containerInfo = containers.find(c => c.Id === worker.containerId);
@@ -1837,7 +1845,13 @@ export class EphemeralWorkerService {
           await this.workerLog.closeLogStream(workerId);
           this.ephemeralWorkers.delete(workerId);
           this.workerCacheByTask.delete(worker.task.id);
-          removed += 1;
+          pruned.push({
+            workerId,
+            taskId: worker.task.id,
+            containerId: worker.containerId,
+            containerState: containerInfo?.State,
+            reason: containerMissing ? 'missing_container' : 'container_exited'
+          });
 
           logger.warn({
             category: 'worker',
@@ -1853,7 +1867,7 @@ export class EphemeralWorkerService {
         }
       }
 
-      return removed;
+      return pruned;
     } catch (error) {
       logger.warn({
         category: 'worker',
@@ -1861,7 +1875,7 @@ export class EphemeralWorkerService {
         message: 'Failed to prune stale workers',
         error
       });
-      return 0;
+      return [];
     }
   }
 

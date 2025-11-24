@@ -126,7 +126,7 @@ export class RetryManager extends EventEmitter {
       reason,
       error: task.error,
       exitCode: taskWithExtras.exitCode,
-      workerId: task.assigned_worker,
+      workerId: task.assigned_worker ?? undefined,
       agentId: task.assigned_agent
     };
 

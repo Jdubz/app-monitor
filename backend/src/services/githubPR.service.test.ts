@@ -308,14 +308,14 @@ describe('GitHubPRService', () => {
       expect(result.reason).toContain('CI');
     });
 
-    it('should block merge when Copilot found blocking issues', () => {
+    it('should block merge when AI review found blocking issues', () => {
       baseCopilotAnalysis.severity = 'high';
       baseCopilotAnalysis.blockingIssues = ['Security issue', 'Bug detected'];
 
       const result = service.canAutoMerge(baseStatus, baseCopilotAnalysis);
 
       expect(result.canMerge).toBe(false);
-      expect(result.reason).toContain('Copilot found 2 blocking issue(s)');
+      expect(result.reason).toContain('AI review found 2 blocking issue(s)');
     });
 
     it('should block merge when human reviewer requests changes', () => {
@@ -471,7 +471,7 @@ describe('GitHubPRService', () => {
       expect(copilotAnalysis.severity).toBe('medium');
       expect(copilotAnalysis.blockingIssues.length).toBe(2);
       expect(mergeDecision.canMerge).toBe(false);
-      expect(mergeDecision.reason).toContain('Copilot found 2 blocking issue(s)');
+      expect(mergeDecision.reason).toContain('AI review found 2 blocking issue(s)');
     });
 
     it('should handle PR with failed CI and Copilot issues', () => {

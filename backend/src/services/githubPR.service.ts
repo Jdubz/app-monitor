@@ -8,6 +8,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { logger } from '../utils/logger.js';
+import { isAiReviewer } from '../utils/aiReviewers.js';
 import { GITHUB_API_TIMEOUT_MS } from '../constants/timeouts.js';
 import { getMockPRRegistry } from './mockPRRegistry.service.js';
 import { PRCacheService } from './prCache.service.js';
@@ -251,10 +252,7 @@ export class GitHubPRService {
    * Uses structured tag parsing with fallback to keyword matching
    */
   analyzeCopilotReview(comments: PRComment[]): CopilotReviewAnalysis {
-    const copilotComments = comments.filter(c =>
-      c.author.toLowerCase().includes('copilot') ||
-      c.author.toLowerCase().includes('github-actions')
-    );
+    const copilotComments = comments.filter(c => isAiReviewer(c.author));
 
     if (copilotComments.length === 0) {
       return {
@@ -427,17 +425,17 @@ export class GitHubPRService {
       };
     }
 
-    // Check for blocking Copilot issues
+    // Check for blocking AI issues
     if (copilotAnalysis.severity === 'high' || copilotAnalysis.severity === 'medium') {
       return {
         canMerge: false,
-        reason: `Copilot found ${copilotAnalysis.blockingIssues.length} blocking issue(s)`
+        reason: `AI review found ${copilotAnalysis.blockingIssues.length} blocking issue(s)`
       };
     }
 
     // Check for human reviews that request changes
     const changesRequested = status.reviews.filter(r =>
-      r.state === 'CHANGES_REQUESTED' && !r.author.toLowerCase().includes('copilot')
+      r.state === 'CHANGES_REQUESTED' && !isAiReviewer(r.author)
     );
     if (changesRequested.length > 0) {
       return {
