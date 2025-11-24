@@ -116,6 +116,34 @@ export class AdminBotService extends EventEmitter {
   }
 
   /**
+   * Build arguments for a new codex exec call (not resume)
+   */
+  private buildNewExecArgs(prompt: string): string[] {
+    return [
+      'exec',
+      '--dangerously-bypass-approvals-and-sandbox',
+      '--skip-git-repo-check',
+      '--cd', this.codexWorkingDir,
+      '--json',
+      prompt
+    ];
+  }
+
+  /**
+   * Build arguments for resuming an existing codex thread
+   */
+  private buildResumeArgs(threadId: string, prompt: string): string[] {
+    // Note: exec resume has limited flags compared to exec
+    // Session config (sandbox bypass, json mode) persists from initial exec
+    return [
+      'exec',
+      'resume',
+      threadId,
+      prompt
+    ];
+  }
+
+  /**
    * Spawn a codex exec process with the given arguments
    */
   private spawnCodexExec(args: string[]): ChildProcess {
@@ -281,16 +309,7 @@ export class AdminBotService extends EventEmitter {
     // This gives immediate feedback that the session is active
     const initialPrompt = 'You are the App Monitor admin bot. Briefly introduce yourself and list the MCP tools available to you. Keep the response concise.';
 
-    const codexArgs = [
-      'exec',
-      '--dangerously-bypass-approvals-and-sandbox',
-      '--skip-git-repo-check',
-      '--cd', this.codexWorkingDir,
-      '--json',
-      initialPrompt
-    ];
-
-    const codexProcess = this.spawnCodexExec(codexArgs);
+    const codexProcess = this.spawnCodexExec(this.buildNewExecArgs(initialPrompt));
     this.session.process = codexProcess;
     this.setupProcessHandlers(codexProcess);
 
@@ -346,15 +365,7 @@ export class AdminBotService extends EventEmitter {
     let codexArgs: string[];
 
     if (this.session.codexThreadId) {
-      // Resume existing thread
-      // Note: exec resume has limited flags compared to exec
-      // Session config (sandbox bypass, json mode) persists from initial exec
-      codexArgs = [
-        'exec',
-        'resume',
-        this.session.codexThreadId,
-        message
-      ];
+      codexArgs = this.buildResumeArgs(this.session.codexThreadId, message);
     } else {
       // Fallback: No thread ID yet (shouldn't happen normally)
       // This could occur if startSession's initial message failed
@@ -364,14 +375,7 @@ export class AdminBotService extends EventEmitter {
         message: 'No thread ID available, starting new thread',
         details: { sessionId: this.session.id }
       });
-      codexArgs = [
-        'exec',
-        '--dangerously-bypass-approvals-and-sandbox',
-        '--skip-git-repo-check',
-        '--cd', this.codexWorkingDir,
-        '--json',
-        message
-      ];
+      codexArgs = this.buildNewExecArgs(message);
     }
 
     logger.info({
