@@ -135,9 +135,11 @@ export class AdminBotService extends EventEmitter {
   private buildResumeArgs(threadId: string, prompt: string): string[] {
     // Note: exec resume has limited flags compared to exec
     // Session config (sandbox bypass, json mode) persists from initial exec
+    // Use -c to pass config overrides including skip_git_repo_check
     return [
       'exec',
       'resume',
+      '-c', 'skip_git_repo_check=true',
       threadId,
       prompt
     ];

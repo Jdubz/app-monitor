@@ -116,11 +116,13 @@ describe('AdminBotService', () => {
       await service.sendMessage('test message');
 
       // Note: exec resume has limited flags - session config persists from initial exec
+      // Uses -c to pass skip_git_repo_check config override
       expect(spawn).toHaveBeenCalledWith(
         'codex',
         [
           'exec',
           'resume',
+          '-c', 'skip_git_repo_check=true',
           'test-thread-id-123',
           'test message'
         ],
