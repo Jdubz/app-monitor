@@ -17,12 +17,13 @@ const skipHeavyBots = process.env.SKIP_HEAVY_DEV_BOT_TESTS === '1';
 
 // Force a single threaded worker to avoid V8 structured clone cache corruption
 const poolConfig = {
+  // Force truly single-process execution to avoid V8 clone/serialization errors
   pool: 'threads',
   poolOptions: {
     threads: {
       maxThreads: 1,
       minThreads: 1,
-      isolate: false,
+      isolate: false, // share context; avoids serialization of native handles
     },
   },
   fileParallelism: false,

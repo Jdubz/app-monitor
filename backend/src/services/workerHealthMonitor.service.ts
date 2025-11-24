@@ -337,6 +337,9 @@ export class WorkerHealthMonitor {
    */
   private async checkCleanupSchedules(): Promise<void> {
     try {
+      // Remove phantom workers whose containers have disappeared so UI stays accurate
+      await this.ephemeralWorkerService.pruneStaleWorkers();
+
       const dueTasks = this.scopeControl.checkCleanupSchedules();
       for (const taskType of dueTasks) {
         const cleanupTask = this.scopeControl.createCleanupTask(taskType, Date.now());

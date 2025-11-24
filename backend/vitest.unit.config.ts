@@ -14,15 +14,13 @@ const repoRoot = path.resolve(__dirname, '..');
 
 export default defineConfig({
   test: {
-    // Use threads pool - forks causes V8 serialization errors with large test suites
-    // The "Unable to deserialize cloned data" error occurs when forked processes
-    // try to send test results back to the main process
+    // Use single threaded pool with isolation off to keep native handles in one process
     pool: 'threads',
     poolOptions: {
       threads: {
-        maxThreads: 1,  // Single thread to avoid race conditions
+        maxThreads: 1,
         minThreads: 1,
-        isolate: false, // Disable isolation to prevent serialization overhead
+        isolate: false,
       },
     },
 

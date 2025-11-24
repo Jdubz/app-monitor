@@ -57,6 +57,8 @@ export const config = {
   phaseSystem: {
     // Maximum attempts per phase before blocking task
     maxPhaseAttempts: parseInt(process.env.MAX_PHASE_ATTEMPTS || '4', 10),
+    // Maximum Review↔Fix loop iterations before escalation
+    maxReviewFixLoops: parseInt(process.env.MAX_REVIEW_FIX_LOOPS || '4', 10),
   },
 
   // Interactive Terminal Configuration

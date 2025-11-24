@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { logger } from '../utils/logger.js';
-import { spawn } from 'child_process';
+import { spawn, type ChildProcess } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs';
 
@@ -524,7 +524,7 @@ export class QualityGateValidator extends EventEmitter {
    */
   private executeCommand(command: string, args: string[], cwd: string, timeout: number): Promise<{ exitCode: number; stdout: string; stderr: string }> {
     return new Promise((resolve, reject) => {
-      const proc = spawn(command, args, {
+      const proc: ChildProcess = spawn(command, args, {
         cwd,
         shell: true,
         timeout
@@ -541,7 +541,13 @@ export class QualityGateValidator extends EventEmitter {
         stderr += data.toString();
       });
 
+      const timeoutTimer = setTimeout(() => {
+        proc.kill();
+        reject(new Error(`Command timed out after ${timeout}ms`));
+      }, timeout);
+
       proc.on('close', (exitCode) => {
+        clearTimeout(timeoutTimer);
         resolve({
           exitCode: exitCode ?? 1,
           stdout,
@@ -550,14 +556,9 @@ export class QualityGateValidator extends EventEmitter {
       });
 
       proc.on('error', (error) => {
+        clearTimeout(timeoutTimer);
         reject(error);
       });
-
-      // Timeout handling
-      setTimeout(() => {
-        proc.kill();
-        reject(new Error(`Command timed out after ${timeout}ms`));
-      }, timeout);
     });
   }
 

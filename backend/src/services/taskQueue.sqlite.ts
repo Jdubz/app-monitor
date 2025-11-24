@@ -114,6 +114,11 @@ export interface PhasePayload {
 
   /** Additional metadata for extensibility */
   metadata?: Record<string, unknown>;
+  /** Review/Fix loop tracking to prevent infinite churn */
+  reviewFixLoop?: {
+    loopCount: number;
+    lastIssueCount?: number;
+  };
 }
 
 export interface Task {
@@ -2225,6 +2230,41 @@ export class TaskQueueService {
         category: 'phase',
         action: 'task_requeued_for_retry',
         message: `Task ${taskId} requeued for phase ${task.phase_index} retry (attempt ${newAttempts})`,
+        details: {
+          taskId,
+          phaseIndex: task.phase_index,
+          phaseName: task.phase_name,
+          attempt: newAttempts,
+        },
+      });
+    });
+  }
+
+  /**
+   * Increment the phase attempt counter without re-queuing the task.
+   * Keeps status/worker assignment intact so the same container can retry
+   * immediately within the current execution loop.
+   */
+  incrementPhaseAttempt(taskId: string): void {
+    this.transaction(() => {
+      const task = this.getTask(taskId);
+      if (!task) {
+        throw new Error(`Task ${taskId} not found`);
+      }
+
+      const newAttempts = task.phase_attempts + 1;
+
+      this.db.prepare(`
+        UPDATE tasks
+        SET phase_attempts = ?,
+            phase_status = 'ready'
+        WHERE id = ?
+      `).run(newAttempts, taskId);
+
+      logger.info({
+        category: 'phase',
+        action: 'phase_attempt_incremented',
+        message: `Incremented attempts for task ${taskId} phase ${task.phase_index} (attempt ${newAttempts})`,
         details: {
           taskId,
           phaseIndex: task.phase_index,
