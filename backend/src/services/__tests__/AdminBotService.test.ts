@@ -115,15 +115,12 @@ describe('AdminBotService', () => {
     it('should spawn codex exec resume with thread ID for subsequent messages', async () => {
       await service.sendMessage('test message');
 
+      // Note: exec resume has limited flags - session config persists from initial exec
       expect(spawn).toHaveBeenCalledWith(
         'codex',
         [
           'exec',
           'resume',
-          '--dangerously-bypass-approvals-and-sandbox',
-          '--skip-git-repo-check',
-          '--cd', expect.any(String),
-          '--json',
           'test-thread-id-123',
           'test message'
         ],
