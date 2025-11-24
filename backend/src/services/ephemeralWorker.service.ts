@@ -1812,6 +1812,60 @@ export class EphemeralWorkerService {
   }
 
   /**
+   * Prune workers whose containers have disappeared or are no longer running.
+   * Prevents the UI from reporting phantom "active" workers when Docker has
+   * already cleaned up the container or it died unexpectedly.
+   *
+   * @returns number of workers removed
+   */
+  async pruneStaleWorkers(): Promise<number> {
+    try {
+      const containers = await this.docker.listContainers({ all: true });
+      let removed = 0;
+
+      for (const [workerId, worker] of this.ephemeralWorkers.entries()) {
+        const containerInfo = containers.find(c => c.Id === worker.containerId);
+        const containerMissing = !containerInfo;
+        const containerExited = containerInfo?.State && containerInfo.State !== 'running';
+
+        if (containerMissing || containerExited) {
+          // Attempt to remove lingering container objects if present
+          if (!containerMissing) {
+            await this.containerLifecycle.removeContainer(worker.containerId, true).catch(() => undefined);
+          }
+
+          await this.workerLog.closeLogStream(workerId);
+          this.ephemeralWorkers.delete(workerId);
+          this.workerCacheByTask.delete(worker.task.id);
+          removed += 1;
+
+          logger.warn({
+            category: 'worker',
+            action: 'pruned_stale_worker',
+            message: `Pruned stale worker ${workerId} (${containerMissing ? 'missing container' : `state=${containerInfo?.State}`})`,
+            details: {
+              workerId,
+              taskId: worker.task.id,
+              containerId: worker.containerId,
+              containerState: containerInfo?.State
+            }
+          });
+        }
+      }
+
+      return removed;
+    } catch (error) {
+      logger.warn({
+        category: 'worker',
+        action: 'prune_stale_workers_failed',
+        message: 'Failed to prune stale workers',
+        error
+      });
+      return 0;
+    }
+  }
+
+  /**
    * Cleanup stuck task containers by task ID
    */
   async cleanupStuckTaskContainers(taskId: string): Promise<void> {
