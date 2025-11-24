@@ -806,10 +806,16 @@ export class TaskExecutionService {
 
     const payload = this.taskQueue.getPhasePayload(task.id);
     const loopState = payload.reviewFixLoop ?? { loopCount: 0, lastIssueCount: Number.MAX_SAFE_INTEGER };
+    const hasTotalIssues = (input: unknown): input is { total_issues: number } =>
+      typeof input === 'object' &&
+      input !== null &&
+      'total_issues' in input &&
+      typeof (input as { total_issues: unknown }).total_issues === 'number';
+
     const issueCount =
-      (validation.details as any)?.total_issues ??
-      (validation.artifacts as any)?.total_issues ??
-      (validation as any).total_issues ??
+      (hasTotalIssues(validation.details) && validation.details.total_issues) ??
+      (hasTotalIssues(validation.artifacts) && validation.artifacts.total_issues) ??
+      (hasTotalIssues(validation) && validation.total_issues) ??
       loopState.lastIssueCount;
 
     // Reset on progress (fewer issues); otherwise increment
