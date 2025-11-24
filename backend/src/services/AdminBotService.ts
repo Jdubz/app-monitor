@@ -346,14 +346,12 @@ export class AdminBotService extends EventEmitter {
     let codexArgs: string[];
 
     if (this.session.codexThreadId) {
-      // Resume existing thread - OPTIONS MUST COME BEFORE POSITIONAL ARGS
+      // Resume existing thread
+      // Note: exec resume has limited flags compared to exec
+      // Session config (sandbox bypass, json mode) persists from initial exec
       codexArgs = [
         'exec',
         'resume',
-        '--dangerously-bypass-approvals-and-sandbox',
-        '--skip-git-repo-check',
-        '--cd', this.codexWorkingDir,
-        '--json',
         this.session.codexThreadId,
         message
       ];
