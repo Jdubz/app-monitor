@@ -172,6 +172,29 @@ check_websocket() {
     return 1
 }
 
+# Check 7: Nginx sync verification
+check_nginx_sync() {
+    log_info "Checking nginx/backend port sync..."
+
+    local scripts_dir="/opt/app-monitor/scripts"
+
+    # Check if nginx-sync.sh exists
+    if [ ! -f "${scripts_dir}/nginx-sync.sh" ]; then
+        log_info "⊘ Nginx sync check skipped (nginx-sync.sh not found)"
+        return 0
+    fi
+
+    # Run sync check (check-only mode)
+    if "${scripts_dir}/nginx-sync.sh" --check > /dev/null 2>&1; then
+        log_info "✓ Nginx/backend port sync verified"
+        return 0
+    else
+        log_error "✗ Nginx/backend port out of sync!"
+        log_info "Run: ${scripts_dir}/nginx-sync.sh to auto-fix"
+        return 1
+    fi
+}
+
 # Main health check flow
 main() {
     log_info "Starting health checks for port ${PORT}..."
@@ -188,6 +211,7 @@ main() {
     check_database || { ((failed++)); log_info "⚠ Database check failed (non-critical)"; }
     check_docker || { ((failed++)); log_info "⚠ Docker check failed (non-critical)"; }
     check_websocket || { ((failed++)); log_info "⚠ WebSocket check failed (non-critical)"; }
+    check_nginx_sync || { ((failed++)); log_info "⚠ Nginx sync check failed (non-critical)"; }
 
     if [ $critical_failed -eq 0 ]; then
         if [ $failed -eq 0 ]; then
