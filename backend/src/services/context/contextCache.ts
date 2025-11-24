@@ -267,13 +267,13 @@ export class ContextCache {
   deleteByBundleId(bundleId: string): boolean {
     let removed = false;
 
-    for (const [key, entry] of Array.from(this.cache.entries())) {
+    // Remove from memory cache
+    for (const [key, entry] of this.cache) {
       if (entry.bundleId === bundleId) {
         this.cache.delete(key);
         this.bundleData.delete(key);
         removed = true;
-
-        removed = true;
+        break; // bundle_id is unique
       }
     }
 
