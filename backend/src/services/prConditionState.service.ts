@@ -27,6 +27,7 @@ import { GitHubPRService, getGitHubPRService, type PRStatus } from './githubPR.s
 import { TaskQueueService } from './taskQueue.sqlite.js';
 import type { Task } from './taskQueue.sqlite.js';
 import { MS_PER_MINUTE } from '../constants/timeouts.js';
+import { config } from '../config.js';
 
 // Import modular evaluators
 import {

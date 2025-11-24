@@ -338,7 +338,18 @@ export class WorkerHealthMonitor {
   private async checkCleanupSchedules(): Promise<void> {
     try {
       // Remove phantom workers whose containers have disappeared so UI stays accurate
-      await this.ephemeralWorkerService.pruneStaleWorkers();
+      const pruned = await this.ephemeralWorkerService.pruneStaleWorkers();
+      if (pruned.length > 0) {
+        for (const worker of pruned) {
+          const reason = worker.reason === 'missing_container'
+            ? 'Worker container disappeared'
+            : `Worker container exited (state=${worker.containerState || 'unknown'})`;
+          this.taskQueue.markWorkerMissing(worker.workerId, worker.taskId, reason);
+        }
+      }
+
+      // Proactively clean up any untracked dev-bot containers to prevent orphans
+      await this.ephemeralWorkerService.reconcileOrphanedDevBotContainers();
 
       const dueTasks = this.scopeControl.checkCleanupSchedules();
       for (const taskType of dueTasks) {
