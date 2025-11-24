@@ -424,7 +424,12 @@ export class TaskExecutionService {
 
       // Mark task as awaiting manual intervention (not failed, not running)
       this.taskQueue.updateTask(nextTask.id, {
-        status: 'pending',
+        status: 'blocked',
+        phase_status: 'blocked',
+        chain_status: 'blocked',
+        blocked_reason: 'Escalated to human - automation paused',
+        blocked_at: Date.now(),
+        blocked_by: 'manual_intervention',
         notes: (nextTask.notes || '') + `\n[${new Date().toISOString()}] Escalated to human - awaiting manual intervention`
       });
 
@@ -820,7 +825,7 @@ export class TaskExecutionService {
 
     // Reset on progress (fewer issues); otherwise increment
     const progressed = typeof issueCount === 'number' && issueCount < (loopState.lastIssueCount ?? Number.MAX_SAFE_INTEGER);
-    const loopCount = progressed ? 1 : (loopState.loopCount ?? 0) + 1;
+    const loopCount = progressed ? 0 : (loopState.loopCount ?? 0) + 1;
 
     this.taskQueue.updatePhasePayload(task.id, {
       reviewFixLoop: {
@@ -834,7 +839,7 @@ export class TaskExecutionService {
         status: 'blocked',
         phase_status: 'blocked',
         chain_status: 'blocked',
-        blocked_reason: `Exceeded Review/Fix loop limit (${MAX_REVIEW_FIX_LOOPS})`,
+        blocked_reason: `Exceeded Review/Fix loop limit (${MAX_REVIEW_FIX_LOOPS}) without measurable progress`,
         blocked_at: Date.now(),
         blocked_by: 'loop_guard'
       });

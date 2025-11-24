@@ -135,7 +135,7 @@ export interface Task {
   started_at?: number;
   completed_at?: number;
   assigned_agent: string;
-  assigned_worker?: string;
+  assigned_worker?: string | null;
   agent_type?: 'claude' | 'codex' | 'gemini'; // Track which CLI tool executed the task
   prompt?: string;
   output?: string;
@@ -657,11 +657,31 @@ export class TaskQueueService {
   }
 
   /**
+   * Collapse duplicated task IDs like "task-123-123" into "task-123".
+   * Some legacy pipelines accidentally appended the raw ID twice.
+   */
+  private normalizeTaskId(id: string): string {
+    const duplicateSuffix = id.match(/^(task-[a-z0-9]+-)([a-z0-9-]+)-\2$/i);
+    if (duplicateSuffix) {
+      const normalized = `${duplicateSuffix[1]}${duplicateSuffix[2]}`;
+      logger.warn({
+        category: 'process',
+        action: 'normalized_task_id',
+        message: `Normalized duplicated task id "${id}" to "${normalized}"`
+      });
+      return normalized;
+    }
+    return id;
+  }
+
+  /**
    * Create a new task
    */
   createTask(taskData: Partial<Task>): Task {
     const now = Date.now();
-    const generatedId = `task-${taskData.type || 'implementation'}-${randomUUID()}`;
+    const generatedId = this.normalizeTaskId(
+      taskData.id || `task-${taskData.type || 'implementation'}-${randomUUID()}`
+    );
     
     // Auto-classify task if not already classified (Phase 0.3)
     let taskCategory = taskData.task_category;
@@ -694,10 +714,10 @@ export class TaskQueueService {
     }
     
     // Chain ID determination - all new tasks start their own chain
-    const chainId = taskData.chain_id || taskData.id || generatedId;
+    const chainId = taskData.chain_id || generatedId;
     
     const task: Task = {
-      id: taskData.id || generatedId,
+      id: generatedId,
       type: taskData.type || 'implementation',
       title: taskData.title || 'Untitled Task',
       description: taskData.description,
@@ -1331,6 +1351,43 @@ export class TaskQueueService {
       stmt.run(...values);
 
       return this.getTask(taskId);
+    });
+  }
+
+  /**
+   * Mark a worker/container as missing and block the task so it doesn't stay "running".
+   */
+  markWorkerMissing(workerId: string, taskId?: string, reason = 'Worker container missing'): void {
+    try {
+      this.workerLifecycle.stopWorker(workerId);
+    } catch (error) {
+      logger.warn({
+        category: 'worker',
+        action: 'stop_worker_failed',
+        message: `Failed to mark worker ${workerId} as stopped`,
+        error
+      });
+    }
+
+    if (!taskId) return;
+
+    const task = this.getTask(taskId);
+    if (!task || task.status !== 'running') {
+      return;
+    }
+
+    const blockedReason = task.blocked_reason
+      ? `${task.blocked_reason}; ${reason}`
+      : reason;
+
+    this.updateTask(taskId, {
+      status: 'blocked',
+      phase_status: 'blocked',
+      chain_status: task.chain_status || 'blocked',
+      blocked_reason: blockedReason,
+      blocked_at: Date.now(),
+      blocked_by: 'worker_health_monitor',
+      assigned_worker: null
     });
   }
 

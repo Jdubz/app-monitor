@@ -11,6 +11,7 @@
 
 import * as crypto from 'crypto';
 import { logger } from '../utils/logger.js';
+import { isAiReviewer } from '../utils/aiReviewers.js';
 import { GitHubPRService, getGitHubPRService, type PRStatus, type CopilotReviewAnalysis } from './githubPR.service.js';
 import { TaskQueueService } from './taskQueue.sqlite.js';
 import type { Task } from './taskQueue.sqlite.js';
@@ -225,14 +226,14 @@ ${prData.description || 'No description available'}`,
       return true;
     }
 
-    // Create followup for blocking Copilot issues
+    // Create followup for blocking AI issues
     if (copilotAnalysis.severity === 'high' || copilotAnalysis.severity === 'medium') {
       return true;
     }
 
     // Create followup for human change requests
     const hasChangeRequests = prStatus.reviews.some(r =>
-      r.state === 'CHANGES_REQUESTED' && !r.author.toLowerCase().includes('copilot')
+      r.state === 'CHANGES_REQUESTED' && !isAiReviewer(r.author)
     );
     if (hasChangeRequests) {
       return true;
@@ -639,7 +640,7 @@ ${taskChain}
 
     // Copilot blocking issues
     if (copilotAnalysis.blockingIssues.length > 0) {
-      issues.push(`🤖 Copilot found ${copilotAnalysis.blockingIssues.length} blocking issue(s)`);
+      issues.push(`🤖 AI review found ${copilotAnalysis.blockingIssues.length} blocking issue(s)`);
       copilotAnalysis.blockingIssues.forEach(issue => {
         issues.push(`  - ${issue.substring(0, 200)}`);
       });
@@ -647,7 +648,7 @@ ${taskChain}
 
     // Human change requests
     const changeRequests = prStatus.reviews.filter(r =>
-      r.state === 'CHANGES_REQUESTED' && !r.author.toLowerCase().includes('copilot')
+      r.state === 'CHANGES_REQUESTED' && !isAiReviewer(r.author)
     );
     if (changeRequests.length > 0) {
       issues.push(`👤 Human reviewer(s) requested changes: ${changeRequests.map(r => r.author).join(', ')}`);
@@ -695,7 +696,8 @@ ${taskChain}
     }
 
     if (copilotAnalysis.blockingIssues.length > 0) {
-      acceptanceCriteria.push(`Address all ${copilotAnalysis.blockingIssues.length} Copilot blocking issue(s)`);
+      acceptanceCriteria.push(`Address all ${copilotAnalysis.blockingIssues.length} AI blocking issue(s)`);
+      acceptanceCriteria.push(`Validate each reported issue is reproducible before changing code; if not reproducible, document why and proceed only with confirmed issues.`);
     }
 
     if (changeRequests.length > 0) {

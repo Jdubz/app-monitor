@@ -132,7 +132,7 @@ export const mapTaskToContract = (task: Task): DevBotsTask => ({
   documentation: task.documentation,
   status: mapTaskStatus(task.status),
   createdAt: iso(task.created_at) ?? new Date().toISOString(),
-  assignedWorker: task.assigned_worker,
+  assignedWorker: task.assigned_worker || undefined,
   assignedAgent: task.assigned_agent,
   assignedAt: iso(task.assigned_at),
   completedAt: iso(task.completed_at),

@@ -27,6 +27,7 @@ import { GitHubPRService, getGitHubPRService, type PRStatus } from './githubPR.s
 import { TaskQueueService } from './taskQueue.sqlite.js';
 import type { Task } from './taskQueue.sqlite.js';
 import { MS_PER_MINUTE } from '../constants/timeouts.js';
+import { config } from '../config.js';
 
 // Import modular evaluators
 import {
@@ -629,6 +630,32 @@ export class PRConditionStateService {
     evaluation: ConditionEvaluation
   ): Promise<void> {
     const previousState = state.conditions[conditionId];
+
+    // Gracefully degrade AI review wait to avoid indefinite blocking when bots are unavailable.
+    // Must run before change detection so the timeout is seen as a state change.
+    const isAiReviewCondition = conditionId === 'copilot_review' || conditionId === 'copilot_review_completed';
+    const isPendingAiReview = evaluation.status === 'unmet' &&
+      evaluation.blocking_issues.some(issue => issue.type === 'copilot_review_pending');
+
+    if (isAiReviewCondition && isPendingAiReview && previousState?.last_checked) {
+      const waitedMs = Date.now() - previousState.last_checked;
+      if (waitedMs > config.prReviews.maxAiReviewWaitMs) {
+        logger.warn({
+          category: 'pr-workflow',
+          action: 'ai_review_timeout',
+          message: `AI review timeout reached for PR #${prNumber}; unblocking gate`,
+          details: { prNumber, waitedMs }
+        });
+
+        evaluation = {
+          ...evaluation,
+          status: 'met',
+          fingerprint: 'ai-review-timeout',
+          blocking_issues: []
+        };
+      }
+    }
+
     const previousFingerprint = previousState?.issue_fingerprint || '';
     const currentFingerprint = evaluation.fingerprint;
 
