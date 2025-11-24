@@ -66,14 +66,6 @@ export class DevBotsDatabase {
     return this.db;
   }
 
-  /**
-   * Backwards-compatible alias used by legacy services/tests.
-   * ShutdownStateManager expects a getConnection() method.
-   */
-  getConnection(): Database.Database {
-    return this.db;
-  }
-
   private initialize(): void {
     // Run migrations
     this.runMigrations();
