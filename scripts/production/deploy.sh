@@ -175,21 +175,16 @@ get_target_port() {
     fi
 }
 
-# Update nginx upstream configuration
+# Update nginx upstream configuration using nginx-sync.sh
 update_nginx_upstream() {
     local port=$1
     log_info "Updating nginx to use backend on port ${port}..."
 
-    # Update upstream in nginx config (match only numeric ports)
-    sudo sed -i "s/server 127.0.0.1:[0-9]\+;/server 127.0.0.1:${port};/" \
-        /etc/nginx/sites-available/app-monitor
-
-    # Test nginx config
-    if sudo nginx -t; then
-        sudo systemctl reload nginx
-        log_info "Nginx reloaded successfully"
+    # Use nginx-sync.sh for reliable port switching
+    if "${SCRIPTS_DIR}/nginx-sync.sh" --force "${port}"; then
+        log_info "Nginx updated successfully via nginx-sync.sh"
     else
-        log_error "Nginx configuration test failed"
+        log_error "nginx-sync.sh failed to update port"
         return 1
     fi
 }
