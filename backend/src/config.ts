@@ -53,6 +53,12 @@ export const config = {
     taskThreshold: parseInt(process.env.PR_SYNC_TASK_THRESHOLD || '10', 10), // Default 10
   },
 
+  // AI Review (Copilot/Gemini) handling
+  prReviews: {
+    // Max wait before we stop blocking on missing AI reviews (ms)
+    maxAiReviewWaitMs: parseInt(process.env.AI_REVIEW_MAX_WAIT_MS || `${6 * 60 * 60 * 1000}`, 10), // default 6h
+  },
+
   // Phase System Configuration
   phaseSystem: {
     // Maximum attempts per phase before blocking task

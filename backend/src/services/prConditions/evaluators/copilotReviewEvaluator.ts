@@ -11,6 +11,8 @@ import type { ConditionEvaluation } from '../types.js';
 import { generateFingerprintFromList } from '../utils.js';
 import { logger } from '../../../utils/logger.js';
 
+const AI_REVIEW_BOT_PATTERNS = ['copilot', 'github-advanced-security', 'gemini', 'code-assist', 'gemini-code-assist', 'google'];
+
 export class CopilotReviewEvaluator extends BaseEvaluator {
   getConditionId(): string {
     return 'copilot_review_completed';
@@ -24,22 +26,20 @@ export class CopilotReviewEvaluator extends BaseEvaluator {
       }
       
       // Check for formal Copilot reviews
-      const copilotReviews = prStatus.reviews.filter(review =>
-        review.author.toLowerCase().includes('copilot') ||
-        review.author.toLowerCase().includes('github-advanced-security')
-      );
+      const isAiReviewer = (author: string) =>
+        AI_REVIEW_BOT_PATTERNS.some(pattern => author.toLowerCase().includes(pattern));
+
+      const copilotReviews = prStatus.reviews.filter(review => isAiReviewer(review.author));
 
       // Check for Copilot review comments (inline code suggestions)
-      const copilotComments = prStatus.comments.filter(comment =>
-        comment.author.toLowerCase().includes('copilot')
-      );
+      const copilotComments = prStatus.comments.filter(comment => isAiReviewer(comment.author));
 
       // If Copilot left comments, check if they're unresolved using GitHub API
       if (copilotComments.length > 0) {
         const unresolvedThreads = await this.github.getUnresolvedComments(prNumber);
         const copilotUnresolved = unresolvedThreads.filter(thread =>
           thread.comments.length > 0 &&
-          thread.comments[0].author.toLowerCase().includes('copilot')
+          isAiReviewer(thread.comments[0].author)
         );
 
         if (copilotUnresolved.length > 0) {
@@ -91,14 +91,14 @@ export class CopilotReviewEvaluator extends BaseEvaluator {
         };
       }
 
-      // No Copilot interaction yet - condition unmet
+      // No AI interaction yet - condition unmet (will be time-limited in prConditionState.service)
       this.logEvaluation(prNumber, 'unmet', { 
-        reason: 'awaiting-copilot-review' 
+        reason: 'awaiting-ai-review' 
       });
       return {
         condition_id: this.getConditionId(),
         status: 'unmet',
-        fingerprint: 'awaiting-copilot',
+        fingerprint: 'awaiting-ai-review',
         blocking_issues: [{
           type: 'copilot_review_pending',
           severity: 'medium'

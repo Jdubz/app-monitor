@@ -251,10 +251,15 @@ export class GitHubPRService {
    * Uses structured tag parsing with fallback to keyword matching
    */
   analyzeCopilotReview(comments: PRComment[]): CopilotReviewAnalysis {
-    const copilotComments = comments.filter(c =>
-      c.author.toLowerCase().includes('copilot') ||
-      c.author.toLowerCase().includes('github-actions')
-    );
+    const isAiReviewer = (author: string) => {
+      const lower = author.toLowerCase();
+      return lower.includes('copilot') ||
+        lower.includes('github-actions') ||
+        lower.includes('gemini') ||
+        lower.includes('code-assist');
+    };
+
+    const copilotComments = comments.filter(c => isAiReviewer(c.author));
 
     if (copilotComments.length === 0) {
       return {
@@ -427,17 +432,20 @@ export class GitHubPRService {
       };
     }
 
-    // Check for blocking Copilot issues
+    // Check for blocking AI issues
     if (copilotAnalysis.severity === 'high' || copilotAnalysis.severity === 'medium') {
       return {
         canMerge: false,
-        reason: `Copilot found ${copilotAnalysis.blockingIssues.length} blocking issue(s)`
+        reason: `AI review found ${copilotAnalysis.blockingIssues.length} blocking issue(s)`
       };
     }
 
     // Check for human reviews that request changes
     const changesRequested = status.reviews.filter(r =>
-      r.state === 'CHANGES_REQUESTED' && !r.author.toLowerCase().includes('copilot')
+      r.state === 'CHANGES_REQUESTED' &&
+      !r.author.toLowerCase().includes('copilot') &&
+      !r.author.toLowerCase().includes('gemini') &&
+      !r.author.toLowerCase().includes('code-assist')
     );
     if (changesRequested.length > 0) {
       return {

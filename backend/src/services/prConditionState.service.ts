@@ -674,6 +674,27 @@ export class PRConditionStateService {
       last_checked: Date.now()
     };
 
+    // Gracefully degrade AI review wait to avoid indefinite blocking when bots are unavailable
+    const isAiReviewCondition = conditionId === 'copilot_review' || conditionId === 'copilot_review_completed';
+    const isPendingAiReview = evaluation.status === 'unmet' &&
+      evaluation.blocking_issues.some(issue => issue.type === 'copilot_review_pending');
+
+    if (isAiReviewCondition && isPendingAiReview && previousState?.last_checked) {
+      const waitedMs = Date.now() - previousState.last_checked;
+      if (waitedMs > config.prReviews.maxAiReviewWaitMs) {
+        logger.warn({
+          category: 'pr-workflow',
+          action: 'ai_review_timeout',
+          message: `AI review timeout reached for PR #${prNumber}; unblocking gate`,
+          details: { prNumber, waitedMs }
+        });
+
+        conditionState.status = 'met';
+        conditionState.issue_fingerprint = 'ai-review-timeout';
+        conditionState.blocking_issues = [];
+      }
+    }
+
     state.conditions[conditionId] = conditionState;
 
     // DUAL-NAME SYNC: Also update corresponding old/new name for backward compatibility
