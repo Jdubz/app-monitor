@@ -172,29 +172,6 @@ check_websocket() {
     return 1
 }
 
-# Check 7: Nginx sync verification
-check_nginx_sync() {
-    log_info "Checking nginx/backend port sync..."
-
-    local scripts_dir="/opt/app-monitor/scripts"
-
-    # Check if nginx-sync.sh exists
-    if [ ! -f "${scripts_dir}/nginx-sync.sh" ]; then
-        log_info "⊘ Nginx sync check skipped (nginx-sync.sh not found)"
-        return 0
-    fi
-
-    # Run sync check (check-only mode)
-    if "${scripts_dir}/nginx-sync.sh" --check > /dev/null 2>&1; then
-        log_info "✓ Nginx/backend port sync verified"
-        return 0
-    else
-        log_error "✗ Nginx/backend port out of sync!"
-        log_info "Run: ${scripts_dir}/nginx-sync.sh to auto-fix"
-        return 1
-    fi
-}
-
 # Main health check flow
 main() {
     log_info "Starting health checks for port ${PORT}..."
@@ -208,10 +185,12 @@ main() {
     check_http_health || { ((failed++)); ((critical_failed++)); }
 
     # Non-critical checks - log but don't fail deployment
-    check_database || { ((failed++)); log_info "⚠ Database check failed (non-critical)"; }
-    check_docker || { ((failed++)); log_info "⚠ Docker check failed (non-critical)"; }
-    check_websocket || { ((failed++)); log_info "⚠ WebSocket check failed (non-critical)"; }
-    check_nginx_sync || { ((failed++)); log_info "⚠ Nginx sync check failed (non-critical)"; }
+    # Note: using ((var++)) || true to avoid exit on first increment when var=0 (bash arithmetic quirk with set -e)
+    check_database || { ((failed++)) || true; log_info "⚠ Database check failed (non-critical)"; }
+    check_docker || { ((failed++)) || true; log_info "⚠ Docker check failed (non-critical)"; }
+    check_websocket || { ((failed++)) || true; log_info "⚠ WebSocket check failed (non-critical)"; }
+    # Note: nginx sync check removed - during blue/green deployment nginx intentionally points
+    # to old port until health checks pass. Use nginx-sync.sh timer for post-deploy monitoring.
 
     if [ $critical_failed -eq 0 ]; then
         if [ $failed -eq 0 ]; then
