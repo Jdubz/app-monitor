@@ -394,6 +394,11 @@ export class PRWorkflowOrchestrator {
     commitsAhead: number;
     mergeBase: string;
   }> {
+    const toStdoutString = (result: unknown): string =>
+      typeof result === 'string'
+        ? result
+        : String((result as { stdout?: string }).stdout ?? '');
+
     try {
       logger.info({
         category: 'pr-workflow',
@@ -403,11 +408,11 @@ export class PRWorkflowOrchestrator {
       });
 
       // Step 1: Find the merge base (common ancestor) between the branch and base
-      const { stdout: mergeBase } = await execAsync(
+      const mergeBaseResult = await execAsync(
         `git -C "${repoPath}" merge-base "${baseBranch}" "${branch}"`,
         { timeout: 10000 }
       );
-      const mergeBaseCommit = mergeBase.trim();
+      const mergeBaseCommit = toStdoutString(mergeBaseResult).trim();
 
       logger.debug({
         category: 'pr-workflow',
@@ -417,18 +422,18 @@ export class PRWorkflowOrchestrator {
       });
 
       // Step 2: Count commits the branch is behind (commits in base not in branch)
-      const { stdout: behindCount } = await execAsync(
+      const behindResult = await execAsync(
         `git -C "${repoPath}" rev-list --count "${branch}..${baseBranch}"`,
         { timeout: 10000 }
       );
-      const commitsBehind = parseInt(behindCount.trim(), 10);
+      const commitsBehind = parseInt(toStdoutString(behindResult).trim(), 10);
 
       // Step 3: Count commits the branch is ahead (commits in branch not in base)
-      const { stdout: aheadCount } = await execAsync(
+      const aheadResult = await execAsync(
         `git -C "${repoPath}" rev-list --count "${baseBranch}..${branch}"`,
         { timeout: 10000 }
       );
-      const commitsAhead = parseInt(aheadCount.trim(), 10);
+      const commitsAhead = parseInt(toStdoutString(aheadResult).trim(), 10);
 
       const isStale = commitsBehind > 0;
 

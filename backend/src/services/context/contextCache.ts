@@ -234,8 +234,68 @@ export class ContextCache {
    * Delete entry from cache
    */
   delete(cacheKey: string): boolean {
-    this.bundleData.delete(cacheKey);
-    return this.cache.delete(cacheKey);
+    let removed = false;
+
+    if (this.cache.delete(cacheKey) || this.bundleData.delete(cacheKey)) {
+      removed = true;
+    }
+
+    // Also delete from database (even if not in memory)
+    if (this.persistToDb && this.db) {
+      try {
+        const result = this.db.getConnection().prepare(
+          'DELETE FROM context_bundle_cache WHERE cache_key = ?'
+        ).run(cacheKey);
+        if (result.changes > 0) {
+          removed = true;
+        }
+      } catch (error) {
+        this.logger.warn(
+          'Failed to delete cache entry from database',
+          { component: 'ContextCache', operation: 'delete', cacheKey },
+          error instanceof Error ? error : undefined
+        );
+      }
+    }
+
+    return removed;
+  }
+
+  /**
+   * Delete entries by bundleId (used when cleaning up materialized bundles)
+   */
+  deleteByBundleId(bundleId: string): boolean {
+    let removed = false;
+
+    // Remove from memory cache
+    for (const [key, entry] of this.cache) {
+      if (entry.bundleId === bundleId) {
+        this.cache.delete(key);
+        this.bundleData.delete(key);
+        removed = true;
+        break; // bundle_id is unique
+      }
+    }
+
+    // Always attempt to delete matching rows from database, even if not in memory
+    if (this.persistToDb && this.db) {
+      try {
+        const result = this.db.getConnection().prepare(
+          'DELETE FROM context_bundle_cache WHERE bundle_id = ?'
+        ).run(bundleId);
+        if (result.changes > 0) {
+          removed = true;
+        }
+      } catch (error) {
+        this.logger.warn(
+          'Failed to delete bundle by id from database',
+          { component: 'ContextCache', operation: 'deleteByBundleId', bundleId },
+          error instanceof Error ? error : undefined
+        );
+      }
+    }
+
+    return removed;
   }
 
   /**

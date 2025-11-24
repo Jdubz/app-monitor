@@ -19,10 +19,10 @@ import { logger } from '../utils/logger.js';
 import type { Task } from './taskQueue.sqlite.js';
 import { TaskQueueService, AUTO_ASSIGNED_AGENT } from './taskQueue.sqlite.js';
 import { MS_PER_HOUR } from '../constants/timeouts.js';
-import type { AgentPersonalityManager } from './agentPersonalities.js';
+import type { AgentPersonalityManager, AgentPersonality } from './agentPersonalities.js';
 import type { TaskPromptTemplateManager, TaskContext } from './taskPromptTemplates.js';
 // WorkspaceOrchestrator removed - we use Docker cp for file systems, not git mirrors
-import type { EphemeralWorkerService, EphemeralWorker, TaskExecutionResult } from './ephemeralWorker.service.js';
+import type { EphemeralWorkerService, EphemeralWorker, TaskExecutionResult, PhaseCompletionResult } from './ephemeralWorker.service.js';
 // TaskPersistence removed - using SQLite directly
 import type { FailurePattern } from './taskFailureGuards.js';
 import { resolveArtifactsDir, resolveLogsDir } from '../utils/repoPaths.js';
@@ -31,6 +31,7 @@ import { selectAgentCliTypeForTask } from './agentCliSelection.js';
 import { TaskClassifier } from './taskClassifier.js';
 import { TaskArtifactService } from './taskArtifact.service.js';
 import { SessionSummaryService } from './sessionSummary.service.js';
+import { MAX_REVIEW_FIX_LOOPS, MAX_PHASE_ATTEMPTS } from './phaseConstants.js';
 
 const execAsync = promisify(exec);
 
@@ -503,7 +504,6 @@ export class TaskExecutionService {
 
     // Track worker for cleanup
     let worker: EphemeralWorker | undefined;
-    let result: TaskExecutionResult | undefined;
     let keepContainer = false;
     const executionStartTime = Date.now();
 
@@ -518,197 +518,26 @@ export class TaskExecutionService {
       if (this.dockerCircuitBreaker) {
         await this.dockerCircuitBreaker.execute(async () => {
           worker = await this.ephemeralWorkerService.getOrCreateWorker(nextTask, agent, agentCliType);
-          result = await this.ephemeralWorkerService.executeTask(worker);
         });
       } else {
         // Fallback if circuit breaker not initialized
         worker = await this.ephemeralWorkerService.getOrCreateWorker(nextTask, agent, agentCliType);
-        result = await this.ephemeralWorkerService.executeTask(worker);
       }
 
-      if (!result) {
-        throw new Error('No execution result returned from ephemeral worker');
+      if (!worker) {
+        throw new Error('Worker not initialized - cannot execute task phases');
       }
 
-      const executionDuration = Date.now() - executionStartTime;
+      const phaseRunOutcome = await this.runPhasesInWorker({
+        task: nextTask,
+        worker,
+        agent,
+        agentCliType,
+        executionStartTime
+      });
 
-      if (result.success) {
-        // Task succeeded - run phase validation and advancement
-        const output = result.output || '';
-        const stderr = result.errorOutput || '';
-
-        logger.info({
-          category: 'process',
-          action: 'task_execution_complete',
-          message: `Task ${nextTask.id} execution complete, running phase validation`,
-          details: {
-            taskId: nextTask.id,
-            phaseIndex: nextTask.phase_index,
-            phaseName: nextTask.phase_name,
-            exitCode: result.exitCode
-          }
-        });
-
-        // Phase system integration: Validate and advance phase
-        // NOTE: This keeps the container alive during validation
-        // Container is destroyed in the finally block
-        if (!worker) {
-          throw new Error('Worker not initialized - cannot complete phase execution');
-        }
-        const phaseValidation = await this.ephemeralWorkerService.completePhaseExecution(
-          worker,
-          output,
-          stderr,
-          result.exitCode || 0
-        );
-
-        // Persist phase execution context (git branch + artifacts) for resume capability
-        this.taskQueue.updatePhasePayload(nextTask.id, {
-          gitBranch: phaseValidation.gitBranch,
-          lastExecutionAt: Date.now(),
-          artifacts: {
-            validationPassed: phaseValidation.passed,
-            validationErrors: phaseValidation.errors,
-            phaseIndex: nextTask.phase_index,
-            phaseName: nextTask.phase_name
-          }
-        });
-
-        logger.debug({
-          category: 'phase',
-          action: 'phase_payload_updated',
-          message: `Updated phase_payload for task ${nextTask.id}`,
-          details: {
-            taskId: nextTask.id,
-            phaseIndex: nextTask.phase_index,
-            gitBranch: phaseValidation.gitBranch,
-            validationPassed: phaseValidation.passed
-          }
-        });
-
-        // Check if validation passed
-        if (phaseValidation.passed) {
-          // Phase validated successfully - complete task
-          this.taskQueue.completeTask(nextTask.id, output, agentCliType);
-          keepContainer = false;
-
-          // Generate session summary for documentation
-          await this.generateSessionSummary(nextTask, result.exitCode || 0, output, stderr, Date.now());
-
-          logger.info({
-            category: 'process',
-            action: 'task_completed_successfully',
-            message: `Task ${nextTask.id} completed successfully in ${Math.floor(executionDuration / 60000)}m ${Math.floor((executionDuration % 60000) / 1000)}s`,
-            details: {
-              taskId: nextTask.id,
-              agent: agent.id,
-              durationMs: executionDuration,
-              exitCode: result.exitCode,
-              phaseValidation: phaseValidation.passed
-            }
-          });
-        } else {
-          // Phase validation failed - check if recovery was attempted
-          if (phaseValidation.recovery?.attempted) {
-            logger.warn({
-              category: 'phase',
-              action: 'phase_validation_failed_with_recovery',
-              message: `Phase validation failed for task ${nextTask.id}, recovery was attempted`,
-              details: {
-                taskId: nextTask.id,
-                phaseIndex: nextTask.phase_index,
-                errors: phaseValidation.errors,
-                recoveryCategory: phaseValidation.recovery.category,
-                recoverySuccess: phaseValidation.recovery.success
-              }
-            });
-
-            // Apply recovery action based on category
-            const recovery = phaseValidation.recovery;
-
-            if (recovery.category === 'retry') {
-              // Simple retry - increment attempts and requeue
-              this.taskQueue.requeueTaskForPhaseRetry(nextTask.id);
-              keepContainer = true; // keep context for retry
-            } else if (recovery.category === 'context_update') {
-              // Update task prompt with additional context
-              if (recovery.diagnosis) {
-                this.taskQueue.updateTaskContext(nextTask.id, recovery.diagnosis);
-              }
-              this.taskQueue.requeueTaskForPhaseRetry(nextTask.id);
-              keepContainer = true; // keep context for retry
-            } else if (recovery.category === 'chain_blocked') {
-              // Block task immediately - requires human intervention
-              this.taskQueue.updateTask(nextTask.id, {
-                status: 'blocked',
-                phase_status: 'blocked',
-                chain_status: 'blocked',
-                blocked_reason: recovery.diagnosis || 'Recovery failed - manual intervention required',
-                blocked_at: Date.now(),
-                blocked_by: 'recovery_agent'
-              });
-
-              // Also block the entire chain if task is part of one
-              if (nextTask.chain_id) {
-                this.taskQueue.blockChain(nextTask.chain_id, recovery.diagnosis || 'Unrecoverable failure', 'recovery_agent');
-              }
-
-              logger.warn({
-                category: 'phase',
-                action: 'task_blocked_by_recovery',
-                message: `Task ${nextTask.id} blocked by recovery agent`,
-                details: {
-                  taskId: nextTask.id,
-                  chainId: nextTask.chain_id,
-                  diagnosis: recovery.diagnosis
-                }
-              });
-
-              // Preserve container and snapshot workspace for unblock
-              keepContainer = true;
-              if (worker) {
-                worker.status = 'blocked';
-                await this.ephemeralWorkerService.snapshotWorkspaceForBlocked(worker);
-              }
-            } else if (recovery.category === 'system_blocked') {
-              // Global pause - emit event for system-wide handling
-              logger.error({
-                category: 'phase',
-                action: 'system_blocked',
-                message: 'Recovery agent detected system-wide issue',
-                details: {
-                  taskId: nextTask.id,
-                  diagnosis: recovery.diagnosis,
-                },
-              });
-              // Note: system:blocked event would be emitted by DevBotsManager if needed
-            }
-          } else {
-            logger.warn({
-              category: 'phase',
-              action: 'phase_validation_failed',
-              message: `Phase validation failed for task ${nextTask.id}`,
-              details: {
-                taskId: nextTask.id,
-                phaseIndex: nextTask.phase_index,
-                errors: phaseValidation.errors
-              }
-            });
-
-            // No recovery attempted - mark task as failed
-            const errorDetails = this.formatValidationErrors(phaseValidation.errors);
-            this.taskQueue.failTask(nextTask.id, `Phase ${nextTask.phase_index} validation failed: ${errorDetails}`);
-            keepContainer = false;
-          }
-
-          // Task will be retried via phase system
-          // Don't mark as complete, let phase orchestrator handle next attempt
-        }
-      } else {
-        // Task failed - throw error to trigger recovery
-        const errorMsg = this.formatExecutionError(result);
-        throw new Error(errorMsg);
-      }
+      // Decide whether to keep the container after phase run
+      keepContainer = phaseRunOutcome.keepContainer;
 
     } catch (error) {
       // Check if error is from circuit breaker being open
@@ -767,6 +596,268 @@ export class TaskExecutionService {
     }
   }
 
+
+  /**
+   * Execute all remaining phases for a task inside the same container/worker.
+   * Keeps task.status=running, only marks complete at Phase 7 when gates pass.
+   */
+  private async runPhasesInWorker(params: {
+    task: Task;
+    worker: EphemeralWorker;
+    agent: AgentPersonality;
+    agentCliType: 'claude' | 'codex' | 'gemini';
+    executionStartTime: number;
+  }): Promise<{ keepContainer: boolean }> {
+    let task = this.taskQueue.getTask(params.task.id) ?? params.task;
+    let keepContainer = true;
+
+    for (let safety = 0; safety < 30; safety++) {
+      // Refresh prompt for current phase context
+      const taskContext: TaskContext = {
+        task,
+        agent: params.agent,
+        project: (task as Task & { project?: string }).project || 'dev-monitor',
+        worktree: '[dynamic workspace provisioned per task]',
+        environment: 'development'
+      };
+      task.prompt = this.templateManager.generatePrompt(taskContext);
+      params.worker.task = task;
+
+      const result = await this.ephemeralWorkerService.executeTask(params.worker);
+      if (!result || !result.success) {
+        const errorMsg = this.formatExecutionError(result);
+        throw new Error(errorMsg);
+      }
+
+      const output = result.output || '';
+      const stderr = result.errorOutput || '';
+
+      logger.info({
+        category: 'process',
+        action: 'task_phase_complete',
+        message: `Task ${task.id} phase ${task.phase_index} execution complete, validating`,
+        details: {
+          taskId: task.id,
+          phaseIndex: task.phase_index,
+          phaseName: task.phase_name,
+          exitCode: result.exitCode
+        }
+      });
+
+      const phaseValidation = await this.ephemeralWorkerService.completePhaseExecution(
+        params.worker,
+        output,
+        stderr,
+        result.exitCode || 0
+      );
+
+      // Persist phase execution context for resume capability
+      this.taskQueue.updatePhasePayload(task.id, {
+        gitBranch: phaseValidation.gitBranch,
+        lastExecutionAt: Date.now(),
+        artifacts: {
+          validationPassed: phaseValidation.passed,
+          validationErrors: phaseValidation.errors,
+          phaseIndex: task.phase_index,
+          phaseName: task.phase_name
+        }
+      });
+
+      // Review/Fix loop guard to prevent endless churn
+      const loopBlocked = await this.handleReviewFixLoop(task, phaseValidation, params.worker);
+      if (loopBlocked) {
+        return { keepContainer: true };
+      }
+
+      if (!phaseValidation.passed) {
+        const recovery = phaseValidation.recovery;
+
+        if (recovery?.category === 'retry' || recovery?.category === 'context_update') {
+          if (recovery.category === 'context_update' && recovery.diagnosis) {
+            this.taskQueue.updateTaskContext(task.id, recovery.diagnosis);
+          }
+          this.taskQueue.incrementPhaseAttempt(task.id);
+          const updated = this.taskQueue.getTask(task.id) ?? task;
+
+          if ((updated.phase_attempts ?? 1) >= MAX_PHASE_ATTEMPTS) {
+            this.taskQueue.updateTask(task.id, {
+              status: 'blocked',
+              phase_status: 'blocked',
+              chain_status: 'blocked',
+              blocked_reason: `Exceeded max attempts (${MAX_PHASE_ATTEMPTS}) for phase ${task.phase_index}`,
+              blocked_at: Date.now(),
+              blocked_by: 'attempt_limit'
+            });
+            params.worker.status = 'blocked';
+            await this.ephemeralWorkerService.snapshotWorkspaceForBlocked(params.worker);
+            return { keepContainer: true };
+          }
+
+          task = updated;
+          continue; // immediate retry in same container
+        }
+
+        if (recovery?.category === 'chain_blocked') {
+          this.taskQueue.updateTask(task.id, {
+            status: 'blocked',
+            phase_status: 'blocked',
+            chain_status: 'blocked',
+            blocked_reason: recovery.diagnosis || 'Recovery failed - manual intervention required',
+            blocked_at: Date.now(),
+            blocked_by: 'recovery_agent'
+          });
+
+          if (task.chain_id) {
+            this.taskQueue.blockChain(task.chain_id, recovery.diagnosis || 'Unrecoverable failure', 'recovery_agent');
+          }
+
+          params.worker.status = 'blocked';
+          await this.ephemeralWorkerService.snapshotWorkspaceForBlocked(params.worker);
+          return { keepContainer: true };
+        }
+
+        if (recovery?.category === 'system_blocked') {
+          logger.error({
+            category: 'phase',
+            action: 'system_blocked',
+            message: 'Recovery agent detected system-wide issue',
+            details: { taskId: task.id, diagnosis: recovery.diagnosis }
+          });
+          params.worker.status = 'blocked';
+          await this.ephemeralWorkerService.snapshotWorkspaceForBlocked(params.worker);
+          return { keepContainer: true };
+        }
+
+        // No (or failed) recovery - mark task failed
+        const errorDetails = this.formatValidationErrors(phaseValidation.errors);
+        this.taskQueue.failTask(task.id, `Phase ${task.phase_index} validation failed: ${errorDetails}`);
+        return { keepContainer: false };
+      }
+
+      // Phase passed. If PR Shepherding gates are all green, finish.
+      if (task.phase_index === 7 && (phaseValidation.allGatesPassing === true || phaseValidation.passed)) {
+        this.taskQueue.completeTask(task.id, output, params.agentCliType);
+        keepContainer = false;
+
+        await this.generateSessionSummary(task, result.exitCode || 0, output, stderr, Date.now());
+
+        logger.info({
+          category: 'process',
+          action: 'task_completed_successfully',
+          message: `Task ${task.id} completed through Phase 7`,
+          details: {
+            taskId: task.id,
+            agent: params.agent.id,
+            durationMs: Date.now() - params.executionStartTime,
+            exitCode: result.exitCode,
+            phaseValidation: phaseValidation.passed
+          }
+        });
+        return { keepContainer };
+      }
+
+      // Move to next phase (DB already advanced inside completePhaseExecution)
+      const updatedTask = this.taskQueue.getTask(task.id);
+      if (!updatedTask) {
+        throw new Error(`Task ${task.id} missing after phase advance`);
+      }
+      if (updatedTask.status !== 'running') {
+        // Task was cancelled/blocked during advance
+        return { keepContainer: false };
+      }
+      task = updatedTask;
+    }
+
+    // Safety net to prevent infinite loops
+    this.taskQueue.updateTask(task.id, {
+      status: 'blocked',
+      phase_status: 'blocked',
+      blocked_reason: 'Safety stop: exceeded max in-process phase iterations',
+      blocked_at: Date.now(),
+      blocked_by: 'taskExecutionService'
+    });
+    params.worker.status = 'blocked';
+    await this.ephemeralWorkerService.snapshotWorkspaceForBlocked(params.worker);
+    return { keepContainer: true };
+  }
+
+  /**
+   * Detect and block excessive Review↔Fix loops. Resets when issue count drops.
+   * Returns true if the task was blocked.
+   */
+  private async handleReviewFixLoop(
+    task: Task,
+    validation: PhaseCompletionResult,
+    worker: EphemeralWorker
+  ): Promise<boolean> {
+    if (task.phase_index !== 3) {
+      // Reset loop tracking when leaving the loop
+      if (task.phase_payload) {
+        this.taskQueue.updatePhasePayload(task.id, { reviewFixLoop: { loopCount: 0, lastIssueCount: 0 } });
+      }
+      return false;
+    }
+
+    const issuesFound = validation.issuesFound === true || validation.passed === false;
+    if (!issuesFound) {
+      this.taskQueue.updatePhasePayload(task.id, { reviewFixLoop: { loopCount: 0, lastIssueCount: 0 } });
+      return false;
+    }
+
+    const payload = this.taskQueue.getPhasePayload(task.id);
+    const loopState = payload.reviewFixLoop ?? { loopCount: 0, lastIssueCount: Number.MAX_SAFE_INTEGER };
+    const hasTotalIssues = (input: unknown): input is { total_issues: number } =>
+      typeof input === 'object' &&
+      input !== null &&
+      'total_issues' in input &&
+      typeof (input as { total_issues: unknown }).total_issues === 'number';
+
+    const issueCount =
+      (hasTotalIssues(validation.details) && validation.details.total_issues) ??
+      (hasTotalIssues(validation.artifacts) && validation.artifacts.total_issues) ??
+      (hasTotalIssues(validation) && validation.total_issues) ??
+      loopState.lastIssueCount;
+
+    // Reset on progress (fewer issues); otherwise increment
+    const progressed = typeof issueCount === 'number' && issueCount < (loopState.lastIssueCount ?? Number.MAX_SAFE_INTEGER);
+    const loopCount = progressed ? 1 : (loopState.loopCount ?? 0) + 1;
+
+    this.taskQueue.updatePhasePayload(task.id, {
+      reviewFixLoop: {
+        loopCount,
+        lastIssueCount: typeof issueCount === 'number' ? issueCount : loopState.lastIssueCount
+      }
+    });
+
+    if (loopCount >= MAX_REVIEW_FIX_LOOPS) {
+      this.taskQueue.updateTask(task.id, {
+        status: 'blocked',
+        phase_status: 'blocked',
+        chain_status: 'blocked',
+        blocked_reason: `Exceeded Review/Fix loop limit (${MAX_REVIEW_FIX_LOOPS})`,
+        blocked_at: Date.now(),
+        blocked_by: 'loop_guard'
+      });
+
+      if (task.chain_id) {
+        this.taskQueue.blockChain(task.chain_id, 'Exceeded review/fix loop limit', 'loop_guard');
+      }
+
+      worker.status = 'blocked';
+      await this.ephemeralWorkerService.snapshotWorkspaceForBlocked(worker);
+
+      logger.warn({
+        category: 'phase',
+        action: 'review_fix_loop_blocked',
+        message: `Task ${task.id} blocked after ${loopCount} review/fix iterations`,
+        details: { taskId: task.id, loopCount, issueCount }
+      });
+
+      return true;
+    }
+
+    return false;
+  }
 
   /**
    * Detect if output contains error indicators, even if exitCode is 0.

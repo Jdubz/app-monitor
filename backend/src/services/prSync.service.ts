@@ -22,6 +22,8 @@ interface PRSyncDelta {
   actualState: 'open' | 'closed' | 'merged' | 'deleted';
   tasksAffected: string[];
   source: 'tasks' | 'pr_conditions';
+  headRef: string;
+  baseRef: string;
 }
 
 interface PRSyncStats {
@@ -335,7 +337,9 @@ export class PRSyncService {
           expectedState: 'open',
           actualState: prStatus.state === 'MERGED' ? 'merged' : 'closed',
           tasksAffected: tasks.map(t => t.id),
-          source
+          source,
+          headRef: prStatus.head_ref,
+          baseRef: prStatus.base_ref
         };
       }
 
@@ -377,7 +381,9 @@ export class PRSyncService {
           expectedState: 'open',
           actualState: 'deleted',
           tasksAffected: tasks.map(t => t.id),
-          source
+          source,
+          headRef: 'unknown',
+          baseRef: 'main'
         };
       }
       
@@ -416,7 +422,12 @@ export class PRSyncService {
         });
 
         // Create properly typed payload for pull request handler
-        const payload = this.createSyncPayload(delta.prNumber, delta.actualState === 'merged');
+        const payload = this.createSyncPayload(
+          delta.prNumber,
+          delta.actualState === 'merged',
+          delta.headRef,
+          delta.baseRef
+        );
 
         // Delegate to existing pull request handler (handles task cleanup + pr_condition_states cleanup)
         await this.pullRequestHandler.handle(payload);
@@ -447,7 +458,7 @@ export class PRSyncService {
    * Create properly typed webhook payload from config
    * Uses actual repository info instead of hardcoded values
    */
-  private createSyncPayload(prNumber: number, merged: boolean): GitHubPullRequestPayload {
+  private createSyncPayload(prNumber: number, merged: boolean, headRef: string, baseRef: string): GitHubPullRequestPayload {
     // Extract repo info from config
     const repoUrl = config.devBots.repositoryUrl;
     const repoFullName = repoUrl
@@ -465,11 +476,11 @@ export class PRSyncService {
         title: `PR #${prNumber}`,
         html_url: `https://github.com/${repoFullName}/pull/${prNumber}`,
         head: {
-          ref: `pr-${prNumber}`,
+          ref: headRef,
           sha: ''
         },
         base: {
-          ref: 'main'
+          ref: baseRef || 'main'
         },
         user: {
           login: 'pr-sync-service',
