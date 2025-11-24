@@ -8,6 +8,7 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import { logger } from '../utils/logger.js';
+import { isAiReviewer } from '../utils/aiReviewers.js';
 import { GITHUB_API_TIMEOUT_MS } from '../constants/timeouts.js';
 import { getMockPRRegistry } from './mockPRRegistry.service.js';
 import { PRCacheService } from './prCache.service.js';
@@ -251,14 +252,6 @@ export class GitHubPRService {
    * Uses structured tag parsing with fallback to keyword matching
    */
   analyzeCopilotReview(comments: PRComment[]): CopilotReviewAnalysis {
-    const isAiReviewer = (author: string) => {
-      const lower = author.toLowerCase();
-      return lower.includes('copilot') ||
-        lower.includes('github-actions') ||
-        lower.includes('gemini') ||
-        lower.includes('code-assist');
-    };
-
     const copilotComments = comments.filter(c => isAiReviewer(c.author));
 
     if (copilotComments.length === 0) {
@@ -442,10 +435,7 @@ export class GitHubPRService {
 
     // Check for human reviews that request changes
     const changesRequested = status.reviews.filter(r =>
-      r.state === 'CHANGES_REQUESTED' &&
-      !r.author.toLowerCase().includes('copilot') &&
-      !r.author.toLowerCase().includes('gemini') &&
-      !r.author.toLowerCase().includes('code-assist')
+      r.state === 'CHANGES_REQUESTED' && !isAiReviewer(r.author)
     );
     if (changesRequested.length > 0) {
       return {

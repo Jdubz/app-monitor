@@ -11,6 +11,7 @@
 
 import * as crypto from 'crypto';
 import { logger } from '../utils/logger.js';
+import { isAiReviewer } from '../utils/aiReviewers.js';
 import { GitHubPRService, getGitHubPRService, type PRStatus, type CopilotReviewAnalysis } from './githubPR.service.js';
 import { TaskQueueService } from './taskQueue.sqlite.js';
 import type { Task } from './taskQueue.sqlite.js';
@@ -232,10 +233,7 @@ ${prData.description || 'No description available'}`,
 
     // Create followup for human change requests
     const hasChangeRequests = prStatus.reviews.some(r =>
-      r.state === 'CHANGES_REQUESTED' &&
-      !r.author.toLowerCase().includes('copilot') &&
-      !r.author.toLowerCase().includes('gemini') &&
-      !r.author.toLowerCase().includes('code-assist')
+      r.state === 'CHANGES_REQUESTED' && !isAiReviewer(r.author)
     );
     if (hasChangeRequests) {
       return true;
@@ -650,10 +648,7 @@ ${taskChain}
 
     // Human change requests
     const changeRequests = prStatus.reviews.filter(r =>
-      r.state === 'CHANGES_REQUESTED' &&
-      !r.author.toLowerCase().includes('copilot') &&
-      !r.author.toLowerCase().includes('gemini') &&
-      !r.author.toLowerCase().includes('code-assist')
+      r.state === 'CHANGES_REQUESTED' && !isAiReviewer(r.author)
     );
     if (changeRequests.length > 0) {
       issues.push(`👤 Human reviewer(s) requested changes: ${changeRequests.map(r => r.author).join(', ')}`);

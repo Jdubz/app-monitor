@@ -10,8 +10,7 @@ import type { PRStatus } from '../../githubPR.service.js';
 import type { ConditionEvaluation } from '../types.js';
 import { generateFingerprintFromList } from '../utils.js';
 import { logger } from '../../../utils/logger.js';
-
-const AI_REVIEW_BOT_PATTERNS = ['copilot', 'github-advanced-security', 'gemini', 'code-assist', 'gemini-code-assist', 'google'];
+import { isAiReviewer } from '../../../utils/aiReviewers.js';
 
 export class CopilotReviewEvaluator extends BaseEvaluator {
   getConditionId(): string {
@@ -26,9 +25,6 @@ export class CopilotReviewEvaluator extends BaseEvaluator {
       }
       
       // Check for formal Copilot reviews
-      const isAiReviewer = (author: string) =>
-        AI_REVIEW_BOT_PATTERNS.some(pattern => author.toLowerCase().includes(pattern));
-
       const copilotReviews = prStatus.reviews.filter(review => isAiReviewer(review.author));
 
       // Check for Copilot review comments (inline code suggestions)
