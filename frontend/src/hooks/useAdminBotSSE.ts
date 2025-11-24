@@ -51,9 +51,12 @@ export function useAdminBotSSE(options: AdminBotSSEOptions) {
     const apiKey = import.meta.env.VITE_API_KEY || '';
 
     // EventSource doesn't support custom headers, so pass API key as query param
+    // Note: This is a known SSE limitation. The API key is only visible in browser devtools network tab.
+    // For production, consider using short-lived tokens or cookie-based auth.
     const url = `${apiUrl}/api/admin-bot/chat/stream?apiKey=${encodeURIComponent(apiKey)}`;
 
-    console.log('[AdminBotSSE] Connecting to', url);
+    // Log without exposing API key
+    console.log('[AdminBotSSE] Connecting to', `${apiUrl}/api/admin-bot/chat/stream`);
     const eventSource = new EventSource(url);
 
     // Generic message handler (for all data: events)
